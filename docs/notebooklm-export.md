@@ -2262,6 +2262,10 @@ Users cannot add/modify Skill permission rules.
 
 ## Troubleshooting
 
+### Config Key Typos
+
+Run `ai-guardian doctor` to detect unknown or misspelled config keys. The `unknown_config_keys` check validates all root and nested keys against the JSON schema and suggests corrections via fuzzy matching (e.g., `"secrt_scanning"` → did you mean `"secret_scanning"`?).
+
 ### My Remote URLs Are Ignored
 
 **Symptom**: URLs in user/local config not loading
@@ -20061,6 +20065,15 @@ Tool Policy checking is **extremely fast**:
 
 Common issues with the AI Guardian daemon, system tray, and container deployments.
 
+## General Diagnostics
+
+Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Use `--json` for machine-readable output.
+
+```bash
+ai-guardian doctor
+ai-guardian doctor --json
+```
+
 ## Daemon Startup Issues
 
 ### Stale Lock File Blocking Daemon Start
@@ -20663,7 +20676,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "project_path": "/home/user/projects/myapp",
-    "ide_type": "vscode"
+    "ide_type": "vscode",
+    "tool_name": "Bash",
+    "source": "PreToolUse",
+    "file_path": null
   },
   "suggestion": {
     "action": "add_allow_rule",
@@ -20691,7 +20707,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "project_path": "/home/user/projects/webapp",
-    "git_branch": "feature/auth"
+    "git_branch": "feature/auth",
+    "tool_name": "Write",
+    "source": "PostToolUse",
+    "file_path": "config/settings.py"
   },
   "suggestion": {
     "action": "use_environment_variable",
@@ -20717,7 +20736,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "tool": "Read",
-    "project_path": "/home/user/projects"
+    "project_path": "/home/user/projects",
+    "tool_name": "Read",
+    "source": "PreToolUse",
+    "file_path": "/home/user/.ssh/id_rsa"
   },
   "suggestion": {
     "action": "use_safe_location",
@@ -21044,6 +21066,7 @@ Violation logging is **extremely efficient**:
 - **v1.5.0** - Extended log types (SSRF, Unicode, config threats)
 - **v1.6.0** - Enhanced SIEM integration and export formats
 - **v1.12.0** - Added column-level position tracking across all scanner types (#1261)
+- **v1.15.1** - Enriched violation context with `tool_name`, `source`, and `file_path` fields (#1717)
 
 # === ai-guardian-example.json ===
 
@@ -22288,6 +22311,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-07-27
+
+### Added
+
+- **Unknown config key detection in doctor** — `ai-guardian doctor` now validates all root and nested config keys against the JSON schema, flags unrecognized keys with WARN status, and offers fuzzy "did you mean?" suggestions via `difflib.get_close_matches` (#1716)
+
+- **Enriched violation context** — violation log entries now include `tool_name`, `source` (hook event), and `file_path` fields in the context object, providing better traceability for security incidents (#1717)
+
+### Changed
+
+- Verified Cursor hook compatibility with Cursor v3.12.30
+
 ## [1.15.0] - 2026-07-22
 
 ### Added
@@ -22391,48 +22426,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Credentials-in-git-URL detection** — catches `https://user:token@host` in git remote URLs (#1709)
 - **Detailed `systemMessage` for warn mode** — user sees full violation details while agent receives sanitized version (#1588, #1651)
 - **Verified Cursor hook compatibility with Cursor v3.11.19** — all 6 hook events confirmed firing correctly
-
-## [1.14.0] - 2026-07-13
-
-### Changed
-
-- **Refactor: extract hook_processing.py into per-event modules** — monolithic `hook_processing.py` (~8800 lines) split into focused modules under `hook_events/`: `content_pipeline.py` (shared content scanning pipeline), `post_tool_use.py` (PostToolUse handler), `scanners.py` (scanner runner functions), `session_events.py` (session lifecycle handlers), `ask_mode.py` (ask-mode dialog helpers), `utils.py` (shared utilities). All public symbols re-exported from `hook_processing.py` for backward compatibility (#1491, #1551).
-
-- **Refactor: extract secret and transcript scanning** — `secret_scanning.py` and `transcript_scanning.py` extracted from `hook_processing.py` as standalone modules (Phase 5a-5b, #1491, #1551).
-
-- **Refactor: ScannerRegistry with pipeline-based invocation** — new `scanners/scanner_registry.py` provides declarative scanner metadata (13 scanners), hook event membership, ordering, and ask-mode support. Content scanning blocks in PreToolUse/UserPromptSubmit are now gated by `_pipeline_names` built from the registry (#1253, #1544).
-
-- **Refactor: post-scan filter pipeline** — new `scanners/post_scan_filters.py` provides `apply_post_scan_pipeline()` for generic violation logging and ask-mode dispatch. Migrated 11 scanner blocks to the shared pipeline, deleting 4 dead helpers (#1254, #1546, #1550).
-
-- **Refactor: extract tray into dedicated package** — `daemon/tray.py` (4000+ lines) split into `tray/` package: `app.py`, `animation.py`, `health.py`, `icons.py`, `menu.py`, `menu_builder.py`, `notifications.py`, `plugin_runner.py`, `plugins.py`. Backward-compat shims at old paths (#1543, #1547, #1561).
-
-- **Refactor: extract config modules into subpackage** — `config_utils.py`, `config_display.py`, `config_loaders.py`, `config_writer.py`, `config_inspector.py`, `config_manager.py` moved to `config/` subpackage. Backward-compat shims at old paths (#1562).
-
-- **Refactor: extract scanners into subpackage** — `prompt_injection.py`, `context_poisoning.py`, `secret_redactor.py`, `supply_chain.py`, `config_scanner.py`, `canary_detection.py`, `exfil_detection.py`, `offensive_language.py`, `scan_result.py`, `bandit_scanner.py`, `ast_scanner.py`, `image_scanner.py`, `ml_detection.py` moved to `scanners/` subpackage (#1562).
-
-- **Refactor: extract setup.py into subpackage** — monolithic `setup.py` split into `setup/` package: `config.py` (default config template), `hooks.py` (IDE hook setup), `mcp.py` (MCP configuration), `rules.py` (guidelines files), `utils.py` (helpers). Backward-compat shims at old paths (#1538).
-
-- **Refactor: extract tool patterns** — `IMMUTABLE_DENY_PATTERNS`, `MIXED_SETTINGS_PATTERNS`, `HOOK_INDICATOR_KEYS`, and `_strip_bash_heredoc_content()` extracted from `tool_policy.py` into new `tool_patterns.py` module (#1537).
-
-- **Refactor: shared response methods in base_agent.py** — `_block_response`, `_warn_response`, `_allow_response` extracted to eliminate duplicated `format_response` branches across adapter subclasses (#1535).
-
-- **Refactor: centralize hook event display names** — `HookEvent` enum in `constants.py` now carries `_DISPLAY_NAMES` dict and `ALL_HOOK_EVENT_DISPLAY_NAMES` frozenset. Adapters use the centralized set instead of hardcoded lists (#1549).
-
-### Fixed
-
-- **Config merge list deduplication** — `deep_merge()` now deduplicates list items during config merge (global + project + SDK overlay), preventing duplicate allowlist entries from accumulating (#1560).
-
-- **Hook event fallback for unmapped events** — adapters now fall back to enum value instead of raising KeyError for hook events not in the display names map (#1548).
-
-- **Moderator scenario expectations** — `config-exfil` and `ssrf-protection` moderator scenarios corrected to expect `block` for immutable core patterns that always block regardless of action mode (#1559).
-
-- **CI: SHA-tagged image cleanup** — new cleanup job in `scenario-tests.yml` deletes ephemeral SHA-tagged container images after scenario tests complete (#1564).
-
-- **CI: release readiness secrets passthrough** — `release-readiness.yml` now passes `secrets: inherit` to the `scenario-tests` job so quay.io credentials propagate to the container build step.
-
-- **Docs: stale module paths** — updated 14 references across 6 documentation files to reflect the v1.14.0 package reorganization (mcp_server → mcp/, prompt_injection → scanners/, tool_policy → tools/policy, setup.py → setup/, daemon/tray → tray/, violation_logger → violations/logger).
-
-- **Verified Cursor hook compatibility with Cursor v3.10.20** — `beforeSubmitPrompt`, `beforeReadFile`, and `postToolUse` confirmed firing correctly. Shell execution hooks (`beforeShellExecution`, `afterShellExecution`) verified via #1531 fix in this release.
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*
