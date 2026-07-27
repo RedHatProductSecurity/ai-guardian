@@ -344,6 +344,10 @@ Users cannot add/modify Skill permission rules.
 
 ## Troubleshooting
 
+### Config Key Typos
+
+Run `ai-guardian doctor` to detect unknown or misspelled config keys. The `unknown_config_keys` check validates all root and nested keys against the JSON schema and suggests corrections via fuzzy matching (e.g., `"secrt_scanning"` → did you mean `"secret_scanning"`?).
+
 ### My Remote URLs Are Ignored
 
 **Symptom**: URLs in user/local config not loading

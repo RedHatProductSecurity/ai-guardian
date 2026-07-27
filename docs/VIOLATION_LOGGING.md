@@ -65,7 +65,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "project_path": "/home/user/projects/myapp",
-    "ide_type": "vscode"
+    "ide_type": "vscode",
+    "tool_name": "Bash",
+    "source": "PreToolUse",
+    "file_path": null
   },
   "suggestion": {
     "action": "add_allow_rule",
@@ -93,7 +96,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "project_path": "/home/user/projects/webapp",
-    "git_branch": "feature/auth"
+    "git_branch": "feature/auth",
+    "tool_name": "Write",
+    "source": "PostToolUse",
+    "file_path": "config/settings.py"
   },
   "suggestion": {
     "action": "use_environment_variable",
@@ -119,7 +125,10 @@ Each violation is logged as a single JSON object per line (JSONL format).
   },
   "context": {
     "tool": "Read",
-    "project_path": "/home/user/projects"
+    "project_path": "/home/user/projects",
+    "tool_name": "Read",
+    "source": "PreToolUse",
+    "file_path": "/home/user/.ssh/id_rsa"
   },
   "suggestion": {
     "action": "use_safe_location",
@@ -446,3 +455,4 @@ Violation logging is **extremely efficient**:
 - **v1.5.0** - Extended log types (SSRF, Unicode, config threats)
 - **v1.6.0** - Enhanced SIEM integration and export formats
 - **v1.12.0** - Added column-level position tracking across all scanner types (#1261)
+- **v1.15.1** - Enriched violation context with `tool_name`, `source`, and `file_path` fields (#1717)

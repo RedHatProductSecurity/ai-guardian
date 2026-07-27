@@ -2,6 +2,15 @@
 
 Common issues with the AI Guardian daemon, system tray, and container deployments.
 
+## General Diagnostics
+
+Run `ai-guardian doctor` for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Use `--json` for machine-readable output.
+
+```bash
+ai-guardian doctor
+ai-guardian doctor --json
+```
+
 ## Daemon Startup Issues
 
 ### Stale Lock File Blocking Daemon Start
