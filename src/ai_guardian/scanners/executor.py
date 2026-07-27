@@ -380,6 +380,11 @@ def run_engine(
 
     # Try listen mode when the engine supports it and daemon is running (#1590)
     if engine_config.supports_listen_mode:
+        cached, cfg_hash = _cache_get(
+            cache, content_hash, engine_config, engine_config.type
+        )
+        if cached is not None:
+            return cached
         try:
             daemon_state = _get_daemon_state()
             if daemon_state is not None:
@@ -393,9 +398,11 @@ def run_engine(
                     elapsed_ms,
                     result_dict.get("total_findings", 0),
                 )
-                return _build_scan_result_from_dict(
+                result = _build_scan_result_from_dict(
                     engine_config.type, result_dict, elapsed_ms, original_file_path
                 )
+                _cache_put(cache, content_hash, engine_config.type, cfg_hash, result)
+                return result
         except (RuntimeError, OSError, ValueError) as exc:
             logging.warning("Listen mode failed, falling back to subprocess: %s", exc)
 

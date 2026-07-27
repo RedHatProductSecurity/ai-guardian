@@ -35,16 +35,5 @@
         "test_id": "B108"
       }
     ]
-  },
-  "permissions": {
-    "rules": [
-      {
-        "mode": "allow",
-        "matcher": "Skill",
-        "patterns": [
-          "release"
-        ]
-      }
-    ]
   }
 }

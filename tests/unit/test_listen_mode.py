@@ -439,6 +439,98 @@ class TestRunEngineListenMode:
             mock_single.assert_called_once()
 
 
+# --- Listen mode cache integration (#1721) ---
+
+
+class TestListenModeCaching:
+    def test_cache_hit_skips_listen_scan(self):
+        from ai_guardian.scanners.executor import run_engine
+        from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
+        from ai_guardian.scanners.strategies import ScanResult
+
+        engine_config = ENGINE_PRESETS["leaktk"]
+        cached_result = ScanResult(has_secrets=False, secrets=[], engine="leaktk")
+
+        mock_cache = mock.MagicMock()
+        mock_cache.get.return_value = cached_result
+
+        with mock.patch(
+            "ai_guardian.scanners.executor._get_daemon_state"
+        ) as mock_daemon:
+            result = run_engine(
+                engine_config,
+                "/tmp/test.txt",
+                "/tmp/report.json",
+                cache=mock_cache,
+                content_hash="abc123",
+            )
+
+        assert result is cached_result
+        mock_daemon.assert_not_called()
+
+    def test_cache_miss_calls_listen_and_stores(self):
+        from ai_guardian.scanners.executor import run_engine
+        from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
+
+        engine_config = ENGINE_PRESETS["leaktk"]
+
+        mock_cache = mock.MagicMock()
+        mock_cache.get.return_value = None
+
+        mock_mgr = mock.MagicMock()
+        mock_mgr.scan.return_value = {
+            "has_secrets": False,
+            "findings": [],
+            "total_findings": 0,
+        }
+        mock_state = mock.MagicMock()
+        mock_state.get_listen_manager.return_value = mock_mgr
+
+        with mock.patch(
+            "ai_guardian.scanners.executor._get_daemon_state",
+            return_value=mock_state,
+        ):
+            result = run_engine(
+                engine_config,
+                "/tmp/test.txt",
+                "/tmp/report.json",
+                cache=mock_cache,
+                content_hash="abc123",
+            )
+
+        assert result.has_secrets is False
+        mock_mgr.scan.assert_called_once()
+        mock_cache.put.assert_called_once()
+
+    def test_no_cache_when_hash_missing(self):
+        from ai_guardian.scanners.executor import run_engine
+        from ai_guardian.scanners.engine_builder import ENGINE_PRESETS
+
+        engine_config = ENGINE_PRESETS["leaktk"]
+
+        mock_mgr = mock.MagicMock()
+        mock_mgr.scan.return_value = {
+            "has_secrets": False,
+            "findings": [],
+            "total_findings": 0,
+        }
+        mock_state = mock.MagicMock()
+        mock_state.get_listen_manager.return_value = mock_mgr
+
+        with mock.patch(
+            "ai_guardian.scanners.executor._get_daemon_state",
+            return_value=mock_state,
+        ):
+            result = run_engine(
+                engine_config,
+                "/tmp/test.txt",
+                "/tmp/report.json",
+            )
+
+        assert result.has_secrets is False
+        mock_mgr.scan.assert_called_once()
+
+
 # --- DaemonState integration ---
 
 
