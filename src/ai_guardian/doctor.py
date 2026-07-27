@@ -12,6 +12,7 @@ Usage:
     ai-guardian doctor --quiet      # Exit codes only (0=ok, 1=warnings, 2=errors)
 """
 
+import difflib
 import enum
 import json
 import logging
@@ -101,6 +102,7 @@ class Doctor:
             self.check_project_config,
             self.check_config_overlay,
             self.check_deprecated_fields,
+            self.check_unknown_config_keys,
             self.check_global_pattern_server,
             self.check_scanners,
             self.check_pattern_server,
@@ -338,6 +340,95 @@ class Doctor:
             name="deprecated_fields",
             status=CheckStatus.PASS,
             message="No deprecated fields",
+        )
+
+    def check_unknown_config_keys(self) -> CheckResult:
+        self._ensure_config()
+        if self._config is None:
+            return CheckResult(
+                name="unknown_config_keys",
+                status=CheckStatus.PASS,
+                message="No config loaded (nothing to check)",
+            )
+
+        schema_path = (
+            Path(__file__).parent / "schemas" / "ai-guardian-config.schema.json"
+        )
+        try:
+            with open(schema_path) as f:
+                schema = json.load(f)
+        except Exception:
+            return CheckResult(
+                name="unknown_config_keys",
+                status=CheckStatus.SKIP,
+                message="Could not load config schema",
+            )
+
+        known_root_keys = set(schema.get("properties", {}).keys())
+        known_root_keys.update(schema.get("definitions", {}).keys())
+
+        try:
+            from ai_guardian.setup.config import _get_default_config_template
+
+            for k in _get_default_config_template():
+                if not k.startswith("_") and not k.startswith("$"):
+                    known_root_keys.add(k)
+        except Exception:
+            pass
+
+        nested_known: Dict[str, set] = {}
+        for key, prop_schema in schema.get("properties", {}).items():
+            if isinstance(prop_schema, dict) and prop_schema.get("type") == "object":
+                sub_props = prop_schema.get("properties", {})
+                if sub_props:
+                    nested_known[key] = set(sub_props.keys())
+        for key, def_schema in schema.get("definitions", {}).items():
+            if key not in nested_known and isinstance(def_schema, dict):
+                sub_props = def_schema.get("properties", {})
+                if sub_props:
+                    nested_known[key] = set(sub_props.keys())
+
+        warnings = []
+
+        for key in self._config:
+            if key.startswith("_") or key.startswith("$"):
+                continue
+            if key not in known_root_keys:
+                matches = difflib.get_close_matches(
+                    key, list(known_root_keys), n=1, cutoff=0.6
+                )
+                suggestion = f' — did you mean "{matches[0]}"?' if matches else ""
+                warnings.append(f'Unknown config key "{key}"{suggestion}')
+
+        for section_key, valid_sub_keys in nested_known.items():
+            section = self._config.get(section_key)
+            if not isinstance(section, dict):
+                continue
+            for sub_key in section:
+                if sub_key.startswith("_") or sub_key.startswith("$"):
+                    continue
+                if sub_key not in valid_sub_keys:
+                    matches = difflib.get_close_matches(
+                        sub_key, list(valid_sub_keys), n=1, cutoff=0.6
+                    )
+                    suggestion = f' — did you mean "{matches[0]}"?' if matches else ""
+                    warnings.append(
+                        f'Unknown key "{sub_key}" in ' f'"{section_key}"{suggestion}'
+                    )
+
+        if warnings:
+            return CheckResult(
+                name="unknown_config_keys",
+                status=CheckStatus.WARN,
+                message=f"{len(warnings)} unknown config key(s) found",
+                detail="\n".join(warnings),
+                fix_hint="Check for typos in config key names",
+            )
+
+        return CheckResult(
+            name="unknown_config_keys",
+            status=CheckStatus.PASS,
+            message="All config keys are recognized",
         )
 
     def check_global_pattern_server(self) -> CheckResult:
@@ -1982,6 +2073,7 @@ _CHECK_DISPLAY_NAMES = {
     "python_version": "Python version",
     "config_file": "Config file",
     "deprecated_fields": "Deprecated fields",
+    "unknown_config_keys": "Unknown config keys",
     "global_pattern_server": "Global pattern server",
     "scanners": "Scanners",
     "pattern_server": "Pattern server",
