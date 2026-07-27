@@ -204,6 +204,80 @@ class TestCheckDeprecatedFields:
         assert result.status == CheckStatus.PASS
 
 
+class TestCheckUnknownConfigKeys:
+    def test_pass_all_known_keys(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {"secret_scanning": {"enabled": True}, "scan_pii": {"enabled": False}}
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.PASS
+
+    def test_warn_typo_root_key(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(json.dumps({"secrt_scanning": {"enabled": True}}))
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.WARN
+        assert "secrt_scanning" in result.detail
+        assert "secret_scanning" in result.detail
+
+    def test_warn_typo_nested_key(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(json.dumps({"secret_scanning": {"enbled": True}}))
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.WARN
+        assert "enbled" in result.detail
+        assert "enabled" in result.detail
+
+    def test_ignores_comment_keys(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "_comment_foo": "this is a comment",
+                    "secret_scanning": {"enabled": True},
+                }
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.PASS
+
+    def test_ignores_schema_key(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "$schema": "https://example.com/schema.json",
+                    "secret_scanning": {"enabled": True},
+                }
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.PASS
+
+    def test_no_config(self, _isolate_config_dir):
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.PASS
+
+    def test_multiple_unknown_keys(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(json.dumps({"secrt_scanning": {}, "providor": "x"}))
+        doctor = Doctor()
+        result = doctor.check_unknown_config_keys()
+        assert result.status == CheckStatus.WARN
+        assert "2 unknown" in result.message
+        assert "secrt_scanning" in result.detail
+        assert "providor" in result.detail
+
+
 class TestCheckScanners:
     def test_no_scanners(self, _isolate_config_dir):
         mock_manager = mock.MagicMock()
@@ -1593,7 +1667,7 @@ class TestDoctorRunAll:
         doctor = Doctor()
         report = doctor.run_all()
         assert isinstance(report, DoctorReport)
-        assert len(report.checks) == 32
+        assert len(report.checks) == 33
         assert report.version != ""
 
     def test_check_crash_handled(self, _isolate_config_dir):
