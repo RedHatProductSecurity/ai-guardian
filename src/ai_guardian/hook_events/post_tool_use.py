@@ -503,7 +503,14 @@ def handle_post_tool_use(ctx=None, **kwargs):
     post_secret_ctx = {
         "ide_type": ide_type.value,
         "hook_event": HookEvent.POST_TOOL_USE,
+        "tool_name": tool_identifier,
+        "source": "scanner",
     }
+    file_path_for_ctx = tool_input.get("file_path") or tool_input.get("path")
+    if not file_path_for_ctx and pretool_ctx:
+        file_path_for_ctx = pretool_ctx.get("file_path")
+    if file_path_for_ctx:
+        post_secret_ctx["file_path"] = file_path_for_ctx
     if hook_tool_use_id:
         post_secret_ctx["tool_use_id"] = hook_tool_use_id
     if hook_session_id:
@@ -622,16 +629,10 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
 
                 # Log to violation logger
-                redaction_file_path = tool_input.get("file_path") or tool_input.get(
-                    "path"
-                )
-                # Inherit file_path from PreToolUse context (#366)
-                if not redaction_file_path and pretool_ctx:
-                    redaction_file_path = pretool_ctx.get("file_path")
                 first_line = redactions[0].get("line_number") if redactions else None
                 blocked_info = {
                     "tool": tool_identifier,
-                    "file_path": redaction_file_path,
+                    "file_path": file_path_for_ctx,
                     "line_number": first_line,
                     "redaction_count": len(redactions),
                     "redacted_types": [r["type"] for r in redactions],
@@ -645,7 +646,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     "action": "redacted",
                     "mode": action,
                     "hook_event": HookEvent.POST_TOOL_USE,
+                    "tool_name": tool_identifier,
+                    "source": "redaction",
                 }
+                if file_path_for_ctx:
+                    ctx["file_path"] = file_path_for_ctx
                 if hook_tool_use_id:
                     ctx["tool_use_id"] = hook_tool_use_id
                 if hook_session_id:

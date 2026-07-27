@@ -111,10 +111,10 @@ def _build_violation_context(context, hook_context):
         "hook_event": ctx.get("hook_event", "unknown"),
         "project_path": get_project_dir(),
     }
-    if hctx.get("tool_use_id"):
-        violation_ctx["tool_use_id"] = hctx["tool_use_id"]
-    if hctx.get("session_id"):
-        violation_ctx["session_id"] = hctx["session_id"]
+    _FORWARD_KEYS = ("tool_use_id", "session_id", "tool_name", "file_path", "source")
+    for key in _FORWARD_KEYS:
+        if key in hctx:
+            violation_ctx[key] = hctx[key]
     return violation_ctx
 
 

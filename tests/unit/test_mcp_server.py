@@ -646,6 +646,109 @@ class TestGetViolations:
             assert "! " not in v["suggestion"]
             assert ".ai-read-deny" not in s
 
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_violations_include_tool_from_blocked(self, mock_vl_cls):
+        """tool field reads from blocked['tool'] when context lacks tool_name."""
+        mock_vl = MagicMock()
+        mock_vl.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "secret_redaction",
+                "severity": "critical",
+                "blocked": {
+                    "tool": "Read",
+                    "file_path": "/tmp/secrets.env",
+                    "line_number": 5,
+                },
+                "context": {"hook_event": "PostToolUse"},
+            }
+        ]
+        mock_vl_cls.return_value = mock_vl
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_violations"]
+        result = tool.fn()
+        v = result["violations"][0]
+        assert v["tool"] == "Read"
+        assert v["file"] == "/tmp/secrets.env"
+        assert v["line"] == 5
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_violations_include_tool_from_context(self, mock_vl_cls):
+        """tool field reads from context['tool_name'] with priority."""
+        mock_vl = MagicMock()
+        mock_vl.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "secret_detected",
+                "severity": "critical",
+                "blocked": {"tool": "Read"},
+                "context": {
+                    "tool_name": "Bash",
+                    "file_path": "/tmp/test.py",
+                    "source": "scanner",
+                },
+            }
+        ]
+        mock_vl_cls.return_value = mock_vl
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_violations"]
+        result = tool.fn()
+        v = result["violations"][0]
+        assert v["tool"] == "Bash"
+        assert v["file"] == "/tmp/test.py"
+        assert v["source"] == "scanner"
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_violations_source_field_distinguishes_redaction(self, mock_vl_cls):
+        """source field distinguishes redaction from scanner violations."""
+        mock_vl = MagicMock()
+        mock_vl.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "secret_redaction",
+                "severity": "critical",
+                "blocked": {"tool": "Read"},
+                "context": {"source": "redaction", "tool_name": "Read"},
+            },
+            {
+                "timestamp": "2026-07-27T10:01:00Z",
+                "violation_type": "secret_detected",
+                "severity": "critical",
+                "blocked": {},
+                "context": {"source": "scanner", "tool_name": "Write"},
+            },
+        ]
+        mock_vl_cls.return_value = mock_vl
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_violations"]
+        result = tool.fn()
+        assert result["count"] == 2
+        assert result["violations"][0]["source"] == "redaction"
+        assert result["violations"][1]["source"] == "scanner"
+
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_violations_file_fallback_to_context(self, mock_vl_cls):
+        """file field falls back to context['file_path'] when blocked lacks it."""
+        mock_vl = MagicMock()
+        mock_vl.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "secret_detected",
+                "severity": "critical",
+                "blocked": {},
+                "context": {"file_path": "/tmp/from_context.py"},
+            }
+        ]
+        mock_vl_cls.return_value = mock_vl
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_violations"]
+        result = tool.fn()
+        assert result["violations"][0]["file"] == "/tmp/from_context.py"
+
 
 class TestGetConfig:
     """Test get_config tool."""
