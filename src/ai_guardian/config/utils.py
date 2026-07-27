@@ -831,3 +831,60 @@ def validate_regex_pattern(pattern: str, max_length: int = 500) -> bool:
     except re.error as e:
         logger.warning(f"Invalid regex syntax: {e}, pattern: {pattern[:100]}")
         return False
+
+
+def get_all_config_paths(project_dir: Optional[str] = None) -> dict:
+    """Return all known config file paths keyed by scope.
+
+    Always includes ``"global"``.  Includes ``"project"`` when a project
+    config is discoverable or *project_dir* is given explicitly (the file
+    need not exist yet).
+
+    Args:
+        project_dir: Explicit project root.  Used when the caller already
+            knows the project directory (e.g. from hook data) and the
+            thread-local override may not be set (subprocess context).
+
+    Returns:
+        ``{"global": Path, "project": Path}`` or ``{"global": Path}``.
+    """
+    paths: dict = {"global": get_config_dir() / "ai-guardian.json"}
+
+    project_path = get_project_config_path()
+    if not project_path and project_dir:
+        candidate = Path(project_dir) / ".ai-guardian" / "ai-guardian.json"
+        if Path(project_dir).resolve() != paths["global"].parent.resolve():
+            project_path = candidate
+
+    if project_path:
+        paths["project"] = project_path
+
+    return paths
+
+
+def format_config_paths(project_dir: Optional[str] = None) -> str:
+    """Format config locations for user-facing messages.
+
+    Shows project path first (recommended) when available, then global.
+    Annotates project path with "(will be created)" if the file does not
+    exist on disk.
+
+    Args:
+        project_dir: Explicit project root (forwarded to
+            :func:`get_all_config_paths`).
+
+    Returns:
+        Multi-line string suitable for appending to error/hint messages.
+    """
+    paths = get_all_config_paths(project_dir)
+    lines = []
+
+    if "project" in paths:
+        suffix = ""
+        if not paths["project"].exists():
+            suffix = " (will be created)"
+        lines.append(f"  Project: {paths['project']}{suffix} (recommended)")
+
+    lines.append(f"  Global:  {paths['global']}")
+
+    return "\n".join(lines)

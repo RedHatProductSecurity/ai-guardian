@@ -313,7 +313,9 @@ class _TextualAskDialog:
                 )
 
                 try:
-                    scope_options = get_config_scope_options()
+                    scope_options = get_config_scope_options(
+                        project_dir=violation.project_path
+                    )
                     self._selected_config_path = scope_options[0][1]
                     json_text, line_number = prepare_config_with_pattern(
                         save_pat,

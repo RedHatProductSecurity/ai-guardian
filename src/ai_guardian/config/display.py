@@ -372,7 +372,11 @@ class ConfigDisplay:
         output.append("")
 
         if not auto_enabled:
+            from ai_guardian.config.utils import format_config_paths
+
             output.append("To enable, add to your config:")
+            output.append(format_config_paths())
+            output.append("")
             output.append('  "permissions": {')
             output.append('    "auto_directory_rules": {"enabled": true}')
             output.append("  }")
