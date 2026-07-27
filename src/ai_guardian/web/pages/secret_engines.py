@@ -4,18 +4,11 @@ import json
 
 from nicegui import run, ui
 
+from ai_guardian.scanners.engine_builder import ENGINE_PRESETS, _PYTHON_SCANNER_PRESETS
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
-VALID_ENGINE_TYPES = {
-    "gitleaks",
-    "betterleaks",
-    "leaktk",
-    "trufflehog",
-    "detect-secrets",
-    "secretlint",
-    "gitguardian",
-}
+VALID_ENGINE_TYPES = set(ENGINE_PRESETS) | _PYTHON_SCANNER_PRESETS
 
 
 def _validate_engines_json(text):
