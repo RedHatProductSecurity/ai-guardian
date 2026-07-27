@@ -137,6 +137,46 @@ def send_sdk_check(check_type, data, timeout=5.0):
         return None
 
 
+def send_engine_test(engine_name, text, use_pattern_server=False, timeout=30.0):
+    """Send engine test request to the daemon.
+
+    Routes the scan through the daemon process so listen mode is used
+    for engines that support it (e.g. leaktk).
+
+    Args:
+        engine_name: Scanner engine preset name
+        text: Content string to scan
+        use_pattern_server: Resolve pattern-server config path
+        timeout: Connection + response timeout in seconds
+
+    Returns:
+        dict or None: EngineTestResult as dict, or None on failure
+    """
+    try:
+        sock = _connect(timeout)
+        if sock is None:
+            return None
+
+        try:
+            from ai_guardian.daemon.protocol import make_engine_test
+
+            request = make_engine_test(engine_name, text, use_pattern_server)
+            sock.sendall(encode_message(request))
+            response = decode_message(sock, timeout=timeout)
+
+            if response.get("type") == "response":
+                return response.get("data")
+            return None
+        finally:
+            sock.close()
+
+    except (socket.error, socket.timeout, ConnectionError, ValueError):
+        return None
+    except Exception as e:
+        logger.debug("Engine test request failed: %s", e)
+        return None
+
+
 def send_shutdown(timeout=2.0):
     """Send shutdown request to the daemon.
 

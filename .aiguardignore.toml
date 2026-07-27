@@ -6,6 +6,7 @@ paths = [
     "src/ai_guardian/patterns/data/offensive-slurs.toml",
     "src/ai_guardian/patterns/data/offensive-inclusive-language.toml",
     "docs/notebooklm-export.md",
+    ".wolf/buglog.json",
 ]
 
 [prompt_injection.allowlist]

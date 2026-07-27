@@ -33,6 +33,7 @@ class EngineTestResult:
     secrets: List[SecretMatch] = field(default_factory=list)
     scan_time_ms: float = 0.0
     error: Optional[str] = None
+    scan_mode: str = "subprocess"
 
 
 def get_available_engines() -> List[str]:
@@ -69,6 +70,45 @@ def get_available_engines() -> List[str]:
     return names
 
 
+def _try_daemon_engine_test(engine_name, text, use_pattern_server):
+    """Try to route an engine test through a running daemon.
+
+    When the daemon is running, scanning inside its process benefits
+    from listen mode (persistent scanner subprocess).  Returns an
+    ``EngineTestResult`` on success, or ``None`` to fall back to the
+    local subprocess path.
+    """
+    from ai_guardian.daemon import get_daemon_state
+
+    if get_daemon_state() is not None:
+        return None
+
+    try:
+        from ai_guardian.daemon.client import is_daemon_running, send_engine_test
+
+        if not is_daemon_running():
+            return None
+
+        result_dict = send_engine_test(engine_name, text, use_pattern_server)
+        if result_dict is None or result_dict.get("error") is not None:
+            return None
+
+        secrets = [
+            SecretMatch(**{k: v for k, v in s.items() if k != "secret"})
+            for s in result_dict.get("secrets", [])
+        ]
+        return EngineTestResult(
+            engine=result_dict.get("engine", engine_name),
+            found=result_dict.get("found", False),
+            secrets=secrets,
+            scan_time_ms=result_dict.get("scan_time_ms", 0.0),
+            error=result_dict.get("error"),
+            scan_mode=result_dict.get("scan_mode", "daemon"),
+        )
+    except Exception:
+        return None
+
+
 def test_engine(
     engine_name: str,
     text: str,
@@ -91,6 +131,10 @@ def test_engine(
             found=False,
             error=f"Unknown engine: {engine_name}",
         )
+
+    daemon_result = _try_daemon_engine_test(engine_name, text, use_pattern_server)
+    if daemon_result is not None:
+        return daemon_result
 
     engine_config = _build_engine_config(engine_name)
     if engine_config is None:
@@ -132,12 +176,20 @@ def test_engine(
             timeout=30,
         )
 
+    from ai_guardian.daemon import get_daemon_state
+
+    if engine_config.supports_listen_mode and get_daemon_state() is not None:
+        scan_mode = "listen"
+    else:
+        scan_mode = "subprocess"
+
     return EngineTestResult(
         engine=engine_name,
         found=scan_result.has_secrets,
         secrets=list(scan_result.secrets),
         scan_time_ms=scan_result.scan_time_ms,
         error=scan_result.error,
+        scan_mode=scan_mode,
     )
 
 
@@ -238,7 +290,8 @@ def format_result(result: EngineTestResult) -> str:
         if result.found
         else "\033[32mNOT FOUND\033[0m"
     )
-    lines = [f"  {result.engine}: {status}  ({result.scan_time_ms:.0f}ms)"]
+    mode = f" [{result.scan_mode}]" if result.scan_mode != "subprocess" else ""
+    lines = [f"  {result.engine}: {status}  ({result.scan_time_ms:.0f}ms{mode})"]
 
     for secret in result.secrets:
         parts = []
@@ -260,8 +313,11 @@ def format_comparison(results: List[EngineTestResult]) -> str:
     name_w = max(len(r.engine) for r in results)
     name_w = max(name_w, 6)  # minimum "Engine" header width
 
-    header = f"  {'Engine':<{name_w}}  {'Result':<12}  {'Secrets':>7}  {'Time':>8}"
-    sep = "  " + "─" * (name_w + 12 + 7 + 8 + 6)
+    header = (
+        f"  {'Engine':<{name_w}}  {'Result':<12}  "
+        f"{'Secrets':>7}  {'Time':>8}  {'Mode':<10}"
+    )
+    sep = "  " + "─" * (name_w + 12 + 7 + 8 + 10 + 8)
     lines = [header, sep]
 
     for r in results:
@@ -273,7 +329,7 @@ def format_comparison(results: List[EngineTestResult]) -> str:
             status = "NOT FOUND"
         lines.append(
             f"  {r.engine:<{name_w}}  {status:<12}  "
-            f"{len(r.secrets):>7}  {r.scan_time_ms:>6.0f}ms"
+            f"{len(r.secrets):>7}  {r.scan_time_ms:>6.0f}ms  {r.scan_mode:<10}"
         )
 
     return "\n".join(lines)
