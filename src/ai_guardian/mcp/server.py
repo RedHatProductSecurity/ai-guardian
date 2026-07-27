@@ -364,18 +364,22 @@ def create_server() -> "FastMCP":
                 if not isinstance(blocked, dict):
                     blocked = {}
                 vtype = v.get("violation_type", "")
+                ctx = v.get("context", {})
+                if not isinstance(ctx, dict):
+                    ctx = {}
                 entry = {
                     "timestamp": v.get("timestamp", ""),
                     "type": vtype,
                     "severity": v.get("severity", ""),
-                    "tool": v.get("context", {}).get("tool_name", ""),
-                    "file": blocked.get("file_path", "")
-                    or v.get("context", {}).get("file_path", ""),
+                    "tool": ctx.get("tool_name", "") or blocked.get("tool", ""),
+                    "file": blocked.get("file_path", "") or ctx.get("file_path", ""),
                     "action": "blocked" if v.get("blocked") else "logged",
                     "suggestion": _SAFE_SUGGESTIONS.get(
                         vtype, "Review the security policy for this violation type"
                     ),
                 }
+                if ctx.get("source"):
+                    entry["source"] = ctx["source"]
                 if blocked.get("line_number"):
                     entry["line"] = blocked["line_number"]
                 if blocked.get("start_column") is not None:

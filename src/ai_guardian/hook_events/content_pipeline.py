@@ -489,7 +489,14 @@ def run_content_pipeline(
             secret_config.get("allowlist_patterns", []) if secret_config else []
         )
 
-        pre_secret_ctx = {"ide_type": ide_type.value, "hook_event": hook_event}
+        pre_secret_ctx = {
+            "ide_type": ide_type.value,
+            "hook_event": hook_event,
+            "tool_name": tool_identifier,
+            "source": "scanner",
+        }
+        if file_path:
+            pre_secret_ctx["file_path"] = file_path
         if hook_tool_use_id:
             pre_secret_ctx["tool_use_id"] = hook_tool_use_id
         if hook_session_id:
