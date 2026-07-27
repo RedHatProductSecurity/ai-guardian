@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-07-27
+
+### Added
+
+- **Unknown config key detection in doctor** — `ai-guardian doctor` now validates all root and nested config keys against the JSON schema, flags unrecognized keys with WARN status, and offers fuzzy "did you mean?" suggestions via `difflib.get_close_matches` (#1716)
+
+- **Enriched violation context** — violation log entries now include `tool_name`, `source` (hook event), and `file_path` fields in the context object, providing better traceability for security incidents (#1717)
+
+### Changed
+
+- Verified Cursor hook compatibility with Cursor v3.12.30
+
 ## [1.15.0] - 2026-07-22
 
 ### Added
@@ -2956,7 +2968,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.15.0...HEAD
+[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.15.1...HEAD
+[1.15.1]: https://github.com/itdove/ai-guardian/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/itdove/ai-guardian/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/itdove/ai-guardian/compare/v1.13.3...v1.14.0
 [1.13.3]: https://github.com/itdove/ai-guardian/compare/v1.13.2...v1.13.3
