@@ -305,9 +305,14 @@ class EngineTesterContent(ScrollableContainer):
         else:
             status = "[green]NOT FOUND[/green]"
 
+        mode = (
+            f"  [italic]{result.scan_mode}[/italic]"
+            if result.scan_mode != "subprocess"
+            else ""
+        )
         self.query_one("#et-summary", Static).update(
             f"[bold]{result.engine}[/bold]: {status}  "
-            f"[dim]({result.scan_time_ms:.0f}ms)[/dim]"
+            f"[dim]({result.scan_time_ms:.0f}ms)[/dim]{mode}"
         )
 
         lines = []
@@ -351,9 +356,10 @@ class EngineTesterContent(ScrollableContainer):
             else:
                 status = "[green]NOT FOUND[/green]"
 
+            mode = f", {r.scan_mode}" if r.scan_mode != "subprocess" else ""
             lines.append(
                 f"  [bold]{r.engine:<14}[/bold] {status}  "
-                f"[dim]({r.scan_time_ms:.0f}ms)[/dim]"
+                f"[dim]({r.scan_time_ms:.0f}ms{mode})[/dim]"
             )
 
         if verdict:

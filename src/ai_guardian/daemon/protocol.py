@@ -196,6 +196,28 @@ def make_sdk_check(check_type, data):
     }
 
 
+def make_engine_test(engine_name, text, use_pattern_server=False):
+    """Create an engine test request message.
+
+    Args:
+        engine_name: Scanner engine preset name (e.g. ``"leaktk"``)
+        text: Content string to scan
+        use_pattern_server: Resolve pattern-server config path
+
+    Returns:
+        dict: Request envelope with version, type, and data
+    """
+    return {
+        "version": PROTOCOL_VERSION,
+        "type": "engine_test",
+        "data": {
+            "engine": engine_name,
+            "text": text,
+            "use_pattern_server": use_pattern_server,
+        },
+    }
+
+
 def make_subscribe():
     """Create a subscribe message — client opts into push event notifications."""
     return {"version": PROTOCOL_VERSION, "type": "subscribe"}

@@ -14,6 +14,7 @@ from unittest.mock import MagicMock, patch
 
 from ai_guardian.scanners.engine_tester import (
     EngineTestResult,
+    _try_daemon_engine_test,
     apply_strategy,
     engine_test_command,
     format_comparison,
@@ -391,3 +392,162 @@ class TestApplyStrategy:
         v = apply_strategy("any-match", self._results({"gitleaks", "leaktk"}))
         assert v.total_engines == 3
         assert v.engines_with_secrets == 2
+
+
+# ---------------------------------------------------------------------------
+# scan_mode field
+# ---------------------------------------------------------------------------
+
+
+class TestScanMode:
+
+    def test_default_scan_mode(self):
+        r = EngineTestResult("gitleaks", False)
+        assert r.scan_mode == "subprocess"
+
+    @patch("ai_guardian.scanners.engine_tester.run_engine")
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    def test_scan_mode_subprocess_when_no_daemon(self, _mock_ds, mock_run):
+        mock_run.return_value = _scan_result_clean()
+        result = _test_engine("gitleaks", "test")
+        assert result.scan_mode == "subprocess"
+
+    @patch("ai_guardian.scanners.engine_tester.run_engine")
+    @patch("ai_guardian.daemon.get_daemon_state")
+    def test_scan_mode_listen_when_daemon_and_listen_engine(self, mock_ds, mock_run):
+        mock_ds.return_value = MagicMock()
+        mock_run.return_value = _scan_result_clean(engine="leaktk")
+        with patch(
+            "ai_guardian.scanners.engine_tester._build_engine_config"
+        ) as mock_build:
+            from ai_guardian.scanners.engine_builder import EngineConfig
+
+            mock_build.return_value = EngineConfig(
+                type="leaktk",
+                binary="leaktk",
+                command_template=[],
+                supports_listen_mode=True,
+            )
+            result = _test_engine("leaktk", "test")
+        assert result.scan_mode == "listen"
+
+    def test_scan_mode_in_format_result_subprocess(self):
+        r = EngineTestResult("gitleaks", False, [], 40, scan_mode="subprocess")
+        text = format_result(r)
+        assert "[listen]" not in text
+        assert "[daemon]" not in text
+
+    def test_scan_mode_in_format_result_listen(self):
+        r = EngineTestResult("gitleaks", False, [], 40, scan_mode="listen")
+        text = format_result(r)
+        assert "[listen]" in text
+
+    def test_scan_mode_in_comparison_table(self):
+        results = [
+            EngineTestResult("gitleaks", False, [], 40, scan_mode="listen"),
+            EngineTestResult("leaktk", False, [], 30, scan_mode="daemon"),
+        ]
+        text = format_comparison(results)
+        assert "Mode" in text
+        assert "listen" in text
+        assert "daemon" in text
+
+    def test_result_to_dict_includes_scan_mode(self):
+        from ai_guardian.scanners.engine_tester import _result_to_dict
+
+        r = EngineTestResult("gitleaks", False, [], 40, scan_mode="listen")
+        d = _result_to_dict(r)
+        assert d["scan_mode"] == "listen"
+
+    def test_json_output_includes_scan_mode(self):
+        from ai_guardian.scanners.engine_tester import _result_to_dict
+
+        r = EngineTestResult("gitleaks", False, [], 40, scan_mode="daemon")
+        d = _result_to_dict(r)
+        output = json.dumps(d)
+        assert '"scan_mode": "daemon"' in output
+
+
+# ---------------------------------------------------------------------------
+# Daemon routing
+# ---------------------------------------------------------------------------
+
+
+class TestDaemonRouting:
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=MagicMock())
+    def test_skip_when_in_daemon_process(self, _mock_ds):
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is None
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=False)
+    def test_skip_when_daemon_not_running(self, _mock_running, _mock_ds):
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is None
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch("ai_guardian.daemon.client.send_engine_test")
+    def test_routes_through_daemon(self, mock_send, _mock_running, _mock_ds):
+        mock_send.return_value = {
+            "engine": "leaktk",
+            "found": True,
+            "secrets": [
+                {
+                    "rule_id": "generic-api-key",
+                    "description": "API key",
+                    "file": "test_input.txt",
+                    "line_number": 1,
+                    "engine": "leaktk",
+                }
+            ],
+            "scan_time_ms": 28.5,
+            "scan_mode": "listen",
+        }
+        result = _try_daemon_engine_test("leaktk", "AKIAEXAMPLE", False)
+        assert result is not None
+        assert result.found is True
+        assert result.scan_mode == "listen"
+        assert result.scan_time_ms == 28.5
+        assert len(result.secrets) == 1
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch("ai_guardian.daemon.client.send_engine_test", return_value=None)
+    def test_fallback_on_send_failure(self, _mock_send, _mock_running, _mock_ds):
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is None
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch(
+        "ai_guardian.daemon.client.send_engine_test",
+        return_value={"error": "something broke"},
+    )
+    def test_fallback_on_error_response(self, _mock_send, _mock_running, _mock_ds):
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is None
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch(
+        "ai_guardian.daemon.client.is_daemon_running",
+        side_effect=Exception("socket error"),
+    )
+    def test_fallback_on_exception(self, _mock_running, _mock_ds):
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is None
+
+    @patch("ai_guardian.daemon.get_daemon_state", return_value=None)
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch("ai_guardian.daemon.client.send_engine_test")
+    def test_daemon_mode_set_on_result(self, mock_send, _mock_running, _mock_ds):
+        mock_send.return_value = {
+            "engine": "gitleaks",
+            "found": False,
+            "secrets": [],
+            "scan_time_ms": 25.0,
+        }
+        result = _try_daemon_engine_test("gitleaks", "test", False)
+        assert result is not None
+        assert result.scan_mode == "daemon"
