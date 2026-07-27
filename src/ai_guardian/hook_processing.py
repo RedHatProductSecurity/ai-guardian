@@ -60,6 +60,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
 from ai_guardian.config.utils import (
+    format_config_paths,
     get_config_dir,
     get_project_dir,
     get_state_dir,
@@ -1069,7 +1070,7 @@ def _build_directory_denied_message(file_path, denied_dir, matched_pattern):
 
     error_msg += "\nRecommendation:\n"
     if matched_pattern:
-        error_msg += "- Update directory_rules in ai-guardian.json to allow this path\n"
+        error_msg += "- Update directory_rules in your config to allow this path\n"
         error_msg += "- Move this file to an accessible location\n"
         error_msg += "- Verify this file should be accessible to AI agents\n"
     else:
@@ -1079,7 +1080,7 @@ def _build_directory_denied_message(file_path, denied_dir, matched_pattern):
             "- Add an allow rule in directory_rules config to override marker\n"
         )
 
-    error_msg += f"\nConfig: {get_config_dir() / 'ai-guardian.json'}\n"
+    error_msg += "\nConfig:\n" + format_config_paths() + "\n"
     error_msg += "Section: directory_rules\n"
 
     return error_msg

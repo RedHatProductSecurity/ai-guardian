@@ -32,6 +32,8 @@ except ImportError:
     JsonSchemaValidationError = None
 
 from ai_guardian.config.utils import (
+    format_config_paths,
+    get_all_config_paths,
     get_config_dir,
     get_project_config_path,
     is_expired,
@@ -1074,7 +1076,8 @@ class ToolPolicyChecker:
         # Generate suggested configuration
         suggested_matcher, suggested_patterns = self._suggest_permission_rule(tool_name)
 
-        config_path = str(get_config_dir() / "ai-guardian.json")
+        paths = get_all_config_paths()
+        config_path = str(paths["global"])
 
         # Start with header
         msg = "🛡️ Tool Access Denied\n\n"
@@ -1179,7 +1182,8 @@ class ToolPolicyChecker:
         msg += "- Or ask your administrator to update the enterprise policy\n"
 
         # Configuration help
-        msg += f"\nTo allow this, add to {config_path}:\n\n"
+        msg += "\nTo allow this, add to your config:\n"
+        msg += format_config_paths() + "\n\n"
         msg += "{\n"
         msg += '  "permissions": [\n'
         msg += "    {\n"
@@ -1200,7 +1204,7 @@ class ToolPolicyChecker:
         msg += "}\n"
 
         # Config path
-        msg += f"\nConfig: {config_path}\n"
+        msg += "\nConfig:\n" + format_config_paths() + "\n"
         msg += f"Section: permissions[matcher={suggested_matcher}].deny_patterns\n"
 
         return msg
@@ -1504,6 +1508,7 @@ class ToolPolicyChecker:
                 ctx["tool_use_id"] = tool_use_id
             if session_id:
                 ctx["session_id"] = session_id
+            all_paths = get_all_config_paths()
             violation_logger.log_violation(
                 violation_type=violation_type,
                 blocked={
@@ -1516,7 +1521,8 @@ class ToolPolicyChecker:
                 context=ctx,
                 suggestion={
                     "action": "add_allow_pattern",
-                    "config_path": str(get_config_dir() / "ai-guardian.json"),
+                    "config_path": str(all_paths["global"]),
+                    "config_paths": {k: str(v) for k, v in all_paths.items()},
                     "rule": {
                         "matcher": suggested_matcher,
                         "mode": "allow",

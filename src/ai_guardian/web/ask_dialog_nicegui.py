@@ -31,7 +31,9 @@ def _show_nicegui_config_editor(dialog_self, app, save_pat, config_section):
         get_config_scope_options,
     )
 
-    scope_options = get_config_scope_options()
+    project_dir = getattr(dialog_self, "_violation", None)
+    project_dir = getattr(project_dir, "project_path", None) if project_dir else None
+    scope_options = get_config_scope_options(project_dir=project_dir)
     scope_map = {label: path_str for label, path_str in scope_options}
     selected = {"path": scope_options[0][1]}
 

@@ -1627,7 +1627,10 @@ def main():
                             print(
                                 f"\nRecommended: Update your configuration to use {args.name}"
                             )
-                            print("\nAdd to ~/.config/ai-guardian/ai-guardian.json:")
+                            from ai_guardian.config.utils import format_config_paths
+
+                            print("\nAdd to your config:")
+                            print(format_config_paths())
                             print("{")
                             print('  "secret_scanning": {')
                             print('    "enabled": true,')
