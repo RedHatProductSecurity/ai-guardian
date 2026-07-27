@@ -12,6 +12,7 @@ from ai_guardian.daemon.protocol import (
     PROTOCOL_VERSION,
     decode_message,
     encode_message,
+    make_engine_test,
     make_event,
     make_hook_request,
     make_pause_dir,
@@ -201,3 +202,15 @@ class TestMessageFactories:
         assert msg["type"] == "event"
         assert msg["event"] == "resumed"
         assert "data" not in msg
+
+    def test_make_engine_test(self):
+        msg = make_engine_test("leaktk", "secret text", use_pattern_server=True)
+        assert msg["version"] == PROTOCOL_VERSION
+        assert msg["type"] == "engine_test"
+        assert msg["data"]["engine"] == "leaktk"
+        assert msg["data"]["text"] == "secret text"
+        assert msg["data"]["use_pattern_server"] is True
+
+    def test_make_engine_test_defaults(self):
+        msg = make_engine_test("gitleaks", "test")
+        assert msg["data"]["use_pattern_server"] is False

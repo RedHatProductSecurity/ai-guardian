@@ -126,9 +126,13 @@ def create_engine_tester_page(service, daemon_name: str):
                             ui.badge("FOUND", color="red").classes("text-sm")
                         else:
                             ui.badge("NOT FOUND", color="green").classes("text-sm")
-                        ui.label(f"{result.scan_time_ms}ms").classes(
+                        ui.label(f"{result.scan_time_ms:.0f}ms").classes(
                             "text-xs text-grey-6"
                         )
+                        mode_color = {"listen": "green", "daemon": "blue"}.get(
+                            result.scan_mode, "grey"
+                        )
+                        ui.badge(result.scan_mode, color=mode_color).classes("text-xs")
 
                     if result.error:
                         ui.label(f"Error: {result.error}").classes("text-sm text-red")
@@ -170,6 +174,7 @@ def create_engine_tester_page(service, daemon_name: str):
                                 "found": "FOUND" if r.found else "NOT FOUND",
                                 "secrets": len(r.secrets),
                                 "time_ms": r.scan_time_ms,
+                                "mode": r.scan_mode,
                                 "error": r.error or "",
                             }
                         )
@@ -192,6 +197,7 @@ def create_engine_tester_page(service, daemon_name: str):
                                 "label": "Time (ms)",
                                 "field": "time_ms",
                             },
+                            {"name": "mode", "label": "Mode", "field": "mode"},
                             {"name": "error", "label": "Error", "field": "error"},
                         ],
                         rows=rows,

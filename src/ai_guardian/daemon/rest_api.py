@@ -233,6 +233,11 @@ class _RestHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             self._handle_scan(body)
+        elif self.path == "/api/engine-test":
+            body = self._read_body()
+            if body is None:
+                return
+            self._handle_engine_test(body)
         elif self.path == "/api/patterns/refresh":
             self._send_json(self._refresh_pattern_cache())
         elif self.path == "/api/register-tray":
@@ -772,6 +777,28 @@ class _RestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error("Scan endpoint failed: %s", e)
             self._send_error(500, "Internal error during scan")
+
+    def _handle_engine_test(self, body):
+        """Handle POST /api/engine-test — test text against a scanner engine."""
+        engine = body.get("engine", "")
+        text = body.get("text", "")
+        use_pattern_server = body.get("use_pattern_server", False)
+
+        if not engine:
+            self._send_error(400, "engine is required")
+            return
+        if not text:
+            self._send_error(400, "text is required")
+            return
+
+        try:
+            from ai_guardian.scanners.engine_tester import _result_to_dict, test_engine
+
+            result = test_engine(engine, text, use_pattern_server)
+            self._send_json(_result_to_dict(result))
+        except Exception as e:
+            logger.error("Engine test endpoint failed: %s", e)
+            self._send_error(500, "Internal error during engine test")
 
     def _handle_prompt(self, body):
         """Handle POST /api/prompt — delegate ask dialog to subprocess.

@@ -334,6 +334,10 @@ class DaemonServer:
                 data = request.get("data", {})
                 response_data = self._handle_sdk_check(data)
                 response = make_response(response_data)
+            elif msg_type == "engine_test":
+                data = request.get("data", {})
+                response_data = self._handle_engine_test(data)
+                response = make_response(response_data)
             elif msg_type == "ml_status":
                 response = make_response(self.state.get_ml_status())
             else:
@@ -509,6 +513,32 @@ class DaemonServer:
             }
         except Exception as e:
             logger.error(f"SDK check failed: {e}")
+            return {"error": str(e)}
+
+    def _handle_engine_test(self, data):
+        """Run an engine test inside the daemon process.
+
+        Benefits from listen mode for engines that support it (e.g. leaktk),
+        giving accurate latency measurements.
+        """
+        self.state.record_activity()
+        engine_name = data.get("engine", "")
+        text = data.get("text", "")
+        use_pattern_server = data.get("use_pattern_server", False)
+
+        if not engine_name or not text:
+            return {"error": "engine and text are required"}
+
+        try:
+            from ai_guardian.scanners.engine_tester import (
+                _result_to_dict,
+                test_engine,
+            )
+
+            result = test_engine(engine_name, text, use_pattern_server)
+            return _result_to_dict(result)
+        except Exception as e:
+            logger.error("Engine test failed: %s", e)
             return {"error": str(e)}
 
     def _idle_check_loop(self):
