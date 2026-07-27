@@ -2975,6 +2975,46 @@ class TestConfigScopeSelection:
         assert options[0][0] == "Project"
         assert "/Users/dev/myproject/.ai-guardian/ai-guardian.json" in options[0][1]
 
+    def test_get_config_scope_options_with_active_project_dirs(self):
+        """Issue #1726: active_project_dirs populates extra project choices."""
+        from ai_guardian.tui.pattern_editor import get_config_scope_options
+
+        with patch(
+            "ai_guardian.config.utils.get_project_config_path", return_value=None
+        ):
+            with patch(
+                "ai_guardian.config.utils.get_config_dir",
+                return_value=Path("/home/user/.config/ai-guardian"),
+            ):
+                options = get_config_scope_options(
+                    active_project_dirs=["/projects/alpha", "/projects/beta"]
+                )
+        assert len(options) == 3
+        labels = [o[0] for o in options]
+        assert "Global" in labels
+        assert "Project (alpha)" in labels
+        assert "Project (beta)" in labels
+
+    def test_get_config_scope_options_active_dirs_ignored_when_project_known(self):
+        """active_project_dirs ignored when project_dir already resolved."""
+        from ai_guardian.tui.pattern_editor import get_config_scope_options
+
+        with patch(
+            "ai_guardian.config.utils.get_project_config_path", return_value=None
+        ):
+            with patch(
+                "ai_guardian.config.utils.get_config_dir",
+                return_value=Path("/home/user/.config/ai-guardian"),
+            ):
+                options = get_config_scope_options(
+                    project_dir="/projects/alpha",
+                    active_project_dirs=["/projects/alpha", "/projects/beta"],
+                )
+        assert len(options) == 2
+        labels = [o[0] for o in options]
+        assert "Project" in labels
+        assert "Global" in labels
+
     def test_ask_result_config_path_field(self):
         from ai_guardian.tui.ask_dialog import AskResult, AskDecision
 

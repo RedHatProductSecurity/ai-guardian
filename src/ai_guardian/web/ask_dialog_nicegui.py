@@ -63,23 +63,22 @@ def _show_nicegui_config_editor(dialog_self, app, save_pat, config_section):
         ).classes("text-sm text-grey-6")
         ui.separator()
 
-        if len(scope_options) > 1:
-            ui.label("Save to:").classes("font-bold text-sm")
-            scope_radio = ui.radio(
-                scope_map,
-                value=scope_options[0][0],
-            ).props("dense")
+        ui.label("Save to:").classes("font-bold text-sm")
+        scope_radio = ui.radio(
+            scope_map,
+            value=scope_options[0][0],
+        ).props("dense")
 
-            def on_scope_change(e):
-                selected["path"] = scope_map[e.value]
-                new_text, _ = prepare_config_with_pattern(
-                    save_pat,
-                    config_section,
-                    config_path=selected["path"],
-                )
-                editor.value = new_text
+        def on_scope_change(e):
+            selected["path"] = scope_map[e.value]
+            new_text, _ = prepare_config_with_pattern(
+                save_pat,
+                config_section,
+                config_path=selected["path"],
+            )
+            editor.value = new_text
 
-            scope_radio.on_value_change(on_scope_change)
+        scope_radio.on_value_change(on_scope_change)
 
         editor = (
             ui.codemirror(

@@ -194,7 +194,10 @@ def suggest_domain(url_or_text: str) -> str:
     return text
 
 
-def get_config_scope_options(project_dir: str = None) -> list:
+def get_config_scope_options(
+    project_dir: str = None,
+    active_project_dirs: list = None,
+) -> list:
     """Return available config scope options as (label, path_str) tuples.
 
     Always includes global config. Includes project config when one exists
@@ -206,14 +209,34 @@ def get_config_scope_options(project_dir: str = None) -> list:
             ``AskViolationInfo.project_path``) to avoid relying on
             ``get_project_dir()`` which may return the wrong value in
             subprocess context.
+        active_project_dirs: List of known project root directories (e.g.
+            from daemon ``active_project_dirs``).  Each is offered as a
+            save target.  Directories that duplicate *project_dir* or the
+            global config dir are skipped.
     """
-    from ai_guardian.config.utils import get_all_config_paths
+    from ai_guardian.config.utils import get_all_config_paths, _find_config_in_dir
 
     paths = get_all_config_paths(project_dir)
 
     options = [("Global", str(paths["global"]))]
     if "project" in paths:
         options.insert(0, ("Project", str(paths["project"])))
+
+    if active_project_dirs and "project" not in paths:
+        seen = {str(v) for v in paths.values()}
+        global_parent = paths["global"].parent.resolve()
+        for d in active_project_dirs:
+            dp = Path(d)
+            if dp.resolve() == global_parent:
+                continue
+            cfg = _find_config_in_dir(dp)
+            if not cfg:
+                cfg = dp / ".ai-guardian" / "ai-guardian.json"
+            if str(cfg) in seen:
+                continue
+            seen.add(str(cfg))
+            label = f"Project ({dp.name})"
+            options.insert(len(options) - 1, (label, str(cfg)))
 
     return options
 
