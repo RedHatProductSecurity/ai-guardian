@@ -675,7 +675,7 @@ async def _show_allow_always_flow(parent_dialog, violation, service, daemon_name
         ui.notify("No matched text available for this violation", type="warning")
         return
 
-    _show_pattern_editor_dialog(matched_text, config_section)
+    _show_pattern_editor_dialog(matched_text, config_section, file_path)
 
 
 def _extract_matched_from_violation(violation: dict) -> str:
@@ -746,7 +746,9 @@ def _extract_matched_from_violation(violation: dict) -> str:
     return ""
 
 
-def _show_pattern_editor_dialog(matched_text: str, config_section: str):
+def _show_pattern_editor_dialog(
+    matched_text: str, config_section: str, file_path: str = ""
+):
     """Open inline pattern editor dialog for allowlisting."""
     from ai_guardian.tui.pattern_editor import (
         validate_pattern,
@@ -813,7 +815,7 @@ def _show_pattern_editor_dialog(matched_text: str, config_section: str):
                     status_label.classes(replace="text-sm text-red")
                     return
                 dlg.close()
-                _show_config_editor_dialog(pat, config_section)
+                _show_config_editor_dialog(pat, config_section, file_path)
 
             ui.button(
                 "Add to Allowlist",
@@ -823,7 +825,7 @@ def _show_pattern_editor_dialog(matched_text: str, config_section: str):
     dlg.open()
 
 
-def _show_config_editor_dialog(save_pat: str, config_section: str):
+def _show_config_editor_dialog(save_pat: str, config_section: str, file_path: str = ""):
     """Show config editor with pattern inserted for review and save."""
     import json as json_mod
     from ai_guardian.tui.pattern_editor import (
@@ -831,8 +833,24 @@ def _show_config_editor_dialog(save_pat: str, config_section: str):
         get_config_scope_options,
     )
     from ai_guardian.tui.ask_dialog import _write_config_text
+    from ai_guardian.web.config_helpers import (
+        _get_remote_project_dir,
+        load_web_projects,
+    )
 
-    scope_options = get_config_scope_options()
+    project_dir = _get_remote_project_dir()
+    active_dirs = load_web_projects()
+
+    if not project_dir and file_path and active_dirs:
+        for d in active_dirs:
+            if file_path.startswith(d.rstrip("/") + "/"):
+                project_dir = d
+                break
+
+    scope_options = get_config_scope_options(
+        project_dir=project_dir,
+        active_project_dirs=active_dirs,
+    )
     scope_map = {label: path_str for label, path_str in scope_options}
     selected = {"path": scope_options[0][1]}
 
@@ -853,23 +871,22 @@ def _show_config_editor_dialog(save_pat: str, config_section: str):
         ).classes("text-sm text-grey-6")
         ui.separator()
 
-        if len(scope_options) > 1:
-            ui.label("Save to:").classes("font-bold text-sm")
-            scope_radio = ui.radio(
-                scope_map,
-                value=scope_options[0][0],
-            ).props("dense")
+        ui.label("Save to:").classes("font-bold text-sm")
+        scope_radio = ui.radio(
+            scope_map,
+            value=scope_options[0][0],
+        ).props("dense")
 
-            def on_scope_change(e):
-                selected["path"] = scope_map[e.value]
-                new_text, _ = prepare_config_with_pattern(
-                    save_pat,
-                    config_section,
-                    config_path=selected["path"],
-                )
-                editor.value = new_text
+        def on_scope_change(e):
+            selected["path"] = scope_map[e.value]
+            new_text, _ = prepare_config_with_pattern(
+                save_pat,
+                config_section,
+                config_path=selected["path"],
+            )
+            editor.value = new_text
 
-            scope_radio.on_value_change(on_scope_change)
+        scope_radio.on_value_change(on_scope_change)
 
         editor = (
             ui.codemirror(

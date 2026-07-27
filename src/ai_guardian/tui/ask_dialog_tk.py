@@ -284,7 +284,7 @@ class _TkinterAskDialog:
         )
 
         v = self._violation
-        scope_options = get_config_scope_options()
+        scope_options = get_config_scope_options(project_dir=v.project_path)
         selected_path = scope_options[0][1]
         json_text, line_number = prepare_config_with_pattern(
             save_pat,

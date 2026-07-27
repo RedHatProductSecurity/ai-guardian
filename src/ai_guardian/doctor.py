@@ -1793,11 +1793,16 @@ class Doctor:
 
         engines_config = pi_config.get("ml_engines", [])
         if not engines_config:
+            from ai_guardian.config.utils import get_config_dir
+
             return CheckResult(
                 name="ml_detection",
                 status=CheckStatus.WARN,
                 message="detector is 'ml'/'hybrid' but no ml_engines configured",
-                fix_hint="Add ml_engines to prompt_injection config in ai-guardian.json",
+                fix_hint=(
+                    "Add ml_engines to prompt_injection config in "
+                    f"{get_config_dir() / 'ai-guardian.json'}"
+                ),
             )
 
         errors = []
