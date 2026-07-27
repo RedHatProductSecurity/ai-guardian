@@ -2973,7 +2973,8 @@ class TestConfigScopeSelection:
                 options = get_config_scope_options(project_dir="/Users/dev/myproject")
         assert len(options) == 2
         assert options[0][0] == "Project"
-        assert "/Users/dev/myproject/.ai-guardian/ai-guardian.json" in options[0][1]
+        expected = str(Path("/Users/dev/myproject/.ai-guardian/ai-guardian.json"))
+        assert expected in options[0][1]
 
     def test_get_config_scope_options_with_active_project_dirs(self):
         """Issue #1726: active_project_dirs populates extra project choices."""
