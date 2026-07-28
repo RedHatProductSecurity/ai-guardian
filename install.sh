@@ -16,8 +16,8 @@ usage() {
 AI Guardian — One-line installer
 
 Usage:
-    curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash
-    curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash -s -- [OPTIONS]
+    curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- [OPTIONS]
 
 Install modes (mutually exclusive, default: auto-detect):
     --pip               Force: bare pip install (no isolation)

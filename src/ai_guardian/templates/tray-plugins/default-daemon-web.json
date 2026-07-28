@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
+  "$schema": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
   "name": "Maintenance",
   "scope": "daemon",
   "items": [

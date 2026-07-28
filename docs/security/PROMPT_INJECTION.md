@@ -2,7 +2,7 @@
 
 AI Guardian detects and blocks prompt injection attacks that try to manipulate the AI assistant into ignoring safety guidelines or executing malicious instructions.
 
-> **v1.6.0**: Enhanced jailbreak detection added ([Issue #263](https://github.com/itdove/ai-guardian/issues/263)) — detects role-play attacks (DAN mode), identity manipulation, constraint removal, and hypothetical framing with dedicated error messages and violation logging.
+> **v1.6.0**: Enhanced jailbreak detection added ([Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263)) — detects role-play attacks (DAN mode), identity manipulation, constraint removal, and hypothetical framing with dedicated error messages and violation logging.
 
 ## What is Prompt Injection?
 
@@ -19,7 +19,7 @@ Think of it like **SQL injection for AI assistants** - instead of injecting data
 
 ## ML-Based Detection
 
-> **v1.11.0**: ML-based prompt injection detection added ([Issue #185](https://github.com/itdove/ai-guardian/issues/185)) — runs ONNX models inside the daemon process for high-accuracy detection. Supports multi-engine execution strategies.
+> **v1.11.0**: ML-based prompt injection detection added ([Issue #185](https://github.com/RedHatProductSecurity/ai-guardian/issues/185)) — runs ONNX models inside the daemon process for high-accuracy detection. Supports multi-engine execution strategies.
 
 ### How It Works
 
@@ -256,7 +256,7 @@ These patterns are checked with context awareness:
 
 ### Enhanced Jailbreak Detection (Coming in v1.6.0)
 
-> **Planned Enhancement:** See [Issue #263](https://github.com/itdove/ai-guardian/issues/263)
+> **Planned Enhancement:** See [Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263)
 
 The v1.6.0 release will add:
 - 🎯 ML-based jailbreak detection (Rebuff, LLM Guard integration)
@@ -318,7 +318,7 @@ This eliminates false positives from patterns like `def __init__(self):` or `ski
 
 ### 4. Tool Output Scanning (v1.12.0)
 
-> **v1.12.0**: Prompt injection scanning now also runs on **PostToolUse** events to catch injection payloads hidden in tool outputs ([Issue #1290](https://github.com/itdove/ai-guardian/issues/1290)). This defends against indirect prompt injection where a malicious instruction is returned by a tool (e.g., fetched web page, API response) rather than typed by the user.
+> **v1.12.0**: Prompt injection scanning now also runs on **PostToolUse** events to catch injection payloads hidden in tool outputs ([Issue #1290](https://github.com/RedHatProductSecurity/ai-guardian/issues/1290)). This defends against indirect prompt injection where a malicious instruction is returned by a tool (e.g., fetched web page, API response) rather than typed by the user.
 
 ### 5. Why This Matters
 
@@ -599,5 +599,5 @@ Prompt injection detection is **lightweight**:
 
 - **v1.4.0** - Initial prompt injection detection (critical patterns)
 - **v1.5.0** - Added suspicious patterns, context awareness, and Unicode detection integration
-- **v1.6.0** (Planned) - Enhanced jailbreak detection with ML-based analysis ([Issue #263](https://github.com/itdove/ai-guardian/issues/263))
-- **v1.10.0** - Language-aware AST scanning for source code files ([Issue #892](https://github.com/itdove/ai-guardian/issues/892))
+- **v1.6.0** (Planned) - Enhanced jailbreak detection with ML-based analysis ([Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263))
+- **v1.10.0** - Language-aware AST scanning for source code files ([Issue #892](https://github.com/RedHatProductSecurity/ai-guardian/issues/892))

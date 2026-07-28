@@ -6,11 +6,11 @@ Thank you for your interest in contributing! This repo uses `collaborators_only`
 
 ### 1. Open a Discussion
 
-[GitHub Discussions](https://github.com/itdove/ai-guardian/discussions) are open to everyone and don't require collaborator access. Use them for:
+[GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions) are open to everyone and don't require collaborator access. Use them for:
 
-- **Bug reports** -- [Bug Reports](https://github.com/itdove/ai-guardian/discussions/categories/bug-reports) category
-- **Feature requests** -- [Ideas](https://github.com/itdove/ai-guardian/discussions/categories/ideas) category
-- **Questions** -- [Q&A](https://github.com/itdove/ai-guardian/discussions/categories/q-a) category
+- **Bug reports** -- [Bug Reports](https://github.com/RedHatProductSecurity/ai-guardian/discussions/categories/bug-reports) category
+- **Feature requests** -- [Ideas](https://github.com/RedHatProductSecurity/ai-guardian/discussions/categories/ideas) category
+- **Questions** -- [Q&A](https://github.com/RedHatProductSecurity/ai-guardian/discussions/categories/q-a) category
 
 Maintainers review discussions regularly and will convert them to issues when appropriate.
 
@@ -19,7 +19,7 @@ Maintainers review discussions regularly and will convert them to issues when ap
 Code contributions via fork + PR are always welcome and are not affected by interaction limits. PRs from forks work regardless of collaborator status.
 
 ```bash
-gh repo fork itdove/ai-guardian --clone
+gh repo fork RedHatProductSecurity/ai-guardian --clone
 cd ai-guardian
 git checkout -b feature/your-change
 # make changes, commit, push

@@ -13,7 +13,7 @@ Result categories:
 Privacy note: validation sends the detected secret to the provider's API.
 Requires explicit opt-in via secret_scanning.validate_secrets: true.
 
-See: https://github.com/itdove/ai-guardian/issues/971
+See: https://github.com/RedHatProductSecurity/ai-guardian/issues/971
 """
 
 import logging

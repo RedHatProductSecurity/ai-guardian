@@ -346,5 +346,5 @@ WARNING: Invalid IP range in SSRF config: <range>
 ## Questions?
 
 For issues or questions:
-- GitHub Issues: https://github.com/itdove/ai-guardian/issues
+- GitHub Issues: https://github.com/RedHatProductSecurity/ai-guardian/issues
 - Tag your issue with `pattern-server` label

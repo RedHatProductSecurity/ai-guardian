@@ -1376,7 +1376,7 @@ class ToolPolicyChecker:
         if is_source_file:
             msg += "- This file is pip-installed and cannot be modified\n"
             msg += "- If developing ai-guardian:\n"
-            msg += "  1. Clone: git clone https://github.com/itdove/ai-guardian\n"
+            msg += "  1. Clone: git clone https://github.com/RedHatProductSecurity/ai-guardian\n"
             msg += "  2. Install in dev mode: pip install -e .\n"
             msg += "  3. Edit source files in cloned repository\n"
             msg += "- Development source files CAN be edited (only pip-installed are protected)\n"
@@ -1793,7 +1793,7 @@ class ToolPolicyChecker:
                 f"Error: {e.message}\n"
                 f"\n"
                 f"Please fix the configuration file and try again.\n"
-                f"See: https://github.com/itdove/ai-guardian#configuration\n"
+                f"See: https://github.com/RedHatProductSecurity/ai-guardian#configuration\n"
                 f"{'='*70}\n"
             )
             # Print to stderr so user sees it (logger might not be visible in all IDEs)

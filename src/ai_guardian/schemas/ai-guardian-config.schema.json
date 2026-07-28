@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/ai-guardian-config.schema.json",
+  "$id": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/ai-guardian-config.schema.json",
   "title": "AI Guardian Configuration",
   "description": "Configuration file for ai-guardian security tool that protects IDE AI agents from unauthorized tool access and security risks",
   "type": "object",

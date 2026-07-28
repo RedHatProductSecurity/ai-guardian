@@ -68,9 +68,9 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/itdove/ai-guardian"
-"Bug Tracker" = "https://github.com/itdove/ai-guardian/issues"
-"Source Code" = "https://github.com/itdove/ai-guardian"
+"Homepage" = "https://github.com/RedHatProductSecurity/ai-guardian"
+"Bug Tracker" = "https://github.com/RedHatProductSecurity/ai-guardian/issues"
+"Source Code" = "https://github.com/RedHatProductSecurity/ai-guardian"
 
 [project.scripts]
 ai-guardian = "ai_guardian.__main__:main"

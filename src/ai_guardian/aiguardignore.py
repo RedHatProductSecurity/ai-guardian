@@ -61,7 +61,7 @@ try:
 except ImportError:
     HAS_TOML_W = False
 
-SCHEMA_HEADER = "#:schema https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json\n"
+SCHEMA_HEADER = "#:schema https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json\n"
 
 SCANNER_TYPES = frozenset(
     {

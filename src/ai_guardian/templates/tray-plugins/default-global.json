@@ -1,5 +1,5 @@
 {
-  "$schema": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
+  "$schema": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
   "name": "Quick Actions",
   "scope": "global",
   "items": [
@@ -73,9 +73,9 @@
     {
       "label": "Open Documentation",
       "command": {
-        "darwin": "open https://github.com/itdove/ai-guardian#readme",
-        "linux": "xdg-open https://github.com/itdove/ai-guardian#readme",
-        "default": "echo https://github.com/itdove/ai-guardian#readme"
+        "darwin": "open https://github.com/RedHatProductSecurity/ai-guardian#readme",
+        "linux": "xdg-open https://github.com/RedHatProductSecurity/ai-guardian#readme",
+        "default": "echo https://github.com/RedHatProductSecurity/ai-guardian#readme"
       },
       "type": "background"
     }

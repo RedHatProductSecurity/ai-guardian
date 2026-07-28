@@ -4,7 +4,7 @@ import platform
 import socket
 import sys
 
-PROJECT_URL = "https://github.com/itdove/ai-guardian"
+PROJECT_URL = "https://github.com/RedHatProductSecurity/ai-guardian"
 
 
 def get_about_info() -> dict:

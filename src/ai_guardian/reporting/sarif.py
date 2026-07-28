@@ -28,7 +28,7 @@ class SARIFFormatter:
                 "text": "Detects attempts to access internal/private IP addresses, cloud metadata endpoints, "
                 "or perform URL redirects that could lead to SSRF attacks."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#ssrf-protection",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#ssrf-protection",
             "defaultConfiguration": {"level": "error"},
             "properties": {
                 "tags": ["security", "ssrf", "network"],
@@ -44,7 +44,7 @@ class SARIFFormatter:
                 "bidirectional override characters, homoglyphs, and tag characters used for "
                 "prompt injection or obfuscation."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#unicode-attack-detection",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#unicode-attack-detection",
             "defaultConfiguration": {"level": "error"},
             "properties": {
                 "tags": ["security", "unicode", "prompt-injection"],
@@ -62,7 +62,7 @@ class SARIFFormatter:
                 "that could exfiltrate credentials or sensitive data through curl, wget, "
                 "base64 encoding, or cloud storage uploads."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#config-file-scanner",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#config-file-scanner",
             "defaultConfiguration": {"level": "error"},
             "properties": {
                 "tags": ["security", "exfiltration", "credentials"],
@@ -77,7 +77,7 @@ class SARIFFormatter:
                 "text": "Detects secrets, API keys, tokens, passwords, and other credentials "
                 "using pattern matching from Gitleaks and custom patterns."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#secret-scanning",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#secret-scanning",
             "defaultConfiguration": {"level": "error"},
             "properties": {
                 "tags": ["security", "secrets", "credentials"],
@@ -94,7 +94,7 @@ class SARIFFormatter:
                 "text": "Detects personally identifiable information (PII) including social security numbers, "
                 "credit card numbers, phone numbers, email addresses, passport numbers, and IBANs."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#pii-detection",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#pii-detection",
             "defaultConfiguration": {"level": "warning"},
             "properties": {"tags": ["security", "pii", "privacy"], "precision": "high"},
         },
@@ -106,7 +106,7 @@ class SARIFFormatter:
                 "text": "Detects prompt injection attempts including instruction overrides, "
                 "role manipulation, and other techniques to manipulate AI behavior."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#prompt-injection-detection",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#prompt-injection-detection",
             "defaultConfiguration": {"level": "warning"},
             "properties": {
                 "tags": ["security", "prompt-injection", "ai"],
@@ -122,7 +122,7 @@ class SARIFFormatter:
                 "download-and-execute chains, obfuscation, environment variable hijacking, "
                 "and reverse shells."
             },
-            "helpUri": "https://github.com/itdove/ai-guardian#supply-chain-scanning",
+            "helpUri": "https://github.com/RedHatProductSecurity/ai-guardian#supply-chain-scanning",
             "defaultConfiguration": {"level": "error"},
             "properties": {
                 "tags": ["security", "supply-chain", "agent-config"],
@@ -188,7 +188,7 @@ class SARIFFormatter:
                         "driver": {
                             "name": "AI Guardian",
                             "version": self.version,
-                            "informationUri": "https://github.com/itdove/ai-guardian",
+                            "informationUri": "https://github.com/RedHatProductSecurity/ai-guardian",
                             "semanticVersion": self.version,
                             "rules": rules,
                         }

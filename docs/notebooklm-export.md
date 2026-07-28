@@ -4,7 +4,7 @@
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/itdove/ai-guardian/main/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
@@ -32,7 +32,7 @@ Combine with:
 - Network security (firewalls, egress rules)
 - Secret management (Vault, AWS Secrets Manager)
 
-See [Security Design](https://github.com/itdove/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for limitations and architecture.
+See [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for limitations and architecture.
 
 ## Quick Start
 
@@ -40,15 +40,15 @@ See [Security Design](https://github.com/itdove/ai-guardian/blob/main/docs/SECUR
 
 ```bash
 # Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash -s -- --ide claude
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --ide claude
 
 # Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/install.sh | bash -s -- --pip --ide claude   # bare pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --venv --ide claude  # venv + pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --pip --ide claude   # bare pip
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/itdove/ai-guardian/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
 ```
 
 Or install manually:
@@ -63,7 +63,7 @@ Or use the container image (no Python setup required):
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/container/run.sh -o run.sh
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/container/run.sh -o run.sh
 chmod +x run.sh
 ANTHROPIC_API_KEY=sk-ant-... ACCEPT_PROPRIETARY_TOS=true \
     ./run.sh --ide claude --repo $(pwd)
@@ -80,7 +80,7 @@ podman run -it -p 63152:63152 \
 
 `ACCEPT_PROPRIETARY_TOS=true` accepts the [Claude Code Terms of Service](https://www.anthropic.com/legal/consumer-terms) and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.
 
-See [container/README.md](https://github.com/itdove/ai-guardian/blob/main/container/README.md) for IDE selection, Vertex AI auth, and multi-arch details.
+See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, Vertex AI auth, and multi-arch details.
 
 The pip/uv install:
 - Installs a scanner engine (gitleaks)
@@ -88,7 +88,7 @@ The pip/uv install:
 - Installs IDE hooks (PreToolUse, PostToolUse, UserPromptSubmit)
 - Sets up the MCP security advisor for AI-aware protection
 
-> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/itdove/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
+> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
 
 ### Daemon & Tray
 
@@ -101,7 +101,7 @@ ai-guardian tray stop             # Stop the tray
 ai-guardian tray --install --autostart  # Add desktop shortcut + launch on login
 ```
 
-The tray auto-discovers running daemons and shows per-daemon submenus with Statistics, Console, Pause/Resume, and Start/Stop controls. On first launch, the tray will offer to create a desktop shortcut automatically. See [Multi-Daemon Tray](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) for full documentation.
+The tray auto-discovers running daemons and shows per-daemon submenus with Statistics, Console, Pause/Resume, and Start/Stop controls. On first launch, the tray will offer to create a desktop shortcut automatically. See [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) for full documentation.
 
 > **Linux + Podman**: Container discovery requires the Podman socket to be active and `DOCKER_HOST` set:
 > ```bash
@@ -131,7 +131,7 @@ podman build -t ai-guardian container/
 podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude ai-guardian
 ```
 
-See [container/README.md](https://github.com/itdove/ai-guardian/blob/main/container/README.md) for IDE selection, auth, and multi-arch builds.
+See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, auth, and multi-arch builds.
 
 ### Security Profiles
 
@@ -153,51 +153,51 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 
 | Feature | Description | Docs |
 |---------|-------------|------|
-| Secret Scanning | Multi-layered detection of API keys, tokens, passwords | [docs/security/SECRET_SCANNING.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
-| PII Detection | Detect personally identifiable information | [docs/security/SECRET_SCANNING.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
-| Prompt Injection | Language-aware detection with tree-sitter AST parsing and configurable sensitivity | [docs/security/PROMPT_INJECTION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| Image Scanning | OCR-based secret and PII detection in screenshots and images | [docs/security/IMAGE_SCANNING.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) |
-| Unicode Attack Detection | Zero-width chars, bidi override, homoglyphs | [docs/security/UNICODE_ATTACKS.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md) |
-| SSRF Protection | Block private IPs, cloud metadata, dangerous schemes | [docs/security/SSRF_PROTECTION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md) |
-| Config File Scanning | Detect exfiltration of sensitive config files | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
-| Directory Blocking | `.ai-read-deny` markers + config-based rules | [docs/security/DIRECTORY_RULES.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) |
-| Tool Permissions | Allow/deny lists for Skills, MCP, Bash, Write | [docs/TOOL_POLICY.md](https://github.com/itdove/ai-guardian/blob/main/docs/TOOL_POLICY.md) |
-| Violation Logging | JSON audit trail of all blocked operations | [docs/VIOLATION_LOGGING.md](https://github.com/itdove/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) |
-| Sanitize Command | Clean sensitive data from files | [docs/security/SECRET_REDACTION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) |
-| Interactive Console | TUI for managing configuration visually | [docs/CONSOLE.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONSOLE.md) |
-| Scanner Management | Install and manage 8 scanner engines (including built-in toml-patterns) | [docs/SCANNER_INSTALLATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Pre-commit Hook | Scan staged files for secrets before commit | [docs/PRE_COMMIT.md](https://github.com/itdove/ai-guardian/blob/main/docs/PRE_COMMIT.md) |
-| Inline Annotations | Suppress false positives with `ai-guardian:allow` and block annotations | [docs/ANNOTATIONS.md](https://github.com/itdove/ai-guardian/blob/main/docs/ANNOTATIONS.md) |
-| Self-Protection | Prevents AI from disabling its own security controls | [docs/SECURITY_DESIGN.md](https://github.com/itdove/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) |
-| MCP Security Advisor | Read-only security tools for AI agents (proactive checks) | [docs/MCP_SERVER.md](https://github.com/itdove/ai-guardian/blob/main/docs/MCP_SERVER.md) |
-| MCP Security Scanning | Audit MCP server configs and source code for supply chain risks | [docs/MCP_SERVER.md](https://github.com/itdove/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) |
-| Project Config Overlay | Per-repo config with immutable fields and global-only section protection | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) |
-| Multi-Daemon Tray | Discover and manage daemons across local, Podman/Docker, and Kubernetes | [docs/MULTI_DAEMON_TRAY.md](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
-| Desktop Shortcut & Autostart | Install tray as desktop app with optional login startup | [docs/MULTI_DAEMON_TRAY.md](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) |
-| Tray Plugins | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands | [docs/MULTI_DAEMON_TRAY.md](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) |
-| TOML Pattern Engine | Built-in Python scanner with 425 pre-compiled patterns, no binary required | [docs/TOML_PATTERNS.md](https://github.com/itdove/ai-guardian/blob/main/docs/TOML_PATTERNS.md) |
-| Multi-Agent Support | Hook adapters for 14 AI coding agents with normalized input/output | [docs/AGENT_SUPPORT.md](https://github.com/itdove/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Container Image | UBI-based image with all headless IDEs and scanners, published to quay.io | [container/README.md](https://github.com/itdove/ai-guardian/blob/main/container/README.md) |
-| Supply Chain Scanning | Detect malicious patterns in agent hooks, MCP configs, and plugin files | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) |
-| Context Poisoning Detection | Detect persistent instruction injection in conversation context (OWASP LLM03) | [docs/security/CONTEXT_POISONING.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) |
-| Security SDK & REST API | Programmatic security checking for Python agents and multi-language support | [docs/SDK.md](https://github.com/itdove/ai-guardian/blob/main/docs/SDK.md) |
-| Secret Liveness Validation | Verify detected secrets are still active via provider APIs | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation) |
-| Hook Latency Metrics | Per-hook timing with console dashboard for performance analysis | [docs/HOOKS.md](https://github.com/itdove/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking) |
-| Canary Token Detection | Detect user-registered tripwire values in AI output to catch data exfiltration | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Offensive Language Scanner | Detect profanity, slurs, and non-inclusive terminology in code and comments | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Exfiltration Behavior Detection | Detect bash commands that steal credentials via curl, base64, SSH key exfil | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
-| Code Security Scanning | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) | [docs/SCANNER_INSTALLATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Dummy Agent | LLM-free hook testing via interactive REPL with YAML scenario files | [docs/AGENT_SUPPORT.md](https://github.com/itdove/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Kubernetes Deployment | Kustomize manifests for Kind, OpenShift, and production deployments | [docs/kubernetes.md](https://github.com/itdove/ai-guardian/blob/main/docs/kubernetes.md) |
-| Security Instructions | Configurable agent context injection rules via TUI and web console | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Transcript Scanning | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs | [docs/AGENT_SUPPORT.md](https://github.com/itdove/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) |
-| LeakTK Listen Mode | Event-driven scanning with 40x latency reduction vs polling | [docs/SCANNER_INSTALLATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Zero-Config Onboarding | `init --scan` scans the project and generates a tuned config | [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Language-Aware FP Suppression | Tree-sitter AST parsing reduces false positives in code | [docs/security/PROMPT_INJECTION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| ML Prompt Injection Setup | One-command `ai-guardian ml setup` installs model + dependencies | [docs/security/PROMPT_INJECTION.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| Crush IDE Support | Hook adapter for Charmbracelet Crush with MCP advisory | [docs/AGENT_SUPPORT.md](https://github.com/itdove/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Event-Driven Tray Updates | Tray refreshes on daemon state changes instead of polling | [docs/MULTI_DAEMON_TRAY.md](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
-| Scan & Configure UI | Web console workflow to scan a project and generate config | [docs/CONSOLE.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONSOLE.md) |
+| Secret Scanning | Multi-layered detection of API keys, tokens, passwords | [docs/security/SECRET_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
+| PII Detection | Detect personally identifiable information | [docs/security/SECRET_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
+| Prompt Injection | Language-aware detection with tree-sitter AST parsing and configurable sensitivity | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
+| Image Scanning | OCR-based secret and PII detection in screenshots and images | [docs/security/IMAGE_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) |
+| Unicode Attack Detection | Zero-width chars, bidi override, homoglyphs | [docs/security/UNICODE_ATTACKS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md) |
+| SSRF Protection | Block private IPs, cloud metadata, dangerous schemes | [docs/security/SSRF_PROTECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md) |
+| Config File Scanning | Detect exfiltration of sensitive config files | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
+| Directory Blocking | `.ai-read-deny` markers + config-based rules | [docs/security/DIRECTORY_RULES.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) |
+| Tool Permissions | Allow/deny lists for Skills, MCP, Bash, Write | [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) |
+| Violation Logging | JSON audit trail of all blocked operations | [docs/VIOLATION_LOGGING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) |
+| Sanitize Command | Clean sensitive data from files | [docs/security/SECRET_REDACTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) |
+| Interactive Console | TUI for managing configuration visually | [docs/CONSOLE.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) |
+| Scanner Management | Install and manage 8 scanner engines (including built-in toml-patterns) | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
+| Pre-commit Hook | Scan staged files for secrets before commit | [docs/PRE_COMMIT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) |
+| Inline Annotations | Suppress false positives with `ai-guardian:allow` and block annotations | [docs/ANNOTATIONS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md) |
+| Self-Protection | Prevents AI from disabling its own security controls | [docs/SECURITY_DESIGN.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) |
+| MCP Security Advisor | Read-only security tools for AI agents (proactive checks) | [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) |
+| MCP Security Scanning | Audit MCP server configs and source code for supply chain risks | [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) |
+| Project Config Overlay | Per-repo config with immutable fields and global-only section protection | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) |
+| Multi-Daemon Tray | Discover and manage daemons across local, Podman/Docker, and Kubernetes | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
+| Desktop Shortcut & Autostart | Install tray as desktop app with optional login startup | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) |
+| Tray Plugins | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) |
+| TOML Pattern Engine | Built-in Python scanner with 425 pre-compiled patterns, no binary required | [docs/TOML_PATTERNS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) |
+| Multi-Agent Support | Hook adapters for 14 AI coding agents with normalized input/output | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
+| Container Image | UBI-based image with all headless IDEs and scanners, published to quay.io | [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) |
+| Supply Chain Scanning | Detect malicious patterns in agent hooks, MCP configs, and plugin files | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) |
+| Context Poisoning Detection | Detect persistent instruction injection in conversation context (OWASP LLM03) | [docs/security/CONTEXT_POISONING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) |
+| Security SDK & REST API | Programmatic security checking for Python agents and multi-language support | [docs/SDK.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) |
+| Secret Liveness Validation | Verify detected secrets are still active via provider APIs | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation) |
+| Hook Latency Metrics | Per-hook timing with console dashboard for performance analysis | [docs/HOOKS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking) |
+| Canary Token Detection | Detect user-registered tripwire values in AI output to catch data exfiltration | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
+| Offensive Language Scanner | Detect profanity, slurs, and non-inclusive terminology in code and comments | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
+| Exfiltration Behavior Detection | Detect bash commands that steal credentials via curl, base64, SSH key exfil | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
+| Code Security Scanning | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
+| Dummy Agent | LLM-free hook testing via interactive REPL with YAML scenario files | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
+| Kubernetes Deployment | Kustomize manifests for Kind, OpenShift, and production deployments | [docs/kubernetes.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) |
+| Security Instructions | Configurable agent context injection rules via TUI and web console | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
+| Transcript Scanning | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) |
+| LeakTK Listen Mode | Event-driven scanning with 40x latency reduction vs polling | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
+| Zero-Config Onboarding | `init --scan` scans the project and generates a tuned config | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
+| Language-Aware FP Suppression | Tree-sitter AST parsing reduces false positives in code | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
+| ML Prompt Injection Setup | One-command `ai-guardian ml setup` installs model + dependencies | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
+| Crush IDE Support | Hook adapter for Charmbracelet Crush with MCP advisory | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
+| Event-Driven Tray Updates | Tray refreshes on daemon state changes instead of polling | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
+| Scan & Configure UI | Web console workflow to scan a project and generate config | [docs/CONSOLE.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) |
 
 ## Default Behavior (No Configuration File)
 
@@ -230,15 +230,15 @@ ai-guardian setup --create-config --profile @moderator      # Human-in-the-loop,
 ai-guardian setup --list-profiles                           # List available profiles
 ```
 
-- **Example config**: [ai-guardian-example.json](https://github.com/itdove/ai-guardian/blob/main/ai-guardian-example.json)
-- **JSON Schema**: [ai-guardian-config.schema.json](https://github.com/itdove/ai-guardian/blob/main/src/ai_guardian/schemas/ai-guardian-config.schema.json) (IDE autocomplete + runtime validation)
-- **Ignore file schema**: [aiguardignore.schema.json](https://github.com/itdove/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) (VS Code Taplo validation for `.aiguardignore.toml`)
-- **Full reference**: [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md)
+- **Example config**: [ai-guardian-example.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/ai-guardian-example.json)
+- **JSON Schema**: [ai-guardian-config.schema.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/ai-guardian-config.schema.json) (IDE autocomplete + runtime validation)
+- **Ignore file schema**: [aiguardignore.schema.json](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) (VS Code Taplo validation for `.aiguardignore.toml`)
+- **Full reference**: [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md)
 
 ### Configuration Locations (Precedence Order)
 
 1. **User config**: `~/.config/ai-guardian/ai-guardian.json` (base)
-2. **Project config**: `.ai-guardian/ai-guardian.json` (merged on top of user config, see [docs](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180))
+2. **Project config**: `.ai-guardian/ai-guardian.json` (merged on top of user config, see [docs](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180))
 3. **Remote configs** (highest, permissions only): Fetched from URLs in `remote_configs`
 4. **Defaults**: Built-in defaults when no config exists
 
@@ -254,7 +254,7 @@ ai-guardian setup --ide claude       # MCP security advisor installed by default
 ai-guardian setup --remote-config-url https://example.com/policy.json
 ```
 
-Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/itdove/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
+Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
 
 ## Action Modes
 
@@ -266,7 +266,7 @@ Each security policy supports three enforcement levels:
 | `warn` | Allowed | Warning shown | **Educate** during rollout |
 | `log-only` | Allowed | Silent | **Monitor** silently |
 
-See [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md) for per-feature action mode configuration.
+See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for per-feature action mode configuration.
 
 ## Integration
 
@@ -287,10 +287,10 @@ See [docs/CONFIGURATION.md](https://github.com/itdove/ai-guardian/blob/main/docs
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | Complete |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | MCP-only |
 
-- [GitHub Copilot Setup](https://github.com/itdove/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
-- [Aider Setup](https://github.com/itdove/ai-guardian/blob/main/docs/AIDER.md)
-- [Multi-Engine Support](https://github.com/itdove/ai-guardian/blob/main/docs/MULTI_ENGINE_SUPPORT.md)
-- [Hook Ordering](https://github.com/itdove/ai-guardian/blob/main/docs/HOOKS.md)
+- [GitHub Copilot Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
+- [Aider Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md)
+- [Multi-Engine Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_ENGINE_SUPPORT.md)
+- [Hook Ordering](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md)
 
 ## How It Works
 
@@ -312,7 +312,7 @@ User prompt / Tool use
   ALLOW --> Send to AI / Execute tool
 ```
 
-The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *during* execution (mandatory). PostToolUse hooks scan tool outputs using the same pipeline. See [docs/MCP_SERVER.md](https://github.com/itdove/ai-guardian/blob/main/docs/MCP_SERVER.md) for the MCP server and [docs/SECURITY_DESIGN.md](https://github.com/itdove/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for full architecture.
+The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *during* execution (mandatory). PostToolUse hooks scan tool outputs using the same pipeline. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for the MCP server and [docs/SECURITY_DESIGN.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) for full architecture.
 
 ## Environment Variables
 
@@ -324,16 +324,16 @@ The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *dur
 | `AI_GUARDIAN_IDE_TYPE` | Override IDE auto-detection | Auto-detect |
 | `AI_GUARDIAN_PATTERN_TOKEN` | Default pattern server auth token (all sections) | None |
 
-Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`, `config_file_scanning`) can use its own pattern server with independent auth via `token_env` or `token_file`. See [docs/PATTERN_SERVER.md](https://github.com/itdove/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers).
+Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`, `config_file_scanning`) can use its own pattern server with independent auth via `token_env` or `token_file`. See [docs/PATTERN_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers).
 
 ## Requirements
 
 - **Python 3.9+** (3.10+ highly recommended — several features including AST-aware scanning, MCP server, and web console require Python 3.10+)
 - **Windows**: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified
 - **Scanner engine**: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian
-- **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/itdove/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))
+- **GNOME Linux**: AppIndicator extension for system tray icon ([setup steps](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started))
 
-See [docs/SCANNER_INSTALLATION.md](https://github.com/itdove/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) for installation instructions.
+See [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) for installation instructions.
 
 ## Optional Dependencies
 
@@ -393,7 +393,7 @@ python -m venv $env:USERPROFILE\.ai-guardian-venv
 & "$env:USERPROFILE\.ai-guardian-venv\Scripts\pip" install ai-guardian
 
 # Or use the one-line installer:
-irm https://raw.githubusercontent.com/itdove/ai-guardian/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
 ```
 
 > **Warning:** The `main` branch contains unreleased development code. Always install stable releases from PyPI (`uv tool install ai-guardian` or `pip install ai-guardian`). Do not `git clone` + `pip install -e .` for production use — development builds may contain breaking changes, incomplete features, or experimental code that has not been release-tested.
@@ -401,12 +401,12 @@ irm https://raw.githubusercontent.com/itdove/ai-guardian/main/install.ps1 | iex
 For development and contributing:
 
 ```bash
-git clone https://github.com/itdove/ai-guardian.git
+git clone https://github.com/RedHatProductSecurity/ai-guardian.git
 cd ai-guardian && uv pip install -e .      # recommended
 # or: pip install -e .
 ```
 
-> **Dev builds:** CI builds a wheel on every PR and merge. Download from the [Actions tab](https://github.com/itdove/ai-guardian/actions/workflows/build-wheel.yml) for testing only; use PyPI for stable releases.
+> **Dev builds:** CI builds a wheel on every PR and merge. Download from the [Actions tab](https://github.com/RedHatProductSecurity/ai-guardian/actions/workflows/build-wheel.yml) for testing only; use PyPI for stable releases.
 
 ## Testing
 
@@ -425,36 +425,36 @@ pytest                                          # Run all tests
 pytest --cov=ai_guardian --cov-report=term      # With coverage
 ```
 
-See [AGENTS.md](https://github.com/itdove/ai-guardian/blob/main/AGENTS.md) for testing guidelines and CI/CD details.
+See [AGENTS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/AGENTS.md) for testing guidelines and CI/CD details.
 
 ## Contributing
 
 We welcome contributions! This repo uses interaction limits, so:
 
-- **Bug reports & feature requests** -- use [GitHub Discussions](https://github.com/itdove/ai-guardian/discussions)
+- **Bug reports & feature requests** -- use [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions)
 - **Code contributions** -- fork + PR (not affected by interaction limits)
 
 ```bash
-gh repo fork itdove/ai-guardian --clone
+gh repo fork RedHatProductSecurity/ai-guardian --clone
 cd ai-guardian
 git checkout -b feature-name
 # Make changes, commit, push
 gh pr create --web
 ```
 
-See [CONTRIBUTING.md](https://github.com/itdove/ai-guardian/blob/main/CONTRIBUTING.md) for complete guidelines.
+See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) for complete guidelines.
 
 ## Documentation
 
-Full documentation is available in the [docs/](https://github.com/itdove/ai-guardian/blob/main/docs/) folder:
+Full documentation is available in the [docs/](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/) folder:
 
-- [Configuration Guide](https://github.com/itdove/ai-guardian/blob/main/docs/CONFIGURATION.md)
-- [Security Documentation](https://github.com/itdove/ai-guardian/blob/main/docs/security/)
-- [Console Guide](https://github.com/itdove/ai-guardian/blob/main/docs/CONSOLE.md)
-- [Tool Policy](https://github.com/itdove/ai-guardian/blob/main/docs/TOOL_POLICY.md)
-- [Scanner Installation](https://github.com/itdove/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md)
-- [Security Design](https://github.com/itdove/ai-guardian/blob/main/docs/SECURITY_DESIGN.md)
-- [All Documentation](https://github.com/itdove/ai-guardian/blob/main/docs/README.md)
+- [Configuration Guide](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md)
+- [Security Documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/)
+- [Console Guide](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md)
+- [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md)
+- [Scanner Installation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md)
+- [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md)
+- [All Documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/README.md)
 
 ## FAQ
 
@@ -462,14 +462,14 @@ Full documentation is available in the [docs/](https://github.com/itdove/ai-guar
 Publishing attack patterns makes them easier to misuse and would cause ai-guardian to block its own documentation. Use `test:` prefixed strings for testing. See OWASP LLM Top 10 for research.
 
 **Q: What's `permissions` vs `permissions_directories` vs `directory_rules`?**
-`permissions` = which **tools** can run. `permissions_directories` = auto-discover tool permissions from repos. `directory_rules` = which **paths** can be accessed. See [docs/TOOL_POLICY.md](https://github.com/itdove/ai-guardian/blob/main/docs/TOOL_POLICY.md) and [docs/security/DIRECTORY_RULES.md](https://github.com/itdove/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md).
+`permissions` = which **tools** can run. `permissions_directories` = auto-discover tool permissions from repos. `directory_rules` = which **paths** can be accessed. See [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) and [docs/security/DIRECTORY_RULES.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md).
 
 **Q: How are multiple rules evaluated?**
-Both `permissions.rules` and `directory_rules` use **last-match-wins**: rules are checked in array order and the last matching rule determines the outcome. Place broad deny rules first, then specific allow rules after. Common mistake: putting an allow rule before a deny-all — the deny-all wins because it comes last. See [docs/TOOL_POLICY.md](https://github.com/itdove/ai-guardian/blob/main/docs/TOOL_POLICY.md#rule-evaluation-order-last-match-wins).
+Both `permissions.rules` and `directory_rules` use **last-match-wins**: rules are checked in array order and the last matching rule determines the outcome. Place broad deny rules first, then specific allow rules after. Common mistake: putting an allow rule before a deny-all — the deny-all wins because it comes last. See [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#rule-evaluation-order-last-match-wins).
 
 ## License
 
-Apache 2.0 - see [LICENSE](https://github.com/itdove/ai-guardian/blob/main/LICENSE) file for details.
+Apache 2.0 - see [LICENSE](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/LICENSE) file for details.
 
 ## Acknowledgments
 
@@ -915,12 +915,12 @@ When Claude Code invokes a skill (slash command), the skill's tool calls do not 
 Claude Code does not provide a hook event that allows modifying tool results before they are shown to the model. The `PostToolUse` hook can inspect output but cannot reliably transform it (see the `updatedToolOutput` issue above for Bash).
 
 - **Impact:** Content sanitization (stripping detection patterns, redacting matched text) cannot be applied to tool results before the model processes them. Warn-mode messages may leak detection patterns into the model context.
-- **Workaround:** ai-guardian strips detection patterns from warn/log-only messages (see [#1327](https://github.com/itdove/ai-guardian/issues/1327)), but this only covers ai-guardian's own messages, not arbitrary tool output.
+- **Workaround:** ai-guardian strips detection patterns from warn/log-only messages (see [#1327](https://github.com/RedHatProductSecurity/ai-guardian/issues/1327)), but this only covers ai-guardian's own messages, not arbitrary tool output.
 - **Upstream:** [anthropics/claude-code#18653](https://github.com/anthropics/claude-code/issues/18653)
 
 ### Image scanning (all agents)
 
-Claude Code binary file reads bypass hooks — image content may not pass through PreToolUse in a scannable format. Image scanning works best when images are base64-encoded in tool output, not when read as raw binary. See [#801](https://github.com/itdove/ai-guardian/issues/801) for tracking.
+Claude Code binary file reads bypass hooks — image content may not pass through PreToolUse in a scannable format. Image scanning works best when images are base64-encoded in tool output, not when read as raw binary. See [#801](https://github.com/RedHatProductSecurity/ai-guardian/issues/801) for tracking.
 
 ### Transcript scanning availability
 
@@ -988,7 +988,7 @@ For agents marked **Low confidence**, we implemented the hook adapter based on a
 - Which violation types fail or behave unexpectedly
 - Any hook format differences from documentation
 
-Report via [GitHub Discussions](https://github.com/itdove/ai-guardian/discussions) or [Issues](https://github.com/itdove/ai-guardian/issues).
+Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions) or [Issues](https://github.com/RedHatProductSecurity/ai-guardian/issues).
 
 ## Hook Event Name Mapping
 
@@ -1603,7 +1603,7 @@ tags = ["token", "internal"]
 ## Getting Help
 
 **Issues with ai-guardian**:
-- GitHub Issues: https://github.com/itdove/ai-guardian/issues
+- GitHub Issues: https://github.com/RedHatProductSecurity/ai-guardian/issues
 
 **Issues with Aider**:
 - Aider Discord: https://aider.chat/docs/discord.html
@@ -2007,12 +2007,12 @@ A TOML file for declaring which files to skip during scanning, using a structure
 
 **Relationship to `.gitleaks.toml`**: `.aiguardignore.toml` skips entire files across all scanners. `.gitleaks.toml` filters individual secret findings (regex, stopwords, per-rule allowlists). They are complementary.
 
-**VS Code / Taplo validation**: A [JSON schema](https://github.com/itdove/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) is available for autocompletion and validation. New files created by AI Guardian include a `#:schema` header that Taplo detects automatically. For existing files, add to `.vscode/settings.json`:
+**VS Code / Taplo validation**: A [JSON schema](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) is available for autocompletion and validation. New files created by AI Guardian include a `#:schema` header that Taplo detects automatically. For existing files, add to `.vscode/settings.json`:
 
 ```json
 {
   "evenBetterToml.schema.associations": {
-    ".aiguardignore.toml": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json"
+    ".aiguardignore.toml": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json"
   }
 }
 ```
@@ -4709,7 +4709,7 @@ The AI Guardian Console provides a comprehensive, user-friendly interface for ma
 - **Real-time validation** to prevent errors
 - **Full keyboard navigation** for power users
 
-For questions, issues, or feature requests, see the main [AI Guardian repository](https://github.com/itdove/ai-guardian).
+For questions, issues, or feature requests, see the main [AI Guardian repository](https://github.com/RedHatProductSecurity/ai-guardian).
 
 # === docs/COOKBOOK.md ===
 
@@ -6849,7 +6849,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 
 ```bash
 # Clone your fork
-gh repo fork itdove/ai-guardian --clone
+gh repo fork RedHatProductSecurity/ai-guardian --clone
 cd ai-guardian
 
 # Install in editable mode with dev dependencies
@@ -6862,7 +6862,7 @@ uv pip install -e ".[dev]"
 ### Keep Your Fork in Sync
 
 ```bash
-git remote add upstream https://github.com/itdove/ai-guardian.git
+git remote add upstream https://github.com/RedHatProductSecurity/ai-guardian.git
 git fetch upstream
 git checkout main && git merge upstream/main
 ```
@@ -7647,7 +7647,7 @@ Track ai-guardian usage for compliance:
 ## Getting Help
 
 **Issues with ai-guardian**:
-- GitHub Issues: https://github.com/itdove/ai-guardian/issues
+- GitHub Issues: https://github.com/RedHatProductSecurity/ai-guardian/issues
 
 **Issues with GitHub Copilot**:
 - GitHub Support: https://support.github.com/
@@ -8662,7 +8662,7 @@ The instructions teach the AI:
 
 # Multi-Engine ML Support for Prompt Injection Detection
 
-**GitHub Issue**: [#185](https://github.com/itdove/ai-guardian/issues/185)  
+**GitHub Issue**: [#185](https://github.com/RedHatProductSecurity/ai-guardian/issues/185)  
 **Status**: v1.11.0  
 **Priority**: High
 
@@ -9622,7 +9622,7 @@ Then run Option B from any machine with access to `localhost:63152`.
 
 # Multi-Engine Support for Secret Scanning
 
-**GitHub Issue**: [#91](https://github.com/itdove/ai-guardian/issues/91)  
+**GitHub Issue**: [#91](https://github.com/RedHatProductSecurity/ai-guardian/issues/91)  
 **Status**: ✅ **Phase 1 Complete (v1.5.0)** | ✅ **Phase 2 Complete (v1.6.0)**  
 **Priority**: High (Production Ready)
 
@@ -13224,7 +13224,7 @@ GitHub maintainers of the AI Guardian project can edit source code with AI assis
 gh auth login
 
 # 2. Be a collaborator on the repository
-# (check: gh api repos/itdove/ai-guardian/collaborators/YOUR_USERNAME)
+# (check: gh api repos/RedHatProductSecurity/ai-guardian/collaborators/YOUR_USERNAME)
 
 # Now AI can help edit source files
 # Allowed for maintainers:
@@ -13264,7 +13264,7 @@ The bypass prevents **two distinct threat models**:
 If maintainer bypass isn't working:
 
 1. Check GitHub authentication: `gh auth status`
-2. Verify collaborator access: `gh api repos/itdove/ai-guardian/collaborators/YOUR_USERNAME`
+2. Verify collaborator access: `gh api repos/RedHatProductSecurity/ai-guardian/collaborators/YOUR_USERNAME`
 3. Clear cache: `rm ~/.cache/ai-guardian/maintainer-status.json`
 4. Check repo URL: `git config --get remote.origin.url` (must be github.com)
 
@@ -13436,7 +13436,7 @@ These legitimate prompts may trigger warnings:
 
 ## Hook Integration
 
-Context poisoning detection runs on **UserPromptSubmit**, **PostToolUse**, and **BeforeReadFile** hook events ([Issue #1285](https://github.com/itdove/ai-guardian/issues/1285)). As of v1.12.0, detection is no longer limited to direct user prompts — tool outputs and file content are also scanned for persistent poisoning instructions.
+Context poisoning detection runs on **UserPromptSubmit**, **PostToolUse**, and **BeforeReadFile** hook events ([Issue #1285](https://github.com/RedHatProductSecurity/ai-guardian/issues/1285)). As of v1.12.0, detection is no longer limited to direct user prompts — tool outputs and file content are also scanned for persistent poisoning instructions.
 
 Detection runs after prompt injection checks and before secret scanning in the hook processing pipeline.
 
@@ -14994,7 +14994,7 @@ image_scanning .... FAIL  rapidocr-onnxruntime not installed
 
 AI Guardian detects and blocks prompt injection attacks that try to manipulate the AI assistant into ignoring safety guidelines or executing malicious instructions.
 
-> **v1.6.0**: Enhanced jailbreak detection added ([Issue #263](https://github.com/itdove/ai-guardian/issues/263)) — detects role-play attacks (DAN mode), identity manipulation, constraint removal, and hypothetical framing with dedicated error messages and violation logging.
+> **v1.6.0**: Enhanced jailbreak detection added ([Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263)) — detects role-play attacks (DAN mode), identity manipulation, constraint removal, and hypothetical framing with dedicated error messages and violation logging.
 
 ## What is Prompt Injection?
 
@@ -15011,7 +15011,7 @@ Think of it like **SQL injection for AI assistants** - instead of injecting data
 
 ## ML-Based Detection
 
-> **v1.11.0**: ML-based prompt injection detection added ([Issue #185](https://github.com/itdove/ai-guardian/issues/185)) — runs ONNX models inside the daemon process for high-accuracy detection. Supports multi-engine execution strategies.
+> **v1.11.0**: ML-based prompt injection detection added ([Issue #185](https://github.com/RedHatProductSecurity/ai-guardian/issues/185)) — runs ONNX models inside the daemon process for high-accuracy detection. Supports multi-engine execution strategies.
 
 ### How It Works
 
@@ -15248,7 +15248,7 @@ These patterns are checked with context awareness:
 
 ### Enhanced Jailbreak Detection (Coming in v1.6.0)
 
-> **Planned Enhancement:** See [Issue #263](https://github.com/itdove/ai-guardian/issues/263)
+> **Planned Enhancement:** See [Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263)
 
 The v1.6.0 release will add:
 - 🎯 ML-based jailbreak detection (Rebuff, LLM Guard integration)
@@ -15310,7 +15310,7 @@ This eliminates false positives from patterns like `def __init__(self):` or `ski
 
 ### 4. Tool Output Scanning (v1.12.0)
 
-> **v1.12.0**: Prompt injection scanning now also runs on **PostToolUse** events to catch injection payloads hidden in tool outputs ([Issue #1290](https://github.com/itdove/ai-guardian/issues/1290)). This defends against indirect prompt injection where a malicious instruction is returned by a tool (e.g., fetched web page, API response) rather than typed by the user.
+> **v1.12.0**: Prompt injection scanning now also runs on **PostToolUse** events to catch injection payloads hidden in tool outputs ([Issue #1290](https://github.com/RedHatProductSecurity/ai-guardian/issues/1290)). This defends against indirect prompt injection where a malicious instruction is returned by a tool (e.g., fetched web page, API response) rather than typed by the user.
 
 ### 5. Why This Matters
 
@@ -15591,8 +15591,8 @@ Prompt injection detection is **lightweight**:
 
 - **v1.4.0** - Initial prompt injection detection (critical patterns)
 - **v1.5.0** - Added suspicious patterns, context awareness, and Unicode detection integration
-- **v1.6.0** (Planned) - Enhanced jailbreak detection with ML-based analysis ([Issue #263](https://github.com/itdove/ai-guardian/issues/263))
-- **v1.10.0** - Language-aware AST scanning for source code files ([Issue #892](https://github.com/itdove/ai-guardian/issues/892))
+- **v1.6.0** (Planned) - Enhanced jailbreak detection with ML-based analysis ([Issue #263](https://github.com/RedHatProductSecurity/ai-guardian/issues/263))
+- **v1.10.0** - Language-aware AST scanning for source code files ([Issue #892](https://github.com/RedHatProductSecurity/ai-guardian/issues/892))
 
 # === docs/security/README.md ===
 
@@ -20252,7 +20252,7 @@ ai-guardian daemon start
 
 **Symptom:** Tray plugin parameter popups open a NiceGUI browser form instead of a native tkinter dialog, even on a system where tkinter should be available.
 
-**Cause:** When ai-guardian is installed via `uv tool install`, the Python runtime is python-build-standalone which may have an incomplete Tcl/Tk installation. Earlier versions of ai-guardian used an overly strict tkinter check (`package require Tk`) that failed on uv's Python even when tkinter itself worked fine. This was fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037).
+**Cause:** When ai-guardian is installed via `uv tool install`, the Python runtime is python-build-standalone which may have an incomplete Tcl/Tk installation. Earlier versions of ai-guardian used an overly strict tkinter check (`package require Tk`) that failed on uv's Python even when tkinter itself worked fine. This was fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037).
 
 **Fix:** Upgrade to ai-guardian v1.11.0 or later:
 ```bash
@@ -20295,7 +20295,7 @@ Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this aut
 
 **Cause:** On macOS, if PyObjC's `NSApplication.sharedApplication()` is initialized before `tkinter.Tk()`, the Objective-C runtime creates an NSApplication wrapper that lacks Tk's `macOSVersion` category method. When tkinter later tries to call this method, the process aborts.
 
-**Fix:** This was fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037). Upgrade to v1.11.0 or later.
+**Fix:** This was fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037). Upgrade to v1.11.0 or later.
 
 **Workaround:** Skip tkinter and use the NiceGUI fallback:
 ```bash
@@ -20308,7 +20308,7 @@ export AI_GUARDIAN_NO_TKINTER=1
 
 **Cause:** uv's venv uses symlinks to the python-build-standalone install. When the tray daemon resolves the Python executable, Tcl searches for `init.tcl` relative to the symlink rather than the real Python install path.
 
-**Fix:** Fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037) — ai-guardian now resolves the real Python path and sets `TCL_LIBRARY` to the correct location. Upgrade to v1.11.0 or later.
+**Fix:** Fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037) — ai-guardian now resolves the real Python path and sets `TCL_LIBRARY` to the correct location. Upgrade to v1.11.0 or later.
 
 ---
 
@@ -20582,7 +20582,7 @@ For per-violation-type impact details, see [AGENT_SUPPORT.md — Known Limitatio
 
 **Cause:** Claude Code does not provide a hook event for modifying tool results. The `PostToolUse` hook can inspect but not reliably transform output.
 
-**Workaround:** ai-guardian strips detection patterns from its own warn/log-only messages ([#1327](https://github.com/itdove/ai-guardian/issues/1327)), but cannot sanitize arbitrary tool output.
+**Workaround:** ai-guardian strips detection patterns from its own warn/log-only messages ([#1327](https://github.com/RedHatProductSecurity/ai-guardian/issues/1327)), but cannot sanitize arbitrary tool output.
 
 **Upstream:** [anthropics/claude-code#18653](https://github.com/anthropics/claude-code/issues/18653)
 

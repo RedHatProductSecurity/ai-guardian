@@ -1,6 +1,6 @@
 # Multi-Engine Support for Secret Scanning
 
-**GitHub Issue**: [#91](https://github.com/itdove/ai-guardian/issues/91)  
+**GitHub Issue**: [#91](https://github.com/RedHatProductSecurity/ai-guardian/issues/91)  
 **Status**: ✅ **Phase 1 Complete (v1.5.0)** | ✅ **Phase 2 Complete (v1.6.0)**  
 **Priority**: High (Production Ready)
 

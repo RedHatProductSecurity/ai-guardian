@@ -102,7 +102,7 @@ class HookInputParsingTests(TestCase):
         hook_data = {
             "hook_event_name": "UserPromptSubmit",
             "prompt": "The script has AI_GUARDIAN_VERSION, I think we can reuse it for example here\n"
-            "    curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/v1.11.1/install.sh | bash -s --",
+            "    curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.11.1/install.sh | bash -s --",
         }
 
         with patch("sys.stdin", StringIO(json.dumps(hook_data))):

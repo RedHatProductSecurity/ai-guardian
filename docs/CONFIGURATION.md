@@ -93,12 +93,12 @@ A TOML file for declaring which files to skip during scanning, using a structure
 
 **Relationship to `.gitleaks.toml`**: `.aiguardignore.toml` skips entire files across all scanners. `.gitleaks.toml` filters individual secret findings (regex, stopwords, per-rule allowlists). They are complementary.
 
-**VS Code / Taplo validation**: A [JSON schema](https://github.com/itdove/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) is available for autocompletion and validation. New files created by AI Guardian include a `#:schema` header that Taplo detects automatically. For existing files, add to `.vscode/settings.json`:
+**VS Code / Taplo validation**: A [JSON schema](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json) is available for autocompletion and validation. New files created by AI Guardian include a `#:schema` header that Taplo detects automatically. For existing files, add to `.vscode/settings.json`:
 
 ```json
 {
   "evenBetterToml.schema.associations": {
-    ".aiguardignore.toml": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json"
+    ".aiguardignore.toml": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json"
   }
 }
 ```
