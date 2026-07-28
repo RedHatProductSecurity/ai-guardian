@@ -74,7 +74,7 @@ jobs:
       # --- Dev image: download wheel from Build Wheel artifact ---
       - name: Download dev wheel
         if: steps.params.outputs.skip != 'true' && steps.params.outputs.wheel_source == 'artifact'
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: ai-guardian-dev-wheel
           path: container/vendor/
@@ -84,7 +84,7 @@ jobs:
       # --- Release image: build wheel from source ---
       - name: Set up Python
         if: steps.params.outputs.skip != 'true' && steps.params.outputs.wheel_source == 'build'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.12"
 
@@ -111,15 +111,15 @@ jobs:
       # --- Multi-arch build setup ---
       - name: Set up QEMU
         if: steps.params.outputs.skip != 'true'
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
 
       - name: Set up Docker Buildx
         if: steps.params.outputs.skip != 'true'
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to quay.io
         if: steps.params.outputs.skip != 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
@@ -138,7 +138,7 @@ jobs:
       # main merge → :latest + :sha  |  release tag → :<version> + :sha
       - name: Build and push image
         if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: container/
           platforms: linux/amd64,linux/arm64
