@@ -22,8 +22,86 @@ logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 5.0
 
+# macOS terminals that support Terminal.app-style "do script" AppleScript.
+_MACOS_DO_SCRIPT_APPS = {"Terminal", "Warp"}
 
-def _launch_in_terminal(cmd_parts, keep_open=False, clear=False, cwd=None):
+# macOS CLI terminals: app name → binary name.
+# These are launched directly via their CLI binary, not AppleScript.
+_MACOS_CLI_TERMINALS = {
+    "alacritty": "alacritty",
+    "kitty": "kitty",
+    "wezterm": "wezterm",
+}
+
+
+def _get_configured_terminal():
+    """Read daemon.tray.terminal_app from config. Returns None for auto-detect."""
+    try:
+        from ai_guardian.config.loaders import _load_config_file
+
+        cfg, _ = _load_config_file()
+        return (cfg or {}).get("daemon", {}).get("tray", {}).get("terminal_app")
+    except Exception:
+        return None
+
+
+def _build_iterm_applescript(cmd_str, keep_open):
+    """Build iTerm2-specific AppleScript."""
+    cmd_escaped = cmd_str.replace("\\", "\\\\").replace('"', '\\"')
+    if keep_open:
+        auto_close = ""
+    else:
+        auto_close = (
+            "        repeat while (is at shell prompt of current session "
+            "of current window) is false\n"
+            "            delay 1\n"
+            "        end repeat\n"
+            "        delay 0.5\n"
+            "        close current window\n"
+        )
+    return (
+        'tell application "iTerm"\n'
+        "    activate\n"
+        "    create window with default profile\n"
+        "    tell current session of current window\n"
+        f'        write text "{cmd_escaped}"\n'
+        f"{auto_close}"
+        "    end tell\n"
+        "end tell"
+    )
+
+
+def _build_terminal_applescript(app_name, cmd_str, keep_open):
+    """Build Terminal.app-style AppleScript (also works for Warp)."""
+    cmd_escaped = cmd_str.replace("\\", "\\\\").replace('"', '\\"')
+    if keep_open:
+        auto_close = ""
+    else:
+        auto_close = (
+            "    repeat\n"
+            "        delay 1\n"
+            "        if not busy of currentTab then\n"
+            "            close (every window whose tabs contains "
+            "currentTab)\n"
+            "            exit repeat\n"
+            "        end if\n"
+            "    end repeat\n"
+        )
+    return (
+        f'tell application "{app_name}"\n'
+        '    set currentTab to do script ""\n'
+        "    delay 2\n"
+        f'    do script "{cmd_escaped}" in currentTab\n'
+        "    activate\n"
+        "    set zoomed of front window to true\n"
+        f"{auto_close}"
+        "end tell"
+    )
+
+
+def _launch_in_terminal(
+    cmd_parts, keep_open=False, clear=False, cwd=None, terminal_app=None
+):
     """Launch a command in a new terminal window.
 
     Args:
@@ -32,10 +110,15 @@ def _launch_in_terminal(cmd_parts, keep_open=False, clear=False, cwd=None):
             finishes so the user can read the output.
         clear: If True, clear the terminal before running the command.
         cwd: If set, cd to this directory before running the command.
+        terminal_app: Override terminal application. If None, reads from
+            config (daemon.tray.terminal_app). If unset, uses platform default.
 
     Returns:
         True if a terminal was launched, False otherwise.
     """
+    if terminal_app is None:
+        terminal_app = _get_configured_terminal()
+
     cmd_str = " ".join(shlex.quote(p) for p in cmd_parts)
     if cwd:
         cmd_str = f"cd {shlex.quote(cwd)}; {cmd_str}"
@@ -44,33 +127,11 @@ def _launch_in_terminal(cmd_parts, keep_open=False, clear=False, cwd=None):
     try:
         system = platform.system()
         if system == "Darwin":
-            if keep_open:
-                auto_close = ""
-            else:
-                auto_close = (
-                    "    repeat\n"
-                    "        delay 1\n"
-                    "        if not busy of currentTab then\n"
-                    "            close (every window whose tabs contains "
-                    "currentTab)\n"
-                    "            exit repeat\n"
-                    "        end if\n"
-                    "    end repeat\n"
-                )
-            cmd_escaped = cmd_str.replace("\\", "\\\\").replace('"', '\\"')
-            script = (
-                'tell application "Terminal"\n'
-                '    set currentTab to do script ""\n'
-                "    delay 2\n"
-                f'    do script "{cmd_escaped}" in currentTab\n'
-                "    activate\n"
-                "    set zoomed of front window to true\n"
-                f"{auto_close}"
-                "end tell"
-            )
-            subprocess.Popen(["osascript", "-e", script])
-            return True
+            return _launch_macos(cmd_parts, cmd_str, keep_open, terminal_app)
         elif system == "Windows":
+            if terminal_app and shutil.which(terminal_app):
+                subprocess.Popen([terminal_app] + list(cmd_parts))
+                return True
             flag = "/k" if keep_open else "/c"
             win_parts = (["cls", "&&"] if clear else []) + cmd_parts
             if cwd:
@@ -81,6 +142,15 @@ def _launch_in_terminal(cmd_parts, keep_open=False, clear=False, cwd=None):
             if keep_open:
                 shell_cmd = cmd_str + '; echo; read -rp "Press Enter to close..."'
                 cmd_parts = ["bash", "-c", shell_cmd]
+            if terminal_app and shutil.which(terminal_app):
+                subprocess.Popen([terminal_app, "-e"] + list(cmd_parts))
+                return True
+            if terminal_app:
+                logger.warning(
+                    "Configured terminal '%s' not found, "
+                    "falling back to auto-detection.",
+                    terminal_app,
+                )
             for term, args in [
                 ("gnome-terminal", ["--maximize", "--"]),
                 ("kgx", ["-e"]),
@@ -102,6 +172,36 @@ def _launch_in_terminal(cmd_parts, keep_open=False, clear=False, cwd=None):
     except OSError as e:
         logger.warning("Failed to launch terminal: %s", e)
         return False
+
+
+def _launch_macos(cmd_parts, cmd_str, keep_open, terminal_app):
+    """Launch terminal on macOS. Handles iTerm2, CLI terminals, and Terminal.app."""
+    app = (terminal_app or "").strip().removesuffix(".app")
+
+    # CLI-based terminals (alacritty, kitty, wezterm) — launch binary directly
+    cli_bin = _MACOS_CLI_TERMINALS.get(app.lower())
+    if cli_bin and shutil.which(cli_bin):
+        subprocess.Popen([cli_bin, "-e"] + list(cmd_parts))
+        return True
+
+    # iTerm2 — uses its own AppleScript API
+    if app.lower() in ("iterm", "iterm2"):
+        script = _build_iterm_applescript(cmd_str, keep_open)
+        subprocess.Popen(["osascript", "-e", script])
+        return True
+
+    # Terminal.app, Warp, or unset (default) — "do script" AppleScript
+    app_name = app or "Terminal"
+    if app and app not in _MACOS_DO_SCRIPT_APPS:
+        logger.warning(
+            "Terminal '%s' not recognized; trying Terminal.app-style "
+            "AppleScript. If it fails, use a CLI terminal name "
+            "(alacritty, kitty, wezterm) or iTerm/iTerm2.",
+            app,
+        )
+    script = _build_terminal_applescript(app_name, cmd_str, keep_open)
+    subprocess.Popen(["osascript", "-e", script])
+    return True
 
 
 class MultiDaemonClient:

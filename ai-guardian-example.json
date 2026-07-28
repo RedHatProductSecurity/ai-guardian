@@ -1098,6 +1098,8 @@
       "enabled": true,
       "auto_install": true,
       "_comment_auto_install": "Auto-install tray shortcut + autostart on first CLI run. Skipped on headless/CI. Set false to disable.",
+      "_comment_terminal_app": "Preferred terminal for tray menu actions. macOS: AppleScript app name (iTerm, Warp). Linux: binary (alacritty, kitty). Windows: executable (wt). Omit for auto-detect.",
+      "terminal_app": "iTerm",
       "discovery_interval_seconds": 15,
       "discover_containers": true,
       "discover_kubernetes": false,

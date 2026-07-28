@@ -17,11 +17,16 @@ def _load_local_daemon_config():
         "client_timeout_seconds": daemon_cfg.get("client_timeout_seconds", 2.0),
         "tray_enabled": daemon_cfg.get("tray", {}).get("enabled", True),
         "tray_auto_install": daemon_cfg.get("tray", {}).get("auto_install", True),
+        "terminal_app": daemon_cfg.get("tray", {}).get("terminal_app", ""),
     }
 
 
 def _save_local_daemon_config(
-    idle_timeout, client_timeout, tray_enabled, tray_auto_install
+    idle_timeout,
+    client_timeout,
+    tray_enabled,
+    tray_auto_install,
+    terminal_app="",
 ):
     import json
     from ai_guardian.config.utils import get_config_dir
@@ -35,10 +40,14 @@ def _save_local_daemon_config(
     daemon_config = full_config.get("daemon", {})
     daemon_config["idle_timeout_minutes"] = idle_timeout
     daemon_config["client_timeout_seconds"] = client_timeout
-    daemon_config["tray"] = {
+    tray_cfg = {
         "enabled": tray_enabled,
         "auto_install": tray_auto_install,
     }
+    term_val = (terminal_app or "").strip()
+    if term_val:
+        tray_cfg["terminal_app"] = term_val
+    daemon_config["tray"] = tray_cfg
     daemon_config.pop("mode", None)
     full_config["daemon"] = daemon_config
 
@@ -253,12 +262,28 @@ def create_daemon_detail_page(service, daemon_name: str):
                                     "Auto-Install Tray",
                                     value=daemon_cfg["tray_auto_install"],
                                 )
+                                cfg_terminal_app = (
+                                    ui.input(
+                                        label="Terminal App",
+                                        value=daemon_cfg.get("terminal_app", ""),
+                                        placeholder="auto-detect",
+                                    )
+                                    .props("dense outlined")
+                                    .classes("w-40")
+                                    .tooltip(
+                                        "macOS: app name (iTerm). "
+                                        "Linux: binary (alacritty). "
+                                        "Windows: exe (wt). "
+                                        "Empty = auto-detect"
+                                    )
+                                )
 
                                 async def do_save_config(
                                     idle=cfg_idle,
                                     client=cfg_client,
                                     tray=cfg_tray,
                                     auto=cfg_auto_install,
+                                    term=cfg_terminal_app,
                                 ):
                                     try:
                                         await run.io_bound(
@@ -267,6 +292,7 @@ def create_daemon_detail_page(service, daemon_name: str):
                                             float(client.value or 2.0),
                                             tray.value,
                                             auto.value,
+                                            term.value or "",
                                         )
                                         ui.notify(
                                             "Daemon config saved",

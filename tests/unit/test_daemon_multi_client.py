@@ -733,6 +733,155 @@ class TestLaunchInTerminalErrorHandling:
         assert result is True
 
 
+class TestLaunchInTerminalConfiguredApp:
+    """Tests for configurable terminal_app (issue #1730)."""
+
+    # -- macOS: iTerm2 --
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    def test_macos_iterm_uses_iterm_applescript(self, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="iTerm")
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "iTerm"' in script
+        assert "write text" in script
+        assert "do script" not in script
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    def test_macos_iterm2_name_variant(self, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="iTerm2")
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "iTerm"' in script
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    def test_macos_iterm_dot_app_stripped(self, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="iTerm.app")
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "iTerm"' in script
+
+    # -- macOS: CLI terminals --
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch(
+        "ai_guardian.daemon.multi_client.shutil.which",
+        side_effect=lambda x: f"/opt/{x}" if x == "alacritty" else None,
+    )
+    @mock.patch("subprocess.Popen")
+    def test_macos_alacritty_launches_cli(self, mock_popen, _which, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="Alacritty")
+        assert result is True
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "alacritty"
+        assert "-e" in args
+
+    # -- macOS: defaults --
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    def test_macos_defaults_to_terminal_when_no_app(self, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="")
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "Terminal"' in script
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    def test_macos_warp_uses_do_script(self, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="Warp")
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "Warp"' in script
+        assert "do script" in script
+
+    # -- Linux --
+
+    @mock.patch("platform.system", return_value="Linux")
+    @mock.patch(
+        "shutil.which",
+        side_effect=lambda x: "/usr/bin/alacritty" if x == "alacritty" else None,
+    )
+    @mock.patch("subprocess.Popen")
+    def test_linux_uses_configured_app(self, mock_popen, _which, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="alacritty")
+        assert result is True
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "alacritty"
+        assert "-e" in args
+
+    @mock.patch("platform.system", return_value="Linux")
+    @mock.patch("shutil.which", return_value=None)
+    def test_linux_falls_back_when_configured_not_found(self, _which, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        with mock.patch("ai_guardian.daemon.multi_client.logger") as mock_logger:
+            result = _launch_in_terminal(["echo", "hello"], terminal_app="nonexistent")
+            assert result is False
+            warn_calls = mock_logger.warning.call_args_list
+            assert any("nonexistent" in str(c) for c in warn_calls)
+
+    # -- Windows --
+
+    @mock.patch("platform.system", return_value="Windows")
+    @mock.patch(
+        "shutil.which",
+        side_effect=lambda x: "C:\\wt.exe" if x == "wt" else None,
+    )
+    @mock.patch("subprocess.Popen")
+    def test_windows_uses_configured_app(self, mock_popen, _which, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="wt")
+        assert result is True
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "wt"
+
+    @mock.patch("platform.system", return_value="Windows")
+    @mock.patch("shutil.which", return_value=None)
+    @mock.patch("subprocess.Popen")
+    def test_windows_falls_back_to_cmd_when_not_found(self, mock_popen, _which, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"], terminal_app="nonexistent")
+        assert result is True
+        args = mock_popen.call_args[0][0]
+        assert args[0] == "cmd"
+
+    # -- Config reading --
+
+    @mock.patch("platform.system", return_value="Darwin")
+    @mock.patch("subprocess.Popen")
+    @mock.patch(
+        "ai_guardian.daemon.multi_client._get_configured_terminal",
+        return_value="Warp",
+    )
+    def test_reads_config_when_no_terminal_app_arg(self, _cfg, mock_popen, _sys):
+        from ai_guardian.daemon.multi_client import _launch_in_terminal
+
+        result = _launch_in_terminal(["echo", "hello"])
+        assert result is True
+        script = mock_popen.call_args[0][0][2]
+        assert 'tell application "Warp"' in script
+
+
 class TestUpgradeTransport:
     """Tests for pip upgrade transport methods."""
 
