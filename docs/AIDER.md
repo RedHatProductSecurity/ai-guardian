@@ -438,7 +438,7 @@ tags = ["token", "internal"]
 ## Getting Help
 
 **Issues with ai-guardian**:
-- GitHub Issues: https://github.com/itdove/ai-guardian/issues
+- GitHub Issues: https://github.com/RedHatProductSecurity/ai-guardian/issues
 
 **Issues with Aider**:
 - Aider Discord: https://aider.chat/docs/discord.html

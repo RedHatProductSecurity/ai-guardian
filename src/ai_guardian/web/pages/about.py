@@ -57,7 +57,7 @@ def create_about_page(service, daemon_name: str):
             ui.label("Project").classes("text-lg font-bold")
             ui.link(
                 "GitHub Repository",
-                "https://github.com/itdove/ai-guardian",
+                "https://github.com/RedHatProductSecurity/ai-guardian",
                 new_tab=True,
             ).classes("text-sm text-blue-4")
             _info_row("License", "Apache-2.0")

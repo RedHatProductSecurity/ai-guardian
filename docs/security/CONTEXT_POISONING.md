@@ -95,7 +95,7 @@ These legitimate prompts may trigger warnings:
 
 ## Hook Integration
 
-Context poisoning detection runs on **UserPromptSubmit**, **PostToolUse**, and **BeforeReadFile** hook events ([Issue #1285](https://github.com/itdove/ai-guardian/issues/1285)). As of v1.12.0, detection is no longer limited to direct user prompts — tool outputs and file content are also scanned for persistent poisoning instructions.
+Context poisoning detection runs on **UserPromptSubmit**, **PostToolUse**, and **BeforeReadFile** hook events ([Issue #1285](https://github.com/RedHatProductSecurity/ai-guardian/issues/1285)). As of v1.12.0, detection is no longer limited to direct user prompts — tool outputs and file content are also scanned for persistent poisoning instructions.
 
 Detection runs after prompt injection checks and before secret scanning in the hook processing pipeline.
 

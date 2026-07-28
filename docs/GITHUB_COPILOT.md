@@ -509,7 +509,7 @@ Track ai-guardian usage for compliance:
 ## Getting Help
 
 **Issues with ai-guardian**:
-- GitHub Issues: https://github.com/itdove/ai-guardian/issues
+- GitHub Issues: https://github.com/RedHatProductSecurity/ai-guardian/issues
 
 **Issues with GitHub Copilot**:
 - GitHub Support: https://support.github.com/

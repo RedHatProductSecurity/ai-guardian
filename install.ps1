@@ -27,7 +27,7 @@
     Verify tkinter availability (included with python.org installers).
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/itdove/ai-guardian/main/install.ps1 | iex
+    irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
 
 .EXAMPLE
     .\install.ps1 -IDE claude -Profile @strict -Venv

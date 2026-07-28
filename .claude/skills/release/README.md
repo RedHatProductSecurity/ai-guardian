@@ -145,5 +145,5 @@ The helper script ensures all configured files are updated atomically, maintaini
 ## Support
 
 For issues or questions about this skill:
-- Original implementation: https://github.com/itdove/ai-guardian/issues/16
+- Original implementation: https://github.com/RedHatProductSecurity/ai-guardian/issues/16
 - Adaptable for any project with version files

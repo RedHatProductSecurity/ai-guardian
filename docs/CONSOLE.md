@@ -2214,4 +2214,4 @@ The AI Guardian Console provides a comprehensive, user-friendly interface for ma
 - **Real-time validation** to prevent errors
 - **Full keyboard navigation** for power users
 
-For questions, issues, or feature requests, see the main [AI Guardian repository](https://github.com/itdove/ai-guardian).
+For questions, issues, or feature requests, see the main [AI Guardian repository](https://github.com/RedHatProductSecurity/ai-guardian).

@@ -84,8 +84,8 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/itdove/ai-guardian/releases/tag/v1.0.0
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.0
 """
     (tmp_path / "CHANGELOG.md").write_text(changelog_content)
 
@@ -200,11 +200,11 @@ def test_update_changelog():
         assert "### Added" in changelog
         assert "- New feature X" in changelog
         assert (
-            "[1.1.0]: https://github.com/itdove/ai-guardian/releases/tag/v1.1.0"
+            "[1.1.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.1.0"
             in changelog
         )
         assert (
-            "[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.1.0...HEAD"
+            "[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.1.0...HEAD"
             in changelog
         )
 
@@ -225,8 +225,8 @@ def test_update_changelog_empty_unreleased():
 ### Added
 - Initial release
 
-[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/itdove/ai-guardian/releases/tag/v1.0.0
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.0
 """
         (tmp_path / "CHANGELOG.md").write_text(changelog_content)
 

@@ -1,6 +1,6 @@
 # Multi-Engine ML Support for Prompt Injection Detection
 
-**GitHub Issue**: [#185](https://github.com/itdove/ai-guardian/issues/185)  
+**GitHub Issue**: [#185](https://github.com/RedHatProductSecurity/ai-guardian/issues/185)  
 **Status**: v1.11.0  
 **Priority**: High
 

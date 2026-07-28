@@ -13,8 +13,8 @@ usage() {
 AI Guardian — Uninstall script
 
 Usage:
-    curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/uninstall.sh | bash
-    curl -fsSL https://raw.githubusercontent.com/itdove/ai-guardian/main/uninstall.sh | bash -s -- [OPTIONS]
+    curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/uninstall.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/uninstall.sh | bash -s -- [OPTIONS]
 
 Options:
     --all               Remove everything: package, hooks, config, state, cache

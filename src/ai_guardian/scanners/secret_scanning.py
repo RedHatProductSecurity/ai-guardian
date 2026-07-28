@@ -2170,7 +2170,7 @@ def check_secrets_with_gitleaks(
             "  Gitleaks:     brew install gitleaks\n"
             "  BetterLeaks:  brew install betterleaks (20-40% faster)\n"
             "  LeakTK:       brew install leaktk/tap/leaktk\n\n"
-            "See https://github.com/itdove/ai-guardian for more information.\n\n"
+            "See https://github.com/RedHatProductSecurity/ai-guardian for more information.\n\n"
             "Operation will continue, but secrets will NOT be detected.\n"
             "After installation, restart your IDE.\n"
             f"{'='*70}\n"

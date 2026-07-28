@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json",
+  "$id": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json",
   "title": "ai-guardian ignore file",
   "description": "Per-project file ignore patterns for ai-guardian scanners (.aiguardignore.toml)",
   "type": "object",

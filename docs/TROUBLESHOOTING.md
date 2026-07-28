@@ -193,7 +193,7 @@ ai-guardian daemon start
 
 **Symptom:** Tray plugin parameter popups open a NiceGUI browser form instead of a native tkinter dialog, even on a system where tkinter should be available.
 
-**Cause:** When ai-guardian is installed via `uv tool install`, the Python runtime is python-build-standalone which may have an incomplete Tcl/Tk installation. Earlier versions of ai-guardian used an overly strict tkinter check (`package require Tk`) that failed on uv's Python even when tkinter itself worked fine. This was fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037).
+**Cause:** When ai-guardian is installed via `uv tool install`, the Python runtime is python-build-standalone which may have an incomplete Tcl/Tk installation. Earlier versions of ai-guardian used an overly strict tkinter check (`package require Tk`) that failed on uv's Python even when tkinter itself worked fine. This was fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037).
 
 **Fix:** Upgrade to ai-guardian v1.11.0 or later:
 ```bash
@@ -236,7 +236,7 @@ Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this aut
 
 **Cause:** On macOS, if PyObjC's `NSApplication.sharedApplication()` is initialized before `tkinter.Tk()`, the Objective-C runtime creates an NSApplication wrapper that lacks Tk's `macOSVersion` category method. When tkinter later tries to call this method, the process aborts.
 
-**Fix:** This was fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037). Upgrade to v1.11.0 or later.
+**Fix:** This was fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037). Upgrade to v1.11.0 or later.
 
 **Workaround:** Skip tkinter and use the NiceGUI fallback:
 ```bash
@@ -249,7 +249,7 @@ export AI_GUARDIAN_NO_TKINTER=1
 
 **Cause:** uv's venv uses symlinks to the python-build-standalone install. When the tray daemon resolves the Python executable, Tcl searches for `init.tcl` relative to the symlink rather than the real Python install path.
 
-**Fix:** Fixed in [#1037](https://github.com/itdove/ai-guardian/issues/1037) — ai-guardian now resolves the real Python path and sets `TCL_LIBRARY` to the correct location. Upgrade to v1.11.0 or later.
+**Fix:** Fixed in [#1037](https://github.com/RedHatProductSecurity/ai-guardian/issues/1037) — ai-guardian now resolves the real Python path and sets `TCL_LIBRARY` to the correct location. Upgrade to v1.11.0 or later.
 
 ---
 
@@ -523,7 +523,7 @@ For per-violation-type impact details, see [AGENT_SUPPORT.md — Known Limitatio
 
 **Cause:** Claude Code does not provide a hook event for modifying tool results. The `PostToolUse` hook can inspect but not reliably transform output.
 
-**Workaround:** ai-guardian strips detection patterns from its own warn/log-only messages ([#1327](https://github.com/itdove/ai-guardian/issues/1327)), but cannot sanitize arbitrary tool output.
+**Workaround:** ai-guardian strips detection patterns from its own warn/log-only messages ([#1327](https://github.com/RedHatProductSecurity/ai-guardian/issues/1327)), but cannot sanitize arbitrary tool output.
 
 **Upstream:** [anthropics/claude-code#18653](https://github.com/anthropics/claude-code/issues/18653)
 

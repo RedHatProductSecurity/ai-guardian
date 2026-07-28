@@ -78,7 +78,7 @@ def test_example_config_is_valid_json():
 
     # Verify it has the schema reference
     assert "$schema" in config
-    assert "itdove/ai-guardian" in config["$schema"]
+    assert "RedHatProductSecurity/ai-guardian" in config["$schema"]
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")

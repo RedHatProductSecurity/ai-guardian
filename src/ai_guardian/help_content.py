@@ -3,7 +3,7 @@
 Used by both the TUI HelpModal and the web console help panel.
 """
 
-_GITHUB_DOCS = "https://github.com/itdove/ai-guardian/blob/main/docs"
+_GITHUB_DOCS = "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs"
 
 SCANNER_HELP = {
     "secret_scanning": {

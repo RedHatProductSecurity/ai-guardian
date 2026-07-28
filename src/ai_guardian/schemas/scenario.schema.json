@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/itdove/ai-guardian/blob/main/src/ai_guardian/schemas/scenario.schema.json",
+  "$id": "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/scenario.schema.json",
   "title": "AI Guardian Dummy-Agent Scenario",
   "description": "Scenario file for ai-guardian dummy-agent --script. Defines a sequence of hook events to fire and the expected outcome (allow or block) for each.",
   "type": "object",

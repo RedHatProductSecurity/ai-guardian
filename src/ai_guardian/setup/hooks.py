@@ -1385,7 +1385,7 @@ class IDESetup:
                     message += f"  {warning}\n"
                 message += (
                     "\n  📚 For more information about hook ordering, see:\n"
-                    "     https://github.com/itdove/ai-guardian/blob/main/docs/HOOK_ORDERING.md\n"
+                    "     https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOK_ORDERING.md\n"
                 )
 
             if not gitleaks_installed:

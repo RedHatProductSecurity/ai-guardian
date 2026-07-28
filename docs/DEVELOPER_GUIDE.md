@@ -68,7 +68,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 
 ```bash
 # Clone your fork
-gh repo fork itdove/ai-guardian --clone
+gh repo fork RedHatProductSecurity/ai-guardian --clone
 cd ai-guardian
 
 # Install in editable mode with dev dependencies
@@ -81,7 +81,7 @@ uv pip install -e ".[dev]"
 ### Keep Your Fork in Sync
 
 ```bash
-git remote add upstream https://github.com/itdove/ai-guardian.git
+git remote add upstream https://github.com/RedHatProductSecurity/ai-guardian.git
 git fetch upstream
 git checkout main && git merge upstream/main
 ```

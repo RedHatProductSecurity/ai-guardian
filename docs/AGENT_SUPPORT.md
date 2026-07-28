@@ -115,12 +115,12 @@ When Claude Code invokes a skill (slash command), the skill's tool calls do not 
 Claude Code does not provide a hook event that allows modifying tool results before they are shown to the model. The `PostToolUse` hook can inspect output but cannot reliably transform it (see the `updatedToolOutput` issue above for Bash).
 
 - **Impact:** Content sanitization (stripping detection patterns, redacting matched text) cannot be applied to tool results before the model processes them. Warn-mode messages may leak detection patterns into the model context.
-- **Workaround:** ai-guardian strips detection patterns from warn/log-only messages (see [#1327](https://github.com/itdove/ai-guardian/issues/1327)), but this only covers ai-guardian's own messages, not arbitrary tool output.
+- **Workaround:** ai-guardian strips detection patterns from warn/log-only messages (see [#1327](https://github.com/RedHatProductSecurity/ai-guardian/issues/1327)), but this only covers ai-guardian's own messages, not arbitrary tool output.
 - **Upstream:** [anthropics/claude-code#18653](https://github.com/anthropics/claude-code/issues/18653)
 
 ### Image scanning (all agents)
 
-Claude Code binary file reads bypass hooks — image content may not pass through PreToolUse in a scannable format. Image scanning works best when images are base64-encoded in tool output, not when read as raw binary. See [#801](https://github.com/itdove/ai-guardian/issues/801) for tracking.
+Claude Code binary file reads bypass hooks — image content may not pass through PreToolUse in a scannable format. Image scanning works best when images are base64-encoded in tool output, not when read as raw binary. See [#801](https://github.com/RedHatProductSecurity/ai-guardian/issues/801) for tracking.
 
 ### Transcript scanning availability
 
@@ -188,7 +188,7 @@ For agents marked **Low confidence**, we implemented the hook adapter based on a
 - Which violation types fail or behave unexpectedly
 - Any hook format differences from documentation
 
-Report via [GitHub Discussions](https://github.com/itdove/ai-guardian/discussions) or [Issues](https://github.com/itdove/ai-guardian/issues).
+Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions) or [Issues](https://github.com/RedHatProductSecurity/ai-guardian/issues).
 
 ## Hook Event Name Mapping
 

@@ -146,7 +146,7 @@ GitHub maintainers of the AI Guardian project can edit source code with AI assis
 gh auth login
 
 # 2. Be a collaborator on the repository
-# (check: gh api repos/itdove/ai-guardian/collaborators/YOUR_USERNAME)
+# (check: gh api repos/RedHatProductSecurity/ai-guardian/collaborators/YOUR_USERNAME)
 
 # Now AI can help edit source files
 # Allowed for maintainers:
@@ -186,7 +186,7 @@ The bypass prevents **two distinct threat models**:
 If maintainer bypass isn't working:
 
 1. Check GitHub authentication: `gh auth status`
-2. Verify collaborator access: `gh api repos/itdove/ai-guardian/collaborators/YOUR_USERNAME`
+2. Verify collaborator access: `gh api repos/RedHatProductSecurity/ai-guardian/collaborators/YOUR_USERNAME`
 3. Clear cache: `rm ~/.cache/ai-guardian/maintainer-status.json`
 4. Check repo URL: `git config --get remote.origin.url` (must be github.com)
 

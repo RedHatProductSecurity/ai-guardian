@@ -239,7 +239,7 @@ Move Unreleased section entries to a new version section:
 ### Fixed
 - [List of bug fixes]
 
-[1.0.0]: https://github.com/itdove/ai-guardian/releases/tag/v1.0.0
+[1.0.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.0
 ```
 
 Commit the changelog:
@@ -303,11 +303,11 @@ Note: `:latest` tracks the main branch (updated on every merge), not releases.
 
 After pushing the tag:
 
-1. Go to GitHub Actions: https://github.com/itdove/ai-guardian/actions
+1. Go to GitHub Actions: https://github.com/RedHatProductSecurity/ai-guardian/actions
 2. Check the "Publish Package" workflow run — verify it completes successfully
 3. Check the "Build Container Image" workflow run — verify it completes successfully
 4. Check PyPI: https://pypi.org/project/ai-guardian/
-5. Check GitHub Releases: https://github.com/itdove/ai-guardian/releases
+5. Check GitHub Releases: https://github.com/RedHatProductSecurity/ai-guardian/releases
 6. Verify the versioned container image on quay.io:
    ```bash
    podman pull quay.io/itdove/ai-guardian:<version>
@@ -470,7 +470,7 @@ Add a new section for the patch:
 ### Fixed
 - Critical timeout issue in permission validation (#123)
 
-[1.0.1]: https://github.com/itdove/ai-guardian/releases/tag/v1.0.1
+[1.0.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.1
 ```
 
 ```bash
@@ -564,7 +564,7 @@ Add a new section for the hotfix:
 ### Fixed
 - Critical timeout issue in permission validation (#123)
 
-[1.0.1]: https://github.com/itdove/ai-guardian/releases/tag/v1.0.1
+[1.0.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.1
 ```
 
 ```bash
@@ -730,7 +730,7 @@ To enable automatic TestPyPI publishing for testing (recommended):
    - **Repository**: ai-guardian
    - **Workflow**: publish-test.yml
    - **Environment**: testpypi
-6. Create GitHub environment at https://github.com/itdove/ai-guardian/settings/environments:
+6. Create GitHub environment at https://github.com/RedHatProductSecurity/ai-guardian/settings/environments:
    - Name: `testpypi`
    - (Optional) Add protection rules
 
@@ -768,7 +768,7 @@ Create an account at https://test.pypi.org/account/register/ and verify your ema
 
 #### 3. Create GitHub Environment
 
-1. Go to https://github.com/itdove/ai-guardian/settings/environments
+1. Go to https://github.com/RedHatProductSecurity/ai-guardian/settings/environments
 2. Click "New environment"
 3. Name: `testpypi`
 4. (Optional) Add protection rules:
@@ -832,7 +832,7 @@ git push origin v1.2.0-test1
 
 #### Step 4: Monitor GitHub Actions
 
-1. Go to https://github.com/itdove/ai-guardian/actions
+1. Go to https://github.com/RedHatProductSecurity/ai-guardian/actions
 2. Check the "Publish to TestPyPI" workflow run
 3. Verify it completes successfully
 
@@ -890,7 +890,7 @@ If the TestPyPI release works correctly:
 
 You can also trigger the TestPyPI workflow manually without creating a tag:
 
-1. Go to https://github.com/itdove/ai-guardian/actions/workflows/publish-test.yml
+1. Go to https://github.com/RedHatProductSecurity/ai-guardian/actions/workflows/publish-test.yml
 2. Click "Run workflow"
 3. Select the branch you want to test
 4. Click "Run workflow" button

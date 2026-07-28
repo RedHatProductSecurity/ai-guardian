@@ -3083,7 +3083,7 @@ class TestAboutMenuItem:
 
     def test_build_about_text_contains_project_url(self):
         text = build_about_text()
-        assert "https://github.com/itdove/ai-guardian" in text
+        assert "https://github.com/RedHatProductSecurity/ai-guardian" in text
 
     def test_build_about_text_contains_scanners(self):
         from ai_guardian.scanners.manager import InstalledScanner
@@ -3245,7 +3245,7 @@ class TestAboutMenuItem:
             "platform": "Linux 5.15 x86_64",
             "config_path": "/root/.config/ai-guardian/ai-guardian.json",
             "scanners": [],
-            "url": "https://github.com/itdove/ai-guardian",
+            "url": "https://github.com/RedHatProductSecurity/ai-guardian",
         }
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -3276,7 +3276,7 @@ class TestAboutMenuItem:
             "platform": "Linux",
             "config_path": None,
             "scanners": [],
-            "url": "https://github.com/itdove/ai-guardian",
+            "url": "https://github.com/RedHatProductSecurity/ai-guardian",
         }
         tray = DaemonTray(
             get_stats_callback=lambda: {},

@@ -3023,7 +3023,7 @@ class TestValidPluginSchemas:
     def test_schema_ref_allowed(self, plugin_schema):
         _validate_schema(
             {
-                "$schema": "https://raw.githubusercontent.com/itdove/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
+                "$schema": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
                 "name": "With Schema Ref",
                 "items": [{"label": "X", "command": "echo ok"}],
             },
