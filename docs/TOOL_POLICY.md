@@ -297,6 +297,142 @@ Result: The workspace allow is overridden — **everything** under `~/` is denie
 
 > **Rule of thumb:** Place broad deny rules first, then narrow allow rules after.
 
+### Multiple Allow Rules Are Additive
+
+Separate allow rules for the same matcher form a **union**. You don't need to combine all patterns into a single rule — each allow rule adds to the set of permitted values:
+
+```json
+{
+  "permissions": {
+    "rules": [
+      { "matcher": "Skill", "mode": "allow", "patterns": ["release"] },
+      { "matcher": "Skill", "mode": "allow", "patterns": ["daf-*"] }
+    ]
+  }
+}
+```
+
+Result: Both `release` **and** any `daf-*` skill are allowed. The second allow rule doesn't replace the first — if either rule matches, the tool is allowed.
+
+This works because the evaluator scans all rules in order and records the last matching decision. If a value matches the first allow but not the second, the first allow's decision stands (no later rule overwrites it).
+
+### Allow-Deny-Allow Sandwich
+
+When allow and deny rules are interleaved, the **last matching rule per tool value** wins:
+
+```json
+{
+  "permissions": {
+    "rules": [
+      { "matcher": "Skill", "mode": "allow", "patterns": ["A"] },
+      { "matcher": "Skill", "mode": "allow", "patterns": ["B"] },
+      { "matcher": "Skill", "mode": "deny",  "patterns": ["B"] },
+      { "matcher": "Skill", "mode": "allow", "patterns": ["C"] }
+    ]
+  }
+}
+```
+
+Result:
+- `A` — **allowed** (matches rule 1, no later rule overrides)
+- `B` — **denied** (matches rule 2 as allow, then rule 3 as deny — deny is last match)
+- `C` — **allowed** (matches rule 4)
+
+Each tool value is evaluated independently against the full rule list. The deny for `B` does not affect `A` or `C`.
+
+### Default When No Rule Matches
+
+When no permission rule matches a tool, the decision depends on the tool type:
+
+| Tool Type | Default | Reason |
+|---|---|---|
+| Built-in (Bash, Read, Write, Edit, WebFetch, Agent) | **Allowed** | Hooks scan input/output for secrets, PII, SSRF, prompt injection |
+| MCP server tools (`mcp__*`) | **Denied** | Third-party code that bypasses hook scanning; requires explicit allow |
+| Skills | **Denied** | Can override AI behavior and instructions; requires explicit allow |
+| ai-guardian MCP tools (`mcp__ai-guardian__*`) | **Allowed** | Auto-allowed (own security tools) |
+
+This means:
+- You only need allow rules for MCP servers and Skills you want to use
+- Built-in tools work without any rules (unless you want to restrict them with deny rules)
+- Forgetting to add an allow rule for an MCP server results in a "no permission rule" denial
+
+### Config Merge Behavior
+
+When both a global config and a project config define permission rules, the rules are **concatenated** — project rules are appended after global rules in the combined array. Rules are never replaced or deduplicated.
+
+**Merge order** (each layer's rules are appended after the previous):
+
+1. **Default config** (built-in defaults)
+2. **Project local config** (`.ai-guardian/ai-guardian.json` in project directory)
+3. **User global config** (`~/.ai-guardian.json` or `~/.config/ai-guardian/ai-guardian.json`)
+4. **Remote configs** (enterprise URLs, highest priority)
+
+Since last-match-wins applies to the combined array, later rules (higher priority configs) override earlier rules when they match the same tool value.
+
+**Example — global allows survive project additions:**
+
+Global config (`~/.ai-guardian.json`):
+```json
+{
+  "permissions": {
+    "rules": [
+      { "matcher": "mcp__ai-guardian__*", "mode": "allow", "patterns": ["*"] },
+      { "matcher": "mcp__lore__*", "mode": "allow", "patterns": ["*"] }
+    ]
+  }
+}
+```
+
+Project config (`.ai-guardian/ai-guardian.json`):
+```json
+{
+  "permissions": {
+    "rules": [
+      { "matcher": "mcp__project-db__*", "mode": "allow", "patterns": ["*"] }
+    ]
+  }
+}
+```
+
+Combined array (after merge):
+```json
+[
+  { "matcher": "mcp__ai-guardian__*", "mode": "allow", "patterns": ["*"] },
+  { "matcher": "mcp__lore__*", "mode": "allow", "patterns": ["*"] },
+  { "matcher": "mcp__project-db__*", "mode": "allow", "patterns": ["*"] }
+]
+```
+
+Result: All three MCP servers are allowed. The project config **adds** to the global rules without affecting them.
+
+**Pitfall — project deny-all overrides global allows:**
+
+If a project config includes a broad deny rule, it overrides matching global allows because it appears later in the combined array:
+
+Project config:
+```json
+{
+  "permissions": {
+    "rules": [
+      { "matcher": "mcp__project-db__*", "mode": "allow", "patterns": ["*"] },
+      { "matcher": "mcp__*", "mode": "deny", "patterns": ["*"] }
+    ]
+  }
+}
+```
+
+Combined array:
+```json
+[
+  { "matcher": "mcp__ai-guardian__*", "mode": "allow", "patterns": ["*"] },
+  { "matcher": "mcp__lore__*", "mode": "allow", "patterns": ["*"] },
+  { "matcher": "mcp__project-db__*", "mode": "allow", "patterns": ["*"] },
+  { "matcher": "mcp__*", "mode": "deny", "patterns": ["*"] }
+]
+```
+
+Result: The project's `mcp__*` deny is last and blocks **all** MCP servers, including the globally-allowed ones. To avoid this, use specific deny patterns instead of wildcards, or place the deny before the allows in the project config.
+
 ---
 
 ## Example Protections
@@ -651,3 +787,4 @@ Tool Policy checking is **extremely fast**:
 - **v1.3.0** - Added path-based restrictions and auto-discovery
 - **v1.5.0** - Enhanced pattern matching and violation logging
 - **v1.6.0** - Permission prompts and policy inheritance
+- **v1.16.0** - Expanded rule evaluation docs: additive allows, sandwich patterns, defaults, config merge behavior
