@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.2] - 2026-07-27
+
+### Added
+
+- **Daemon-routed engine testing** — `ai-guardian engine test` now routes through the daemon when running, leveraging listen-mode persistent scanners for faster test execution. New `engine_test` daemon protocol message, `POST /api/engine-test` REST endpoint, and `scan_mode` field in `EngineTestResult` (#1720, #1725)
+
+- **Listen mode scan caching** — scan results are cached by content hash in listen mode, avoiding redundant re-scans of unchanged content for further latency reduction (#1723)
+
+### Fixed
+
+- **Web console engine type validation** — the web UI secret engines page now derives valid engine types from `engine_builder` presets instead of a hardcoded set, fixing rejection of `toml-patterns` and other dynamically-registered engine types (#1719, #1722)
+
+### Changed
+
+- **Permission denied message UX** — directory blocking messages now show all config file locations (global and project-level) and suggest project-level fixes, making it easier to resolve false positives (#1726, #1727)
+
+- Verified Cursor hook compatibility with Cursor v3.13.21
+
 ## [1.15.1] - 2026-07-27
 
 ### Added
@@ -2968,7 +2986,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.15.1...HEAD
+[Unreleased]: https://github.com/itdove/ai-guardian/compare/v1.15.2...HEAD
+[1.15.2]: https://github.com/itdove/ai-guardian/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/itdove/ai-guardian/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/itdove/ai-guardian/compare/v1.14.0...v1.15.0
 [1.14.0]: https://github.com/itdove/ai-guardian/compare/v1.13.3...v1.14.0
