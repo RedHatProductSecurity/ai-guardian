@@ -21,6 +21,8 @@ def rescan_violation(
     violation_type: str,
     sub_type: str = "",
     config: Optional[Dict] = None,
+    start_column: Optional[int] = None,
+    end_column: Optional[int] = None,
 ) -> Dict:
     """Rescan a file to find the matched text for a violation.
 
@@ -30,6 +32,8 @@ def rescan_violation(
         violation_type: Top-level violation type (e.g. "secret_detected").
         sub_type: Sub-type field (e.g. "env-variable", "pii-ssn").
         config: AI Guardian config dict (loaded from daemon state if None).
+        start_column: Column offset (0-based) where the match starts.
+        end_column: Column offset (0-based) where the match ends.
 
     Returns:
         Dict with "status" key:
@@ -64,7 +68,15 @@ def rescan_violation(
             "message": f"Unsupported violation type: {violation_type}",
         }
 
-    return handler(content, file_path, line_number, sub_type, config)
+    return handler(
+        content,
+        file_path,
+        line_number,
+        sub_type,
+        config,
+        start_column=start_column,
+        end_column=end_column,
+    )
 
 
 def _load_config() -> Dict:
@@ -77,8 +89,27 @@ def _load_config() -> Dict:
         return {}
 
 
-def _scan_secrets(content, file_path, line_number, sub_type, config):
+def _scan_secrets(
+    content,
+    file_path,
+    line_number,
+    sub_type,
+    config,
+    start_column=None,
+    end_column=None,
+):
     """Rescan for secrets, filter by sub_type near line_number."""
+    if start_column is not None and end_column is not None and line_number:
+        matched = _extract_at_position(content, line_number, start_column, end_column)
+        if matched:
+            return {
+                "status": "found",
+                "matched_text": matched,
+                "line_number": line_number,
+                "violation_type": "secret_detected",
+                "secret_type": sub_type,
+            }
+
     try:
         from ai_guardian.scanners.secret_scanning import check_secrets_with_gitleaks
     except ImportError:
@@ -120,7 +151,7 @@ def _scan_secrets(content, file_path, line_number, sub_type, config):
     }
 
 
-def _scan_pii(content, file_path, line_number, sub_type, config):
+def _scan_pii(content, file_path, line_number, sub_type, config, **_kwargs):
     """Rescan for PII near line_number."""
     try:
         from ai_guardian.hook_processing import _scan_for_pii
@@ -171,7 +202,9 @@ def _scan_pii(content, file_path, line_number, sub_type, config):
     }
 
 
-def _scan_prompt_injection(content, file_path, line_number, sub_type, config):
+def _scan_prompt_injection(
+    content, file_path, line_number, sub_type, config, **_kwargs
+):
     """Rescan for prompt injection near line_number."""
     try:
         from ai_guardian.scanners.prompt_injection import check_prompt_injection
@@ -196,7 +229,9 @@ def _scan_prompt_injection(content, file_path, line_number, sub_type, config):
     }
 
 
-def _scan_context_poisoning(content, file_path, line_number, sub_type, config):
+def _scan_context_poisoning(
+    content, file_path, line_number, sub_type, config, **_kwargs
+):
     """Rescan for context poisoning."""
     try:
         from ai_guardian.scanners.context_poisoning import check_context_poisoning
@@ -223,7 +258,7 @@ def _scan_context_poisoning(content, file_path, line_number, sub_type, config):
     }
 
 
-def _scan_config_exfil(content, file_path, line_number, sub_type, config):
+def _scan_config_exfil(content, file_path, line_number, sub_type, config, **_kwargs):
     """Rescan for config file exfiltration."""
     try:
         from ai_guardian.scanners.config_scanner import ConfigFileScanner
@@ -248,7 +283,9 @@ def _scan_config_exfil(content, file_path, line_number, sub_type, config):
     }
 
 
-def _passthrough_violation(content, file_path, line_number, sub_type, config):
+def _passthrough_violation(
+    content, file_path, line_number, sub_type, config, **_kwargs
+):
     """For types where the matched text is the file path or line content."""
     matched = _extract_line_near(content, line_number) if line_number else file_path
     return {
@@ -258,6 +295,28 @@ def _passthrough_violation(content, file_path, line_number, sub_type, config):
         "violation_type": "directory_blocking",
         "secret_type": sub_type,
     }
+
+
+def _extract_at_position(
+    content: str, line_number: int, start_col: int, end_col: int
+) -> str:
+    """Extract text at a known line:column range from content.
+
+    Columns are 1-based (as stored by scanners).
+    """
+    if not content or line_number < 1:
+        return ""
+    lines = content.splitlines()
+    if line_number > len(lines):
+        return ""
+    line = lines[line_number - 1]
+    sc = max(start_col - 1, 0)
+    ec = end_col
+    if sc < len(line) and ec > sc and ec <= len(line):
+        return line[sc:ec]
+    if sc < len(line):
+        return line[sc:]
+    return line.strip()
 
 
 def _extract_line_near(content: str, line_number: int) -> str:

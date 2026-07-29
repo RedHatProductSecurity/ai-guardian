@@ -331,4 +331,6 @@ def suggest_pattern(matched_text: str, config_section: str = "") -> str:
     env_match = re.match(r"^([A-Z][A-Z0-9_]+)\s*=", matched_text)
     if env_match:
         return env_match.group(1) + r"\s*="
+    if ".*" in matched_text:
+        return matched_text.strip()
     return re.escape(matched_text)

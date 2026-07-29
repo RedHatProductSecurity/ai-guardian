@@ -2703,7 +2703,8 @@ class TestLogAskDecision:
         assert call_kwargs["severity"] == "info"
         assert call_kwargs["context"]["ask_decision"] == "allow_once"
         assert call_kwargs["context"]["action_taken"] == "allowed"
-        assert call_kwargs["blocked"]["matched_text"] == "AWS_KEY"
+        assert "matched_text" not in call_kwargs["blocked"]
+        assert call_kwargs["blocked"]["pattern_hint"] == "AW.*EY"
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_allow_always(self, mock_vl_cls):
@@ -2720,6 +2721,7 @@ class TestLogAskDecision:
         )
         call_kwargs = mock_vl.log_violation.call_args[1]
         assert call_kwargs["context"]["ask_decision"] == "allow_always"
+        assert "matched_text" not in call_kwargs["blocked"]
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_with_file_path(self, mock_vl_cls):
@@ -3437,7 +3439,8 @@ class TestLogAskDecisionBlock:
         call_kwargs = mock_vl.log_violation.call_args[1]
         assert call_kwargs["context"]["ask_decision"] == "block"
         assert call_kwargs["context"]["action_taken"] == "blocked"
-        assert call_kwargs["blocked"]["matched_text"] == "AKIA_KEY"
+        assert "matched_text" not in call_kwargs["blocked"]
+        assert call_kwargs["blocked"]["pattern_hint"] == "AKIA.*_KEY"
 
     @patch("ai_guardian.ask_mode.ViolationLogger")
     def test_logs_block_all_decision(self, mock_vl_cls):

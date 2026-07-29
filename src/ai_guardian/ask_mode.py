@@ -426,11 +426,31 @@ def _log_ask_decision(
     try:
         from ai_guardian.tui.ask_dialog import AskDecision
 
+        from ai_guardian.violations.redact import (
+            REDACT_VIOLATION_TYPES,
+            redact_secret_hint,
+        )
+
         vlogger = ViolationLogger()
+
+        vtype_str = (
+            violation_type.value
+            if hasattr(violation_type, "value")
+            else str(violation_type)
+        )
+        if vtype_str in REDACT_VIOLATION_TYPES:
+            persisted_text = redact_secret_hint(matched_text) if matched_text else ""
+        else:
+            persisted_text = matched_text or ""
+
         blocked_info = {
             "description": (error_msg[:200] if error_msg else str(violation_type)),
-            "matched_text": matched_text or "",
         }
+        if vtype_str in REDACT_VIOLATION_TYPES:
+            if persisted_text and persisted_text != "[redacted]":
+                blocked_info["pattern_hint"] = persisted_text
+        else:
+            blocked_info["matched_text"] = persisted_text
         if file_path:
             blocked_info["file_path"] = file_path
         if line_number:

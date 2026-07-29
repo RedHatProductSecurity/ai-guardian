@@ -72,6 +72,8 @@ class DaemonService:
         line_number: int,
         violation_type: str,
         secret_type: str = "",
+        start_column: Optional[int] = None,
+        end_column: Optional[int] = None,
     ) -> Optional[dict]:
         try:
             return self._client.get_violation_context(
@@ -80,6 +82,8 @@ class DaemonService:
                 line_number,
                 violation_type,
                 secret_type,
+                start_column=start_column,
+                end_column=end_column,
             )
         except Exception:
             return None
