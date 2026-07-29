@@ -112,7 +112,16 @@ def build_violation_blocked(
     if result.end_column is not None:
         blocked["end_column"] = result.end_column
     if result.matched_text:
-        blocked["matched_text"] = result.matched_text[:100]
+        from ai_guardian.violations.redact import (
+            REDACT_VIOLATION_TYPES,
+            redact_secret_hint,
+        )
+
+        if result.violation_type in REDACT_VIOLATION_TYPES:
+            if not (result.file_path and result.line_number is not None):
+                blocked["pattern_hint"] = redact_secret_hint(result.matched_text)
+        else:
+            blocked["matched_text"] = result.matched_text[:100]
     if result.matched_pattern:
         blocked["pattern"] = result.matched_pattern
     if result.rule_id:

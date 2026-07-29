@@ -166,6 +166,10 @@ def _log_secret_detection_violation(
         }
         _enrich_blocked_from_details(blocked_info, details)
 
+        from ai_guardian.violations.redact import sanitize_blocked_for_secret
+
+        sanitize_blocked_for_secret(blocked_info)
+
         violation_logger = violation_logger or ViolationLogger()
         if details.get("end_line") and details["end_line"] != details.get(
             "line_number"
@@ -259,6 +263,14 @@ def _log_finding_violation(
             "reason": f"{engine_name}: {reason_label} ({rule_id})",
         }
         _enrich_blocked_from_details(blocked_info, details)
+
+        from ai_guardian.violations.redact import (
+            REDACT_VIOLATION_TYPES,
+            sanitize_blocked_for_secret,
+        )
+
+        if vtype.value in REDACT_VIOLATION_TYPES:
+            sanitize_blocked_for_secret(blocked_info)
 
         violation_logger = violation_logger or ViolationLogger()
         if details.get("end_line") and details["end_line"] != details.get(

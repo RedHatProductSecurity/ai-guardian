@@ -626,6 +626,8 @@ async def _show_allow_always_flow(parent_dialog, violation, service, daemon_name
     file_path = blocked.get("file_path") or ""
     line_number = blocked.get("line_number", 0)
     sub_type = blocked.get("secret_type", "")
+    start_column = blocked.get("start_column")
+    end_column = blocked.get("end_column")
 
     from ai_guardian.tui.pattern_editor import config_section_for_violation
 
@@ -642,14 +644,29 @@ async def _show_allow_always_flow(parent_dialog, violation, service, daemon_name
             ui.notify("Daemon not available", type="negative")
             return
 
-        result = await run.io_bound(
-            service.get_violation_context,
-            target,
-            file_path,
-            line_number,
-            vtype,
-            sub_type,
-        )
+        try:
+            result = await run.io_bound(
+                lambda t=target, fp=file_path, ln=line_number, vt=vtype, st=sub_type, sc=start_column, ec=end_column: (
+                    service.get_violation_context(
+                        t,
+                        fp,
+                        ln,
+                        vt,
+                        st,
+                        start_column=sc,
+                        end_column=ec,
+                    )
+                ),
+            )
+        except TypeError:
+            result = await run.io_bound(
+                service.get_violation_context,
+                target,
+                file_path,
+                line_number,
+                vtype,
+                sub_type,
+            )
 
         if result is None:
             ui.notify("Failed to contact daemon", type="negative")
@@ -695,6 +712,9 @@ def _extract_matched_from_violation(violation: dict) -> str:
 
     if blocked.get("context_snippet"):
         return str(blocked["context_snippet"])
+
+    if blocked.get("pattern_hint"):
+        return str(blocked["pattern_hint"])
 
     if vtype == "tool_permission":
         tool = blocked.get("tool_name", "")

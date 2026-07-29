@@ -683,6 +683,12 @@ class _RestHandler(BaseHTTPRequestHandler):
 
         line_number = int(body.get("line_number", 0))
         sub_type = body.get("secret_type", "")
+        start_column = body.get("start_column")
+        end_column = body.get("end_column")
+        if start_column is not None:
+            start_column = int(start_column)
+        if end_column is not None:
+            end_column = int(end_column)
 
         try:
             from ai_guardian.daemon.violation_rescan import rescan_violation
@@ -698,6 +704,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             violation_type=violation_type,
             sub_type=sub_type,
             config=cfg,
+            start_column=start_column,
+            end_column=end_column,
         )
         self._send_json(result)
 

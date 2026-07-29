@@ -726,6 +726,8 @@ class MultiDaemonClient:
         line_number: int,
         violation_type: str,
         secret_type: str = "",
+        start_column: int = None,
+        end_column: int = None,
     ) -> Optional[dict]:
         """Rescan a file on the daemon to get matched text for allowlisting."""
         if target.runtime == "local":
@@ -736,6 +738,8 @@ class MultiDaemonClient:
                 line_number=line_number,
                 violation_type=violation_type,
                 sub_type=secret_type,
+                start_column=start_column,
+                end_column=end_column,
             )
         body = {
             "file_path": file_path,
@@ -743,6 +747,10 @@ class MultiDaemonClient:
             "violation_type": violation_type,
             "secret_type": secret_type,
         }
+        if start_column is not None:
+            body["start_column"] = start_column
+        if end_column is not None:
+            body["end_column"] = end_column
         return self._rest_request(target, "POST", "/api/violation-context", body)
 
     def scan_path(

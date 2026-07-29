@@ -101,6 +101,9 @@ def _extract_matched_from_violation(violation: dict) -> str:
     if blocked.get("context_snippet"):
         return str(blocked["context_snippet"])
 
+    if blocked.get("pattern_hint"):
+        return str(blocked["pattern_hint"])
+
     if vtype == "tool_permission":
         tool = blocked.get("tool_name", "")
         value = blocked.get("tool_value", "")
@@ -313,6 +316,8 @@ class ViolationDetailsModal(ModalScreen):
         file_path = blocked.get("file_path") or ""
         line_number = blocked.get("line_number", 0)
         sub_type = blocked.get("secret_type", "")
+        start_column = blocked.get("start_column")
+        end_column = blocked.get("end_column")
 
         config_section = config_section_for_violation(vtype)
         if not config_section:
@@ -324,12 +329,22 @@ class ViolationDetailsModal(ModalScreen):
         if not matched_text and file_path:
             from ai_guardian.daemon.violation_rescan import rescan_violation
 
-            result = rescan_violation(
-                file_path=file_path,
-                line_number=line_number,
-                violation_type=vtype,
-                sub_type=sub_type,
-            )
+            try:
+                result = rescan_violation(
+                    file_path=file_path,
+                    line_number=line_number,
+                    violation_type=vtype,
+                    sub_type=sub_type,
+                    start_column=start_column,
+                    end_column=end_column,
+                )
+            except TypeError:
+                result = rescan_violation(
+                    file_path=file_path,
+                    line_number=line_number,
+                    violation_type=vtype,
+                    sub_type=sub_type,
+                )
 
             status = result.get("status", "")
             if status == "file_not_found":

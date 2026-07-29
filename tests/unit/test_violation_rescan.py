@@ -320,6 +320,14 @@ class TestExtractMatchedFromViolation:
         }
         assert self._extract(v) == "SSN, Phone Number"
 
+    def test_pattern_hint_fallback(self):
+        """pattern_hint used when matched_text absent (redacted secrets/PII)."""
+        v = {
+            "blocked": {"pattern_hint": "AKIA.*MPLE"},
+            "violation_type": "secret_detected",
+        }
+        assert self._extract(v) == "AKIA.*MPLE"
+
     def test_secret_detected_returns_empty(self):
         """Secrets not stored in violation data — requires file rescan."""
         v = {
