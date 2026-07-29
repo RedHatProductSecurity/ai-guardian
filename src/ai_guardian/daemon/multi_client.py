@@ -140,11 +140,20 @@ def _launch_in_terminal(
             subprocess.Popen(["cmd", flag, "start", "/max"] + win_parts)
             return True
         else:
+            linux_terminals = [
+                ("gnome-terminal", ["--maximize", "--"]),
+                ("kgx", ["-e"]),
+                ("konsole", ["--fullscreen", "-e"]),
+                ("xfce4-terminal", ["--maximize", "-e"]),
+                ("xterm", ["-maximized", "-e"]),
+            ]
             if keep_open:
                 shell_cmd = cmd_str + '; echo; read -rp "Press Enter to close..."'
                 cmd_parts = ["bash", "-c", shell_cmd]
             if terminal_app and shutil.which(terminal_app):
-                subprocess.Popen([terminal_app, "-e"] + list(cmd_parts))
+                known_args = dict(linux_terminals)
+                args = known_args.get(terminal_app, ["-e"])
+                subprocess.Popen([terminal_app] + args + list(cmd_parts))
                 return True
             if terminal_app:
                 logger.warning(
@@ -152,13 +161,7 @@ def _launch_in_terminal(
                     "falling back to auto-detection.",
                     terminal_app,
                 )
-            for term, args in [
-                ("gnome-terminal", ["--maximize", "--"]),
-                ("kgx", ["-e"]),
-                ("konsole", ["--fullscreen", "-e"]),
-                ("xfce4-terminal", ["--maximize", "-e"]),
-                ("xterm", ["-maximized", "-e"]),
-            ]:
+            for term, args in linux_terminals:
                 if shutil.which(term):
                     subprocess.Popen([term] + args + cmd_parts)
                     return True
