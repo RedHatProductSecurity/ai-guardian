@@ -45,6 +45,12 @@ from ai_guardian.tray.plugins import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_web_console(monkeypatch):
+    """Prevent tests from spawning real web console subprocesses."""
+    monkeypatch.setattr(DaemonTray, "_start_web_console", lambda self: None)
+
+
 class TestCheckGiAvailable:
     def test_returns_bool(self):
         result = _check_gi_available()
@@ -6412,3 +6418,87 @@ class TestDaemonTraySubscriber:
         tray._prompt_poll_running = False
         tray.stop()
         assert tray._subscriber_running is False
+
+
+class TestWebConsoleNoAutoOpen:
+    """Web console never auto-opens browser (#1737).
+
+    Browser is only opened via tray menu or CLI command.
+    Notification only fires on first tray start, not restarts.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _restore_web_console_methods(self, monkeypatch):
+        """Undo the module-level autouse fixture for this class."""
+        monkeypatch.undo()
+
+    def _make_tray(self):
+        return DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+
+    def test_start_always_passes_no_open(self, tmp_path):
+        """_start_web_console always passes --no-open."""
+        tray = self._make_tray()
+        with (
+            mock.patch("ai_guardian.config.utils.get_state_dir", return_value=tmp_path),
+            mock.patch(
+                "ai_guardian.tray.app.tray_plugins.resolve_cli_cmd",
+                return_value=["ai-guardian", "console"],
+            ),
+            mock.patch("subprocess.Popen") as mock_popen,
+            mock.patch("threading.Thread"),
+        ):
+            mock_popen.return_value.pid = 12345
+            tray._start_web_console()
+            cmd = mock_popen.call_args[0][0]
+            assert "--no-open" in cmd
+
+    def test_reuses_existing_console(self, tmp_path):
+        """When console is already alive, should not start a new one."""
+        tray = self._make_tray()
+        port_file = tmp_path / "web-console.port"
+        port_file.write_text("8080")
+        with (
+            mock.patch("ai_guardian.config.utils.get_state_dir", return_value=tmp_path),
+            mock.patch.object(DaemonTray, "_is_web_console_alive", return_value=True),
+            mock.patch("subprocess.Popen") as mock_popen,
+        ):
+            tray._start_web_console()
+            mock_popen.assert_not_called()
+
+    def test_notify_skipped_on_restart(self, tmp_path):
+        """Notification should not fire on subsequent starts."""
+        tray = self._make_tray()
+        port_file = tmp_path / "web-console.port"
+        port_file.write_text("8080")
+        with (
+            mock.patch("ai_guardian.config.utils.get_state_dir", return_value=tmp_path),
+            mock.patch.object(DaemonTray, "_is_web_console_alive", return_value=True),
+            mock.patch(
+                "ai_guardian.tray.app.tray_notifications.show_notification"
+            ) as mock_notify,
+        ):
+            tray._icon = None
+            tray._notify_web_console_ready(is_first_start=False)
+            mock_notify.assert_not_called()
+
+    def test_notify_fires_on_first_start(self, tmp_path):
+        """Notification should fire on first start."""
+        tray = self._make_tray()
+        port_file = tmp_path / "web-console.port"
+        port_file.write_text("8080")
+        with (
+            mock.patch("ai_guardian.config.utils.get_state_dir", return_value=tmp_path),
+            mock.patch.object(DaemonTray, "_is_web_console_alive", return_value=True),
+            mock.patch(
+                "ai_guardian.tray.app.tray_notifications.show_notification"
+            ) as mock_notify,
+        ):
+            tray._icon = None
+            tray._notify_web_console_ready(is_first_start=True)
+            mock_notify.assert_called_once_with(
+                "Web Console Ready", "http://127.0.0.1:8080"
+            )
