@@ -1,4 +1,16 @@
 {
+  "permissions": {
+    "rules": [
+      {
+        "mode": "allow",
+        "matcher": "Skill",
+        "patterns": [
+          "release",
+          "daf-*"
+        ]
+      }
+    ]
+  },
   "prompt_injection": {
     "allowlist_patterns": [
       "__init__",
