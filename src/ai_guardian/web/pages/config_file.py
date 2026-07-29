@@ -141,14 +141,11 @@ def create_config_file_page(service, daemon_name: str):
                 if info["global_exists"] and info["global_content"]:
                     with ui.card().classes("w-full"):
                         ui.label("Global Configuration").classes("text-lg font-bold")
-                        with (
-                            ui.scroll_area()
-                            .classes("w-full")
-                            .style("max-height: 500px")
-                        ):
-                            ui.code(info["global_content"], language="json").classes(
-                                "w-full"
-                            )
+                        ui.codemirror(
+                            info["global_content"],
+                            language="JSON",
+                            theme="dracula",
+                        ).classes("w-full").props("readonly")
 
                 if info["project_path"]:
                     with ui.card().classes("w-full"):
@@ -156,14 +153,11 @@ def create_config_file_page(service, daemon_name: str):
                             f"Project Configuration — {info['project_path']}"
                         ).classes("text-lg font-bold")
                         if info["project_exists"] and info["project_content"]:
-                            with (
-                                ui.scroll_area()
-                                .classes("w-full")
-                                .style("max-height: 500px")
-                            ):
-                                ui.code(
-                                    info["project_content"], language="json"
-                                ).classes("w-full")
+                            ui.codemirror(
+                                info["project_content"],
+                                language="JSON",
+                                theme="dracula",
+                            ).classes("w-full").props("readonly")
                         else:
                             ui.label("No project configuration file found.").classes(
                                 "text-grey-6 text-sm"
