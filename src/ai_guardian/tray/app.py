@@ -305,6 +305,7 @@ class DaemonTray:
         self._anim = TrayIconManager(self)
         self._refresh_event = threading.Event()
         self._web_proc = None
+        self._web_console_first_start = True
         self._last_autostart_attempt = 0.0
         self._last_stats_snapshot = None
 
@@ -645,7 +646,12 @@ class DaemonTray:
         return self._mcp_installed_per_daemon.get(key, self._mcp_installed_local)
 
     def _start_web_console(self):
-        """Start the web console server as a subprocess."""
+        """Start the web console server as a subprocess.
+
+        Always passes ``--no-open`` — browser is never opened
+        automatically.  Users open the console via the tray menu
+        or ``ai-guardian console --web`` (#1737).
+        """
         from ai_guardian.config.utils import get_state_dir
 
         port_file = get_state_dir() / "web-console.port"
@@ -669,8 +675,11 @@ class DaemonTray:
             logger.info(
                 "Web console started (pid %d, cmd: %s)", self._web_proc.pid, cmd[0]
             )
+            is_first = self._web_console_first_start
+            self._web_console_first_start = False
             threading.Thread(
                 target=self._notify_web_console_ready,
+                args=(is_first,),
                 daemon=True,
                 name="web-console-notify",
             ).start()
@@ -681,8 +690,13 @@ class DaemonTray:
                 cmd if "cmd" in locals() else "N/A",
             )
 
-    def _notify_web_console_ready(self):
-        """Wait for web console to be ready, update menu, then notify."""
+    def _notify_web_console_ready(self, is_first_start=True):
+        """Wait for web console to be ready, update menu, then notify.
+
+        Args:
+            is_first_start: When True, send a desktop notification.
+                When False (daemon restart), skip the notification (#1737).
+        """
         from ai_guardian.config.utils import get_state_dir
 
         port_file = get_state_dir() / "web-console.port"
@@ -690,14 +704,15 @@ class DaemonTray:
             if port_file.exists() and self._is_web_console_alive(port_file):
                 if self._icon:
                     self._icon.update_menu()
-                try:
-                    port = int(port_file.read_text().strip())
-                    tray_notifications.show_notification(
-                        "Web Console Ready",
-                        f"http://127.0.0.1:{port}",
-                    )
-                except (ValueError, OSError):
-                    pass  # intentionally silent — invalid value uses default
+                if is_first_start:
+                    try:
+                        port = int(port_file.read_text().strip())
+                        tray_notifications.show_notification(
+                            "Web Console Ready",
+                            f"http://127.0.0.1:{port}",
+                        )
+                    except (ValueError, OSError):
+                        pass  # intentionally silent — invalid value uses default
                 return
             time.sleep(1)
 
