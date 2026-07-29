@@ -20,8 +20,10 @@ def show_notification(title, message):
     system = platform.system()
     try:
         if system == "Darwin":
-            safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
-            safe_msg = message.replace("\\", "\\\\").replace('"', '\\"')
+            from ai_guardian.daemon.multi_client import _escape_for_applescript
+
+            safe_title = _escape_for_applescript(title)
+            safe_msg = _escape_for_applescript(message)
             subprocess.Popen(
                 [
                     "osascript",

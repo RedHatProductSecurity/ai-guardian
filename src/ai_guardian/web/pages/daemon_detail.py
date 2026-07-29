@@ -40,13 +40,14 @@ def _save_local_daemon_config(
     daemon_config = full_config.get("daemon", {})
     daemon_config["idle_timeout_minutes"] = idle_timeout
     daemon_config["client_timeout_seconds"] = client_timeout
-    tray_cfg = {
-        "enabled": tray_enabled,
-        "auto_install": tray_auto_install,
-    }
+    tray_cfg = daemon_config.get("tray", {})
+    tray_cfg["enabled"] = tray_enabled
+    tray_cfg["auto_install"] = tray_auto_install
     term_val = (terminal_app or "").strip()
     if term_val:
         tray_cfg["terminal_app"] = term_val
+    else:
+        tray_cfg.pop("terminal_app", None)
     daemon_config["tray"] = tray_cfg
     daemon_config.pop("mode", None)
     full_config["daemon"] = daemon_config

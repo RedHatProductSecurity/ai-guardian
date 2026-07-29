@@ -25,13 +25,8 @@ REQUEST_TIMEOUT = 5.0
 # macOS terminals that support Terminal.app-style "do script" AppleScript.
 _MACOS_DO_SCRIPT_APPS = {"Terminal", "Warp"}
 
-# macOS CLI terminals: app name → binary name.
-# These are launched directly via their CLI binary, not AppleScript.
-_MACOS_CLI_TERMINALS = {
-    "alacritty": "alacritty",
-    "kitty": "kitty",
-    "wezterm": "wezterm",
-}
+# macOS CLI terminals launched directly via their binary, not AppleScript.
+_MACOS_CLI_TERMINALS = {"alacritty", "kitty", "wezterm"}
 
 
 def _get_configured_terminal():
@@ -41,13 +36,19 @@ def _get_configured_terminal():
 
         cfg, _ = _load_config_file()
         return (cfg or {}).get("daemon", {}).get("tray", {}).get("terminal_app")
-    except Exception:
+    except Exception as exc:
+        logger.debug("Could not read terminal_app from config: %s", exc)
         return None
+
+
+def _escape_for_applescript(s):
+    """Escape a string for use inside an AppleScript double-quoted literal."""
+    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def _build_iterm_applescript(cmd_str, keep_open):
     """Build iTerm2-specific AppleScript."""
-    cmd_escaped = cmd_str.replace("\\", "\\\\").replace('"', '\\"')
+    cmd_escaped = _escape_for_applescript(cmd_str)
     if keep_open:
         auto_close = ""
     else:
@@ -73,7 +74,7 @@ def _build_iterm_applescript(cmd_str, keep_open):
 
 def _build_terminal_applescript(app_name, cmd_str, keep_open):
     """Build Terminal.app-style AppleScript (also works for Warp)."""
-    cmd_escaped = cmd_str.replace("\\", "\\\\").replace('"', '\\"')
+    cmd_escaped = _escape_for_applescript(cmd_str)
     if keep_open:
         auto_close = ""
     else:
@@ -129,13 +130,13 @@ def _launch_in_terminal(
         if system == "Darwin":
             return _launch_macos(cmd_parts, cmd_str, keep_open, terminal_app)
         elif system == "Windows":
-            if terminal_app and shutil.which(terminal_app):
-                subprocess.Popen([terminal_app] + list(cmd_parts))
-                return True
             flag = "/k" if keep_open else "/c"
             win_parts = (["cls", "&&"] if clear else []) + cmd_parts
             if cwd:
                 win_parts = ["cd", "/d", cwd, "&&"] + win_parts
+            if terminal_app and shutil.which(terminal_app):
+                subprocess.Popen([terminal_app, "cmd", flag] + win_parts)
+                return True
             subprocess.Popen(["cmd", flag, "start", "/max"] + win_parts)
             return True
         else:
@@ -178,10 +179,20 @@ def _launch_macos(cmd_parts, cmd_str, keep_open, terminal_app):
     """Launch terminal on macOS. Handles iTerm2, CLI terminals, and Terminal.app."""
     app = (terminal_app or "").strip().removesuffix(".app")
 
+    if app and not all(c.isalnum() or c in "._ -" for c in app):
+        logger.warning(
+            "terminal_app '%s' contains invalid characters, ignoring",
+            app,
+        )
+        app = ""
+
     # CLI-based terminals (alacritty, kitty, wezterm) — launch binary directly
-    cli_bin = _MACOS_CLI_TERMINALS.get(app.lower())
-    if cli_bin and shutil.which(cli_bin):
-        subprocess.Popen([cli_bin, "-e"] + list(cmd_parts))
+    cli_bin = app.lower()
+    if cli_bin in _MACOS_CLI_TERMINALS and shutil.which(cli_bin):
+        run_cmd = cmd_str
+        if keep_open:
+            run_cmd += '; echo; read -rp "Press Enter to close..."'
+        subprocess.Popen([cli_bin, "-e", "bash", "-c", run_cmd])
         return True
 
     # iTerm2 — uses its own AppleScript API

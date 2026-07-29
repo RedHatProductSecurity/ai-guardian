@@ -184,13 +184,14 @@ class DaemonPanelContent(Static):
             daemon_config = full_config.get("daemon", {})
             daemon_config["idle_timeout_minutes"] = int(idle_input.value or 0)
             daemon_config["client_timeout_seconds"] = float(client_input.value or 2.0)
-            tray_cfg = {
-                "enabled": tray_select.value,
-                "auto_install": auto_install_select.value,
-            }
+            tray_cfg = daemon_config.get("tray", {})
+            tray_cfg["enabled"] = tray_select.value
+            tray_cfg["auto_install"] = auto_install_select.value
             term_val = (terminal_app_input.value or "").strip()
             if term_val:
                 tray_cfg["terminal_app"] = term_val
+            else:
+                tray_cfg.pop("terminal_app", None)
             daemon_config["tray"] = tray_cfg
             daemon_config.pop("mode", None)
             full_config["daemon"] = daemon_config
