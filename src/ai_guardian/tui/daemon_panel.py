@@ -32,6 +32,7 @@ class DaemonPanelContent(Static):
         tray_config = config.get("tray", {})
         tray_enabled = tray_config.get("enabled", True)
         tray_auto_install = tray_config.get("auto_install", True)
+        terminal_app = tray_config.get("terminal_app", "")
 
         yield Static("[bold]Daemon Configuration[/bold]\n", classes="section-header")
 
@@ -86,6 +87,19 @@ class DaemonPanelContent(Static):
             )
             yield Static(
                 "[dim]Auto-install shortcut and autostart on first CLI run (default: Enabled)[/dim]",
+                classes="help-text",
+            )
+
+        with Vertical(classes="form-group"):
+            yield Static("Terminal App")
+            yield Input(
+                terminal_app or "",
+                id="daemon-terminal-app",
+                placeholder="auto-detect",
+            )
+            yield Static(
+                "[dim]macOS: app name (iTerm). Linux: binary (alacritty). "
+                "Windows: exe (wt). Empty = auto-detect[/dim]",
                 classes="help-text",
             )
 
@@ -159,6 +173,7 @@ class DaemonPanelContent(Static):
             client_input = self.query_one("#daemon-client-timeout", Input)
             tray_select = self.query_one("#daemon-tray-enabled", Select)
             auto_install_select = self.query_one("#daemon-tray-auto-install", Select)
+            terminal_app_input = self.query_one("#daemon-terminal-app", Input)
 
             config_path = get_config_dir() / "ai-guardian.json"
             if config_path.exists():
@@ -169,10 +184,15 @@ class DaemonPanelContent(Static):
             daemon_config = full_config.get("daemon", {})
             daemon_config["idle_timeout_minutes"] = int(idle_input.value or 0)
             daemon_config["client_timeout_seconds"] = float(client_input.value or 2.0)
-            daemon_config["tray"] = {
-                "enabled": tray_select.value,
-                "auto_install": auto_install_select.value,
-            }
+            tray_cfg = daemon_config.get("tray", {})
+            tray_cfg["enabled"] = tray_select.value
+            tray_cfg["auto_install"] = auto_install_select.value
+            term_val = (terminal_app_input.value or "").strip()
+            if term_val:
+                tray_cfg["terminal_app"] = term_val
+            else:
+                tray_cfg.pop("terminal_app", None)
+            daemon_config["tray"] = tray_cfg
             daemon_config.pop("mode", None)
             full_config["daemon"] = daemon_config
 

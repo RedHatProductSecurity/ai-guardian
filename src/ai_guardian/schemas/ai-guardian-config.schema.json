@@ -2129,6 +2129,11 @@
               "default": true,
               "description": "Auto-install tray shortcut, autostart, and start tray on first CLI invocation. Set false to disable. Skipped on headless servers and CI/CD environments."
             },
+            "terminal_app": {
+              "type": "string",
+              "pattern": "^[\\w ./-]*$",
+              "description": "Preferred terminal application for tray menu actions (Console, Terminal, Doctor). macOS: 'iTerm', 'iTerm2', or 'iTerm.app' for iTerm2; 'Warp' for Warp; 'alacritty'/'kitty'/'wezterm' for CLI terminals. Linux: binary name (e.g. 'alacritty', 'kitty'). Windows: executable name (e.g. 'wt'). Omit or leave empty for platform default (Terminal.app / auto-detect / cmd.exe). The '.app' suffix is stripped automatically on macOS."
+            },
             "discover_kubernetes": {
               "type": "boolean",
               "default": false,

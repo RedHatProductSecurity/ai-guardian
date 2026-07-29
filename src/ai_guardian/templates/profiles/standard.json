@@ -301,7 +301,8 @@
     "client_timeout_seconds": 2.0,
     "tray": {
       "enabled": true,
-      "auto_install": true
+      "auto_install": true,
+      "_comment_terminal_app": "Preferred terminal for tray menu actions. macOS: app name (iTerm, Warp, alacritty). Linux: binary (alacritty, kitty). Windows: exe (wt). Omit for auto-detect."
     }
   },
   "_comment_on_scan_error": "Global behavior when a scanner encounters an error. 'allow' (default, fail-open): log warning, allow operation. 'block' (fail-closed): block operation if any scanner fails. For strict compliance environments. (NEW in v1.7.0, Issue #461)",

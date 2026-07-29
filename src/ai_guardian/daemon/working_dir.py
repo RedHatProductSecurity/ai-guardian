@@ -124,7 +124,9 @@ def choose_directory(current: Optional[str] = None) -> Optional[str]:
 def _choose_directory_macos(current: Optional[str] = None) -> Optional[str]:
     default_clause = ""
     if current:
-        escaped = current.replace("\\", "\\\\").replace('"', '\\"')
+        from ai_guardian.daemon.multi_client import _escape_for_applescript
+
+        escaped = _escape_for_applescript(current)
         default_clause = f' default location POSIX file "{escaped}"'
     script = f"POSIX path of (choose folder{default_clause})"
     result = subprocess.run(

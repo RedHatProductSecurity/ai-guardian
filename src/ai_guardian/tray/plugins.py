@@ -942,18 +942,14 @@ def show_dialog(title: str, message: str) -> bool:
     system = platform.system()
     try:
         if system == "Darwin":
+            from ai_guardian.daemon.multi_client import _escape_for_applescript
+
             msg = (
-                message.replace("\\", "\\\\")
-                .replace('"', '\\"')
+                _escape_for_applescript(message)
                 .replace("\r", "")
                 .replace("\n", '" & return & "')
             )
-            ttl = (
-                title.replace("\\", "\\\\")
-                .replace('"', '\\"')
-                .replace("\r", "")
-                .replace("\n", " ")
-            )
+            ttl = _escape_for_applescript(title).replace("\r", "").replace("\n", " ")
             icon_clause = ""
             icns_path = _find_icon("ai-guardian.icns")
             if icns_path:
@@ -1006,19 +1002,15 @@ def send_notification(title: str, message: str) -> bool:
         if system == "Darwin":
             from datetime import datetime
 
+            from ai_guardian.daemon.multi_client import _escape_for_applescript
+
             ts = datetime.now().strftime("%H:%M:%S")
             msg = (
-                message.replace("\\", "\\\\")
-                .replace('"', '\\"')
+                _escape_for_applescript(message)
                 .replace("\r", "")
                 .replace("\n", '" & return & "')
             )
-            ttl = (
-                title.replace("\\", "\\\\")
-                .replace('"', '\\"')
-                .replace("\r", "")
-                .replace("\n", " ")
-            )
+            ttl = _escape_for_applescript(title).replace("\r", "").replace("\n", " ")
             script = (
                 f'display notification ("{msg}") with title "{ttl}" subtitle "{ts}"'
             )

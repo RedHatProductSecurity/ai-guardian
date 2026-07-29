@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Configurable terminal for tray menu actions** (Issue #1730) — new `daemon.tray.terminal_app` config option with iTerm2, CLI terminal (alacritty/kitty/wezterm), and platform-specific support
+
 ## [1.15.2] - 2026-07-27
 
 ### Added

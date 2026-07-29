@@ -410,7 +410,11 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
         "daemon": {
             "idle_timeout_minutes": 0,
             "client_timeout_seconds": 2.0,
-            "tray": {"enabled": True, "auto_install": True},
+            "tray": {
+                "enabled": True,
+                "auto_install": True,
+                "_comment_terminal_app": "Preferred terminal for tray menu actions. macOS: app name (iTerm, Warp, alacritty). Linux: binary (alacritty, kitty). Windows: exe (wt). Omit for auto-detect.",
+            },
         },
         "_comment_on_scan_error": "Global behavior when a scanner encounters an error. 'allow' (default, fail-open): log warning, allow operation. 'block' (fail-closed): block operation if any scanner fails. For strict compliance environments. (NEW in v1.7.0, Issue #461)",
         "on_scan_error": "allow",
