@@ -79,6 +79,12 @@ class Plugin:
     items: List[PluginItem] = field(default_factory=list)
     tags: List[str] = field(default_factory=list)
     scope: str = "daemon"
+    id: Optional[str] = None
+
+    @property
+    def dedup_key(self) -> str:
+        """Deduplication key: ``id`` if set, otherwise ``name``."""
+        return self.id if self.id else self.name
 
 
 def load_plugins(
@@ -234,13 +240,14 @@ def load_merged_plugins(
     project_plugins = load_plugins(project_dir, daemon_tags) if project_dir else []
 
     merged: List[Plugin] = []
-    seen_names: set = set()
+    seen_keys: set = set()
 
     for layer in (project_plugins, user_plugins, bundled_plugins):
         for p in layer:
-            if p.name not in seen_names:
+            key = p.dedup_key
+            if key not in seen_keys:
                 merged.append(p)
-                seen_names.add(p.name)
+                seen_keys.add(key)
 
     return merged
 
@@ -280,7 +287,11 @@ def _parse_plugin(data: dict, filename: str) -> Optional[Plugin]:
     if scope not in ("daemon", "global"):
         scope = "daemon"
 
-    return Plugin(name=name, items=items, tags=tags, scope=scope)
+    plugin_id = data.get("id")
+    if plugin_id is not None and (not isinstance(plugin_id, str) or not plugin_id):
+        plugin_id = None
+
+    return Plugin(name=name, items=items, tags=tags, scope=scope, id=plugin_id)
 
 
 def _parse_item(raw: dict, filename: str, index: int) -> Optional[PluginItem]:
@@ -841,6 +852,8 @@ def plugins_to_dict(plugins: List[Plugin]) -> dict:
             "name": p.name,
             "items": [_item_to_dict(item) for item in p.items],
         }
+        if p.id:
+            d["id"] = p.id
         if p.tags:
             d["tags"] = list(p.tags)
         if p.scope != "daemon":
