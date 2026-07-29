@@ -1,5 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
+  "id": "quick-actions-global",
   "name": "Quick Actions",
   "scope": "global",
   "items": [

@@ -11,6 +11,11 @@
       "type": "string",
       "description": "JSON Schema reference for IDE autocompletion"
     },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique deduplication key for this plugin. Used to identify the plugin during merge across bundled, user, and project layers. If omitted, 'name' is used as the dedup key. Two plugins with the same display name but different ids are treated as distinct."
+    },
     "name": {
       "type": "string",
       "minLength": 1,

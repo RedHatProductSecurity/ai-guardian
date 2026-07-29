@@ -2891,6 +2891,127 @@ class TestLoadMergedPlugins:
         filtered = filter_plugins_by_tags(result, daemon_tags=["special"])
         assert len(filtered) == 1
 
+    def _make_plugin_json_with_id(
+        self, path, name, plugin_id, label="Action", command="echo ok"
+    ):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "id": plugin_id,
+            "name": name,
+            "items": [{"label": label, "command": command}],
+        }
+        path.write_text(json.dumps(data))
+
+    def test_id_based_dedup_same_name_different_id(self, tmp_path):
+        """Two plugins with same display name but different ids are both kept."""
+        user_dir = tmp_path / "user-plugins"
+        user_dir.mkdir()
+        self._make_plugin_json_with_id(
+            user_dir / "a.json", "Carbonite", "carbonite-global", label="Global"
+        )
+        self._make_plugin_json_with_id(
+            user_dir / "b.json", "Carbonite", "carbonite-daemon", label="Daemon"
+        )
+        with mock.patch(
+            "ai_guardian.daemon.get_tray_plugins_dir",
+            return_value=user_dir,
+        ):
+            result = load_merged_plugins(None)
+        assert len(result) == 2
+        labels = {p.items[0].label for p in result}
+        assert labels == {"Global", "Daemon"}
+
+    def test_id_based_dedup_same_id_drops_duplicate(self, tmp_path):
+        """Two plugins with same id — project wins over user."""
+        user_dir = tmp_path / "user-plugins"
+        user_dir.mkdir()
+        self._make_plugin_json_with_id(
+            user_dir / "a.json", "Tools", "my-tools", label="User"
+        )
+        project = tmp_path / "project"
+        proj_plugins = project / ".ai-guardian" / "tray-plugins"
+        self._make_plugin_json_with_id(
+            proj_plugins / "a.json", "Tools", "my-tools", label="Project"
+        )
+        with mock.patch(
+            "ai_guardian.daemon.get_tray_plugins_dir",
+            return_value=user_dir,
+        ):
+            result = load_merged_plugins(str(project))
+        assert len(result) == 1
+        assert result[0].items[0].label == "Project"
+
+    def test_id_missing_falls_back_to_name(self, tmp_path):
+        """Plugin without id uses name as dedup key (backward compat)."""
+        user_dir = tmp_path / "user-plugins"
+        user_dir.mkdir()
+        self._make_plugin_json(user_dir / "a.json", "SameName", label="First")
+        self._make_plugin_json(user_dir / "b.json", "SameName", label="Second")
+        with mock.patch(
+            "ai_guardian.daemon.get_tray_plugins_dir",
+            return_value=user_dir,
+        ):
+            result = load_merged_plugins(None)
+        assert len(result) == 1
+
+    def test_id_dedup_key_property(self):
+        """Plugin.dedup_key returns id when set, name otherwise."""
+        p_with_id = Plugin(name="Display", id="unique-key", items=[])
+        assert p_with_id.dedup_key == "unique-key"
+        p_without_id = Plugin(name="Display", items=[])
+        assert p_without_id.dedup_key == "Display"
+        p_empty_id = Plugin(name="Display", id="", items=[])
+        assert p_empty_id.dedup_key == "Display"
+
+    def test_plugins_to_dict_includes_id(self):
+        """plugins_to_dict includes id when set on plugin."""
+        plugins = [
+            Plugin(
+                name="Test",
+                id="test-id",
+                items=[PluginItem(label="Run", command="echo")],
+            ),
+            Plugin(
+                name="NoId",
+                items=[PluginItem(label="Run", command="echo")],
+            ),
+        ]
+        result = plugins_to_dict(plugins)
+        assert result["plugins"][0]["id"] == "test-id"
+        assert "id" not in result["plugins"][1]
+
+    def test_dict_to_plugins_roundtrip_with_id(self):
+        """id survives serialization/deserialization roundtrip."""
+        plugins = [
+            Plugin(
+                name="Test",
+                id="test-id",
+                items=[PluginItem(label="Run", command="echo")],
+            ),
+        ]
+        data = plugins_to_dict(plugins)
+        restored = dict_to_plugins(data)
+        assert restored[0].id == "test-id"
+        assert restored[0].dedup_key == "test-id"
+
+    def test_parse_plugin_ignores_invalid_id(self, tmp_path):
+        """Non-string or empty id values fall back to None."""
+        user_dir = tmp_path / "user-plugins"
+        user_dir.mkdir()
+        (user_dir / "bad.json").write_text(
+            json.dumps(
+                {
+                    "id": 123,
+                    "name": "BadId",
+                    "items": [{"label": "Run", "command": "echo"}],
+                }
+            )
+        )
+        result = load_plugins(user_dir)
+        assert len(result) == 1
+        assert result[0].id is None
+        assert result[0].dedup_key == "BadId"
+
 
 # --- Merged from test_tray_plugin_schema.py ---
 
@@ -2945,6 +3066,27 @@ class TestValidPluginSchemas:
             },
             plugin_schema,
         )
+
+    def test_plugin_with_id(self, plugin_schema):
+        _validate_schema(
+            {
+                "id": "my-custom-plugin",
+                "name": "My Plugin",
+                "items": [{"label": "Hello", "command": "echo hello"}],
+            },
+            plugin_schema,
+        )
+
+    def test_plugin_id_empty_string_rejected(self, plugin_schema):
+        with pytest.raises(jsonschema.ValidationError):
+            _validate_schema(
+                {
+                    "id": "",
+                    "name": "My Plugin",
+                    "items": [{"label": "Hello", "command": "echo hello"}],
+                },
+                plugin_schema,
+            )
 
     def test_platform_map_command(self, plugin_schema):
         _validate_schema(

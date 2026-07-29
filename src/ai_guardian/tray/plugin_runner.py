@@ -97,9 +97,9 @@ class TrayPluginMenuBuilder:
                 pass  # intentionally silent — best-effort operation
         for i in reachable_slots:
             for p in self._daemon_global_plugins.get(i, []):
-                if p.name not in seen_global_names:
+                if p.dedup_key not in seen_global_names:
                     collected_globals.append(p)
-                    seen_global_names.add(p.name)
+                    seen_global_names.add(p.dedup_key)
         stale = set(self._daemon_global_plugins) - reachable_slots
         for i in stale:
             del self._daemon_global_plugins[i]
