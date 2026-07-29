@@ -43,7 +43,7 @@ def _get_configured_terminal():
 
 def _escape_for_applescript(s):
     """Escape a string for use inside an AppleScript double-quoted literal."""
-    return s.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
+    return s.replace("\\", "\\\\").replace('"', '\\"')
 
 
 def _build_iterm_applescript(cmd_str, keep_open):
