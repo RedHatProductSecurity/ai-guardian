@@ -15,6 +15,7 @@ from textual.widgets import Static, Button, Input, Label, Checkbox
 from textual.message import Message
 
 from ai_guardian.config.utils import get_config_dir, get_project_config_path
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 
 class PathEntry(Container):
@@ -80,8 +81,10 @@ class PathEntry(Container):
             self.post_message(self.RemovePressed(self.index))
 
 
-class DirectoryProtectionContent(Container):
+class DirectoryProtectionContent(ConfigSaveMixin, Container):
     """Content widget for Directory Protection tab."""
+
+    CONFIG_SECTION = "directory_rules"
 
     CSS = """
     DirectoryProtectionContent {
@@ -357,14 +360,8 @@ class DirectoryProtectionContent(Container):
             self.app.notify("Please enter a path", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "directory_exclusions" not in config:
                 config["directory_exclusions"] = {}
@@ -378,8 +375,7 @@ class DirectoryProtectionContent(Container):
 
             config["directory_exclusions"]["paths"].append(path)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             # Clear input
             self.query_one("#new-path-input", Input).value = ""
@@ -392,13 +388,9 @@ class DirectoryProtectionContent(Container):
 
     def remove_path(self, index: int) -> None:
         """Remove an exclusion path."""
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
+            config = self._load_full_config()
+            if not config:
                 return
 
             if (
@@ -409,8 +401,7 @@ class DirectoryProtectionContent(Container):
                 if 0 <= index < len(paths):
                     removed_path = paths.pop(index)
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     self.load_config()
                     self.app.notify(
@@ -422,22 +413,15 @@ class DirectoryProtectionContent(Container):
 
     def save_enabled(self, enabled: bool) -> None:
         """Save the exclusions enabled state."""
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "directory_exclusions" not in config:
                 config["directory_exclusions"] = {}
 
             config["directory_exclusions"]["enabled"] = enabled
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             status = "enabled" if enabled else "disabled"
             self.app.notify(f"✓ Directory exclusions {status}", severity="success")

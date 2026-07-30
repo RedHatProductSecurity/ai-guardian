@@ -5,7 +5,6 @@ MCP Servers Tab Content
 Manage MCP server permissions (allow/deny rules for MCP server tools).
 """
 
-import logging
 import json
 from typing import Dict
 
@@ -15,7 +14,7 @@ from textual.widgets import Button, Static, Input, Select, Label
 from textual.screen import ModalScreen
 from textual.binding import Binding
 
-from ai_guardian.config.utils import get_config_dir
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 
 class MCPPermissionCard(Container):
@@ -186,8 +185,10 @@ class AddMCPPermissionModal(ModalScreen):
             self.dismiss(None)
 
 
-class MCPServersContent(Container):
+class MCPServersContent(ConfigSaveMixin, Container):
     """Content widget for MCP Servers tab."""
+
+    CONFIG_SECTION = "mcp_server"
 
     CSS = """
     MCPServersContent {
@@ -341,30 +342,23 @@ class MCPServersContent(Container):
 
     def load_permissions(self) -> None:
         """Load and display MCP server permission rules."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         permissions = []
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                    # NEW unified structure in v1.4.0
-                    permissions_obj = config.get("permissions", {})
-                    if isinstance(permissions_obj, dict):
-                        all_permissions = permissions_obj.get("rules", [])
-                    else:
-                        all_permissions = (
-                            permissions_obj if isinstance(permissions_obj, list) else []
-                        )
-                    # Filter only MCP permissions
-                    permissions = [
-                        p
-                        for p in all_permissions
-                        if p.get("matcher", "").startswith("mcp__")
-                    ]
-            except Exception as e:
-                self.app.notify(f"Error loading permissions: {e}", severity="error")
+        try:
+            config = self._load_full_config()
+            # NEW unified structure in v1.4.0
+            permissions_obj = config.get("permissions", {})
+            if isinstance(permissions_obj, dict):
+                all_permissions = permissions_obj.get("rules", [])
+            else:
+                all_permissions = (
+                    permissions_obj if isinstance(permissions_obj, list) else []
+                )
+            # Filter only MCP permissions
+            permissions = [
+                p for p in all_permissions if p.get("matcher", "").startswith("mcp__")
+            ]
+        except Exception as e:
+            self.app.notify(f"Error loading permissions: {e}", severity="error")
 
         # Get the permissions list container
         permissions_list = self.query_one("#mcp-list", VerticalScroll)
@@ -400,16 +394,8 @@ class MCPServersContent(Container):
 
     def _load_proactive_level(self) -> None:
         """Load proactive level from config."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-        level = "low"
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                level = config.get("mcp_server", {}).get("proactive_level", "low")
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning("Failed to read config: %s", e)
+        config = self._load_full_config()
+        level = config.get("mcp_server", {}).get("proactive_level", "low")
         try:
             select = self.query_one("#proactive-level", Select)
             select.value = level
@@ -419,36 +405,13 @@ class MCPServersContent(Container):
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle proactive level change."""
         if event.select.id == "proactive-level" and event.value != Select.BLANK:
-            config_dir = get_config_dir()
-            config_path = config_dir / "ai-guardian.json"
-            config = {}
-            if config_path.exists():
-                try:
-                    with open(config_path, "r", encoding="utf-8") as f:
-                        config = json.load(f)
-                except (json.JSONDecodeError, OSError):
-                    pass
-            if "mcp_server" not in config:
-                config["mcp_server"] = {}
-            config["mcp_server"]["proactive_level"] = event.value
-            config_dir.mkdir(parents=True, exist_ok=True)
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-                f.write("\n")
+            self._save_config_field("proactive_level", event.value)
             self.app.notify(f"Proactive level: {event.value}", severity="information")
 
     def _load_support_config(self) -> None:
         """Load support config values into the input fields."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-        support = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                support = config.get("support", {})
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning("Failed to read config: %s", e)
+        config = self._load_full_config()
+        support = config.get("support", {})
 
         try:
             dest_input = self.query_one("#support-destination", Input)
@@ -461,16 +424,7 @@ class MCPServersContent(Container):
 
     def _save_support_config(self) -> None:
         """Save support config from input fields."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning("Failed to read config: %s", e)
+        config = self._load_full_config()
 
         if "support" not in config:
             config["support"] = {}
@@ -489,10 +443,7 @@ class MCPServersContent(Container):
         except Exception:
             pass
 
-        config_dir.mkdir(parents=True, exist_ok=True)
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, indent=2)
-            f.write("\n")
+        self._write_full_config(config)
 
         self.app.notify("Support bundle config saved", severity="information")
 
@@ -511,29 +462,23 @@ class MCPServersContent(Container):
 
     def edit_permission(self, index: int) -> None:
         """Show modal to edit an existing MCP server permission rule."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        if not config_path.exists():
-            self.app.notify("Config file not found", severity="error")
-            return
-
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                # NEW unified structure in v1.4.0
-                permissions_obj = config.get("permissions", {})
-                if isinstance(permissions_obj, dict):
-                    all_permissions = permissions_obj.get("rules", [])
-                else:
-                    all_permissions = (
-                        permissions_obj if isinstance(permissions_obj, list) else []
-                    )
-                mcp_permissions = [
-                    p
-                    for p in all_permissions
-                    if p.get("matcher", "").startswith("mcp__")
-                ]
+            config = self._load_full_config()
+            if not config:
+                self.app.notify("Config file not found", severity="error")
+                return
+
+            # NEW unified structure in v1.4.0
+            permissions_obj = config.get("permissions", {})
+            if isinstance(permissions_obj, dict):
+                all_permissions = permissions_obj.get("rules", [])
+            else:
+                all_permissions = (
+                    permissions_obj if isinstance(permissions_obj, list) else []
+                )
+            mcp_permissions = [
+                p for p in all_permissions if p.get("matcher", "").startswith("mcp__")
+            ]
 
             if index >= len(mcp_permissions):
                 self.app.notify("Permission not found", severity="error")
@@ -561,8 +506,7 @@ class MCPServersContent(Container):
                             "rules": all_permissions,
                         }
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     self.load_permissions()
                     self.app.notify("MCP server permission updated", severity="success")
@@ -574,31 +518,27 @@ class MCPServersContent(Container):
 
     def delete_permission(self, index: int) -> None:
         """Delete an MCP server permission rule."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        if not config_path.exists():
-            self.app.notify("Config file not found", severity="error")
-            return
-
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                # NEW unified structure in v1.4.0
-                permissions_obj = config.get("permissions", {})
-                if isinstance(permissions_obj, dict):
-                    all_permissions = permissions_obj.get("rules", [])
-                else:
-                    all_permissions = (
-                        permissions_obj if isinstance(permissions_obj, list) else []
-                    )
+            config = self._load_full_config()
+            if not config:
+                self.app.notify("Config file not found", severity="error")
+                return
+
+            # NEW unified structure in v1.4.0
+            permissions_obj = config.get("permissions", {})
+            if isinstance(permissions_obj, dict):
+                all_permissions = permissions_obj.get("rules", [])
+            else:
+                all_permissions = (
+                    permissions_obj if isinstance(permissions_obj, list) else []
+                )
 
             # Find and remove the MCP permission
             mcp_count = 0
             for i, perm in enumerate(all_permissions):
                 if perm.get("matcher", "").startswith("mcp__"):
                     if mcp_count == index:
-                        removed_rule = all_permissions.pop(i)
+                        all_permissions.pop(i)
                         break
                     mcp_count += 1
 
@@ -608,8 +548,7 @@ class MCPServersContent(Container):
             else:
                 config["permissions"] = {"enabled": True, "rules": all_permissions}
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.load_permissions()
             self.app.notify("MCP server permission deleted", severity="success")
@@ -619,15 +558,8 @@ class MCPServersContent(Container):
 
     def save_permission(self, rule: Dict) -> None:
         """Save a new MCP server permission rule to config (merges with existing if matcher+mode match)."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             permissions_obj = config.get("permissions", {})
             if isinstance(permissions_obj, dict):
@@ -664,8 +596,7 @@ class MCPServersContent(Container):
             else:
                 config["permissions"] = all_permissions
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.load_permissions()
             self.app.notify(message, severity="success")

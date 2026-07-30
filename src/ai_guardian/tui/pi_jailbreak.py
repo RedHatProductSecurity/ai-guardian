@@ -6,18 +6,19 @@ Manage jailbreak-specific detection patterns that detect role-play attacks,
 identity manipulation, constraint removal, and hypothetical framing.
 """
 
-import json
 import re
 
 from textual.app import ComposeResult
 from textual.containers import Container, VerticalScroll
 from textual.widgets import Static, Input
 
-from ai_guardian.config.utils import get_config_dir
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 
-class PIJailbreakContent(Container):
+class PIJailbreakContent(ConfigSaveMixin, Container):
     """Content widget for Jailbreak Patterns."""
+
+    CONFIG_SECTION = "prompt_injection"
 
     CSS = """
     PIJailbreakContent {
@@ -128,16 +129,7 @@ class PIJailbreakContent(Container):
         self.app.notify("Jailbreak patterns refreshed", severity="information")
 
     def load_config(self) -> None:
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            except Exception as e:
-                self.app.notify(f"Error loading config: {e}", severity="error")
+        config = self._load_full_config()
 
         pi_config = config.get("prompt_injection", {})
         jailbreak_patterns = pi_config.get("jailbreak_patterns", [])
@@ -188,32 +180,8 @@ class PIJailbreakContent(Container):
             self.app.notify(f"Invalid regex: {e}", severity="error")
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            if "prompt_injection" not in config:
-                config["prompt_injection"] = {}
-            if "jailbreak_patterns" not in config["prompt_injection"]:
-                config["prompt_injection"]["jailbreak_patterns"] = []
-
-            if pattern in config["prompt_injection"]["jailbreak_patterns"]:
-                self.app.notify("Pattern already exists", severity="warning")
-                return
-
-            config["prompt_injection"]["jailbreak_patterns"].append(pattern)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            input_widget.value = ""
-            self.load_config()
-            self.app.notify("Added jailbreak pattern", severity="success")
-
+            if self._add_config_list_item("jailbreak_patterns", pattern, input_widget):
+                self.app.notify("Added jailbreak pattern", severity="success")
         except Exception as e:
             self.app.notify(f"Error: {e}", severity="error")
