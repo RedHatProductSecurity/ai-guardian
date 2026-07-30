@@ -7,9 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.3] - 2026-07-30
+
 ### Added
 
-- **Configurable terminal for tray menu actions** (Issue #1730) — new `daemon.tray.terminal_app` config option with iTerm2, CLI terminal (alacritty/kitty/wezterm), and platform-specific support
+- **Configurable terminal for tray menu actions** (Issue #1730) — new `daemon.tray.terminal_app` config option with iTerm2, CLI terminal (alacritty/kitty/wezterm), and platform-specific support (#1738)
+
+- **Config file viewer upgrade** — JSON config card now fills available width, permission rules page added to web console (#1746)
+
+- **Secret value redaction in violation records** — `matched_text` field in `violations.json` is now redacted before persisting, preventing plaintext secret storage (#1744)
+
+- **Tray plugin id field** — plugins can now specify a separate `id` field for deduplication independent of display name (#1741)
+
+### Changed
+
+- **Repository migrated to RedHatProductSecurity/ai-guardian** — all 334 references across 40 files updated from `itdove/ai-guardian` to `RedHatProductSecurity/ai-guardian` (#1731, #1732)
+
+- **Permission rule interaction docs** — new examples for additive allows, sandwich patterns, and merge behavior added to TOOL_POLICY.md (#1728, #1735)
+
+- **CI dependency updates** — GitHub Actions group bumped with 6 updates (#1729)
+
+- Verified Cursor hook compatibility with Cursor v3.13.21
+
+### Fixed
+
+- **Project config resolution** — `get_config_scoped()` now correctly resolves project config when `project_dir` is explicitly provided, fixing phantom config display in web console (#1749, #1751)
+
+- **Permission rule legacy fallback** — legacy fallback no longer overrides a prior explicit allow, fixing skills being denied despite global `allow *` (#1748, #1750)
+
+- **TUI ConfigSaveMixin bypass** — 9 TUI pages that bypassed `ConfigSaveMixin` now use the shared save/load pattern, preventing dropped config sections on save (#1745, #1747)
+
+- **Browser auto-open on daemon restart** — web console no longer opens a new browser tab on every daemon restart during development (#1740)
 
 ## [1.15.2] - 2026-07-27
 
@@ -2990,7 +3018,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.2...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...HEAD
+[1.15.3]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.0...v1.15.1
 [1.15.0]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.14.0...v1.15.0
