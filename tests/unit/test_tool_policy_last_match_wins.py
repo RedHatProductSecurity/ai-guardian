@@ -475,6 +475,138 @@ class StrictProfileTests(TestCase):
         assert not allowed, "Non-allowed MCP should be blocked"
 
 
+class LegacyFallbackOverrideTests(TestCase):
+    """Test that legacy fallback does not override prior explicit allow (#1748)."""
+
+    def test_global_allow_not_overridden_by_project_legacy_fallback(self):
+        """Global Skill allow * must survive a project allow with legacy action."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {"matcher": "Skill", "mode": "allow", "patterns": ["*"]},
+                    {
+                        "matcher": "Skill",
+                        "mode": "allow",
+                        "patterns": ["release"],
+                        "action": "warn",
+                    },
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(
+            tool_name="Skill", tool_input={"skill": "daf-workflow"}
+        )
+        allowed, error_msg, _ = policy.check_tool_allowed(hook_data)
+        assert (
+            allowed
+        ), f"Global allow * should not be overridden by project legacy fallback: {error_msg}"
+
+    def test_legacy_fallback_warns_when_no_prior_allow(self):
+        """Legacy fallback with warn action denies but allows execution (warn mode)."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {
+                        "matcher": "Skill",
+                        "mode": "allow",
+                        "patterns": ["release"],
+                        "action": "warn",
+                    },
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(
+            tool_name="Skill", tool_input={"skill": "daf-workflow"}
+        )
+        allowed, error_msg, _ = policy.check_tool_allowed(hook_data)
+        assert allowed, "Warn mode allows execution"
+        assert error_msg and "warn" in error_msg.lower()
+
+    def test_no_allow_rule_blocks_skill(self):
+        """Skill with no matching allow rule is blocked (default deny)."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {"matcher": "Skill", "mode": "allow", "patterns": ["release"]},
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(
+            tool_name="Skill", tool_input={"skill": "daf-workflow"}
+        )
+        allowed, _, _ = policy.check_tool_allowed(hook_data)
+        assert not allowed, "Non-matching skill should be blocked"
+
+    def test_legacy_fallback_after_deny_changes_action_to_warn(self):
+        """Legacy fallback after explicit deny replaces block with warn (allowed in warn mode)."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {"matcher": "Skill", "mode": "deny", "patterns": ["*"]},
+                    {
+                        "matcher": "Skill",
+                        "mode": "allow",
+                        "patterns": ["release"],
+                        "action": "warn",
+                    },
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(
+            tool_name="Skill", tool_input={"skill": "daf-workflow"}
+        )
+        allowed, error_msg, _ = policy.check_tool_allowed(hook_data)
+        assert allowed, "Warn mode allows execution"
+        assert error_msg and "warn" in error_msg.lower(), "Should indicate warn mode"
+
+    def test_project_allow_match_still_overrides_global_deny(self):
+        """A project allow rule that actually matches should still override global deny."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {"matcher": "Skill", "mode": "deny", "patterns": ["*"]},
+                    {
+                        "matcher": "Skill",
+                        "mode": "allow",
+                        "patterns": ["release"],
+                        "action": "warn",
+                    },
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(tool_name="Skill", tool_input={"skill": "release"})
+        allowed, _, _ = policy.check_tool_allowed(hook_data)
+        assert allowed, "Matching project allow should override global deny"
+
+    def test_global_allow_wildcard_project_allow_specific_no_action(self):
+        """Without legacy action, project allow rule that doesn't match is a no-op."""
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {"matcher": "Skill", "mode": "allow", "patterns": ["*"]},
+                    {"matcher": "Skill", "mode": "allow", "patterns": ["release"]},
+                ],
+            }
+        }
+        policy = ToolPolicyChecker(config=config)
+        hook_data = create_hook_data(
+            tool_name="Skill", tool_input={"skill": "daf-workflow"}
+        )
+        allowed, _, _ = policy.check_tool_allowed(hook_data)
+        assert allowed, "Global allow * should persist when project has no action"
+
+
 class PermissionsDisabledTests(TestCase):
     """Test behavior when permissions are disabled."""
 
