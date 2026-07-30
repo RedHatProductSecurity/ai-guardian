@@ -357,10 +357,19 @@ def save_ask_pattern(
 def _resolve_config_path(scope: str, project_dir: Optional[str] = None) -> Path:
     """Resolve config file path for the given scope."""
     if scope == "project":
+        if project_dir:
+            root = Path(project_dir)
+            standard = root / ".ai-guardian" / "ai-guardian.json"
+            if standard.exists():
+                return standard
+            legacy = root / "ai-guardian.json"
+            if legacy.exists():
+                return legacy
+            return standard
         existing = get_project_config_path()
         if existing:
             return existing
-        root = Path(project_dir) if project_dir else (_find_git_root() or Path.cwd())
+        root = _find_git_root() or Path.cwd()
         return root / ".ai-guardian" / "ai-guardian.json"
     return get_config_dir() / "ai-guardian.json"
 
