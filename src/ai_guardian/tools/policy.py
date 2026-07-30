@@ -604,8 +604,14 @@ class ToolPolicyChecker:
 
                 # Legacy backward compat: allow rule with action field
                 # When no pattern matched but _legacy_fallback_action is set,
-                # apply it as a deny decision (the old "not in allow list" behavior)
-                if not pattern_matched and rule.get("_legacy_fallback_action"):
+                # apply it as a deny decision (the old "not in allow list" behavior).
+                # Skip if a prior rule already explicitly allowed — a project-level
+                # allow rule's fallback must not override a global allow (#1748).
+                if (
+                    not pattern_matched
+                    and rule.get("_legacy_fallback_action")
+                    and final_decision != "allow"
+                ):
                     fallback_action = rule["_legacy_fallback_action"]
                     final_decision = "deny"
                     final_action = fallback_action
