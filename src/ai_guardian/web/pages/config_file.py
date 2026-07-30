@@ -48,7 +48,7 @@ def _load_daemon_config_files(target):
         project_cfg = _daemon_service.get_config_scoped(
             target, "project", project_dir=project_dir
         )
-        if project_cfg is not None:
+        if project_cfg:
             result["project_exists"] = True
             result["project_content"] = json.dumps(project_cfg, indent=2)
 

@@ -559,3 +559,63 @@ class TestConfigEditorSaveBackup:
 
         err = _save_config_with_backup('{"a": 1}', None)
         assert err is not None
+
+
+class TestConfigFilePhantomConfig:
+    """Regression tests for #1749 — phantom project config."""
+
+    def test_daemon_config_empty_dict_means_no_project(self):
+        """get_config_scoped returning {} should set project_exists=False."""
+        from ai_guardian.web.pages.config_file import _load_daemon_config_files
+
+        fake_target = mock.MagicMock()
+        fake_target.name = "test-daemon"
+        fake_service = mock.MagicMock()
+        fake_service.get_config_scoped.return_value = {}
+
+        with (
+            mock.patch(
+                "ai_guardian.web.pages.config_file._get_current_target",
+                return_value=fake_target,
+            ),
+            mock.patch(
+                "ai_guardian.web.pages.config_file._daemon_service",
+                fake_service,
+            ),
+            mock.patch(
+                "ai_guardian.web.config_helpers._get_remote_project_dir",
+                return_value="/some/project",
+            ),
+        ):
+            result = _load_daemon_config_files(fake_target)
+            assert result["project_exists"] is False
+            assert result["project_content"] is None
+
+    def test_daemon_config_nonempty_dict_means_project_exists(self):
+        """get_config_scoped returning real config should set project_exists=True."""
+        from ai_guardian.web.pages.config_file import _load_daemon_config_files
+
+        fake_target = mock.MagicMock()
+        fake_target.name = "test-daemon"
+        fake_service = mock.MagicMock()
+        fake_service.get_config_scoped.return_value = {
+            "ssrf_protection": {"action": "warn"}
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.web.pages.config_file._get_current_target",
+                return_value=fake_target,
+            ),
+            mock.patch(
+                "ai_guardian.web.pages.config_file._daemon_service",
+                fake_service,
+            ),
+            mock.patch(
+                "ai_guardian.web.config_helpers._get_remote_project_dir",
+                return_value="/some/project",
+            ),
+        ):
+            result = _load_daemon_config_files(fake_target)
+            assert result["project_exists"] is True
+            assert result["project_content"] is not None

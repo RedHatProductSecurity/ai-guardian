@@ -379,6 +379,52 @@ class TestLoadScopedConfig:
             cfg = load_scoped_config("project")
             assert cfg == {}
 
+    def test_project_scope_explicit_project_dir(self, tmp_path):
+        """When project_dir is passed, load config from that dir — not CWD."""
+        project_dir = tmp_path / "selected_project"
+        ai_dir = project_dir / ".ai-guardian"
+        ai_dir.mkdir(parents=True)
+        (ai_dir / "ai-guardian.json").write_text(
+            json.dumps({"ssrf_protection": {"action": "warn"}})
+        )
+
+        cwd_project = tmp_path / "cwd_project"
+        cwd_ai = cwd_project / ".ai-guardian"
+        cwd_ai.mkdir(parents=True)
+        (cwd_ai / "ai-guardian.json").write_text(
+            json.dumps({"ssrf_protection": {"action": "block"}})
+        )
+
+        with mock.patch(
+            "ai_guardian.config.writer.get_project_config_path",
+            return_value=cwd_ai / "ai-guardian.json",
+        ):
+            from ai_guardian.config.writer import load_scoped_config
+
+            cfg = load_scoped_config("project", project_dir=str(project_dir))
+            assert cfg["ssrf_protection"]["action"] == "warn"
+
+    def test_project_scope_explicit_project_dir_no_config(self, tmp_path):
+        """When project_dir has no config, return {} even if CWD has config."""
+        project_dir = tmp_path / "no_config_project"
+        project_dir.mkdir()
+
+        cwd_project = tmp_path / "cwd_project"
+        cwd_ai = cwd_project / ".ai-guardian"
+        cwd_ai.mkdir(parents=True)
+        (cwd_ai / "ai-guardian.json").write_text(
+            json.dumps({"ssrf_protection": {"action": "block"}})
+        )
+
+        with mock.patch(
+            "ai_guardian.config.writer.get_project_config_path",
+            return_value=cwd_ai / "ai-guardian.json",
+        ):
+            from ai_guardian.config.writer import load_scoped_config
+
+            cfg = load_scoped_config("project", project_dir=str(project_dir))
+            assert cfg == {}
+
     def test_invalid_scope(self):
         from ai_guardian.config.writer import load_scoped_config
 
