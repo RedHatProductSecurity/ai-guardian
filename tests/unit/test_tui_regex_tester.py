@@ -7,7 +7,6 @@ Tests the find_matches() helper function and config integration logic.
 
 import json
 import re
-from unittest.mock import patch
 
 
 from ai_guardian.tui.regex_tester import (
@@ -198,12 +197,9 @@ class TestConfigIntegration:
         config = {"prompt_injection": {"allowlist_patterns": []}}
         self._write_config(tmp_path, config)
 
-        with patch(
-            "ai_guardian.tui.regex_tester.get_config_dir", return_value=tmp_path
-        ):
-            result = self._read_config(tmp_path)
-            result["prompt_injection"]["allowlist_patterns"].append(r"test.*pattern")
-            self._write_config(tmp_path, result)
+        result = self._read_config(tmp_path)
+        result["prompt_injection"]["allowlist_patterns"].append(r"test.*pattern")
+        self._write_config(tmp_path, result)
 
         saved = self._read_config(tmp_path)
         assert r"test.*pattern" in saved["prompt_injection"]["allowlist_patterns"]
@@ -212,12 +208,9 @@ class TestConfigIntegration:
         config = {"scan_pii": {"allowlist_patterns": []}}
         self._write_config(tmp_path, config)
 
-        with patch(
-            "ai_guardian.tui.regex_tester.get_config_dir", return_value=tmp_path
-        ):
-            result = self._read_config(tmp_path)
-            result["scan_pii"]["allowlist_patterns"].append(r"user@example\.com")
-            self._write_config(tmp_path, result)
+        result = self._read_config(tmp_path)
+        result["scan_pii"]["allowlist_patterns"].append(r"user@example\.com")
+        self._write_config(tmp_path, result)
 
         saved = self._read_config(tmp_path)
         assert r"user@example\.com" in saved["scan_pii"]["allowlist_patterns"]
@@ -226,14 +219,9 @@ class TestConfigIntegration:
         config = {"secret_scanning": {"allowlist_patterns": []}}
         self._write_config(tmp_path, config)
 
-        with patch(
-            "ai_guardian.tui.regex_tester.get_config_dir", return_value=tmp_path
-        ):
-            result = self._read_config(tmp_path)
-            result["secret_scanning"]["allowlist_patterns"].append(
-                r"pk_test_[A-Za-z0-9]+"
-            )
-            self._write_config(tmp_path, result)
+        result = self._read_config(tmp_path)
+        result["secret_scanning"]["allowlist_patterns"].append(r"pk_test_[A-Za-z0-9]+")
+        self._write_config(tmp_path, result)
 
         saved = self._read_config(tmp_path)
         assert r"pk_test_[A-Za-z0-9]+" in saved["secret_scanning"]["allowlist_patterns"]
@@ -242,18 +230,15 @@ class TestConfigIntegration:
         config = {}
         self._write_config(tmp_path, config)
 
-        with patch(
-            "ai_guardian.tui.regex_tester.get_config_dir", return_value=tmp_path
-        ):
-            result = self._read_config(tmp_path)
-            section_key = "prompt_injection"
-            field_key = "allowlist_patterns"
-            if section_key not in result:
-                result[section_key] = {}
-            if field_key not in result[section_key]:
-                result[section_key][field_key] = []
-            result[section_key][field_key].append(r"new_pattern")
-            self._write_config(tmp_path, result)
+        result = self._read_config(tmp_path)
+        section_key = "prompt_injection"
+        field_key = "allowlist_patterns"
+        if section_key not in result:
+            result[section_key] = {}
+        if field_key not in result[section_key]:
+            result[section_key][field_key] = []
+        result[section_key][field_key].append(r"new_pattern")
+        self._write_config(tmp_path, result)
 
         saved = self._read_config(tmp_path)
         assert "prompt_injection" in saved
