@@ -16,6 +16,7 @@ from textual.message import Message
 
 from ai_guardian.config.utils import get_config_dir
 from ai_guardian.tui.schema_defaults import (
+    ConfigSaveMixin,
     SchemaDefaultsMixin,
     default_indicator,
     default_placeholder,
@@ -123,9 +124,10 @@ class RemoteConfigEntry(Container):
             self.post_message(self.RemovePressed(self.index))
 
 
-class RemoteConfigsContent(SchemaDefaultsMixin, Container):
+class RemoteConfigsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
     """Content widget for Remote Configs tab."""
 
+    CONFIG_SECTION = "remote_configs"
     SCHEMA_SECTION = "remote_configs"
     SCHEMA_FIELDS = [
         ("refresh-interval-input", "refresh_interval_hours", "input"),
@@ -390,27 +392,14 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
             )
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
+            config.setdefault("remote_configs", {}).setdefault("urls", [])
 
-            if "remote_configs" not in config:
-                config["remote_configs"] = {}
-            if "urls" not in config["remote_configs"]:
-                config["remote_configs"]["urls"] = []
-
-            # Create URL config
             url_config = {"url": url, "enabled": True}
             if token_env:
                 url_config["token_env"] = token_env
 
-            # Check if URL already exists
             existing_urls = config["remote_configs"]["urls"]
             for existing in existing_urls:
                 existing_url = (
@@ -421,11 +410,8 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
                     return
 
             config["remote_configs"]["urls"].append(url_config)
+            self._write_full_config(config)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            # Clear inputs
             self.query_one("#new-url-input", Input).value = ""
             self.query_one("#new-token-env-input", Input).value = ""
 
@@ -437,15 +423,8 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
 
     def remove_url(self, index: int) -> None:
         """Remove a remote config URL."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                return
+            config = self._load_full_config()
 
             if "remote_configs" in config and "urls" in config["remote_configs"]:
                 urls = config["remote_configs"]["urls"]
@@ -457,8 +436,7 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
                         else removed_url.get("url", "")
                     )
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     self.load_config()
                     self.app.notify(
@@ -471,27 +449,18 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
 
     def toggle_url_enabled(self, index: int, enabled: bool) -> None:
         """Toggle the enabled state of a URL."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                return
+            config = self._load_full_config()
 
             if "remote_configs" in config and "urls" in config["remote_configs"]:
                 urls = config["remote_configs"]["urls"]
                 if 0 <= index < len(urls):
-                    # Convert to object format if needed
                     if isinstance(urls[index], str):
                         urls[index] = {"url": urls[index], "enabled": enabled}
                     else:
                         urls[index]["enabled"] = enabled
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     status = "enabled" if enabled else "disabled"
                     self.app.notify(f"✓ URL {status}", severity="success")
@@ -501,26 +470,9 @@ class RemoteConfigsContent(SchemaDefaultsMixin, Container):
 
     def save_cache_setting(self, field: str, value: int) -> None:
         """Save a cache setting."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
-
-            if "remote_configs" not in config:
-                config["remote_configs"] = {}
-
-            config["remote_configs"][field] = value
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
+            self._save_config_field(field, value)
             self.app.notify(f"✓ Saved {field}: {value}", severity="success")
-
         except Exception as e:
             self.app.notify(f"Error saving {field}: {e}", severity="error")
 

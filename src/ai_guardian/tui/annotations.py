@@ -4,43 +4,22 @@ Annotations Tab Content
 View and configure inline/block annotation suppression settings.
 """
 
-import logging
-import json
-from pathlib import Path
 from typing import Dict, Any
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Static, Button, Input, Label
 
-from ai_guardian.config.utils import get_config_dir, get_project_config_path
-from ai_guardian.tui.schema_defaults import SchemaDefaultsMixin
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin, SchemaDefaultsMixin
 from ai_guardian.tui.widgets import TimeBasedToggle
 
 
-class AnnotationsContent(SchemaDefaultsMixin, Container):
+class AnnotationsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
     """Content widget for Annotations tab."""
 
+    CONFIG_SECTION = "annotations"
     SCHEMA_SECTION = "annotations"
     SCHEMA_FIELDS = []
-
-    @property
-    def _is_project_scope(self) -> bool:
-        try:
-            return self.app.config_scope == "project"
-        except Exception:
-            return False
-
-    def _get_config_path(self) -> Path:
-        if self._is_project_scope:
-            project_path = get_project_config_path()
-            if project_path:
-                return project_path
-            from ai_guardian.config.utils import _find_git_root
-
-            root = _find_git_root() or Path.cwd()
-            return root / ".ai-guardian" / "ai-guardian.json"
-        return get_config_dir() / "ai-guardian.json"
 
     CSS = """
     AnnotationsContent {
@@ -224,14 +203,7 @@ class AnnotationsContent(SchemaDefaultsMixin, Container):
         self.load_config()
 
     def load_config(self) -> None:
-        config_path = self._get_config_path()
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning("Failed to read config: %s", e)
+        config = self._load_full_config()
 
         section = config.get("annotations", {})
 
@@ -259,27 +231,13 @@ class AnnotationsContent(SchemaDefaultsMixin, Container):
             widget.update("[dim]  (none configured)[/dim]")
 
     def save_config(self, updates: Dict[str, Any]) -> bool:
-        config_path = self._get_config_path()
-
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                pass
+        config = self._load_full_config()
 
         if "annotations" not in config:
             config["annotations"] = {}
         config["annotations"].update(updates)
 
-        try:
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(config_path, "w") as f:
-                json.dump(config, f, indent=2)
-            return True
-        except OSError:
-            return False
+        return self._write_full_config(config)
 
     def _add_alias(self, config_key: str, input_id: str, list_id: str) -> None:
         input_widget = self.query_one(f"#{input_id}", Input)
@@ -287,15 +245,7 @@ class AnnotationsContent(SchemaDefaultsMixin, Container):
         if not alias:
             return
 
-        config_path = self._get_config_path()
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                pass
-
+        config = self._load_full_config()
         section = config.get("annotations", {})
         current = list(section.get(config_key, []))
         if alias not in current:
@@ -306,15 +256,7 @@ class AnnotationsContent(SchemaDefaultsMixin, Container):
         input_widget.value = ""
 
     def _remove_last_alias(self, config_key: str, list_id: str) -> None:
-        config_path = self._get_config_path()
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r") as f:
-                    config = json.load(f)
-            except (json.JSONDecodeError, OSError) as e:
-                logging.warning("Failed to read config: %s", e)
-
+        config = self._load_full_config()
         section = config.get("annotations", {})
         current = list(section.get(config_key, []))
         if current:

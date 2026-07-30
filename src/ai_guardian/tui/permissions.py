@@ -15,6 +15,7 @@ from textual.widgets import Button, Static, Input, Select, Label
 from textual.binding import Binding
 
 from ai_guardian.config.utils import get_config_dir
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 
 class PermissionCard(Container):
@@ -187,8 +188,10 @@ class AddPermissionModal(ModalScreen):
         self.dismiss(None)
 
 
-class PermissionsScreen(Screen):
+class PermissionsScreen(ConfigSaveMixin, Screen):
     """Screen for managing tool permissions."""
+
+    CONFIG_SECTION = "permissions"
 
     CSS = """
     PermissionsScreen {
@@ -337,24 +340,20 @@ class PermissionsScreen(Screen):
 
     def edit_permission(self, index: int) -> None:
         """Show modal to edit an existing permission rule."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        if not config_path.exists():
-            self.notify("Config file not found", severity="error")
-            return
-
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                # NEW unified structure in v1.4.0
-                permissions_obj = config.get("permissions", {})
-                if isinstance(permissions_obj, dict):
-                    permissions = permissions_obj.get("rules", [])
-                else:
-                    permissions = (
-                        permissions_obj if isinstance(permissions_obj, list) else []
-                    )
+            config = self._load_full_config()
+            if not config:
+                self.notify("Config file not found", severity="error")
+                return
+
+            # NEW unified structure in v1.4.0
+            permissions_obj = config.get("permissions", {})
+            if isinstance(permissions_obj, dict):
+                permissions = permissions_obj.get("rules", [])
+            else:
+                permissions = (
+                    permissions_obj if isinstance(permissions_obj, list) else []
+                )
 
             if index >= len(permissions):
                 self.notify("Permission not found", severity="error")
@@ -371,8 +370,7 @@ class PermissionsScreen(Screen):
                     else:
                         config["permissions"] = {"enabled": True, "rules": permissions}
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     self.load_permissions()
                     self.notify("Permission updated", severity="success")
@@ -384,24 +382,20 @@ class PermissionsScreen(Screen):
 
     def delete_permission(self, index: int) -> None:
         """Delete a permission rule."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        if not config_path.exists():
-            self.notify("Config file not found", severity="error")
-            return
-
         try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-                # NEW unified structure in v1.4.0
-                permissions_obj = config.get("permissions", {})
-                if isinstance(permissions_obj, dict):
-                    permissions = permissions_obj.get("rules", [])
-                else:
-                    permissions = (
-                        permissions_obj if isinstance(permissions_obj, list) else []
-                    )
+            config = self._load_full_config()
+            if not config:
+                self.notify("Config file not found", severity="error")
+                return
+
+            # NEW unified structure in v1.4.0
+            permissions_obj = config.get("permissions", {})
+            if isinstance(permissions_obj, dict):
+                permissions = permissions_obj.get("rules", [])
+            else:
+                permissions = (
+                    permissions_obj if isinstance(permissions_obj, list) else []
+                )
 
             if index >= len(permissions):
                 self.notify("Permission not found", severity="error")
@@ -415,8 +409,7 @@ class PermissionsScreen(Screen):
             else:
                 config["permissions"] = {"enabled": True, "rules": permissions}
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.load_permissions()
             self.notify(
@@ -429,15 +422,8 @@ class PermissionsScreen(Screen):
 
     def save_permission(self, rule: Dict) -> None:
         """Save a new permission rule to config."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             permissions_obj = config.get("permissions", {})
             if isinstance(permissions_obj, dict):
@@ -457,8 +443,7 @@ class PermissionsScreen(Screen):
             else:
                 config["permissions"] = all_permissions
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.load_permissions()
             self.notify("Permission added", severity="success")

@@ -6,7 +6,6 @@ Manage permissions_directories configuration for auto-discovering
 permissions from local directories or GitHub repositories.
 """
 
-import json
 from typing import List, Dict, Any
 
 from textual.app import ComposeResult
@@ -14,7 +13,7 @@ from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Static, Button, Input, Label, Select
 from textual.message import Message
 
-from ai_guardian.config.utils import get_config_dir
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 
 class DirectoryEntry(Container):
@@ -108,8 +107,10 @@ class DirectoryEntry(Container):
             self.post_message(self.RemovePressed(self.list_type, self.index))
 
 
-class PermissionsDiscoveryContent(Container):
+class PermissionsDiscoveryContent(ConfigSaveMixin, Container):
     """Content widget for Permissions Discovery tab."""
+
+    CONFIG_SECTION = "permissions"
 
     CSS = """
     PermissionsDiscoveryContent {
@@ -307,18 +308,7 @@ class PermissionsDiscoveryContent(Container):
 
     def load_config(self) -> None:
         """Load and display permissions discovery configuration."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        # Load config
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            except Exception as e:
-                self.app.notify(f"Error loading config: {e}", severity="error")
-                return
+        config = self._load_full_config()
 
         # Load permissions directories
         perms_dirs = config.get("permissions_directories", {})
@@ -379,15 +369,8 @@ class PermissionsDiscoveryContent(Container):
             self.app.notify("Please enter a URL or path", severity="error")
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "permissions_directories" not in config:
                 config["permissions_directories"] = {}
@@ -401,8 +384,7 @@ class PermissionsDiscoveryContent(Container):
 
             config["permissions_directories"][list_type].append(entry)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             # Clear inputs
             self.query_one("#matcher-input", Input).value = ""
@@ -419,14 +401,9 @@ class PermissionsDiscoveryContent(Container):
 
     def remove_entry(self, list_type: str, index: int) -> None:
         """Remove a directory entry."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
+            config = self._load_full_config()
+            if not config:
                 return
 
             if (
@@ -437,8 +414,7 @@ class PermissionsDiscoveryContent(Container):
                 if 0 <= index < len(entries):
                     removed_entry = entries.pop(index)
 
-                    with open(config_path, "w", encoding="utf-8") as f:
-                        json.dump(config, f, indent=2)
+                    self._write_full_config(config)
 
                     self.load_config()
                     self.app.notify(

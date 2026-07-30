@@ -5,14 +5,12 @@ Prompt Injection Tab Content
 View and configure prompt injection detection settings.
 """
 
-import json
-
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Static, Button, Input, Label, Select, Checkbox
 
-from ai_guardian.config.utils import get_config_dir
 from ai_guardian.tui.schema_defaults import (
+    ConfigSaveMixin,
     SchemaDefaultsMixin,
     default_indicator,
     default_placeholder,
@@ -21,9 +19,10 @@ from ai_guardian.tui.schema_defaults import (
 from ai_guardian.tui.widgets import TimeBasedToggle, format_local_time
 
 
-class PromptInjectionContent(SchemaDefaultsMixin, Container):
+class PromptInjectionContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
     """Content widget for Prompt Injection tab."""
 
+    CONFIG_SECTION = "prompt_injection"
     SCHEMA_SECTION = "prompt_injection"
     SCHEMA_FIELDS = [
         ("detector-select", "detector", "select"),
@@ -328,17 +327,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
     def load_config(self) -> None:
         """Load and display prompt injection detection configuration."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
-        # Load config
-        config = {}
-        if config_path.exists():
-            try:
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            except Exception as e:
-                self.app.notify(f"Error loading config: {e}", severity="error")
+        config = self._load_full_config()
 
         # Prompt injection settings
         pi_config = config.get("prompt_injection", {})
@@ -560,23 +549,15 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
     def save_field(self, field: str, value) -> None:
         """Save a prompt injection field to config."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
 
             config["prompt_injection"][field] = value
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.app.notify(f"✓ Saved {field}", severity="success")
 
@@ -585,15 +566,8 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
     def save_unicode_detection_field(self, field: str, value: bool) -> None:
         """Save a unicode detection field to config."""
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
@@ -603,8 +577,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
             config["prompt_injection"]["unicode_detection"][field] = value
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             # Convert field name to human-readable
             field_name = field.replace("_", " ").title()
@@ -622,15 +595,8 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
         detector = self.query_one("#detector-select", Select).value
         sensitivity = self.query_one("#sensitivity-select", Select).value
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
@@ -638,8 +604,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
             config["prompt_injection"]["detector"] = detector
             config["prompt_injection"]["sensitivity"] = sensitivity
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             self.load_config()
             self.app.notify(
@@ -658,15 +623,8 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a pattern", severity="error")
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
@@ -681,8 +639,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
             config["prompt_injection"]["allowlist_patterns"].append(pattern)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             # Clear input
             self.query_one("#new-allowlist-input", Input).value = ""
@@ -703,15 +660,8 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a pattern", severity="error")
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
@@ -726,8 +676,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
             config["prompt_injection"]["custom_patterns"].append(pattern)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             # Clear input
             self.query_one("#new-custom-input", Input).value = ""
@@ -745,14 +694,8 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a pattern", severity="error")
             return
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
+            config = self._load_full_config()
 
             if "prompt_injection" not in config:
                 config["prompt_injection"] = {}
@@ -765,8 +708,7 @@ class PromptInjectionContent(SchemaDefaultsMixin, Container):
 
             config["prompt_injection"][field].append(value)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             input_widget.value = ""
             self.load_config()

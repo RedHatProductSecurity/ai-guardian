@@ -462,32 +462,9 @@ class ScanPIIContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a glob pattern", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            if "scan_pii" not in config:
-                config["scan_pii"] = {}
-            if "ignore_files" not in config["scan_pii"]:
-                config["scan_pii"]["ignore_files"] = []
-
-            if pattern in config["scan_pii"]["ignore_files"]:
-                self.app.notify("Pattern already in list", severity="warning")
-                return
-
-            config["scan_pii"]["ignore_files"].append(pattern)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            input_widget.value = ""
-            self.load_config()
-            self.app.notify(f"Added ignore pattern: {pattern}", severity="success")
-
+            if self._add_config_list_item("ignore_files", pattern, input_widget):
+                self.app.notify(f"Added ignore pattern: {pattern}", severity="success")
         except Exception as e:
             self.app.notify(f"Error adding pattern: {e}", severity="error")
 
@@ -499,32 +476,11 @@ class ScanPIIContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a tool name pattern", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            if "scan_pii" not in config:
-                config["scan_pii"] = {}
-            if "ignore_tools" not in config["scan_pii"]:
-                config["scan_pii"]["ignore_tools"] = []
-
-            if pattern in config["scan_pii"]["ignore_tools"]:
-                self.app.notify("Pattern already in list", severity="warning")
-                return
-
-            config["scan_pii"]["ignore_tools"].append(pattern)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            input_widget.value = ""
-            self.load_config()
-            self.app.notify(f"Added ignore tool pattern: {pattern}", severity="success")
-
+            if self._add_config_list_item("ignore_tools", pattern, input_widget):
+                self.app.notify(
+                    f"Added ignore tool pattern: {pattern}", severity="success"
+                )
         except Exception as e:
             self.app.notify(f"Error adding pattern: {e}", severity="error")
 
@@ -544,31 +500,10 @@ class ScanPIIContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             self.app.notify(f"Invalid regex: {e}", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            if "scan_pii" not in config:
-                config["scan_pii"] = {}
-            if "allowlist_patterns" not in config["scan_pii"]:
-                config["scan_pii"]["allowlist_patterns"] = []
-
-            if pattern in config["scan_pii"]["allowlist_patterns"]:
-                self.app.notify("Pattern already in allowlist", severity="warning")
-                return
-
-            config["scan_pii"]["allowlist_patterns"].append(pattern)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            input_widget.value = ""
-            self.load_config()
-            self.app.notify(f"Added allowlist pattern: {pattern}", severity="success")
-
+            if self._add_config_list_item("allowlist_patterns", pattern, input_widget):
+                self.app.notify(
+                    f"Added allowlist pattern: {pattern}", severity="success"
+                )
         except Exception as e:
             self.app.notify(f"Error adding pattern: {e}", severity="error")

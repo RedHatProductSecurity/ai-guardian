@@ -14,39 +14,22 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Static, Button, Input, Label, Select
 
-from ai_guardian.config.utils import get_config_dir, get_project_config_path
 from ai_guardian.tui.schema_defaults import (
+    ConfigSaveMixin,
     SchemaDefaultsMixin,
     select_options_with_default,
 )
 from ai_guardian.tui.widgets import TimeBasedToggle, sanitize_enabled_value
 
 
-class ConfigScannerContent(SchemaDefaultsMixin, Container):
+class ConfigScannerContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
     """Content widget for Config File Scanner tab."""
 
+    CONFIG_SECTION = "config_file_scanning"
     SCHEMA_SECTION = "config_file_scanning"
     SCHEMA_FIELDS = [
         ("action-select", "action", "select"),
     ]
-
-    @property
-    def _is_project_scope(self) -> bool:
-        try:
-            return self.app.config_scope == "project"
-        except Exception:
-            return False
-
-    def _get_config_path(self) -> Path:
-        if self._is_project_scope:
-            project_path = get_project_config_path()
-            if project_path:
-                return project_path
-            from ai_guardian.config.utils import _find_git_root
-
-            root = _find_git_root() or Path.cwd()
-            return root / ".ai-guardian" / "ai-guardian.json"
-        return get_config_dir() / "ai-guardian.json"
 
     CSS = """
     ConfigScannerContent {
@@ -413,34 +396,14 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
         Returns:
             bool: True if successful, False otherwise
         """
-        config_path = self._get_config_path()
-
         try:
-            # Load existing config
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            # Ensure config_file_scanning section exists
-            if "config_file_scanning" not in config:
-                config["config_file_scanning"] = {}
-
-            if "enabled" in config_updates:
-                config_updates["enabled"] = sanitize_enabled_value(
-                    config_updates["enabled"]
+            if self._save_config_updates(config_updates):
+                self.app.notify(
+                    "Config file scanner configuration saved",
+                    severity="information",
                 )
-            config["config_file_scanning"].update(config_updates)
-
-            # Save config
-            config_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            self.app.notify(
-                "Config file scanner configuration saved", severity="information"
-            )
-            return True
+                return True
+            return False
 
         except Exception as e:
             self.app.notify(f"Error saving config: {e}", severity="error")
@@ -523,39 +486,12 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a file pattern", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
-
-            if "config_file_scanning" not in config:
-                config["config_file_scanning"] = {}
-
-            if "additional_files" not in config["config_file_scanning"]:
-                config["config_file_scanning"]["additional_files"] = []
-
-            # Check if file already exists
-            if file_value in config["config_file_scanning"]["additional_files"]:
-                self.app.notify("File pattern already in list", severity="warning")
-                return
-
-            config["config_file_scanning"]["additional_files"].append(file_value)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            # Clear input
-            file_input.value = ""
-
-            self.load_config()
-            self.app.notify(
-                f"✓ Added {file_value} to additional files", severity="success"
-            )
-
+            if self._add_config_list_item("additional_files", file_value, file_input):
+                self.app.notify(
+                    f"✓ Added {file_value} to additional files",
+                    severity="success",
+                )
         except Exception as e:
             self.app.notify(f"Error adding file: {e}", severity="error")
 
@@ -568,39 +504,12 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter an ignore pattern", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
-
-            if "config_file_scanning" not in config:
-                config["config_file_scanning"] = {}
-
-            if "ignore_files" not in config["config_file_scanning"]:
-                config["config_file_scanning"]["ignore_files"] = []
-
-            # Check if pattern already exists
-            if ignore_value in config["config_file_scanning"]["ignore_files"]:
-                self.app.notify("Ignore pattern already in list", severity="warning")
-                return
-
-            config["config_file_scanning"]["ignore_files"].append(ignore_value)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            # Clear input
-            ignore_input.value = ""
-
-            self.load_config()
-            self.app.notify(
-                f"✓ Added {ignore_value} to ignore patterns", severity="success"
-            )
-
+            if self._add_config_list_item("ignore_files", ignore_value, ignore_input):
+                self.app.notify(
+                    f"✓ Added {ignore_value} to ignore patterns",
+                    severity="success",
+                )
         except Exception as e:
             self.app.notify(f"Error adding ignore pattern: {e}", severity="error")
 
@@ -613,32 +522,9 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a tool pattern", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-
-            if "config_file_scanning" not in config:
-                config["config_file_scanning"] = {}
-            if "ignore_tools" not in config["config_file_scanning"]:
-                config["config_file_scanning"]["ignore_tools"] = []
-
-            if value in config["config_file_scanning"]["ignore_tools"]:
-                self.app.notify("Pattern already exists", severity="warning")
-                return
-
-            config["config_file_scanning"]["ignore_tools"].append(value)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            input_widget.value = ""
-            self.load_config()
-            self.app.notify(f"Added: {value}", severity="success")
-
+            if self._add_config_list_item("ignore_tools", value, input_widget):
+                self.app.notify(f"Added: {value}", severity="success")
         except Exception as e:
             self.app.notify(f"Error adding pattern: {e}", severity="error")
 
@@ -651,7 +537,6 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
             self.app.notify("Please enter a detection pattern", severity="error")
             return
 
-        # Try to compile as regex to validate
         import re
 
         try:
@@ -660,36 +545,10 @@ class ConfigScannerContent(SchemaDefaultsMixin, Container):
             self.app.notify(f"Invalid regex pattern: {e}", severity="error")
             return
 
-        config_path = self._get_config_path()
-
         try:
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-            else:
-                config = {}
-
-            if "config_file_scanning" not in config:
-                config["config_file_scanning"] = {}
-
-            if "additional_patterns" not in config["config_file_scanning"]:
-                config["config_file_scanning"]["additional_patterns"] = []
-
-            # Check if pattern already exists
-            if pattern_value in config["config_file_scanning"]["additional_patterns"]:
-                self.app.notify("Pattern already in list", severity="warning")
-                return
-
-            config["config_file_scanning"]["additional_patterns"].append(pattern_value)
-
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
-
-            # Clear input
-            pattern_input.value = ""
-
-            self.load_config()
-            self.app.notify("✓ Added detection pattern", severity="success")
-
+            if self._add_config_list_item(
+                "additional_patterns", pattern_value, pattern_input
+            ):
+                self.app.notify("✓ Added detection pattern", severity="success")
         except Exception as e:
             self.app.notify(f"Error adding pattern: {e}", severity="error")

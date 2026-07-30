@@ -6,7 +6,6 @@ Interactive regex pattern testing with ReDoS validation
 and config integration for allowlist patterns.
 """
 
-import json
 import re
 from typing import List, Tuple
 
@@ -14,7 +13,8 @@ from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Static, Input, Button, Select, Checkbox, TextArea
 
-from ai_guardian.config.utils import get_config_dir, validate_regex_pattern
+from ai_guardian.config.utils import validate_regex_pattern
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
 MAX_MATCHES_DISPLAYED = 100
 
@@ -87,8 +87,10 @@ def find_matches(
     return True, "", matches
 
 
-class RegexTesterContent(Container):
+class RegexTesterContent(ConfigSaveMixin, Container):
     """Content widget for the Regex Tester panel."""
+
+    CONFIG_SECTION = "prompt_injection"
 
     CSS = """
     RegexTesterContent {
@@ -339,14 +341,8 @@ class RegexTesterContent(Container):
 
         section_key, field_key = CONFIG_SECTIONS[target]
 
-        config_dir = get_config_dir()
-        config_path = config_dir / "ai-guardian.json"
-
         try:
-            config = {}
-            if config_path.exists():
-                with open(config_path, "r", encoding="utf-8") as f:
-                    config = json.load(f)
+            config = self._load_full_config()
 
             if section_key not in config:
                 config[section_key] = {}
@@ -367,8 +363,7 @@ class RegexTesterContent(Container):
 
             config[section_key][field_key].append(pattern)
 
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2)
+            self._write_full_config(config)
 
             section_labels = {
                 "prompt_injection": "Prompt Injection",
