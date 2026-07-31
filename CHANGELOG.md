@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.15.4] - 2026-07-31
+
+### Added
+
+- **Deprecation warning for `action` on allow rules** — `ai-guardian doctor` now reports WARN when allow permission rules include a legacy `action` field; config loader emits WARNING log at startup; policy checker log level bumped from INFO to WARNING for visibility (#1752, #1755)
+
+### Fixed
+
+- **Web console project config resolution** — all config-consuming pages now resolve project config using the explicit `project_dir` from the header selector instead of the daemon's last-seen CWD, fixing global config leaking into project view, real project configs being ignored, and phantom configs from unrelated projects appearing (#1753, #1754)
+
+### Changed
+
+- Verified Cursor hook compatibility with Cursor v3.13.21
+
 ## [1.15.3] - 2026-07-30
 
 ### Added
@@ -3018,7 +3033,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...HEAD
+[1.15.4]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.1...v1.15.2
 [1.15.1]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.0...v1.15.1
