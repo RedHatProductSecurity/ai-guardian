@@ -22382,64 +22382,7 @@ Violation logging is **extremely efficient**:
 }
 ```
 
-# === aiguardignore.schema.json ===
-
-```json
-{
-  "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json",
-  "title": "ai-guardian ignore file",
-  "description": "Per-project file ignore patterns for ai-guardian scanners (.aiguardignore.toml)",
-  "type": "object",
-  "properties": {
-    "allowlist": {
-      "type": "object",
-      "description": "Global allowlist — applies to all scanners",
-      "properties": {
-        "paths": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Glob patterns for files to skip across all scanners (e.g. \"tests/fixtures/**\")"
-        }
-      },
-      "additionalProperties": false
-    },
-    "secret_scanning": { "$ref": "#/$defs/scanner_section" },
-    "scan_pii": { "$ref": "#/$defs/scanner_section" },
-    "prompt_injection": { "$ref": "#/$defs/scanner_section" },
-    "config_file_scanning": { "$ref": "#/$defs/scanner_section" },
-    "context_poisoning": { "$ref": "#/$defs/scanner_section" },
-    "supply_chain": { "$ref": "#/$defs/scanner_section" },
-    "image_scanning": { "$ref": "#/$defs/scanner_section" },
-    "offensive_language": { "$ref": "#/$defs/scanner_section" },
-    "exfil_detection": { "$ref": "#/$defs/scanner_section" }
-  },
-  "additionalProperties": false,
-  "$defs": {
-    "scanner_section": {
-      "type": "object",
-      "description": "Scanner-specific ignore configuration",
-      "properties": {
-        "allowlist": {
-          "type": "object",
-          "description": "Allowlist for this scanner",
-          "properties": {
-            "paths": {
-              "type": "array",
-              "items": { "type": "string" },
-              "description": "Glob patterns for files to skip for this scanner"
-            }
-          },
-          "additionalProperties": false
-        }
-      },
-      "additionalProperties": false
-    }
-  }
-}
-```
-
-# === CHANGELOG.md (recent) ===
+# === CHANGELOG (recent) ===
 
 # Changelog
 
@@ -22449,6 +22392,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+
+## [1.15.4] - 2026-07-31
+
+### Added
+
+- **Deprecation warning for `action` on allow rules** — `ai-guardian doctor` now reports WARN when allow permission rules include a legacy `action` field; config loader emits WARNING log at startup; policy checker log level bumped from INFO to WARNING for visibility (#1752, #1755)
+
+### Fixed
+
+- **Web console project config resolution** — all config-consuming pages now resolve project config using the explicit `project_dir` from the header selector instead of the daemon's last-seen CWD, fixing global config leaking into project view, real project configs being ignored, and phantom configs from unrelated projects appearing (#1753, #1754)
+
+### Changed
+
+- Verified Cursor hook compatibility with Cursor v3.13.21
 
 ## [1.15.3] - 2026-07-30
 
@@ -22499,6 +22457,232 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Permission denied message UX** — directory blocking messages now show all config file locations (global and project-level) and suggest project-level fixes, making it easier to resolve false positives (#1726, #1727)
 
 - Verified Cursor hook compatibility with Cursor v3.13.21
+
+## [1.15.1] - 2026-07-27
+
+### Added
+
+- **Unknown config key detection in doctor** — `ai-guardian doctor` now validates all root and nested config keys against the JSON schema, flags unrecognized keys with WARN status, and offers fuzzy "did you mean?" suggestions via `difflib.get_close_matches` (#1716)
+
+- **Enriched violation context** — violation log entries now include `tool_name`, `source` (hook event), and `file_path` fields in the context object, providing better traceability for security incidents (#1717)
+
+### Changed
+
+- Verified Cursor hook compatibility with Cursor v3.12.30
+
+## [1.15.0] - 2026-07-22
+
+### Added
+
+- **Transcript scanning for 7 new IDEs** — Cursor (SQLite), Cline/ZooCode (JSON), Windsurf (JSONL), Kiro (JSONL), Copilot Chat (VS Code delta journal), AiderDesk (Markdown chat history), and OpenClaw (JSONL). New `scanners/transcript/` subpackage with adapter pattern: `base.py` (ABC), `common.py` (shared scanning/dedup), per-IDE adapters. Content pipeline uses polymorphic `can_scan()`/`scan_incremental()` loop (#936, #937, #938, #939, #940, #942)
+
+- **LeakTK listen mode — 40x scanner latency reduction** — persistent LeakTK process accepts scan requests over stdin/stdout instead of spawning a new process per hook. Reduces secret scan latency from ~200ms to ~5ms. Automatic fallback to one-shot mode if listen mode unavailable. Timeout guard prevents hangs (#1590)
+
+- **`init-project --scan` — auto-generate config from false positive analysis** — scans project with default config, clusters findings by pattern, identifies high-frequency patterns (10+ files) as likely false positives. Generates tuned `.ai-guardian/ai-guardian.json` with allowlist patterns and `.aiguardignore.toml` with per-scanner directory ignores. `--threshold N` flag to control sensitivity. Config generation for all scanner types. TUI and web console UI for interactive configuration (#1584, #1665, #1677)
+
+- **Language-aware false positive suppression** — auto-detects project language (Python, Go, JavaScript, TypeScript, Java, C#, Ruby, Rust, PHP) and injects language-specific overlay patterns to suppress known false positives. Pipeline-level overlay injection via `ScannerEntry` flag. Generalized to all scanners (#1585, #1662, #1674)
+
+- **Per-file-type scanner dispatch (`skip_file_types`)** — pattern rules in secrets.toml can specify file extensions to skip (e.g., skip `.py` for patterns that only match config files). Scanner executor threads original `file_path` through to skip logic (#1586, #1653)
+
+- **ML prompt injection one-command setup** — `ai-guardian ml setup` downloads ONNX model and tokenizer in one step. Auto-detects platform and configures ML detection (#1587)
+
+- **PostToolUse redacted output via `additionalContext`** — when a secret is detected in tool output, redacted content is sent to the AI agent via `additionalContext` since `updatedToolOutput` is silently ignored by some IDEs. Sanitized block reason prevents leaking detection patterns (#1630)
+
+- **Crush (Charmbracelet) IDE hook adapter** — full hook support for Crush IDE including PreToolUse, PostToolUse, Prompt, and Stop events. Config path auto-detection, response formatting, and confidence levels (#928)
+
+- **Event-driven tray updates via push notifications** — daemon server emits SSE events on state changes (violations, stats, pause/resume). Tray client subscribes instead of polling. Reduces CPU usage and provides instant UI updates. Readiness event for deterministic startup detection (#650, #1610)
+
+- **Scan & Configure UI in TUI and web console** — new page for running `init --scan` interactively, viewing analysis results, and applying generated configuration. Shared scan pipeline extracted for reuse (#1677, #1690)
+
+- **Credentials-in-git-URL detection** — new pattern detects credentials embedded in `git remote` URLs (e.g., `https://user:token@github.com/...`) (#1709)
+
+- **`token_prefixes` field in secrets.toml** — separates prefix-based token matching from keyword matching. Prefix regex derived from secrets.toml at load time (#1639)
+
+- **`workspace_files` support and path traversal guards** — hook data can include `workspace_files` for context-aware scanning with protection against path traversal attacks (#1694)
+
+- **30 new secret detection patterns** — coverage for HashiCorp Vault, Confluent Cloud, OpenRouter, Google Gemini API, Databricks, Datadog, DigitalOcean, Elastic, Fastly, Grafana, Linear, Netlify, PlanetScale, Pulumi, Railway, Render, Sentry, Snyk, Supabase, Terraform Cloud, Vercel, and more (#1617, #1618)
+
+- **4 new credential format patterns** — Gemini API keys (AIza prefix), OpenRouter keys (sk-or- prefix), Vault tokens (hvs. prefix), Confluent Cloud API keys (#1633)
+
+- **Cursor preToolUse hook event** — Cursor IDE now fires preToolUse events, enabling pre-execution scanning (#1592)
+
+### Changed
+
+- **Refactor: centralize language overlay config loading** — shared overlay logic moved to pipeline level via `ScannerEntry` flag instead of per-scanner implementation (#1674, #1675, #1696)
+
+- **Refactor: switch transcript scanning to byte-offset tracking** — JSONL adapters use byte offsets instead of line counts for more reliable incremental scanning (#1672, #1695)
+
+- **Refactor: extract shared JSONL scan logic** — `_scan_with_position_tracking()` and `_discover_path()` helpers in `common.py` reduce duplication across transcript adapters (#1604, #1608, #1673)
+
+- **Refactor: extract shared scan pipeline** — `run_scan_pipeline()` in `scan_analyzer.py` extracted from TUI and web console for reuse (#1689, #1702)
+
+- **Refactor: centralize rule ID mappings** — `RULE_ID_LABELS`, `RULE_ID_TO_SLUG`, and related mappings consolidated in `constants.py`. `RULE_ID_TO_SLUG` derived from existing mappings (#1687, #1688, #1699, #1703)
+
+- **Refactor: deduplicate TUI config I/O** — `ConfigSaveMixin` extracted to eliminate repeated save/load boilerplate across TUI pages (#1684, #1697)
+
+- **Refactor: centralize logging suppression** — `quiet_logging()` context manager extracted to shared TUI utility (#1686, #1698)
+
+- **Refactor: centralize violation filter types** — filter type constants consolidated for consistency across TUI and web console (#1707)
+
+- **Refactor: move MCP Security panel to Tools section** — MCP Security nav item relocated under Scanning & Analysis group in console sidebar (#1708)
+
+- **Refactor: remove pattern server from secrets panel** — deprecated global pattern server UI removed (#1680, #1685)
+
+- **Refactor: remove `_hp` delegation shims** — leftover hook_processing delegation wrappers removed after Phase 5 extraction (#1599, #1602)
+
+- **Refactor: derive token prefix regex from secrets.toml** — hardcoded prefix list replaced with data-driven derivation (#1640)
+
+- **Refactor: replace LeakTK hardcoding with capability flags** — `EngineConfig` dataclass gains data-driven capability flags instead of engine name checks (#1644, #1648)
+
+- **Refactor: extract stderr block response into base adapter** — shared error handling moved to `BaseAgentAdapter` (#1638)
+
+- **Refactor: rename nav menu button to Quick Links** (#1646)
+
+- **Refactor: extract Crush hook events constant** — `CURSOR_HOOK_EVENTS` used as single source of truth (#1597, #1598)
+
+### Fixed
+
+- **Doctor: treat missing IDE config as "not installed"** — missing Crush/Cursor config files now report as "not installed" (skip) instead of failure, fixing false failures on CI and systems without those IDEs (#1712, #1713)
+
+- **Daemon: load project config before pause check** — project-specific configuration now loaded before the pause guard, preventing paused daemons from dropping project directory tracking (#1700, #1705)
+
+- **PostToolUse: duplicate block message** — `reason` and `systemMessage` no longer contain the same text when blocking tool output (#1642, #1647)
+
+- **PostToolUse: secret scan misses env var tokens** — TOML patterns now wired into output scanning path (#1624, #1625)
+
+- **UserPromptSubmit: scans task-notifications** — task notification content no longer triggers false positive scans (#1628, #1631)
+
+- **Scanner executor: thread original file_path** — `skip_file_types` now uses the original filename instead of temp file path (#1653, #1668, #1679)
+
+- **Secret scanning: reduce env var false positives** — `ALL_CAPS_IDENTIFIER` pattern no longer triggers on Python constants and shell variable assignments (#1627, #1632)
+
+- **Warn mode: sanitize context sent to AI agents** — detection patterns, confidence scores, and matched text stripped from warn-mode messages (#1642, #1651)
+
+- **LeakTK listen mode: timeout guard** — prevents daemon hangs if LeakTK process becomes unresponsive (#1650)
+
+- **Stats refresh: guard against unhandled exceptions** — stats tick no longer crashes on transient errors (#1614, #1615)
+
+- **Cursor scanner: use raw_prefix for bubble ID extraction** — fixes incorrect position tracking in Cursor SQLite adapter (#1613)
+
+- **Flaky test: thread join instead of sleep** — `test_stats_refresh_normal_tick_no_rebuild` uses deterministic thread join (#1626, #1635)
+
+### Security
+
+- **30 new secret detection patterns** for cloud providers and SaaS platforms (#1617, #1618, #1621)
+- **4 new credential format patterns** — Gemini API (AIza prefix), OpenRouter (sk-or-), Vault (hvs.), Confluent Cloud (#1633, #1637)
+- **Credentials-in-git-URL detection** — catches `https://user:token@host` in git remote URLs (#1709)
+- **Detailed `systemMessage` for warn mode** — user sees full violation details while agent receives sanitized version (#1588, #1651)
+- **Verified Cursor hook compatibility with Cursor v3.11.19** — all 6 hook events confirmed firing correctly
+
+## [1.14.0] - 2026-07-13
+
+### Changed
+
+- **Refactor: extract hook_processing.py into per-event modules** — monolithic `hook_processing.py` (~8800 lines) split into focused modules under `hook_events/`: `content_pipeline.py` (shared content scanning pipeline), `post_tool_use.py` (PostToolUse handler), `scanners.py` (scanner runner functions), `session_events.py` (session lifecycle handlers), `ask_mode.py` (ask-mode dialog helpers), `utils.py` (shared utilities). All public symbols re-exported from `hook_processing.py` for backward compatibility (#1491, #1551).
+
+- **Refactor: extract secret and transcript scanning** — `secret_scanning.py` and `transcript_scanning.py` extracted from `hook_processing.py` as standalone modules (Phase 5a-5b, #1491, #1551).
+
+- **Refactor: ScannerRegistry with pipeline-based invocation** — new `scanners/scanner_registry.py` provides declarative scanner metadata (13 scanners), hook event membership, ordering, and ask-mode support. Content scanning blocks in PreToolUse/UserPromptSubmit are now gated by `_pipeline_names` built from the registry (#1253, #1544).
+
+- **Refactor: post-scan filter pipeline** — new `scanners/post_scan_filters.py` provides `apply_post_scan_pipeline()` for generic violation logging and ask-mode dispatch. Migrated 11 scanner blocks to the shared pipeline, deleting 4 dead helpers (#1254, #1546, #1550).
+
+- **Refactor: extract tray into dedicated package** — `daemon/tray.py` (4000+ lines) split into `tray/` package: `app.py`, `animation.py`, `health.py`, `icons.py`, `menu.py`, `menu_builder.py`, `notifications.py`, `plugin_runner.py`, `plugins.py`. Backward-compat shims at old paths (#1543, #1547, #1561).
+
+- **Refactor: extract config modules into subpackage** — `config_utils.py`, `config_display.py`, `config_loaders.py`, `config_writer.py`, `config_inspector.py`, `config_manager.py` moved to `config/` subpackage. Backward-compat shims at old paths (#1562).
+
+- **Refactor: extract scanners into subpackage** — `prompt_injection.py`, `context_poisoning.py`, `secret_redactor.py`, `supply_chain.py`, `config_scanner.py`, `canary_detection.py`, `exfil_detection.py`, `offensive_language.py`, `scan_result.py`, `bandit_scanner.py`, `ast_scanner.py`, `image_scanner.py`, `ml_detection.py` moved to `scanners/` subpackage (#1562).
+
+- **Refactor: extract setup.py into subpackage** — monolithic `setup.py` split into `setup/` package: `config.py` (default config template), `hooks.py` (IDE hook setup), `mcp.py` (MCP configuration), `rules.py` (guidelines files), `utils.py` (helpers). Backward-compat shims at old paths (#1538).
+
+- **Refactor: extract tool patterns** — `IMMUTABLE_DENY_PATTERNS`, `MIXED_SETTINGS_PATTERNS`, `HOOK_INDICATOR_KEYS`, and `_strip_bash_heredoc_content()` extracted from `tool_policy.py` into new `tool_patterns.py` module (#1537).
+
+- **Refactor: shared response methods in base_agent.py** — `_block_response`, `_warn_response`, `_allow_response` extracted to eliminate duplicated `format_response` branches across adapter subclasses (#1535).
+
+- **Refactor: centralize hook event display names** — `HookEvent` enum in `constants.py` now carries `_DISPLAY_NAMES` dict and `ALL_HOOK_EVENT_DISPLAY_NAMES` frozenset. Adapters use the centralized set instead of hardcoded lists (#1549).
+
+### Fixed
+
+- **Config merge list deduplication** — `deep_merge()` now deduplicates list items during config merge (global + project + SDK overlay), preventing duplicate allowlist entries from accumulating (#1560).
+
+- **Hook event fallback for unmapped events** — adapters now fall back to enum value instead of raising KeyError for hook events not in the display names map (#1548).
+
+- **Moderator scenario expectations** — `config-exfil` and `ssrf-protection` moderator scenarios corrected to expect `block` for immutable core patterns that always block regardless of action mode (#1559).
+
+- **CI: SHA-tagged image cleanup** — new cleanup job in `scenario-tests.yml` deletes ephemeral SHA-tagged container images after scenario tests complete (#1564).
+
+- **CI: release readiness secrets passthrough** — `release-readiness.yml` now passes `secrets: inherit` to the `scenario-tests` job so quay.io credentials propagate to the container build step.
+
+- **Docs: stale module paths** — updated 14 references across 6 documentation files to reflect the v1.14.0 package reorganization (mcp_server → mcp/, prompt_injection → scanners/, tool_policy → tools/policy, setup.py → setup/, daemon/tray → tray/, violation_logger → violations/logger).
+
+- **Verified Cursor hook compatibility with Cursor v3.10.20** — `beforeSubmitPrompt`, `beforeReadFile`, and `postToolUse` confirmed firing correctly. Shell execution hooks (`beforeShellExecution`, `afterShellExecution`) verified via #1531 fix in this release.
+
+## [1.13.3] - 2026-07-08
+
+### Added
+
+- **Scenario tests in CI/CD** — new `scenario-tests.yml` workflow runs all YAML-based dummy-agent scenarios (minimal, standard, strict, moderator profiles) in CI on every push and PR. Covers secret detection, PII, SSRF, tool policy, prompt injection, config exfil, and bootstrap scan (#1497).
+
+- **Violations page: directory filter** — dropdown with browse button lets users filter the violations list to a specific daemon project directory (#1503).
+
+- **Per-daemon stale-code indicator in tray** — each daemon entry in the tray menu now shows an orange dot when stale code is detected, making it clear which daemon needs a restart (#1510).
+
+- **In-progress guard and restart polling in tray** — restart actions now show a spinner and poll until the daemon is back online, preventing double-clicks and giving clear feedback (#1512).
+
+- **SessionStart support in dummy-agent** — `ai-guardian dummy-agent` can now emit SessionStart events; includes a new `bootstrap-scan.yaml` scenario demonstrating AGENTS.md poisoning detection (#1517).
+
+- **Rebuild-image hint for remote/container daemons** — stale-code tray indicator for container/Kubernetes daemons now shows a rebuild hint instead of a restart action, which is not applicable to remote daemons (#1521).
+
+### Fixed
+
+- **Cursor shell execution hooks silent failure** — `beforeShellExecution` and `afterShellExecution` events were silently broken: `afterShellExecution` was misrouted to `HookEvent.PROMPT` instead of `POST_TOOL_USE`; top-level `command` field was not extracted so Bash commands were not scanned; `can_handle()` did not recognize these events when sent via `hook_event_name`. Shell commands run by Cursor are now fully scanned by tool policy and secret scanner (#1531).
+
+- **Doctor cache path failure before first hook call** — `ai-guardian setup` now creates the cache directory proactively so `ai-guardian doctor` does not report a false failure before any hook has run (#1499).
+
+- **Bandit silent failure** — `ai-guardian scan` now shows `⚠️  Code security scanner (Bandit) unavailable` instead of silently reporting `✅ No security issues detected` when Bandit is not importable. `ai-guardian doctor` reports `[FAIL] Bandit (code security) not found` with a reinstall hint (#1504).
+
+- **Doctor hook coverage** — `ai-guardian doctor` now checks all 5 hook event types (UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd, PostCompact) instead of only the first 3 (#1505).
+
+- **Bootstrap scan block message formatting** — block and warn messages from bootstrap scanning now use the consistent `🚨 BLOCKED BY POLICY` style matching other violation outputs (#1513).
+
+- **Setup: abort on config failure** — `ai-guardian setup` now exits with an error when global config cannot be written instead of silently continuing; also accepts bare profile names (e.g., `minimal`) in addition to `@minimal` (#1501).
+
+- **SessionStart camelCase detection** — SessionStart events sent by Claude Code use `hookEventName` (camelCase) but the adapter only checked `hook_event_name` (snake_case). Both are now handled (#1522).
+
+- **Transcript secret warnings: per-finding dedup and count** — repeated identical secret findings in a single transcript scan are now deduplicated and reported with a count instead of flooding the output (#1500).
+
+- **SessionStart block: full message shown** — block responses from the SessionStart hook now include `systemMessage` and `additionalContext` fields so the full error message appears in the Claude Code startup hook error UI (#1526).
+
+### Documentation
+
+- **Hook regression testing guide** — new `docs/hook-regression-testing.md` covers dummy-agent container setup, scenario authoring, and CI integration (#1496).
+
+- **Bootstrap scan limitation documented** — Claude Code does not support a true SessionStart hook; bootstrap scanning fires on the first UserPromptSubmit instead. This limitation is now documented in AGENTS.md and the bootstrap-scan config page (#1506).
+
+## [1.13.2] - 2026-07-06
+
+### Fixed
+
+- **Container quick-start docs corrected** — README example now uses `curl` to download `run.sh` (no full repo clone required), pins image to `v1.13.2` instead of `:latest`, and includes required `ANTHROPIC_API_KEY` and `ACCEPT_PROPRIETARY_TOS=true` variables that were missing from the previous example.
+
+## [1.13.1] - 2026-07-06
+
+### Fixed
+
+- **Container image: proprietary CLIs moved to runtime install with ToS consent** — Claude Code (Anthropic, All Rights Reserved) and Kiro CLI (AWS proprietary) were installed at image build time, violating redistribution restrictions. Both CLIs are now installed at container first-start after the user explicitly accepts the respective Terms of Service. Set `ACCEPT_PROPRIETARY_TOS=true` to bypass the interactive prompt in CI/automation. Open-source CLIs (OpenCode, Gemini CLI, Codex CLI, OpenClaw) remain in the Dockerfile (Issue #1495).
+
+## [1.13.0] - 2026-07-06
+
+### Added
+
+- **Bandit and Semgrep code security scanners** — detect insecure code patterns in files being written or edited (hardcoded credentials, `eval()`/`exec()`, weak crypto, SQL injection sinks). Available via optional `[code-security]` extras; scanner auto-detects availability and fails gracefully if missing. New **Code Security** page in TUI and web console shows scanner status and findings. SARIF output for downstream consumers. Enabled in `@strict` profile; disabled in all other profiles (Issue #828).
+
+- **Container image on quay.io** — `quay.io/itdove/ai-guardian:<version>` published on every release tag via new `build-container.yml` CI/CD workflow; `:latest` updated on every merge to `main`. `support/` directory renamed to `container/`; includes smoke-test YAML scenarios for secret detection, PII, ask dialog, and tool policy (Issue #1423).
+
+- **Kubernetes deployment** — Kustomize-based manifests with base + overlays for Kind (local/CI, NodePort), OpenShift (Route CRD), and production (LoadBalancer). Kind overlay includes cluster config for local testing. Docs at `docs/kubernetes.md`. Kind-based CI test validates remote daemon and ask dialog forwarding end-to-end (Issue #1428).
+
+- **Ask dialog forwarding from remote daemon to host tray** — container/Kubernetes daemon queues ask prompts; host tray polls every 2.5s and presents the full dialog locally (NiceGUI browser tab on macOS, auto-select on Linux). Decision returned to daemon via REST; hook continues with user's choice. New REST endpoints: `GET /api/pending-prompts`, `POST /api/prompt-decision`, `POST /api/register-tray` (Issue #1342).
+
+- **Dummy-agent for LLM-free hook testing** — new `ai-guardian dummy-agent` command: interactive REPL that simulates all Claude Code hook events (PreToolUse, PostToolUse, UserPromptSubmit, Stop, Notification) using YAML scenario files, no LLM required. Bundled scenarios for secret detection, PII, tool policy, and ask dialog (Issue #1438).
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*
