@@ -142,19 +142,25 @@ def load_web_config() -> dict:
     if _is_target_expected():
         return {}
 
-    from ai_guardian.config.utils import get_config_dir, get_project_config_path
+    from pathlib import Path
+
+    from ai_guardian.config.utils import get_config_dir
     from ai_guardian.config.writer import _load_json_file
 
     global_path = get_config_dir() / "ai-guardian.json"
     global_cfg = _load_json_file(global_path)
 
-    project_path = get_project_config_path()
-    if project_path:
-        project_cfg = _load_json_file(project_path)
-        if project_cfg:
-            from ai_guardian.config.utils import deep_merge
+    project_dir = _get_remote_project_dir()
+    if project_dir:
+        from ai_guardian.config.utils import _find_config_in_dir
 
-            return deep_merge(global_cfg, project_cfg)
+        project_path = _find_config_in_dir(Path(project_dir))
+        if project_path:
+            project_cfg = _load_json_file(project_path)
+            if project_cfg:
+                from ai_guardian.config.utils import deep_merge
+
+                return deep_merge(global_cfg, project_cfg)
 
     return global_cfg
 
@@ -289,7 +295,7 @@ def get_web_config_provenance() -> dict:
     try:
         from ai_guardian.config.writer import compute_provenance
 
-        return compute_provenance(_get_project_dir())
+        return compute_provenance(_get_remote_project_dir())
     except Exception:
         return {}
 
