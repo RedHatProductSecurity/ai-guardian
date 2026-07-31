@@ -114,6 +114,7 @@ class Doctor:
             self.check_state_dir,
             self.check_cache_dir,
             self.check_permissions,
+            self.check_deprecated_action_on_allow,
             self.check_directory_rules,
             self.check_console_deps,
             self.check_tray_support,
@@ -1236,6 +1237,54 @@ class Doctor:
             name="permissions",
             status=CheckStatus.PASS,
             message=f"{len(rules)} rule(s) configured",
+        )
+
+    def check_deprecated_action_on_allow(self) -> CheckResult:
+        self._ensure_config()
+        if self._config is None:
+            return CheckResult(
+                name="deprecated_action_on_allow",
+                status=CheckStatus.PASS,
+                message="No config loaded (nothing to check)",
+            )
+
+        perms = self._config.get("permissions")
+        if not isinstance(perms, dict):
+            return CheckResult(
+                name="deprecated_action_on_allow",
+                status=CheckStatus.PASS,
+                message="No permissions section",
+            )
+
+        rules = perms.get("rules", [])
+        deprecated = []
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            if rule.get("mode") == "allow" and rule.get("action"):
+                matcher = rule.get("matcher", "?")
+                action = rule.get("action")
+                deprecated.append(
+                    f'"action": "{action}" on allow rule (matcher={matcher})'
+                )
+
+        if deprecated:
+            return CheckResult(
+                name="deprecated_action_on_allow",
+                status=CheckStatus.WARN,
+                message=f"Deprecated: {deprecated[0]}",
+                detail=(
+                    "\n".join(f"  - {d}" for d in deprecated)
+                    if len(deprecated) > 1
+                    else None
+                ),
+                fix_hint='Remove "action" or split into separate deny + allow rules',
+            )
+
+        return CheckResult(
+            name="deprecated_action_on_allow",
+            status=CheckStatus.PASS,
+            message="No deprecated action on allow rules",
         )
 
     def check_directory_rules(self) -> CheckResult:
