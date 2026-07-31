@@ -400,19 +400,14 @@ def load_scoped_config(
         Config dict for the requested scope.
     """
     if scope == "merged":
-        try:
-            from ai_guardian.config.loaders import _load_config_file
-
-            result, _ = _load_config_file()
-            return result or {}
-        except Exception:
-            global_cfg = _load_json_file(_resolve_config_path("global"))
+        global_cfg = _load_json_file(_resolve_config_path("global"))
+        if project_dir:
             project_cfg = _load_json_file(_resolve_config_path("project", project_dir))
             if project_cfg:
                 from ai_guardian.config.utils import deep_merge
 
                 return deep_merge(global_cfg, project_cfg)
-            return global_cfg
+        return global_cfg
     elif scope == "global":
         return _load_json_file(_resolve_config_path("global"))
     elif scope == "project":

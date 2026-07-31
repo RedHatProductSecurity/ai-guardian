@@ -24,19 +24,32 @@ def _load_effective_data(project_dir=None):
 
     target = _get_current_target()
     if _is_remote_target(target):
-        merged = _daemon_service.get_config_scoped(target, "merged")
-        provenance = _daemon_service.get_config_provenance(target)
+        if project_dir:
+            merged = _daemon_service.get_config_scoped(
+                target, "merged", project_dir=project_dir
+            )
+            provenance = _daemon_service.get_config_provenance(
+                target, project_dir=project_dir
+            )
+        else:
+            merged = _daemon_service.get_config_scoped(target, "global")
+            provenance = {}
         return merged or {}, provenance or {}, {}, None
 
     try:
         from ai_guardian.config.writer import (
             load_scoped_config,
             compute_detailed_provenance,
+            _mark_all_provenance,
         )
 
         merged = load_scoped_config("merged", project_dir)
-        provenance = compute_detailed_provenance(project_dir)
-        project = load_scoped_config("project", project_dir)
+        if project_dir:
+            provenance = compute_detailed_provenance(project_dir)
+            project = load_scoped_config("project", project_dir)
+        else:
+            provenance = _mark_all_provenance(merged or {}, "global", True)
+            project = {}
 
         _inject_generated_rules(merged, provenance)
 

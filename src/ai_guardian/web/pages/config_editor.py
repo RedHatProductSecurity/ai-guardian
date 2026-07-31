@@ -27,12 +27,21 @@ def _validate_json(text):
     return parsed, None
 
 
-def _get_config_path(scope):
-    """Get the config file path for the given scope."""
-    if scope == "project":
-        from ai_guardian.config.utils import get_project_config_path
+def _get_config_path(scope, project_dir=None):
+    """Get the config file path for the given scope.
 
-        return get_project_config_path()
+    Args:
+        scope: "global" or "project".
+        project_dir: Explicit project directory from header selector.
+    """
+    if scope == "project":
+        if project_dir:
+            from pathlib import Path
+
+            from ai_guardian.config.utils import _find_config_in_dir
+
+            return _find_config_in_dir(Path(project_dir))
+        return None
     from ai_guardian.config.utils import get_config_dir
 
     return get_config_dir() / "ai-guardian.json"
@@ -57,7 +66,9 @@ def _load_config_by_scope(scope):
             return json.dumps(cfg, indent=2), label
         return "", f"(daemon: {target.name} — unreachable)"
 
-    path = _get_config_path(scope)
+    from ai_guardian.web.config_helpers import _get_remote_project_dir
+
+    path = _get_config_path(scope, _get_remote_project_dir())
     if path is None:
         return "", None
     path_str = str(path)
