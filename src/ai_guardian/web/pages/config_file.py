@@ -18,10 +18,13 @@ def _load_config_files():
     Routes through DaemonService for both local and remote targets.
     Uses the selected project directory from the header selector.
     """
+    from ai_guardian.web.config_helpers import _get_remote_project_dir
+
     target = _get_current_target()
+    project_dir = _get_remote_project_dir()
     if target is not None and _daemon_service is not None:
         return _load_daemon_config_files(target)
-    return _load_local_config_files()
+    return _load_local_config_files(project_dir)
 
 
 def _load_daemon_config_files(target):
@@ -55,12 +58,25 @@ def _load_daemon_config_files(target):
     return result
 
 
-def _load_local_config_files():
-    """Load config from local filesystem."""
-    from ai_guardian.config.utils import get_config_dir, get_project_config_path
+def _load_local_config_files(project_dir=None):
+    """Load config from local filesystem.
+
+    Args:
+        project_dir: Explicit project directory from header selector.
+            When set, looks for config in that directory.
+            When None (Global only), no project config is shown.
+    """
+    from pathlib import Path
+
+    from ai_guardian.config.utils import get_config_dir
 
     global_path = get_config_dir() / "ai-guardian.json"
-    project_path = get_project_config_path()
+
+    project_path = None
+    if project_dir:
+        from ai_guardian.config.utils import _find_config_in_dir
+
+        project_path = _find_config_in_dir(Path(project_dir))
 
     result = {
         "global_path": str(global_path),
