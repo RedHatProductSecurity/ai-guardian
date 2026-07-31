@@ -745,6 +745,90 @@ class TestCheckPermissions:
         assert result.status == CheckStatus.WARN
 
 
+class TestCheckDeprecatedActionOnAllow:
+    def test_detects_action_on_allow(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "permissions": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "matcher": "Skill",
+                                "mode": "allow",
+                                "patterns": ["release"],
+                                "action": "warn",
+                            }
+                        ],
+                    }
+                }
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_deprecated_action_on_allow()
+        assert result.status == CheckStatus.WARN
+        assert "Deprecated" in result.message
+        assert "Skill" in result.message
+
+    def test_no_action_on_allow(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "permissions": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "matcher": "Skill",
+                                "mode": "allow",
+                                "patterns": ["release"],
+                            }
+                        ],
+                    }
+                }
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_deprecated_action_on_allow()
+        assert result.status == CheckStatus.PASS
+
+    def test_action_on_deny_is_fine(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "permissions": {
+                        "enabled": True,
+                        "rules": [
+                            {
+                                "matcher": "Bash",
+                                "mode": "deny",
+                                "patterns": ["rm -rf *"],
+                                "action": "block",
+                            }
+                        ],
+                    }
+                }
+            )
+        )
+        doctor = Doctor()
+        result = doctor.check_deprecated_action_on_allow()
+        assert result.status == CheckStatus.PASS
+
+    def test_no_config(self, _isolate_config_dir):
+        doctor = Doctor()
+        result = doctor.check_deprecated_action_on_allow()
+        assert result.status == CheckStatus.PASS
+
+    def test_no_permissions(self, _isolate_config_dir):
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(json.dumps({"secret_scanning": {"enabled": True}}))
+        doctor = Doctor()
+        result = doctor.check_deprecated_action_on_allow()
+        assert result.status == CheckStatus.PASS
+
+
 class TestCheckDirectoryRules:
     def test_no_rules(self, _isolate_config_dir):
         config_path = _isolate_config_dir / "ai-guardian.json"
@@ -1667,7 +1751,7 @@ class TestDoctorRunAll:
         doctor = Doctor()
         report = doctor.run_all()
         assert isinstance(report, DoctorReport)
-        assert len(report.checks) == 33
+        assert len(report.checks) == 34
         assert report.version != ""
 
     def test_check_crash_handled(self, _isolate_config_dir):

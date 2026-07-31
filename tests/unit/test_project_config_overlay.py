@@ -32,6 +32,7 @@ from ai_guardian.config.loaders import (
     _dedup_config_lists,
     _load_config_file,
     _normalize_permissions,
+    _warn_deprecated_action_on_allow,
 )
 
 
@@ -727,6 +728,84 @@ class TestNormalizePermissions:
         with caplog.at_level(logging.WARNING):
             _normalize_permissions({"permissions": {"enabled": True, "rules": []}})
         assert "DEPRECATED" not in caplog.text
+
+
+class TestWarnDeprecatedActionOnAllow:
+    """Tests for _warn_deprecated_action_on_allow() — Issue #1752."""
+
+    def test_warns_on_action_on_allow(self, caplog):
+        import logging
+
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {
+                        "matcher": "Skill",
+                        "mode": "allow",
+                        "patterns": ["release"],
+                        "action": "warn",
+                    }
+                ],
+            }
+        }
+        with caplog.at_level(logging.WARNING):
+            _warn_deprecated_action_on_allow(config)
+        assert "DEPRECATED" in caplog.text
+        assert "Skill" in caplog.text
+
+    def test_no_warning_for_deny_with_action(self, caplog):
+        import logging
+
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {
+                        "matcher": "Bash",
+                        "mode": "deny",
+                        "patterns": ["rm *"],
+                        "action": "block",
+                    }
+                ],
+            }
+        }
+        with caplog.at_level(logging.WARNING):
+            _warn_deprecated_action_on_allow(config)
+        assert "DEPRECATED" not in caplog.text
+
+    def test_no_warning_for_allow_without_action(self, caplog):
+        import logging
+
+        config = {
+            "permissions": {
+                "enabled": True,
+                "rules": [{"matcher": "Skill", "mode": "allow", "patterns": ["*"]}],
+            }
+        }
+        with caplog.at_level(logging.WARNING):
+            _warn_deprecated_action_on_allow(config)
+        assert "DEPRECATED" not in caplog.text
+
+    def test_none_config_safe(self):
+        _warn_deprecated_action_on_allow(None)
+
+    def test_handles_list_format(self, caplog):
+        import logging
+
+        config = {
+            "permissions": [
+                {
+                    "matcher": "Skill",
+                    "mode": "allow",
+                    "patterns": ["*"],
+                    "action": "warn",
+                }
+            ]
+        }
+        with caplog.at_level(logging.WARNING):
+            _warn_deprecated_action_on_allow(config)
+        assert "DEPRECATED" in caplog.text
 
 
 class TestPermissionsMergeFormats:

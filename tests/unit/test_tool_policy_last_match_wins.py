@@ -411,9 +411,11 @@ class BackwardCompatibilityTests(TestCase):
         hook_data = create_hook_data(tool_name="mcp__test__tool", tool_input={})
         policy.check_tool_allowed(hook_data)
 
-        info_calls = [str(c) for c in mock_logger.info.call_args_list]
-        deprecation_logged = any("deprecated" in c.lower() for c in info_calls)
-        assert deprecation_logged, f"Should log deprecation. Info calls: {info_calls}"
+        warning_calls = [str(c) for c in mock_logger.warning.call_args_list]
+        deprecation_logged = any("deprecated" in c.lower() for c in warning_calls)
+        assert (
+            deprecation_logged
+        ), f"Should log deprecation at WARNING level. Warning calls: {warning_calls}"
 
 
 class StrictProfileTests(TestCase):

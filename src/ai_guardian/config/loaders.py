@@ -206,6 +206,29 @@ def _normalize_permissions(config):
     return config
 
 
+def _warn_deprecated_action_on_allow(config):
+    """Warn about deprecated action field on allow permission rules."""
+    if config is None:
+        return
+    permissions = config.get("permissions")
+    if isinstance(permissions, dict):
+        rules = permissions.get("rules", [])
+    elif isinstance(permissions, list):
+        rules = permissions
+    else:
+        return
+    for rule in rules:
+        if not isinstance(rule, dict):
+            continue
+        if rule.get("mode") == "allow" and rule.get("action"):
+            logger.warning(
+                'DEPRECATED: "action": "%s" on allow rule (matcher=%s). '
+                'Remove "action" or split into separate deny + allow rules.',
+                rule.get("action"),
+                rule.get("matcher", "?"),
+            )
+
+
 def _load_config_file():
     """
     Load ai-guardian.json configuration with project-level and SDK overlays.
@@ -316,6 +339,10 @@ def _load_config_file():
         # Normalize permissions format before merge (list → dict)
         global_config = _normalize_permissions(global_config)
         project_config = _normalize_permissions(project_config)
+
+        # Warn about deprecated action on allow rules
+        _warn_deprecated_action_on_allow(global_config)
+        _warn_deprecated_action_on_allow(project_config)
 
         # Merge (use `is not None` — empty dict {} is a valid config)
         if global_config is not None and project_config is not None:

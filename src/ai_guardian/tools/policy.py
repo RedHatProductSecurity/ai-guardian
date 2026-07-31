@@ -903,7 +903,7 @@ class ToolPolicyChecker:
             action = rule.get("action")
 
             if mode == "allow" and action and action != "block":
-                logger.info(
+                logger.warning(
                     f"Deprecated: action '{action}' on allow rule (matcher={rule.get('matcher')}). "
                     f"Prefer separate deny rule with action instead."
                 )
