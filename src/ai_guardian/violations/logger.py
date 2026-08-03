@@ -116,6 +116,8 @@ class ViolationLogger:
         limit: int = 50,
         violation_type: Optional[str] = None,
         resolved: Optional[bool] = None,
+        tool_use_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> List[Dict]:
         """
         Get recent violations from log.
@@ -124,6 +126,8 @@ class ViolationLogger:
             limit: Maximum number of violations to return
             violation_type: Optional filter by violation type
             resolved: Optional filter by resolved status (True/False/None for all)
+            tool_use_id: Optional filter by context.tool_use_id
+            session_id: Optional filter by context.session_id
 
         Returns:
             list: List of violation entries (most recent first)
@@ -148,6 +152,19 @@ class ViolationLogger:
                         if (
                             resolved is not None
                             and entry.get("resolved", False) != resolved
+                        ):
+                            continue
+
+                        if (
+                            tool_use_id is not None
+                            and entry.get("context", {}).get("tool_use_id")
+                            != tool_use_id
+                        ):
+                            continue
+
+                        if (
+                            session_id is not None
+                            and entry.get("context", {}).get("session_id") != session_id
                         ):
                             continue
 
