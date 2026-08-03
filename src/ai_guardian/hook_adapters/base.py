@@ -346,10 +346,12 @@ class HookAdapter(ABC):
             ):
                 return HookEvent.POST_TOOL_USE
 
+        _hook_obj = hook_data.get("hook")
         event_name = (
             hook_data.get("hook_event_name")
             or hook_data.get("hookEventName")
             or hook_data.get("hookName")
+            or (_hook_obj.get("hookName") if isinstance(_hook_obj, dict) else _hook_obj)
             or ""
         ).lower()
 

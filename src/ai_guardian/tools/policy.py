@@ -105,6 +105,7 @@ class ToolPolicyChecker:
         Args:
             config: Optional configuration dict. If None, loads from disk.
         """
+        self._config_warnings: List[str] = []
         self.config = config or self._load_config()
         self.last_deny_action = None
         self.last_deny_matched_pattern = None
@@ -1766,45 +1767,56 @@ class ToolPolicyChecker:
         """
         Validate configuration against JSON Schema.
 
+        Collects all validation errors as warnings in self._config_warnings
+        but always returns True so the config is loaded (warn-but-load).
+        A schema mismatch in one section is far less dangerous than losing
+        all permission rules by dropping the entire config.
+
         Args:
             config: Configuration dictionary to validate
             source_name: Human-readable source name for error messages
             path: Path to config file (for error messages)
 
         Returns:
-            bool: True if valid (or validation skipped), False if invalid
+            bool: Always True (config is always loaded; errors are warnings)
         """
         validator = self._get_schema_validator()
         if not validator:
-            # jsonschema not available or schema failed to load
-            # Continue without validation (backwards compatible)
             return True
 
         try:
             validator.validate(config)
             logger.debug(f"{source_name} config passed schema validation")
             return True
-        except JsonSchemaValidationError as e:
-            # Format user-friendly error message
-            error_path = (
-                " -> ".join(str(p) for p in e.absolute_path)
-                if e.absolute_path
-                else "root"
+        except JsonSchemaValidationError:
+            warnings = []
+            for error in validator.iter_errors(config):
+                error_path = (
+                    " -> ".join(str(p) for p in error.absolute_path)
+                    if error.absolute_path
+                    else "root"
+                )
+                warnings.append(
+                    f"  Location: {error_path}\n" f"  Error: {error.message}"
+                )
+
+            warning_header = (
+                f"[ai-guardian] Config validation warning in {source_name} "
+                f"config at {path}"
             )
-            error_msg = (
-                f"\n{'='*70}\n"
-                f"❌ CONFIGURATION ERROR: {source_name} config at {path}\n"
-                f"{'='*70}\n"
-                f"Location: {error_path}\n"
-                f"Error: {e.message}\n"
-                f"\n"
-                f"Please fix the configuration file and try again.\n"
-                f"See: https://github.com/RedHatProductSecurity/ai-guardian#configuration\n"
-                f"{'='*70}\n"
+            warning_detail = "\n".join(warnings)
+            warning_footer = (
+                "Config loaded despite errors. Fix the file to silence this warning."
             )
-            # Print to stderr so user sees it (logger might not be visible in all IDEs)
-            print(error_msg, flush=True)
-            return False
+            full_warning = f"{warning_header}\n{warning_detail}\n{warning_footer}"
+
+            self._config_warnings.append(full_warning)
+            print(f"\n{full_warning}\n", flush=True)
+            logger.warning(
+                f"Schema validation warnings for {source_name} config: "
+                f"{len(warnings)} error(s)"
+            )
+            return True
 
     def _load_json_file(self, path: Path, source_name: str) -> Optional[Dict]:
         """
@@ -1835,11 +1847,9 @@ class ToolPolicyChecker:
 
         logger.debug(f"Loaded {source_name} config: {config}")
 
-        # Validate against JSON Schema
-        if not self._validate_config(config, source_name, path):
-            # Validation failed - return None to block operation
-            logger.error(f"Schema validation failed for {source_name} config")
-            return None
+        # Validate against JSON Schema (warn-but-load: warnings collected,
+        # config always loaded)
+        self._validate_config(config, source_name, path)
 
         return config
 
@@ -2127,10 +2137,8 @@ class ToolPolicyChecker:
                 if not config:
                     return None
 
-                # Validate remote config against JSON schema
-                if not self._validate_config(config, f"remote ({url})", Path(url)):
-                    logger.error(f"Remote config validation failed: {url}")
-                    return None
+                # Validate remote config against JSON schema (warn-but-load)
+                self._validate_config(config, f"remote ({url})", Path(url))
 
                 # Security check: prevent remote configs from disabling security features
                 # Remote configs MUST NOT be able to disable critical security enforcement
