@@ -229,6 +229,55 @@ def test_immutable_field_in_sections_is_valid():
         Path(temp_path).unlink()
 
 
+def test_engine_config_without_binary_is_valid():
+    """Test that built-in engine config without binary field is valid (#1760)."""
+    config = {
+        "secret_scanning": {
+            "engines": [
+                {"type": "toml-patterns"},
+                {"type": "leaktk"},
+                {"type": "gitleaks", "binary": "gitleaks"},
+            ]
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config, f)
+        temp_path = f.name
+
+    try:
+        checker = ToolPolicyChecker()
+        loaded = checker._load_json_file(Path(temp_path), "test")
+        assert loaded is not None
+        assert len(loaded["secret_scanning"]["engines"]) == 3
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_engine_config_with_binary_is_valid():
+    """Test that engine config with explicit binary field still works (#1760)."""
+    config = {
+        "secret_scanning": {
+            "engines": [
+                {"type": "gitleaks", "binary": "gitleaks"},
+                {"type": "custom", "binary": "/usr/local/bin/my-scanner"},
+            ]
+        }
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(config, f)
+        temp_path = f.name
+
+    try:
+        checker = ToolPolicyChecker()
+        loaded = checker._load_json_file(Path(temp_path), "test")
+        assert loaded is not None
+        assert len(loaded["secret_scanning"]["engines"]) == 2
+    finally:
+        Path(temp_path).unlink()
+
+
 def test_invalid_immutable_type_rejected():
     """Test that invalid immutable field type (string) is rejected (Issue #67)."""
     invalid_config = {
