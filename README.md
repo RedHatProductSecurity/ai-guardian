@@ -1,7 +1,7 @@
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
@@ -37,15 +37,15 @@ See [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/
 
 ```bash
 # Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.sh | bash -s -- --ide claude
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.sh | bash -s -- --ide claude
 
 # Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.sh | bash -s -- --pip --ide claude   # bare pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.sh | bash -s -- --venv --ide claude  # venv + pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.sh | bash -s -- --pip --ide claude   # bare pip
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.ps1 | iex
 ```
 
 Or install manually:
@@ -60,7 +60,7 @@ Or use the container image (no Python setup required):
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/container/run.sh -o run.sh
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/container/run.sh -o run.sh
 chmod +x run.sh
 ANTHROPIC_API_KEY=sk-ant-... ACCEPT_PROPRIETARY_TOS=true \
     ./run.sh --ide claude --repo $(pwd)
@@ -390,7 +390,7 @@ python -m venv $env:USERPROFILE\.ai-guardian-venv
 & "$env:USERPROFILE\.ai-guardian-venv\Scripts\pip" install ai-guardian
 
 # Or use the one-line installer:
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.4/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.15.5/install.ps1 | iex
 ```
 
 > **Warning:** The `main` branch contains unreleased development code. Always install stable releases from PyPI (`uv tool install ai-guardian` or `pip install ai-guardian`). Do not `git clone` + `pip install -e .` for production use — development builds may contain breaking changes, incomplete features, or experimental code that has not been release-tested.
