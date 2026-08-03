@@ -212,7 +212,8 @@
                 "properties": {
                   "type": {
                     "type": "string",
-                    "description": "Engine type: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', 'gitguardian', or 'custom'"
+                    "description": "Engine type: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', 'gitguardian', or 'custom'",
+                    "not": {"enum": ["toml-patterns", "python"]}
                   },
                   "binary": {
                     "type": "string",
@@ -284,7 +285,7 @@
                     "description": "File extensions/patterns this engine should handle for file type routing (e.g., ['*.env*', '*.yaml', '*.json']). Engines without file_patterns handle all files. Used with any-match and consensus strategies to route files to specialized engines."
                   }
                 },
-                "required": ["type", "binary"]
+                "required": ["type"]
               }
             ]
           },
