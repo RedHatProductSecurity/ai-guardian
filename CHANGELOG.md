@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.15.5] - 2026-08-03
+
+### Fixed
+
+- **Schema validation no longer requires `binary` for built-in scanner engines** — `{"type": "leaktk"}` engine config is now valid without a `binary` field; built-in engines resolve their binary name at runtime (#1760, #1762)
+
+- **Config validation failure no longer silently drops entire config** — schema validation errors in global config now log a warning and load the config anyway instead of silently falling back to defaults, which previously disabled all permission rules, SSRF protection, and other security settings (#1761, #1765)
+
+### Changed
+
+- **SHA-256 checksums added to release artifacts** — GitHub release assets now include a `checksums.txt` file with SHA-256 hashes for all published artifacts (#1768)
 
 ## [1.15.4] - 2026-07-31
 
@@ -3033,7 +3044,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.5...HEAD
+[1.15.5]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...v1.15.5
 [1.15.4]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.2...v1.15.3
 [1.15.2]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.1...v1.15.2
