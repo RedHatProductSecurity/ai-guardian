@@ -1,7 +1,8 @@
 """
 Tests for runtime configuration validation using JSON Schema.
 
-Tests that invalid configurations are rejected at load time with clear error messages.
+Tests that invalid configurations are loaded with warnings (warn-but-load),
+not silently dropped (#1761).
 """
 
 import json
@@ -32,12 +33,13 @@ def test_valid_config_loads_successfully():
         assert config is not None
         assert "permissions" in config
         assert "rules" in config["permissions"]
+        assert checker._config_warnings == []
     finally:
         Path(temp_path).unlink()
 
 
-def test_invalid_mode_rejected_at_load():
-    """Test that invalid permission mode is rejected at load time."""
+def test_invalid_mode_loads_with_warning():
+    """Test that invalid permission mode loads config with warning (#1761)."""
     invalid_config = {
         "permissions": {
             "enabled": True,
@@ -58,14 +60,16 @@ def test_invalid_mode_rejected_at_load():
     try:
         checker = ToolPolicyChecker()
         config = checker._load_json_file(Path(temp_path), "test")
-        # Should return None due to validation failure
-        assert config is None
+        assert config is not None
+        assert config == invalid_config
+        assert len(checker._config_warnings) == 1
+        assert "invalid_mode" in checker._config_warnings[0]
     finally:
         Path(temp_path).unlink()
 
 
-def test_invalid_detector_rejected_at_load():
-    """Test that invalid detector type is rejected at load time."""
+def test_invalid_detector_loads_with_warning():
+    """Test that invalid detector type loads config with warning (#1761)."""
     invalid_config = {"prompt_injection": {"detector": "invalid_detector"}}  # Invalid!
 
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
@@ -75,14 +79,16 @@ def test_invalid_detector_rejected_at_load():
     try:
         checker = ToolPolicyChecker()
         config = checker._load_json_file(Path(temp_path), "test")
-        # Should return None due to validation failure
-        assert config is None
+        assert config is not None
+        assert config == invalid_config
+        assert len(checker._config_warnings) == 1
+        assert "invalid_detector" in checker._config_warnings[0]
     finally:
         Path(temp_path).unlink()
 
 
-def test_missing_required_fields_rejected_at_load():
-    """Test that missing required fields are rejected at load time."""
+def test_missing_required_fields_loads_with_warning():
+    """Test that missing required fields loads config with warning (#1761)."""
     invalid_config = {
         "permissions": {
             "enabled": True,
@@ -102,8 +108,9 @@ def test_missing_required_fields_rejected_at_load():
     try:
         checker = ToolPolicyChecker()
         config = checker._load_json_file(Path(temp_path), "test")
-        # Should return None due to validation failure
-        assert config is None
+        assert config is not None
+        assert config == invalid_config
+        assert len(checker._config_warnings) >= 1
     finally:
         Path(temp_path).unlink()
 
@@ -121,6 +128,7 @@ def test_empty_config_is_valid():
         config = checker._load_json_file(Path(temp_path), "test")
         assert config is not None
         assert config == {}
+        assert checker._config_warnings == []
     finally:
         Path(temp_path).unlink()
 
@@ -162,6 +170,7 @@ def test_complex_valid_config_loads():
         assert config is not None
         assert "permissions" in config
         assert "prompt_injection" in config
+        assert checker._config_warnings == []
     finally:
         Path(temp_path).unlink()
 
@@ -278,8 +287,8 @@ def test_engine_config_with_binary_is_valid():
         Path(temp_path).unlink()
 
 
-def test_invalid_immutable_type_rejected():
-    """Test that invalid immutable field type (string) is rejected (Issue #67)."""
+def test_invalid_immutable_type_loads_with_warning():
+    """Test that invalid immutable field type loads with warning (#1761)."""
     invalid_config = {
         "permissions": [
             {
@@ -298,7 +307,77 @@ def test_invalid_immutable_type_rejected():
     try:
         checker = ToolPolicyChecker()
         config = checker._load_json_file(Path(temp_path), "test")
-        # Should return None due to validation failure
-        assert config is None
+        assert config is not None
+        assert config == invalid_config
+        assert len(checker._config_warnings) >= 1
     finally:
         Path(temp_path).unlink()
+
+
+def test_warning_message_includes_path_and_error():
+    """Test that config warning message includes location and error details."""
+    invalid_config = {"prompt_injection": {"detector": "nonexistent_detector"}}
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(invalid_config, f)
+        temp_path = f.name
+
+    try:
+        checker = ToolPolicyChecker()
+        checker._load_json_file(Path(temp_path), "test source")
+        assert len(checker._config_warnings) == 1
+        warning = checker._config_warnings[0]
+        assert "test source" in warning
+        assert "Location:" in warning
+        assert "Error:" in warning
+        assert "nonexistent_detector" in warning
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_valid_config_no_warnings():
+    """Test that valid config produces zero warnings."""
+    valid_config = {
+        "permissions": {
+            "enabled": True,
+            "rules": [{"matcher": "Bash", "mode": "deny", "patterns": ["*rm -rf*"]}],
+        },
+        "ssrf_protection": {"enabled": True},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+        json.dump(valid_config, f)
+        temp_path = f.name
+
+    try:
+        checker = ToolPolicyChecker()
+        config = checker._load_json_file(Path(temp_path), "test")
+        assert config is not None
+        assert checker._config_warnings == []
+    finally:
+        Path(temp_path).unlink()
+
+
+def test_multiple_configs_accumulate_warnings():
+    """Test that warnings from multiple config loads accumulate."""
+    invalid1 = {"prompt_injection": {"detector": "bad1"}}
+    invalid2 = {"prompt_injection": {"detector": "bad2"}}
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+        json.dump(invalid1, f1)
+        path1 = f1.name
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+        json.dump(invalid2, f2)
+        path2 = f2.name
+
+    try:
+        checker = ToolPolicyChecker()
+        checker._load_json_file(Path(path1), "config1")
+        checker._load_json_file(Path(path2), "config2")
+        assert len(checker._config_warnings) == 2
+        assert "config1" in checker._config_warnings[0]
+        assert "config2" in checker._config_warnings[1]
+    finally:
+        Path(path1).unlink()
+        Path(path2).unlink()

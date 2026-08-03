@@ -1766,6 +1766,22 @@ def process_hook_data(hook_data, daemon_state=None):
             )
             if bs_response:
                 return bs_response
+
+            # Surface config validation warnings at session start (#1761)
+            if HAS_TOOL_POLICY:
+                try:
+                    _cw_checker = ToolPolicyChecker()
+                    if _cw_checker._config_warnings:
+                        _cw_msg = "\n\n".join(_cw_checker._config_warnings)
+                        return _format_response(
+                            adapter,
+                            has_secrets=False,
+                            warning_message=_cw_msg,
+                            hook_event=hook_event,
+                        )
+                except Exception:
+                    pass
+
             return {"output": None, "exit_code": 0}
 
         _latency_timer = _CheckTimer(enabled=_is_latency_enabled())

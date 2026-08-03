@@ -350,6 +350,7 @@ class HookAdapter(ABC):
             hook_data.get("hook_event_name")
             or hook_data.get("hookEventName")
             or hook_data.get("hookName")
+            or hook_data.get("hook", {}).get("hookName")
             or ""
         ).lower()
 

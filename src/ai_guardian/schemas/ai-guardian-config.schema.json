@@ -154,7 +154,8 @@
             "oneOf": [
               {
                 "type": "string",
-                "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'"
+                "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
+                "enum": ["gitleaks", "betterleaks", "leaktk", "trufflehog", "detect-secrets", "secretlint", "gitguardian"]
               },
               {
                 "type": "object",
@@ -213,7 +214,7 @@
                   "type": {
                     "type": "string",
                     "description": "Engine type: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', 'gitguardian', or 'custom'",
-                    "not": {"enum": ["toml-patterns", "python"]}
+                    "enum": ["gitleaks", "betterleaks", "leaktk", "trufflehog", "detect-secrets", "secretlint", "gitguardian", "custom"]
                   },
                   "binary": {
                     "type": "string",
