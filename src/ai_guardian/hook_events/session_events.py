@@ -174,6 +174,7 @@ def _handle_bootstrap_scan(
                     hook_event=hook_event,
                     violation_type=ViolationType.CONFIG_FILE_EXFIL,
                 )
+
     except Exception as _bs_exc:
         logging.debug(f"Bootstrap scan error (non-fatal): {_bs_exc}")
     return None

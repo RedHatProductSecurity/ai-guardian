@@ -410,7 +410,9 @@ def test_invalid_immutable_type_rejected(checker):
     try:
         loaded_config = checker._load_json_file(Path(temp_path), "test")
 
-        assert loaded_config is None
+        # Config loaded with warnings (warn-but-load, #1761)
+        assert loaded_config is not None
+        assert len(checker._config_warnings) >= 1
     finally:
         Path(temp_path).unlink()
 
