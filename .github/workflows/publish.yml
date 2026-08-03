@@ -58,6 +58,13 @@ jobs:
           twine check dist/*
           ls -la dist/
 
+      - name: Generate checksums
+        if: steps.target.outputs.create_release == 'true'
+        run: |
+          cd dist
+          sha256sum *.tar.gz *.whl > checksums.txt
+          cat checksums.txt
+
       - name: Publish to ${{ steps.target.outputs.registry }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
@@ -92,5 +99,6 @@ jobs:
           files: |
             dist/*.tar.gz
             dist/*.whl
+            dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
