@@ -1002,3 +1002,620 @@ class TestCustomExtractor:
         with pytest.raises(SecurityViolation):
             wrapped.generate(prompt="secret data")
         mock_generate.assert_not_called()
+
+
+# ============================================================================
+# TestToolResolution
+# ============================================================================
+
+
+class TestToolResolution:
+    """Tool name → Anthropic tool dict resolution."""
+
+    def test_preset_coding(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools("coding")
+        names = [t["name"] for t in tools]
+        assert names == ["bash", "str_replace_based_edit_tool", "grep", "glob"]
+
+    def test_preset_readonly(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools("readonly")
+        names = [t["name"] for t in tools]
+        assert names == ["str_replace_based_edit_tool", "grep", "glob"]
+
+    def test_preset_browser(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools("browser")
+        names = [t["name"] for t in tools]
+        assert names == ["computer", "bash"]
+        computer = [t for t in tools if t["name"] == "computer"][0]
+        assert "display_width_px" in computer
+
+    def test_single_tool_name(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools("bash")
+        assert len(tools) == 1
+        assert tools[0]["name"] == "bash"
+        assert "bash_" in tools[0]["type"]
+
+    def test_list_of_names(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools(["bash", "grep"])
+        assert len(tools) == 2
+        assert tools[0]["name"] == "bash"
+        assert tools[1]["name"] == "grep"
+        assert "input_schema" in tools[1]
+
+    def test_mixed_list_with_dict(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        custom = {"name": "my_tool", "input_schema": {"type": "object"}}
+        tools = resolve_tools(["bash", custom])
+        assert len(tools) == 2
+        assert tools[1] == custom
+
+    def test_preset_in_list(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools(["coding", "web_search"])
+        names = [t["name"] for t in tools]
+        assert "bash" in names
+        assert "web_search" in names
+
+    def test_unknown_tool_raises(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        with pytest.raises(ValueError, match="Unknown tool"):
+            resolve_tools("nonexistent_tool")
+
+    def test_tool_type_override(self):
+        from ai_guardian.integrations.anthropic.tools import resolve_tools
+
+        tools = resolve_tools(["bash"], tool_types={"bash": "bash_99990101"})
+        assert tools[0]["type"] == "bash_99990101"
+
+    def test_server_tool_detection(self):
+        from ai_guardian.integrations.anthropic.tools import is_server_tool
+
+        assert is_server_tool("web_search")
+        assert is_server_tool("web_fetch")
+        assert is_server_tool("code_execution")
+        assert not is_server_tool("bash")
+        assert not is_server_tool("grep")
+
+    def test_fallback_types_used_without_sdk(self):
+        from ai_guardian.integrations.anthropic.tools import (
+            _detected_cache,
+            get_tool_type,
+        )
+
+        _detected_cache.clear()
+        result = get_tool_type("bash")
+        assert result == "bash_20250124"
+
+    def test_auto_detect_from_sdk(self):
+        from ai_guardian.integrations.anthropic.tools import (
+            _detected_cache,
+            _discover_tool_type,
+        )
+
+        _detected_cache.clear()
+        fake_types = SimpleNamespace()
+        fake_types.ToolBash20250124Param = True
+        fake_types.ToolBash20990101Param = True
+        fake_anthropic = SimpleNamespace(types=fake_types)
+
+        with patch.dict(sys.modules, {"anthropic": fake_anthropic}):
+            result = _discover_tool_type("bash")
+            assert result == "bash_20990101"
+
+        _detected_cache.clear()
+
+
+# ============================================================================
+# TestToolExecution
+# ============================================================================
+
+
+class TestToolExecution:
+    """Client-side tool executor tests."""
+
+    def test_execute_bash(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool("bash", {"command": "echo hello"}, str(tmp_path))
+        assert "hello" in result
+
+    def test_execute_bash_restart(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool("bash", {"restart": True}, str(tmp_path))
+        assert "restarted" in result.lower()
+
+    def test_execute_bash_timeout(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        with patch("ai_guardian.integrations.anthropic.tools._BASH_TIMEOUT", 0.01):
+            result = execute_tool("bash", {"command": "sleep 10"}, str(tmp_path))
+            assert "timed out" in result.lower()
+
+    def test_execute_text_editor_view(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        f = tmp_path / "test.txt"
+        f.write_text("line1\nline2\nline3\n")
+        result = execute_tool(
+            "text_editor", {"command": "view", "path": "test.txt"}, str(tmp_path)
+        )
+        assert "line1" in result
+        assert "line3" in result
+
+    def test_execute_text_editor_create(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "text_editor",
+            {"command": "create", "path": "new.txt", "file_text": "content"},
+            str(tmp_path),
+        )
+        assert "Created" in result
+        assert (tmp_path / "new.txt").read_text() == "content"
+
+    def test_execute_text_editor_str_replace(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        f = tmp_path / "test.txt"
+        f.write_text("hello world")
+        result = execute_tool(
+            "text_editor",
+            {
+                "command": "str_replace",
+                "path": "test.txt",
+                "old_str": "world",
+                "new_str": "earth",
+            },
+            str(tmp_path),
+        )
+        assert "Replaced" in result
+        assert f.read_text() == "hello earth"
+
+    def test_execute_text_editor_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "text_editor",
+            {"command": "view", "path": "../../../etc/passwd"},
+            str(tmp_path),
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_grep(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "a.py").write_text("def hello():\n    pass\n")
+        result = execute_tool(
+            "grep", {"pattern": "def hello", "path": "."}, str(tmp_path)
+        )
+        assert "hello" in result
+
+    def test_execute_glob(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "a.py").write_text("")
+        (tmp_path / "b.txt").write_text("")
+        result = execute_tool("glob", {"pattern": "*.py"}, str(tmp_path))
+        assert "a.py" in result
+        assert "b.txt" not in result
+
+    def test_execute_text_editor_path_prefix_collision(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        sibling = tmp_path.parent / (tmp_path.name + "bar")
+        sibling.mkdir(exist_ok=True)
+        secret = sibling / "secret.txt"
+        secret.write_text("sensitive data")
+        rel = os.path.relpath(str(secret), str(tmp_path))
+        result = execute_tool(
+            "text_editor", {"command": "view", "path": rel}, str(tmp_path)
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_grep_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "grep", {"pattern": "secret", "path": "../../../etc"}, str(tmp_path)
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_glob_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "glob", {"pattern": "*", "path": "../../../etc"}, str(tmp_path)
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_unknown_tool(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool("unknown_tool", {}, str(tmp_path))
+        assert "Error" in result
+
+
+# ============================================================================
+# TestGuardedAgent
+# ============================================================================
+
+
+def _make_agent_response(content_blocks, stop_reason="end_turn", usage=None):
+    """Build a mock Anthropic response for agent tests."""
+    usage = usage or SimpleNamespace(input_tokens=100, output_tokens=50)
+    return SimpleNamespace(
+        content=content_blocks,
+        stop_reason=stop_reason,
+        usage=usage,
+    )
+
+
+class TestGuardedAgent:
+    """GuardedAgent tool-use loop tests."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_single_turn_no_tools(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["output"] == "Hello!"
+        assert result["stop_reason"] == "end_turn"
+        assert mock_session.check_content.call_count >= 2
+        filenames = [
+            call.kwargs.get("filename", call.args[0] if len(call.args) > 1 else "")
+            for call in mock_session.check_content.call_args_list
+        ]
+        content_args = [
+            call.args[0] for call in mock_session.check_content.call_args_list
+        ]
+        assert "Hi" in content_args
+        assert "Hello!" in content_args
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_use_loop(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo test"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="test output",
+        ):
+            result = agent.run("Run echo test")
+
+        assert result["output"] == "Done!"
+        assert client.messages.create.call_count == 2
+        scanned = [call.args[0] for call in mock_session.check_content.call_args_list]
+        assert "test output" in scanned
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_result_scanning(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "cat secret.txt"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Found it")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="sensitive-credential-value",
+        ):
+            result = agent.run("Read secret")
+
+        scanned_filenames = [
+            call.kwargs.get("filename", "")
+            for call in mock_session.check_content.call_args_list
+        ]
+        assert any("tool_result" in f for f in scanned_filenames)
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_max_turns_limit(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo loop"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        agent, client = self._make_agent(max_turns=3)
+        client.messages.create.return_value = tool_response
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            result = agent.run("Loop forever")
+
+        assert result["stop_reason"] == "max_turns"
+        assert client.messages.create.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_refusal_handling(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="I cannot do that.")],
+            stop_reason="refusal",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Do something bad")
+
+        assert result["stop_reason"] == "refusal"
+        assert "cannot" in result["output"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_structured_output(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="tool_1",
+                    input={"findings": ["bug1", "bug2"]},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"findings": {"type": "array"}},
+        }
+        agent, client = self._make_agent(output_schema=schema)
+        client.messages.create.return_value = tool_response
+
+        result = agent.run("Find bugs")
+
+        assert result["output"] == {"findings": ["bug1", "bug2"]}
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_system_prompt_scanned(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(system_prompt="You are a helpful agent.")
+        client.messages.create.return_value = response
+
+        agent.run("Hello")
+
+        scanned = [call.args[0] for call in mock_session.check_content.call_args_list]
+        assert "You are a helpful agent." in scanned
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_server_tools_not_executed_locally(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="web_search",
+                    id="tool_1",
+                    input={"query": "test"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Found it")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(tools=["bash", "web_search"])
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool"
+        ) as mock_exec:
+            result = agent.run("Search for test")
+            mock_exec.assert_not_called()
+            assert result["stop_reason"] == "end_turn"
+            assert result["output"] == "Found it"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_scan_disabled(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        mock_session.check_content.assert_not_called()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_usage_accumulation(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=50),
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=200, output_tokens=30),
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test")
+
+        assert result["usage"]["input_tokens"] == 300
+        assert result["usage"]["output_tokens"] == 80
+
+    def test_auto_client_creation(self):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        with patch(
+            "ai_guardian.integrations.anthropic._extractor.create_client"
+        ) as mock_create:
+            mock_create.return_value = SimpleNamespace(
+                messages=SimpleNamespace(create=MagicMock())
+            )
+            agent = GuardedAgent(tools=["bash"])
+            mock_create.assert_called_once()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_pause_turn_continues(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        pause_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="pause_turn",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="All done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [pause_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test pause")
+
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
