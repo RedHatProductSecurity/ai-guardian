@@ -94,6 +94,31 @@ class GuardSession:
         """Sanitize text, redacting secrets and PII."""
         raise NotImplementedError
 
+    def get_violations(
+        self,
+        *,
+        tool_use_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        violation_type: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Query hook-triggered violations with sanitized output.
+
+        Returns violation records with secrets/PII redacted so results
+        are safe to store in external databases.
+
+        Args:
+            tool_use_id: Filter by tool_use_id from hook context
+            session_id: Filter by session_id from hook context
+            violation_type: Filter by violation type
+            limit: Maximum number of violations to return
+
+        Returns:
+            List of sanitized violation dicts with: violation_type, message,
+            tool_name, tool_use_id, session_id, timestamp, severity
+        """
+        raise NotImplementedError
+
     def _handle_result(self, result: CheckResult) -> CheckResult:
         """Apply action policy to a result."""
         self._results.append(result)
@@ -106,6 +131,35 @@ class GuardSession:
                 stacklevel=3,
             )
         return result
+
+    @staticmethod
+    def _sanitize_violation(v: Dict, sanitize_fn) -> Dict[str, Any]:
+        """Extract and sanitize a single violation record."""
+        blocked = v.get("blocked", {})
+        if not isinstance(blocked, dict):
+            blocked = {}
+        ctx = v.get("context", {})
+        if not isinstance(ctx, dict):
+            ctx = {}
+
+        raw_message = (
+            v.get("message") or blocked.get("reason") or blocked.get("message") or ""
+        )
+        if raw_message:
+            result = sanitize_fn(raw_message)
+            safe_message = result.get("sanitized_text", raw_message)
+        else:
+            safe_message = ""
+
+        return {
+            "violation_type": v.get("violation_type", ""),
+            "message": safe_message,
+            "tool_name": ctx.get("tool_name", "") or blocked.get("tool", ""),
+            "tool_use_id": ctx.get("tool_use_id", ""),
+            "session_id": ctx.get("session_id", ""),
+            "timestamp": v.get("timestamp", ""),
+            "severity": v.get("severity", ""),
+        }
 
     @staticmethod
     def _merge_results(results: List[CheckResult]) -> CheckResult:
@@ -343,6 +397,27 @@ class _DirectSession(GuardSession):
 
         return sanitize_text(text)
 
+    def get_violations(
+        self,
+        *,
+        tool_use_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        violation_type: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        from ai_guardian.scanners.sanitizer import sanitize_text
+        from ai_guardian.violations.logger import ViolationLogger
+
+        limit = max(1, min(limit, 1000))
+        vl = ViolationLogger(config=self._config.get("violation_logging") or {})
+        raw = vl.get_recent_violations(
+            limit=limit,
+            violation_type=violation_type,
+            tool_use_id=tool_use_id,
+            session_id=session_id,
+        )
+        return [self._sanitize_violation(v, sanitize_text) for v in raw]
+
 
 class _RestSession(GuardSession):
     """Daemon-delegated detection via socket protocol."""
@@ -389,6 +464,35 @@ class _RestSession(GuardSession):
         if response is None:
             return {"sanitized_text": text, "redactions": [], "stats": {}}
         return response.get("data", response)
+
+    def get_violations(
+        self,
+        *,
+        tool_use_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+        violation_type: Optional[str] = None,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        from ai_guardian.daemon.client import send_sdk_check
+
+        params: Dict[str, Any] = {"limit": limit}
+        if tool_use_id is not None:
+            params["tool_use_id"] = tool_use_id
+        if session_id is not None:
+            params["session_id"] = session_id
+        if violation_type is not None:
+            params["violation_type"] = violation_type
+
+        response = send_sdk_check("violations", params, timeout=5.0)
+        if response is None:
+            return []
+        if response.get("error") is not None:
+            logger.debug("Daemon violations query failed: %s", response["error"])
+            return []
+        data = response.get("data", response)
+        if isinstance(data, list):
+            return data
+        return data.get("violations", [])
 
     def _send_check(self, check_type: str, data: Dict[str, Any]) -> CheckResult:
         from ai_guardian.daemon.client import send_sdk_check
