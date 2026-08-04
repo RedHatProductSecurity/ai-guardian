@@ -257,6 +257,112 @@ class TestTomlPatternsGapFillingRules:
         text = "r8_shortvalue"
         assert not self._find(text, "replicate-api-token")
 
+    # --- Issue #1777: AI/ML Provider Keys ---
+
+    def test_groq_api_key_detected(self):
+        token = "gsk_" + "a1B2c3D4" * 7
+        assert self._find(f"TOKEN={token}", "groq-api-key")
+
+    def test_groq_placeholder_rejected(self):
+        token = "gsk_" + "X" * 52
+        assert not self._find(f"TOKEN={token}", "groq-api-key")
+
+    def test_groq_short_not_matched(self):
+        assert not self._find("gsk_short", "groq-api-key")
+
+    def test_xai_api_key_detected(self):
+        token = "xai-" + "a1B2c3D4" * 10
+        assert self._find(f"TOKEN={token}", "xai-api-key")
+
+    def test_xai_short_not_matched(self):
+        assert not self._find("xai-short", "xai-api-key")
+
+    def test_nvidia_nim_api_key_detected(self):
+        token = "nvapi-" + "a1B2c3D4" * 8
+        assert self._find(f"TOKEN={token}", "nvidia-nim-api-key")
+
+    def test_nvidia_nim_short_not_matched(self):
+        assert not self._find("nvapi-short", "nvidia-nim-api-key")
+
+    def test_new_relic_api_key_detected(self):
+        token = "NRAK-" + "A1B2C3D4" * 3 + "A1B"
+        assert self._find(f"TOKEN={token}", "new-relic-api-key")
+
+    def test_new_relic_short_not_matched(self):
+        assert not self._find("NRAK-SHORT", "new-relic-api-key")
+
+    def test_langfuse_secret_key_detected(self):
+        token = "sk-lf-" + "a1B2c3D4" * 5
+        assert self._find(f"TOKEN={token}", "langfuse-secret-key")
+
+    def test_langfuse_short_not_matched(self):
+        assert not self._find("sk-lf-short", "langfuse-secret-key")
+
+    def test_langsmith_pat_detected(self):
+        token = "lsv2_pt_" + "a1b2c3d4" * 4 + "_" + "e5f6a7b8c9"
+        assert self._find(f"TOKEN={token}", "langsmith-pat")
+
+    def test_langsmith_service_key_detected(self):
+        token = "lsv2_sk_" + "a1b2c3d4" * 4 + "_" + "e5f6a7b8c9"
+        assert self._find(f"TOKEN={token}", "langsmith-service-key")
+
+    def test_wandb_api_key_detected(self):
+        token = "wandb_v1_" + "a1B2c3D4xYz" * 7
+        assert self._find(f"TOKEN={token}", "wandb-api-key")
+
+    def test_wandb_short_not_matched(self):
+        assert not self._find("wandb_v1_short", "wandb-api-key")
+
+    def test_cerebras_api_key_detected(self):
+        token = "csk-" + "a1b2c3d4" * 6
+        assert self._find(f"TOKEN={token}", "cerebras-api-key")
+
+    def test_cerebras_short_not_matched(self):
+        assert not self._find("csk-short", "cerebras-api-key")
+
+    def test_together_ai_api_key_detected(self):
+        token = "tgp_v1_" + "a1B2c3D4xYz" * 4
+        assert self._find(f"TOKEN={token}", "together-ai-api-key")
+
+    def test_together_ai_short_not_matched(self):
+        assert not self._find("tgp_v1_short", "together-ai-api-key")
+
+    def test_pinecone_api_key_detected(self):
+        token = "pcsk_" + "AbCdEf" + "_" + "a1b2c3d4e5f6" * 5 + "a1b"
+        assert self._find(f"TOKEN={token}", "pinecone-api-key")
+
+    def test_pinecone_short_not_matched(self):
+        assert not self._find("pcsk_short", "pinecone-api-key")
+
+    def test_runpod_api_key_detected(self):
+        token = "rpa_" + "A1B2C3D4" * 5 + "aBcDeF"
+        assert self._find(f"TOKEN={token}", "runpod-api-key")
+
+    def test_runpod_short_not_matched(self):
+        assert not self._find("rpa_SHORT", "runpod-api-key")
+
+    def test_minimax_api_key_detected(self):
+        token = "sk-api-" + "a1B2c3D4" * 15
+        assert self._find(f"TOKEN={token}", "minimax-api-key")
+
+    def test_minimax_short_not_matched(self):
+        assert not self._find("sk-api-short", "minimax-api-key")
+
+    def test_devin_personal_api_key_detected(self):
+        token = "apk_user_" + "a1B2c3D4" * 18
+        assert self._find(f"TOKEN={token}", "devin-personal-api-key")
+
+    def test_devin_service_api_key_detected(self):
+        token = "apk_" + "a1B2c3D4" * 12
+        assert self._find(f"TOKEN={token}", "devin-service-api-key")
+
+    def test_azure_ad_client_secret_detected(self):
+        token = "AbC1Q~" + "a1b2c3d4e5f6g7h8" * 2 + "x"
+        assert self._find(f"SECRET={token}", "azure-ad-client-secret")
+
+    def test_azure_ad_short_not_matched(self):
+        assert not self._find("shortQ~val", "azure-ad-client-secret")
+
 
 class TestTomlPatternsEngineBuilder:
 

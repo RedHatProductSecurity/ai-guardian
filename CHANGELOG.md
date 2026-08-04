@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **New AI tool config paths for prompt injection scanning** — `.windsurf/rules`, `.windsurf/cascade.json`, `.openclaw/config.json` added to `DEFAULT_CONFIG_FILES` for context file poisoning detection (#1779)
 
 - **New credential paths for exfiltration detection** — `~/.config/gh/hosts.yml`, `~/.copilot/`, `~/.codeium/` added to `file_exfil` pattern; exfil detection now also catches `nc`, `wget`, `socat` as exfiltration targets (#1779)
+- **16 new AI/ML provider API key detection patterns** — Groq (`gsk_`), xAI (`xai-`), NVIDIA NIM (`nvapi-`), New Relic (`NRAK-`), LangFuse (`sk-lf-`), LangSmith PAT/Service (`lsv2_pt_`/`lsv2_sk_`), Weights & Biases (`wandb_v1_`), Cerebras (`csk-`), Together.ai (`tgp_v1_`), Devin (`apk_user_`/`apk_`), Pinecone (`pcsk_`), RunPod (`rpa_`), MiniMax (`sk-api-`), Azure AD Client Secret (`Q~` marker) (#1777)
 
 ## [1.15.5] - 2026-08-03
 
