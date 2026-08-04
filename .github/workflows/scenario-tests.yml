@@ -84,21 +84,3 @@ jobs:
               "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
               "docker://quay.io/itdove/ai-guardian:${TAG}"
           done
-
-  cleanup-image:
-    name: Cleanup SHA Image
-    needs: scenario-tests
-    if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main'))
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete SHA-tagged images
-        continue-on-error: true
-        run: |
-          skopeo login quay.io \
-            --username "${{ secrets.QUAY_RPS_PERSONAL_USERNAME }}" \
-            --password "${{ secrets.QUAY_RPS_PERSONAL_PASSWORD }}"
-          skopeo delete \
-            "docker://quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}"
-          # Legacy mirror cleanup (remove in v2.0, see #1774)
-          skopeo delete \
-            "docker://quay.io/itdove/ai-guardian:${{ github.sha }}"
