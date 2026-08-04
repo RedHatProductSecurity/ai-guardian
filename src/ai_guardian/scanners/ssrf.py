@@ -68,6 +68,8 @@ import fnmatch
 import ipaddress
 import logging
 import re
+import socket
+import struct
 import urllib.parse
 from typing import Tuple, Optional, Dict, Any, List
 
@@ -452,6 +454,59 @@ class SSRFProtector:
             logger.warning(f"Failed to parse URL '{url}': {e}")
             return None, None, None, None, None
 
+    @staticmethod
+    def _normalize_ip(host: str) -> str:
+        """Convert hex/octal/decimal-encoded IPs to dotted-decimal for CIDR matching.
+
+        Handles formats that curl/wget/browsers resolve but Python's ipaddress rejects:
+        - Full hex: 0x7f000001 -> 127.0.0.1
+        - Full decimal: 2130706433 -> 127.0.0.1
+        - Octal octets: 0177.0.0.1 -> 127.0.0.1
+        - Hex octets: 0x7f.0x00.0x00.0x01 -> 127.0.0.1
+        - Mixed: 0x7f.0.0.1 -> 127.0.0.1
+        """
+        if not host:
+            return host
+
+        # Full hex: 0x7f000001
+        if re.match(r"^0[xX][0-9a-fA-F]+$", host):
+            try:
+                val = int(host, 16)
+                if 0 <= val <= 0xFFFFFFFF:
+                    return socket.inet_ntoa(struct.pack("!I", val))
+            except (ValueError, struct.error):
+                pass
+
+        # Full decimal: 2130706433
+        if host.isdigit():
+            try:
+                val = int(host)
+                if 0 <= val <= 0xFFFFFFFF:
+                    return socket.inet_ntoa(struct.pack("!I", val))
+            except (ValueError, struct.error):
+                pass
+
+        # Octal/hex/mixed octets: 0177.0.0.1 or 0x7f.0x00.0x00.0x01
+        parts = host.split(".")
+        if len(parts) == 4:
+            try:
+                octets = []
+                for p in parts:
+                    if p.lower().startswith("0x"):
+                        octets.append(int(p, 16))
+                    elif p.startswith("0") and len(p) > 1 and p.isdigit():
+                        octets.append(int(p, 8))
+                    else:
+                        octets.append(int(p))
+                if all(0 <= o <= 255 for o in octets):
+                    normalized = ".".join(str(o) for o in octets)
+                    if normalized != host:
+                        return normalized
+            except ValueError:
+                pass
+
+        return host
+
     def _is_ip_blocked(self, ip_str: str) -> bool:
         """
         Check if an IP address is in a blocked range.
@@ -692,6 +747,10 @@ class SSRFProtector:
 
         if not hostname:
             return False, "", False
+
+        # Normalize alternative IP encodings (hex/octal/decimal) that bypass
+        # Python's ipaddress module but are resolved by curl/wget/browsers
+        hostname = self._normalize_ip(hostname)
 
         # IMMUTABLE: Check core metadata endpoints (cannot be overridden by allow-list)
         hostname_lower = hostname.lower()
