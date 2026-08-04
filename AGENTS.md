@@ -1484,6 +1484,19 @@ Review these sources in order of priority:
 4. **TruffleHog detectors** - https://github.com/trufflesecurity/trufflehog/tree/main/pkg/detectors
    - Focus: New cloud provider and service credential formats
    - Update frequency: Active project, check twice-monthly
+   - **License: AGPL-3.0** — do NOT copy patterns; independently author from public API docs
+
+5. **LeakTK patterns** - https://github.com/leaktk/patterns
+   - Focus: Curated secret patterns extending gitleaks, with precise regex bounds and entropy thresholds
+   - Update frequency: Active project (last commit 2026-07-21), check twice-monthly
+   - **License: MIT** — patterns can be adapted directly
+   - Key file: `patterns/gitleaks/8.27.0/98-general.toml`
+
+6. **Betterleaks** - https://github.com/betterleaks/betterleaks
+   - Focus: Gitleaks successor with 200+ service-specific rule files, very precise regex with exact key lengths
+   - Update frequency: Very active (daily commits), check twice-monthly
+   - **License: MIT** — patterns can be adapted directly
+   - Key directory: `cmd/generate/config/rules/` (one `.go` file per service)
 
 **Priority 2 (Review if Time Permits):**
 5. **AI Security Research Papers** - Search arXiv, Google Scholar, ACM Digital Library
@@ -1662,12 +1675,12 @@ def test_legitimate_unicode_not_blocked():
 
 Update this section after each twice-monthly research review:
 
-**Last Research Review**: _2026-07-16_ *(Update this date after completing twice-monthly review)*
+**Last Research Review**: _2026-08-04_ *(Update this date after completing twice-monthly review)*
 
 **Review Summary** *(Keep last 3 months)*:
+- **2026-08-04**: All scanners reviewed. All issues from previous reviews (#1482, #1483, #1484, #1601, #1617, #1618) confirmed CLOSED/shipped. **PI/CP**: No new regex-detectable patterns — Hermes repo dormant since early July (Apache-2.0), OWASP LLM Top 10 and Agentic Top 10 both stable. Significant CVE activity: Claude Code CVE-2026-46406 (/copy temp file leak), CVE-2026-39861 (symlink sandbox escape), CVE-2026-33068/-21852 (TrustFall RCE via project settings), CVE-2026-35603 (world-writable config dirs, multi-IDE Windows); Cursor CVE-2026-26268 (git hook RCE); Flowise CVE-2026-40933 (CVSS 10.0, MCP adapter unsafe serialization). TrustFall attack (Adversa.ai) demonstrates 1-click RCE across Claude Code/Cursor/Copilot/Gemini CLI — architectural, not regex-detectable. Context file poisoning (CLAUDE.md/SKILL.md) identified as primary supply-chain vector (CSA May 2026) — partially addressable by existing config scanner. **Secrets**: 7 new patterns — Groq `gsk_`, xAI `xai-`, NVIDIA NIM `nvapi-`, New Relic `NRAK-`/`NRJS-`/`NRIQ-`, LangFuse `sk-lf-` — created issue #1777. TruffleHog added 6 new detectors (New Relic x5, SonarQube Cloud) but is AGPL-3.0; patterns independently authored from public API docs. Gitleaks dormant (last config commit 2025-11-20, MIT). LeakTK patterns (MIT, actively maintained) identified as new priority source — has more precise regexes for Groq (`gsk_[A-Za-z0-9]{52}`) and NVIDIA (`nvapi-[\w\-]{64}` with entropy), plus Azure AD Client Secret, Dynatrace, OpenShift, Vault AppRole rules not in ai-guardian — added to Priority 1 source list and workflow template. Betterleaks (MIT, 1590 stars, gitleaks successor, 200+ services) revealed that LangSmith (`lsv2_pt_`/`lsv2_sk_`), W&B v1 (`wandb_v1_`), and Anthropic Admin (`sk-ant-admin01-`) DO have distinctive prefixes — corrected in #1777. Additional high-value services: Cerebras (`csk-`), Together.ai (`tgp_v1_`), Devin (`apk_user_`/`apk_`), Pinecone v2 (`pcsk_`), RunPod (`rpa_`). Both leaktk/patterns and betterleaks added as Priority 1 sources. **SSRF**: Decimal/octal/hex IP encoding bypass gap identified — Python `ipaddress` doesn't parse `0x7f000001`/`2130706433`/octal formats that curl/browsers resolve — created issue #1778. No new cloud metadata endpoints. **Config exfil**: New AI tool config paths identified — `.windsurf/rules`, `~/.config/gh/hosts.yml`, `~/.copilot/`, `~/.codeium/` — created issue #1779. See issue #1758.
 - **2026-07-16**: All scanners reviewed. **PI/CP**: No new patterns — Hermes repo inactive on security payloads (CODEOWNERS experiment only), OWASP LLM Top 10 v2.0 and Agentic Top 10 both stable. Notable research: Agent Data Injection (arXiv 2607.05120) introduces delimiter injection distinct from standard PI, demonstrated RCE on Claude Code/Codex/Gemini CLI — worth monitoring but needs FP evaluation. GhostApproval symlink escape (CVE-2026-12958, Wiz) and Friendly Fire repo content PI (AI Now) are architectural, not regex-detectable. Copilot July Patch Tuesday cluster (CVE-2026-47282, 50510, 48561 CVSS 9.6). Langflow IDOR (CVE-2026-55255) first AI platform on CISA KEV. **Secrets**: 4 new patterns — Google Gemini AQ. prefix (replacing AIza, deprecated by Sep 2026), OpenRouter sk-or-v1- (AI gateway, currently misidentified as OpenAI), HashiCorp Vault hvs. (high severity), Confluent Cloud cflt — created issue #1617. Broader Gitleaks gap analysis identified ~15-20 additional high-relevance patterns (Cohere, Doppler, Grafana, Sentry, etc.) — created issue #1618. Anthropic OAuth sk-ant-oat01- already covered by existing sk-ant- rule. **SSRF**: No new findings. **Config exfil**: No new findings. See issue #1601.
 - **2026-07-06**: First review covering all scanners (PI, secrets, SSRF, config exfil). **PI/CP**: No new patterns — Hermes repo had structural rename only (0009-), OWASP LLM Top 10 unchanged, arXiv papers (2506.23260, 2601.09625, 2602.22242) and CVEs (Cursor DuneSlide CVE-2026-50548/50549, Semantic Kernel CVE-2026-25592/26030) confirm architectural/framework threat landscape, 4 candidates rejected. **Secrets**: 6 new patterns from Gitleaks (MIT) — HuggingFace x2, GitHub fine-grained PAT, GitHub user token (ghu_), AWS Bedrock long-lived key, Perplexity — created issue #1482. **SSRF**: 2 unblocked cloud metadata endpoints confirmed via IP range check — Alibaba (100.100.100.200) and Oracle (192.0.0.192) — created issue #1483. **Config exfil**: 2 missing AI IDE config file paths — .github/copilot-instructions.md and .kiro/steering/*.md — created issue #1484. See issue #1435.
-- **2026-05-01**: No new patterns found. Reviewed Hermes Security Patterns (Apache-2.0, no new commits since April repo move), OWASP LLM Top 10 2025 and new OWASP Top 10 for Agentic Applications 2026 (ASI01-ASI10), arXiv papers (2601.17548, 2603.21642), and "Comment and Control" attack disclosure. Evaluated 6 candidate patterns (MCP tool poisoning, memory poisoning, cross-context injection, process env snooping, rug pulls, agent goal hijacking) - all rejected (architectural/protocol-level attacks not suitable for regex detection, or duplicates of existing patterns). The 2026 threat landscape is shifting toward agentic/protocol attacks addressed by AI Guardian's MCP security features and hooks, not the pattern module. See issue #336.
 
 ---
 

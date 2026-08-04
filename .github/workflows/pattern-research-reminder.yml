@@ -93,6 +93,17 @@ jobs:
               - [ ] **TruffleHog detectors** - https://github.com/trufflesecurity/trufflehog/tree/main/pkg/detectors
                 - Last reviewed: _[update date after review]_
                 - Check: new cloud provider/service credential formats
+                - **License: AGPL-3.0** — do NOT copy patterns; independently author from public API docs
+
+              - [ ] **LeakTK patterns** - https://github.com/leaktk/patterns
+                - Last reviewed: _[update date after review]_
+                - Check: curated patterns in \`patterns/gitleaks/8.27.0/98-general.toml\` — precise regex with entropy thresholds
+                - **License: MIT** — patterns can be adapted directly
+
+              - [ ] **Betterleaks** - https://github.com/betterleaks/betterleaks
+                - Last reviewed: _[update date after review]_
+                - Check: 200+ service rules in \`cmd/generate/config/rules/\` — gitleaks successor with exact key lengths
+                - **License: MIT** — patterns can be adapted directly
 
               - [ ] **AI Security Research Papers** - Search arXiv, Google Scholar for recent publications
                 - Keywords: "prompt injection", "LLM jailbreak", "context poisoning", "AI agent security"
@@ -123,7 +134,7 @@ jobs:
               - New patterns found: _[yes/no]_
 
               ### 🔑 Secrets (\`src/ai_guardian/patterns/data/secrets.toml\`)
-              Sources: Gitleaks community config, TruffleHog detectors, cloud provider announcements
+              Sources: Gitleaks community config, TruffleHog detectors, LeakTK patterns, Betterleaks, cloud provider announcements
               - [ ] Reviewed
               - New credential formats found: _[yes/no]_
 
