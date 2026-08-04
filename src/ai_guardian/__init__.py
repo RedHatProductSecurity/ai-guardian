@@ -210,5 +210,8 @@ from ai_guardian.sdk import (  # noqa: F401
     monitor,
 )
 
+# --- integrations ---
+from ai_guardian.integrations import guarded  # noqa: F401
+
 # --- cli.py ---
 from ai_guardian.cli import main  # noqa: F401

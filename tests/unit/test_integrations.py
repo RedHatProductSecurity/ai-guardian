@@ -1,0 +1,1004 @@
+"""Tests for the LLM client integration wrapper."""
+
+import os
+import sys
+import warnings
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from ai_guardian.integrations.base import (
+    ProviderExtractor,
+    _GuardedClient,
+    _MethodChainProxy,
+    _StreamProxy,
+    _detect_extractor,
+    _REGISTRY,
+    guarded,
+    register_extractor,
+)
+from ai_guardian.integrations.anthropic import AnthropicExtractor, create_client
+from ai_guardian.integrations.openai import OpenAIExtractor
+from ai_guardian.sdk import SecurityViolation
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_anthropic_client():
+    """Build a mock object that looks like anthropic.Anthropic()."""
+    mock_create = MagicMock(name="messages.create")
+    mock_stream = MagicMock(name="messages.stream")
+    messages = SimpleNamespace(create=mock_create, stream=mock_stream)
+    client = SimpleNamespace(messages=messages, api_key="sk-test-key")
+    return client, mock_create, mock_stream
+
+
+def _make_mock_response(texts):
+    """Build a mock Anthropic Message response with text content blocks."""
+    blocks = []
+    for t in texts:
+        blocks.append(SimpleNamespace(type="text", text=t))
+    return SimpleNamespace(content=blocks, model="claude-sonnet-4-20250514")
+
+
+def _fake_anthropic_module():
+    """Create a fake anthropic module with all Anthropic client classes."""
+    mod = SimpleNamespace()
+    mod.Anthropic = type("Anthropic", (), {})
+    mod.AsyncAnthropic = type("AsyncAnthropic", (), {})
+    mod.AnthropicVertex = type("AnthropicVertex", (), {})
+    mod.AsyncAnthropicVertex = type("AsyncAnthropicVertex", (), {})
+    mod.AnthropicBedrock = type("AnthropicBedrock", (), {})
+    mod.AsyncAnthropicBedrock = type("AsyncAnthropicBedrock", (), {})
+    mod.AnthropicFoundry = type("AnthropicFoundry", (), {})
+    mod.AsyncAnthropicFoundry = type("AsyncAnthropicFoundry", (), {})
+    return mod
+
+
+# ============================================================================
+# TestProviderExtractor
+# ============================================================================
+
+
+class TestProviderExtractor:
+    """ProviderExtractor ABC contract."""
+
+    def test_cannot_instantiate_abc(self):
+        with pytest.raises(TypeError):
+            ProviderExtractor()
+
+    def test_concrete_subclass_works(self):
+        class Dummy(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        d = Dummy()
+        assert d.methods_to_wrap() == []
+
+
+# ============================================================================
+# TestRegistry
+# ============================================================================
+
+
+class TestRegistry:
+    """Extractor registration and detection."""
+
+    def test_anthropic_extractor_registered(self):
+        for name in AnthropicExtractor._CLIENT_NAMES:
+            key = f"anthropic.{name}"
+            assert key in _REGISTRY, f"{key} not registered"
+            assert _REGISTRY[key] is AnthropicExtractor
+
+    def test_detect_raises_for_unknown_client(self):
+        with pytest.raises(ValueError, match="No provider extractor found"):
+            _detect_extractor({"not": "a client"})
+
+    def test_register_custom_extractor(self):
+        class FakeExtractor(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return True
+
+            def methods_to_wrap(self):
+                return ["chat"]
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        register_extractor("test_pkg.FakeClient", FakeExtractor)
+        assert "test_pkg.FakeClient" in _REGISTRY
+        del _REGISTRY["test_pkg.FakeClient"]
+
+
+# ============================================================================
+# TestAnthropicExtractor
+# ============================================================================
+
+
+class TestAnthropicExtractor:
+    """AnthropicExtractor detection and text extraction."""
+
+    def test_detect_true_when_anthropic_imported(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.Anthropic()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_async_client(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.AsyncAnthropic()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_subclass(self):
+        fake_mod = _fake_anthropic_module()
+        AnthropicVertex = type("AnthropicVertex", (fake_mod.Anthropic,), {})
+        client = AnthropicVertex()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_vertex_client(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.AnthropicVertex()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_async_vertex_client(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.AsyncAnthropicVertex()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_bedrock_client(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.AnthropicBedrock()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_true_for_foundry_client(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.AnthropicFoundry()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect(client) is True
+
+    def test_detect_false_when_anthropic_not_imported(self):
+        with patch.dict(sys.modules, {}, clear=False):
+            sys.modules.pop("anthropic", None)
+            assert AnthropicExtractor.detect(object()) is False
+
+    def test_detect_false_for_non_anthropic_client(self):
+        fake_mod = _fake_anthropic_module()
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            assert AnthropicExtractor.detect("not a client") is False
+
+    def test_methods_to_wrap(self):
+        ext = AnthropicExtractor()
+        assert ext.methods_to_wrap() == ["messages.create", "messages.stream"]
+
+    def test_extract_input_string_content(self):
+        ext = AnthropicExtractor()
+        kwargs = {
+            "messages": [{"role": "user", "content": "hello world"}],
+        }
+        result = ext.extract_input("messages.create", (), kwargs)
+        assert result == ["hello world"]
+
+    def test_extract_input_content_blocks(self):
+        ext = AnthropicExtractor()
+        kwargs = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "block one"},
+                        {"type": "image", "source": {}},
+                        {"type": "text", "text": "block two"},
+                    ],
+                }
+            ],
+        }
+        result = ext.extract_input("messages.create", (), kwargs)
+        assert result == ["block one", "block two"]
+
+    def test_extract_input_with_system_string(self):
+        ext = AnthropicExtractor()
+        kwargs = {
+            "system": "You are helpful.",
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        result = ext.extract_input("messages.create", (), kwargs)
+        assert result == ["You are helpful.", "hi"]
+
+    def test_extract_input_with_system_list(self):
+        ext = AnthropicExtractor()
+        kwargs = {
+            "system": [
+                {"type": "text", "text": "rule one"},
+                {"type": "text", "text": "rule two"},
+            ],
+            "messages": [],
+        }
+        result = ext.extract_input("messages.create", (), kwargs)
+        assert result == ["rule one", "rule two"]
+
+    def test_extract_input_empty_messages(self):
+        ext = AnthropicExtractor()
+        result = ext.extract_input("messages.create", (), {"messages": []})
+        assert result == []
+
+    def test_extract_input_no_messages_key(self):
+        ext = AnthropicExtractor()
+        result = ext.extract_input("messages.create", (), {})
+        assert result == []
+
+    def test_extract_output_text_blocks(self):
+        ext = AnthropicExtractor()
+        response = _make_mock_response(["hello", "world"])
+        result = ext.extract_output("messages.create", response)
+        assert result == ["hello", "world"]
+
+    def test_extract_output_tool_use_only(self):
+        ext = AnthropicExtractor()
+        block = SimpleNamespace(type="tool_use", id="123", name="fn", input={})
+        response = SimpleNamespace(content=[block])
+        result = ext.extract_output("messages.create", response)
+        assert result == []
+
+    def test_extract_output_no_content(self):
+        ext = AnthropicExtractor()
+        response = SimpleNamespace()
+        result = ext.extract_output("messages.create", response)
+        assert result == []
+
+
+# ============================================================================
+# TestGuardedFunction
+# ============================================================================
+
+
+class TestGuardedFunction:
+    """The guarded() factory function."""
+
+    def test_raises_value_error_for_unknown_client(self):
+        with pytest.raises(ValueError, match="No provider extractor found"):
+            guarded({"not": "a client"})
+
+    def test_auto_detects_anthropic(self):
+        fake_mod = _fake_anthropic_module()
+        client = fake_mod.Anthropic()
+        client.messages = SimpleNamespace(create=lambda: None, stream=lambda: None)
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            wrapped = guarded(client)
+        assert isinstance(wrapped, _GuardedClient)
+
+    def test_explicit_extractor_skips_detection(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return ["do_thing"]
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        wrapped = guarded(object(), extractor=CustomExt())
+        assert isinstance(wrapped, _GuardedClient)
+
+    def test_action_and_mode_passed_through(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        wrapped = guarded(object(), extractor=CustomExt(), action="warn", mode="rest")
+        assert wrapped._action == "warn"
+        assert wrapped._mode == "rest"
+
+
+# ============================================================================
+# TestGuardedClientProxy
+# ============================================================================
+
+
+class TestGuardedClientProxy:
+    """_GuardedClient proxy interception and scanning."""
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_intercepts_messages_create(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["response text"])
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log")
+        result = wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test input"}],
+        )
+
+        assert mock_session.check_content.call_count == 2
+        input_call = mock_session.check_content.call_args_list[0]
+        assert input_call[0][0] == "test input"
+        assert input_call[1]["filename"] == "llm_input"
+        output_call = mock_session.check_content.call_args_list[1]
+        assert output_call[0][0] == "response text"
+        assert output_call[1]["filename"] == "llm_output"
+        assert result.model == "claude-sonnet-4-20250514"
+
+    def test_non_wrapped_attributes_pass_through(self):
+        client, _, _ = _make_mock_anthropic_client()
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext)
+        assert wrapped.api_key == "sk-test-key"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_block_raises_on_input_threat(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret detected",
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation, match="Secret detected"):
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "my secret key"}],
+            )
+        mock_create.assert_not_called()
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_block_raises_on_output_threat(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        call_count = [0]
+
+        def check_side_effect(text, filename="input"):
+            call_count[0] += 1
+            if filename == "llm_output":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret in response",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["leaked secret"])
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation, match="Secret in response"):
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "safe input"}],
+            )
+        mock_create.assert_called_once()
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_log_action_no_exception(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=True
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["output"])
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log")
+
+        result = wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+        assert result is not None
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_scan_input_false_skips_input(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["output"])
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log", scan_input=False)
+
+        wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+        assert mock_session.check_content.call_count == 1
+        assert mock_session.check_content.call_args[1]["filename"] == "llm_output"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_scan_output_false_skips_output(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["output"])
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log", scan_output=False)
+
+        wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+        assert mock_session.check_content.call_count == 1
+        assert mock_session.check_content.call_args[1]["filename"] == "llm_input"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_stream_method_returns_stream_proxy(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, _, mock_stream_method = _make_mock_anthropic_client()
+        mock_stream_ctx = MagicMock()
+        mock_stream_method.return_value = mock_stream_ctx
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log")
+
+        result = wrapped.messages.stream(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+        assert isinstance(result, _StreamProxy)
+
+
+# ============================================================================
+# TestStreamProxy
+# ============================================================================
+
+
+class TestStreamProxy:
+    """_StreamProxy accumulates and scans on context exit."""
+
+    def test_scans_on_exit(self):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        ext = AnthropicExtractor()
+
+        final_msg = _make_mock_response(["streamed text"])
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.get_final_message = MagicMock(return_value=final_msg)
+
+        proxy = _StreamProxy(mock_stream, ext, "messages.stream", mock_session)
+        with proxy:
+            pass
+
+        mock_session.check_content.assert_called_once_with(
+            "streamed text", filename="llm_output"
+        )
+
+    def test_no_scan_on_exception(self):
+        mock_session = MagicMock()
+        ext = AnthropicExtractor()
+
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.get_final_message = MagicMock()
+
+        proxy = _StreamProxy(mock_stream, ext, "messages.stream", mock_session)
+        with pytest.raises(RuntimeError):
+            with proxy:
+                raise RuntimeError("boom")
+
+        mock_stream.get_final_message.assert_not_called()
+        mock_session.check_content.assert_not_called()
+
+    def test_passthrough_attributes(self):
+        mock_stream = MagicMock()
+        mock_stream.some_attr = "value"
+        ext = AnthropicExtractor()
+        proxy = _StreamProxy(mock_stream, ext, "messages.stream", MagicMock())
+        assert proxy.some_attr == "value"
+
+
+# ============================================================================
+# TestCreateClient
+# ============================================================================
+
+
+_CLEAN_ANTHROPIC_ENV = {
+    "ANTHROPIC_API_KEY": "",
+    "ANTHROPIC_VERTEX_PROJECT_ID": "",
+    "ANTHROPIC_BEDROCK_BASE_URL": "",
+    "CLOUD_ML_REGION": "",
+}
+
+
+class TestCreateClient:
+    """Auto-detect Anthropic client from env vars."""
+
+    def _mock_anthropic(self):
+        mock_mod = MagicMock()
+        mock_mod.Anthropic.return_value = MagicMock()
+        mock_mod.AnthropicVertex.return_value = MagicMock()
+        mock_mod.AnthropicBedrock.return_value = MagicMock()
+        return mock_mod
+
+    @patch.dict("os.environ", {**_CLEAN_ANTHROPIC_ENV, "ANTHROPIC_API_KEY": "sk-test"})
+    def test_creates_direct_client(self):
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client()
+        mock_mod.Anthropic.assert_called_once_with()
+        assert result is mock_mod.Anthropic.return_value
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+            "CLOUD_ML_REGION": "us-east5",
+        },
+    )
+    def test_creates_vertex_client(self):
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client()
+        mock_mod.AnthropicVertex.assert_called_once_with(
+            project_id="my-project", region="us-east5"
+        )
+        assert result is mock_mod.AnthropicVertex.return_value
+
+    @patch.dict(
+        "os.environ",
+        {**_CLEAN_ANTHROPIC_ENV, "ANTHROPIC_VERTEX_PROJECT_ID": "my-project"},
+    )
+    def test_vertex_default_region(self):
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            create_client()
+        call_kwargs = mock_mod.AnthropicVertex.call_args[1]
+        assert call_kwargs["region"] == "us-east5"
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_BEDROCK_BASE_URL": "https://bedrock.us-east-1.amazonaws.com",
+        },
+    )
+    def test_creates_bedrock_client(self):
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client()
+        mock_mod.AnthropicBedrock.assert_called_once_with()
+        assert result is mock_mod.AnthropicBedrock.return_value
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+    )
+    def test_raises_on_conflicting_env_vars(self):
+        with pytest.raises(ValueError, match="Multiple Anthropic provider env vars"):
+            create_client()
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_raises_when_no_env_vars(self):
+        with pytest.raises(ValueError, match="No Anthropic credentials found"):
+            create_client()
+
+    @patch.dict(
+        "os.environ",
+        {**_CLEAN_ANTHROPIC_ENV, "ANTHROPIC_VERTEX_PROJECT_ID": "my-project"},
+    )
+    def test_kwargs_forwarded(self):
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            create_client(timeout=30.0)
+        call_kwargs = mock_mod.AnthropicVertex.call_args[1]
+        assert call_kwargs["timeout"] == 30.0
+
+
+# ============================================================================
+# TestGuardedAutoClient
+# ============================================================================
+
+
+class TestGuardedAutoClient:
+    """guarded() with no client arg auto-creates from env."""
+
+    @patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-test"}, clear=False)
+    def test_guarded_no_client_auto_creates(self):
+        fake_mod = _fake_anthropic_module()
+        mock_client = fake_mod.Anthropic()
+        mock_client.messages = SimpleNamespace(create=lambda: None, stream=lambda: None)
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            with patch(
+                "ai_guardian.integrations.anthropic.create_client",
+                return_value=mock_client,
+            ):
+                wrapped = guarded(action="log")
+        assert isinstance(wrapped, _GuardedClient)
+
+
+# ============================================================================
+# Helpers — OpenAI
+# ============================================================================
+
+
+def _fake_openai_module():
+    """Create a fake openai module with all OpenAI client classes."""
+    mod = SimpleNamespace()
+    mod.OpenAI = type("OpenAI", (), {})
+    mod.AsyncOpenAI = type("AsyncOpenAI", (), {})
+    mod.AzureOpenAI = type("AzureOpenAI", (), {})
+    mod.AsyncAzureOpenAI = type("AsyncAzureOpenAI", (), {})
+    return mod
+
+
+def _make_mock_openai_client():
+    """Build a mock object that looks like openai.OpenAI()."""
+    mock_create = MagicMock(name="chat.completions.create")
+    completions = SimpleNamespace(create=mock_create)
+    chat = SimpleNamespace(completions=completions)
+    client = SimpleNamespace(chat=chat, api_key="sk-test-key")
+    return client, mock_create
+
+
+def _make_openai_response(texts):
+    """Build a mock OpenAI ChatCompletion response."""
+    choices = []
+    for t in texts:
+        msg = SimpleNamespace(role="assistant", content=t)
+        choices.append(SimpleNamespace(message=msg, index=len(choices)))
+    return SimpleNamespace(choices=choices, model="gpt-4o")
+
+
+# ============================================================================
+# TestOpenAIExtractor
+# ============================================================================
+
+
+class TestOpenAIExtractor:
+    """OpenAIExtractor detection and text extraction."""
+
+    def test_detect_true_when_openai_imported(self):
+        fake_mod = _fake_openai_module()
+        client = fake_mod.OpenAI()
+        with patch.dict(sys.modules, {"openai": fake_mod}):
+            assert OpenAIExtractor.detect(client) is True
+
+    def test_detect_true_for_async_client(self):
+        fake_mod = _fake_openai_module()
+        client = fake_mod.AsyncOpenAI()
+        with patch.dict(sys.modules, {"openai": fake_mod}):
+            assert OpenAIExtractor.detect(client) is True
+
+    def test_detect_true_for_azure_client(self):
+        fake_mod = _fake_openai_module()
+        client = fake_mod.AzureOpenAI()
+        with patch.dict(sys.modules, {"openai": fake_mod}):
+            assert OpenAIExtractor.detect(client) is True
+
+    def test_detect_true_for_async_azure_client(self):
+        fake_mod = _fake_openai_module()
+        client = fake_mod.AsyncAzureOpenAI()
+        with patch.dict(sys.modules, {"openai": fake_mod}):
+            assert OpenAIExtractor.detect(client) is True
+
+    def test_detect_false_when_openai_not_imported(self):
+        with patch.dict(sys.modules, {}, clear=False):
+            sys.modules.pop("openai", None)
+            assert OpenAIExtractor.detect(object()) is False
+
+    def test_detect_false_for_non_openai_client(self):
+        fake_mod = _fake_openai_module()
+        with patch.dict(sys.modules, {"openai": fake_mod}):
+            assert OpenAIExtractor.detect("not a client") is False
+
+    def test_methods_to_wrap(self):
+        ext = OpenAIExtractor()
+        assert ext.methods_to_wrap() == ["chat.completions.create"]
+
+    def test_extract_input_string_content(self):
+        ext = OpenAIExtractor()
+        kwargs = {
+            "messages": [{"role": "user", "content": "hello world"}],
+        }
+        result = ext.extract_input("chat.completions.create", (), kwargs)
+        assert result == ["hello world"]
+
+    def test_extract_input_system_message(self):
+        ext = OpenAIExtractor()
+        kwargs = {
+            "messages": [
+                {"role": "system", "content": "You are helpful."},
+                {"role": "user", "content": "hi"},
+            ],
+        }
+        result = ext.extract_input("chat.completions.create", (), kwargs)
+        assert result == ["You are helpful.", "hi"]
+
+    def test_extract_input_content_blocks(self):
+        ext = OpenAIExtractor()
+        kwargs = {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "describe this"},
+                        {"type": "image_url", "image_url": {"url": "http://..."}},
+                    ],
+                }
+            ],
+        }
+        result = ext.extract_input("chat.completions.create", (), kwargs)
+        assert result == ["describe this"]
+
+    def test_extract_input_empty_messages(self):
+        ext = OpenAIExtractor()
+        result = ext.extract_input("chat.completions.create", (), {"messages": []})
+        assert result == []
+
+    def test_extract_input_no_messages_key(self):
+        ext = OpenAIExtractor()
+        result = ext.extract_input("chat.completions.create", (), {})
+        assert result == []
+
+    def test_extract_output_single_choice(self):
+        ext = OpenAIExtractor()
+        response = _make_openai_response(["hello world"])
+        result = ext.extract_output("chat.completions.create", response)
+        assert result == ["hello world"]
+
+    def test_extract_output_multiple_choices(self):
+        ext = OpenAIExtractor()
+        response = _make_openai_response(["answer one", "answer two"])
+        result = ext.extract_output("chat.completions.create", response)
+        assert result == ["answer one", "answer two"]
+
+    def test_extract_output_no_content(self):
+        ext = OpenAIExtractor()
+        msg = SimpleNamespace(role="assistant", content=None)
+        choice = SimpleNamespace(message=msg, index=0)
+        response = SimpleNamespace(choices=[choice])
+        result = ext.extract_output("chat.completions.create", response)
+        assert result == []
+
+    def test_extract_output_no_choices(self):
+        ext = OpenAIExtractor()
+        response = SimpleNamespace(choices=[])
+        result = ext.extract_output("chat.completions.create", response)
+        assert result == []
+
+    def test_registered_in_registry(self):
+        for name in OpenAIExtractor._CLIENT_NAMES:
+            key = f"openai.{name}"
+            assert key in _REGISTRY, f"{key} not registered"
+            assert _REGISTRY[key] is OpenAIExtractor
+
+
+# ============================================================================
+# TestOpenAIGuardedProxy
+# ============================================================================
+
+
+class TestOpenAIGuardedProxy:
+    """_GuardedClient proxy with OpenAI extractor."""
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_intercepts_chat_completions_create(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create = _make_mock_openai_client()
+        mock_create.return_value = _make_openai_response(["response text"])
+
+        ext = OpenAIExtractor()
+        wrapped = _GuardedClient(client, ext, action="log")
+        result = wrapped.chat.completions.create(
+            model="gpt-4o",
+            messages=[{"role": "user", "content": "test input"}],
+        )
+
+        assert mock_session.check_content.call_count == 2
+        input_call = mock_session.check_content.call_args_list[0]
+        assert input_call[0][0] == "test input"
+        output_call = mock_session.check_content.call_args_list[1]
+        assert output_call[0][0] == "response text"
+        assert result.model == "gpt-4o"
+
+    def test_non_wrapped_attributes_pass_through(self):
+        client, _ = _make_mock_openai_client()
+        ext = OpenAIExtractor()
+        wrapped = _GuardedClient(client, ext)
+        assert wrapped.api_key == "sk-test-key"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_block_raises_on_threat(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="prompt_injection",
+                message="Prompt injection detected",
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create = _make_mock_openai_client()
+        ext = OpenAIExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation, match="Prompt injection detected"):
+            wrapped.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": "ignore instructions"}],
+            )
+        mock_create.assert_not_called()
+
+
+# ============================================================================
+# TestCustomExtractor (Phase 3)
+# ============================================================================
+
+
+class TestCustomExtractor:
+    """Custom ProviderExtractor passed via extractor= param."""
+
+    def _make_custom_extractor(self):
+        class MyExtractor(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return ["generate"]
+
+            def extract_input(self, method_name, args, kwargs):
+                prompt = kwargs.get("prompt", "")
+                return [prompt] if prompt else []
+
+            def extract_output(self, method_name, response):
+                text = getattr(response, "text", "")
+                return [text] if text else []
+
+        return MyExtractor()
+
+    def test_custom_extractor_wraps_client(self):
+        ext = self._make_custom_extractor()
+        client = SimpleNamespace(generate=MagicMock(), name="my-llm")
+        wrapped = guarded(client, extractor=ext, action="log")
+        assert isinstance(wrapped, _GuardedClient)
+        assert wrapped.name == "my-llm"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_custom_extractor_intercepts_method(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        ext = self._make_custom_extractor()
+        mock_generate = MagicMock(return_value=SimpleNamespace(text="generated output"))
+        client = SimpleNamespace(generate=mock_generate)
+        wrapped = guarded(client, extractor=ext, action="log")
+
+        result = wrapped.generate(prompt="hello")
+
+        assert mock_session.check_content.call_count == 2
+        assert mock_session.check_content.call_args_list[0][0][0] == "hello"
+        assert mock_session.check_content.call_args_list[1][0][0] == "generated output"
+        assert result.text == "generated output"
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_custom_extractor_block_raises(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True, detected=True, violation_type="secret", message="blocked"
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        ext = self._make_custom_extractor()
+        mock_generate = MagicMock()
+        client = SimpleNamespace(generate=mock_generate)
+        wrapped = guarded(client, extractor=ext, action="block")
+
+        with pytest.raises(SecurityViolation):
+            wrapped.generate(prompt="secret data")
+        mock_generate.assert_not_called()
