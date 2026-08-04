@@ -150,14 +150,31 @@ jobs:
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
-      # --- Legacy mirror to itdove (transition period — remove in v2.0, see #1774) ---
+
+      # --- Legacy mirror outputs for downstream jobs ---
+      - name: Export image tag
+        if: steps.params.outputs.skip != 'true'
+        id: export
+        run: echo "image_tag=${{ steps.params.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
+
+    outputs:
+      image_tag: ${{ steps.export.outputs.image_tag }}
+      skip: ${{ steps.params.outputs.skip }}
+
+  # --- Legacy mirror to itdove (transition period — remove in v2.0, see #1774) ---
+  # Skipped on workflow_call — scenario-tests.yml runs this in parallel instead.
+  legacy-mirror:
+    name: Legacy Mirror (itdove)
+    needs: build-and-push
+    if: needs.build-and-push.outputs.skip != 'true' && github.event_name != 'workflow_call'
+    runs-on: ubuntu-latest
+    steps:
       - name: Copy to itdove legacy registry
-        if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
         env:
           SRC_CREDS: ${{ secrets.QUAY_RPS_USERNAME }}:${{ secrets.QUAY_RPS_PASSWORD }}
           DEST_CREDS: ${{ secrets.QUAY_USERNAME }}:${{ secrets.QUAY_PASSWORD }}
         run: |
-          for TAG in "${{ steps.params.outputs.image_tag }}" "${{ github.sha }}"; do
+          for TAG in "${{ needs.build-and-push.outputs.image_tag }}" "${{ github.sha }}"; do
             skopeo copy --all \
               --src-creds "$SRC_CREDS" \
               --dest-creds "$DEST_CREDS" \
