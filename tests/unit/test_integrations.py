@@ -1126,6 +1126,7 @@ class TestToolResolution:
 class TestToolExecution:
     """Client-side tool executor tests."""
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="bash not available on Windows")
     def test_execute_bash(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool
 
@@ -1138,6 +1139,7 @@ class TestToolExecution:
         result = execute_tool("bash", {"restart": True}, str(tmp_path))
         assert "restarted" in result.lower()
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="bash not available on Windows")
     def test_execute_bash_timeout(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool
 
@@ -1196,6 +1198,7 @@ class TestToolExecution:
         assert "Error" in result
         assert "escapes" in result
 
+    @pytest.mark.skipif(sys.platform == "win32", reason="grep not available on Windows")
     def test_execute_grep(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool
 
