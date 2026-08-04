@@ -12,7 +12,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 85,
+    "secrets.toml": 101,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -258,17 +258,74 @@ GITLEAKS_FALSE_POSITIVE_CASES = [
     ("1password-service-account-token", "ops_eyJ" + "A" * 10),
 ]
 
+ISSUE_1777_DETECTION_CASES = [
+    ("groq-api-key", "GROQ_API_KEY=" + "gsk_" + "a1B2c3D4" * 7),
+    ("groq-api-key", 'key = "gsk_' + "xYz9AbCd" * 7 + '"'),
+    ("xai-api-key", "XAI_API_KEY=" + "xai-" + "a1B2c3D4" * 10),
+    ("xai-api-key", 'key = "xai-' + "xYz9AbCd" * 13 + '"'),
+    ("nvidia-nim-api-key", "NVIDIA_API_KEY=" + "nvapi-" + "a1B2c3D4" * 8),
+    ("nvidia-nim-api-key", 'key = "nvapi-' + "xYz9AbCd" * 8 + '"'),
+    ("new-relic-api-key", 'NEWRELIC_KEY="' + "NRAK-" + "A1B2C3D4" * 3 + "A1B" + '"'),
+    ("langfuse-secret-key", 'LANGFUSE_SK="sk-lf-' + "a1B2c3D4" * 5 + '"'),
+    ("langfuse-secret-key", "sk-lf-" + "xYz9AbCd" * 5),
+    ("langsmith-pat", "lsv2_pt_" + "a1b2c3d4" * 4 + "_" + "e5f6a7b8c9"),
+    ("langsmith-service-key", "lsv2_sk_" + "a1b2c3d4" * 4 + "_" + "e5f6a7b8c9"),
+    ("wandb-api-key", "WANDB_API_KEY=" + "wandb_v1_" + "a1B2c3D4xYz" * 7),
+    ("cerebras-api-key", "CEREBRAS_KEY=" + "csk-" + "a1b2c3d4" * 6),
+    ("together-ai-api-key", "TOGETHER_KEY=" + "tgp_v1_" + "a1B2c3D4xYz" * 4),
+    ("devin-personal-api-key", "DEVIN_KEY=" + "apk_user_" + "a1B2c3D4" * 18),
+    ("devin-service-api-key", "DEVIN_KEY=" + "apk_" + "a1B2c3D4" * 12),
+    ("pinecone-api-key", "pcsk_" + "AbCdEf" + "_" + "a1b2c3d4e5f6" * 5 + "a1b"),
+    ("runpod-api-key", "rpa_" + "A1B2C3D4" * 5 + "aBcDeF"),
+    ("minimax-api-key", "sk-api-" + "a1B2c3D4" * 15),
+    ("azure-ad-client-secret", "AbC1Q~" + "a1b2c3d4e5f6g7h8" * 2 + "x"),
+]
+
+ISSUE_1777_FALSE_POSITIVE_CASES = [
+    ("groq-api-key", "gsk_short"),
+    ("groq-api-key", "# gsk_ is the Groq API key prefix"),
+    ("xai-api-key", "xai-tooshort"),
+    ("xai-api-key", "# xai- is the xAI API key prefix"),
+    ("nvidia-nim-api-key", "nvapi-short"),
+    ("nvidia-nim-api-key", "# nvapi- is the NVIDIA NIM prefix"),
+    ("new-relic-api-key", "NRAK-SHORT"),
+    ("new-relic-api-key", "# NRAK- is the New Relic API key prefix"),
+    ("langfuse-secret-key", "sk-lf-short"),
+    ("langfuse-secret-key", "# sk-lf- is LangFuse secret key prefix"),
+    ("langsmith-pat", "lsv2_pt_tooshort"),
+    ("langsmith-pat", "# lsv2_pt_ is LangSmith PAT prefix"),
+    ("langsmith-service-key", "lsv2_sk_short"),
+    ("wandb-api-key", "wandb_v1_short"),
+    ("wandb-api-key", "# wandb_v1_ is the W&B API key prefix"),
+    ("cerebras-api-key", "csk-short"),
+    ("cerebras-api-key", "# csk- is the Cerebras prefix"),
+    ("together-ai-api-key", "tgp_v1_short"),
+    ("together-ai-api-key", "# tgp_v1_ is Together.ai prefix"),
+    ("devin-personal-api-key", "apk_user_short"),
+    ("devin-service-api-key", "apk_short"),
+    ("pinecone-api-key", "pcsk_short"),
+    ("pinecone-api-key", "# pcsk_ is the Pinecone prefix"),
+    ("runpod-api-key", "rpa_SHORT"),
+    ("runpod-api-key", "# rpa_ is the RunPod prefix"),
+    ("minimax-api-key", "sk-api-short"),
+    ("minimax-api-key", "# sk-api- is the MiniMax prefix"),
+    ("azure-ad-client-secret", "# Q~ is the Azure AD marker"),
+    ("azure-ad-client-secret", "shortQ~value"),
+]
+
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
     + ISSUE_1617_DETECTION_CASES
     + GITLEAKS_DETECTION_CASES
     + ISSUE_1678_DETECTION_CASES
+    + ISSUE_1777_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
     + ISSUE_1617_FALSE_POSITIVE_CASES
     + GITLEAKS_FALSE_POSITIVE_CASES
     + ISSUE_1678_FALSE_POSITIVE_CASES
+    + ISSUE_1777_FALSE_POSITIVE_CASES
 )
 
 

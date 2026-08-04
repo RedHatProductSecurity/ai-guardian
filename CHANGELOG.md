@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **16 new AI/ML provider API key detection patterns** — Groq (`gsk_`), xAI (`xai-`), NVIDIA NIM (`nvapi-`), New Relic (`NRAK-`), LangFuse (`sk-lf-`), LangSmith PAT/Service (`lsv2_pt_`/`lsv2_sk_`), Weights & Biases (`wandb_v1_`), Cerebras (`csk-`), Together.ai (`tgp_v1_`), Devin (`apk_user_`/`apk_`), Pinecone (`pcsk_`), RunPod (`rpa_`), MiniMax (`sk-api-`), Azure AD Client Secret (`Q~` marker) (#1777)
+
 ## [1.15.5] - 2026-08-03
 
 ### Fixed
