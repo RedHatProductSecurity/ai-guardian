@@ -11,24 +11,10 @@
       "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/immutable_fields"
         },
         "auto_directory_rules": {
           "type": "object",
@@ -43,7 +29,9 @@
               "oneOf": [
                 {
                   "type": "string",
-                  "enum": ["auto"],
+                  "enum": [
+                    "auto"
+                  ],
                   "description": "Auto-discover skill directories from standard locations"
                 },
                 {
@@ -155,7 +143,15 @@
               {
                 "type": "string",
                 "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
-                "enum": ["gitleaks", "betterleaks", "leaktk", "trufflehog", "detect-secrets", "secretlint", "gitguardian"]
+                "enum": [
+                  "gitleaks",
+                  "betterleaks",
+                  "leaktk",
+                  "trufflehog",
+                  "detect-secrets",
+                  "secretlint",
+                  "gitguardian"
+                ]
               },
               {
                 "type": "object",
@@ -166,7 +162,9 @@
                     "const": "toml-patterns"
                   }
                 },
-                "required": ["type"],
+                "required": [
+                  "type"
+                ],
                 "additionalProperties": false
               },
               {
@@ -196,16 +194,23 @@
                   },
                   "ignore_files": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Per-engine glob patterns for files to skip scanning"
                   },
                   "file_patterns": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "File extensions/patterns this scanner should handle for file type routing"
                   }
                 },
-                "required": ["type", "class"]
+                "required": [
+                  "type",
+                  "class"
+                ]
               },
               {
                 "type": "object",
@@ -214,7 +219,16 @@
                   "type": {
                     "type": "string",
                     "description": "Engine type: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', 'gitguardian', or 'custom'",
-                    "enum": ["gitleaks", "betterleaks", "leaktk", "trufflehog", "detect-secrets", "secretlint", "gitguardian", "custom"]
+                    "enum": [
+                      "gitleaks",
+                      "betterleaks",
+                      "leaktk",
+                      "trufflehog",
+                      "detect-secrets",
+                      "secretlint",
+                      "gitguardian",
+                      "custom"
+                    ]
                   },
                   "binary": {
                     "type": "string",
@@ -222,17 +236,29 @@
                   },
                   "command_template": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Command template with placeholders (required for custom type)"
                   },
                   "config_flag": {
-                    "type": ["array", "null"],
-                    "items": {"type": "string"},
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Flags for specifying config file"
                   },
                   "extra_flags": {
-                    "type": ["array", "null"],
-                    "items": {"type": "string"},
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Additional command-line flags"
                   },
                   "success_exit_code": {
@@ -248,30 +274,64 @@
                   "output_parser": {
                     "type": "string",
                     "description": "Parser type: 'gitleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
-                    "enum": ["gitleaks", "leaktk", "trufflehog", "detect-secrets", "secretlint", "gitguardian"],
+                    "enum": [
+                      "gitleaks",
+                      "leaktk",
+                      "trufflehog",
+                      "detect-secrets",
+                      "secretlint",
+                      "gitguardian"
+                    ],
                     "default": "gitleaks"
                   },
                   "ignore_files": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "Per-engine glob patterns for files to skip scanning. Merged with global ignore_files. Use when one engine has more false positives on certain file types (e.g., TruffleHog on test fixtures)."
                   },
                   "pattern_server": {
-                    "type": ["object", "null"],
+                    "type": [
+                      "object",
+                      "null"
+                    ],
                     "description": "Per-engine pattern server configuration. The canonical location for pattern server config (replaces the deprecated global secret_scanning.pattern_server). Set to null to explicitly disable pattern server for this engine.",
                     "additionalProperties": true,
                     "properties": {
                       "enabled": {
                         "oneOf": [
-                          {"type": "boolean"},
-                          {"$ref": "#/definitions/time_based_feature"}
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "$ref": "#/definitions/time_based_feature"
+                          }
                         ],
                         "default": true
                       },
-                      "url": {"type": ["string", "null"], "description": "Pattern server base URL"},
-                      "patterns_endpoint": {"type": "string", "description": "Endpoint path for patterns (appended to url)", "default": "/patterns/gitleaks/8.18.1"},
-                      "warn_on_failure": {"type": "boolean", "description": "Show warning when pattern server fails", "default": true},
-                      "immutable": {"type": "boolean", "description": "If true, local configs cannot override this pattern_server", "default": false},
+                      "url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Pattern server base URL"
+                      },
+                      "patterns_endpoint": {
+                        "type": "string",
+                        "description": "Endpoint path for patterns (appended to url)",
+                        "default": "/patterns/gitleaks/8.18.1"
+                      },
+                      "warn_on_failure": {
+                        "type": "boolean",
+                        "description": "Show warning when pattern server fails",
+                        "default": true
+                      },
+                      "immutable": {
+                        "type": "boolean",
+                        "description": "If true, local configs cannot override this pattern_server",
+                        "default": false
+                      },
                       "auth": {
                         "$ref": "#/definitions/pattern_server_auth"
                       },
@@ -282,20 +342,30 @@
                   },
                   "file_patterns": {
                     "type": "array",
-                    "items": {"type": "string"},
+                    "items": {
+                      "type": "string"
+                    },
                     "description": "File extensions/patterns this engine should handle for file type routing (e.g., ['*.env*', '*.yaml', '*.json']). Engines without file_patterns handle all files. Used with any-match and consensus strategies to route files to specialized engines."
                   }
                 },
-                "required": ["type"]
+                "required": [
+                  "type"
+                ]
               }
             ]
           },
-          "default": ["gitleaks"]
+          "default": [
+            "gitleaks"
+          ]
         },
         "execution_strategy": {
           "type": "string",
           "description": "Strategy for executing multiple scanner engines (v1.6.0+). 'first-match' uses first available engine (default, backward compatible). 'any-match' runs all engines and blocks if ANY finds secrets (maximum security, defense-in-depth). 'consensus' blocks only if N engines agree (reduces false positives, configurable via consensus_threshold). See docs/MULTI_ENGINE_SUPPORT.md for use cases and examples.",
-          "enum": ["first-match", "any-match", "consensus"],
+          "enum": [
+            "first-match",
+            "any-match",
+            "consensus"
+          ],
           "default": "first-match"
         },
         "consensus_threshold": {
@@ -353,7 +423,9 @@
               "default": false
             }
           },
-          "required": ["url"]
+          "required": [
+            "url"
+          ]
         },
         "compliance": {
           "type": "object",
@@ -362,29 +434,16 @@
             "framework": {
               "type": "string",
               "description": "Target compliance framework",
-              "enum": ["hipaa", "pci-dss", "soc2"]
+              "enum": [
+                "hipaa",
+                "pci-dss",
+                "soc2"
+              ]
             }
           }
         },
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
-        },
-        "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/time_based_enabled"
         },
         "ignore_files": {
           "type": "array",
@@ -406,20 +465,15 @@
           "type": "array",
           "description": "Regex patterns for known-safe secret values to ignore (for false positives). Unlike ignore_files which skips entire files, this lets you keep scanning but exclude specific known-safe values such as test API key prefixes or example tokens. Complements inline '# gitleaks:allow' for cases where you cannot modify the source file. Supports time-based patterns for temporary allowlisting.",
           "items": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "Simple regex pattern"
-              },
-              {
-                "$ref": "#/definitions/time_based_pattern"
-              }
-            ]
+            "$ref": "#/definitions/string_or_timed_pattern"
           },
           "default": []
         },
         "pattern_server": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "DEPRECATED: Move to per-engine format: secret_scanning.engines[].pattern_server. This global location only applies to gitleaks but implies all engines. Supported for backward compatibility; will be removed in v2.0.0. Run: ai-guardian setup --migrate-pattern-server",
           "deprecated": true,
           "additionalProperties": true,
@@ -437,7 +491,10 @@
               "default": false
             },
             "url": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Pattern server base URL (required if using pattern server)"
             },
             "patterns_endpoint": {
@@ -456,49 +513,10 @@
               "default": false
             },
             "auth": {
-              "type": "object",
-              "description": "Authentication configuration for pattern server",
-              "additionalProperties": true,
-              "properties": {
-                "method": {
-                  "type": "string",
-                  "enum": ["bearer", "token"],
-                  "description": "Authentication method",
-                  "default": "bearer"
-                },
-                "token_env": {
-                  "type": "string",
-                  "description": "Environment variable name containing auth token"
-                },
-                "token_file": {
-                  "type": "string",
-                  "description": "Path to file containing auth token (supports ~ expansion)"
-                }
-              }
+              "$ref": "#/definitions/pattern_server_auth"
             },
             "cache": {
-              "type": "object",
-              "description": "Pattern cache configuration",
-              "additionalProperties": true,
-              "properties": {
-                "path": {
-                  "type": "string",
-                  "description": "Cache file path (supports ~ expansion)",
-                  "default": "~/.cache/ai-guardian/patterns.toml"
-                },
-                "refresh_interval_hours": {
-                  "type": "number",
-                  "description": "Hours between automatic pattern refresh",
-                  "default": 12,
-                  "minimum": 1
-                },
-                "expire_after_hours": {
-                  "type": "number",
-                  "description": "Hours until cached patterns expire",
-                  "default": 168,
-                  "minimum": 1
-                }
-              }
+              "$ref": "#/definitions/pattern_server_cache"
             }
           }
         },
@@ -517,11 +535,17 @@
         "on_inactive": {
           "type": "string",
           "description": "Action to take when a secret is validated as inactive (revoked/expired). 'warn' logs a warning but does not block. 'allow' silently skips without warning. Verified-active and unverified secrets always block regardless of this setting.",
-          "enum": ["warn", "allow"],
+          "enum": [
+            "warn",
+            "allow"
+          ],
           "default": "warn"
         },
         "min_entropy": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "description": "Minimum Shannon entropy threshold for secret detection (v1.12.0+). Matches below this value are rejected as likely placeholders. Range: 0.0 (all identical chars) to ~6.0 (fully random). Default: 3.0 (filters placeholders while keeping real secrets which score 4.0+). Set to null to disable.",
           "minimum": 0,
           "maximum": 8,
@@ -530,7 +554,9 @@
         "stopwords": {
           "type": "array",
           "description": "Additional stopwords for false positive filtering (v1.12.0+). MERGED with (not replacing) the bundled stopwords. Matched secrets containing any stopword (case-insensitive substring) are suppressed. Minimum word length: 3 characters.",
-          "items": {"type": "string"},
+          "items": {
+            "type": "string"
+          },
           "default": []
         }
       },
@@ -541,20 +567,14 @@
       "description": "Secret redaction configuration (NEW in v1.5.0). Redacts secrets from tool outputs instead of blocking them entirely, providing defense-in-depth while allowing work to continue. Part of Phase 4: Hermes Security Patterns integration.",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "type": "string",
-          "enum": ["log-only", "warn"],
+          "enum": [
+            "log-only",
+            "warn"
+          ],
           "description": "Action to take when secrets are detected: 'log-only' (redact silently), 'warn' (redact with user warning and notification)",
           "default": "warn"
         },
@@ -580,7 +600,13 @@
               },
               "strategy": {
                 "type": "string",
-                "enum": ["preserve_prefix_suffix", "full_redact", "env_assignment", "json_field", "connection_string"],
+                "enum": [
+                  "preserve_prefix_suffix",
+                  "full_redact",
+                  "env_assignment",
+                  "json_field",
+                  "connection_string"
+                ],
                 "description": "Masking strategy to apply",
                 "default": "preserve_prefix_suffix"
               },
@@ -589,25 +615,29 @@
                 "description": "Human-readable name for this secret type"
               }
             },
-            "required": ["pattern", "type"]
+            "required": [
+              "pattern",
+              "type"
+            ]
           },
           "default": []
         },
         "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/immutable_fields"
         },
         "pattern_server": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "OPTIONAL/ADVANCED: Secret redaction patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise secret patterns that can be updated as new secret formats emerge. Supports override modes: 'replace' (use only server patterns) or 'extend' (add to defaults).",
           "additionalProperties": true,
           "properties": {
             "url": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Pattern server base URL (required if using pattern server)"
             },
             "patterns_endpoint": {
@@ -634,31 +664,51 @@
           "$ref": "#/definitions/immutable_fields"
         },
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "pii_types": {
           "type": "array",
           "description": "PII types to detect. Remove types from this list to disable detection for specific PII categories.",
           "items": {
             "type": "string",
-            "enum": ["ssn", "credit_card", "phone", "email", "us_passport", "iban", "intl_phone", "medical_id", "passport", "canada_sin", "uk_nin", "india_aadhaar", "address"]
+            "enum": [
+              "ssn",
+              "credit_card",
+              "phone",
+              "email",
+              "us_passport",
+              "iban",
+              "intl_phone",
+              "medical_id",
+              "passport",
+              "canada_sin",
+              "uk_nin",
+              "india_aadhaar",
+              "address"
+            ]
           },
-          "default": ["ssn", "credit_card", "phone", "us_passport", "iban", "intl_phone", "medical_id", "passport", "uk_nin"]
+          "default": [
+            "ssn",
+            "credit_card",
+            "phone",
+            "us_passport",
+            "iban",
+            "intl_phone",
+            "medical_id",
+            "passport",
+            "uk_nin"
+          ]
         },
         "action": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["block", "redact", "warn", "log-only"]
+              "enum": [
+                "block",
+                "redact",
+                "warn",
+                "log-only"
+              ]
             },
             {
               "type": "string",
@@ -689,25 +739,23 @@
           "type": "array",
           "description": "Regex patterns for known-safe PII values to ignore (for false positives). Unlike ignore_files which skips entire files, this lets you keep scanning but exclude specific known-safe values such as corporate email domains or example data. Supports time-based patterns for temporary allowlisting.",
           "items": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "Simple regex pattern"
-              },
-              {
-                "$ref": "#/definitions/time_based_pattern"
-              }
-            ]
+            "$ref": "#/definitions/string_or_timed_pattern"
           },
           "default": []
         },
         "pattern_server": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "OPTIONAL/ADVANCED: PII patterns from a pattern server (NEW in v1.9.0). Configure to use enterprise or community PII patterns that can be updated without code changes. Supports extend (add to defaults) and replace (override defaults) modes.",
           "additionalProperties": true,
           "properties": {
             "url": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Pattern server base URL (required if using pattern server)"
             },
             "patterns_endpoint": {
@@ -745,15 +793,13 @@
           "default": false
         },
         "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/immutable_fields"
         },
         "url": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Pattern server base URL"
         },
         "patterns_endpoint": {
@@ -767,49 +813,10 @@
           "default": true
         },
         "auth": {
-          "type": "object",
-          "description": "Authentication configuration for pattern server",
-          "additionalProperties": true,
-          "properties": {
-            "method": {
-              "type": "string",
-              "enum": ["bearer", "token"],
-              "description": "Authentication method",
-              "default": "bearer"
-            },
-            "token_env": {
-              "type": "string",
-              "description": "Environment variable name containing auth token"
-            },
-            "token_file": {
-              "type": "string",
-              "description": "Path to file containing auth token (supports ~ expansion)"
-            }
-          }
+          "$ref": "#/definitions/pattern_server_auth"
         },
         "cache": {
-          "type": "object",
-          "description": "Pattern cache configuration",
-          "additionalProperties": true,
-          "properties": {
-            "path": {
-              "type": "string",
-              "description": "Cache file path (supports ~ expansion)",
-              "default": "~/.cache/ai-guardian/patterns.toml"
-            },
-            "refresh_interval_hours": {
-              "type": "number",
-              "description": "Hours between automatic pattern refresh",
-              "default": 12,
-              "minimum": 1
-            },
-            "expire_after_hours": {
-              "type": "number",
-              "description": "Hours until cached patterns expire",
-              "default": 168,
-              "minimum": 1
-            }
-          }
+          "$ref": "#/definitions/pattern_server_cache"
         }
       }
     },
@@ -822,22 +829,17 @@
           "$ref": "#/definitions/immutable_fields"
         },
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["block", "warn", "log-only"]
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
             },
             {
               "type": "string",
@@ -848,17 +850,15 @@
           "description": "Action on violation (NEW in v1.7.0): 'block' prevents execution (default), 'warn' logs violation and shows warning to user but allows execution, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively",
           "default": "block"
         },
-        "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
-        },
         "detector": {
           "type": "string",
-          "enum": ["heuristic", "ml", "hybrid", "rebuff", "llm-guard"],
+          "enum": [
+            "heuristic",
+            "ml",
+            "hybrid",
+            "rebuff",
+            "llm-guard"
+          ],
           "description": "Detection method: heuristic (local patterns, <1ms), ml (ML-only via daemon, 10-50ms), hybrid (heuristic first, ML for uncertain cases), rebuff/llm-guard (legacy stubs)",
           "default": "heuristic"
         },
@@ -870,7 +870,9 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["llm-guard"],
+                "enum": [
+                  "llm-guard"
+                ],
                 "description": "Engine type"
               },
               "model": {
@@ -885,13 +887,20 @@
                 "maximum": 1.0
               }
             },
-            "required": ["type", "model"]
+            "required": [
+              "type",
+              "model"
+            ]
           },
           "default": []
         },
         "ml_strategy": {
           "type": "string",
-          "enum": ["first-match", "any-match", "consensus"],
+          "enum": [
+            "first-match",
+            "any-match",
+            "consensus"
+          ],
           "description": "Execution strategy across ML engines: first-match (use first detection), any-match (flag if any engine detects), consensus (flag if N engines agree)",
           "default": "any-match"
         },
@@ -908,13 +917,21 @@
         },
         "fallback_on_error": {
           "type": "string",
-          "enum": ["heuristic", "block", "allow"],
+          "enum": [
+            "heuristic",
+            "block",
+            "allow"
+          ],
           "description": "Action when ML detection is unavailable (daemon not running, model not loaded): heuristic (use pattern detection), block (fail closed), allow (fail open)",
           "default": "heuristic"
         },
         "sensitivity": {
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "description": "Detection sensitivity: low (obvious attacks only), medium (balanced), high (more aggressive)",
           "default": "medium"
         },
@@ -929,15 +946,7 @@
           "type": "array",
           "description": "Regex patterns to ignore (for false positives). Supports time-based patterns.",
           "items": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "Simple regex pattern"
-              },
-              {
-                "$ref": "#/definitions/time_based_pattern"
-              }
-            ]
+            "$ref": "#/definitions/string_or_timed_pattern"
           },
           "default": []
         },
@@ -979,16 +988,7 @@
           "additionalProperties": true,
           "properties": {
             "enabled": {
-              "oneOf": [
-                {
-                  "type": "boolean",
-                  "description": "Simple boolean format for permanent enable/disable"
-                },
-                {
-                  "$ref": "#/definitions/time_based_feature"
-                }
-              ],
-              "default": true
+              "$ref": "#/definitions/time_based_enabled"
             },
             "detect_zero_width": {
               "type": "boolean",
@@ -1021,12 +1021,18 @@
               "default": true
             },
             "pattern_server": {
-              "type": ["object", "null"],
+              "type": [
+                "object",
+                "null"
+              ],
               "description": "OPTIONAL/ADVANCED: Homoglyph patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise homoglyph patterns that can be updated as new scripts emerge. Immutable patterns (zero-width chars, bidi overrides) cannot be overridden.",
               "additionalProperties": true,
               "properties": {
                 "url": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "description": "Pattern server base URL (required if using pattern server)"
                 },
                 "patterns_endpoint": {
@@ -1055,22 +1061,17 @@
           "$ref": "#/definitions/immutable_fields"
         },
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["block", "warn", "log-only"]
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
             },
             {
               "type": "string",
@@ -1083,7 +1084,11 @@
         },
         "sensitivity": {
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "description": "Detection sensitivity: low (dangerous combinations only), medium (balanced), high (any persistence keyword)",
           "default": "medium"
         },
@@ -1091,15 +1096,7 @@
           "type": "array",
           "description": "Regex patterns to ignore (for false positives). Supports time-based patterns.",
           "items": {
-            "oneOf": [
-              {
-                "type": "string",
-                "description": "Simple regex pattern"
-              },
-              {
-                "$ref": "#/definitions/time_based_pattern"
-              }
-            ]
+            "$ref": "#/definitions/string_or_timed_pattern"
           },
           "default": []
         },
@@ -1138,22 +1135,17 @@
           "$ref": "#/definitions/immutable_fields"
         },
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "oneOf": [
             {
               "type": "string",
-              "enum": ["block", "warn", "log-only"]
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
             },
             {
               "type": "string",
@@ -1163,14 +1155,6 @@
           ],
           "description": "Action on violation: 'block' prevents execution (default), 'warn' logs violation and shows warning to user but allows execution, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively",
           "default": "block"
-        },
-        "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
         },
         "additional_blocked_ips": {
           "type": "array",
@@ -1210,7 +1194,9 @@
           "description": "Path-based filtering rules for granular access control (NEW in v1.6.0). Allows blocking/allowing specific URL paths on domains. Useful for allowing public API endpoints while blocking admin pages on the same domain. Evaluation order: 1) Domain-level checks (blocked_domains/allowed_domains), 2) Path rules (if domain has path rules defined). Supports glob patterns: * (any chars except /), ** (any chars including /), ? (single char).",
           "items": {
             "type": "object",
-            "required": ["domain"],
+            "required": [
+              "domain"
+            ],
             "properties": {
               "domain": {
                 "type": "string",
@@ -1254,12 +1240,18 @@
           "default": []
         },
         "pattern_server": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "OPTIONAL/ADVANCED: SSRF protection patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise patterns instead of hardcoded defaults. Supports three-tier system: immutable core (metadata endpoints, dangerous schemes) + pattern server/defaults (RFC 1918 ranges) + local config additions.",
           "additionalProperties": true,
           "properties": {
             "url": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Pattern server base URL (required if using pattern server)"
             },
             "patterns_endpoint": {
@@ -1293,21 +1285,18 @@
       "additionalProperties": true,
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true,
-          "description": "Enable/disable supply chain scanning"
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "type": "string",
-          "enum": ["block", "warn", "log-only", "ask", "ask:warn", "ask:log-only"],
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
           "default": "block",
           "description": "Action to take when supply chain threats are detected. block = prevent operation, warn = allow with warning, log-only = silent logging, ask = interactive prompt (with fallback: block, warn, or log-only if headless)."
         },
@@ -1348,13 +1337,24 @@
         },
         "action": {
           "type": "string",
-          "enum": ["block", "warn", "log-only", "ask", "ask:warn", "ask:log-only"],
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
           "default": "warn",
           "description": "Action when insecure code is detected. block = prevent Write/Edit, warn = allow with warning, log-only = silent logging, ask = interactive prompt."
         },
         "severity_threshold": {
           "type": "string",
-          "enum": ["LOW", "MEDIUM", "HIGH"],
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
           "default": "MEDIUM",
           "description": "Minimum Bandit severity to report. LOW = all findings, MEDIUM = medium+high (recommended), HIGH = critical only."
         },
@@ -1376,7 +1376,9 @@
                 "description": "Human-readable explanation of why this finding is safe"
               }
             },
-            "required": ["test_id"]
+            "required": [
+              "test_id"
+            ]
           },
           "default": [],
           "description": "Allowlist entries to suppress specific Bandit findings by test ID, optionally scoped to a file path prefix. Bandit's native # nosec annotation is also honored."
@@ -1403,7 +1405,15 @@
         },
         "action": {
           "type": "string",
-          "enum": ["block", "warn", "log", "log-only", "ask", "ask:warn", "ask:log-only"],
+          "enum": [
+            "block",
+            "warn",
+            "log",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
           "default": "log",
           "description": "Action when offensive language is detected."
         },
@@ -1411,26 +1421,40 @@
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["profanity", "slurs", "inclusive_language"]
+            "enum": [
+              "profanity",
+              "slurs",
+              "inclusive_language"
+            ]
           },
-          "default": ["profanity", "slurs", "inclusive_language"],
+          "default": [
+            "profanity",
+            "slurs",
+            "inclusive_language"
+          ],
           "description": "Pattern categories to enable. All three categories enabled by default when scanner is on. inclusive_language detects master/slave, blacklist/whitelist, dummy, etc."
         },
         "ignore_files": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Glob patterns for files to skip."
         },
         "ignore_tools": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Tool names to skip offensive language scanning for."
         },
         "allowlist_patterns": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Regex patterns to suppress specific matches."
         }
@@ -1449,7 +1473,13 @@
         "action": {
           "type": "string",
           "oneOf": [
-            {"enum": ["block", "warn", "log-only"]},
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
             {
               "type": "string",
               "pattern": "^ask(:(block|warn|log-only))?$",
@@ -1497,7 +1527,13 @@
         "action": {
           "type": "string",
           "oneOf": [
-            {"enum": ["block", "warn", "log-only"]},
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
             {
               "type": "string",
               "pattern": "^ask(:(block|warn|log-only))?$",
@@ -1509,7 +1545,9 @@
         },
         "allowlist_patterns": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "List of regex patterns to allowlist commands. If any pattern matches the command, scanning is skipped."
         }
@@ -1521,21 +1559,18 @@
       "additionalProperties": true,
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
           "type": "string",
           "oneOf": [
-            {"enum": ["block", "warn", "log-only"]},
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
             {
               "type": "string",
               "pattern": "^ask(:(block|warn|log-only))?$",
@@ -1546,12 +1581,7 @@
           "default": "block"
         },
         "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/immutable_fields"
         },
         "additional_files": {
           "type": "array",
@@ -1586,12 +1616,18 @@
           "default": []
         },
         "pattern_server": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "description": "OPTIONAL/ADVANCED: Config exfiltration patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise patterns for detecting credential exfiltration in AI config files. Immutable core patterns cannot be overridden.",
           "additionalProperties": true,
           "properties": {
             "url": {
-              "type": ["string", "null"],
+              "type": [
+                "string",
+                "null"
+              ],
               "description": "Pattern server base URL (required if using pattern server)"
             },
             "patterns_endpoint": {
@@ -1616,15 +1652,23 @@
           "description": "DEPRECATED: Array format. Use object format with action field instead.",
           "items": {
             "type": "object",
-            "required": ["mode", "paths"],
+            "required": [
+              "mode",
+              "paths"
+            ],
             "properties": {
               "mode": {
                 "type": "string",
-                "enum": ["allow", "deny"]
+                "enum": [
+                  "allow",
+                  "deny"
+                ]
               },
               "paths": {
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {
+                  "type": "string"
+                },
                 "minItems": 1
               }
             }
@@ -1637,7 +1681,13 @@
             "action": {
               "type": "string",
               "oneOf": [
-                {"enum": ["block", "warn", "log-only"]},
+                {
+                  "enum": [
+                    "block",
+                    "warn",
+                    "log-only"
+                  ]
+                },
                 {
                   "type": "string",
                   "pattern": "^ask(:(block|warn|log-only))?$",
@@ -1650,7 +1700,9 @@
             "exclusions": {
               "type": "array",
               "description": "Glob patterns that are always allowed, even when matched by deny rules. Used by ask mode's Allow Always flow to persist user decisions.",
-              "items": {"type": "string"},
+              "items": {
+                "type": "string"
+              },
               "default": []
             },
             "rules": {
@@ -1658,11 +1710,17 @@
               "description": "List of directory access rules evaluated in order (last match wins)",
               "items": {
                 "type": "object",
-                "required": ["mode", "paths"],
+                "required": [
+                  "mode",
+                  "paths"
+                ],
                 "properties": {
                   "mode": {
                     "type": "string",
-                    "enum": ["allow", "deny"],
+                    "enum": [
+                      "allow",
+                      "deny"
+                    ],
                     "description": "Access mode: 'allow' permits access, 'deny' blocks access"
                   },
                   "paths": {
@@ -1682,7 +1740,10 @@
           "additionalProperties": false
         }
       ],
-      "default": {"action": "block", "rules": []}
+      "default": {
+        "action": "block",
+        "rules": []
+      }
     },
     "directory_exclusions": {
       "type": "object",
@@ -1695,12 +1756,7 @@
           "default": false
         },
         "immutable": {
-          "oneOf": [
-            {"type": "boolean"},
-            {"type": "string", "enum": ["tighten-only"]}
-          ],
-          "description": "Controls override policy. true: section fully locked. 'tighten-only': lower-level configs can tighten but not loosen settings. false: fully overridable.",
-          "default": false
+          "$ref": "#/definitions/immutable_fields"
         },
         "paths": {
           "type": "array",
@@ -1717,39 +1773,40 @@
       "description": "Inline annotation suppression for secrets and PII on specific lines (NEW in v1.8.0, Issue #481). Hardcoded markers: ai-guardian:allow (inline, secrets+PII), ai-guardian:begin-allow / ai-guardian:end-allow (block, secrets+PII). Configurable aliases for secrets-only suppression (gitleaks:allow, notsecret). Prompt injection, jailbreak, and config exfiltration are always scanned and cannot be suppressed. Only applies to file content scanning (PreToolUse/beforeReadFile). Unmatched begin-allow without end-allow is ignored (fail-safe).",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "inline_allow": {
           "type": "array",
           "description": "Additional inline aliases that suppress secrets and PII (extends hardcoded ai-guardian:allow). User config extends defaults.",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": []
         },
         "inline_allow_secrets": {
           "type": "array",
           "description": "Inline aliases that suppress secrets only (default: gitleaks:allow). User config extends defaults.",
-          "items": { "type": "string" },
-          "default": ["gitleaks:allow"]
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "gitleaks:allow"
+          ]
         },
         "block_begin": {
           "type": "array",
           "description": "Additional block-begin aliases (extends hardcoded ai-guardian:begin-allow). User config extends defaults.",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": []
         },
         "block_end": {
           "type": "array",
           "description": "Additional block-end aliases (extends hardcoded ai-guardian:end-allow). User config extends defaults.",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": []
         }
       },
@@ -1760,16 +1817,7 @@
       "description": "Violation logging configuration (NEW in v1.1.0). Logs blocked operations to JSONL file for audit and review.",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "max_entries": {
           "type": "number",
@@ -1788,9 +1836,51 @@
           "description": "Types of violations to log. Empty array logs all types.",
           "items": {
             "type": "string",
-            "enum": ["tool_permission", "directory_blocking", "secret_detected", "secret_redaction", "prompt_injection", "jailbreak_detected", "ssrf_blocked", "config_file_exfil", "pii_detected", "secret_in_transcript", "pii_in_transcript", "prompt_injection_in_transcript", "annotation_suppressed", "image_secret_detected", "image_pii_detected", "context_poisoning", "supply_chain", "code_security", "offensive_language", "canary_detected", "exfil_detection"]
+            "enum": [
+              "tool_permission",
+              "directory_blocking",
+              "secret_detected",
+              "secret_redaction",
+              "prompt_injection",
+              "jailbreak_detected",
+              "ssrf_blocked",
+              "config_file_exfil",
+              "pii_detected",
+              "secret_in_transcript",
+              "pii_in_transcript",
+              "prompt_injection_in_transcript",
+              "annotation_suppressed",
+              "image_secret_detected",
+              "image_pii_detected",
+              "context_poisoning",
+              "supply_chain",
+              "code_security",
+              "offensive_language",
+              "canary_detected",
+              "exfil_detection"
+            ]
           },
-          "default": ["tool_permission", "directory_blocking", "secret_detected", "secret_redaction", "prompt_injection", "jailbreak_detected", "ssrf_blocked", "config_file_exfil", "pii_detected", "secret_in_transcript", "pii_in_transcript", "prompt_injection_in_transcript", "annotation_suppressed", "context_poisoning", "supply_chain", "code_security", "offensive_language", "canary_detected", "exfil_detection"]
+          "default": [
+            "tool_permission",
+            "directory_blocking",
+            "secret_detected",
+            "secret_redaction",
+            "prompt_injection",
+            "jailbreak_detected",
+            "ssrf_blocked",
+            "config_file_exfil",
+            "pii_detected",
+            "secret_in_transcript",
+            "pii_in_transcript",
+            "prompt_injection_in_transcript",
+            "annotation_suppressed",
+            "context_poisoning",
+            "supply_chain",
+            "code_security",
+            "offensive_language",
+            "canary_detected",
+            "exfil_detection"
+          ]
         }
       },
       "additionalProperties": false
@@ -1831,25 +1921,46 @@
       "description": "Scan conversation transcript for secrets, PII, and prompt injection that bypassed hooks (e.g., from ! shell commands). Incrementally scans new transcript content on each UserPromptSubmit event. Detection only — warns but does not block (the content is already in the AI context). Supports Claude Code, Cursor, and GitHub Copilot. NEW in v1.7.0 (Issue #430).",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         }
       },
       "additionalProperties": false
+    },
+    "console": {
+      "$ref": "#/definitions/console"
+    },
+    "name": {
+      "$ref": "#/definitions/name"
+    },
+    "menu_tags": {
+      "$ref": "#/definitions/menu_tags"
+    },
+    "daemon": {
+      "$ref": "#/definitions/daemon"
+    },
+    "on_scan_error": {
+      "$ref": "#/definitions/on_scan_error"
+    },
+    "security_instructions": {
+      "$ref": "#/definitions/security_instructions"
+    },
+    "image_scanning": {
+      "$ref": "#/definitions/image_scanning"
+    },
+    "mcp_server": {
+      "$ref": "#/definitions/mcp_server"
+    },
+    "support": {
+      "$ref": "#/definitions/support"
     }
   },
   "definitions": {
     "permission_rule": {
       "type": "object",
-      "required": ["matcher", "mode"],
+      "required": [
+        "matcher",
+        "mode"
+      ],
       "description": "Permission rule defining allow/deny patterns for a specific tool matcher. Rules are evaluated in order, last match wins (same as directory_rules). Use broad-to-specific ordering: allow all, then deny categories, then allow specific tools.",
       "properties": {
         "matcher": {
@@ -1858,7 +1969,10 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["allow", "deny"],
+          "enum": [
+            "allow",
+            "deny"
+          ],
           "description": "Permission mode: 'allow' allows the tool, 'deny' denies the tool. action field only applies to deny rules."
         },
         "patterns": {
@@ -1878,7 +1992,14 @@
         },
         "action": {
           "type": "string",
-          "enum": ["block", "warn", "log-only", "ask", "ask:warn", "ask:log-only"],
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
           "description": "Action when deny rule matches (v1.7.0+): 'block' prevents execution (default), 'warn' logs violation and shows warning but allows execution, 'log-only' logs silently, 'ask' shows interactive dialog (Allow Once / Allow Always / Block), 'ask:warn' or 'ask:log-only' use warn/log-only as fallback when dialog unavailable. Only meaningful on mode=deny rules.",
           "default": "block"
         },
@@ -1892,7 +2013,9 @@
     },
     "time_based_pattern": {
       "type": "object",
-      "required": ["pattern"],
+      "required": [
+        "pattern"
+      ],
       "description": "Pattern with optional time-based expiration (NEW in v1.3.0)",
       "properties": {
         "pattern": {
@@ -1909,7 +2032,9 @@
     },
     "time_based_feature": {
       "type": "object",
-      "required": ["value"],
+      "required": [
+        "value"
+      ],
       "description": "Feature toggle with optional time-based temporary disabling (NEW in v1.4.0)",
       "properties": {
         "value": {
@@ -1930,7 +2055,9 @@
     },
     "directory_entry": {
       "type": "object",
-      "required": ["url"],
+      "required": [
+        "url"
+      ],
       "description": "Directory to scan for auto-discovery of tool permissions (NOT filesystem path blocking). Scans directory or GitHub repo for permission files and generates tool permission rules. Purpose: Auto-populate permissions.rules, not block directories. In object format (allow/deny arrays), mode is determined by which array the entry is in. In array format, mode defaults to 'allow' if not specified.",
       "properties": {
         "matcher": {
@@ -1940,7 +2067,10 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["allow", "deny"],
+          "enum": [
+            "allow",
+            "deny"
+          ],
           "description": "Permission mode for discovered patterns. Only used in array format; ignored in object format (allow/deny arrays). Defaults to 'allow'.",
           "default": "allow"
         },
@@ -1957,7 +2087,9 @@
     },
     "remote_url_entry": {
       "type": "object",
-      "required": ["url"],
+      "required": [
+        "url"
+      ],
       "description": "Remote configuration URL with optional settings",
       "properties": {
         "url": {
@@ -1983,7 +2115,10 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["bearer", "token"],
+          "enum": [
+            "bearer",
+            "token"
+          ],
           "description": "Authentication method",
           "default": "bearer"
         },
@@ -2027,19 +2162,35 @@
       "properties": {
         "preferred_ui": {
           "type": "string",
-          "enum": ["auto", "tkinter", "nicegui", "textual", "headless"],
+          "enum": [
+            "auto",
+            "tkinter",
+            "nicegui",
+            "textual",
+            "headless"
+          ],
           "default": "auto",
           "description": "Preferred UI toolkit for interactive dialogs (tray-prompt, ask-prompt). auto = cascade tkinter → NiceGUI → Textual → headless. tkinter/nicegui/textual = use only that toolkit (fall to headless if unavailable). headless = no UI dialogs, ask actions use configured fallback. Env var override: AI_GUARDIAN_PREFERRED_UI"
         },
         "editor_theme": {
           "type": "string",
-          "enum": ["monokai", "vscode_dark", "dracula", "github_light"],
+          "enum": [
+            "monokai",
+            "vscode_dark",
+            "dracula",
+            "github_light"
+          ],
           "default": "monokai",
           "description": "Color theme for the JSON config editor. Options: monokai, vscode_dark, dracula, github_light"
         },
         "preferred_theme": {
           "type": "string",
-          "enum": ["default", "classic_green", "high_contrast", "solarized"],
+          "enum": [
+            "default",
+            "classic_green",
+            "high_contrast",
+            "solarized"
+          ],
           "default": "default",
           "description": "Color theme preset for AI Guardian UI. Affects TUI console, web console, and ask dialogs. default = Material dark blue, classic_green = original AI Guardian brand, high_contrast = WCAG AA accessibility, solarized = Solarized dark variant"
         },
@@ -2159,14 +2310,17 @@
               "additionalProperties": false
             }
           },
-          "additionalProperties": false
+          "additionalProperties": true
         }
       },
       "additionalProperties": false
     },
     "on_scan_error": {
       "type": "string",
-      "enum": ["allow", "block"],
+      "enum": [
+        "allow",
+        "block"
+      ],
       "description": "Global behavior when a scanner encounters an error (exception, unavailable, network issue). 'allow' (default): log warning, allow operation to proceed (fail-open). 'block': block the operation if any scanner fails (fail-closed, for strict compliance). NEW in v1.7.0.",
       "default": "allow"
     },
@@ -2175,26 +2329,23 @@
       "description": "Security instruction injection into AI context (NEW in v1.7.0, Issue #580). When enabled, security rules are injected via systemMessage on every UserPromptSubmit hook response. These rules instruct the AI to never bypass, disable, or work around security protections. Default: enabled.",
       "properties": {
         "inject_on_prompt": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "inject_trigger": {
           "type": "string",
-          "enum": ["first_per_session", "every_prompt", "after_block_only"],
+          "enum": [
+            "first_per_session",
+            "every_prompt",
+            "after_block_only"
+          ],
           "description": "When to inject security rules: first_per_session (default, inject once per session + after blocks), every_prompt (inject on every UserPromptSubmit), after_block_only (only inject after a block event).",
           "default": "first_per_session"
         },
         "custom_rules": {
           "type": "array",
-          "items": {"type": "string"},
+          "items": {
+            "type": "string"
+          },
           "description": "Additional security rules to append to (or replace) the built-in rules. Each string is one rule line.",
           "default": []
         },
@@ -2211,30 +2362,42 @@
       "description": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Enabled by default. Scans image files during PreToolUse (file reads) and image attachments during UserPromptSubmit. PostToolUse is excluded (AI already extracted text). Requires rapidocr-onnxruntime (included as dependency).",
       "properties": {
         "enabled": {
-          "oneOf": [
-            {
-              "type": "boolean",
-              "description": "Simple boolean format for permanent enable/disable"
-            },
-            {
-              "$ref": "#/definitions/time_based_feature"
-            }
-          ],
-          "default": true
+          "$ref": "#/definitions/time_based_enabled"
         },
         "action": {
-          "type": "string",
-          "enum": ["block", "warn", "log-only"],
-          "default": "block",
-          "description": "Action when secrets/PII found in image: 'block' prevents AI from seeing the image, 'warn' allows with warning, 'log-only' silently logs."
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action when secrets/PII found in image: 'block' prevents AI from seeing the image, 'warn' allows with warning, 'log-only' silently logs, 'ask' prompts user interactively",
+          "default": "block"
         },
         "scan_types": {
           "type": "array",
           "items": {
             "type": "string",
-            "enum": ["secrets", "pii", "ssrf", "prompt_injection"]
+            "enum": [
+              "secrets",
+              "pii",
+              "ssrf",
+              "prompt_injection"
+            ]
           },
-          "default": ["secrets", "pii"],
+          "default": [
+            "secrets",
+            "pii"
+          ],
           "description": "Types of threats to scan for in OCR-extracted text."
         },
         "max_processing_ms": {
@@ -2253,7 +2416,11 @@
         },
         "redaction_method": {
           "type": "string",
-          "enum": ["blur", "blackout", "pixelate"],
+          "enum": [
+            "blur",
+            "blackout",
+            "pixelate"
+          ],
           "default": "blur",
           "description": "Method for redacting sensitive regions in images."
         },
@@ -2269,13 +2436,17 @@
         },
         "ignore_files": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "File patterns to skip for image scanning (e.g., '*.ico', 'favicon.*')."
         },
         "ignore_tools": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "default": [],
           "description": "Tool names to skip for image scanning."
         },
@@ -2295,7 +2466,11 @@
       "properties": {
         "proactive_level": {
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "default": "low",
           "description": "How aggressively the AI should use proactive security checks. 'low' (default): only check when user asks or after a block. 'medium': check unfamiliar paths and suspicious commands. 'high': check every file access and command. Higher levels add latency and token usage."
         }
@@ -2317,7 +2492,10 @@
           "properties": {
             "method": {
               "type": "string",
-              "enum": ["env", "none"],
+              "enum": [
+                "env",
+                "none"
+              ],
               "default": "none",
               "description": "Auth method: 'env' reads token from environment variable, 'none' for unauthenticated."
             },
@@ -2364,7 +2542,11 @@
               "properties": {
                 "method": {
                   "type": "string",
-                  "enum": ["none", "env", "inline"],
+                  "enum": [
+                    "none",
+                    "env",
+                    "inline"
+                  ],
                   "default": "none",
                   "description": "Auth method: 'none' for corporate relays (no credentials), 'env' reads from environment variables (recommended), 'inline' stores credentials in config (doctor warns)."
                 },
@@ -2401,22 +2583,54 @@
           "description": "Minutes before a prepared bundle auto-expires. Prevents stale bundles from being sent."
         }
       },
-      "additionalProperties": false
+      "additionalProperties": true
     },
     "immutable_fields": {
       "oneOf": [
         {
+          "type": "boolean",
+          "description": "true: section fully locked. false: fully overridable."
+        },
+        {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "description": "List of field names in this section that project-level configs cannot override."
         },
         {
           "type": "string",
-          "enum": ["tighten-only"],
+          "enum": [
+            "tighten-only"
+          ],
           "description": "Lower-level configs can tighten settings but not loosen them."
         }
       ],
-      "description": "Controls what project-level ai-guardian.json configs can override. Array lists locked fields. 'tighten-only' allows overrides that make settings stricter but blocks loosening."
+      "description": "Controls override policy. true/false: lock/unlock entire section. Array: lock specific fields. 'tighten-only': lower-level configs can tighten but not loosen.",
+      "default": false
+    },
+    "time_based_enabled": {
+      "oneOf": [
+        {
+          "type": "boolean",
+          "description": "Simple boolean format for permanent enable/disable"
+        },
+        {
+          "$ref": "#/definitions/time_based_feature"
+        }
+      ],
+      "default": true
+    },
+    "string_or_timed_pattern": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple regex pattern"
+        },
+        {
+          "$ref": "#/definitions/time_based_pattern"
+        }
+      ]
     }
   }
 }

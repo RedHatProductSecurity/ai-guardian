@@ -511,6 +511,96 @@ def test_time_based_enabled_all_sections_object_with_reason(schema, section):
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_daemon_config(schema):
+    """Test that daemon configuration validates correctly."""
+    config = {
+        "daemon": {
+            "idle_timeout_minutes": 30,
+            "client_timeout_seconds": 2.0,
+            "rest_port": 63152,
+            "rest_host": "127.0.0.1",
+            "tray": {
+                "enabled": True,
+                "auto_install": True,
+                "discover_containers": True,
+                "discovery_interval_seconds": 15,
+            },
+        }
+    }
+    try:
+        validate(instance=config, schema=schema)
+    except ValidationError as e:
+        pytest.fail(f"Daemon config failed validation: {e.message}")
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_daemon_invalid_timeout_rejected(schema):
+    """Test that invalid daemon timeout type is rejected."""
+    config = {"daemon": {"idle_timeout_minutes": "not-a-number"}}
+    with pytest.raises(ValidationError):
+        validate(instance=config, schema=schema)
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_daemon_additional_properties_rejected(schema):
+    """Test that daemon rejects unknown properties."""
+    config = {"daemon": {"unknown_field": True}}
+    with pytest.raises(ValidationError):
+        validate(instance=config, schema=schema)
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_support_config(schema):
+    """Test that support configuration validates correctly."""
+    config = {
+        "support": {
+            "export_destination": "s3://bucket/prefix/",
+            "auth": {"method": "env", "token_env": "AWS_TOKEN"},
+            "email": {
+                "smtp_host": "smtp.example.com",
+                "smtp_port": 587,
+                "smtp_tls": True,
+                "from": "guardian@example.com",
+                "subject_prefix": "[AI Guardian Support]",
+                "auth": {
+                    "method": "env",
+                    "username_env": "SMTP_USER",
+                    "password_env": "SMTP_PASS",
+                },
+            },
+            "bundle_ttl_minutes": 60,
+        }
+    }
+    try:
+        validate(instance=config, schema=schema)
+    except ValidationError as e:
+        pytest.fail(f"Support config failed validation: {e.message}")
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_support_invalid_auth_method_rejected(schema):
+    """Test that invalid support auth method is rejected."""
+    config = {"support": {"auth": {"method": "invalid"}}}
+    with pytest.raises(ValidationError):
+        validate(instance=config, schema=schema)
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_support_allows_comment_keys(schema):
+    """Test that support allows _comment_* keys (used throughout config)."""
+    config = {
+        "support": {
+            "export_destination": "",
+            "_comment_email": "SMTP settings for mailto: destinations.",
+        }
+    }
+    try:
+        validate(instance=config, schema=schema)
+    except ValidationError as e:
+        pytest.fail(f"Support with _comment key failed validation: {e.message}")
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_invalid_timestamp_format(schema):
     """Test that invalid timestamp format is rejected."""
     config = {
