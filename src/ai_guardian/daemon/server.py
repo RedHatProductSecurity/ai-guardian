@@ -499,6 +499,14 @@ class DaemonServer:
             elif check_type == "sanitize":
                 sanitized = session.sanitize(data.get("text", ""))
                 return {"data": sanitized}
+            elif check_type == "violations":
+                violations = session.get_violations(
+                    tool_use_id=data.get("tool_use_id"),
+                    session_id=data.get("session_id"),
+                    violation_type=data.get("violation_type"),
+                    limit=data.get("limit", 50),
+                )
+                return {"data": {"violations": violations}}
             else:
                 return {"error": f"Unknown check_type: {check_type}"}
 

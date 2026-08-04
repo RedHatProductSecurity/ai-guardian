@@ -107,7 +107,7 @@ def send_sdk_check(check_type, data, timeout=5.0):
     """Send an SDK security check to the daemon.
 
     Args:
-        check_type: "content", "file", "command", or "sanitize"
+        check_type: "content", "file", "command", "sanitize", or "violations"
         data: Check-specific parameters
         timeout: Connection + response timeout in seconds
 

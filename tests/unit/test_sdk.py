@@ -599,3 +599,217 @@ class TestConfigLoading:
     def test_none_config_becomes_empty_dict(self, mock_load):
         session = _DirectSession(action="log")
         assert session._config == {}
+
+
+# ---------------------------------------------------------------------------
+# GuardSession.get_violations (base class)
+# ---------------------------------------------------------------------------
+
+
+class TestGetViolationsBase:
+    def test_base_class_raises(self):
+        session = GuardSession(action="log")
+        with pytest.raises(NotImplementedError):
+            session.get_violations()
+
+
+# ---------------------------------------------------------------------------
+# _DirectSession.get_violations
+# ---------------------------------------------------------------------------
+
+
+class TestDirectSessionGetViolations:
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
+    @patch(
+        "ai_guardian.scanners.sanitizer.sanitize_text",
+        return_value={"sanitized_text": "[REDACTED]", "redactions": [], "stats": {}},
+    )
+    def test_returns_sanitized_violations(
+        self, mock_sanitize, mock_get_violations, mock_config
+    ):
+        mock_get_violations.return_value = [
+            {
+                "timestamp": "2026-08-04T12:00:00Z",
+                "violation_type": "secret_detected",
+                "severity": "high",
+                "blocked": {
+                    "tool": "Bash",
+                    "reason": "AWS key AKIAIOSFODNN7EXAMPLE found",
+                },
+                "context": {
+                    "tool_name": "Bash",
+                    "tool_use_id": "toolu_abc123",
+                    "session_id": "sess_xyz",
+                },
+            }
+        ]
+        with monitor(action="log") as s:
+            s._config = {}
+            violations = s.get_violations(tool_use_id="toolu_abc123")
+
+        assert len(violations) == 1
+        v = violations[0]
+        assert v["violation_type"] == "secret_detected"
+        assert v["message"] == "[REDACTED]"
+        assert v["tool_name"] == "Bash"
+        assert v["tool_use_id"] == "toolu_abc123"
+        assert v["session_id"] == "sess_xyz"
+        assert v["timestamp"] == "2026-08-04T12:00:00Z"
+        assert v["severity"] == "high"
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
+    @patch(
+        "ai_guardian.scanners.sanitizer.sanitize_text",
+        return_value={"sanitized_text": "clean", "redactions": [], "stats": {}},
+    )
+    def test_passes_filters(self, mock_sanitize, mock_get_violations, mock_config):
+        mock_get_violations.return_value = []
+        with monitor(action="log") as s:
+            s._config = {}
+            s.get_violations(
+                tool_use_id="toolu_1",
+                session_id="sess_1",
+                violation_type="prompt_injection",
+                limit=5,
+            )
+
+        mock_get_violations.assert_called_once_with(
+            limit=5,
+            violation_type="prompt_injection",
+            tool_use_id="toolu_1",
+            session_id="sess_1",
+        )
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
+    def test_empty_violations(self, mock_get_violations, mock_config):
+        mock_get_violations.return_value = []
+        with monitor(action="log") as s:
+            s._config = {}
+            violations = s.get_violations()
+        assert violations == []
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
+    @patch(
+        "ai_guardian.scanners.sanitizer.sanitize_text",
+        return_value={"sanitized_text": "safe", "redactions": [], "stats": {}},
+    )
+    def test_missing_context_fields(
+        self, mock_sanitize, mock_get_violations, mock_config
+    ):
+        mock_get_violations.return_value = [
+            {
+                "timestamp": "2026-08-04T12:00:00Z",
+                "violation_type": "directory_blocking",
+                "severity": "warning",
+                "blocked": {},
+                "context": {},
+            }
+        ]
+        with monitor(action="log") as s:
+            s._config = {}
+            violations = s.get_violations()
+
+        v = violations[0]
+        assert v["tool_name"] == ""
+        assert v["tool_use_id"] == ""
+        assert v["session_id"] == ""
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.violations.logger.ViolationLogger.get_recent_violations")
+    @patch(
+        "ai_guardian.scanners.sanitizer.sanitize_text",
+        return_value={"sanitized_text": "safe", "redactions": [], "stats": {}},
+    )
+    def test_non_dict_blocked_and_context(
+        self, mock_sanitize, mock_get_violations, mock_config
+    ):
+        mock_get_violations.return_value = [
+            {
+                "timestamp": "2026-08-04T12:00:00Z",
+                "violation_type": "secret_detected",
+                "severity": "high",
+                "blocked": "not a dict",
+                "context": "also not a dict",
+            }
+        ]
+        with monitor(action="log") as s:
+            s._config = {}
+            violations = s.get_violations()
+
+        v = violations[0]
+        assert v["tool_name"] == ""
+        assert v["tool_use_id"] == ""
+
+
+# ---------------------------------------------------------------------------
+# _RestSession.get_violations
+# ---------------------------------------------------------------------------
+
+
+class TestRestSessionGetViolations:
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch(
+        "ai_guardian.daemon.client.send_sdk_check",
+        return_value={
+            "data": {
+                "violations": [
+                    {
+                        "violation_type": "secret_detected",
+                        "message": "[REDACTED]",
+                        "tool_name": "Bash",
+                        "tool_use_id": "toolu_abc",
+                        "session_id": "sess_1",
+                        "timestamp": "2026-08-04T12:00:00Z",
+                        "severity": "high",
+                    }
+                ]
+            }
+        },
+    )
+    def test_routes_to_daemon(self, mock_send, mock_running):
+        session = _RestSession(action="log")
+        violations = session.get_violations(
+            tool_use_id="toolu_abc", violation_type="secret_detected"
+        )
+        mock_send.assert_called_once_with(
+            "violations",
+            {
+                "limit": 50,
+                "tool_use_id": "toolu_abc",
+                "violation_type": "secret_detected",
+            },
+            timeout=5.0,
+        )
+        assert len(violations) == 1
+        assert violations[0]["violation_type"] == "secret_detected"
+
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch("ai_guardian.daemon.client.send_sdk_check", return_value=None)
+    def test_daemon_unreachable_returns_empty(self, mock_send, mock_running):
+        session = _RestSession(action="log")
+        violations = session.get_violations()
+        assert violations == []
+
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch(
+        "ai_guardian.daemon.client.send_sdk_check",
+        return_value={"data": []},
+    )
+    def test_handles_list_response(self, mock_send, mock_running):
+        session = _RestSession(action="log")
+        violations = session.get_violations()
+        assert violations == []
+
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    @patch(
+        "ai_guardian.daemon.client.send_sdk_check",
+        return_value={"error": "SDK check failed: permission denied"},
+    )
+    def test_daemon_error_returns_empty(self, mock_send, mock_running):
+        session = _RestSession(action="log")
+        violations = session.get_violations()
+        assert violations == []
