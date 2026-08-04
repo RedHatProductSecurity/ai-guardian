@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **New AI tool config paths for prompt injection scanning** — `.windsurf/rules`, `.windsurf/cascade.json`, `.openclaw/config.json` added to `DEFAULT_CONFIG_FILES` for context file poisoning detection (#1779)
+
+- **New credential paths for exfiltration detection** — `~/.config/gh/hosts.yml`, `~/.copilot/`, `~/.codeium/` added to `file_exfil` pattern; exfil detection now also catches `nc`, `wget`, `socat` as exfiltration targets (#1779)
+
 ## [1.15.5] - 2026-08-03
 
 ### Fixed
