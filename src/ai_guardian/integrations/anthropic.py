@@ -110,8 +110,6 @@ def create_client(**kwargs: Any) -> Any:
     Any extra ``**kwargs`` are forwarded to the client constructor
     (e.g. ``region``, ``project_id``).
     """
-    import anthropic
-
     detected = {
         name: env_var
         for name, env_var in _ENV_DETECTORS.items()
@@ -133,6 +131,8 @@ def create_client(**kwargs: Any) -> Any:
             "ANTHROPIC_API_KEY, ANTHROPIC_VERTEX_PROJECT_ID, "
             "ANTHROPIC_BEDROCK_BASE_URL"
         )
+
+    import anthropic
 
     provider = next(iter(detected))
 
