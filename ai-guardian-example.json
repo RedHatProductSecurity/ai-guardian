@@ -171,8 +171,6 @@
       "disabled_until": "2026-04-13T16:00:00Z",
       "reason": "Testing with known-safe example secrets"
     },
-    "_comment_action": "Action when secrets detected: block (default), warn, log-only, ask (interactive prompt with Allow Once/Allow Always/Block). Use ask:warn or ask:log-only to set headless fallback",
-    "action": "block",
     "_pattern_server_comment": "DEPRECATED: pattern_server at this level is deprecated (Issue #530). Use per-engine format in engines[] instead. Run: ai-guardian setup --migrate-pattern-server",
     "_comment_ignore_files": "Glob patterns for files to skip during secret scanning (e.g., 'tests/fixtures/**', '**/examples/**')",
     "ignore_files": [],

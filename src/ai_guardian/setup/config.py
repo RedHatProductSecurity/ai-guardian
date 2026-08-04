@@ -119,7 +119,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
     config = {
         "$schema": schema_uri,
         "_comment_project_overlay": "Project-level .ai-guardian/ai-guardian.json at repo root merges on top of this global config. Use immutable arrays to lock fields from project override.",
-        "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
+        "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks — use allowlist_patterns for false positives. Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
         "secret_scanning": {
             "enabled": True,
             "ignore_files": [],
