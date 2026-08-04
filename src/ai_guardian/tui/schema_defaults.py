@@ -59,6 +59,16 @@ class SchemaDefaults:
         except Exception:
             self._schema = {}
 
+    def _follow_ref(self, node: Dict[str, Any]) -> Dict[str, Any]:
+        """Follow a $ref pointer to its target definition."""
+        ref = node.get("$ref", "")
+        if ref.startswith("#/definitions/"):
+            def_name = ref[len("#/definitions/") :]
+            resolved = self._schema.get("definitions", {}).get(def_name)
+            if resolved is not None:
+                return resolved
+        return node
+
     def _resolve_path(self, dotted_path: str) -> Optional[Dict[str, Any]]:
         """Resolve a dotted path to its schema property definition."""
         if not self._schema:
@@ -66,6 +76,7 @@ class SchemaDefaults:
         parts = dotted_path.split(".")
         node = self._schema
         for part in parts:
+            node = self._follow_ref(node)
             props = node.get("properties", {})
             if part in props:
                 node = props[part]
@@ -75,7 +86,7 @@ class SchemaDefaults:
                     node = defs[part]
                 else:
                     return None
-        return node
+        return self._follow_ref(node)
 
     def get_default(self, dotted_path: str) -> Any:
         """Get the default value for a dotted schema path.
