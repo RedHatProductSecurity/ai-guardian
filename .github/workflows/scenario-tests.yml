@@ -52,18 +52,38 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Pull base image
-        run: docker pull quay.io/itdove/ai-guardian:${{ github.sha }}
+        run: docker pull quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
 
       - name: Build test image
         run: |
           docker build \
             -f container/Dockerfile.test \
-            --build-arg BASE_IMAGE=quay.io/itdove/ai-guardian:${{ github.sha }} \
+            --build-arg BASE_IMAGE=quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }} \
             -t ai-guardian-test \
             .
 
       - name: Run ${{ matrix.profile }} scenarios
         run: docker run --rm -e AI_GUARDIAN_PROFILE=${{ matrix.profile }} ai-guardian-test /sandbox/run-scenarios.sh
+
+  # --- Legacy mirror to itdove (runs in parallel with scenario-tests) ---
+  # Remove in v2.0, see #1774
+  legacy-mirror:
+    name: Legacy Mirror (itdove)
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Copy to itdove legacy registry
+        env:
+          SRC_CREDS: ${{ secrets.QUAY_RPS_USERNAME }}:${{ secrets.QUAY_RPS_PASSWORD }}
+          DEST_CREDS: ${{ secrets.QUAY_USERNAME }}:${{ secrets.QUAY_PASSWORD }}
+        run: |
+          for TAG in "${{ github.sha }}"; do
+            skopeo copy --all \
+              --src-creds "$SRC_CREDS" \
+              --dest-creds "$DEST_CREDS" \
+              "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
+              "docker://quay.io/itdove/ai-guardian:${TAG}"
+          done
 
   cleanup-image:
     name: Cleanup SHA Image
@@ -71,11 +91,14 @@ jobs:
     if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main'))
     runs-on: ubuntu-latest
     steps:
-      - name: Delete SHA-tagged image
+      - name: Delete SHA-tagged images
         continue-on-error: true
         run: |
           skopeo login quay.io \
-            --username "${{ secrets.QUAY_PERSONAL_USERNAME }}" \
-            --password "${{ secrets.QUAY_PERSONAL_PASSWORD }}"
+            --username "${{ secrets.QUAY_RPS_PERSONAL_USERNAME }}" \
+            --password "${{ secrets.QUAY_RPS_PERSONAL_PASSWORD }}"
+          skopeo delete \
+            "docker://quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}"
+          # Legacy mirror cleanup (remove in v2.0, see #1774)
           skopeo delete \
             "docker://quay.io/itdove/ai-guardian:${{ github.sha }}"

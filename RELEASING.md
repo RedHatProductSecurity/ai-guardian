@@ -295,7 +295,7 @@ git push origin v1.0.0
 
 **Important:** Pushing the tag will automatically trigger two GitHub Actions workflows:
 1. **Publish Package** — builds and publishes to PyPI, creates a GitHub Release
-2. **Build Container Image** — builds and pushes `quay.io/itdove/ai-guardian:<version>`
+2. **Build Container Image** — builds and pushes `quay.io/redhatproductsecurity/ai-guardian:<version>`
 
 Note: `:latest` tracks the main branch (updated on every merge), not releases.
 
@@ -310,8 +310,8 @@ After pushing the tag:
 5. Check GitHub Releases: https://github.com/RedHatProductSecurity/ai-guardian/releases
 6. Verify the versioned container image on quay.io:
    ```bash
-   podman pull quay.io/itdove/ai-guardian:<version>
-   podman run -it quay.io/itdove/ai-guardian:<version> ai-guardian --version
+   podman pull quay.io/redhatproductsecurity/ai-guardian:<version>
+   podman run -it quay.io/redhatproductsecurity/ai-guardian:<version> ai-guardian --version
    ```
 
 If the workflow fails, you may need to:

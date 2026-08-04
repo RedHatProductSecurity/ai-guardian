@@ -1,7 +1,7 @@
 # AI Guardian Container Image
 
 UBI-based container image with ai-guardian and all headless-capable IDEs.
-Published to [quay.io/itdove/ai-guardian](https://quay.io/itdove/ai-guardian) on every merge and release.
+Published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) on every merge and release.
 
 ## What's Included
 
@@ -27,10 +27,10 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 
 ```bash
 # Latest build from main branch
-podman pull quay.io/itdove/ai-guardian:latest
+podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/itdove/ai-guardian:1.13.2
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.13.2
 ```
 
 Tag conventions:
@@ -174,13 +174,13 @@ the relevant Terms of Service.
 podman run -it -p 63152 \
     -e ACCEPT_PROPRIETARY_TOS=true \
     -e ANTHROPIC_API_KEY=sk-ant-... \
-    quay.io/itdove/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Kiro CLI — non-interactive
 podman run -it -p 63152 \
     -e AI_GUARDIAN_IDE=kiro \
     -e ACCEPT_PROPRIETARY_TOS=true \
-    quay.io/itdove/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
 The `run.sh` helper passes `ACCEPT_PROPRIETARY_TOS` through from the host

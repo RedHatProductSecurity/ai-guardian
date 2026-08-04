@@ -13,7 +13,7 @@ set -euo pipefail
 #   ./container/run.sh --                           # pass extra args to container run
 #   ./container/run.sh -- bash -c "ai-guardian scan ."
 
-IMAGE="${AI_GUARDIAN_IMAGE:-quay.io/itdove/ai-guardian:latest}"
+IMAGE="${AI_GUARDIAN_IMAGE:-quay.io/redhatproductsecurity/ai-guardian:latest}"
 IDE="${AI_GUARDIAN_IDE:-claude}"
 PROFILE="${AI_GUARDIAN_PROFILE:-}"
 REST_PORT="${AI_GUARDIAN_REST_PORT:-63152}"
