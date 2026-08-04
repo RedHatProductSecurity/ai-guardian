@@ -1430,5 +1430,125 @@ class TestWildcardDomainPatterns:
         assert not should_block
 
 
+class TestIPEncodingBypass:
+    """Tests for hex/octal/decimal IP encoding bypass protection (#1778)."""
+
+    def setup_method(self):
+        self.protector = SSRFProtector({})
+
+    # --- _normalize_ip unit tests ---
+
+    def test_normalize_full_hex_loopback(self):
+        assert SSRFProtector._normalize_ip("0x7f000001") == "127.0.0.1"
+
+    def test_normalize_full_hex_metadata(self):
+        assert SSRFProtector._normalize_ip("0xa9fea9fe") == "169.254.169.254"
+
+    def test_normalize_full_hex_uppercase(self):
+        assert SSRFProtector._normalize_ip("0X7F000001") == "127.0.0.1"
+
+    def test_normalize_full_decimal_loopback(self):
+        assert SSRFProtector._normalize_ip("2130706433") == "127.0.0.1"
+
+    def test_normalize_full_decimal_metadata(self):
+        assert SSRFProtector._normalize_ip("2852039166") == "169.254.169.254"
+
+    def test_normalize_octal_octets(self):
+        assert SSRFProtector._normalize_ip("0177.0.0.01") == "127.0.0.1"
+
+    def test_normalize_hex_octets(self):
+        assert SSRFProtector._normalize_ip("0x7f.0x00.0x00.0x01") == "127.0.0.1"
+
+    def test_normalize_mixed_octets(self):
+        assert SSRFProtector._normalize_ip("0x7f.0.0.1") == "127.0.0.1"
+
+    def test_normalize_standard_ip_unchanged(self):
+        assert SSRFProtector._normalize_ip("127.0.0.1") == "127.0.0.1"
+
+    def test_normalize_domain_unchanged(self):
+        assert SSRFProtector._normalize_ip("example.com") == "example.com"
+
+    def test_normalize_empty_string(self):
+        assert SSRFProtector._normalize_ip("") == ""
+
+    def test_normalize_overflow_hex_ignored(self):
+        assert SSRFProtector._normalize_ip("0xFFFFFFFFFF") == "0xFFFFFFFFFF"
+
+    def test_normalize_overflow_decimal_ignored(self):
+        assert SSRFProtector._normalize_ip("4294967296") == "4294967296"
+
+    def test_normalize_octet_overflow_ignored(self):
+        assert (
+            SSRFProtector._normalize_ip("0x7f.0x00.0x00.0x100")
+            == "0x7f.0x00.0x00.0x100"
+        )
+
+    # --- Integration: encoded IPs blocked in commands ---
+
+    def test_block_hex_loopback_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://0x7f000001/admin"}
+        )
+        assert should_block
+
+    def test_block_decimal_loopback_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://2130706433/"}
+        )
+        assert should_block
+
+    def test_block_hex_metadata_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "wget http://0xa9fea9fe/latest/meta-data/"}
+        )
+        assert should_block
+
+    def test_block_octal_loopback_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://0177.0.0.01/"}
+        )
+        assert should_block
+
+    def test_block_hex_octets_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://0x7f.0x00.0x00.0x01/secret"}
+        )
+        assert should_block
+
+    def test_block_decimal_private_10_net(self):
+        # 167772160 = 10.0.0.0
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://167772160/internal"}
+        )
+        assert should_block
+
+    def test_block_hex_private_192_168(self):
+        # 0xc0a80001 = 192.168.0.1
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://0xc0a80001/"}
+        )
+        assert should_block
+
+    # --- Safe scenarios: no false positives ---
+
+    def test_safe_public_domain(self):
+        should_block, _ = self.protector.check(
+            "Bash", {"command": "curl http://example.com/api"}
+        )
+        assert not should_block
+
+    def test_safe_hex_in_echo(self):
+        """Hex constant in non-URL context should not trigger."""
+        should_block, _ = self.protector.check("Bash", {"command": 'echo "0x7f000001"'})
+        assert not should_block
+
+    def test_safe_hex_in_code_comment(self):
+        """Hex literal in code should not trigger."""
+        should_block, _ = self.protector.check(
+            "Bash", {"command": "grep '0x7f000001' source.c"}
+        )
+        assert not should_block
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
