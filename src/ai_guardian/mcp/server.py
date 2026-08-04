@@ -41,7 +41,7 @@ _SAFE_SUGGESTIONS: Dict[str, str] = {
 }
 
 try:
-    from mcp.server.fastmcp import FastMCP
+    from mcp.server import MCPServer
 
     HAS_MCP = True
 except ImportError:
@@ -142,9 +142,9 @@ def _validate_scan_path(path: str) -> Tuple[bool, str, Optional[Path]]:
     return True, "", resolved
 
 
-def create_server() -> "FastMCP":
+def create_server() -> "MCPServer":
     """Create and configure the MCP server with all tools and resources."""
-    server = FastMCP("ai-guardian", instructions=_load_skill_instructions())
+    server = MCPServer("ai-guardian", instructions=_load_skill_instructions())
 
     # ─── Security Check Tools (proactive) ─────────────────────────
 
