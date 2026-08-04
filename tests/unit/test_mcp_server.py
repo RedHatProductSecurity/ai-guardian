@@ -1256,7 +1256,7 @@ class TestScanDirectoryReport:
 class TestServerCreation:
     """Test server setup."""
 
-    def test_create_server_returns_fastmcp(self):
+    def test_create_server_returns_mcp_server(self):
         server = create_server()
         assert server is not None
 
