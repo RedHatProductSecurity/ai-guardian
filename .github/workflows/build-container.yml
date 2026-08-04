@@ -1,10 +1,11 @@
 # GitHub Actions CI/CD - Build Container Image
-# Publishes to quay.io/itdove/ai-guardian:
+# Publishes to quay.io/redhatproductsecurity/ai-guardian:
 #   - :latest         on every successful merge to main  (triggered by Build Wheel)
 #   - :VERSION        on clean release tags (v1.2.3)
 #
-# Required secrets: QUAY_USERNAME, QUAY_PASSWORD
-# Required: quay.io/itdove/ai-guardian repo created and set to public
+# Required secrets: QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (primary registry)
+#                   QUAY_USERNAME, QUAY_PASSWORD (legacy mirror — remove in v2.0, see #1774)
+# Required: quay.io/redhatproductsecurity/ai-guardian repo created and set to public
 
 name: Build Container Image
 
@@ -122,15 +123,15 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
+          username: ${{ secrets.QUAY_RPS_USERNAME }}
+          password: ${{ secrets.QUAY_RPS_PASSWORD }}
 
       # --- Skip rebuild if commit-tagged image already exists ---
       - name: Check if image exists
         if: steps.params.outputs.skip != 'true'
         id: check
         run: |
-          docker manifest inspect quay.io/itdove/ai-guardian:${{ github.sha }} > /dev/null 2>&1 \
+          docker manifest inspect quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }} > /dev/null 2>&1 \
             && echo "exists=true" >> "$GITHUB_OUTPUT" \
             || echo "exists=false" >> "$GITHUB_OUTPUT"
 
@@ -144,7 +145,22 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            quay.io/itdove/ai-guardian:${{ steps.params.outputs.image_tag }}
-            quay.io/itdove/ai-guardian:${{ github.sha }}
+            quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}
+            quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
+
+      # --- Legacy mirror to itdove (transition period — remove in v2.0, see #1774) ---
+      - name: Copy to itdove legacy registry
+        if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
+        env:
+          SRC_CREDS: ${{ secrets.QUAY_RPS_USERNAME }}:${{ secrets.QUAY_RPS_PASSWORD }}
+          DEST_CREDS: ${{ secrets.QUAY_USERNAME }}:${{ secrets.QUAY_PASSWORD }}
+        run: |
+          for TAG in "${{ steps.params.outputs.image_tag }}" "${{ github.sha }}"; do
+            skopeo copy --all \
+              --src-creds "$SRC_CREDS" \
+              --dest-creds "$DEST_CREDS" \
+              "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
+              "docker://quay.io/itdove/ai-guardian:${TAG}"
+          done

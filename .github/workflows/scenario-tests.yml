@@ -52,13 +52,13 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Pull base image
-        run: docker pull quay.io/itdove/ai-guardian:${{ github.sha }}
+        run: docker pull quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
 
       - name: Build test image
         run: |
           docker build \
             -f container/Dockerfile.test \
-            --build-arg BASE_IMAGE=quay.io/itdove/ai-guardian:${{ github.sha }} \
+            --build-arg BASE_IMAGE=quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }} \
             -t ai-guardian-test \
             .
 
@@ -71,11 +71,14 @@ jobs:
     if: always() && (github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref != 'refs/heads/main'))
     runs-on: ubuntu-latest
     steps:
-      - name: Delete SHA-tagged image
+      - name: Delete SHA-tagged images
         continue-on-error: true
         run: |
           skopeo login quay.io \
-            --username "${{ secrets.QUAY_PERSONAL_USERNAME }}" \
-            --password "${{ secrets.QUAY_PERSONAL_PASSWORD }}"
+            --username "${{ secrets.QUAY_RPS_PERSONAL_USERNAME }}" \
+            --password "${{ secrets.QUAY_RPS_PERSONAL_PASSWORD }}"
+          skopeo delete \
+            "docker://quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}"
+          # Legacy mirror cleanup (remove in v2.0, see #1774)
           skopeo delete \
             "docker://quay.io/itdove/ai-guardian:${{ github.sha }}"

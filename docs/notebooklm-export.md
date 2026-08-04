@@ -73,13 +73,13 @@ ANTHROPIC_API_KEY=sk-ant-... ACCEPT_PROPRIETARY_TOS=true \
     ./run.sh --ide claude --repo $(pwd)
 
 # Or manually with podman/docker
-podman pull quay.io/itdove/ai-guardian:latest
+podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 podman run -it -p 63152:63152 \
     -v $(pwd):/workspace:z \
     -e AI_GUARDIAN_IDE=claude \
     -e ANTHROPIC_API_KEY=sk-ant-... \
     -e ACCEPT_PROPRIETARY_TOS=true \
-    quay.io/itdove/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
 `ACCEPT_PROPRIETARY_TOS=true` accepts the [Claude Code Terms of Service](https://www.anthropic.com/legal/consumer-terms) and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.
@@ -119,16 +119,16 @@ The tray auto-discovers running daemons and shows per-daemon submenus with Stati
 
 ### Container
 
-A pre-built container image is published to [quay.io/itdove/ai-guardian](https://quay.io/itdove/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
+A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
 
 ```bash
 # Latest (tracks main branch)
-podman pull quay.io/itdove/ai-guardian:latest
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/itdove/ai-guardian:latest
+podman pull quay.io/redhatproductsecurity/ai-guardian:latest
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Pinned release
-podman pull quay.io/itdove/ai-guardian:v1.15.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/itdove/ai-guardian:v1.15.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.15.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.15.0
 
 # Or build from source
 podman build -t ai-guardian container/
@@ -489,7 +489,7 @@ Apache 2.0 - see [LICENSE](https://github.com/RedHatProductSecurity/ai-guardian/
 # AI Guardian Container Image
 
 UBI-based container image with ai-guardian and all headless-capable IDEs.
-Published to [quay.io/itdove/ai-guardian](https://quay.io/itdove/ai-guardian) on every merge and release.
+Published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) on every merge and release.
 
 ## What's Included
 
@@ -515,10 +515,10 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 
 ```bash
 # Latest build from main branch
-podman pull quay.io/itdove/ai-guardian:latest
+podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/itdove/ai-guardian:1.13.2
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.13.2
 ```
 
 Tag conventions:
@@ -662,13 +662,13 @@ the relevant Terms of Service.
 podman run -it -p 63152 \
     -e ACCEPT_PROPRIETARY_TOS=true \
     -e ANTHROPIC_API_KEY=sk-ant-... \
-    quay.io/itdove/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Kiro CLI — non-interactive
 podman run -it -p 63152 \
     -e AI_GUARDIAN_IDE=kiro \
     -e ACCEPT_PROPRIETARY_TOS=true \
-    quay.io/itdove/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
 The `run.sh` helper passes `ACCEPT_PROPRIETARY_TOS` through from the host
@@ -9526,7 +9526,7 @@ container or remote daemon appear on the host tray.
    ./container/run.sh
 
    # Or manually with Podman/Docker
-   podman run -l ai-guardian.daemon=true -p 63152:63152 quay.io/itdove/ai-guardian:latest
+   podman run -l ai-guardian.daemon=true -p 63152:63152 quay.io/redhatproductsecurity/ai-guardian:latest
    ```
 
 2. **On Linux — export the Podman socket** so the tray can discover the container (#1436):

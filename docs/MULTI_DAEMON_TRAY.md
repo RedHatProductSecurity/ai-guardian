@@ -598,7 +598,7 @@ container or remote daemon appear on the host tray.
    ./container/run.sh
 
    # Or manually with Podman/Docker
-   podman run -l ai-guardian.daemon=true -p 63152:63152 quay.io/itdove/ai-guardian:latest
+   podman run -l ai-guardian.daemon=true -p 63152:63152 quay.io/redhatproductsecurity/ai-guardian:latest
    ```
 
 2. **On Linux — export the Podman socket** so the tray can discover the container (#1436):
