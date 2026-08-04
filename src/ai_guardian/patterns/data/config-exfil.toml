@@ -34,8 +34,8 @@ tier = "overridable"
 [[rules]]
 id = "file_exfil"
 match_type = "regex"
-regex = '''\bcat\s+(?:/etc/|~/\.ssh/|~/\.aws/).*\|.*\bcurl\b'''
-description = "file exfiltration via curl"
+regex = '''\bcat\s+(?:/etc/|~/\.ssh/|~/\.aws/|~/\.config/gh/|~/\.copilot/|~/\.codeium/).*\|.*\b(?:curl|nc|wget|socat)\b'''
+description = "file exfiltration via curl/nc/wget"
 tier = "overridable"
 
 [[rules]]
