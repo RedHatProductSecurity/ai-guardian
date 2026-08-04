@@ -28,6 +28,203 @@ with monitor(action="block") as session:
     session.check_command("curl http://example.com")
 ```
 
+## LLM Client Integration
+
+The `guarded()` wrapper automatically intercepts LLM API calls and scans prompts and responses — no manual `check_content()` calls needed.
+
+### Installation
+
+```bash
+pip install ai-guardian[anthropic]    # Anthropic SDK support
+pip install ai-guardian[openai]       # OpenAI SDK support
+```
+
+### Usage
+
+**Auto-detect from environment** (simplest — no provider import needed):
+
+```python
+from ai_guardian.integrations import guarded
+
+# Auto-creates Anthropic client from environment variables:
+#   ANTHROPIC_API_KEY            → Anthropic()
+#   ANTHROPIC_VERTEX_PROJECT_ID  → AnthropicVertex()
+#   ANTHROPIC_BEDROCK_BASE_URL   → AnthropicBedrock()
+client = guarded(action="block")
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**Explicit Anthropic client**:
+
+```python
+from anthropic import Anthropic
+from ai_guardian.integrations import guarded
+
+client = guarded(Anthropic(), action="block")
+response = client.messages.create(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**Vertex AI**:
+
+```python
+from anthropic import AnthropicVertex
+from ai_guardian.integrations import guarded
+
+client = guarded(
+    AnthropicVertex(project_id="my-project", region="us-east5"),
+    action="block",
+)
+response = client.messages.create(
+    model="claude-sonnet-4@20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**AWS Bedrock**:
+
+```python
+from anthropic import AnthropicBedrock
+from ai_guardian.integrations import guarded
+
+client = guarded(AnthropicBedrock(), action="block")
+response = client.messages.create(
+    model="anthropic.claude-sonnet-4-20250514-v1:0",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**OpenAI**:
+
+```python
+from openai import OpenAI
+from ai_guardian.integrations import guarded
+
+client = guarded(OpenAI(), action="block")
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**Azure OpenAI**:
+
+```python
+from openai import AzureOpenAI
+from ai_guardian.integrations import guarded
+
+client = guarded(
+    AzureOpenAI(azure_endpoint="https://my-resource.openai.azure.com"),
+    action="block",
+)
+response = client.chat.completions.create(
+    model="gpt-4o",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+### `create_client(**kwargs)`
+
+Auto-detect and create an Anthropic client from environment variables.
+
+```python
+from ai_guardian.integrations import create_client
+
+# Returns the right client type based on which env var is set
+client = create_client()
+
+# Pass kwargs to the underlying client constructor
+client = create_client(timeout=30.0)
+```
+
+Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
+
+### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output)`
+
+Wraps an LLM client with automatic security scanning.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
+| `action` | str | `"block"` | `"block"` raises `SecurityViolation`, `"warn"` emits warning, `"log"` records silently |
+| `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
+| `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
+| `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |
+| `scan_input` | bool | `True` | Scan prompts before sending to LLM |
+| `scan_output` | bool | `True` | Scan responses after receiving from LLM |
+
+**Returns:** A wrapped client proxy. Use it exactly like the original client.
+
+**Raises:**
+
+- `ValueError` if no extractor matches the client type and none provided explicitly
+- `SecurityViolation` when `action="block"` and a threat is detected
+
+### What Gets Scanned
+
+**Input** (before API call): system prompt, all message content — checked for secrets, prompt injection, context poisoning, PII.
+
+**Output** (after API call): response text content blocks — same checks.
+
+### Streaming
+
+For `messages.stream()`, input is scanned before the stream starts. Output is scanned on the accumulated final message when the stream context exits — individual chunks are not scanned.
+
+```python
+client = guarded(Anthropic(), action="block")
+
+with client.messages.stream(
+    model="claude-sonnet-4-20250514",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": user_input}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="")
+# Output scanned here on context exit
+```
+
+### Supported Providers
+
+| Provider | Client Types | Methods Wrapped |
+|----------|-------------|-----------------|
+| Anthropic | `Anthropic`, `AsyncAnthropic`, `AnthropicVertex`, `AnthropicBedrock`, `AnthropicFoundry` (+ async variants) | `messages.create`, `messages.stream` |
+| OpenAI | `OpenAI`, `AsyncOpenAI`, `AzureOpenAI`, `AsyncAzureOpenAI` | `chat.completions.create` |
+
+### Custom Extractors
+
+Implement `ProviderExtractor` to support any LLM client:
+
+```python
+from ai_guardian.integrations import ProviderExtractor, guarded
+
+class MyExtractor(ProviderExtractor):
+    @classmethod
+    def detect(cls, client):
+        return isinstance(client, MyLLMClient)
+
+    def methods_to_wrap(self):
+        return ["generate"]
+
+    def extract_input(self, method_name, args, kwargs):
+        return [kwargs.get("prompt", "")]
+
+    def extract_output(self, method_name, response):
+        return [response.text]
+
+client = guarded(MyLLMClient(), extractor=MyExtractor())
+```
+
 ## API Reference
 
 ### `monitor(action, mode, config)`
