@@ -66,6 +66,7 @@ jobs:
             echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
             echo "wheel_source=build" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "expires_label=quay.expires-after=24h" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout code
@@ -147,6 +148,7 @@ jobs:
           tags: |
             quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}
             quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
+          labels: ${{ steps.params.outputs.expires_label }}
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
