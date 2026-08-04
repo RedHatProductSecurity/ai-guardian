@@ -225,6 +225,138 @@ class MyExtractor(ProviderExtractor):
 client = guarded(MyLLMClient(), extractor=MyExtractor())
 ```
 
+## GuardedAgent (Anthropic)
+
+`GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII.
+
+### Usage
+
+```python
+from ai_guardian.integrations.anthropic import GuardedAgent
+
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    system_prompt="You are a code analysis agent.",
+    tools=["bash", "text_editor", "grep", "glob"],
+    cwd="/path/to/repo",
+    max_turns=100,
+    action="block",
+)
+result = agent.run("Find and fix the bug described in JIRA-123")
+print(result["output"])
+```
+
+### Backend Auto-Detection
+
+Same as `guarded()` — detected from environment variables, or pass an explicit client:
+
+```python
+from anthropic import AnthropicVertex
+
+agent = GuardedAgent(
+    client=AnthropicVertex(project_id="my-project", region="us-east5"),
+    model="claude-sonnet-5",
+    tools=["bash", "text_editor"],
+)
+```
+
+### Tools
+
+#### Anthropic Built-In Tools
+
+| Name | Anthropic Type | Side |
+|------|---------------|------|
+| `bash` | `bash_YYYYMMDD` | Client — GuardedAgent executes |
+| `text_editor` | `text_editor_YYYYMMDD` | Client — GuardedAgent executes |
+| `computer` | `computer_YYYYMMDD` | Client — GuardedAgent executes |
+| `web_search` | `web_search_YYYYMMDD` | Server — Anthropic executes |
+| `web_fetch` | `web_fetch_YYYYMMDD` | Server — Anthropic executes |
+| `code_execution` | `code_execution_YYYYMMDD` | Server — Anthropic executes |
+
+Tool type versions are auto-detected from the installed Anthropic SDK. Override with `tool_types`:
+
+```python
+agent = GuardedAgent(
+    tools=["bash"],
+    tool_types={"bash": "bash_20260301"},
+)
+```
+
+#### Custom Tools
+
+| Name | Description |
+|------|-------------|
+| `grep` | Search for a pattern in files |
+| `glob` | List files matching a pattern |
+
+#### Presets
+
+```python
+tools="coding"    # bash + text_editor + grep + glob
+tools="readonly"  # text_editor + grep + glob
+tools="browser"   # computer + bash
+```
+
+Mix presets, names, and raw Anthropic tool dicts:
+
+```python
+tools=["coding", "web_search", {"name": "my_tool", "input_schema": {...}}]
+```
+
+### Structured Output
+
+```python
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools=["bash", "text_editor"],
+    output_schema={"type": "object", "properties": {"findings": {"type": "array"}}},
+)
+result = agent.run("Analyze this code")
+print(result["output"])  # validated structured object
+```
+
+### What Gets Scanned
+
+| Content | `guarded()` | `GuardedAgent` |
+|---------|------------|----------------|
+| Initial prompt | Scanned | Scanned |
+| System prompt | Not scanned | **Scanned** |
+| Tool results (file contents, bash output) | N/A | **Scanned** |
+| Intermediate responses | N/A | **Scanned** |
+| Final response | Scanned | Scanned |
+
+### `GuardedAgent(...)` Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `model` | str | `"claude-sonnet-5"` | Anthropic model ID |
+| `system_prompt` | str | `""` | System prompt |
+| `tools` | str or list | `"coding"` | Tool preset, list of names/dicts, or mixed |
+| `cwd` | str | `os.getcwd()` | Working directory for tool execution |
+| `max_turns` | int | `100` | Max tool-use loop iterations |
+| `action` | str | `"block"` | `"block"`, `"warn"`, or `"log"` |
+| `client` | Any | `None` | Anthropic client (auto-detected if omitted) |
+| `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
+| `config` | dict | `None` | ai-guardian config override |
+| `output_schema` | dict | `None` | JSON schema for structured output |
+| `tool_types` | dict | `None` | Override tool type versions |
+| `scan_input` | bool | `True` | Scan prompts before sending |
+| `scan_output` | bool | `True` | Scan responses and tool results |
+
+### `agent.run(prompt)` Return Value
+
+```python
+{
+    "output": "...",       # final text or structured object
+    "messages": [...],     # full conversation history
+    "stop_reason": "...",  # "end_turn", "refusal", or "max_turns"
+    "usage": {
+        "input_tokens": 1234,
+        "output_tokens": 567,
+    },
+}
+```
+
 ## API Reference
 
 ### `monitor(action, mode, config)`
