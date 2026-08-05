@@ -17,6 +17,10 @@ on:
   push:
     tags: ['v*']
   workflow_call:
+    inputs:
+      skip_legacy_mirror:
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       image_tag:
@@ -164,11 +168,11 @@ jobs:
       skip: ${{ steps.params.outputs.skip }}
 
   # --- Legacy mirror to itdove (transition period — remove in v2.0, see #1774) ---
-  # Skipped on workflow_call — scenario-tests.yml runs this in parallel instead.
+  # Callers pass skip_legacy_mirror: true when they run their own mirror job.
   legacy-mirror:
     name: Legacy Mirror (itdove)
     needs: build-and-push
-    if: needs.build-and-push.outputs.skip != 'true' && github.event_name != 'workflow_call'
+    if: needs.build-and-push.outputs.skip != 'true' && !inputs.skip_legacy_mirror
     runs-on: ubuntu-latest
     steps:
       - name: Copy to itdove legacy registry
