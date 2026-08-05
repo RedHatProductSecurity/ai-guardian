@@ -148,7 +148,7 @@ client = create_client(timeout=30.0)
 
 Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
 
-### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output, response_parser)`
+### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output, response_parser, before_call, after_call)`
 
 Wraps an LLM client with automatic security scanning.
 
@@ -164,6 +164,8 @@ Wraps an LLM client with automatic security scanning.
 | `scan_input` | bool | `True` | Scan prompts before sending to LLM |
 | `scan_output` | bool | `True` | Scan responses after receiving from LLM |
 | `response_parser` | callable | `None` | `(client_type: str, response) -> Any` — transforms native responses into a caller-defined format. If `None`, native response returned unchanged. |
+| `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each API call |
+| `after_call` | callable | `None` | `(method_name: str, response: Any) -> None` — called after each successful API call. Not called on `SecurityViolation` |
 
 **Returns:** A wrapped client proxy. Use it exactly like the original client. If `response_parser` is set, calls return the parser's output instead of the native response.
 
@@ -270,6 +272,25 @@ except SecurityViolation as e:
     e.response          # raw native response (always available)
     e.sanitized_text    # redacted text (always available)
     e.sanitized_parsed  # parser applied to the violating response
+```
+
+### Hooks
+
+Use `before_call` and `after_call` for per-call observability:
+
+```python
+def on_call(method_name, args, kwargs):
+    print(f"Calling {method_name}")
+
+def on_response(method_name, response):
+    print(f"{method_name}: {response.usage.output_tokens} tokens")
+
+client = guarded(
+    Anthropic(),
+    action="block",
+    before_call=on_call,
+    after_call=on_response,
+)
 ```
 
 ## GuardedAgent (Anthropic)
@@ -391,6 +412,38 @@ print(result["output"])  # validated structured object
 | `tool_types` | dict | `None` | Override tool type versions |
 | `scan_input` | bool | `True` | Scan prompts before sending |
 | `scan_output` | bool | `True` | Scan responses and tool results |
+| `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each `messages.create()` |
+| `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
+| `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
+| `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
+
+### Hooks
+
+```python
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools="coding",
+    before_call=lambda method, args, kwargs: print("Turn starting"),
+    after_call=lambda method, response: print(f"Tokens: {response.usage.output_tokens}"),
+    pre_run=lambda prompt, config: print(f"Agent starting: {prompt[:50]}"),
+    post_run=lambda result: print(f"Done: {result['stop_reason']}" if result else "Failed"),
+)
+```
+
+**Lifecycle:**
+
+```
+agent.run("prompt")
+  ├── pre_run(prompt, config)          ← once, before loop
+  ├── Turn 1:
+  │     ├── before_call(...)           ← per turn
+  │     ├── messages.create()
+  │     └── after_call(...)            ← per turn (return False to stop)
+  ├── Turn 2: ...
+  └── post_run(result)                 ← once, after loop (even on exception)
+```
+
+The `config` dict passed to `pre_run` contains: `model`, `tools`, `system_prompt`, `max_turns`, `max_budget_tokens`.
 
 ### `agent.run(prompt)` Return Value
 
@@ -398,7 +451,7 @@ print(result["output"])  # validated structured object
 {
     "output": "...",       # final text or structured object
     "messages": [...],     # full conversation history
-    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", or "budget_exceeded"
+    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", "budget_exceeded", or "hook_early_stop"
     "usage": {
         "input_tokens": 1234,
         "output_tokens": 567,
