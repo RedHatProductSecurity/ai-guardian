@@ -381,6 +381,8 @@ print(result["output"])  # validated structured object
 | `tools` | str or list | `"coding"` | Tool preset, list of names/dicts, or mixed |
 | `cwd` | str | `os.getcwd()` | Working directory for tool execution |
 | `max_turns` | int | `100` | Max tool-use loop iterations |
+| `max_tokens` | int | `16000` | Max tokens per API call |
+| `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
 | `action` | str | `"block"` | `"block"`, `"warn"`, or `"log"` |
 | `client` | Any | `None` | Anthropic client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
@@ -396,7 +398,7 @@ print(result["output"])  # validated structured object
 {
     "output": "...",       # final text or structured object
     "messages": [...],     # full conversation history
-    "stop_reason": "...",  # "end_turn", "refusal", or "max_turns"
+    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", or "budget_exceeded"
     "usage": {
         "input_tokens": 1234,
         "output_tokens": 567,
