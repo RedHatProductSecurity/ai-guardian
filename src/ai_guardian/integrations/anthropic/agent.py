@@ -2,7 +2,7 @@
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from ai_guardian.integrations.anthropic.tools import (
     execute_tool,
@@ -13,6 +13,8 @@ from ai_guardian.integrations.base import _try_sanitize_text
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
+
+_API_METHOD = "messages.create"
 
 
 class GuardedAgent:
@@ -43,6 +45,10 @@ class GuardedAgent:
         tool_types: Optional[Dict[str, str]] = None,
         scan_input: bool = True,
         scan_output: bool = True,
+        before_call: Optional[Callable[[str, tuple, dict], None]] = None,
+        after_call: Optional[Callable[[str, Any], Any]] = None,
+        pre_run: Optional[Callable[[str, dict], None]] = None,
+        post_run: Optional[Callable[[dict], None]] = None,
     ):
         self._model = model
         self._system_prompt = system_prompt
@@ -57,6 +63,10 @@ class GuardedAgent:
         self._tool_types = tool_types
         self._scan_input = scan_input
         self._scan_output = scan_output
+        self._before_call = before_call
+        self._after_call = after_call
+        self._pre_run = pre_run
+        self._post_run = post_run
 
         self._client = client or self._create_client()
         self._resolved_tools = resolve_tools(tools, tool_types)
@@ -88,6 +98,25 @@ class GuardedAgent:
         - ``stop_reason``: why the loop ended
         - ``usage``: cumulative token usage
         """
+        run_config = {
+            "model": self._model,
+            "tools": list(self._resolved_tools),
+            "system_prompt": self._system_prompt,
+            "max_turns": self._max_turns,
+            "max_budget_tokens": self._max_budget_tokens,
+        }
+        if self._pre_run:
+            self._pre_run(prompt, run_config)
+
+        result = None
+        try:
+            result = self._run_loop(prompt)
+            return result
+        finally:
+            if self._post_run:
+                self._post_run(result)
+
+    def _run_loop(self, prompt: str) -> Dict[str, Any]:
         with monitor(
             action=self._action, mode=self._mode, config=self._config
         ) as session:
@@ -123,6 +152,9 @@ class GuardedAgent:
                 if system:
                     create_kwargs["system"] = system
 
+                if self._before_call:
+                    self._before_call(_API_METHOD, (), create_kwargs)
+
                 response = self._client.messages.create(**create_kwargs)
 
                 resp_usage = getattr(response, "usage", None)
@@ -153,6 +185,12 @@ class GuardedAgent:
                     )
                     raise
 
+                early_stop = False
+                if self._after_call:
+                    hook_result = self._after_call(_API_METHOD, response)
+                    if hook_result is False:
+                        early_stop = True
+
                 if self._max_budget_tokens > 0:
                     total_spent = (
                         usage_totals["input_tokens"] + usage_totals["output_tokens"]
@@ -161,6 +199,11 @@ class GuardedAgent:
                         final_text = self._extract_text(content)
                         stop_reason = "budget_exceeded"
                         break
+
+                if early_stop:
+                    final_text = self._extract_text(content)
+                    stop_reason = "hook_early_stop"
+                    break
 
                 if resp_stop == "end_turn":
                     if self._output_schema and structured_output is None:

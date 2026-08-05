@@ -222,6 +222,8 @@ class _GuardedClient:
         scan_input=True,
         scan_output=True,
         response_parser=None,
+        before_call=None,
+        after_call=None,
     ):
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_extractor", extractor)
@@ -231,6 +233,8 @@ class _GuardedClient:
         object.__setattr__(self, "_scan_input", scan_input)
         object.__setattr__(self, "_scan_output", scan_output)
         object.__setattr__(self, "_response_parser", response_parser)
+        object.__setattr__(self, "_before_call", before_call)
+        object.__setattr__(self, "_after_call", after_call)
 
         methods = extractor.methods_to_wrap()
         object.__setattr__(self, "_wrapped_methods", set(methods))
@@ -259,6 +263,9 @@ class _GuardedClient:
             with monitor(
                 action=gc._action, mode=gc._mode, config=gc._config
             ) as session:
+                if gc._before_call:
+                    gc._before_call(method_name, args, kwargs)
+
                 if gc._scan_input:
                     for text in gc._extractor.extract_input(method_name, args, kwargs):
                         if text:
@@ -293,6 +300,9 @@ class _GuardedClient:
                         )
                         raise
 
+                if gc._after_call:
+                    gc._after_call(method_name, response)
+
                 if gc._response_parser:
                     return gc._response_parser(gc._extractor.provider_name, response)
                 return response
@@ -318,6 +328,8 @@ def guarded(
     scan_input: bool = True,
     scan_output: bool = True,
     response_parser: Optional[Callable[[str, Any], Any]] = None,
+    before_call: Optional[Callable[[str, tuple, dict], None]] = None,
+    after_call: Optional[Callable[[str, Any], Any]] = None,
 ) -> Any:
     """Wrap an LLM client with automatic security scanning.
 
@@ -339,6 +351,10 @@ def guarded(
         response_parser: Optional callable ``(client_type: str, response) -> Any``
             that transforms native LLM responses into a caller-defined format.
             If ``None`` (default), the native response object is returned unchanged.
+        before_call: Optional callback invoked before each API call.
+            Signature: ``(method_name: str, args: tuple, kwargs: dict) -> None``.
+        after_call: Optional callback invoked after each API call and output
+            scanning. Signature: ``(method_name: str, response: Any) -> None``.
 
     Returns:
         A wrapped client proxy — use exactly like the original client.
@@ -367,4 +383,6 @@ def guarded(
         scan_input=scan_input,
         scan_output=scan_output,
         response_parser=response_parser,
+        before_call=before_call,
+        after_call=after_call,
     )

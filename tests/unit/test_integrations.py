@@ -2264,3 +2264,357 @@ class TestGuardedAgent:
 
         assert result["stop_reason"] == "end_turn"
         assert client.messages.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_before_call_hook(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        calls = []
+
+        def on_call(method_name, args, kwargs):
+            calls.append({"method": method_name, "model": kwargs.get("model")})
+
+        agent, client = self._make_agent(before_call=on_call)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        assert len(calls) == 1
+        assert calls[0]["method"] == "messages.create"
+        assert calls[0]["model"] == "claude-sonnet-5"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_after_call_hook(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        responses = []
+
+        def on_response(method_name, resp):
+            responses.append(
+                {"method": method_name, "tokens": resp.usage.output_tokens}
+            )
+
+        agent, client = self._make_agent(after_call=on_response)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        assert len(responses) == 1
+        assert responses[0]["method"] == "messages.create"
+        assert responses[0]["tokens"] == 50
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_after_call_false_stops_loop(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        def stop_after_first(method_name, response):
+            return False
+
+        agent, client = self._make_agent(after_call=stop_after_first, max_turns=10)
+        client.messages.create.return_value = r1
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test early stop")
+
+        assert result["stop_reason"] == "hook_early_stop"
+        assert client.messages.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_after_call_none_continues(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        def noop(method_name, response):
+            return None
+
+        agent, client = self._make_agent(after_call=noop)
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test continue")
+
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_pre_run_hook(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        pre_run_calls = []
+
+        def on_start(prompt, config):
+            pre_run_calls.append({"prompt": prompt, "config": config})
+
+        agent, client = self._make_agent(pre_run=on_start, max_turns=5)
+        client.messages.create.return_value = response
+
+        agent.run("Hello agent")
+
+        assert len(pre_run_calls) == 1
+        assert pre_run_calls[0]["prompt"] == "Hello agent"
+        cfg = pre_run_calls[0]["config"]
+        assert cfg["model"] == "claude-sonnet-5"
+        assert cfg["max_turns"] == 5
+        assert cfg["max_budget_tokens"] == -1
+        assert "tools" in cfg
+        assert "system_prompt" in cfg
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_post_run_hook(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done!")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=50),
+        )
+
+        post_run_calls = []
+
+        def on_end(result):
+            post_run_calls.append(result)
+
+        agent, client = self._make_agent(post_run=on_end)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        assert len(post_run_calls) == 1
+        r = post_run_calls[0]
+        assert r["stop_reason"] == "end_turn"
+        assert r["output"] == "Done!"
+        assert r["usage"]["input_tokens"] == 100
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_post_run_called_on_exception(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret in prompt",
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        post_run_calls = []
+
+        def on_end(result):
+            post_run_calls.append(result)
+
+        agent, client = self._make_agent(post_run=on_end, action="block")
+
+        with pytest.raises(SecurityViolation):
+            agent.run("secret data")
+
+        assert len(post_run_calls) == 1
+        assert post_run_calls[0] is None
+
+
+# ============================================================================
+# TestGuardedClientHooks
+# ============================================================================
+
+
+class TestGuardedClientHooks:
+    """before_call/after_call hooks on _GuardedClient (guarded())."""
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_before_call_invoked(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["response"])
+
+        calls = []
+
+        def on_call(method_name, args, kwargs):
+            calls.append(method_name)
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log", before_call=on_call)
+
+        wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        assert calls == ["messages.create"]
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_after_call_invoked(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        original_response = _make_mock_response(["response"])
+        mock_create.return_value = original_response
+
+        responses = []
+
+        def on_response(method_name, resp):
+            responses.append((method_name, resp))
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log", after_call=on_response)
+
+        wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        assert len(responses) == 1
+        assert responses[0][0] == "messages.create"
+        assert responses[0][1] is original_response
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_after_call_not_called_on_input_violation(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret",
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+
+        after_calls = []
+
+        def on_response(method_name, resp):
+            after_calls.append(True)
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block", after_call=on_response)
+
+        with pytest.raises(SecurityViolation):
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "secret"}],
+            )
+
+        assert after_calls == []
+
+    def test_guarded_passes_hooks(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        bc = lambda mn, a, k: None
+        ac = lambda mn, r: None
+        wrapped = guarded(
+            object(), extractor=CustomExt(), before_call=bc, after_call=ac
+        )
+        assert wrapped._before_call is bc
+        assert wrapped._after_call is ac
+
+    def test_guarded_hooks_default_none(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        wrapped = guarded(object(), extractor=CustomExt())
+        assert wrapped._before_call is None
+        assert wrapped._after_call is None
