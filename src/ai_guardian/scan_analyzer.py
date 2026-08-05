@@ -65,7 +65,10 @@ def run_scan_pipeline(
     language_config = initializer.generate_config(allowlist_entries, ignore_files)
 
     _phase("Scanning files...")
-    scanner = FileScanner(config={}, verbose=False)
+    from ai_guardian.config.loaders import load_scanner_config
+
+    scan_config = load_scanner_config(project_root=str(initializer.project_dir))
+    scanner = FileScanner(config=scan_config, verbose=False)
     findings = scanner.scan_directory(
         str(initializer.project_dir),
         progress_callback=on_file_progress,

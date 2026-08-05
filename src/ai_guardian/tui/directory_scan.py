@@ -565,15 +565,9 @@ class DirectoryScanContent(ScrollableContainer):
 
     def _load_config(self) -> Dict[str, Any]:
         try:
-            from ai_guardian.config.utils import get_config_dir
+            from ai_guardian.config.loaders import load_scanner_config
 
-            config_path = get_config_dir() / "ai-guardian.json"
-            if not config_path.exists():
-                config_path = Path.cwd() / ".ai-guardian.json"
-            if not config_path.exists():
-                return {}
-            with open(config_path, "r") as f:
-                return json.load(f)
+            return load_scanner_config()
         except Exception:
             return {}
 
