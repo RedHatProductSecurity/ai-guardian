@@ -152,6 +152,19 @@ class GuardedAgent:
                     raise
 
                 if resp_stop == "end_turn":
+                    if self._output_schema and structured_output is None:
+                        messages.append({"role": "assistant", "content": content})
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You must call the submit_result tool with "
+                                    "your structured output. Do not respond with "
+                                    "plain text."
+                                ),
+                            }
+                        )
+                        continue
                     final_text = self._extract_text(content)
                     stop_reason = "end_turn"
                     break

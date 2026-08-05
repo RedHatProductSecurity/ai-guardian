@@ -1033,6 +1033,328 @@ class TestOpenAIGuardedProxy:
 # ============================================================================
 
 
+# ============================================================================
+# TestProviderName
+# ============================================================================
+
+
+class TestProviderName:
+    """ProviderExtractor.provider_name auto-derives from class name."""
+
+    def test_anthropic_extractor(self):
+        ext = AnthropicExtractor()
+        assert ext.provider_name == "anthropic"
+
+    def test_openai_extractor(self):
+        ext = OpenAIExtractor()
+        assert ext.provider_name == "openai"
+
+    def test_custom_extractor_name(self):
+        class MyCustomExtractor(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        ext = MyCustomExtractor()
+        assert ext.provider_name == "mycustom"
+
+    def test_no_extractor_suffix(self):
+        class Gemini(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        ext = Gemini()
+        assert ext.provider_name == "gemini"
+
+
+# ============================================================================
+# TestResponseParser
+# ============================================================================
+
+
+class TestResponseParser:
+    """response_parser parameter on guarded() and _GuardedClient."""
+
+    @staticmethod
+    def _make_parser():
+        def parser(client_type, response):
+            text = ""
+            if client_type == "anthropic":
+                content = getattr(response, "content", [])
+                if content:
+                    text = getattr(content[0], "text", "")
+            return {"text": text, "provider": client_type}
+
+        return parser
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_parser_transforms_response(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["hello world"])
+
+        ext = AnthropicExtractor()
+        parser = self._make_parser()
+        wrapped = _GuardedClient(client, ext, action="log", response_parser=parser)
+
+        result = wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        assert result == {"text": "hello world", "provider": "anthropic"}
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_no_parser_returns_native_response(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        original_response = _make_mock_response(["hello"])
+        mock_create.return_value = original_response
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="log")
+
+        result = wrapped.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "test"}],
+        )
+
+        assert result is original_response
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_violation_sets_sanitized_parsed(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "llm_output":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret in response",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        original_response = _make_mock_response(["leaked secret"])
+        mock_create.return_value = original_response
+
+        ext = AnthropicExtractor()
+        parser = self._make_parser()
+        wrapped = _GuardedClient(client, ext, action="block", response_parser=parser)
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "safe input"}],
+            )
+
+        exc = exc_info.value
+        assert exc.response is original_response
+        assert exc.sanitized_text == "[REDACTED]"
+        assert exc.sanitized_parsed == {
+            "text": "leaked secret",
+            "provider": "anthropic",
+        }
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_violation_no_parser_no_sanitized_parsed(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "llm_output":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["secret"])
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        exc = exc_info.value
+        assert exc.sanitized_parsed is None
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_parser_error_sets_sanitized_parsed_none(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "llm_output":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        def bad_parser(client_type, response):
+            raise ValueError("parser broke")
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        mock_create.return_value = _make_mock_response(["secret"])
+
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(
+            client, ext, action="block", response_parser=bad_parser
+        )
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "test"}],
+            )
+
+        assert exc_info.value.sanitized_parsed is None
+
+    def test_guarded_passes_response_parser(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        parser = lambda ct, r: {"parsed": True}
+        wrapped = guarded(object(), extractor=CustomExt(), response_parser=parser)
+        assert wrapped._response_parser is parser
+
+    def test_guarded_no_parser_default(self):
+        class CustomExt(ProviderExtractor):
+            @classmethod
+            def detect(cls, client):
+                return False
+
+            def methods_to_wrap(self):
+                return []
+
+            def extract_input(self, method_name, args, kwargs):
+                return []
+
+            def extract_output(self, method_name, response):
+                return []
+
+        wrapped = guarded(object(), extractor=CustomExt())
+        assert wrapped._response_parser is None
+
+    def test_stream_violation_sets_sanitized_parsed(self):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret in stream",
+            )
+        )
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        ext = AnthropicExtractor()
+
+        parser = self._make_parser()
+        final_msg = _make_mock_response(["leaked secret"])
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.get_final_message = MagicMock(return_value=final_msg)
+
+        proxy = _StreamProxy(
+            mock_stream, ext, "messages.stream", mock_session, response_parser=parser
+        )
+        with pytest.raises(SecurityViolation) as exc_info:
+            with proxy:
+                pass
+
+        exc = exc_info.value
+        assert exc.sanitized_parsed == {
+            "text": "leaked secret",
+            "provider": "anthropic",
+        }
+
+
 class TestCustomExtractor:
     """Custom ProviderExtractor passed via extractor= param."""
 
@@ -1572,6 +1894,71 @@ class TestGuardedAgent:
         result = agent.run("Find bugs")
 
         assert result["output"] == {"findings": ["bug1", "bug2"]}
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_structured_output_reprompts_on_text(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        text_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Here are the results...")],
+            stop_reason="end_turn",
+        )
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="tool_1",
+                    input={"findings": ["bug1"], "file_count": 1},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {
+                "findings": {"type": "array"},
+                "file_count": {"type": "integer"},
+            },
+            "required": ["findings", "file_count"],
+        }
+        agent, client = self._make_agent(output_schema=schema)
+        client.messages.create.side_effect = [text_response, tool_response]
+
+        result = agent.run("Find bugs")
+
+        assert result["output"] == {"findings": ["bug1"], "file_count": 1}
+        assert client.messages.create.call_count == 2
+        messages = result["messages"]
+        reprompt_msg = messages[2]
+        assert reprompt_msg["role"] == "user"
+        assert "submit_result" in reprompt_msg["content"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_structured_output_max_turns_on_repeated_text(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        text_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="I'll just respond with text")],
+            stop_reason="end_turn",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"findings": {"type": "array"}},
+        }
+        agent, client = self._make_agent(output_schema=schema, max_turns=3)
+        client.messages.create.return_value = text_response
+
+        result = agent.run("Find bugs")
+
+        assert result["stop_reason"] == "max_turns"
+        assert client.messages.create.call_count == 3
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_system_prompt_scanned(self, mock_monitor):

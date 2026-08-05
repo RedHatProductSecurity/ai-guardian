@@ -148,7 +148,7 @@ client = create_client(timeout=30.0)
 
 Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
 
-### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output)`
+### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output, response_parser)`
 
 Wraps an LLM client with automatic security scanning.
 
@@ -163,13 +163,14 @@ Wraps an LLM client with automatic security scanning.
 | `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |
 | `scan_input` | bool | `True` | Scan prompts before sending to LLM |
 | `scan_output` | bool | `True` | Scan responses after receiving from LLM |
+| `response_parser` | callable | `None` | `(client_type: str, response) -> Any` — transforms native responses into a caller-defined format. If `None`, native response returned unchanged. |
 
-**Returns:** A wrapped client proxy. Use it exactly like the original client.
+**Returns:** A wrapped client proxy. Use it exactly like the original client. If `response_parser` is set, calls return the parser's output instead of the native response.
 
 **Raises:**
 
 - `ValueError` if no extractor matches the client type and none provided explicitly
-- `SecurityViolation` when `action="block"` and a threat is detected
+- `SecurityViolation` when `action="block"` and a threat is detected. If `response_parser` is set, the exception's `sanitized_parsed` attribute contains the parser applied to the violating response.
 
 ### What Gets Scanned
 
@@ -223,6 +224,52 @@ class MyExtractor(ProviderExtractor):
         return [response.text]
 
 client = guarded(MyLLMClient(), extractor=MyExtractor())
+```
+
+### Response Parser
+
+Use `response_parser` to transform native LLM responses into a unified format. This is useful when your application works with multiple providers and needs a consistent response shape.
+
+```python
+from ai_guardian.integrations import guarded
+
+def my_parser(client_type: str, response) -> dict:
+    if client_type == "anthropic":
+        return {
+            "text": response.content[0].text,
+            "tokens_in": response.usage.input_tokens,
+            "tokens_out": response.usage.output_tokens,
+            "model": response.model,
+        }
+    elif client_type == "openai":
+        return {
+            "text": response.choices[0].message.content,
+            "tokens_in": response.usage.prompt_tokens,
+            "tokens_out": response.usage.completion_tokens,
+            "model": response.model,
+        }
+
+# Without parser — native response (default, backward compatible)
+client = guarded(Anthropic(), action="block")
+response = client.messages.create(...)  # returns Anthropic Message object
+
+# With parser — caller's unified format
+client = guarded(Anthropic(), action="block", response_parser=my_parser)
+result = client.messages.create(...)  # returns my_parser's dict
+print(result["text"])
+```
+
+The `client_type` string is derived from the extractor class name: `AnthropicExtractor` → `"anthropic"`, `OpenAIExtractor` → `"openai"`. Custom extractors can override the `provider_name` property.
+
+When `response_parser` is set and an output violation occurs, the `SecurityViolation` exception includes a `sanitized_parsed` attribute with the parser applied to the violating response:
+
+```python
+try:
+    result = client.messages.create(...)
+except SecurityViolation as e:
+    e.response          # raw native response (always available)
+    e.sanitized_text    # redacted text (always available)
+    e.sanitized_parsed  # parser applied to the violating response
 ```
 
 ## GuardedAgent (Anthropic)
@@ -438,6 +485,7 @@ Exception raised when `action="block"` and a threat is detected.
 | `result` | `CheckResult` | The check result that triggered the violation |
 | `response` | object or None | The original LLM response object (set by `guarded()` and `GuardedAgent` for output violations; `None` for input violations or direct `monitor()` usage) |
 | `sanitized_text` | str or None | Redacted version of the response text (`None` if sanitization was unavailable or not applicable) |
+| `sanitized_parsed` | Any or absent | Only present when `response_parser` is set on `guarded()`. Contains the parser applied to the violating response, or `None` if the parser raised an error. |
 
 ```python
 try:
