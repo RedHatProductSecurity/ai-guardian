@@ -65,22 +65,6 @@ def _load_mcp_config() -> Dict:
         return {}
 
 
-def _load_full_config() -> Optional[Dict]:
-    """Load full ai-guardian.json config."""
-    from ai_guardian.config.utils import get_config_dir
-
-    config_path = get_config_dir() / "ai-guardian.json"
-    if not config_path.exists():
-        config_path = Path.cwd() / ".ai-guardian.json"
-    if not config_path.exists():
-        return None
-    try:
-        with open(config_path, "r") as f:
-            return json.load(f)
-    except Exception:
-        return None
-
-
 def _load_skill_instructions() -> str:
     """Load skill instructions to send during MCP initialization."""
     try:
@@ -396,9 +380,12 @@ def create_server() -> "MCPServer":
     def get_config() -> Dict[str, Any]:
         """Get current security posture summary. Returns feature enabled/disabled status only — no security rule details. Re-reads config on every call to reflect changes."""
         try:
+            from ai_guardian.config.loaders import _load_config_file
             from ai_guardian.config.utils import is_feature_enabled
 
-            config = _load_full_config() or {}
+            config, _ = _load_config_file()
+            if config is None:
+                config = {}
             features = {}
 
             feature_keys = [
@@ -604,8 +591,9 @@ def create_server() -> "MCPServer":
                 return {"status": "error", "message": err}
 
             from ai_guardian.scanners.file_scanner import FileScanner
+            from ai_guardian.config.loaders import load_scanner_config
 
-            config = _load_full_config() or {}
+            config = load_scanner_config()
             scanner = FileScanner(config=config)
 
             start_ms = time.monotonic_ns() // 1_000_000
@@ -656,8 +644,9 @@ def create_server() -> "MCPServer":
                 }
 
             from ai_guardian.scanners.file_scanner import FileScanner
+            from ai_guardian.config.loaders import load_scanner_config
 
-            config = _load_full_config() or {}
+            config = load_scanner_config()
             scanner = FileScanner(config=config)
             findings = scanner.scan_directory(path=str(resolved))
 

@@ -727,6 +727,53 @@ def _load_security_instructions_config():
     return _load_config_section("security_instructions")
 
 
+_SCANNER_MERGE_SECTIONS = (
+    "prompt_injection",
+    "config_file_scanning",
+    "secret_scanning",
+    "scan_pii",
+    "image_scanning",
+    "context_poisoning",
+    "supply_chain",
+    "code_scanning",
+    "canary_detection",
+    "exfil_detection",
+    "scan_offensive",
+    "ssrf_protection",
+)
+
+
+def load_scanner_config(project_root=None):
+    """Load full merged config suitable for FileScanner.
+
+    Loads global + project + SDK overlay config via _load_config_file(),
+    then merges .aiguardignore.toml ignore paths into each scanner section.
+    Logs a warning on config loading errors but always returns a usable dict.
+
+    Args:
+        project_root: Project root for .aiguardignore.toml lookup.
+            Defaults to get_project_dir().
+
+    Returns:
+        dict: Merged config (empty on failure).
+    """
+    config, error_msg = _load_config_file()
+    if error_msg:
+        logger.warning("Config loading issue: %s", error_msg)
+        return {}
+    if config is None:
+        config = {}
+
+    root = Path(project_root) if project_root else Path(get_project_dir())
+    for section_key in _SCANNER_MERGE_SECTIONS:
+        section = config.get(section_key)
+        merged = _merge_aiguardignore(section, section_key, root)
+        if merged is not None:
+            config[section_key] = merged
+
+    return config
+
+
 def _get_on_scan_error_action() -> str:
     """
     Load the global on_scan_error setting from ai-guardian.json.

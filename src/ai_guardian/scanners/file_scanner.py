@@ -1224,13 +1224,17 @@ def scan_command(args) -> int:
                 handler.setLevel(logging.CRITICAL + 1)
 
     # Load configuration
-    config = {}
     if hasattr(args, "config") and args.config:
+        config = {}
         try:
             with open(args.config, encoding="utf-8") as f:
                 config = json.load(f)
         except Exception as e:
             print(f"Warning: Could not load config file: {e}", file=sys.stderr)
+    else:
+        from ai_guardian.config.loaders import load_scanner_config
+
+        config = load_scanner_config()
 
     # Initialize scanner
     scanner = FileScanner(config=config, verbose=args.verbose)
