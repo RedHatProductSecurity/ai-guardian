@@ -223,10 +223,12 @@ class ProjectInitializer:
         return config_path, True, existed
 
     def scan_project(self) -> List[Dict]:
-        """Run FileScanner with default config against the project."""
+        """Run FileScanner with merged config against the project."""
         from ai_guardian.scanners.file_scanner import FileScanner
+        from ai_guardian.config.loaders import load_scanner_config
 
-        scanner = FileScanner(config={}, verbose=False)
+        config = load_scanner_config(project_root=str(self.project_dir))
+        scanner = FileScanner(config=config, verbose=False)
         return scanner.scan_directory(str(self.project_dir))
 
     def analyze_scan(self, findings: List[Dict], threshold: int = 10):

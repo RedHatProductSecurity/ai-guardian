@@ -753,16 +753,19 @@ class TestGetViolations:
 class TestGetConfig:
     """Test get_config tool."""
 
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders._load_config_file")
     def test_returns_feature_booleans(self, mock_config):
-        mock_config.return_value = {
-            "secret_scanning": {"enabled": True},
-            "prompt_injection": {"enabled": False, "action": "warn"},
-            "scan_pii": {"enabled": True},
-            "security_instructions": {"inject_on_prompt": True},
-            "action": "block",
-            "mcp_server": {"proactive_level": "low"},
-        }
+        mock_config.return_value = (
+            {
+                "secret_scanning": {"enabled": True},
+                "prompt_injection": {"enabled": False, "action": "warn"},
+                "scan_pii": {"enabled": True},
+                "security_instructions": {"inject_on_prompt": True},
+                "action": "block",
+                "mcp_server": {"proactive_level": "low"},
+            },
+            None,
+        )
 
         server = create_server()
         tool = server._tool_manager._tools["get_config"]
@@ -777,17 +780,22 @@ class TestGetConfig:
         assert scanner_actions["prompt_injection"] == "warn"
         assert scanner_actions["scan_pii"] == "block"  # falls back to global
 
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders._load_config_file")
     def test_no_rules_or_patterns_exposed(self, mock_config):
         """Config response must not contain regex patterns, allowlists, or deny rules."""
-        mock_config.return_value = {
-            "secret_scanning": {"enabled": True, "allowlist_patterns": ["test.*"]},
-            "permissions": {
-                "enabled": True,
-                "rules": [{"matcher": "Write", "pattern": "*.py", "action": "allow"}],
+        mock_config.return_value = (
+            {
+                "secret_scanning": {"enabled": True, "allowlist_patterns": ["test.*"]},
+                "permissions": {
+                    "enabled": True,
+                    "rules": [
+                        {"matcher": "Write", "pattern": "*.py", "action": "allow"}
+                    ],
+                },
+                "prompt_injection": {"enabled": True, "sensitivity": "high"},
             },
-            "prompt_injection": {"enabled": True, "sensitivity": "high"},
-        }
+            None,
+        )
 
         server = create_server()
         tool = server._tool_manager._tools["get_config"]
@@ -936,10 +944,10 @@ class TestDoctor:
 class TestResources:
     """Test MCP resources."""
 
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders._load_config_file")
     @patch("ai_guardian.scanners.manager.ScannerManager")
     def test_security_posture_resource(self, mock_sm_cls, mock_config):
-        mock_config.return_value = {"secret_scanning": {"enabled": True}}
+        mock_config.return_value = ({"secret_scanning": {"enabled": True}}, None)
         mock_sm = MagicMock()
         mock_sm.list_installed.return_value = []
         mock_sm_cls.return_value = mock_sm
@@ -1098,7 +1106,7 @@ class TestScanDirectory:
 
     @patch("ai_guardian.scanners.file_scanner.FileScanner.scan_directory")
     @patch("ai_guardian.scanners.file_scanner.FileScanner._discover_files")
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders.load_scanner_config")
     def test_scan_with_findings(self, mock_config, mock_discover, mock_scan, tmp_path):
         mock_config.return_value = {}
         mock_discover.return_value = [tmp_path / "a.py", tmp_path / "b.py"]
@@ -1129,7 +1137,7 @@ class TestScanDirectory:
 
     @patch("ai_guardian.scanners.file_scanner.FileScanner.scan_directory")
     @patch("ai_guardian.scanners.file_scanner.FileScanner._discover_files")
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders.load_scanner_config")
     def test_no_secret_values_exposed(
         self, mock_config, mock_discover, mock_scan, tmp_path
     ):
@@ -1179,7 +1187,7 @@ class TestScanDirectoryReport:
     """Test scan_directory_report tool."""
 
     @patch("ai_guardian.scanners.file_scanner.FileScanner.scan_directory")
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders.load_scanner_config")
     def test_generates_json_report(self, mock_config, mock_scan, tmp_path):
         mock_config.return_value = {}
         mock_scan.return_value = [
@@ -1196,7 +1204,7 @@ class TestScanDirectoryReport:
         assert Path(result["report_path"]).exists()
 
     @patch("ai_guardian.scanners.file_scanner.FileScanner.scan_directory")
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders.load_scanner_config")
     def test_generates_sarif_report(self, mock_config, mock_scan, tmp_path):
         mock_config.return_value = {}
         mock_scan.return_value = []
@@ -1210,7 +1218,7 @@ class TestScanDirectoryReport:
         assert Path(result["report_path"]).exists()
 
     @patch("ai_guardian.scanners.file_scanner.FileScanner.scan_directory")
-    @patch("ai_guardian.mcp.server._load_full_config")
+    @patch("ai_guardian.config.loaders.load_scanner_config")
     def test_report_path_only_no_content(self, mock_config, mock_scan, tmp_path):
         """Response must contain path but not the report content."""
         mock_config.return_value = {}

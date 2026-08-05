@@ -760,8 +760,9 @@ class _RestHandler(BaseHTTPRequestHandler):
         try:
             from ai_guardian.scanners.file_scanner import FileScanner
             from ai_guardian.tui.pattern_editor import config_section_for_rule_id
+            from ai_guardian.config.loaders import load_scanner_config
 
-            cfg = self.server.daemon_state.get_config()
+            cfg = load_scanner_config(project_root=project_dir)
             scanner = FileScanner(config=cfg)
 
             t0 = _time.monotonic()
