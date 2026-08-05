@@ -10,6 +10,8 @@ Provides different strategies for combining results from multiple scanners:
 import fnmatch
 import logging
 from abc import ABC, abstractmethod
+
+logger = logging.getLogger(__name__)
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -132,7 +134,7 @@ class FirstMatchStrategy(ExecutionStrategy):
 
         for engine_config in engines:
             report_file = f"{report_file_prefix}_{engine_config.type}.json"
-            logging.info(f"FirstMatchStrategy: trying engine {engine_config.type}")
+            logger.info(f"FirstMatchStrategy: trying engine {engine_config.type}")
 
             resolved_path = resolve_engine_config_path(engine_config, config_path)
             result = scanner_fn(
@@ -144,24 +146,24 @@ class FirstMatchStrategy(ExecutionStrategy):
             )
 
             if result.error and "not found" in (result.error or "").lower():
-                logging.warning(f"Engine {engine_config.type} unavailable, trying next")
+                logger.warning(f"Engine {engine_config.type} unavailable, trying next")
                 continue
 
             if result.has_secrets:
-                logging.info(
+                logger.info(
                     f"Strategy 'first-match' complete: engine={engine_config.type} "
                     f"duration_ms={result.scan_time_ms:.1f} "
                     f"has_secrets=True"
                 )
                 return result
 
-            logging.info(
+            logger.info(
                 f"Engine {engine_config.type} found no secrets, trying next engine"
             )
             last_clean_result = result
 
         if last_clean_result is not None:
-            logging.info(
+            logger.info(
                 f"Strategy 'first-match' complete: all engines clean "
                 f"(last={last_clean_result.engine})"
             )
@@ -224,7 +226,7 @@ class AnyMatchStrategy(ExecutionStrategy):
         unique_secrets = self._deduplicate(all_secrets)
         engine_label = f"any-match({','.join(engines_run)})"
 
-        logging.info(
+        logger.info(
             f"Strategy 'any-match' complete: engines_run={len(engines_run)} "
             f"total_duration_ms={total_time_ms:.1f} "
             f"combined_findings={len(all_secrets)} "
@@ -272,7 +274,7 @@ class AnyMatchStrategy(ExecutionStrategy):
                     result = future.result()
                     results.append(result)
                 except Exception as e:
-                    logging.error(f"Engine {engine_type} raised exception: {e}")
+                    logger.error(f"Engine {engine_type} raised exception: {e}")
                     results.append(
                         ScanResult(
                             has_secrets=False,
@@ -369,7 +371,7 @@ class ConsensusStrategy(ExecutionStrategy):
         consensus_secrets = self._find_consensus(all_secrets)
         engine_label = f"consensus({','.join(engines_run)})"
 
-        logging.info(
+        logger.info(
             f"Strategy 'consensus' complete: engines_run={len(engines_run)} "
             f"threshold={self.threshold} "
             f"total_duration_ms={total_time_ms:.1f} "

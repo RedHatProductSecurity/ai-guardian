@@ -23,6 +23,8 @@ from ai_guardian.scanners.engine_builder import (
 from ai_guardian.scanners.executor import run_engine
 from ai_guardian.scanners.strategies import SecretMatch
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class EngineTestResult:
@@ -159,7 +161,7 @@ def test_engine(
                 global_path = None
             config_path = resolve_engine_config_path(engine_config, global_path)
         except Exception as exc:
-            logging.warning("Pattern server resolution failed: %s", exc)
+            logger.warning("Pattern server resolution failed: %s", exc)
 
     with tempfile.TemporaryDirectory(prefix="aiguardian_engtest_") as tmpdir:
         source_file = str(Path(tmpdir) / "test_input.txt")

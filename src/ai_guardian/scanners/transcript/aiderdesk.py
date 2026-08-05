@@ -19,6 +19,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_with_position_tracking,
 )
 
+logger = logging.getLogger(__name__)
+
 _H4_RE = re.compile(r"^####\s+")
 _SESSION_HEADER_RE = re.compile(r"^#\s+aider chat started at\s+")
 
@@ -86,7 +88,7 @@ def read_aiderdesk_transcript(
         extracted = _extract_text_from_markdown(new_content)
         return extracted, new_offset
     except OSError as e:
-        logging.debug(f"AiderDesk transcript read error: {e}")
+        logger.debug(f"AiderDesk transcript read error: {e}")
         return "", byte_offset
 
 
@@ -148,7 +150,7 @@ class AiderDeskTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         history_path = get_aiderdesk_history_path()
         if not history_path:
-            logging.debug("AiderDesk transcript: no history file found")
+            logger.debug("AiderDesk transcript: no history file found")
             return []
 
         return scan_aiderdesk_transcript_incremental(

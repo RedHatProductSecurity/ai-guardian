@@ -18,6 +18,8 @@ from ai_guardian.scanners.secret_scanning import check_secrets_with_gitleaks
 
 import ai_guardian.scanners.secret_scanning as _secret_scanning_mod
 
+logger = logging.getLogger(__name__)
+
 try:
     from ai_guardian.violations.logger import ViolationLogger
 
@@ -74,7 +76,7 @@ def _load_transcript_positions() -> Dict[str, object]:
     except FileNotFoundError:
         pass  # intentionally silent — file may not exist yet
     except Exception as e:
-        logging.debug(f"Failed to load transcript positions: {e}")
+        logger.debug(f"Failed to load transcript positions: {e}")
     return {}
 
 
@@ -106,7 +108,7 @@ def _save_transcript_positions(positions: Dict[str, object]) -> None:
                 os.unlink(tmp_path)
             raise
     except Exception as e:
-        logging.debug(f"Failed to save transcript positions: {e}")
+        logger.debug(f"Failed to save transcript positions: {e}")
 
 
 def _scan_with_position_tracking(
@@ -142,7 +144,7 @@ def _scan_with_position_tracking(
             _, new_pos = reader_fn(default_position)
             positions[pos_key] = new_pos
         _save_transcript_positions(positions)
-        logging.debug(f"{label} transcript first seen, initialized position")
+        logger.debug(f"{label} transcript first seen, initialized position")
         return ""
 
     last_pos = positions[pos_key]
@@ -195,7 +197,7 @@ def _get_most_recent_entry(
                     best_mtime = mtime
                     best_path = entry.path
     except OSError as e:
-        logging.debug(f"{label} directory listing error: {e}")
+        logger.debug(f"{label} directory listing error: {e}")
         return None
 
     if best_path is None:
@@ -262,11 +264,11 @@ def _read_jsonl_incremental(
     try:
         file_size = os.path.getsize(path)
     except OSError as e:
-        logging.debug(f"{label} transcript read error: {e}")
+        logger.debug(f"{label} transcript read error: {e}")
         return "", last_pos
 
     if file_size < last_pos:
-        logging.debug(
+        logger.debug(
             f"{label} transcript file truncated (size={file_size}, "
             f"last_pos={last_pos}), re-reading from start"
         )
@@ -281,7 +283,7 @@ def _read_jsonl_incremental(
             new_bytes = f.read()
             new_pos = f.tell()
     except OSError as e:
-        logging.debug(f"{label} transcript read error: {e}")
+        logger.debug(f"{label} transcript read error: {e}")
         return "", last_pos
 
     if strip_bom and last_pos == 0:
@@ -371,7 +373,7 @@ def _load_seen_findings() -> Dict[str, Dict[str, str]]:
     except FileNotFoundError:
         pass  # intentionally silent — file may not exist yet
     except Exception as e:
-        logging.debug(f"Failed to load seen findings: {e}")
+        logger.debug(f"Failed to load seen findings: {e}")
     return {}
 
 
@@ -388,7 +390,7 @@ def _save_seen_findings(seen: Dict[str, Dict[str, str]]) -> None:
         with open(sf_file, "w", encoding="utf-8") as f:
             json.dump(pruned, f)
     except Exception as e:
-        logging.debug(f"Failed to save seen findings: {e}")
+        logger.debug(f"Failed to save seen findings: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +547,7 @@ def _scan_transcript_text(
                         )
                         seen[fp] = now_iso
         except Exception as e:
-            logging.debug(f"Transcript secret scan error (fail-open): {e}")
+            logger.debug(f"Transcript secret scan error (fail-open): {e}")
 
     # --- PII scanning ---
     if pii_config and is_feature_enabled(pii_config.get("enabled"), now, default=True):
@@ -594,7 +596,7 @@ def _scan_transcript_text(
                         hook_context=hook_context,
                     )
         except Exception as e:
-            logging.debug(f"Transcript PII scan error (fail-open): {e}")
+            logger.debug(f"Transcript PII scan error (fail-open): {e}")
 
     if len(seen) > seen_count:
         seen_all[transcript_key] = seen
@@ -649,4 +651,4 @@ def _log_transcript_violation(
             severity="high",
         )
     except Exception as e:
-        logging.error(f"Failed to log transcript violation: {e}")
+        logger.error(f"Failed to log transcript violation: {e}")

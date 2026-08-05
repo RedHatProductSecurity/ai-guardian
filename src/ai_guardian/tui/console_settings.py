@@ -18,6 +18,8 @@ from ai_guardian.tui.schema_defaults import (
     save_global_config_field,
 )
 
+logger = logging.getLogger(__name__)
+
 THEME_OPTIONS = [
     ("Monokai", "monokai"),
     ("VS Code Dark", "vscode_dark"),
@@ -60,7 +62,7 @@ def load_editor_theme() -> str:
             if theme in valid_themes:
                 return theme
         except Exception as e:
-            logging.warning("Failed to read config: %s", e)
+            logger.warning("Failed to read config: %s", e)
     return DEFAULT_THEME
 
 
@@ -77,7 +79,7 @@ def load_preferred_ui() -> str:
             if val in valid:
                 return val
         except Exception as e:
-            logging.warning("Failed to read config: %s", e)
+            logger.warning("Failed to read config: %s", e)
     return DEFAULT_UI_TOOLKIT
 
 
@@ -94,7 +96,7 @@ def load_preferred_color_theme() -> str:
             if val in valid:
                 return val
         except Exception as e:
-            logging.warning("Failed to read config: %s", e)
+            logger.warning("Failed to read config: %s", e)
     return DEFAULT_COLOR_THEME
 
 

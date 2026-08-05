@@ -12,6 +12,8 @@ These functions are the building blocks that execution strategies use.
 import logging
 import os
 import subprocess
+
+logger = logging.getLogger(__name__)
 import time
 from typing import Optional
 
@@ -30,7 +32,7 @@ def _cache_get(cache, content_hash, engine_config, engine_label):
     cfg_hash = ScanResultCache.config_hash(engine_config)
     cached = cache.get(content_hash, engine_label, cfg_hash)
     if cached is not None:
-        logging.info(f"Cache hit for {engine_label} (hash={content_hash[:12]})")
+        logger.info(f"Cache hit for {engine_label} (hash={content_hash[:12]})")
     return cached, cfg_hash
 
 
@@ -93,7 +95,7 @@ def run_single_engine(
             config_path=config_path,
         )
 
-        logging.debug(f"Engine {engine_config.type}: running {' '.join(cmd)}")
+        logger.debug(f"Engine {engine_config.type}: running {' '.join(cmd)}")
 
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
@@ -122,7 +124,7 @@ def run_single_engine(
             return scan_result
 
         if result.returncode == engine_config.success_exit_code:
-            logging.info(
+            logger.info(
                 f"Engine scan complete: engine={engine_config.type} "
                 f"duration_ms={elapsed_ms:.1f} findings=0 has_secrets=False"
             )
@@ -150,7 +152,7 @@ def run_single_engine(
         )
         if engine_config.version_hint:
             msg += f" ({engine_config.version_hint})"
-        logging.warning(msg)
+        logger.warning(msg)
         return ScanResult(
             has_secrets=False,
             secrets=[],
@@ -161,7 +163,7 @@ def run_single_engine(
 
     except subprocess.TimeoutExpired:
         elapsed_ms = (time.monotonic() - start_time) * 1000
-        logging.warning(f"Engine {engine_config.type} timed out after {timeout}s")
+        logger.warning(f"Engine {engine_config.type} timed out after {timeout}s")
         return ScanResult(
             has_secrets=False,
             secrets=[],
@@ -171,7 +173,7 @@ def run_single_engine(
         )
     except FileNotFoundError:
         elapsed_ms = (time.monotonic() - start_time) * 1000
-        logging.warning(
+        logger.warning(
             f"Engine {engine_config.type} binary not found: {engine_config.binary}"
         )
         return ScanResult(
@@ -183,7 +185,7 @@ def run_single_engine(
         )
     except Exception as e:
         elapsed_ms = (time.monotonic() - start_time) * 1000
-        logging.error(f"Engine {engine_config.type} failed: {e}")
+        logger.error(f"Engine {engine_config.type} failed: {e}")
         return ScanResult(
             has_secrets=False,
             secrets=[],
@@ -240,7 +242,7 @@ def run_python_scanner(
         elapsed_ms = (time.monotonic() - start_time) * 1000
 
         if not findings:
-            logging.info(
+            logger.info(
                 f"Engine scan complete: engine={scanner_name} "
                 f"duration_ms={elapsed_ms:.1f} findings=0 has_secrets=False"
             )
@@ -271,7 +273,7 @@ def run_python_scanner(
                 )
             )
 
-        logging.info(
+        logger.info(
             f"Engine scan complete: engine={scanner_name} "
             f"duration_ms={elapsed_ms:.1f} findings={len(secrets)} has_secrets=True"
         )
@@ -287,7 +289,7 @@ def run_python_scanner(
 
     except Exception as e:
         elapsed_ms = (time.monotonic() - start_time) * 1000
-        logging.error(f"Python scanner {scanner_name} failed: {e}")
+        logger.error(f"Python scanner {scanner_name} failed: {e}")
         return ScanResult(
             has_secrets=False,
             secrets=[],
@@ -392,7 +394,7 @@ def run_engine(
                 mgr = daemon_state.get_listen_manager()
                 result_dict = mgr.scan(engine_config.binary, source_file, config_path)
                 elapsed_ms = (time.monotonic() - start) * 1000
-                logging.info(
+                logger.info(
                     "%s listen mode scan: %.1fms, findings=%d",
                     engine_config.type,
                     elapsed_ms,
@@ -404,7 +406,7 @@ def run_engine(
                 _cache_put(cache, content_hash, engine_config.type, cfg_hash, result)
                 return result
         except (RuntimeError, OSError, ValueError) as exc:
-            logging.warning("Listen mode failed, falling back to subprocess: %s", exc)
+            logger.warning("Listen mode failed, falling back to subprocess: %s", exc)
 
     return run_single_engine(
         engine_config,
@@ -435,7 +437,7 @@ def _parse_secrets_result(
         extra = ""
         if not result.has_secrets:
             extra = " (exit code indicated secrets but parser found none)"
-        logging.info(
+        logger.info(
             f"Engine scan complete: engine={engine_config.type} "
             f"duration_ms={elapsed_ms:.1f} "
             f"findings={len(result.secrets)} "
@@ -444,7 +446,7 @@ def _parse_secrets_result(
         return result
 
     except Exception as e:
-        logging.error(f"Failed to parse {engine_config.type} output: {e}")
+        logger.error(f"Failed to parse {engine_config.type} output: {e}")
         return ScanResult(
             has_secrets=True,
             secrets=[

@@ -11,6 +11,8 @@ from textual.widgets import Static
 
 from ai_guardian.config.utils import get_config_dir, get_project_config_path
 
+logger = logging.getLogger(__name__)
+
 
 class SecurityInstructionsContent(Container):
     """Content widget for Security Instructions tab."""
@@ -102,7 +104,7 @@ class SecurityInstructionsContent(Container):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
             except Exception as e:
-                logging.warning("Failed to read config: %s", e)
+                logger.warning("Failed to read config: %s", e)
 
         si = config.get("security_instructions", {})
         if not isinstance(si, dict):

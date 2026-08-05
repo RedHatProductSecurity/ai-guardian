@@ -467,12 +467,12 @@ def _is_path_excluded(file_path, config):
             datetime.now(timezone.utc),
             default=False,
         ):
-            logging.debug("Directory exclusions disabled in config")
+            logger.debug("Directory exclusions disabled in config")
             return False
 
         exclusion_paths = dir_exclusions.get("paths", [])
         if not exclusion_paths:
-            logging.debug("No directory exclusion paths configured")
+            logger.debug("No directory exclusion paths configured")
             return False
 
         # Convert file path to absolute path and resolve symlinks
@@ -481,7 +481,7 @@ def _is_path_excluded(file_path, config):
         # Check each exclusion path
         for exclusion_path in exclusion_paths:
             if not isinstance(exclusion_path, str):
-                logging.warning(
+                logger.warning(
                     f"Invalid exclusion path (not a string): {exclusion_path}"
                 )
                 continue
@@ -500,7 +500,7 @@ def _is_path_excluded(file_path, config):
                         .replace("**", "")
                     )
                     if _startswith_path(abs_file_path, base_path):
-                        logging.debug(
+                        logger.debug(
                             f"Path {abs_file_path} matches recursive exclusion: {exclusion_path}"
                         )
                         return True
@@ -513,7 +513,7 @@ def _is_path_excluded(file_path, config):
                     if _fnmatch_path(file_parent, expanded_path) or _startswith_path(
                         file_parent, expanded_path.replace("\\*", "").replace("/*", "")
                     ):
-                        logging.debug(
+                        logger.debug(
                             f"Path {abs_file_path} matches wildcard exclusion: {exclusion_path}"
                         )
                         return True
@@ -524,13 +524,13 @@ def _is_path_excluded(file_path, config):
                         _startswith_path(abs_file_path, expanded_path + "/")
                         or abs_file_path == expanded_path
                     ):
-                        logging.debug(
+                        logger.debug(
                             f"Path {abs_file_path} matches exact exclusion: {exclusion_path}"
                         )
                         return True
 
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     f"Error processing exclusion path '{exclusion_path}': {e}"
                 )
                 # Fail-safe: skip this exclusion path, continue checking others
@@ -539,7 +539,7 @@ def _is_path_excluded(file_path, config):
         return False
 
     except Exception as e:
-        logging.error(f"Error checking directory exclusions: {e}")
+        logger.error(f"Error checking directory exclusions: {e}")
         # Fail-safe: if exclusion check fails, don't exclude (let normal blocking proceed)
         return False
 
@@ -626,7 +626,7 @@ def _check_directory_rules(file_path, config):
         ) and dir_exclusions.get("paths"):
             # Log deprecation warning once
             if not hasattr(_check_directory_rules, "_warned_deprecation"):
-                logging.warning(
+                logger.warning(
                     "directory_exclusions is deprecated - use directory_rules instead"
                 )
                 _check_directory_rules._warned_deprecation = True
@@ -653,12 +653,12 @@ def _check_directory_rules(file_path, config):
         for excl_pattern in exclusions:
             try:
                 if _matches_directory_pattern(abs_file_path, excl_pattern):
-                    logging.debug(
+                    logger.debug(
                         f"Path {abs_file_path} matched exclusion: {excl_pattern}"
                     )
                     return "allow", global_action, excl_pattern
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     f"Error processing exclusion pattern '{excl_pattern}': {e}"
                 )
                 continue
@@ -669,19 +669,17 @@ def _check_directory_rules(file_path, config):
 
         for rule in directory_rules:
             if not isinstance(rule, dict):
-                logging.warning(f"Invalid directory rule (not a dict): {rule}")
+                logger.warning(f"Invalid directory rule (not a dict): {rule}")
                 continue
 
             mode = rule.get("mode")
             if mode not in ["allow", "deny"]:
-                logging.warning(
-                    f"Invalid rule mode: {mode} (must be 'allow' or 'deny')"
-                )
+                logger.warning(f"Invalid rule mode: {mode} (must be 'allow' or 'deny')")
                 continue
 
             paths = rule.get("paths", [])
             if not isinstance(paths, list):
-                logging.warning(f"Invalid paths in rule (not a list): {paths}")
+                logger.warning(f"Invalid paths in rule (not a list): {paths}")
                 continue
 
             # Check if file matches any pattern in this rule
@@ -690,12 +688,12 @@ def _check_directory_rules(file_path, config):
                     if _matches_directory_pattern(abs_file_path, pattern):
                         final_decision = mode
                         matched_pattern = pattern
-                        logging.debug(
+                        logger.debug(
                             f"Path {abs_file_path} matched rule: {mode} {pattern} (action={global_action})"
                         )
                         break
                 except Exception as e:
-                    logging.warning(f"Error processing rule pattern '{pattern}': {e}")
+                    logger.warning(f"Error processing rule pattern '{pattern}': {e}")
                     continue
 
         # Return decision, global action, and matched pattern
@@ -704,7 +702,7 @@ def _check_directory_rules(file_path, config):
         return final_decision, global_action, matched_pattern
 
     except Exception as e:
-        logging.error(f"Error checking directory rules: {e}")
+        logger.error(f"Error checking directory rules: {e}")
         return None, None, None
 
 
@@ -743,7 +741,7 @@ def check_directory_denied(file_path, config=None):
                 policy_checker = ToolPolicyChecker()
                 config = policy_checker.config
             except Exception as e:
-                logging.debug(f"Could not load config for directory rules: {e}")
+                logger.debug(f"Could not load config for directory rules: {e}")
                 config = {}
 
         # Convert to absolute path and resolve symlinks
@@ -765,7 +763,7 @@ def check_directory_denied(file_path, config=None):
             if os.path.exists(deny_marker):
                 deny_marker_found = True
                 denied_directory = current_dir
-                logging.info(f"Found .ai-read-deny marker in {current_dir}")
+                logger.info(f"Found .ai-read-deny marker in {current_dir}")
                 break
 
             # Move to parent directory
@@ -781,7 +779,7 @@ def check_directory_denied(file_path, config=None):
         if deny_marker_found:
             # Marker found - check if rules override it
             if rule_decision == "allow":
-                logging.info(
+                logger.info(
                     f"Found .ai-read-deny at {denied_directory}, but directory rules allow access - allowing"
                 )
                 return (
@@ -794,7 +792,7 @@ def check_directory_denied(file_path, config=None):
                 # No allow rule to override - block, warn, or log-only
                 # Check action
                 if rule_action == ActionMode.WARN:
-                    logging.warning(
+                    logger.warning(
                         f"Policy violation (warn mode): {file_path} - .ai-read-deny marker in {denied_directory} but allowed for audit"
                     )
                     _log_directory_blocking_violation(
@@ -808,7 +806,7 @@ def check_directory_denied(file_path, config=None):
                         matched_pattern,
                     )  # ALLOW - logged for audit, with warning
                 elif rule_action == ActionMode.LOG_ONLY:
-                    logging.warning(
+                    logger.warning(
                         f"Policy violation (log-only mode): {file_path} - .ai-read-deny marker in {denied_directory} but allowed for audit (silent)"
                     )
                     _log_directory_blocking_violation(
@@ -822,7 +820,7 @@ def check_directory_denied(file_path, config=None):
                     )  # ALLOW - logged for audit, NO warning
                 else:
                     # Block access
-                    logging.error(
+                    logger.error(
                         f".ai-read-deny marker blocks access to {denied_directory}"
                     )
                     _log_directory_blocking_violation(
@@ -840,7 +838,7 @@ def check_directory_denied(file_path, config=None):
                 "warning": f"Directory rules deny access (matched pattern: {matched_pattern})",
             }
             if rule_action == ActionMode.WARN:
-                logging.warning(
+                logger.warning(
                     f"Policy violation (warn mode): {file_path} - denied by rules but allowed for audit"
                 )
                 _log_directory_blocking_violation(
@@ -858,7 +856,7 @@ def check_directory_denied(file_path, config=None):
                     matched_pattern,
                 )  # ALLOW - logged for audit, with warning
             elif rule_action == ActionMode.LOG_ONLY:
-                logging.warning(
+                logger.warning(
                     f"Policy violation (log-only mode): {file_path} - denied by rules but allowed for audit (silent)"
                 )
                 _log_directory_blocking_violation(
@@ -876,7 +874,7 @@ def check_directory_denied(file_path, config=None):
                 )  # ALLOW - logged for audit, NO warning
             else:
                 # Block access
-                logging.error(f"Directory rules deny access to {abs_path}")
+                logger.error(f"Directory rules deny access to {abs_path}")
                 _log_directory_blocking_violation(
                     file_path,
                     os.path.dirname(abs_path),
@@ -890,10 +888,10 @@ def check_directory_denied(file_path, config=None):
         return False, None, None, None
 
     except Exception as e:
-        logging.error(f"Error checking directory access: {e}")
+        logger.error(f"Error checking directory access: {e}")
         import traceback
 
-        logging.debug(traceback.format_exc())
+        logger.debug(traceback.format_exc())
         # Fail-closed: block access if check fails (security-critical path)
         return True, None, f"Directory access check error: {e}", None
 
@@ -916,26 +914,26 @@ def extract_tool_result(hook_data):
     try:
         # Get tool name from multiple possible locations
         tool_name = hook_data.get("tool_name")
-        logging.info(
+        logger.info(
             f"extract_tool_result: tool_name from hook_data.tool_name = {tool_name}"
         )
         if not tool_name and "tool_use" in hook_data:
             # Try tool_use.name format (Claude Code format)
             if isinstance(hook_data["tool_use"], dict):
                 tool_name = hook_data["tool_use"].get("name")
-                logging.info(
+                logger.info(
                     f"extract_tool_result: tool_name from tool_use.name = {tool_name}"
                 )
         if not tool_name:
             tool_name = "unknown"
-            logging.info("extract_tool_result: tool_name defaulted to 'unknown'")
+            logger.info("extract_tool_result: tool_name defaulted to 'unknown'")
 
         # Augment Code: normalize tool names
         if tool_name in _AUGMENT_TOOL_MAP:
             tool_name = _AUGMENT_TOOL_MAP[tool_name]
 
         if tool_name in STATE_MODIFY_TOOLS:
-            logging.debug(
+            logger.debug(
                 f"Skipping PostToolUse scan for state-modifying tool: {tool_name}"
             )
             return None, tool_name
@@ -981,7 +979,7 @@ def extract_tool_result(hook_data):
         return output, tool_name
 
     except Exception as e:
-        logging.error(f"Error extracting tool result: {e}")
+        logger.error(f"Error extracting tool result: {e}")
         return None, "unknown"
 
 
@@ -1003,13 +1001,13 @@ def _should_skip_pii_scan(pii_config, tool_identifier=None, file_path=None):
     if ignore_tools and tool_identifier:
         for pattern in ignore_tools:
             if fnmatch.fnmatch(tool_identifier, pattern):
-                logging.info(
+                logger.info(
                     f"Skipping PII scan for ignored tool: {tool_identifier} (pattern: {pattern})"
                 )
                 return True
 
     if _matches_ignore_files(file_path, pii_config.get("ignore_files", [])):
-        logging.info(f"Skipping PII scan for ignored file: {file_path}")
+        logger.info(f"Skipping PII scan for ignored file: {file_path}")
         return True
 
 
@@ -1019,13 +1017,13 @@ def _should_skip_context_poisoning(cp_config, tool_identifier=None, file_path=No
     if ignore_tools and tool_identifier:
         for pattern in ignore_tools:
             if fnmatch.fnmatch(tool_identifier, pattern):
-                logging.info(
+                logger.info(
                     f"Skipping context poisoning scan for ignored tool: {tool_identifier} (pattern: {pattern})"
                 )
                 return True
 
     if _matches_ignore_files(file_path, cp_config.get("ignore_files", [])):
-        logging.info(f"Skipping context poisoning scan for ignored file: {file_path}")
+        logger.info(f"Skipping context poisoning scan for ignored file: {file_path}")
         return True
 
     return False
@@ -1171,10 +1169,10 @@ def extract_file_content_from_tool(hook_data):
                 tool_args = json.loads(hook_data["toolArgs"])
                 file_path = tool_args.get("file_path") or tool_args.get("path")
             except json.JSONDecodeError:
-                logging.warning("Could not parse GitHub Copilot toolArgs JSON")
+                logger.warning("Could not parse GitHub Copilot toolArgs JSON")
 
         if not file_path:
-            logging.warning("Could not extract file path from hook data")
+            logger.warning("Could not extract file path from hook data")
             return None, "unknown_file", None, False, None, None
 
         # Expand ~ to home directory
@@ -1203,7 +1201,7 @@ def extract_file_content_from_tool(hook_data):
                 dir_warning,
             )
         except FileNotFoundError:
-            logging.warning(f"File not found: {file_path}")
+            logger.warning(f"File not found: {file_path}")
             return (
                 None,
                 os.path.basename(file_path),
@@ -1213,7 +1211,7 @@ def extract_file_content_from_tool(hook_data):
                 dir_warning,
             )
         except PermissionError:
-            logging.warning(f"Permission denied reading file: {file_path}")
+            logger.warning(f"Permission denied reading file: {file_path}")
             return (
                 None,
                 os.path.basename(file_path),
@@ -1223,7 +1221,7 @@ def extract_file_content_from_tool(hook_data):
                 dir_warning,
             )
         except Exception as e:
-            logging.error(f"Error reading file {file_path}: {e}")
+            logger.error(f"Error reading file {file_path}: {e}")
             return (
                 None,
                 os.path.basename(file_path),
@@ -1234,7 +1232,7 @@ def extract_file_content_from_tool(hook_data):
             )
 
     except Exception as e:
-        logging.error(f"Error extracting file from tool data: {e}")
+        logger.error(f"Error extracting file from tool data: {e}")
         return None, "unknown_file", None, False, None, None
 
 
@@ -1304,10 +1302,10 @@ def _scan_for_pii(text, pii_config, file_path=None):
             return True, result["redacted_text"], redactions, warning
         return False, text, [], None
     except Exception as e:
-        logging.warning(f"PII scan error: {e}")
+        logger.warning(f"PII scan error: {e}")
         on_error = _get_on_scan_error_action()
         if on_error == ActionMode.BLOCK:
-            logging.error(f"PII scan failed (fail-closed, on_scan_error=block): {e}")
+            logger.error(f"PII scan failed (fail-closed, on_scan_error=block): {e}")
             return (
                 True,
                 text,
@@ -1712,10 +1710,10 @@ def process_hook_data(hook_data, daemon_state=None):
         if ide_type == IDEType.CURSOR:
             logging.disable(logging.CRITICAL)
         else:
-            logging.info(
+            logger.info(
                 f"Detected IDE type: {ide_type.value} (adapter: {adapter.name})"
             )
-            logging.info(f"Detected hook event: {hook_event}")
+            logger.info(f"Detected hook event: {hook_event}")
 
         # Use correlation IDs from normalized input
         hook_tool_use_id = normalized.tool_use_id or hook_data.get("tool_use_id")
@@ -1741,11 +1739,11 @@ def process_hook_data(hook_data, daemon_state=None):
                 session_key = derive_session_key(hook_data)
                 state_mgr = SessionStateManager(daemon_state=daemon_state)
                 state_mgr.mark_security_reinject(session_key)
-                logging.info(
+                logger.info(
                     f"PostCompact: flagged session {session_key[:16]}... for security re-injection"
                 )
             except Exception as e:
-                logging.debug(
+                logger.debug(
                     f"PostCompact: security reinject flag failed (non-fatal): {e}"
                 )
             return {"output": None, "exit_code": 0}
@@ -1809,7 +1807,7 @@ def process_hook_data(hook_data, daemon_state=None):
             adapter_default_paths = adapter.get_default_transcript_paths()
             if adapter_default_paths:
                 hook_data["transcript_path"] = adapter_default_paths[0]
-                logging.debug(
+                logger.debug(
                     "Resolved transcript path from %s adapter: %s",
                     adapter.name,
                     adapter_default_paths[0],
@@ -1824,7 +1822,7 @@ def process_hook_data(hook_data, daemon_state=None):
                 session_id=hook_session_id, daemon_state=daemon_state
             )
         except Exception as e:
-            logging.debug(f"Hook context manager init failed (non-fatal): {e}")
+            logger.debug(f"Hook context manager init failed (non-fatal): {e}")
 
         # Load security instructions for systemMessage injection (#580, #584)
         # Inject only on first prompt per session + after blocks (not every prompt)
@@ -1833,7 +1831,7 @@ def process_hook_data(hook_data, daemon_state=None):
             try:
                 si_config, si_error = _load_security_instructions_config()
                 if si_error:
-                    logging.warning(f"Security instructions config error: {si_error}")
+                    logger.warning(f"Security instructions config error: {si_error}")
                 inject = True
                 if si_config is not None:
                     inject = is_feature_enabled(
@@ -1889,20 +1887,20 @@ def process_hook_data(hook_data, daemon_state=None):
                                 else:
                                     raw = _SECURITY_SYSTEM_MESSAGE
                             security_message = raw
-                            logging.info(
+                            logger.info(
                                 f"Security rules injected for session {session_key[:16]}..."
                             )
                         else:
-                            logging.info(
+                            logger.info(
                                 f"Security rules already injected for session {session_key[:16]}..., skipping"
                             )
                     except Exception as e:
-                        logging.debug(
+                        logger.debug(
                             f"Session state check failed, injecting as fallback: {e}"
                         )
                         security_message = _SECURITY_SYSTEM_MESSAGE
             except Exception as e:
-                logging.debug(
+                logger.debug(
                     f"Security instructions config load failed (non-fatal): {e}"
                 )
 
@@ -2075,7 +2073,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                     if file_path:
                                         tool_details = f" (file_path='{file_path}')"
 
-                            logging.warning(
+                            logger.warning(
                                 f"🚨 BLOCKED BY POLICY: Tool '{checked_tool_name}'{tool_details} - {reason_summary}"
                             )
                             combined_warning = (
@@ -2095,7 +2093,7 @@ def process_hook_data(hook_data, daemon_state=None):
                             return result
                     elif is_allowed and error_message:
                         # Log mode: allowed but violation logged - display warning to user
-                        logging.warning(
+                        logger.warning(
                             f"⚠️  Policy violation (log mode): Tool '{checked_tool_name}' - execution allowed"
                         )
                         # Accumulate warning message to display at the end
@@ -2103,16 +2101,14 @@ def process_hook_data(hook_data, daemon_state=None):
                         warn_violation_types.append(ViolationType.TOOL_PERMISSION)
 
                     if checked_tool_name and ide_type != IDEType.CURSOR:
-                        logging.info(f"✓ Tool '{checked_tool_name}' allowed by policy")
+                        logger.info(f"✓ Tool '{checked_tool_name}' allowed by policy")
                 elif permissions_config and ide_type != IDEType.CURSOR:
                     # Permissions enforcement is temporarily disabled
-                    logging.info(
-                        "⚠️  Tool permissions enforcement temporarily disabled"
-                    )
+                    logger.info("⚠️  Tool permissions enforcement temporarily disabled")
             except Exception as e:
                 on_error = _get_on_scan_error_action()
                 if on_error == ActionMode.BLOCK:
-                    logging.error(
+                    logger.error(
                         f"Tool policy check error (fail-closed, on_scan_error=block): {e}"
                     )
                     return _format_response(
@@ -2123,7 +2119,7 @@ def process_hook_data(hook_data, daemon_state=None):
                         violation_type=ViolationType.TOOL_PERMISSION,
                         security_message=security_message,
                     )
-                logging.warning(f"Tool policy check error (fail-open): {e}")
+                logger.warning(f"Tool policy check error (fail-open): {e}")
 
         content_to_scan = None
         filename = "unknown"
@@ -2161,7 +2157,7 @@ def process_hook_data(hook_data, daemon_state=None):
 
         if hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE):
             # PreToolUse or beforeReadFile hook
-            logging.info(f"Processing {hook_event} hook...")
+            logger.info(f"Processing {hook_event} hook...")
 
             # Bash command exfiltration detection (Issue #1100)
             if hook_event == HookEvent.PRE_TOOL_USE and tool_name == "Bash":
@@ -2173,7 +2169,7 @@ def process_hook_data(hook_data, daemon_state=None):
                     )
 
                     if bash_exfil_result is not None and bash_exfil_result.detected:
-                        logging.warning(
+                        logger.warning(
                             "🚨 BLOCKED: Credential exfiltration detected in Bash command"
                         )
                         be_decision = apply_post_scan_pipeline(
@@ -2214,7 +2210,7 @@ def process_hook_data(hook_data, daemon_state=None):
                         exfil_detection_result is not None
                         and exfil_detection_result.detected
                     ):
-                        logging.warning(
+                        logger.warning(
                             "🚨 BLOCKED: Credential exfiltration behavior detected"
                         )
                         ed_decision = apply_post_scan_pipeline(
@@ -2310,7 +2306,7 @@ def process_hook_data(hook_data, daemon_state=None):
                             )
 
                 if is_denied:
-                    logging.warning(f"Directory access denied for file '{file_path}'")
+                    logger.warning(f"Directory access denied for file '{file_path}'")
                     combined_warning = (
                         "\n\n".join(warning_messages) if warning_messages else None
                     )
@@ -2333,7 +2329,7 @@ def process_hook_data(hook_data, daemon_state=None):
                 # Skip scanning ai-guardian's own test files (contain example secrets)
                 # IMPORTANT: Only skips ai-guardian tests, not user project tests
                 if file_path and _is_ai_guardian_test_file(file_path):
-                    logging.debug(
+                    logger.debug(
                         f"Skipping scan for ai-guardian test file: {file_path}"
                     )
 
@@ -2355,9 +2351,7 @@ def process_hook_data(hook_data, daemon_state=None):
 
                 if content_to_scan is None:
                     # Could not extract file content - allow operation (fail-open)
-                    logging.warning(
-                        "Could not extract file content, allowing operation"
-                    )
+                    logger.warning("Could not extract file content, allowing operation")
 
                     combined_warning = (
                         "\n\n".join(warning_messages) if warning_messages else None
@@ -2397,7 +2391,7 @@ def process_hook_data(hook_data, daemon_state=None):
                             content_to_scan = extracted_text if extracted_text else None
 
                             if not content_to_scan:
-                                logging.info(
+                                logger.info(
                                     "No text extracted from image, allowing through"
                                 )
                                 combined_warning = (
@@ -2421,7 +2415,7 @@ def process_hook_data(hook_data, daemon_state=None):
                     except Exception as e:
                         on_error = _get_on_scan_error_action()
                         if on_error == ActionMode.BLOCK:
-                            logging.error(f"Image scanning error (fail-closed): {e}")
+                            logger.error(f"Image scanning error (fail-closed): {e}")
                             return _format_response(
                                 adapter,
                                 has_secrets=True,
@@ -2430,7 +2424,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                 violation_type=ViolationType.IMAGE_SECRET_DETECTED,
                                 security_message=security_message,
                             )
-                        logging.warning(f"Image scanning error (fail-open): {e}")
+                        logger.warning(f"Image scanning error (fail-open): {e}")
                         combined_warning = (
                             "\n\n".join(warning_messages) if warning_messages else None
                         )
@@ -2449,11 +2443,11 @@ def process_hook_data(hook_data, daemon_state=None):
 
                 # Log with full path for debugging false positives
                 if file_path:
-                    logging.info(
+                    logger.info(
                         f"Scanning file '{filename}' ({file_path}) for secrets..."
                     )
                 else:
-                    logging.info(f"Scanning file '{filename}' for secrets...")
+                    logger.info(f"Scanning file '{filename}' for secrets...")
 
                 # Apply annotation-based suppression (Issue #481)
                 # Only for file content (PreToolUse/beforeReadFile), never for prompts or PostToolUse
@@ -2511,7 +2505,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                         severity="info",
                                     )
                                 except Exception as e:
-                                    logging.error(
+                                    logger.error(
                                         f"Failed to log annotation suppression: {e}"
                                     )
 
@@ -2521,7 +2515,7 @@ def process_hook_data(hook_data, daemon_state=None):
                 # Non-file-reading tool (Bash, Write, Edit, etc.)
                 # These tools don't read files in PreToolUse, so no content to scan here
                 # They are checked by tool_policy.py for command patterns
-                logging.info(
+                logger.info(
                     f"Tool '{tool_name}' does not read files - skipping file content scan"
                 )
 
@@ -2562,7 +2556,7 @@ def process_hook_data(hook_data, daemon_state=None):
                             try:
                                 cs_config, cs_config_err = _load_code_scanning_config()
                                 if cs_config_err:
-                                    logging.warning(
+                                    logger.warning(
                                         f"Code scanning config error: {cs_config_err}"
                                     )
                                 cs_result = run_code_security_scan(
@@ -2623,7 +2617,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                             ViolationType.CODE_SECURITY
                                         )
                             except Exception as e:
-                                logging.warning(
+                                logger.warning(
                                     f"Code security check error (fail-open): {e}"
                                 )
 
@@ -2647,7 +2641,7 @@ def process_hook_data(hook_data, daemon_state=None):
 
         else:
             # Prompt hook - scan the user's prompt
-            logging.info("Processing prompt submission hook...")
+            logger.info("Processing prompt submission hook...")
             content_to_scan = hook_data.get(
                 "prompt", hook_data.get("userMessage", hook_data.get("message", ""))
             )
@@ -2671,7 +2665,7 @@ def process_hook_data(hook_data, daemon_state=None):
                     )
                 except Exception as e:
                     image_bytes_list = []
-                    logging.warning(f"Prompt image extraction error (fail-open): {e}")
+                    logger.warning(f"Prompt image extraction error (fail-open): {e}")
                 if image_bytes_list:
                     img_config, img_config_error = _load_image_scanning_config()
                     if img_config_error:
@@ -2687,7 +2681,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                     img_result = scan_image(img_bytes, img_config)
                                 if img_result.extracted_text:
                                     content_to_scan = f"{content_to_scan}\n{img_result.extracted_text}"
-                                    logging.info(
+                                    logger.info(
                                         f"OCR extracted {len(img_result.extracted_text)} chars from prompt image"
                                     )
                                 if img_result.qr_texts:
@@ -2696,14 +2690,14 @@ def process_hook_data(hook_data, daemon_state=None):
                                         + "\n".join(img_result.qr_texts)
                                     )
                         except Exception as e:
-                            logging.warning(
+                            logger.warning(
                                 f"Prompt image scanning error (fail-open): {e}"
                             )
 
                     # Strip base64 image data from content before unicode/injection scanning (Issue #1120)
                     content_to_scan = ImageDetector.strip_base64_images(content_to_scan)
 
-            logging.info("Scanning user prompt for secrets...")
+            logger.info("Scanning user prompt for secrets...")
             secret_content_to_scan = None  # No annotation processing for prompts
             pii_content_to_scan = None
             annotations_config = None
@@ -2752,10 +2746,10 @@ def process_hook_data(hook_data, daemon_state=None):
         return result
 
     except Exception as e:
-        logging.error(f"Unexpected error processing hook data: {e}")
+        logger.error(f"Unexpected error processing hook data: {e}")
         import traceback
 
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         # Best-effort position advance so PostToolUse exceptions don't leave
         # the transcript position stale for the next session.
         try:
@@ -2810,11 +2804,11 @@ def process_hook_input():
 
         return result
     except json.JSONDecodeError as e:
-        logging.error(f"Failed to parse hook input: {e}")
+        logger.error(f"Failed to parse hook input: {e}")
         return {"output": None, "exit_code": 0}
     except Exception as e:
-        logging.error(f"Unexpected error in hook: {e}")
+        logger.error(f"Unexpected error in hook: {e}")
         import traceback
 
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return {"output": None, "exit_code": 0}

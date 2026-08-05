@@ -19,6 +19,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_with_position_tracking,
 )
 
+logger = logging.getLogger(__name__)
+
 HISTORY_FILENAME = "api_conversation_history.json"
 
 
@@ -130,11 +132,11 @@ def read_cline_task_transcript(
         with open(history, encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, json.JSONDecodeError) as e:
-        logging.debug(f"Cline transcript read error: {e}")
+        logger.debug(f"Cline transcript read error: {e}")
         return "", 0
 
     if not isinstance(data, list):
-        logging.debug("Cline transcript: expected JSON array")
+        logger.debug("Cline transcript: expected JSON array")
         return "", 0
 
     total = len(data)
@@ -203,7 +205,7 @@ class ClineTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         storage_dir = get_cline_storage_dir()
         if not storage_dir:
-            logging.debug("Cline transcript: no storage directory found")
+            logger.debug("Cline transcript: no storage directory found")
             return []
 
         task_id = hook_data.get("session_id") or hook_data.get("task_id")
@@ -217,7 +219,7 @@ class ClineTranscriptAdapter(TranscriptAdapter):
             task_dir = get_most_recent_task_dir(storage_dir)
 
         if not task_dir:
-            logging.debug("Cline transcript: no task directory found")
+            logger.debug("Cline transcript: no task directory found")
             return []
 
         return scan_cline_transcript_incremental(

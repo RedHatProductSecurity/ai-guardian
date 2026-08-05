@@ -12,6 +12,8 @@ from ai_guardian.project_init import get_language_allowlist_patterns
 from ai_guardian.reporting.latency import _CheckTimer
 from ai_guardian.scanners.scan_result import ScanResult
 
+logger = logging.getLogger(__name__)
+
 _NULL_TIMER = _CheckTimer(enabled=False)
 
 import ai_guardian.config.loaders as _loaders
@@ -123,9 +125,7 @@ def _load_overlaid_config(entry):
         entry.config_section, merge_ignore=True
     )
     if config_error:
-        logging.warning(
-            "Config load warning for %s: %s", entry.name.value, config_error
-        )
+        logger.warning("Config load warning for %s: %s", entry.name.value, config_error)
     if not config:
         return None
     return apply_language_overlays(config, entry.name.value)
@@ -168,7 +168,7 @@ def run_prompt_injection_scan(
     if config is None:
         config, config_error = _loaders._load_prompt_injection_config()
         if config_error:
-            logging.warning(f"PI config error: {config_error}")
+            logger.warning(f"PI config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -232,7 +232,7 @@ def run_context_poisoning_scan(
     if config is None:
         config, config_error = _loaders._load_context_poisoning_config()
         if config_error:
-            logging.warning(f"CP config error: {config_error}")
+            logger.warning(f"CP config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -295,7 +295,7 @@ def run_supply_chain_scan(
     if config is None:
         config, config_error = _loaders._load_supply_chain_config()
         if config_error:
-            logging.warning(f"Supply chain config error: {config_error}")
+            logger.warning(f"Supply chain config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -371,7 +371,7 @@ def run_offensive_language_scan(
     if config is None:
         config, config_error = _loaders._load_offensive_language_config()
         if config_error:
-            logging.warning(f"Offensive language config error: {config_error}")
+            logger.warning(f"Offensive language config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=False):
         return None
 
@@ -420,7 +420,7 @@ def run_canary_detection_scan(
     if config is None:
         config, config_error = _loaders._load_canary_detection_config()
         if config_error:
-            logging.warning(f"Canary detection config error: {config_error}")
+            logger.warning(f"Canary detection config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=False):
         return None
     if not config.get("tokens"):
@@ -484,7 +484,7 @@ def run_code_security_scan(
 
             config, config_error = _load_code_scanning_config()
             if config_error:
-                logging.warning(f"Code scanning config error: {config_error}")
+                logger.warning(f"Code scanning config error: {config_error}")
         except ImportError:
             config = {}
 
@@ -549,7 +549,7 @@ def run_config_file_scan(
     if config is None:
         config, config_error = _loaders._load_config_scanner_config()
         if config_error:
-            logging.warning(f"Config scanner config error: {config_error}")
+            logger.warning(f"Config scanner config error: {config_error}")
     is_enabled = is_feature_enabled(
         config.get("enabled") if config else None, now, default=True
     )
@@ -598,7 +598,7 @@ def run_bash_exfil_scan(
     if config is None:
         config, config_error = _loaders._load_config_scanner_config()
         if config_error:
-            logging.warning(f"Config scanner config error: {config_error}")
+            logger.warning(f"Config scanner config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -638,7 +638,7 @@ def run_exfil_detection_scan(
     if config is None:
         config, config_error = _loaders._load_exfil_detection_config()
         if config_error:
-            logging.warning(f"Exfil detection config error: {config_error}")
+            logger.warning(f"Exfil detection config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -688,7 +688,7 @@ def run_image_scan(
     if config is None:
         config, config_error = _loaders._load_image_scanning_config()
         if config_error:
-            logging.warning(f"Image scanning config error: {config_error}")
+            logger.warning(f"Image scanning config error: {config_error}")
     if not config or not is_feature_enabled(
         config.get("enabled", True), now, default=True
     ):
@@ -697,24 +697,24 @@ def run_image_scan(
     ignore_files = config.get("ignore_files", [])
     ignore_tools = config.get("ignore_tools", [])
     if _matches_ignore_files(file_path, ignore_files):
-        logging.info(f"Image scanning skipped for {file_path} (ignore pattern match)")
+        logger.info(f"Image scanning skipped for {file_path} (ignore pattern match)")
         return None
     if tool_identifier and ignore_tools:
         for pattern in ignore_tools:
             if fnmatch.fnmatch(tool_identifier, pattern):
-                logging.info(
+                logger.info(
                     f"Image scanning skipped for {file_path} (ignore pattern match)"
                 )
                 return None
 
-    logging.info(f"Image file detected: {file_path}, running OCR scan...")
+    logger.info(f"Image file detected: {file_path}, running OCR scan...")
     with open(file_path, "rb") as f:
         image_data = f.read()
 
     with (latency_timer or _NULL_TIMER).check("image_scanning"):
         result = scan_image(image_data, config)
 
-    logging.info(
+    logger.info(
         f"OCR extracted {len(result.extracted_text)} chars "
         f"in {result.elapsed_ms:.0f}ms"
     )
@@ -759,7 +759,7 @@ def run_pii_scan(
     if config is None:
         config, config_error = _loaders._load_pii_config()
         if config_error:
-            logging.warning(f"PII config error: {config_error}")
+            logger.warning(f"PII config error: {config_error}")
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
@@ -820,7 +820,7 @@ def run_secret_scan(
     if config is None:
         config, config_error = _loaders._load_secret_scanning_config()
         if config_error:
-            logging.warning(f"Secret scanning config error: {config_error}")
+            logger.warning(f"Secret scanning config error: {config_error}")
     if config and not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 

@@ -9,6 +9,8 @@ from ai_guardian.hook_events.scanners import run_config_file_scan
 from ai_guardian.hook_events.utils import _format_response
 from ai_guardian.scanners.transcript import _advance_transcript_position
 
+logger = logging.getLogger(__name__)
+
 try:
     from ai_guardian.scanners.config_scanner import ConfigFileScanner  # noqa: F401
 
@@ -37,14 +39,14 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
         else (session_id or "unknown")
     )
     adapter_name = adapter.name if adapter else "unknown"
-    logging.info(f"Session ended for {session_label} (adapter: {adapter_name})")
+    logger.info(f"Session ended for {session_label} (adapter: {adapter_name})")
 
     contexts_cleaned = 0
 
     try:
         _advance_transcript_position(hook_data)
     except Exception as e:
-        logging.debug(
+        logger.debug(
             f"Session end: transcript position advance failed (non-fatal): {e}"
         )
 
@@ -56,7 +58,7 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
         )
         contexts_cleaned = context_mgr.cleanup_session()
     except Exception as e:
-        logging.debug(f"Session end: hook context cleanup failed (non-fatal): {e}")
+        logger.debug(f"Session end: hook context cleanup failed (non-fatal): {e}")
 
     try:
         from ai_guardian.session_state import SessionStateManager, derive_session_key
@@ -65,9 +67,9 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
         state_mgr = SessionStateManager(daemon_state=daemon_state)
         state_mgr.cleanup_session(session_key)
     except Exception as e:
-        logging.debug(f"Session end: session state cleanup failed (non-fatal): {e}")
+        logger.debug(f"Session end: session state cleanup failed (non-fatal): {e}")
 
-    logging.info(f"Session cleanup complete: {contexts_cleaned} contexts removed")
+    logger.info(f"Session cleanup complete: {contexts_cleaned} contexts removed")
 
     return {"output": None, "exit_code": 0}
 
@@ -86,7 +88,7 @@ def _handle_bootstrap_scan(
         _bs_cwd = get_project_dir()
         if not daemon_state.is_new_session(hook_session_id, _bs_cwd):
             return None
-        logging.info(f"Bootstrap scan: new session detected (cwd={_bs_cwd})")
+        logger.info(f"Bootstrap scan: new session detected (cwd={_bs_cwd})")
         _bs_config, _ = _loaders._load_config_scanner_config()
         _bs_results = _run_bootstrap_scan(_bs_cwd, config=_bs_config)
         for _bs_result in _bs_results:
@@ -96,7 +98,7 @@ def _handle_bootstrap_scan(
                 "Agent config file contains credential exfiltration pattern"
             )
             _bs_details = _bs_result.extra.get("details") or {}
-            logging.warning(f"Bootstrap scan: threat in {_bs_file}: {_bs_error}")
+            logger.warning(f"Bootstrap scan: threat in {_bs_file}: {_bs_error}")
             if violation_logger:
                 try:
                     violation_logger.log_violation(
@@ -176,7 +178,7 @@ def _handle_bootstrap_scan(
                 )
 
     except Exception as _bs_exc:
-        logging.debug(f"Bootstrap scan error (non-fatal): {_bs_exc}")
+        logger.debug(f"Bootstrap scan error (non-fatal): {_bs_exc}")
     return None
 
 

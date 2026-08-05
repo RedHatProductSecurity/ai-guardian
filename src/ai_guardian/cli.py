@@ -55,7 +55,7 @@ def _ensure_daemon_started():
     """Auto-start daemon if not running. Silent — no output on success or failure."""
     try:
         if _is_stop_requested():
-            logging.debug("Skipping daemon auto-start: recent stop requested")
+            logger.debug("Skipping daemon auto-start: recent stop requested")
             return
 
         from ai_guardian.daemon.client import is_daemon_running, start_daemon_background
@@ -1993,30 +1993,30 @@ def main():
 
         running = is_daemon_running()
         if not running and not _is_stop_requested():
-            logging.info("Daemon not running, starting...")
+            logger.info("Daemon not running, starting...")
             running = start_daemon_background()
 
         if running:
-            logging.info("Daemon is running, forwarding hook request")
+            logger.info("Daemon is running, forwarding hook request")
             timeout = _get_client_timeout(config=_hook_config)
             if _hook_config and _has_ask_action(_hook_config):
                 timeout = max(timeout, 310.0)
             response = send_hook_request(hook_data, timeout=timeout)
             if response is not None:
-                logging.info("Daemon processed hook request")
+                logger.info("Daemon processed hook request")
             else:
-                logging.warning("Daemon returned no response, falling back to direct")
+                logger.warning("Daemon returned no response, falling back to direct")
         else:
-            logging.info("Daemon unavailable, falling back to direct")
+            logger.info("Daemon unavailable, falling back to direct")
     except Exception as e:
-        logging.info(f"Daemon client error, falling back to direct: {e}")
+        logger.info(f"Daemon client error, falling back to direct: {e}")
 
     if response is None:
         # Check persisted pause state before direct-mode fallback (#1319)
         from ai_guardian.daemon.state import DaemonState
 
         if DaemonState.is_paused_on_disk(cwd=os.getcwd()):
-            logging.info("Scanning paused (persisted state), skipping direct fallback")
+            logger.info("Scanning paused (persisted state), skipping direct fallback")
             response = {"output": "{}", "exit_code": 0}
         elif hook_data is not None:
             response = process_hook_data(hook_data)

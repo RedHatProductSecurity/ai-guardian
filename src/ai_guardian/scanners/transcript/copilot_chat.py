@@ -19,6 +19,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_jsonl_incremental,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def _get_vscode_user_dir() -> str:
     """Return the platform-specific VS Code User directory."""
@@ -207,13 +209,13 @@ class CopilotChatTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         chat_dirs = get_copilot_chat_dirs()
         if not chat_dirs:
-            logging.debug("Copilot Chat transcript: no chatSessions directories found")
+            logger.debug("Copilot Chat transcript: no chatSessions directories found")
             return []
 
         session_id = hook_data.get("sessionId") or hook_data.get("session_id")
         transcript_path = _find_session_file(chat_dirs, session_id)
         if not transcript_path:
-            logging.debug("Copilot Chat transcript: no session file found")
+            logger.debug("Copilot Chat transcript: no session file found")
             return []
 
         file_session_id = os.path.splitext(os.path.basename(transcript_path))[0]

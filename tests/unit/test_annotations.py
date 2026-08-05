@@ -428,11 +428,11 @@ class TestProcessAnnotations:
 class TestAnnotationsIntegration:
     """Tests that verify annotation suppression works with scanning functions."""
 
-    @patch("ai_guardian.annotations.logging")
-    def test_logging_on_suppression(self, mock_logging):
+    @patch("ai_guardian.annotations.logger")
+    def test_logging_on_suppression(self, mock_logger):
         content = 'ssn = "123"  # ai-guardian:allow\nother'
         process_annotations(content)
-        mock_logging.info.assert_called()
+        mock_logger.info.assert_called()
 
     def test_no_logging_when_nothing_suppressed(self):
         content = "clean_line1\nclean_line2"

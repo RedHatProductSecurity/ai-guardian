@@ -322,7 +322,7 @@ def _count_gitleaks_patterns(config_path):
         return rule_count
 
     except Exception as e:
-        logging.debug(f"Error counting patterns in {config_path}: {e}")
+        logger.debug(f"Error counting patterns in {config_path}: {e}")
         return 0
 
 
@@ -598,15 +598,15 @@ def _apply_secret_validation(
             for result in results:
                 if result.status == ValidationStatus.INACTIVE:
                     if on_inactive == "warn":
-                        logging.warning(
+                        logger.warning(
                             f"Secret '{result.rule_id}' is inactive (revoked/expired): "
                             f"{result.message} [{result.elapsed_ms:.0f}ms]"
                         )
                     else:
-                        logging.info(
+                        logger.info(
                             f"Secret '{result.rule_id}' is inactive: {result.message}"
                         )
-            logging.info(
+            logger.info(
                 f"All {len(inactive_secrets)} detected secret(s) validated as inactive — "
                 f"skipping block (on_inactive={on_inactive})"
             )
@@ -624,12 +624,12 @@ def _apply_secret_validation(
         # At least one secret is active or unverified — block
         for result in results:
             if result.status == ValidationStatus.VERIFIED:
-                logging.warning(
+                logger.warning(
                     f"Secret '{result.rule_id}' VERIFIED ACTIVE "
                     f"[{result.elapsed_ms:.0f}ms]"
                 )
             elif result.status == ValidationStatus.INACTIVE:
-                logging.info(
+                logger.info(
                     f"Secret '{result.rule_id}' inactive but other secrets "
                     f"still active — blocking all"
                 )
@@ -649,10 +649,10 @@ def _apply_secret_validation(
         }
 
     except ImportError:
-        logging.debug("Secret validator module not available — skipping validation")
+        logger.debug("Secret validator module not available — skipping validation")
         return None
     except Exception as e:
-        logging.warning(f"Secret validation error (fail-closed): {e}")
+        logger.warning(f"Secret validation error (fail-closed): {e}")
         return {
             "skip_block": False,
             "validation_info": {
@@ -753,7 +753,7 @@ def check_secrets_with_gitleaks(
         if ignore_tools and tool_name:
             for pattern in ignore_tools:
                 if fnmatch.fnmatch(tool_name, pattern):
-                    logging.info(
+                    logger.info(
                         f"Skipping secret scanning for ignored tool: {tool_name}"
                     )
                     return False, None
@@ -776,7 +776,7 @@ def check_secrets_with_gitleaks(
                     matched = file_path_obj.match(expanded_pattern)
 
                 if matched:
-                    logging.info(
+                    logger.info(
                         f"Skipping secret scanning for ignored file: {file_path}"
                     )
                     return False, None
@@ -792,7 +792,7 @@ def check_secrets_with_gitleaks(
         # This prevents false positives when viewing pattern files
         # Use path-based detection instead of content-based to prevent bypass
         if file_path and file_path.endswith(".gitleaks.toml"):
-            logging.debug(f"Skipping scan - file is a gitleaks config: {file_path}")
+            logger.debug(f"Skipping scan - file is a gitleaks config: {file_path}")
             return False, None
 
         # Check project .gitleaks.toml path allowlist (Issue #488)
@@ -801,7 +801,7 @@ def check_secrets_with_gitleaks(
             _gitleaks_allowlist = _gitleaks_cfg.load_gitleaks_allowlist()
             if _gitleaks_allowlist and file_path:
                 if _gitleaks_cfg.should_skip_file(file_path, _gitleaks_allowlist):
-                    logging.info(
+                    logger.info(
                         f"Skipping secret scanning for .gitleaks.toml allowlisted path: {file_path}"
                     )
                     return False, None
@@ -873,17 +873,17 @@ def check_secrets_with_gitleaks(
                             # SUCCESS: Use pattern server
                             gitleaks_config_path = server_patterns
                             config_source = "pattern server"
-                            logging.info(
+                            logger.info(
                                 f"Using pattern server config: {server_patterns}"
                             )
                         else:
                             # Pattern server failed - will try scanner engines below
-                            logging.warning(
+                            logger.warning(
                                 f"Pattern server unavailable ({pattern_config.get('url')}), "
                                 f"falling back to scanner engines"
                             )
                     except Exception as e:
-                        logging.warning(
+                        logger.warning(
                             f"Pattern server error, trying scanner engines: {e}"
                         )
 
@@ -935,11 +935,11 @@ def check_secrets_with_gitleaks(
 
                     # Log context about why we're using scanner engines
                     if pattern_server_attempted:
-                        logging.warning(
+                        logger.info(
                             f"Using {engine_config.type} scanner (pattern server unavailable)"
                         )
                     else:
-                        logging.info(f"Using {engine_config.type} scanner")
+                        logger.info(f"Using {engine_config.type} scanner")
 
                     config_source = f"{engine_config.type} defaults"
 
@@ -966,7 +966,7 @@ def check_secrets_with_gitleaks(
                         )
                     on_error = _get_on_scan_error_action()
                     if on_error == ActionMode.BLOCK:
-                        logging.error(
+                        logger.error(
                             "No scanner available (fail-closed, on_scan_error=block)"
                         )
                         return (
@@ -974,14 +974,14 @@ def check_secrets_with_gitleaks(
                             warning_msg
                             + "\n\nOperation BLOCKED (on_scan_error=block).",
                         )
-                    logging.warning("No scanner available - warning user")
+                    logger.warning("No scanner available - warning user")
                     return False, warning_msg
 
             # Validate pattern completeness if using pattern server
             if config_source == "pattern server" and gitleaks_config_path:
                 pattern_count = _count_gitleaks_patterns(gitleaks_config_path)
                 if pattern_count > 0 and pattern_count < 50:
-                    logging.warning(
+                    logger.warning(
                         f"Pattern server returned only {pattern_count} rules. "
                         f"Standard Gitleaks has 100+ rules. "
                         f"Your pattern server may be missing common secret types (AWS keys, RSA keys, etc.). "
@@ -1058,7 +1058,7 @@ def check_secrets_with_gitleaks(
                                         all_allowlisted = False
                                         break
                                 if all_allowlisted:
-                                    logging.info(
+                                    logger.info(
                                         "All strategy findings matched allowlist — skipping"
                                     )
                                     return False, None
@@ -1081,7 +1081,7 @@ def check_secrets_with_gitleaks(
                                 findings_dicts, gl_lines, file_path, _gitleaks_allowlist
                             )
                             if not remaining:
-                                logging.info(
+                                logger.info(
                                     "All strategy findings matched .gitleaks.toml allowlist — skipping"
                                 )
                                 return False, None
@@ -1096,12 +1096,12 @@ def check_secrets_with_gitleaks(
                                 )
                             )
                             if _sw_n or _ent_n:
-                                logging.info(
+                                logger.info(
                                     f"External scanner: filtered {_sw_n} stopword + "
                                     f"{_ent_n} low-entropy findings (strategy path)"
                                 )
                             if not strategy_result.secrets:
-                                logging.info(
+                                logger.info(
                                     "All external scanner findings filtered by stopwords/entropy — skipping"
                                 )
                                 return False, None
@@ -1111,11 +1111,11 @@ def check_secrets_with_gitleaks(
                             strategy_result.secrets, content
                         )
                         if _hash_n:
-                            logging.info(
+                            logger.info(
                                 f"External scanner: filtered {_hash_n} hash value findings (strategy path)"
                             )
                         if not strategy_result.secrets:
-                            logging.info(
+                            logger.info(
                                 "All external scanner findings filtered as hash values — skipping"
                             )
                             return False, None
@@ -1183,7 +1183,7 @@ def check_secrets_with_gitleaks(
                                 secret_details,
                                 hook_context=context,
                             )
-                            logging.info(
+                            logger.info(
                                 "All secrets validated as inactive (strategy path) — allowing"
                             )
                             return False, None
@@ -1202,7 +1202,7 @@ def check_secrets_with_gitleaks(
                             secret_details,
                             hook_context=context,
                         )
-                        logging.error(
+                        logger.error(
                             f"Secret detected ({execution_strategy_name}): {first_secret.rule_id}"
                         )
                         _last_secret_matched_text = _extract_matched_text_for_ask(
@@ -1290,10 +1290,10 @@ def check_secrets_with_gitleaks(
                     return False, None
 
                 except RuntimeError as e:
-                    logging.warning(f"Multi-engine strategy failed: {e}")
+                    logger.warning(f"Multi-engine strategy failed: {e}")
                     return False, str(e)
                 except Exception as e:
-                    logging.error(f"Unexpected error in multi-engine strategy: {e}")
+                    logger.error(f"Unexpected error in multi-engine strategy: {e}")
                     return False, None
 
             # If we have pattern server config, select engine for using it
@@ -1342,10 +1342,10 @@ def check_secrets_with_gitleaks(
                         f"  ai-guardian scanner install {default_scanner}\n\n"
                         f"Until a scanner is installed, you may leak secrets."
                     )
-                    logging.warning(f"Scanner engine selection failed: {e}")
+                    logger.warning(f"Scanner engine selection failed: {e}")
                     return False, warning_msg
                 except Exception as e:
-                    logging.error(f"Unexpected error selecting scanner engine: {e}")
+                    logger.error(f"Unexpected error selecting scanner engine: {e}")
                     return False, None
 
             # Build scanner command
@@ -1363,7 +1363,7 @@ def check_secrets_with_gitleaks(
                 )
             else:
                 # Legacy fallback: hardcoded gitleaks command
-                logging.debug(
+                logger.debug(
                     "Using legacy gitleaks command (scanner engine not available)"
                 )
                 cmd = [
@@ -1387,7 +1387,7 @@ def check_secrets_with_gitleaks(
                     cmd.extend(["--config", str(Path(gitleaks_config_path).absolute())])
 
             # Run scanner
-            logging.debug(f"Scanner command: {' '.join(cmd)}")
+            logger.debug(f"Scanner command: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=30  # Prevent hanging
             )
@@ -1401,7 +1401,7 @@ def check_secrets_with_gitleaks(
                 [engine_config.success_exit_code] if engine_config else [0]
             )
 
-            logging.debug(
+            logger.debug(
                 f"Scanner exit code: {result.returncode}, expected_secrets={expected_secrets_code}, expected_success={expected_success_codes}"
             )
 
@@ -1445,7 +1445,7 @@ def check_secrets_with_gitleaks(
                                 "matched_text": first_finding.get("matched_text", ""),
                             }
                     except Exception as e:
-                        logging.error(
+                        logger.error(
                             f"Failed to parse scanner output with {engine_config.output_parser} parser: {e}"
                         )
                 else:
@@ -1469,14 +1469,14 @@ def check_secrets_with_gitleaks(
                                     "matched_text": first_finding.get("Match", ""),
                                 }
                     except Exception as e:
-                        logging.debug(f"Failed to parse scanner JSON report: {e}")
+                        logger.debug(f"Failed to parse scanner JSON report: {e}")
 
                 # Guard: exit code said secrets but report is empty/unparseable (Issue #532)
                 # Don't return immediately — fall through to first-match fallthrough (Issue #523)
                 if secret_details is None and (
                     scan_result is None or not scan_result.get("has_secrets")
                 ):
-                    logging.warning(
+                    logger.warning(
                         f"Scanner exited with secrets-found code ({result.returncode}) "
                         f"but produced no findings — treating as clean"
                     )
@@ -1491,7 +1491,7 @@ def check_secrets_with_gitleaks(
                             if e.type != engine_config.type
                         ]
                         if remaining:
-                            logging.info(
+                            logger.info(
                                 f"Engine {engine_config.type} found no secrets, "
                                 f"trying remaining engines: {[e.type for e in remaining]}"
                             )
@@ -1518,12 +1518,12 @@ def check_secrets_with_gitleaks(
                                         )
                                     )
                                     if _sw_n or _ent_n:
-                                        logging.info(
+                                        logger.info(
                                             f"External scanner: filtered {_sw_n} stopword + "
                                             f"{_ent_n} low-entropy findings (fallthrough 1)"
                                         )
                                     if not fallback_result.secrets:
-                                        logging.info(
+                                        logger.info(
                                             "All fallthrough-1 findings filtered by stopwords/entropy — skipping"
                                         )
                                         return False, None
@@ -1535,11 +1535,11 @@ def check_secrets_with_gitleaks(
                                     )
                                 )
                                 if _hash_n:
-                                    logging.info(
+                                    logger.info(
                                         f"External scanner: filtered {_hash_n} hash value findings (fallthrough 1)"
                                     )
                                 if not fallback_result.secrets:
-                                    logging.info(
+                                    logger.info(
                                         "All fallthrough-1 findings filtered as hash values — skipping"
                                     )
                                     return False, None
@@ -1586,7 +1586,7 @@ def check_secrets_with_gitleaks(
                                         secret_details,
                                         hook_context=context,
                                     )
-                                    logging.info(
+                                    logger.info(
                                         "All secrets validated as inactive (fallthrough 1) — allowing"
                                     )
                                     return False, None
@@ -1604,7 +1604,7 @@ def check_secrets_with_gitleaks(
                                     secret_details,
                                     hook_context=context,
                                 )
-                                logging.error(
+                                logger.error(
                                     f"Secret detected (first-match fallthrough): {first_secret.rule_id}"
                                 )
                                 _last_secret_matched_text = (
@@ -1669,7 +1669,7 @@ def check_secrets_with_gitleaks(
                                 all_allowlisted = False
 
                         if all_allowlisted:
-                            logging.info(
+                            logger.info(
                                 "All secret findings matched allowlist patterns — skipping"
                             )
                             return False, None
@@ -1690,7 +1690,7 @@ def check_secrets_with_gitleaks(
                             [secret_details], gl_lines, file_path, _gitleaks_allowlist
                         )
                     if not gl_remaining:
-                        logging.info(
+                        logger.info(
                             "All secret findings matched .gitleaks.toml allowlist — skipping"
                         )
                         return False, None
@@ -1706,23 +1706,23 @@ def check_secrets_with_gitleaks(
                             )
                         )
                         if _sw_n or _ent_n:
-                            logging.info(
+                            logger.info(
                                 f"External scanner: filtered {_sw_n} stopword + "
                                 f"{_ent_n} low-entropy findings (legacy path)"
                             )
                         if not _filt:
-                            logging.info(
+                            logger.info(
                                 "All external scanner findings filtered by stopwords/entropy — skipping"
                             )
                             return False, None
                         # Filter hash false positives (#1378) — legacy path (findings)
                         _filt, _hash_n = filter_findings_dicts_by_hash(_filt, content)
                         if _hash_n:
-                            logging.info(
+                            logger.info(
                                 f"External scanner: filtered {_hash_n} hash value findings (legacy path)"
                             )
                         if not _filt:
-                            logging.info(
+                            logger.info(
                                 "All legacy findings filtered as hash values — skipping"
                             )
                             return False, None
@@ -1759,23 +1759,23 @@ def check_secrets_with_gitleaks(
                             )
                         )
                         if _sw_n or _ent_n:
-                            logging.info(
+                            logger.info(
                                 f"External scanner: filtered {_sw_n} stopword + "
                                 f"{_ent_n} low-entropy findings (legacy path)"
                             )
                         if not _filt:
-                            logging.info(
+                            logger.info(
                                 "All external scanner findings filtered by stopwords/entropy — skipping"
                             )
                             return False, None
                         # Filter hash false positives (#1378) — legacy path (single)
                         _filt, _hash_n = filter_findings_dicts_by_hash(_filt, content)
                         if _hash_n:
-                            logging.info(
+                            logger.info(
                                 f"External scanner: filtered {_hash_n} hash value findings (legacy single)"
                             )
                         if not _filt:
-                            logging.info(
+                            logger.info(
                                 "All legacy findings filtered as hash values — skipping"
                             )
                             return False, None
@@ -1806,7 +1806,7 @@ def check_secrets_with_gitleaks(
                             secret_details,
                             hook_context=context,
                         )
-                        logging.info(
+                        logger.info(
                             "All secrets validated as inactive (legacy path) — allowing"
                         )
                         return False, None
@@ -1832,7 +1832,7 @@ def check_secrets_with_gitleaks(
                     file_path or filename, context, secret_details, hook_context=context
                 )
 
-                logging.error(
+                logger.error(
                     f"Secret detected: {secret_details.get('rule_id') if secret_details else 'unknown'}"
                 )
                 _last_secret_matched_text = _extract_matched_text_for_ask(
@@ -1860,7 +1860,7 @@ def check_secrets_with_gitleaks(
                         if e.type != engine_config.type
                     ]
                     if remaining:
-                        logging.info(
+                        logger.info(
                             f"Engine {engine_config.type} found no secrets, "
                             f"trying remaining engines: {[e.type for e in remaining]}"
                         )
@@ -1887,12 +1887,12 @@ def check_secrets_with_gitleaks(
                                     )
                                 )
                                 if _sw_n or _ent_n:
-                                    logging.info(
+                                    logger.info(
                                         f"External scanner: filtered {_sw_n} stopword + "
                                         f"{_ent_n} low-entropy findings (fallthrough 2)"
                                     )
                                 if not fallback_result.secrets:
-                                    logging.info(
+                                    logger.info(
                                         "All fallthrough-2 findings filtered by stopwords/entropy — skipping"
                                     )
                                     return False, None
@@ -1902,11 +1902,11 @@ def check_secrets_with_gitleaks(
                                 fallback_result.secrets, content
                             )
                             if _hash_n:
-                                logging.info(
+                                logger.info(
                                     f"External scanner: filtered {_hash_n} hash value findings (fallthrough 2)"
                                 )
                             if not fallback_result.secrets:
-                                logging.info(
+                                logger.info(
                                     "All fallthrough-2 findings filtered as hash values — skipping"
                                 )
                                 return False, None
@@ -1953,7 +1953,7 @@ def check_secrets_with_gitleaks(
                                     secret_details,
                                     hook_context=context,
                                 )
-                                logging.info(
+                                logger.info(
                                     "All secrets validated as inactive (fallthrough 2) — allowing"
                                 )
                                 return False, None
@@ -1987,7 +1987,7 @@ def check_secrets_with_gitleaks(
                                 secret_details,
                                 hook_context=context,
                             )
-                            logging.error(
+                            logger.error(
                                 f"Secret detected (first-match fallthrough): {first_secret.rule_id}"
                             )
                             _last_secret_matched_text = _extract_matched_text_for_ask(
@@ -2003,7 +2003,7 @@ def check_secrets_with_gitleaks(
 
             else:
                 # Unexpected error - analyze and decide whether to block or warn
-                logging.warning(
+                logger.warning(
                     f"Gitleaks returned unexpected exit code: {result.returncode}"
                 )
 
@@ -2011,7 +2011,7 @@ def check_secrets_with_gitleaks(
                 stderr_preview = ""
                 if result.stderr:
                     # Only log sanitized error info, not full stderr
-                    logging.debug(
+                    logger.debug(
                         f"Gitleaks stderr present (length: {len(result.stderr)} chars)"
                     )
                     stderr_lines = [
@@ -2096,7 +2096,7 @@ def check_secrets_with_gitleaks(
 
                     on_error = _get_on_scan_error_action()
                     if on_error == ActionMode.BLOCK:
-                        logging.error(
+                        logger.error(
                             "Secret scanning error (fail-closed, on_scan_error=block)"
                         )
                         return (
@@ -2123,7 +2123,7 @@ def check_secrets_with_gitleaks(
                     os.unlink(tmp_file_path)
 
                 except Exception as cleanup_error:
-                    logging.warning(
+                    logger.warning(
                         f"Failed to securely cleanup temp file: {cleanup_error}"
                     )
                     # Still try basic deletion
@@ -2153,7 +2153,7 @@ def check_secrets_with_gitleaks(
                             os.fsync(f.fileno())
                         os.unlink(rf_path)
                     except Exception as cleanup_error:
-                        logging.debug(
+                        logger.debug(
                             f"Failed to securely cleanup report file {rf_path}: {cleanup_error}"
                         )
                         try:
@@ -2165,7 +2165,7 @@ def check_secrets_with_gitleaks(
     except FileNotFoundError:
         # Scanner binary not found - warn but allow (user may not be able to install immediately)
         scanner_name = engine_config.type if engine_config else "scanner"
-        logging.warning(f"{scanner_name} binary not found - skipping secret scanning")
+        logger.warning(f"{scanner_name} binary not found - skipping secret scanning")
 
         # Print visible warning to stderr
         warning_msg = (
@@ -2193,13 +2193,13 @@ def check_secrets_with_gitleaks(
         return False, None
 
     except subprocess.TimeoutExpired:
-        logging.error("Gitleaks scan timed out after 30 seconds")
+        logger.error("Gitleaks scan timed out after 30 seconds")
         return False, None
 
     except Exception as e:
-        logging.error(f"Unexpected error during secret scanning: {e}")
+        logger.error(f"Unexpected error during secret scanning: {e}")
         import traceback
 
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         # Fail open - don't block on errors
         return False, None
