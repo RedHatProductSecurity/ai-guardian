@@ -49,6 +49,8 @@ from ai_guardian.tools.patterns import (
     _strip_bash_heredoc_content,
 )
 
+logger = logging.getLogger(__name__)
+
 # Import violation logger
 try:
     from ai_guardian.violations.logger import ViolationLogger
@@ -56,7 +58,7 @@ try:
     HAS_VIOLATION_LOGGER = True
 except ImportError:
     HAS_VIOLATION_LOGGER = False
-    logging.debug("violation_logger module not available")
+    logger.debug("violation_logger module not available")
 
 # Import SSRF protector
 try:
@@ -65,7 +67,7 @@ try:
     HAS_SSRF_PROTECTOR = True
 except ImportError:
     HAS_SSRF_PROTECTOR = False
-    logging.debug("ssrf_protector module not available")
+    logger.debug("ssrf_protector module not available")
 
 # Import config exfiltration scanner
 try:
@@ -74,9 +76,7 @@ try:
     HAS_CONFIG_SCANNER = True
 except ImportError:
     HAS_CONFIG_SCANNER = False
-    logging.debug("config_scanner module not available")
-
-logger = logging.getLogger(__name__)
+    logger.debug("config_scanner module not available")
 
 
 class ToolPolicyChecker:

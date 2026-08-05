@@ -20,6 +20,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_with_position_tracking,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def get_cursor_db_path() -> Optional[str]:
     """Find Cursor SQLite database path.
@@ -155,7 +157,7 @@ def read_cursor_transcript(
         finally:
             conn.close()
     except sqlite3.Error as e:
-        logging.debug(f"Cursor DB read error: {e}")
+        logger.debug(f"Cursor DB read error: {e}")
 
     return "\n".join(texts), new_seen
 
@@ -177,7 +179,7 @@ def get_cursor_bubble_ids(db_path: str, composer_id: str) -> Set[str]:
         finally:
             conn.close()
     except sqlite3.Error as e:
-        logging.debug(f"Cursor DB bubble ID query error: {e}")
+        logger.debug(f"Cursor DB bubble ID query error: {e}")
 
     return bubble_ids
 
@@ -236,7 +238,7 @@ class CursorTranscriptAdapter(TranscriptAdapter):
         db_path = get_cursor_db_path()
         composer_id = hook_data.get("conversation_id") or hook_data.get("session_id")
         if not db_path or not composer_id:
-            logging.debug("Cursor transcript: no DB path or composer_id available")
+            logger.debug("Cursor transcript: no DB path or composer_id available")
             return []
 
         return scan_cursor_transcript_incremental(

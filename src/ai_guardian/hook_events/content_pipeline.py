@@ -13,6 +13,8 @@ from ai_guardian.hook_events.utils import (
 )
 from ai_guardian.scanners.scan_result import ScanResult  # noqa: F401 — used by callers
 
+logger = logging.getLogger(__name__)
+
 
 def _matches_ignore_files(file_path, ignore_files):
     from ai_guardian.hook_processing import _matches_ignore_files as _mif
@@ -168,11 +170,11 @@ def run_content_pipeline(
                 if pi_decision.should_block:
                     if ide_type != IDEType.CURSOR:
                         if file_path:
-                            logging.info(
+                            logger.info(
                                 f"Blocking operation for {file_path} due to prompt injection detection"
                             )
                         else:
-                            logging.info(
+                            logger.info(
                                 "Blocking operation due to prompt injection detection"
                             )
                     combined_warning = (
@@ -192,13 +194,13 @@ def run_content_pipeline(
                     )
             else:
                 if ide_type != IDEType.CURSOR:
-                    logging.info("✓ No prompt injection detected")
+                    logger.info("✓ No prompt injection detected")
         elif HAS_PROMPT_INJECTION and ide_type != IDEType.CURSOR:
-            logging.info("⚠️  Prompt injection detection temporarily disabled")
+            logger.info("⚠️  Prompt injection detection temporarily disabled")
     except Exception as e:
         on_error = _loaders._get_on_scan_error_action()
         if on_error == ActionMode.BLOCK:
-            logging.error(
+            logger.error(
                 f"Prompt injection check error (fail-closed, on_scan_error=block): {e}"
             )
             return (
@@ -212,7 +214,7 @@ def run_content_pipeline(
                 ),
                 log_only_count,
             )
-        logging.warning(f"Prompt injection check error (fail-open): {e}")
+        logger.warning(f"Prompt injection check error (fail-open): {e}")
 
     # Check for context poisoning (LLM03) — on both user prompts and file reads
     try:
@@ -240,9 +242,7 @@ def run_content_pipeline(
                 if warn_violation_types is not None and cp_decision.warnings:
                     warn_violation_types.append(ViolationType.CONTEXT_POISONING)
                 if cp_decision.should_block:
-                    logging.info(
-                        "Blocking operation due to context poisoning detection"
-                    )
+                    logger.info("Blocking operation due to context poisoning detection")
                     combined_warning = (
                         "\n\n".join(warning_messages) if warning_messages else None
                     )
@@ -260,7 +260,7 @@ def run_content_pipeline(
                     )
 
     except Exception as e:
-        logging.warning(f"Context poisoning check error (fail-open): {e}")
+        logger.warning(f"Context poisoning check error (fail-open): {e}")
 
     # Check for supply chain threats in agent configuration files
     try:
@@ -286,7 +286,7 @@ def run_content_pipeline(
             if warn_violation_types is not None and sc_decision.warnings:
                 warn_violation_types.append(ViolationType.SUPPLY_CHAIN)
             if sc_decision.should_block:
-                logging.info("Blocking operation due to supply chain threat detection")
+                logger.info("Blocking operation due to supply chain threat detection")
                 combined_warning = (
                     "\n\n".join(warning_messages) if warning_messages else None
                 )
@@ -308,7 +308,7 @@ def run_content_pipeline(
                 warn_violation_types.append(ViolationType.SUPPLY_CHAIN)
 
     except Exception as e:
-        logging.warning(f"Supply chain check error (fail-open): {e}")
+        logger.warning(f"Supply chain check error (fail-open): {e}")
 
     # Check for offensive language (profanity, slurs, non-inclusive terms)
     try:
@@ -333,7 +333,7 @@ def run_content_pipeline(
             if warn_violation_types is not None and ol_decision.warnings:
                 warn_violation_types.append(ViolationType.OFFENSIVE_LANGUAGE)
             if ol_decision.should_block:
-                logging.info("Blocking operation due to offensive language detection")
+                logger.info("Blocking operation due to offensive language detection")
                 combined_warning = (
                     "\n\n".join(warning_messages) if warning_messages else None
                 )
@@ -355,7 +355,7 @@ def run_content_pipeline(
                 warn_violation_types.append(ViolationType.OFFENSIVE_LANGUAGE)
 
     except Exception as e:
-        logging.warning(f"Offensive language check error (fail-open): {e}")
+        logger.warning(f"Offensive language check error (fail-open): {e}")
 
     # Check for canary tokens (user-registered tripwire values detecting exfiltration)
     try:
@@ -380,7 +380,7 @@ def run_content_pipeline(
             if warn_violation_types is not None and cd_decision.warnings:
                 warn_violation_types.append(ViolationType.CANARY_DETECTED)
             if cd_decision.should_block:
-                logging.info("Blocking operation due to canary token detection")
+                logger.info("Blocking operation due to canary token detection")
                 combined_warning = (
                     "\n\n".join(warning_messages) if warning_messages else None
                 )
@@ -402,7 +402,7 @@ def run_content_pipeline(
                 warn_violation_types.append(ViolationType.CANARY_DETECTED)
 
     except Exception as e:
-        logging.warning(f"Canary detection check error (fail-open): {e}")
+        logger.warning(f"Canary detection check error (fail-open): {e}")
 
     # Check for config file threats (credential exfiltration patterns in AI config files)
     if ScannerName.CONFIG_FILE in _pipeline_names:
@@ -430,7 +430,7 @@ def run_content_pipeline(
                         warn_violation_types.append(ViolationType.CONFIG_FILE_EXFIL)
                     if cfs_decision.should_block:
                         if ide_type != IDEType.CURSOR:
-                            logging.info(
+                            logger.info(
                                 f"Blocking operation for {file_path} due to config file threat"
                             )
                         combined_warning = (
@@ -452,13 +452,13 @@ def run_content_pipeline(
                             warn_violation_types.append(ViolationType.CONFIG_FILE_EXFIL)
                 else:
                     if ide_type != IDEType.CURSOR:
-                        logging.debug("✓ No config file threats detected")
+                        logger.debug("✓ No config file threats detected")
             elif HAS_CONFIG_SCANNER and ide_type != IDEType.CURSOR:
-                logging.info("⚠️  Config file scanning temporarily disabled")
+                logger.info("⚠️  Config file scanning temporarily disabled")
         except Exception as e:
             on_error = _loaders._get_on_scan_error_action()
             if on_error == ActionMode.BLOCK:
-                logging.error(
+                logger.error(
                     f"Config file scanning error (fail-closed, on_scan_error=block): {e}"
                 )
                 return (
@@ -472,7 +472,7 @@ def run_content_pipeline(
                     ),
                     log_only_count,
                 )
-            logging.warning(f"Config file scanning error (fail-open): {e}")
+            logger.warning(f"Config file scanning error (fail-open): {e}")
 
     # Check for secrets in the content
     secret_config, config_error = _loaders._load_secret_scanning_config()
@@ -559,16 +559,14 @@ def run_content_pipeline(
         # No secrets found, allow operation
         if hook_event == HookEvent.PRE_TOOL_USE:
             if file_path:
-                logging.info(
-                    f"✓ No secrets detected in file '{filename}' ({file_path})"
-                )
+                logger.info(f"✓ No secrets detected in file '{filename}' ({file_path})")
             else:
-                logging.info(f"✓ No secrets detected in file '{filename}'")
+                logger.info(f"✓ No secrets detected in file '{filename}'")
         else:
-            logging.info("✓ No secrets detected in prompt")
+            logger.info("✓ No secrets detected in prompt")
     elif secret_config and ide_type != IDEType.CURSOR:
         # Secret scanning is temporarily disabled
-        logging.info("⚠️  Secret scanning temporarily disabled")
+        logger.info("⚠️  Secret scanning temporarily disabled")
 
     # PII scanning for UserPromptSubmit and PreToolUse (Issue #262)
     pii_was_skipped = False
@@ -576,7 +574,7 @@ def run_content_pipeline(
         pii_scan_content = (
             pii_content_to_scan if pii_content_to_scan is not None else content_to_scan
         )
-        logging.info(
+        logger.info(
             f"Scanning {'prompt' if hook_event == HookEvent.PROMPT else filename} for PII..."
         )
         pii_result = run_pii_scan(
@@ -609,7 +607,7 @@ def run_content_pipeline(
                 pii_config_for_log, _ = _loaders._load_pii_config()
                 pii_action = (pii_config_for_log or {}).get("action", pii_action)
                 pii_types = list(set(r.get("type", "unknown") for r in pii_redactions))
-                logging.warning(f"PII detected: {pii_types}")
+                logger.warning(f"PII detected: {pii_types}")
 
                 pii_result.extra["action"] = pii_action
                 if pii_redactions and pii_redactions[0].get("line_number") is not None:
@@ -677,7 +675,7 @@ def run_content_pipeline(
                 elif pii_action == "log-only":
                     log_only_count += 1
                 else:
-                    logging.warning(
+                    logger.warning(
                         f"Unknown PII action '{pii_action}', allowing through"
                     )
 
@@ -694,12 +692,12 @@ def run_content_pipeline(
             try:
                 ts_config, ts_error = _loaders._load_transcript_scanning_config()
                 if ts_error:
-                    logging.warning(f"Transcript scanning config error: {ts_error}")
+                    logger.warning(f"Transcript scanning config error: {ts_error}")
 
                 if ts_config and is_feature_enabled(
                     ts_config.get("enabled"), now, default=True
                 ):
-                    logging.info(
+                    logger.info(
                         f"Scanning {ts_adapter.name} transcript for secrets/PII..."
                     )
 
@@ -731,20 +729,20 @@ def run_content_pipeline(
                             warn_violation_types.append(
                                 ViolationType.SECRET_IN_TRANSCRIPT
                             )
-                        logging.warning(
+                        logger.warning(
                             f"{ts_adapter.name} transcript scanning found "
                             f"{len(transcript_warnings)} issue(s)"
                         )
                     else:
-                        logging.info(
+                        logger.info(
                             f"✓ No threats detected in {ts_adapter.name} transcript"
                         )
                 elif ts_config:
-                    logging.info("⚠️  Transcript scanning temporarily disabled")
+                    logger.info("⚠️  Transcript scanning temporarily disabled")
             except Exception as e:
                 on_error = _loaders._get_on_scan_error_action()
                 if on_error == ActionMode.BLOCK:
-                    logging.error(
+                    logger.error(
                         f"{ts_adapter.name} transcript scanning error "
                         f"(fail-closed, on_scan_error=block): {e}"
                     )
@@ -762,7 +760,7 @@ def run_content_pipeline(
                         ),
                         log_only_count,
                     )
-                logging.warning(
+                logger.warning(
                     f"{ts_adapter.name} transcript scanning error (fail-open): {e}"
                 )
             break
@@ -810,11 +808,9 @@ def run_content_pipeline(
                 "ignore_files_matched": ignore_files_matched,
             }
             context_mgr.save_pretool_context(hook_tool_use_id, pretool_context)
-            logging.info(
-                f"PreToolUse: saved context for tool_use_id={hook_tool_use_id}"
-            )
+            logger.info(f"PreToolUse: saved context for tool_use_id={hook_tool_use_id}")
         except Exception as e:
-            logging.debug(f"Failed to save PreToolUse context (non-fatal): {e}")
+            logger.debug(f"Failed to save PreToolUse context (non-fatal): {e}")
 
     # No block — pipeline passed
     return (None, log_only_count)

@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 import sys
 
+logger = logging.getLogger(__name__)
+
 # Handle tomllib import for Python 3.11+ and fallback to tomli
 if sys.version_info >= (3, 11):
     import tomllib
@@ -30,7 +32,7 @@ else:
     try:
         import tomli as tomllib
     except ImportError:
-        logging.error("tomli package required for Python < 3.11 but not available")
+        logger.error("tomli package required for Python < 3.11 but not available")
         tomllib = None
 
 try:
@@ -39,9 +41,6 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
-
-
-logger = logging.getLogger(__name__)
 
 
 class InstallMethod(Enum):

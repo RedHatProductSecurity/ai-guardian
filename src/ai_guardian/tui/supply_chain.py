@@ -12,6 +12,8 @@ from textual.widgets import Static
 
 from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 
+logger = logging.getLogger(__name__)
+
 
 def _format_enabled(value: Union[bool, Dict[str, Any]]) -> str:
     if isinstance(value, dict):
@@ -118,7 +120,7 @@ class SupplyChainContent(ConfigSaveMixin, Container):
                 with open(config_path, "r", encoding="utf-8") as f:
                     config = json.load(f)
             except Exception as e:
-                logging.warning("Failed to read config: %s", e)
+                logger.warning("Failed to read config: %s", e)
 
         sc = config.get("supply_chain", {})
         if not isinstance(sc, dict):

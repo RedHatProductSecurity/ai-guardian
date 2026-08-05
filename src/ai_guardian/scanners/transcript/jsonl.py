@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Dict, List, Optional
 
+logger = logging.getLogger(__name__)
+
 from ai_guardian.config.utils import get_state_dir
 from ai_guardian.scanners.transcript.base import TranscriptAdapter
 from ai_guardian.scanners.transcript.common import (
@@ -76,7 +78,7 @@ def scan_transcript_incremental(
     history naturally contains patterns that trigger false positives.
     """
     if not os.path.exists(transcript_path):
-        logging.debug(f"Transcript file does not exist: {transcript_path}")
+        logger.debug(f"Transcript file does not exist: {transcript_path}")
         return []
 
     return _scan_jsonl_incremental(
@@ -127,7 +129,7 @@ def _advance_transcript_position(hook_data: dict) -> None:
                 if _HAS_FCNTL:
                     fcntl.flock(lf, fcntl.LOCK_UN)
     except OSError as e:
-        logging.debug(f"Failed to advance transcript position: {e}")
+        logger.debug(f"Failed to advance transcript position: {e}")
 
 
 class JsonlTranscriptAdapter(TranscriptAdapter):

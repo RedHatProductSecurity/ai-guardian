@@ -59,7 +59,7 @@ class PatternServerWarningsTest(TestCase):
         # Store original logging level
         self.original_level = logging.getLogger().level
 
-        # Add handler to root logger (ai_guardian uses logging.warning, not logger.warning)
+        # Add handler to root logger (module loggers propagate here)
         logging.getLogger().addHandler(self.log_handler)
         logging.getLogger().setLevel(logging.DEBUG)
 
@@ -564,8 +564,6 @@ class PatternServerWarningsTest(TestCase):
             "Should mention pattern server URL",
         )
 
-    @patch("logging.warning")
-    @patch("logging.info")
     @patch("subprocess.run")
     @patch("shutil.which")
     @patch("ai_guardian.scanners.secret_scanning._load_secret_scanning_config")
@@ -578,8 +576,6 @@ class PatternServerWarningsTest(TestCase):
         mock_scanning_config,
         mock_which,
         mock_run,
-        mock_log_info,
-        mock_log_warning,
     ):
         """Test that engines are tried in order with warnings logged for unavailable ones"""
         # Setup: Pattern server unavailable
@@ -619,27 +615,30 @@ class PatternServerWarningsTest(TestCase):
         self.assertFalse(has_secrets, "Operation should succeed with gitleaks")
         self.assertIsNone(error_msg, "No error message")
 
-        # Check that warnings were logged
-        warning_calls = [str(call) for call in mock_log_warning.call_args_list]
-        info_calls = [str(call) for call in mock_log_info.call_args_list]
+        # Check that warnings were logged (via setUp's root-logger ListHandler)
+        warning_msgs = [
+            r.getMessage() for r in self.log_capture if r.levelno >= logging.WARNING
+        ]
+        info_msgs = [
+            r.getMessage() for r in self.log_capture if r.levelno == logging.INFO
+        ]
 
         # Should log warning about pattern server unavailable
         self.assertTrue(
             any(
-                "Pattern server unavailable" in str(call)
-                or "pattern server" in str(call).lower()
-                for call in warning_calls
+                "Pattern server unavailable" in msg or "pattern server" in msg.lower()
+                for msg in warning_msgs
             ),
-            f"Expected pattern server warning. Got: {warning_calls}",
+            f"Expected pattern server warning. Got: {warning_msgs}",
         )
 
         # Should log warning about betterleaks not available
         self.assertTrue(
             any(
-                "betterleaks" in str(call) and "not available" in str(call).lower()
-                for call in warning_calls
+                "betterleaks" in msg and "not available" in msg.lower()
+                for msg in warning_msgs
             ),
-            f"Expected betterleaks unavailable warning. Got: {warning_calls}",
+            f"Expected betterleaks unavailable warning. Got: {warning_msgs}",
         )
 
     @patch("ai_guardian.patterns.server.logger")

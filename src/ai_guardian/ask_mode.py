@@ -8,6 +8,8 @@ from typing import Dict, Optional  # noqa: F401
 from ai_guardian.constants import ViolationType, ActionMode, parse_ask_action
 from ai_guardian.config.utils import get_project_dir
 
+logger = logging.getLogger(__name__)
+
 try:
     from ai_guardian.tools.policy import ToolPolicyChecker
 
@@ -197,7 +199,7 @@ def _handle_ask_mode(
         return result
 
     except Exception as e:
-        logging.warning(f"Ask dialog error, falling back to {fallback_action}: {e}")
+        logger.warning(f"Ask dialog error, falling back to {fallback_action}: {e}")
         from ai_guardian.tui.ask_dialog import (
             AskResult,
             AskDecision,
@@ -486,7 +488,7 @@ def _log_ask_decision(
                 finding_fingerprints,
             )
     except Exception as e:
-        logging.error(f"Failed to log ask decision: {e}")
+        logger.error(f"Failed to log ask decision: {e}")
 
 
 def _record_allowed_for_transcript(
@@ -517,7 +519,7 @@ def _record_allowed_for_transcript(
                 fp = _finding_fingerprint("secret", rule_id)
                 result_set.add(fp)
     except Exception as e:
-        logging.debug(f"Failed to record allowed finding: {e}")
+        logger.debug(f"Failed to record allowed finding: {e}")
 
 
 def _compute_pii_transcript_fingerprints(pii_redactions, content):

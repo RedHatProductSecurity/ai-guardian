@@ -260,7 +260,7 @@ def _load_config_file():
         if global_path is None and project_path is None:
             legacy_path = Path.cwd() / ".ai-guardian.json"
             if legacy_path.exists():
-                logging.warning(
+                logger.warning(
                     "DEPRECATED: Using legacy '.ai-guardian.json' in project root. "
                     "Move to '.ai-guardian/ai-guardian.json' instead. "
                     "Legacy support will be removed in v2.0.0."
@@ -386,7 +386,7 @@ def _load_config_file():
 
     except Exception as e:
         error_msg = f"⚠️  Configuration Error: {str(e)}"
-        logging.error(f"Unexpected error loading config: {e}")
+        logger.error(f"Unexpected error loading config: {e}")
         return None, error_msg
 
 
@@ -419,7 +419,7 @@ def _load_json_config(config_path):
             f"JSON Error: {e.msg} (line {e.lineno}, column {e.colno})\n"
             f"Using default configuration. Please fix the config file."
         )
-        logging.error(f"JSON parse error in {config_path}: {e}")
+        logger.error(f"JSON parse error in {config_path}: {e}")
         print(error_msg, file=sys.stderr)
         return None, error_msg
     except Exception as e:
@@ -428,7 +428,7 @@ def _load_json_config(config_path):
             f"Error: {str(e)}\n"
             f"Using default configuration."
         )
-        logging.error(f"Error reading config {config_path}: {e}")
+        logger.error(f"Error reading config {config_path}: {e}")
         return None, error_msg
 
 
@@ -451,7 +451,7 @@ def _load_pattern_server_config():
         if "pattern_server" in secret_scanning:
             pattern_config = secret_scanning["pattern_server"]
 
-            logging.warning(
+            logger.warning(
                 "DEPRECATED: 'secret_scanning.pattern_server' is a global setting "
                 "but only applies to gitleaks. Move to per-engine format:\n"
                 '  "secret_scanning": {\n'
@@ -464,7 +464,7 @@ def _load_pattern_server_config():
             )
 
             if pattern_config is None:
-                logging.debug(
+                logger.debug(
                     "Pattern server explicitly disabled (secret_scanning.pattern_server = null)"
                 )
                 return None
@@ -472,24 +472,22 @@ def _load_pattern_server_config():
             if isinstance(pattern_config, dict):
                 if "enabled" in pattern_config:
                     if not is_feature_enabled(pattern_config["enabled"]):
-                        logging.debug("Pattern server disabled via enabled field")
+                        logger.debug("Pattern server disabled via enabled field")
                         return None
 
                 if pattern_config.get("url"):
-                    logging.debug(
+                    logger.debug(
                         "Using pattern server from secret_scanning.pattern_server"
                     )
                     return pattern_config
                 else:
-                    logging.debug(
-                        "Pattern server section present but no URL configured"
-                    )
+                    logger.debug("Pattern server section present but no URL configured")
                     return None
 
         if "pattern_server" in config:
             pattern_config = config["pattern_server"]
 
-            logging.warning(
+            logger.warning(
                 "DEPRECATED: Root-level 'pattern_server' configuration. "
                 "Move to 'secret_scanning.pattern_server' instead. "
                 "Example:\n"
@@ -503,7 +501,7 @@ def _load_pattern_server_config():
             if isinstance(pattern_config, dict):
                 if "enabled" in pattern_config:
                     if not is_feature_enabled(pattern_config["enabled"]):
-                        logging.debug("Pattern server disabled via enabled field")
+                        logger.debug("Pattern server disabled via enabled field")
                         return None
 
                 if pattern_config.get("url"):
@@ -512,7 +510,7 @@ def _load_pattern_server_config():
         return None
 
     except Exception as e:
-        logging.debug(f"Error loading pattern server config: {e}")
+        logger.debug(f"Error loading pattern server config: {e}")
         return None
 
 

@@ -18,6 +18,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_with_position_tracking,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def get_opencode_db_path() -> Optional[str]:
     """Find OpenCode SQLite database path.
@@ -103,7 +105,7 @@ def read_opencode_transcript(
         finally:
             conn.close()
     except sqlite3.Error as e:
-        logging.debug(f"OpenCode DB read error: {e}")
+        logger.debug(f"OpenCode DB read error: {e}")
 
     return "\n".join(texts), latest_ts
 
@@ -122,7 +124,7 @@ def get_opencode_latest_timestamp(db_path: str, session_id: str) -> int:
         finally:
             conn.close()
     except sqlite3.Error as e:
-        logging.debug(f"OpenCode DB timestamp query error: {e}")
+        logger.debug(f"OpenCode DB timestamp query error: {e}")
     return 0
 
 
@@ -177,7 +179,7 @@ class OpenCodeTranscriptAdapter(TranscriptAdapter):
         db_path = get_opencode_db_path()
         session_id = hook_data.get("session_id")
         if not db_path or not session_id:
-            logging.debug("OpenCode transcript: no DB path or session_id available")
+            logger.debug("OpenCode transcript: no DB path or session_id available")
             return []
 
         return scan_opencode_transcript_incremental(

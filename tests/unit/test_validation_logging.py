@@ -56,7 +56,7 @@ class TestApplySecretValidationReturnType:
         result = _apply_secret_validation({"validate_secrets": True}, [], "content")
         assert result is None
 
-    @patch("ai_guardian.hook_processing.logging")
+    @patch("ai_guardian.hook_processing.logger")
     def test_returns_unverified_when_no_validators(self, mock_logging):
         """When validate_secrets=true but no validator exists for the rule."""
         mock_validator = MagicMock()
@@ -93,7 +93,7 @@ class TestApplySecretValidationReturnType:
         assert result["validation_info"]["status"] == "unverified"
         assert "No validator" in result["validation_info"]["message"]
 
-    @patch("ai_guardian.hook_processing.logging")
+    @patch("ai_guardian.hook_processing.logger")
     def test_returns_inactive_with_skip_block(self, mock_logging):
         """When all secrets are inactive, skip_block=True with validation_info."""
         mock_validator = MagicMock()
@@ -134,7 +134,7 @@ class TestApplySecretValidationReturnType:
         assert result["validation_info"]["message"] == "Token returned 401"
         assert result["validation_info"]["elapsed_ms"] == 150.0
 
-    @patch("ai_guardian.hook_processing.logging")
+    @patch("ai_guardian.hook_processing.logger")
     def test_returns_verified_with_no_skip(self, mock_logging):
         """When secret is active, skip_block=False with status=verified."""
         mock_validator = MagicMock()
@@ -174,7 +174,7 @@ class TestApplySecretValidationReturnType:
         assert result["validation_info"]["message"] == "Token is active (HTTP 200)"
         assert result["validation_info"]["elapsed_ms"] == 200.0
 
-    @patch("ai_guardian.hook_processing.logging")
+    @patch("ai_guardian.hook_processing.logger")
     def test_returns_error_on_exception(self, mock_logging):
         """On validation exception, return status=error instead of None."""
         mock_module = MagicMock()

@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Any, Optional
 
+logger = logging.getLogger(__name__)
+
 
 class _PatternServerUnset:
     _instance = None
@@ -235,9 +237,9 @@ def _build_python_preset(
                 python_scanner=scanner,
             )
         except Exception as e:
-            logging.warning(f"Failed to load toml-patterns scanner: {e}")
+            logger.warning(f"Failed to load toml-patterns scanner: {e}")
             return None
-    logging.warning(f"Unknown Python scanner preset: {preset_name}")
+    logger.warning(f"Unknown Python scanner preset: {preset_name}")
     return None
 
 
@@ -261,7 +263,7 @@ def _build_engine_config(
         if engine_spec in _PYTHON_SCANNER_PRESETS:
             return _build_python_preset(engine_spec, parent_config=parent_config)
         if engine_spec not in ENGINE_PRESETS:
-            logging.warning(f"Unknown engine preset: {engine_spec}")
+            logger.warning(f"Unknown engine preset: {engine_spec}")
             return None
         return copy.deepcopy(ENGINE_PRESETS[engine_spec])
 
@@ -293,7 +295,7 @@ def _build_engine_config(
                 python_scanner=scanner,
             )
         except Exception as e:
-            logging.warning(f"Failed to load Python scanner: {e}")
+            logger.warning(f"Failed to load Python scanner: {e}")
             return None
     elif engine_type == "custom":
         engine_config = EngineConfig(
@@ -307,7 +309,7 @@ def _build_engine_config(
             output_parser=engine_spec.get("output_format", "gitleaks"),
         )
     else:
-        logging.warning(f"Unknown engine type: {engine_type}")
+        logger.warning(f"Unknown engine type: {engine_type}")
         return None
 
     # Apply per-engine configuration
@@ -396,22 +398,20 @@ def select_engine(
             continue
 
         if not check_engine_consent(engine_config):
-            logging.warning(
+            logger.warning(
                 f"Scanner '{engine_config.type}' requires consent. "
                 f"Run: ai-guardian engine consent {engine_config.type}"
             )
             continue
 
         if engine_config.python_scanner is not None:
-            logging.info(
-                f"Selected Python scanner: {engine_config.python_scanner.name}"
-            )
+            logger.info(f"Selected Python scanner: {engine_config.python_scanner.name}")
             return engine_config
         elif shutil.which(engine_config.binary):
-            logging.info(f"Selected scanner engine: {engine_config.type}")
+            logger.info(f"Selected scanner engine: {engine_config.type}")
             return engine_config
         else:
-            logging.warning(
+            logger.warning(
                 f"Scanner '{engine_config.type}' (binary: {engine_config.binary}) "
                 f"not available, trying next scanner in list"
             )
@@ -453,21 +453,19 @@ def select_all_engines(
             continue
 
         if not check_engine_consent(engine_config):
-            logging.warning(
-                f"Scanner '{engine_config.type}' requires consent, skipping"
-            )
+            logger.warning(f"Scanner '{engine_config.type}' requires consent, skipping")
             continue
 
         if engine_config.python_scanner is not None:
-            logging.info(
+            logger.info(
                 f"Found available Python scanner: {engine_config.python_scanner.name}"
             )
             available.append(engine_config)
         elif shutil.which(engine_config.binary):
-            logging.info(f"Found available scanner engine: {engine_config.type}")
+            logger.info(f"Found available scanner engine: {engine_config.type}")
             available.append(engine_config)
         else:
-            logging.warning(
+            logger.warning(
                 f"Scanner '{engine_config.type}' (binary: {engine_config.binary}) "
                 f"not available, skipping"
             )
@@ -573,7 +571,7 @@ def resolve_engine_config_path(
                 if path:
                     return str(Path(path).absolute())
             except Exception as e:
-                logging.warning(
+                logger.warning(
                     f"Per-engine pattern server failed for {engine_config.type}: {e}"
                 )
             return None

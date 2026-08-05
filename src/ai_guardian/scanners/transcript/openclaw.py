@@ -18,6 +18,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_jsonl_incremental,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def get_openclaw_transcripts_dir() -> Optional[str]:
     """Find the OpenClaw transcripts directory.
@@ -76,7 +78,7 @@ def get_most_recent_transcript(transcripts_dir: str) -> Optional[str]:
     try:
         date_dirs = sorted(os.listdir(transcripts_dir), reverse=True)
     except OSError as e:
-        logging.debug(f"OpenClaw transcripts listing error: {e}")
+        logger.debug(f"OpenClaw transcripts listing error: {e}")
         return None
 
     for date_dir in date_dirs:
@@ -145,7 +147,7 @@ class OpenClawTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         transcripts_dir = get_openclaw_transcripts_dir()
         if not transcripts_dir:
-            logging.debug("OpenClaw transcript: no transcripts directory found")
+            logger.debug("OpenClaw transcript: no transcripts directory found")
             return []
 
         session_id = hook_data.get("session_id")
@@ -167,7 +169,7 @@ class OpenClawTranscriptAdapter(TranscriptAdapter):
             transcript_path = get_most_recent_transcript(transcripts_dir)
 
         if not transcript_path:
-            logging.debug("OpenClaw transcript: no transcript file found")
+            logger.debug("OpenClaw transcript: no transcript file found")
             return []
 
         if not session_id:

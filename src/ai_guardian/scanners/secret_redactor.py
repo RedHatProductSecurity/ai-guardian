@@ -389,7 +389,7 @@ class SecretRedactor:
             )
 
             if self.log_redactions:
-                logging.info(
+                logger.info(
                     f"Redacted {secret_type} at position {start} using {strategy}"
                 )
 

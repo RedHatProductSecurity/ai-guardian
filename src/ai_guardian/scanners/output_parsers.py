@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Dict, Any, Optional, List
 
+logger = logging.getLogger(__name__)
+
 
 class ScannerOutputParser(ABC):
     """Abstract base class for scanner output parsers."""
@@ -73,7 +75,7 @@ class GitleaksOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"Gitleaks output file not found: {output_file}")
+                logger.error(f"Gitleaks output file not found: {output_file}")
                 return None
 
             with open(output_file, "r", encoding="utf-8") as f:
@@ -107,10 +109,10 @@ class GitleaksOutputParser(ScannerOutputParser):
             }
 
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse Gitleaks JSON output: {e}")
+            logger.error(f"Failed to parse Gitleaks JSON output: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error parsing Gitleaks output: {e}")
+            logger.error(f"Unexpected error parsing Gitleaks output: {e}")
             return None
 
 
@@ -159,7 +161,7 @@ class LeakTKOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"LeakTK output file not found: {output_file}")
+                logger.error(f"LeakTK output file not found: {output_file}")
                 return None
 
             with open(output_file, "r", encoding="utf-8") as f:
@@ -185,7 +187,7 @@ class LeakTKOutputParser(ScannerOutputParser):
             errors = data.get("errors", [])
             if errors:
                 for error in errors:
-                    logging.warning(f"LeakTK scanner error: {error}")
+                    logger.warning(f"LeakTK scanner error: {error}")
 
             findings = data.get("findings", [])
             if not findings:
@@ -214,10 +216,10 @@ class LeakTKOutputParser(ScannerOutputParser):
             }
 
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse LeakTK JSON output: {e}")
+            logger.error(f"Failed to parse LeakTK JSON output: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error parsing LeakTK output: {e}")
+            logger.error(f"Unexpected error parsing LeakTK output: {e}")
             return None
 
 
@@ -243,7 +245,7 @@ class TruffleHogOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"TruffleHog output file not found: {output_file}")
+                logger.error(f"TruffleHog output file not found: {output_file}")
                 return None
 
             standardized_findings = []
@@ -288,7 +290,7 @@ class TruffleHogOutputParser(ScannerOutputParser):
                         )
 
                     except json.JSONDecodeError as e:
-                        logging.warning(
+                        logger.warning(
                             f"Failed to parse TruffleHog line {line_num}: {e}"
                         )
                         continue
@@ -304,7 +306,7 @@ class TruffleHogOutputParser(ScannerOutputParser):
             }
 
         except Exception as e:
-            logging.error(f"Unexpected error parsing TruffleHog output: {e}")
+            logger.error(f"Unexpected error parsing TruffleHog output: {e}")
             return None
 
 
@@ -340,7 +342,7 @@ class DetectSecretsOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"detect-secrets output file not found: {output_file}")
+                logger.error(f"detect-secrets output file not found: {output_file}")
                 return None
 
             with open(output_file, "r", encoding="utf-8") as f:
@@ -378,10 +380,10 @@ class DetectSecretsOutputParser(ScannerOutputParser):
             }
 
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse detect-secrets JSON output: {e}")
+            logger.error(f"Failed to parse detect-secrets JSON output: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error parsing detect-secrets output: {e}")
+            logger.error(f"Unexpected error parsing detect-secrets output: {e}")
             return None
 
 
@@ -411,7 +413,7 @@ class SecretlintOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"Secretlint output file not found: {output_file}")
+                logger.error(f"Secretlint output file not found: {output_file}")
                 return None
 
             content = output_path.read_text(encoding="utf-8").strip()
@@ -454,10 +456,10 @@ class SecretlintOutputParser(ScannerOutputParser):
             }
 
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse Secretlint JSON output: {e}")
+            logger.error(f"Failed to parse Secretlint JSON output: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error parsing Secretlint output: {e}")
+            logger.error(f"Unexpected error parsing Secretlint output: {e}")
             return None
 
     @staticmethod
@@ -525,7 +527,7 @@ class GitGuardianOutputParser(ScannerOutputParser):
         try:
             output_path = Path(output_file)
             if not output_path.exists():
-                logging.error(f"GitGuardian output file not found: {output_file}")
+                logger.error(f"GitGuardian output file not found: {output_file}")
                 return None
 
             with open(output_file, "r", encoding="utf-8") as f:
@@ -569,10 +571,10 @@ class GitGuardianOutputParser(ScannerOutputParser):
             }
 
         except json.JSONDecodeError as e:
-            logging.error(f"Failed to parse GitGuardian JSON output: {e}")
+            logger.error(f"Failed to parse GitGuardian JSON output: {e}")
             return None
         except Exception as e:
-            logging.error(f"Unexpected error parsing GitGuardian output: {e}")
+            logger.error(f"Unexpected error parsing GitGuardian output: {e}")
             return None
 
 

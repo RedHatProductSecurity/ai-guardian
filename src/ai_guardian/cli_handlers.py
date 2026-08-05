@@ -14,6 +14,8 @@ from pathlib import Path
 from ai_guardian.config.loaders import _load_config_file
 from ai_guardian.constants import ViolationType
 
+logger = logging.getLogger(__name__)
+
 
 def _format_duration_ago(secs):
     """Format a duration in seconds as a human-readable 'X ago' string.
@@ -225,7 +227,7 @@ def _handle_daemon_command(args):
             marker = get_state_dir() / "daemon.stop-requested"
             if marker.exists():
                 marker.unlink(missing_ok=True)
-                logging.info("Cleared stop-requested marker (explicit daemon start)")
+                logger.info("Cleared stop-requested marker (explicit daemon start)")
         except OSError:
             pass  # intentionally silent — best-effort operation
 

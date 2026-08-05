@@ -415,13 +415,13 @@ class TestRunEngineListenMode:
                 "ai_guardian.scanners.executor.subprocess.run",
                 return_value=proc,
             ),
-            mock.patch("ai_guardian.scanners.executor.logging") as mock_logging,
+            mock.patch("ai_guardian.scanners.executor.logger") as mock_logger,
         ):
             result = run_single_engine(config, "/tmp/test.txt", "/tmp/report.json")
 
         assert result.has_secrets is False
         assert result.error is not None
-        warning_msg = mock_logging.warning.call_args[0][0]
+        warning_msg = mock_logger.warning.call_args[0][0]
         assert "test-engine >= 2.0 required" in warning_msg
 
     def test_engine_without_listen_support_skips_listen_mode(self):

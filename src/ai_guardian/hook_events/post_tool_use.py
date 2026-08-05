@@ -375,11 +375,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
         _invocation_allowed = kwargs["_invocation_allowed"]
         now = kwargs["now"]
 
-    logging.info("Processing PostToolUse hook...")
+    logger.info("Processing PostToolUse hook...")
 
     # Extract tool output
     tool_output, tool_name = extract_tool_result(hook_data)
-    logging.info(
+    logger.info(
         f"PostToolUse: tool_name={tool_name}, has_output={tool_output is not None}"
     )
 
@@ -403,11 +403,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
 
     if tool_name == "Skill" and tool_input.get("skill"):
         tool_identifier = f"Skill:{tool_input['skill']}"
-        logging.info(
+        logger.info(
             f"PostToolUse (with output): Created composite identifier {tool_identifier}"
         )
 
-    logging.info(f"PostToolUse tool_identifier: {tool_identifier}")
+    logger.info(f"PostToolUse tool_identifier: {tool_identifier}")
 
     # Extract command for Bash tool (for violation context)
     bash_command = None
@@ -421,16 +421,16 @@ def handle_post_tool_use(ctx=None, **kwargs):
     if context_mgr and hook_tool_use_id:
         pretool_ctx = context_mgr.get_pretool_context(hook_tool_use_id)
         if pretool_ctx:
-            logging.info(
+            logger.info(
                 f"PostToolUse: loaded PreToolUse context for {hook_tool_use_id}"
             )
             # Inherit file_path from PreToolUse if not available in PostToolUse
             if not tool_input.get("file_path") and not tool_input.get("path"):
                 pretool_file = pretool_ctx.get("file_path")
                 if pretool_file:
-                    logging.info(f"PostToolUse: inherited file_path={pretool_file}")
+                    logger.info(f"PostToolUse: inherited file_path={pretool_file}")
 
-    logging.info(f"Scanning {tool_identifier} output for secrets...")
+    logger.info(f"Scanning {tool_identifier} output for secrets...")
 
     # Apply annotation suppression for file-reading tools (Issue #481)
     # If PreToolUse was a file read, annotations in the output should be honored
@@ -456,7 +456,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 tool_output = post_all_content
                 post_secret_content = post_secret_content_sup
                 total_suppressed = sum(len(s.get("lines", [])) for s in post_ann_info)
-                logging.info(
+                logger.info(
                     f"PostToolUse: annotation suppression applied "
                     f"({total_suppressed} line(s) suppressed)"
                 )
@@ -467,13 +467,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
     # If config has errors, log warning and continue with defaults
     # (ignore lists default to [] when secret_config is None)
     if config_error:
-        logging.warning(f"Config error in PostToolUse: {config_error}")
+        logger.warning(f"Config error in PostToolUse: {config_error}")
 
     # Check if secret scanning is enabled (respect disabled_until)
     if secret_config and not is_feature_enabled(
         secret_config.get("enabled", True), now, default=True
     ):
-        logging.info("Secret scanning is disabled - skipping PostToolUse scan")
+        logger.info("Secret scanning is disabled - skipping PostToolUse scan")
         _advance_transcript_position(hook_data)
         return _format_response(adapter, has_secrets=False, hook_event=hook_event)
 
@@ -489,13 +489,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
         "secrets_found"
     )
     if skip_secret_scan:
-        logging.info(
+        logger.info(
             "PostToolUse: skipping secret scan (PreToolUse already scanned clean)"
         )
 
     # Cross-hook optimization: respect ignore_files from PreToolUse (#366)
     if pretool_ctx and pretool_ctx.get("ignore_files_matched"):
-        logging.info(
+        logger.info(
             "PostToolUse: skipping scans (file matched ignore_files in PreToolUse)"
         )
         skip_secret_scan = True
@@ -553,9 +553,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
         redaction_config, redaction_error = _loaders._load_secret_redaction_config()
 
         if redaction_error:
-            logging.warning(f"Config error loading secret_redaction: {redaction_error}")
+            logger.warning(f"Config error loading secret_redaction: {redaction_error}")
             # Fall back to blocking
-            logging.warning(f"Secrets detected in {tool_identifier} output - blocking")
+            logger.warning(f"Secrets detected in {tool_identifier} output - blocking")
             result = _format_response(
                 adapter,
                 has_secrets=True,
@@ -575,7 +575,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
 
         if enabled:
             # REDACT instead of block
-            logging.info(f"Secret redaction enabled with action={action}")
+            logger.info(f"Secret redaction enabled with action={action}")
 
             try:
                 from ai_guardian.scanners.secret_redactor import SecretRedactor
@@ -596,7 +596,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 redactions = result["redactions"]
 
                 if not redactions:
-                    logging.warning(
+                    logger.warning(
                         "Secret detected but redactor produced 0 redactions "
                         f"for {tool_identifier} output — falling back to block"
                     )
@@ -620,11 +620,11 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     redacted_text = "\n".join(redacted_lines)
 
                 # Log redaction event
-                logging.warning(
+                logger.warning(
                     f"Redacted {len(redactions)} secret(s) from {tool_identifier} output"
                 )
                 for r in redactions:
-                    logging.info(
+                    logger.info(
                         f"  - {r['type']} at position {r['position']} using {r['strategy']}"
                     )
 
@@ -673,7 +673,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         + "\n".join([f"  - {r['type']}" for r in redactions[:5]])
                         + ("\n  - ..." if len(redactions) > 5 else "")
                     )
-                    logging.warning(f"WARN mode: {warning_msg}")
+                    logger.warning(f"WARN mode: {warning_msg}")
 
                 # Block output containing detected secrets.
                 # Redaction produces correct modified_output, but upstream
@@ -687,7 +687,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         redacted_text[:_MAX_REDACTED_CONTEXT_BYTES]
                         + f"\n\n[Truncated: original output was {orig_len} bytes]"
                     )
-                logging.info(
+                logger.info(
                     "Secrets redacted — blocking output, "
                     "sending redacted content via additionalContext"
                 )
@@ -705,12 +705,12 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 return result
 
             except Exception as redact_error:
-                logging.error(f"Error during secret redaction: {redact_error}")
+                logger.error(f"Error during secret redaction: {redact_error}")
                 import traceback
 
-                logging.error(traceback.format_exc())
+                logger.error(traceback.format_exc())
                 # Fall back to blocking on redaction errors
-                logging.warning("Redaction failed, falling back to blocking")
+                logger.warning("Redaction failed, falling back to blocking")
                 result = _format_response(
                     adapter,
                     has_secrets=True,
@@ -722,7 +722,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 return result
         else:
             # Redaction disabled - block to prevent secrets from reaching AI model
-            logging.warning("Secrets detected and redaction disabled - blocking output")
+            logger.warning("Secrets detected and redaction disabled - blocking output")
             result = _format_response(
                 adapter,
                 has_secrets=True,
@@ -733,7 +733,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             _advance_transcript_position(hook_data)
             return result
 
-    logging.info(f"✓ No secrets detected in {tool_identifier} output")
+    logger.info(f"✓ No secrets detected in {tool_identifier} output")
 
     # Accumulate warning messages for PII ask-mode decisions
     warning_messages = []
@@ -750,7 +750,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         == "ignore_files match"
     )
     if not pii_skip_from_pretool:
-        logging.info("Scanning tool output for PII...")
+        logger.info("Scanning tool output for PII...")
         post_pii_result = run_pii_scan(
             tool_output,
             file_path=pii_file_path,
@@ -796,9 +796,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     bash_command=bash_command,
                     pretool_ctx=pretool_ctx,
                 )
-                logging.warning(
-                    f"PII detected in {tool_identifier} output: {pii_types}"
-                )
+                logger.warning(f"PII detected in {tool_identifier} output: {pii_types}")
 
                 # Build multi-finding list from PII redactions
                 pii_matched_text = _extract_pii_matched_text(
@@ -920,7 +918,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     _advance_transcript_position(hook_data)
                     return result
                 else:
-                    logging.warning(
+                    logger.warning(
                         f"Unknown PII action '{pii_action}', allowing through"
                     )
                     _advance_transcript_position(hook_data)
@@ -953,7 +951,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 post_pi_skip = True
 
             if post_pi_skip:
-                logging.info(
+                logger.info(
                     "PostToolUse: skipping PI scan (PreToolUse already scanned clean)"
                 )
             else:
@@ -1048,9 +1046,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                 )
 
                         if post_pi_block:
-                            logging.info(
-                                "PostToolUse: blocking due to prompt injection"
-                            )
+                            logger.info("PostToolUse: blocking due to prompt injection")
                             result = _format_response(
                                 adapter,
                                 has_secrets=True,
@@ -1065,13 +1061,13 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         post_warn_types.append(ViolationType.PROMPT_INJECTION)
 
                     if not post_pi_detected:
-                        logging.info(
+                        logger.info(
                             "PostToolUse: no prompt injection detected in output"
                         )
         except Exception as e:
             on_error = _loaders._get_on_scan_error_action()
             if on_error == ActionMode.BLOCK:
-                logging.error(f"PostToolUse PI check error (fail-closed): {e}")
+                logger.error(f"PostToolUse PI check error (fail-closed): {e}")
                 result = _format_response(
                     adapter,
                     has_secrets=True,
@@ -1081,7 +1077,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 )
                 _advance_transcript_position(hook_data)
                 return result
-            logging.warning(f"PostToolUse PI check error (fail-open): {e}")
+            logger.warning(f"PostToolUse PI check error (fail-open): {e}")
 
     # Context poisoning scanning on PostToolUse output (#1285)
     if tool_output:
@@ -1094,7 +1090,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 post_cp_skip = True
 
             if post_cp_skip:
-                logging.info(
+                logger.info(
                     "PostToolUse: skipping CP scan (PreToolUse already scanned clean)"
                 )
             else:
@@ -1185,7 +1181,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                 )
 
                         if post_cp_block:
-                            logging.info(
+                            logger.info(
                                 "PostToolUse: blocking due to context poisoning"
                             )
                             result = _format_response(
@@ -1201,7 +1197,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         post_warning_messages.append(post_cp_error_msg)
                         post_warn_types.append(ViolationType.CONTEXT_POISONING)
         except Exception as e:
-            logging.warning(f"PostToolUse CP check error (fail-open): {e}")
+            logger.warning(f"PostToolUse CP check error (fail-open): {e}")
 
     # Check for offensive language in PostToolUse output
     try:
@@ -1263,9 +1259,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         dialog_wait_ms=post_ol_ask.dialog_wait_ms,
                     )
             if post_ol_should_block:
-                logging.info(
-                    "PostToolUse: blocking due to offensive language detection"
-                )
+                logger.info("PostToolUse: blocking due to offensive language detection")
                 result = _format_response(
                     adapter,
                     has_secrets=True,
@@ -1279,7 +1273,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 post_warning_messages.append(post_ol_error_msg)
                 post_warn_types.append(ViolationType.OFFENSIVE_LANGUAGE)
     except Exception as e:
-        logging.warning(f"PostToolUse offensive language check error (fail-open): {e}")
+        logger.warning(f"PostToolUse offensive language check error (fail-open): {e}")
 
     _advance_transcript_position(hook_data)
     if post_warning_messages:

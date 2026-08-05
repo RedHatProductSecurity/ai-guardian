@@ -15,6 +15,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_jsonl_incremental,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def get_windsurf_transcripts_dir() -> Optional[str]:
     """Find the Windsurf transcripts directory.
@@ -96,17 +98,17 @@ class WindsurfTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         transcripts_dir = get_windsurf_transcripts_dir()
         if not transcripts_dir:
-            logging.debug("Windsurf transcript: no transcripts directory found")
+            logger.debug("Windsurf transcript: no transcripts directory found")
             return []
 
         trajectory_id = hook_data.get("trajectory_id") or hook_data.get("session_id")
         if not trajectory_id:
-            logging.debug("Windsurf transcript: no trajectory_id in hook data")
+            logger.debug("Windsurf transcript: no trajectory_id in hook data")
             return []
 
         transcript_path = os.path.join(transcripts_dir, f"{trajectory_id}.jsonl")
         if not os.path.isfile(transcript_path):
-            logging.debug(f"Windsurf transcript file not found: {transcript_path}")
+            logger.debug(f"Windsurf transcript file not found: {transcript_path}")
             return []
 
         return scan_windsurf_transcript_incremental(

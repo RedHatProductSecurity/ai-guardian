@@ -17,6 +17,8 @@ from ai_guardian.scanners.transcript.common import (
     _scan_jsonl_incremental,
 )
 
+logger = logging.getLogger(__name__)
+
 
 def get_kiro_sessions_dir() -> Optional[str]:
     """Find the Kiro CLI sessions directory.
@@ -116,7 +118,7 @@ class KiroTranscriptAdapter(TranscriptAdapter):
     ) -> List[str]:
         sessions_dir = get_kiro_sessions_dir()
         if not sessions_dir:
-            logging.debug("Kiro transcript: no sessions directory found")
+            logger.debug("Kiro transcript: no sessions directory found")
             return []
 
         session_id = hook_data.get("session_id")
@@ -130,7 +132,7 @@ class KiroTranscriptAdapter(TranscriptAdapter):
             transcript_path = get_most_recent_session_file(sessions_dir)
 
         if not transcript_path:
-            logging.debug("Kiro transcript: no session file found")
+            logger.debug("Kiro transcript: no session file found")
             return []
 
         session_id = os.path.splitext(os.path.basename(transcript_path))[0]

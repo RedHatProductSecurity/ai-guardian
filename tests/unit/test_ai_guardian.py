@@ -1319,9 +1319,9 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.hook_processing.ToolPolicyChecker")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.logging")
+    @patch("ai_guardian.hook_processing.logger")
     def test_pretooluse_glob_no_warnings(
-        self, mock_logging, mock_load_config, mock_policy_checker_class
+        self, mock_logger, mock_load_config, mock_policy_checker_class
     ):
         """Test that Glob tool doesn't generate misleading warnings (Issue #174)"""
         # Mock config to avoid user config errors
@@ -1350,8 +1350,8 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         # Should succeed (exit_code 0)
         self.assertEqual(response["exit_code"], 0)
 
-        # Verify that logging.warning was NOT called for file path/content extraction
-        warning_calls = [str(call) for call in mock_logging.warning.call_args_list]
+        # Verify that logger.warning was NOT called for file path/content extraction
+        warning_calls = [str(call) for call in mock_logger.warning.call_args_list]
 
         # These warnings should NOT appear for Glob
         for call in warning_calls:

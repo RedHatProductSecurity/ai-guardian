@@ -11,6 +11,8 @@ from textual.widgets import Static
 
 from ai_guardian.config.utils import get_config_dir, get_project_config_path
 
+logger = logging.getLogger(__name__)
+
 
 def _format_enabled(value: Union[bool, Dict[str, Any]]) -> str:
     if isinstance(value, dict):
@@ -103,7 +105,7 @@ class CanaryDetectionContent(Container):
                     cfg = json.load(f)
                 return cfg.get("canary_detection", {})
         except Exception as e:
-            logging.warning(f"Could not load canary detection config: {e}")
+            logger.warning(f"Could not load canary detection config: {e}")
         return {}
 
     def _load_config_status(self) -> None:

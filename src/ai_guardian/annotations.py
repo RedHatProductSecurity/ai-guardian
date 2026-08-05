@@ -16,6 +16,8 @@ Configurable aliases (extend defaults, never replace):
 import logging
 from typing import Dict, List, Optional, Set, Tuple
 
+logger = logging.getLogger(__name__)
+
 INLINE_MARKER = "ai-guardian:allow"
 BLOCK_BEGIN_MARKER = "ai-guardian:begin-allow"
 BLOCK_END_MARKER = "ai-guardian:end-allow"
@@ -230,7 +232,7 @@ def process_annotations(
         content, all_suppressed | secret_only_suppressed
     )
 
-    logging.info(
+    logger.info(
         f"Annotations: {len(all_suppressed)} line(s) fully suppressed, "
         f"{len(secret_only_suppressed)} line(s) secrets-only suppressed"
     )

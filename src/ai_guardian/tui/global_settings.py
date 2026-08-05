@@ -27,6 +27,8 @@ from ai_guardian.tui.schema_defaults import (
 )
 from ai_guardian.tui.widgets import TimeBasedToggle, sanitize_enabled_value
 
+logger = logging.getLogger(__name__)
+
 FEATURES = [
     ("permissions", "permissions_enabled", "🔐 Tool Permissions Enforcement"),
     ("secret_scanning", "secret_scanning", "🔍 Secret Scanning"),
@@ -328,7 +330,7 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                     elif isinstance(immutable, list):
                         immutables[section] = immutable
             except Exception as e:
-                logging.warning("Failed to read config: %s", e)
+                logger.warning("Failed to read config: %s", e)
         return immutables
 
     def _update_scope_notice(self) -> None:
