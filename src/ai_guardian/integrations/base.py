@@ -3,7 +3,7 @@
 import logging
 import sys
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Callable, Dict, List, Optional, Type
 
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -16,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 class ProviderExtractor(ABC):
     """Abstract base for provider-specific text extraction."""
+
+    @property
+    def provider_name(self) -> str:
+        """Short identifier for the provider (e.g. ``"anthropic"``, ``"openai"``)."""
+        return type(self).__name__.removesuffix("Extractor").lower()
 
     @classmethod
     @abstractmethod
@@ -92,12 +97,13 @@ def _detect_extractor(client: Any) -> ProviderExtractor:
 class _StreamProxy:
     """Wraps a streaming response to scan accumulated text on completion."""
 
-    def __init__(self, stream, extractor, method_name, session):
+    def __init__(self, stream, extractor, method_name, session, response_parser=None):
         self._stream = stream
         self._entered = None
         self._extractor = extractor
         self._method_name = method_name
         self._session = session
+        self._response_parser = response_parser
 
     def __enter__(self):
         self._entered = self._stream.__enter__()
@@ -115,9 +121,13 @@ class _StreamProxy:
                         if text:
                             self._session.check_content(text, filename="llm_output")
                 except SecurityViolation as exc:
-                    exc.response = msg
-                    exc.sanitized_text = _sanitize_response_text(
-                        self._session, self._extractor, self._method_name, msg
+                    _enrich_violation(
+                        exc,
+                        msg,
+                        self._session,
+                        self._extractor,
+                        self._method_name,
+                        self._response_parser,
                     )
                     raise
         return result
@@ -161,6 +171,19 @@ def _sanitize_response_text(session, extractor, method_name, response):
         return None
 
 
+def _enrich_violation(exc, response, session, extractor, method_name, response_parser):
+    """Attach response, sanitized text, and parsed output to a SecurityViolation."""
+    exc.response = response
+    exc.sanitized_text = _sanitize_response_text(
+        session, extractor, method_name, response
+    )
+    if response_parser is not None:
+        try:
+            exc.sanitized_parsed = response_parser(extractor.provider_name, response)
+        except Exception:
+            exc.sanitized_parsed = None
+
+
 # ---------------------------------------------------------------------------
 # Guarded client proxy
 # ---------------------------------------------------------------------------
@@ -198,6 +221,7 @@ class _GuardedClient:
         config=None,
         scan_input=True,
         scan_output=True,
+        response_parser=None,
     ):
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_extractor", extractor)
@@ -206,6 +230,7 @@ class _GuardedClient:
         object.__setattr__(self, "_config", config)
         object.__setattr__(self, "_scan_input", scan_input)
         object.__setattr__(self, "_scan_output", scan_output)
+        object.__setattr__(self, "_response_parser", response_parser)
 
         methods = extractor.methods_to_wrap()
         object.__setattr__(self, "_wrapped_methods", set(methods))
@@ -244,7 +269,11 @@ class _GuardedClient:
                 if gc._is_stream_method(method_name):
                     if gc._scan_output:
                         return _StreamProxy(
-                            response, gc._extractor, method_name, session
+                            response,
+                            gc._extractor,
+                            method_name,
+                            session,
+                            response_parser=gc._response_parser,
                         )
                     return response
 
@@ -254,12 +283,18 @@ class _GuardedClient:
                             if text:
                                 session.check_content(text, filename="llm_output")
                     except SecurityViolation as exc:
-                        exc.response = response
-                        exc.sanitized_text = _sanitize_response_text(
-                            session, gc._extractor, method_name, response
+                        _enrich_violation(
+                            exc,
+                            response,
+                            session,
+                            gc._extractor,
+                            method_name,
+                            gc._response_parser,
                         )
                         raise
 
+                if gc._response_parser:
+                    return gc._response_parser(gc._extractor.provider_name, response)
                 return response
 
         return wrapper
@@ -282,6 +317,7 @@ def guarded(
     extractor: Optional[ProviderExtractor] = None,
     scan_input: bool = True,
     scan_output: bool = True,
+    response_parser: Optional[Callable[[str, Any], Any]] = None,
 ) -> Any:
     """Wrap an LLM client with automatic security scanning.
 
@@ -300,14 +336,21 @@ def guarded(
         extractor: Explicit ``ProviderExtractor`` instance (skips auto-detect)
         scan_input: Scan prompts before sending (default ``True``)
         scan_output: Scan responses after receiving (default ``True``)
+        response_parser: Optional callable ``(client_type: str, response) -> Any``
+            that transforms native LLM responses into a caller-defined format.
+            If ``None`` (default), the native response object is returned unchanged.
 
     Returns:
         A wrapped client proxy — use exactly like the original client.
+        If *response_parser* is set, calls return the parser's output
+        instead of the native response.
 
     Raises:
         ValueError: If no extractor matches and none provided explicitly,
             or if conflicting provider env vars are set.
         SecurityViolation: When ``action="block"`` and a threat is detected.
+            If *response_parser* is set, the exception's ``sanitized_parsed``
+            attribute contains the parser applied to the violating response.
     """
     if client is _MISSING:
         from ai_guardian.integrations.anthropic import create_client
@@ -323,4 +366,5 @@ def guarded(
         config=config,
         scan_input=scan_input,
         scan_output=scan_output,
+        response_parser=response_parser,
     )
