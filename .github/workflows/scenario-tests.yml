@@ -36,6 +36,8 @@ jobs:
   build-image:
     name: Build Container Image
     uses: ./.github/workflows/build-container.yml
+    with:
+      skip_legacy_mirror: true
     secrets: inherit
 
   scenario-tests:
