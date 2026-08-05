@@ -5,7 +5,7 @@ import sys
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Type
 
-from ai_guardian.sdk import monitor
+from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
 
@@ -110,9 +110,16 @@ class _StreamProxy:
             final = getattr(target, "get_final_message", None)
             if final is not None:
                 msg = final()
-                for text in self._extractor.extract_output(self._method_name, msg):
-                    if text:
-                        self._session.check_content(text, filename="llm_output")
+                try:
+                    for text in self._extractor.extract_output(self._method_name, msg):
+                        if text:
+                            self._session.check_content(text, filename="llm_output")
+                except SecurityViolation as exc:
+                    exc.response = msg
+                    exc.sanitized_text = _sanitize_response_text(
+                        self._session, self._extractor, self._method_name, msg
+                    )
+                    raise
         return result
 
     def __iter__(self):
@@ -126,6 +133,32 @@ class _StreamProxy:
     def __getattr__(self, name):
         target = self._entered if self._entered is not None else self._stream
         return getattr(target, name)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _try_sanitize_text(session, text):
+    """Sanitize *text* via *session*, returning ``None`` on failure."""
+    if not text:
+        return None
+    try:
+        result = session.sanitize(text)
+        return result.get("sanitized_text", text)
+    except Exception:
+        return None
+
+
+def _sanitize_response_text(session, extractor, method_name, response):
+    """Extract all text from *response* and return a sanitized version."""
+    try:
+        texts = extractor.extract_output(method_name, response)
+        combined = "\n".join(t for t in texts if t)
+        return _try_sanitize_text(session, combined)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -216,9 +249,16 @@ class _GuardedClient:
                     return response
 
                 if gc._scan_output:
-                    for text in gc._extractor.extract_output(method_name, response):
-                        if text:
-                            session.check_content(text, filename="llm_output")
+                    try:
+                        for text in gc._extractor.extract_output(method_name, response):
+                            if text:
+                                session.check_content(text, filename="llm_output")
+                    except SecurityViolation as exc:
+                        exc.response = response
+                        exc.sanitized_text = _sanitize_response_text(
+                            session, gc._extractor, method_name, response
+                        )
+                        raise
 
                 return response
 

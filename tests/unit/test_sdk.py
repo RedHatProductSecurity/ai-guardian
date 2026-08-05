@@ -71,6 +71,19 @@ class TestSecurityViolation:
     def test_is_exception(self):
         assert issubclass(SecurityViolation, Exception)
 
+    def test_sanitized_text_and_response(self):
+        r = CheckResult(blocked=True, detected=True, message="secret found")
+        resp = object()
+        exc = SecurityViolation(r, sanitized_text="redacted", response=resp)
+        assert exc.sanitized_text == "redacted"
+        assert exc.response is resp
+
+    def test_defaults_none(self):
+        r = CheckResult(blocked=True, detected=True)
+        exc = SecurityViolation(r)
+        assert exc.sanitized_text is None
+        assert exc.response is None
+
 
 # ---------------------------------------------------------------------------
 # monitor() context manager

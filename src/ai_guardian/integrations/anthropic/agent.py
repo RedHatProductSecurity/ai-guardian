@@ -9,6 +9,7 @@ from ai_guardian.integrations.anthropic.tools import (
     is_server_tool,
     resolve_tools,
 )
+from ai_guardian.integrations.base import _try_sanitize_text
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
@@ -134,12 +135,21 @@ class GuardedAgent:
                 content = getattr(response, "content", [])
                 resp_stop = getattr(response, "stop_reason", "end_turn")
 
-                for block in content:
-                    block_type = getattr(block, "type", None)
-                    if block_type == "text" and self._scan_output:
-                        text = getattr(block, "text", "")
-                        if text:
-                            session.check_content(text, filename="assistant_response")
+                try:
+                    for block in content:
+                        block_type = getattr(block, "type", None)
+                        if block_type == "text" and self._scan_output:
+                            text = getattr(block, "text", "")
+                            if text:
+                                session.check_content(
+                                    text, filename="assistant_response"
+                                )
+                except SecurityViolation as exc:
+                    exc.response = response
+                    exc.sanitized_text = _try_sanitize_text(
+                        session, self._extract_text(content)
+                    )
+                    raise
 
                 if resp_stop == "end_turn":
                     final_text = self._extract_text(content)

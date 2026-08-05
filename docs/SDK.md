@@ -431,12 +431,22 @@ Dataclass returned by all check methods.
 
 Exception raised when `action="block"` and a threat is detected.
 
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `result` | `CheckResult` | The check result that triggered the violation |
+| `response` | object or None | The original LLM response object (set by `guarded()` and `GuardedAgent` for output violations; `None` for input violations or direct `monitor()` usage) |
+| `sanitized_text` | str or None | Redacted version of the response text (`None` if sanitization was unavailable or not applicable) |
+
 ```python
 try:
     with monitor(action="block") as session:
         session.check_content(untrusted_text)
 except SecurityViolation as e:
     print(f"Blocked: {e.result.violation_type} — {e.result.message}")
+    if e.sanitized_text:
+        print(f"Sanitized: {e.sanitized_text}")
 ```
 
 ## Modes

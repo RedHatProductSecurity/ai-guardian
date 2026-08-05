@@ -54,8 +54,10 @@ class CheckResult:
 class SecurityViolation(Exception):
     """Raised when action='block' and a threat is detected."""
 
-    def __init__(self, result: CheckResult):
+    def __init__(self, result: CheckResult, sanitized_text=None, response=None):
         self.result = result
+        self.sanitized_text = sanitized_text
+        self.response = response
         super().__init__(result.message or "Security violation detected")
 
 

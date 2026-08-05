@@ -435,6 +435,78 @@ class TestGuardedClientProxy:
         mock_create.assert_called_once()
 
     @patch("ai_guardian.integrations.base.monitor")
+    def test_output_violation_attaches_response_and_sanitized_text(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "llm_output":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret in response",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        original_response = _make_mock_response(["leaked secret"])
+        mock_create.return_value = original_response
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "safe input"}],
+            )
+
+        exc = exc_info.value
+        assert exc.response is original_response
+        assert exc.sanitized_text == "[REDACTED]"
+        mock_session.sanitize.assert_called_once_with("leaked secret")
+
+    @patch("ai_guardian.integrations.base.monitor")
+    def test_input_violation_has_no_response(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret in input",
+            )
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        client, mock_create, _ = _make_mock_anthropic_client()
+        ext = AnthropicExtractor()
+        wrapped = _GuardedClient(client, ext, action="block")
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            wrapped.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=100,
+                messages=[{"role": "user", "content": "my secret"}],
+            )
+
+        exc = exc_info.value
+        assert exc.response is None
+        assert exc.sanitized_text is None
+
+    @patch("ai_guardian.integrations.base.monitor")
     def test_log_action_no_exception(self, mock_monitor):
         mock_session = MagicMock()
         mock_session.check_content.return_value = MagicMock(
@@ -575,6 +647,36 @@ class TestStreamProxy:
         ext = AnthropicExtractor()
         proxy = _StreamProxy(mock_stream, ext, "messages.stream", MagicMock())
         assert proxy.some_attr == "value"
+
+    def test_violation_attaches_response_and_sanitized_text(self):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.check_content.side_effect = SecurityViolation(
+            CheckResult(
+                blocked=True,
+                detected=True,
+                violation_type="secret",
+                message="Secret in stream",
+            )
+        )
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        ext = AnthropicExtractor()
+
+        final_msg = _make_mock_response(["leaked secret"])
+        mock_stream = MagicMock()
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.get_final_message = MagicMock(return_value=final_msg)
+
+        proxy = _StreamProxy(mock_stream, ext, "messages.stream", mock_session)
+        with pytest.raises(SecurityViolation) as exc_info:
+            with proxy:
+                pass
+
+        exc = exc_info.value
+        assert exc.response is final_msg
+        assert exc.sanitized_text == "[REDACTED]"
 
 
 # ============================================================================
@@ -1540,6 +1642,44 @@ class TestGuardedAgent:
         agent.run("Hi")
 
         mock_session.check_content.assert_not_called()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_output_violation_attaches_response(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret in assistant response",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="leaked secret")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(action="block")
+        client.messages.create.return_value = response
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            agent.run("Hi")
+
+        exc = exc_info.value
+        assert exc.response is response
+        assert exc.sanitized_text == "[REDACTED]"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_usage_accumulation(self, mock_monitor):
