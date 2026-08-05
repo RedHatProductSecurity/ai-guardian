@@ -34,6 +34,7 @@ class GuardedAgent:
         cwd: Optional[str] = None,
         max_turns: int = 100,
         max_tokens: int = 16000,
+        max_budget_tokens: int = -1,
         action: str = "block",
         client: Any = None,
         mode: str = "direct",
@@ -48,6 +49,7 @@ class GuardedAgent:
         self._cwd = cwd or os.getcwd()
         self._max_turns = max_turns
         self._max_tokens = max_tokens
+        self._max_budget_tokens = max_budget_tokens
         self._action = action
         self._mode = mode
         self._config = config
@@ -150,6 +152,15 @@ class GuardedAgent:
                         session, self._extract_text(content)
                     )
                     raise
+
+                if self._max_budget_tokens > 0:
+                    total_spent = (
+                        usage_totals["input_tokens"] + usage_totals["output_tokens"]
+                    )
+                    if total_spent >= self._max_budget_tokens:
+                        final_text = self._extract_text(content)
+                        stop_reason = "budget_exceeded"
+                        break
 
                 if resp_stop == "end_turn":
                     if self._output_schema and structured_output is None:

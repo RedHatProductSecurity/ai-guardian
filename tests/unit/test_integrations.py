@@ -2104,6 +2104,121 @@ class TestGuardedAgent:
         assert result["usage"]["input_tokens"] == 300
         assert result["usage"]["output_tokens"] == 80
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_budget_exceeded_stops_loop(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=300, output_tokens=200),
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Still going")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=300, output_tokens=200),
+        )
+
+        agent, client = self._make_agent(max_budget_tokens=500)
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test budget")
+
+        assert result["stop_reason"] == "budget_exceeded"
+        assert result["usage"]["input_tokens"] == 300
+        assert result["usage"]["output_tokens"] == 200
+        assert client.messages.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_budget_negative_one_no_limit(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=500000, output_tokens=500000),
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=500000, output_tokens=500000),
+        )
+
+        agent, client = self._make_agent(max_budget_tokens=-1)
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test no limit")
+
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_budget_exceeded_preserves_last_text(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Partial answer")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=600, output_tokens=400),
+        )
+
+        agent, client = self._make_agent(max_budget_tokens=500)
+        client.messages.create.return_value = response
+
+        result = agent.run("Test budget text")
+
+        assert result["stop_reason"] == "budget_exceeded"
+        assert result["output"] == "Partial answer"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_budget_exact_boundary(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Exact boundary")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=300, output_tokens=200),
+        )
+
+        agent, client = self._make_agent(max_budget_tokens=500)
+        client.messages.create.return_value = response
+
+        result = agent.run("Test exact")
+
+        assert result["stop_reason"] == "budget_exceeded"
+        assert result["usage"]["input_tokens"] == 300
+        assert result["usage"]["output_tokens"] == 200
+
     def test_auto_client_creation(self):
         from ai_guardian.integrations.anthropic.agent import GuardedAgent
 
