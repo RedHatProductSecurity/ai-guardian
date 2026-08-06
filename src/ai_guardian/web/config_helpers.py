@@ -446,7 +446,7 @@ def load_web_smoke_test() -> Optional[dict]:
         if _is_target_expected():
             return None
         return _local_smoke_test()
-    return _local_smoke_test()
+    return _daemon_service.get_daemon_smoke_test(target)
 
 
 def _local_smoke_test():

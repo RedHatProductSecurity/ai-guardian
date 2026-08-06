@@ -177,7 +177,12 @@ def create_health_check_page(service, daemon_name: str):
             content.clear()
             with content:
                 if not report:
-                    ui.label("Failed to run smoke tests.").classes("text-grey-6")
+                    if _is_remote:
+                        ui.label(
+                            "Smoke test not available — upgrade remote daemon."
+                        ).classes("text-grey-6")
+                    else:
+                        ui.label("Failed to run smoke tests.").classes("text-grey-6")
                     return
 
                 # Phase 1

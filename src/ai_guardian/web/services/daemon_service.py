@@ -147,6 +147,12 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_daemon_smoke_test(self, target: DaemonTarget) -> Optional[dict]:
+        try:
+            return self._client.get_smoke_test(target)
+        except Exception:
+            return None
+
     def get_daemon_performance(
         self,
         target: DaemonTarget,
