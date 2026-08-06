@@ -13,7 +13,7 @@ from ai_guardian.scanners.file_scanner import FileScanner, scan_command
 class TestScanText:
     """Tests for FileScanner.scan_text() method."""
 
-    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_detects_secrets(self, mock_gitleaks):
         mock_gitleaks.return_value = (
             True,
@@ -27,7 +27,7 @@ class TestScanText:
         assert len(findings) >= 1
         assert findings[0]["rule_id"] == "SECRET-001"
 
-    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_source_label_stdin(self, mock_gitleaks):
         mock_gitleaks.return_value = (True, "Secret Type: api-key")
 
@@ -36,7 +36,7 @@ class TestScanText:
 
         assert all(f["file_path"] == "stdin" for f in findings)
 
-    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_source_label_inline(self, mock_gitleaks):
         mock_gitleaks.return_value = (True, "Secret Type: api-key")
 
@@ -55,7 +55,7 @@ class TestScanText:
         findings = scanner.scan_text("   \n\n  \t  ")
         assert findings == []
 
-    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_clean_text_no_findings(self, mock_gitleaks):
         mock_gitleaks.return_value = (False, None)
 
@@ -64,7 +64,7 @@ class TestScanText:
 
         assert findings == []
 
-    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_temp_file_cleaned_up(self, mock_gitleaks):
         mock_gitleaks.return_value = (False, None)
 

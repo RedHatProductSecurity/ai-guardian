@@ -33,7 +33,7 @@ class TestScanTranscriptTextAllowedFindings:
         allowed = {fp}
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.transcript.common.check_secrets"
         ) as mock_scan:
             mock_scan.return_value = (
                 True,
@@ -64,7 +64,7 @@ class TestScanTranscriptTextAllowedFindings:
         # ai-guardian:end-allow
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.transcript.common.check_secrets"
         ) as mock_scan:
             mock_scan.return_value = (
                 True,
@@ -103,7 +103,7 @@ class TestScanTranscriptTextAllowedFindings:
         ]
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks",
+            "ai_guardian.scanners.transcript.common.check_secrets",
             return_value=(False, None),
         ):
             with mock.patch("ai_guardian.hook_processing._scan_for_pii") as mock_pii:
@@ -141,7 +141,7 @@ class TestScanTranscriptTextAllowedFindings:
         ]
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.transcript.common.check_secrets"
         ) as mock_scan:
             mock_scan.return_value = (True, "Secret Type: aws-access-token")
             with mock.patch(
@@ -186,7 +186,7 @@ class TestScanTranscriptTextAllowedFindings:
         fp2 = _finding_fingerprint("secret", "github-pat")
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.transcript.common.check_secrets"
         ) as mock_scan:
             mock_scan.return_value = (True, "Secret Type: aws-access-token")
             with mock.patch(
@@ -227,7 +227,7 @@ class TestScanTranscriptTextAllowedFindings:
         fp1 = _finding_fingerprint("secret", "aws-access-token")
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.transcript.common.check_secrets"
         ) as mock_scan:
             mock_scan.return_value = (True, "Secret Type: aws-access-token")
             with mock.patch(
@@ -258,7 +258,7 @@ class TestScanTranscriptTextAllowedFindings:
         from ai_guardian.scanners.transcript import _scan_transcript_text
 
         with mock.patch(
-            "ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks",
+            "ai_guardian.scanners.transcript.common.check_secrets",
             return_value=(False, None),
         ):
             with mock.patch(

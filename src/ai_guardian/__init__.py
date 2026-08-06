@@ -167,8 +167,10 @@ from ai_guardian.scanners.secret_scanning import (  # noqa: F401
     _log_secret_detection_violation,
     _count_gitleaks_patterns,
     _describe_patterns,
-    check_secrets_with_gitleaks,
+    check_secrets,
 )
+
+check_secrets_with_gitleaks = check_secrets
 
 # --- scanners.transcript ---
 from ai_guardian.scanners.transcript import (  # noqa: F401

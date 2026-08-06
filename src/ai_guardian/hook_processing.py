@@ -297,7 +297,7 @@ from ai_guardian.scanners.secret_scanning import (
     _enrich_blocked_from_details,
     _log_secret_detection_violation,
     _build_secret_detected_message,
-    check_secrets_with_gitleaks,
+    check_secrets,
 )
 from ai_guardian.scanners.transcript import (
     _advance_transcript_position,

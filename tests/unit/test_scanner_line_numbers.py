@@ -166,7 +166,7 @@ class TestPiiLineNumbers(unittest.TestCase):
 
 class TestSecretLineNumbers(unittest.TestCase):
 
-    @patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_secret_line_number_from_error_message(self, mock_check):
         mock_check.return_value = (
             True,
@@ -182,7 +182,7 @@ class TestSecretLineNumbers(unittest.TestCase):
         finding = scanner.findings[0]
         assert finding["line_number"] == 42
 
-    @patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_secret_no_line_in_message(self, mock_check):
         mock_check.return_value = (
             True,
@@ -197,7 +197,7 @@ class TestSecretLineNumbers(unittest.TestCase):
         assert len(scanner.findings) == 1
         assert scanner.findings[0]["line_number"] is None
 
-    @patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.file_scanner.check_secrets")
     def test_secret_type_extracted(self, mock_check):
         mock_check.return_value = (
             True,

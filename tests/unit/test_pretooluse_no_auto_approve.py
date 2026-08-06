@@ -201,7 +201,7 @@ class PreToolUseNoAutoApproveTests(TestCase):
 
         assert response == {}, f"Response should be empty, got: {response}"
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_read_with_secret_still_denies(self, mock_config, mock_check_secrets):
         """

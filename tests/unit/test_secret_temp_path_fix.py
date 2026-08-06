@@ -5,7 +5,7 @@ from unittest import mock
 
 from ai_guardian.hook_processing import (
     _build_secret_detected_message,
-    check_secrets_with_gitleaks,
+    check_secrets,
 )
 
 
@@ -50,7 +50,7 @@ class TestSecretMessageShowsOriginalPath:
 
 
 class TestCheckSecretsUsesOriginalPath:
-    """Verify check_secrets_with_gitleaks replaces temp paths with file_path."""
+    """Verify check_secrets replaces temp paths with file_path."""
 
     @mock.patch("ai_guardian.scanners.secret_scanning._log_secret_detection_violation")
     @mock.patch("ai_guardian.scanners.secret_scanning.select_all_engines")
@@ -93,7 +93,7 @@ class TestCheckSecretsUsesOriginalPath:
         mock_strategy_obj.execute.return_value = mock_result
         mock_get_strategy.return_value = mock_strategy_obj
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "some content with secret",
             filename="Containerfile",
             file_path="/project/Containerfile",
@@ -144,7 +144,7 @@ class TestCheckSecretsUsesOriginalPath:
         mock_strategy_obj.execute.return_value = mock_result
         mock_get_strategy.return_value = mock_strategy_obj
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "some content with secret",
             filename="Containerfile",
             file_path=None,
@@ -195,7 +195,7 @@ class TestCheckSecretsUsesOriginalPath:
         mock_strategy_obj.execute.return_value = mock_result
         mock_get_strategy.return_value = mock_strategy_obj
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "AWS_KEY = 'AKIA...'",
             filename="main.py",
             file_path="/home/user/project/main.py",
@@ -245,7 +245,7 @@ class TestCheckSecretsUsesOriginalPath:
         mock_strategy_obj.execute.return_value = mock_result
         mock_get_strategy.return_value = mock_strategy_obj
 
-        check_secrets_with_gitleaks(
+        check_secrets(
             "content",
             filename="Containerfile",
             file_path="/project/Containerfile",

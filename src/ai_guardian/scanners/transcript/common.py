@@ -14,7 +14,7 @@ from typing import Callable, Dict, Optional, Tuple
 
 from ai_guardian.config.utils import get_project_dir, get_state_dir, is_feature_enabled
 from ai_guardian.constants import HookEvent, ViolationType
-from ai_guardian.scanners.secret_scanning import check_secrets_with_gitleaks
+from ai_guardian.scanners.secret_scanning import check_secrets
 
 import ai_guardian.scanners.secret_scanning as _secret_scanning_mod
 
@@ -467,7 +467,7 @@ def _scan_transcript_text(
             secret_allowlist = (
                 secret_config.get("allowlist_patterns", []) if secret_config else []
             )
-            has_secrets, secret_error = check_secrets_with_gitleaks(
+            has_secrets, secret_error = check_secrets(
                 combined_text,
                 "transcript",
                 context={"ide_type": "transcript_scan", "hook_event": HookEvent.PROMPT},

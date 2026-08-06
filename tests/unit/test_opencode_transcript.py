@@ -487,7 +487,7 @@ class TestScanTranscriptText(unittest.TestCase):
         )
         self.assertEqual(result, [])
 
-    @mock.patch("ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.transcript.common.check_secrets")
     def test_secret_detection(self, mock_gitleaks):
         from ai_guardian.scanners.transcript import _scan_transcript_text
 
@@ -505,7 +505,7 @@ class TestScanTranscriptText(unittest.TestCase):
         self.assertEqual(len(result), 1)
         self.assertIn("SECRET DETECTED", result[0])
 
-    @mock.patch("ai_guardian.scanners.transcript.common.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.transcript.common.check_secrets")
     def test_dedup_same_secret(self, mock_gitleaks):
         from ai_guardian.scanners.transcript import _scan_transcript_text
 
