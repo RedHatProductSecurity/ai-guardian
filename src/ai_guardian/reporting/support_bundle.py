@@ -315,6 +315,37 @@ def prepare_bundle(
     except Exception as e:
         logger.debug("Bundle doctor error: %s", e)
 
+    # 4b. Smoke test (scanner canary verification)
+    try:
+        from ai_guardian.smoke_test import SmokeTestRunner
+
+        runner = SmokeTestRunner()
+        smoke_report = runner.run()
+        smoke_data = {
+            "phase1_passed": smoke_report.phase1_passed,
+            "phase2_results": [
+                {
+                    "scanner": r.scanner_name,
+                    "outcome": r.outcome.value,
+                    "expected_action": r.expected_action,
+                    "detected": r.actual_detected,
+                    "message": r.message,
+                }
+                for r in smoke_report.phase2_results
+            ],
+        }
+        (temp_dir / "smoke-test.json").write_text(json.dumps(smoke_data, indent=2))
+        files_info.append(
+            {
+                "name": "smoke-test.json",
+                "sanitized": False,
+                "redactions": 0,
+                "note": "Scanner canary payload verification",
+            }
+        )
+    except Exception as e:
+        logger.debug("Bundle smoke test error: %s", e)
+
     # 5. System info
     try:
         info = _get_system_info()

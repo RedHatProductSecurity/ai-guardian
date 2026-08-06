@@ -439,6 +439,59 @@ def _local_health_check(fix):
         return {"checks": [], "version": "unknown"}
 
 
+def load_web_smoke_test() -> Optional[dict]:
+    """Run smoke tests on the current daemon target (or locally)."""
+    target = _get_current_target()
+    if target is None or _daemon_service is None:
+        if _is_target_expected():
+            return None
+        return _local_smoke_test()
+    return _daemon_service.get_daemon_smoke_test(target)
+
+
+def _local_smoke_test():
+    """Run smoke test locally."""
+    try:
+        from ai_guardian.smoke_test import SmokeTestRunner
+
+        runner = SmokeTestRunner()
+        report = runner.run()
+        return {
+            "phase1_checks": [
+                {
+                    "name": c.name,
+                    "status": c.status.value,
+                    "message": c.message,
+                    "detail": c.detail,
+                }
+                for c in report.phase1_checks
+            ],
+            "phase2_results": [
+                {
+                    "scanner": r.scanner_name,
+                    "display_name": r.display_name,
+                    "outcome": r.outcome.value,
+                    "expected_action": r.expected_action,
+                    "detected": r.actual_detected,
+                    "message": r.message,
+                    "detail": r.detail,
+                    "fix_hint": r.fix_hint,
+                    "elapsed_ms": r.elapsed_ms,
+                }
+                for r in report.phase2_results
+            ],
+            "phase1_passed": report.phase1_passed,
+            "version": report.version,
+        }
+    except Exception:
+        return {
+            "phase1_checks": [],
+            "phase2_results": [],
+            "phase1_passed": False,
+            "version": "unknown",
+        }
+
+
 def load_web_performance(since_days: int = 30) -> Optional[dict]:
     """Load latency performance data for the current daemon target."""
     target = _get_current_target()

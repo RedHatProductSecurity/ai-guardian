@@ -1016,6 +1016,46 @@ class MultiDaemonClient:
             "version": report.version,
         }
 
+    def get_smoke_test(self, target: DaemonTarget) -> Optional[dict]:
+        """Run smoke tests on a daemon."""
+        if target.runtime == "local":
+            return self._local_smoke_test()
+        return self._rest_request(target, "GET", "/api/smoke-test")
+
+    @staticmethod
+    def _local_smoke_test() -> dict:
+        from ai_guardian.smoke_test import SmokeTestRunner
+
+        runner = SmokeTestRunner()
+        report = runner.run()
+        return {
+            "phase1_checks": [
+                {
+                    "name": c.name,
+                    "status": c.status.value,
+                    "message": c.message,
+                    "detail": c.detail,
+                }
+                for c in report.phase1_checks
+            ],
+            "phase2_results": [
+                {
+                    "scanner": r.scanner_name,
+                    "display_name": r.display_name,
+                    "outcome": r.outcome.value,
+                    "expected_action": r.expected_action,
+                    "detected": r.actual_detected,
+                    "message": r.message,
+                    "detail": r.detail,
+                    "fix_hint": r.fix_hint,
+                    "elapsed_ms": r.elapsed_ms,
+                }
+                for r in report.phase2_results
+            ],
+            "phase1_passed": report.phase1_passed,
+            "version": report.version,
+        }
+
     def refresh_pattern_cache(self, target: DaemonTarget) -> Optional[dict]:
         """Trigger pattern server cache refresh on a daemon."""
         if target.runtime == "local":

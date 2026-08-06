@@ -903,6 +903,11 @@ def main():
             action="store_true",
             help="Include network connectivity checks (pattern server)",
         )
+        doctor_parser.add_argument(
+            "--smoke-test",
+            action="store_true",
+            help="Run canary payload tests against each scanner to verify detection",
+        )
 
         # Daemon subcommand
         daemon_parser = subparsers.add_parser(
@@ -1758,6 +1763,11 @@ def main():
         # Handle doctor command (Issue #475)
         if args.command == "doctor":
             try:
+                if getattr(args, "smoke_test", False):
+                    from ai_guardian.smoke_test import smoke_test_command
+
+                    return smoke_test_command(args)
+
                 from ai_guardian.doctor import doctor_command
 
                 return doctor_command(args)

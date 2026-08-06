@@ -114,6 +114,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             fix = qs.get("fix", ["false"])[0].lower() == "true"
             self._send_json(self._get_health_check(fix))
+        elif path == "/api/smoke-test":
+            self._send_json(self._get_smoke_test())
         elif path == "/api/pending-prompts":
             prompts = self.server.daemon_state.get_pending_prompts()
             self._send_json({"prompts": prompts})
@@ -521,6 +523,21 @@ class _RestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.debug("Failed to run health check: %s", e)
             return {"checks": [], "version": "unknown"}
+
+    @staticmethod
+    def _get_smoke_test():
+        try:
+            from ai_guardian.daemon.multi_client import MultiDaemonClient
+
+            return MultiDaemonClient._local_smoke_test()
+        except Exception as e:
+            logger.debug("Failed to run smoke test: %s", e)
+            return {
+                "phase1_checks": [],
+                "phase2_results": [],
+                "phase1_passed": False,
+                "version": "unknown",
+            }
 
     @staticmethod
     def _refresh_pattern_cache():

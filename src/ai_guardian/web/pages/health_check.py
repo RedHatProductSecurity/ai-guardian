@@ -153,4 +153,121 @@ def create_health_check_page(service, daemon_name: str):
                             color="green",
                         ).props("dense" + (" disable" if not has_fixable else ""))
 
+                    ui.button(
+                        "Smoke Test",
+                        icon="science",
+                        on_click=lambda: do_smoke_test(),
+                    ).props("dense")
+
+        _SMOKE_OUTCOME_ICONS = {
+            "match": ("check_circle", "green"),
+            "mismatch": ("error", "red"),
+            "skipped": ("skip_next", "grey"),
+        }
+
+        async def do_smoke_test():
+            content.clear()
+            with content:
+                ui.label("Running smoke tests...").classes("text-sm text-grey-6")
+
+            from ai_guardian.web.config_helpers import load_web_smoke_test
+
+            report = await run.io_bound(load_web_smoke_test)
+
+            content.clear()
+            with content:
+                if not report:
+                    if _is_remote:
+                        ui.label(
+                            "Smoke test not available — upgrade remote daemon."
+                        ).classes("text-grey-6")
+                    else:
+                        ui.label("Failed to run smoke tests.").classes("text-grey-6")
+                    return
+
+                # Phase 1
+                with ui.card().classes("w-full"):
+                    ui.label("Phase 1 — Config Validation").classes("text-lg font-bold")
+                    for check in report.get("phase1_checks", []):
+                        status = check.get("status", "skip")
+                        icon_name, color = _STATUS_ICONS.get(status, ("help", "grey"))
+                        with ui.row().classes("items-center gap-2 w-full"):
+                            ui.icon(icon_name).classes(f"text-{color}")
+                            ui.label(check.get("name", "")).classes("font-bold text-sm")
+                            ui.label(check.get("message", "")).classes(
+                                "text-sm text-grey-4 flex-grow"
+                            )
+
+                if not report.get("phase1_passed", True):
+                    ui.label("⛔ Skipping smoke tests — fix config first").classes(
+                        "text-red font-bold"
+                    )
+                    with ui.row().classes("gap-2"):
+                        ui.button(
+                            "Back to Health Check",
+                            icon="arrow_back",
+                            on_click=lambda: refresh(fix=False),
+                        ).props("dense flat")
+                    return
+
+                # Phase 2
+                with ui.card().classes("w-full"):
+                    ui.label("Phase 2 — Scanner Smoke Tests").classes(
+                        "text-lg font-bold"
+                    )
+
+                    results = report.get("phase2_results", [])
+                    match_count = sum(1 for r in results if r.get("outcome") == "match")
+                    mismatch_count = sum(
+                        1 for r in results if r.get("outcome") == "mismatch"
+                    )
+                    skip_count = sum(
+                        1 for r in results if r.get("outcome") == "skipped"
+                    )
+
+                    with ui.row().classes("items-center gap-3 mb-2"):
+                        ui.badge(f"Match: {match_count}", color="green")
+                        ui.badge(f"Mismatch: {mismatch_count}", color="red")
+                        ui.badge(f"Skipped: {skip_count}", color="grey")
+
+                    for r in results:
+                        outcome = r.get("outcome", "skipped")
+                        icon_name, color = _SMOKE_OUTCOME_ICONS.get(
+                            outcome, ("help", "grey")
+                        )
+                        action_str = (
+                            f" → {r.get('expected_action')}"
+                            if r.get("expected_action")
+                            else ""
+                        )
+                        with ui.row().classes("items-center gap-2 w-full"):
+                            ui.icon(icon_name).classes(f"text-{color}")
+                            ui.label(r.get("display_name", "")).classes(
+                                "font-bold text-sm"
+                            )
+                            ui.label(f"{action_str}  {r.get('message', '')}").classes(
+                                "text-sm text-grey-4 flex-grow"
+                            )
+
+                        fix_hint = r.get("fix_hint")
+                        if fix_hint and outcome == "mismatch":
+                            with ui.expansion("Details").classes("w-full ml-8"):
+                                if r.get("detail"):
+                                    ui.label(r["detail"]).classes("text-xs text-grey-6")
+                                ui.label(f"Fix: {fix_hint}").classes(
+                                    "text-xs text-blue-4"
+                                )
+
+                with ui.row().classes("gap-2"):
+                    ui.button(
+                        "Back to Health Check",
+                        icon="arrow_back",
+                        on_click=lambda: refresh(fix=False),
+                    ).props("dense flat")
+                    ui.button(
+                        "Re-run Smoke Test",
+                        icon="refresh",
+                        on_click=lambda: do_smoke_test(),
+                    ).props("dense")
+
         ui.timer(0.1, refresh, once=True)
