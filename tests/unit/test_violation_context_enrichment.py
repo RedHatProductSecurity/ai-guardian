@@ -88,7 +88,7 @@ class TestViolationCommandField(unittest.TestCase):
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_pii_violation_includes_command_for_bash(
         self,
         mock_check_secrets,
@@ -147,7 +147,7 @@ class TestViolationCommandField(unittest.TestCase):
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_command_truncated_to_500_chars(
         self,
         mock_check_secrets,
@@ -208,7 +208,7 @@ class TestViolationToolUseId(unittest.TestCase):
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_posttooluse_pii_includes_ids(
         self,
         mock_check_secrets,
@@ -365,7 +365,7 @@ class TestViolationContextSnippetInLog(unittest.TestCase):
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_pii_violation_includes_snippet(
         self,
         mock_check_secrets,

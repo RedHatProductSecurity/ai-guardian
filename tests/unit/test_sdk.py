@@ -241,7 +241,7 @@ class TestActionModes:
 class TestDirectSessionCheckContent:
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
     @patch(
-        "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+        "ai_guardian.scanners.secret_scanning.check_secrets",
         return_value=(False, None),
     )
     @patch(
@@ -265,7 +265,7 @@ class TestDirectSessionCheckContent:
 
     @patch("ai_guardian.sdk._DirectSession._ensure_config")
     @patch(
-        "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+        "ai_guardian.scanners.secret_scanning.check_secrets",
         return_value=(True, "AWS key detected"),
     )
     def test_secret_detected(self, mock_secrets, mock_config):

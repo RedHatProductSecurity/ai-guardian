@@ -115,7 +115,7 @@ class SecretScanningEnforcementTest(unittest.TestCase):
         self, mock_load_config, mock_select_engine, mock_select_all, mock_run_single
     ):
         """Secret scanning always blocks when secrets are found (no log mode)"""
-        from ai_guardian import check_secrets_with_gitleaks
+        from ai_guardian import check_secrets
         from ai_guardian.scanners.strategies import ScanResult, SecretMatch
 
         mock_load_config.return_value = ({"engines": ["gitleaks"]}, None)
@@ -143,7 +143,7 @@ class SecretScanningEnforcementTest(unittest.TestCase):
             scan_time_ms=10.0,
         )
 
-        has_secrets, error_msg = check_secrets_with_gitleaks("AKIAIOSFODNN7EXAMPLE")
+        has_secrets, error_msg = check_secrets("AKIAIOSFODNN7EXAMPLE")
 
         # Should always be blocked
         self.assertTrue(has_secrets, "Secrets should always block")

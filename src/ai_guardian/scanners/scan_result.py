@@ -65,7 +65,7 @@ class ScanResult:
         scan_time_ms: float = 0.0,
         file_path: Optional[str] = None,
     ) -> "ScanResult":
-        """Wrap secret scanner (check_secrets_with_gitleaks) result."""
+        """Wrap secret scanner (check_secrets) result."""
         return cls(
             detected=has_secrets,
             violation_type="secret_detected",

@@ -162,8 +162,8 @@ class PatternServerWarningsTest(TestCase):
                     with patch("subprocess.run") as mock_run:
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
-                        has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                        has_secrets, error_msg = ai_guardian.check_secrets(
+                            content, "test.txt"
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -227,8 +227,8 @@ class PatternServerWarningsTest(TestCase):
                     with patch("subprocess.run") as mock_run:
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
-                        has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                        has_secrets, error_msg = ai_guardian.check_secrets(
+                            content, "test.txt"
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -267,9 +267,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Verify: Operation should warn but NOT block (Issue #343)
         self.assertFalse(
@@ -494,8 +492,8 @@ class PatternServerWarningsTest(TestCase):
                     with patch("subprocess.run") as mock_run:
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
-                        has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                        has_secrets, error_msg = ai_guardian.check_secrets(
+                            content, "test.txt"
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -538,9 +536,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Verify: Warning message (not blocking) with helpful details (Issue #343)
         self.assertFalse(
@@ -607,9 +603,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Verify: Operation succeeded with gitleaks
         self.assertFalse(has_secrets, "Operation should succeed with gitleaks")
@@ -850,9 +844,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", False):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         self.assertFalse(has_secrets)
         self.assertIsNotNone(error_msg)
@@ -892,9 +884,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         self.assertFalse(has_secrets)
         self.assertIsNotNone(error_msg)
@@ -931,9 +921,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
-                    content, "test.txt"
-                )
+                has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         self.assertFalse(has_secrets)
         self.assertIsNotNone(error_msg)

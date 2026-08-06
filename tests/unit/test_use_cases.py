@@ -92,7 +92,7 @@ class DataExfiltrationAttackScenario(TestCase):
         """
 
         # Secret scanning would catch this
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             credential_content, "source_content"
         )
 
@@ -222,9 +222,7 @@ class PromptInjectionChainScenario(TestCase):
         assert is_attack, "Bypass attempt should be detected as injection"
 
         # Also check that secret would be detected
-        has_secrets, secret_error = ai_guardian.check_secrets_with_gitleaks(
-            bypass_attempt, "prompt"
-        )
+        has_secrets, secret_error = ai_guardian.check_secrets(bypass_attempt, "prompt")
 
         assert has_secrets, "Secret should also be detected (defense in depth)"
 
@@ -285,7 +283,7 @@ class LegitimateWorkflowScenario(TestCase):
         assert allowed, f"Legitimate notebook creation should be allowed: {error_msg}"
 
         # Check secret scanning on title
-        has_secrets, secret_error = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, secret_error = ai_guardian.check_secrets(
             attack_constants.LEGITIMATE_NOTEBOOK_TITLE, "title"
         )
         assert not has_secrets, "Legitimate title should not trigger secret detection"
@@ -303,7 +301,7 @@ class LegitimateWorkflowScenario(TestCase):
         assert allowed, f"Public URL source should be allowed: {error_msg}"
 
         # Step 3: Add text source with research
-        has_secrets, secret_error = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, secret_error = ai_guardian.check_secrets(
             attack_constants.LEGITIMATE_TEXT_SOURCE, "source_text"
         )
         assert not has_secrets, "Legitimate research text should not trigger detection"

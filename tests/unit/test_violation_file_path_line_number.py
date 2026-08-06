@@ -656,7 +656,7 @@ class TestPIIViolationLineNumberPopulated:
     """Test that PII violation logging populates line_number from redactions (Issue #359)."""
 
     @mock.patch("ai_guardian.config.loaders._load_pii_config")
-    @mock.patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @mock.patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @mock.patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @mock.patch("ai_guardian.config.loaders._load_prompt_injection_config")
     def test_pretooluse_pii_line_number_populated(
