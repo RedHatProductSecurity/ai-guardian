@@ -47,6 +47,70 @@ try:
 except ImportError:
     HAS_MCP = False
 
+_CLIENT_TO_IDE: Dict[str, str] = {
+    "claude-code": "claude",
+    "cursor": "cursor",
+    "opencode": "opencode",
+    "gemini-cli": "gemini",
+    "windsurf": "windsurf",
+    "github-copilot": "copilot",
+    "codex-cli": "codex",
+    "augment": "augment",
+    "kiro": "kiro",
+}
+
+
+def _check_client_hooks(client_name: str) -> Optional[str]:
+    """Check hook status for the connecting MCP client.
+
+    Returns a warning string if hooks are missing, None otherwise.
+    """
+    ide_type = _CLIENT_TO_IDE.get(client_name)
+    if not ide_type:
+        return None
+
+    try:
+        from ai_guardian.setup import IDESetup
+
+        setup = IDESetup()
+        ide_config = setup.IDE_CONFIGS.get(ide_type, {})
+
+        if ide_config.get("mcp_only"):
+            return None
+
+        config_path_str = setup.get_config_path(ide_type)
+        if not config_path_str:
+            return None
+
+        config_path = Path(config_path_str).expanduser()
+        if setup.check_hooks_configured(config_path, ide_type):
+            return None
+
+        ide_name = ide_config.get("name", ide_type)
+        return (
+            f"\n\n⚠️ SECURITY WARNING: {ide_name} hooks are NOT installed. "
+            f"Security scanning is NOT active for this session. "
+            f"Run `ai-guardian setup` to install hooks."
+        )
+    except Exception as exc:
+        logger.debug("Hook check failed for %s: %s", client_name, exc)
+        return None
+
+
+class HookCheckMiddleware:
+    """MCP middleware that checks hook installation during initialize."""
+
+    async def __call__(self, ctx, call_next):
+        result = await call_next(ctx)
+        if ctx.method == "initialize" and isinstance(result, dict):
+            client_info = (ctx.params or {}).get("clientInfo")
+            if isinstance(client_info, dict):
+                warning = _check_client_hooks(client_info.get("name", ""))
+                if warning:
+                    current = result.get("instructions") or ""
+                    result["instructions"] = current + warning
+        return result
+
 
 def _load_mcp_config() -> Dict:
     """Load ai-guardian.json and return the mcp_server section."""
@@ -724,6 +788,8 @@ def create_server() -> "MCPServer":
             return json.dumps(result, indent=2)
         except Exception:
             return json.dumps({"violations": [], "count": 0})
+
+    server.middleware.append(HookCheckMiddleware())
 
     return server
 

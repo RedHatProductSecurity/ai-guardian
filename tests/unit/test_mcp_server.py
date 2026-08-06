@@ -5,6 +5,7 @@ Tests all 16 tools, 3 resources, and security filtering.
 Requires Python >= 3.10 (MCP SDK dependency).
 """
 
+import asyncio
 import json
 import sys
 from pathlib import Path
@@ -19,6 +20,8 @@ pytestmark = pytest.mark.skipif(
 )
 
 from ai_guardian.mcp.server import (
+    HookCheckMiddleware,
+    _check_client_hooks,
     _validate_scan_path,
     create_server,
 )
@@ -1322,3 +1325,158 @@ class TestServerCreation:
         assert expected_uris == set(
             resources.keys()
         ), f"Missing: {expected_uris - set(resources.keys())}"
+
+    def test_server_has_hook_check_middleware(self):
+        server = create_server()
+        has_hook_mw = any(isinstance(m, HookCheckMiddleware) for m in server.middleware)
+        assert has_hook_mw, "HookCheckMiddleware not found in server middleware"
+
+
+# ─── Hook Check Tests ────────────────────────────────────────
+
+
+class TestCheckClientHooks:
+    """Test _check_client_hooks function."""
+
+    def test_unknown_client_returns_none(self):
+        assert _check_client_hooks("unknown-agent") is None
+
+    def test_empty_client_returns_none(self):
+        assert _check_client_hooks("") is None
+
+    def test_hooks_present_returns_none(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+        mock_setup.get_config_path.return_value = "/tmp/settings.json"
+        mock_setup.check_hooks_configured.return_value = True
+
+        with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
+            result = _check_client_hooks("claude-code")
+
+        assert result is None
+
+    def test_hooks_missing_returns_warning(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+        mock_setup.get_config_path.return_value = "/tmp/settings.json"
+        mock_setup.check_hooks_configured.return_value = False
+
+        with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
+            result = _check_client_hooks("claude-code")
+
+        assert result is not None
+        assert "Claude Code" in result
+        assert "ai-guardian setup" in result
+        assert "WARNING" in result
+
+    def test_mcp_only_ide_returns_none(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {"junie": {"name": "Junie", "mcp_only": True}}
+        mock_setup.get_config_path.return_value = "/tmp/junie"
+
+        with patch("ai_guardian.mcp.server._CLIENT_TO_IDE", {"junie-cli": "junie"}):
+            with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
+                result = _check_client_hooks("junie-cli")
+
+        assert result is None
+
+    def test_setup_exception_returns_none(self):
+        with patch(
+            "ai_guardian.setup.IDESetup",
+            side_effect=ImportError("no setup"),
+        ):
+            result = _check_client_hooks("claude-code")
+
+        assert result is None
+
+
+class TestHookCheckMiddleware:
+    """Test HookCheckMiddleware."""
+
+    def test_appends_warning_on_initialize(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "initialize"
+        ctx.params = {"clientInfo": {"name": "claude-code"}}
+
+        async def call_next(c):
+            return {
+                "instructions": "base instructions",
+                "protocolVersion": "2025-11-05",
+            }
+
+        warning = "\n\n⚠️ WARNING: hooks missing"
+        with patch("ai_guardian.mcp.server._check_client_hooks", return_value=warning):
+            result = asyncio.run(middleware(ctx, call_next))
+
+        assert result["instructions"] == "base instructions" + warning
+
+    def test_no_warning_when_hooks_present(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "initialize"
+        ctx.params = {"clientInfo": {"name": "claude-code"}}
+
+        async def call_next(c):
+            return {"instructions": "base", "protocolVersion": "2025-11-05"}
+
+        with patch("ai_guardian.mcp.server._check_client_hooks", return_value=None):
+            result = asyncio.run(middleware(ctx, call_next))
+
+        assert result["instructions"] == "base"
+
+    def test_non_initialize_passthrough(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "tools/list"
+        ctx.params = {}
+
+        expected = {"tools": []}
+
+        async def call_next(c):
+            return expected
+
+        result = asyncio.run(middleware(ctx, call_next))
+
+        assert result == expected
+
+    def test_no_client_info_no_warning(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "initialize"
+        ctx.params = {}
+
+        async def call_next(c):
+            return {"instructions": "base", "protocolVersion": "2025-11-05"}
+
+        result = asyncio.run(middleware(ctx, call_next))
+
+        assert result["instructions"] == "base"
+
+    def test_none_params_no_warning(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "initialize"
+        ctx.params = None
+
+        async def call_next(c):
+            return {"instructions": "base", "protocolVersion": "2025-11-05"}
+
+        result = asyncio.run(middleware(ctx, call_next))
+
+        assert result["instructions"] == "base"
+
+    def test_adds_instructions_when_none(self):
+        middleware = HookCheckMiddleware()
+        ctx = MagicMock()
+        ctx.method = "initialize"
+        ctx.params = {"clientInfo": {"name": "cursor"}}
+
+        async def call_next(c):
+            return {"protocolVersion": "2025-11-05"}
+
+        warning = "\n\n⚠️ WARNING: hooks missing"
+        with patch("ai_guardian.mcp.server._check_client_hooks", return_value=warning):
+            result = asyncio.run(middleware(ctx, call_next))
+
+        assert result["instructions"] == warning
