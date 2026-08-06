@@ -141,6 +141,7 @@ class HealthCheckContent(ScrollableContainer):
         with Horizontal(id="hc-actions"):
             yield Button("Refresh", id="hc-refresh-btn", variant="primary")
             yield Button("Fix Issues", id="hc-fix-btn", variant="warning")
+            yield Button("Smoke Test", id="hc-smoke-btn", variant="default")
 
     def on_mount(self) -> None:
         self._run_checks()
@@ -214,6 +215,129 @@ class HealthCheckContent(ScrollableContainer):
             self.action_refresh()
         elif event.button.id == "hc-fix-btn":
             self._confirm_fix()
+        elif event.button.id == "hc-smoke-btn":
+            self._run_smoke_test()
+
+    def _run_smoke_test(self) -> None:
+        """Run smoke tests and display results."""
+        import threading
+
+        loading = self.query_one("#hc-loading", Static)
+        loading.update("[dim]Running smoke tests...[/dim]")
+        loading.display = True
+
+        results_container = self.query_one("#hc-results", Container)
+        results_container.remove_children()
+        summary_container = self.query_one("#hc-summary", Container)
+        summary_container.remove_children()
+
+        def worker():
+            try:
+                from ai_guardian.smoke_test import SmokeTestRunner
+
+                runner = SmokeTestRunner()
+                report = runner.run()
+                self.app.call_from_thread(self._display_smoke_results, report)
+            except Exception as exc:
+                self.app.call_from_thread(self._show_smoke_error, str(exc))
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _show_smoke_error(self, error: str) -> None:
+        loading = self.query_one("#hc-loading", Static)
+        loading.display = False
+        results_container = self.query_one("#hc-results", Container)
+        results_container.remove_children()
+        results_container.mount(Static(f"[red]Smoke test error: {error}[/red]"))
+
+    def _display_smoke_results(self, report) -> None:
+        """Render smoke test results."""
+        from ai_guardian.smoke_test import SmokeTestOutcome
+
+        loading = self.query_one("#hc-loading", Static)
+        loading.display = False
+
+        results_container = self.query_one("#hc-results", Container)
+        results_container.remove_children()
+
+        # Phase 1
+        results_container.mount(Static("[bold]Phase 1 — Config Validation[/bold]"))
+        for check in report.phase1_checks:
+            has_detail = bool(check.detail or check.fix_hint)
+            summary_line = format_check_status(check)
+            if has_detail:
+                detail_text = format_check_detail(check)
+                collapsible = Collapsible(
+                    Static(detail_text, classes="hc-check-detail"),
+                    title=summary_line,
+                    collapsed=True,
+                )
+                results_container.mount(collapsible)
+            else:
+                results_container.mount(Static(summary_line))
+
+        if not report.phase1_passed:
+            results_container.mount(
+                Static("[red]⛔ Skipping smoke tests — fix config first[/red]")
+            )
+            return
+
+        # Phase 2
+        outcome_icons = {
+            SmokeTestOutcome.MATCH: "[green]✅[/green]",
+            SmokeTestOutcome.MISMATCH: "[red]❌[/red]",
+            SmokeTestOutcome.SKIPPED: "[dim]⏭️[/dim]",
+        }
+        outcome_colors = {
+            SmokeTestOutcome.MATCH: "green",
+            SmokeTestOutcome.MISMATCH: "red",
+            SmokeTestOutcome.SKIPPED: "dim",
+        }
+
+        results_container.mount(Static("\n[bold]Phase 2 — Scanner Smoke Tests[/bold]"))
+        for r in report.phase2_results:
+            icon = outcome_icons.get(r.outcome, "")
+            color = outcome_colors.get(r.outcome, "")
+            action_str = f" → {r.expected_action}" if r.expected_action else ""
+            line = (
+                f"{icon} [{color}]{r.display_name:<20s}[/{color}]"
+                f"{action_str}  {r.message}"
+            )
+
+            if r.fix_hint and r.outcome == SmokeTestOutcome.MISMATCH:
+                detail = f"[yellow]Hint[/yellow]: {r.fix_hint}"
+                if r.detail:
+                    detail = f"[dim]{r.detail}[/dim]\n{detail}"
+                collapsible = Collapsible(
+                    Static(detail, classes="hc-check-detail"),
+                    title=line,
+                    collapsed=True,
+                )
+                results_container.mount(collapsible)
+            else:
+                results_container.mount(Static(line))
+
+        # Summary
+        match_count = sum(
+            1 for r in report.phase2_results if r.outcome == SmokeTestOutcome.MATCH
+        )
+        mismatch_count = sum(
+            1 for r in report.phase2_results if r.outcome == SmokeTestOutcome.MISMATCH
+        )
+        skip_count = sum(
+            1 for r in report.phase2_results if r.outcome == SmokeTestOutcome.SKIPPED
+        )
+
+        summary_container = self.query_one("#hc-summary", Container)
+        summary_container.remove_children()
+        parts = []
+        if match_count:
+            parts.append(f"[green]{match_count} matched[/green]")
+        if mismatch_count:
+            parts.append(f"[red]{mismatch_count} mismatched[/red]")
+        if skip_count:
+            parts.append(f"[dim]{skip_count} skipped[/dim]")
+        summary_container.mount(Static(f"  {', '.join(parts)}"))
 
     def _confirm_fix(self) -> None:
         """Show confirmation before running auto-fix."""
