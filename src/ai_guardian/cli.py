@@ -1237,7 +1237,7 @@ def main():
         # init-project subcommand (Issue #608)
         init_project_parser = subparsers.add_parser(
             "init-project",
-            help="Auto-detect project languages and generate prompt injection allowlist",
+            help="Scan project and generate security config (.ai-guardian/ and .aiguardignore.toml)",
         )
         init_project_parser.add_argument(
             "--dry-run",
