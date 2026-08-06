@@ -222,9 +222,7 @@ class PromptInjectionChainScenario(TestCase):
         assert is_attack, "Bypass attempt should be detected as injection"
 
         # Also check that secret would be detected
-        has_secrets, secret_error = ai_guardian.check_secrets(
-            bypass_attempt, "prompt"
-        )
+        has_secrets, secret_error = ai_guardian.check_secrets(bypass_attempt, "prompt")
 
         assert has_secrets, "Secret should also be detected (defense in depth)"
 

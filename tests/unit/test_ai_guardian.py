@@ -19,9 +19,7 @@ class AIGuardianTest(TestCase):
     def test_check_secrets_with_clean_content(self):
         """Test that clean content passes secret detection"""
         clean_content = "This is a normal prompt without any secrets"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            clean_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(clean_content, "test.txt")
 
         self.assertFalse(has_secrets, "Clean content should not be flagged as secret")
         self.assertIsNone(
@@ -36,9 +34,7 @@ class AIGuardianTest(TestCase):
 
         # Agent tool can return list output - should be converted to string
         list_content = ["line 1", "line 2", "line 3"]
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            list_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(list_content, "test.txt")
 
         self.assertFalse(
             has_secrets, "Clean list content should not be flagged as secret"
@@ -59,9 +55,7 @@ class AIGuardianTest(TestCase):
             "My token: ghp_16C0123456789abcdefghijklmTEST0000",
             "more text",
         ]
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            list_with_secret, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(list_with_secret, "test.txt")
 
         self.assertTrue(has_secrets, "Secret in list should be detected")
         self.assertIsNotNone(error_msg, "Error message should be returned for secrets")
@@ -74,9 +68,7 @@ class AIGuardianTest(TestCase):
 
         # Agent tool could return dict output
         dict_content = {"key": "value", "status": "success"}
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            dict_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(dict_content, "test.txt")
 
         self.assertFalse(
             has_secrets, "Clean dict content should not be flagged as secret"
@@ -93,9 +85,7 @@ class AIGuardianTest(TestCase):
 
         # Use a token format that gitleaks detects but GitHub ignores (obviously fake)
         secret_content = "My GitHub token: ghp_16C0123456789abcdefghijklmTEST0000"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            secret_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(secret_content, "test.txt")
 
         self.assertTrue(has_secrets, "GitHub token should be detected as secret")
         self.assertIsNotNone(error_msg, "Error message should be returned for secrets")
@@ -114,9 +104,7 @@ v2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Y
 yv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7
 Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 -----END RSA PRIVATE KEY-----"""
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            secret_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(secret_content, "test.txt")
 
         self.assertTrue(has_secrets, "Private key should be detected as secret")
         self.assertIsNotNone(error_msg, "Error message should be returned for secrets")
@@ -128,9 +116,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_pattern_config.return_value = None
 
         secret_content = "GitLab token: glpat-20_characters_test"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            secret_content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(secret_content, "test.txt")
 
         self.assertTrue(has_secrets, "GitLab token should be detected as secret")
 
@@ -166,9 +152,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Should return False (don't block) with warning message (fail-open)
         self.assertFalse(has_secrets, "Missing Gitleaks should not block operation")
@@ -202,9 +186,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Should block operation (return True) with error message
         self.assertTrue(has_secrets, "Auth error should block operation")
@@ -254,9 +236,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         # Should not block (return False)
         self.assertFalse(has_secrets, "Network error should not block operation")
@@ -287,9 +267,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_run.return_value = mock_result
 
         content = "This is some clean content"
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            content, "test.txt"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(content, "test.txt")
 
         self.assertFalse(has_secrets, "Empty report with exit code 1 should not block")
         self.assertIsNone(error_msg, "Should not return error message for empty report")

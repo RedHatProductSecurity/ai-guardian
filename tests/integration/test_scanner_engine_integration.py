@@ -86,9 +86,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         )
 
         # Run scan
-        has_secrets, error_msg = check_secrets(
-            "clean content", filename="test.txt"
-        )
+        has_secrets, error_msg = check_secrets("clean content", filename="test.txt")
 
         # Verify select_all_engines was called (strategy framework + first-match prep)
         self.assertTrue(mock_select_all.called)
@@ -108,9 +106,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         mock_run.return_value = mock_result
 
         # Run scan
-        has_secrets, error_msg = check_secrets(
-            "clean content", filename="test.txt"
-        )
+        has_secrets, error_msg = check_secrets("clean content", filename="test.txt")
 
         # Verify gitleaks command was used (legacy fallback)
         mock_run.assert_called_once()
@@ -133,9 +129,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         mock_select_engine.side_effect = Exception("Unexpected error")
 
         # Should fail open
-        has_secrets, error_msg = check_secrets(
-            "some content", filename="test.txt"
-        )
+        has_secrets, error_msg = check_secrets("some content", filename="test.txt")
 
         # Verify it fails open (allows operation)
         self.assertFalse(has_secrets, "Should fail open on unexpected errors")
@@ -510,9 +504,7 @@ class TestGuardClauseFallthrough(unittest.TestCase):
         }
         mock_get_parser.return_value = mock_parser
 
-        has_secrets, error_msg = check_secrets(
-            "clean content", filename="test.txt"
-        )
+        has_secrets, error_msg = check_secrets("clean content", filename="test.txt")
 
         self.assertFalse(
             has_secrets, "Single engine with no findings should return clean"

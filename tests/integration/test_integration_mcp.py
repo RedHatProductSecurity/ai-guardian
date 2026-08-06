@@ -318,9 +318,7 @@ class MCPSecretScanningTests(TestCase):
         Token 2: xoxb-987654321098-987654321098-YYYYYYYYYYYYYYYYYYYY  # notsecret - FAKE TEST CREDENTIAL
         """
 
-        has_secrets, error_msg = ai_guardian.check_secrets(
-            content, "multi_secret_test"
-        )
+        has_secrets, error_msg = ai_guardian.check_secrets(content, "multi_secret_test")
 
         # Expected: BLOCKED (at least one secret detected)
         assert has_secrets, "Multiple secrets should be detected"
