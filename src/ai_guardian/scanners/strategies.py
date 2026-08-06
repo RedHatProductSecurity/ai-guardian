@@ -134,7 +134,7 @@ class FirstMatchStrategy(ExecutionStrategy):
 
         for engine_config in engines:
             report_file = f"{report_file_prefix}_{engine_config.type}.json"
-            logger.info(f"FirstMatchStrategy: trying engine {engine_config.type}")
+            logger.debug(f"FirstMatchStrategy: trying engine {engine_config.type}")
 
             resolved_path = resolve_engine_config_path(engine_config, config_path)
             result = scanner_fn(
@@ -150,20 +150,20 @@ class FirstMatchStrategy(ExecutionStrategy):
                 continue
 
             if result.has_secrets:
-                logger.info(
+                logger.debug(
                     f"Strategy 'first-match' complete: engine={engine_config.type} "
                     f"duration_ms={result.scan_time_ms:.1f} "
                     f"has_secrets=True"
                 )
                 return result
 
-            logger.info(
+            logger.debug(
                 f"Engine {engine_config.type} found no secrets, trying next engine"
             )
             last_clean_result = result
 
         if last_clean_result is not None:
-            logger.info(
+            logger.debug(
                 f"Strategy 'first-match' complete: all engines clean "
                 f"(last={last_clean_result.engine})"
             )
@@ -226,7 +226,7 @@ class AnyMatchStrategy(ExecutionStrategy):
         unique_secrets = self._deduplicate(all_secrets)
         engine_label = f"any-match({','.join(engines_run)})"
 
-        logger.info(
+        logger.debug(
             f"Strategy 'any-match' complete: engines_run={len(engines_run)} "
             f"total_duration_ms={total_time_ms:.1f} "
             f"combined_findings={len(all_secrets)} "
@@ -371,7 +371,7 @@ class ConsensusStrategy(ExecutionStrategy):
         consensus_secrets = self._find_consensus(all_secrets)
         engine_label = f"consensus({','.join(engines_run)})"
 
-        logger.info(
+        logger.debug(
             f"Strategy 'consensus' complete: engines_run={len(engines_run)} "
             f"threshold={self.threshold} "
             f"total_duration_ms={total_time_ms:.1f} "

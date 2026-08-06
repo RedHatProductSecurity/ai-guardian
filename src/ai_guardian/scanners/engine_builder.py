@@ -405,10 +405,12 @@ def select_engine(
             continue
 
         if engine_config.python_scanner is not None:
-            logger.info(f"Selected Python scanner: {engine_config.python_scanner.name}")
+            logger.debug(
+                f"Selected Python scanner: {engine_config.python_scanner.name}"
+            )
             return engine_config
         elif shutil.which(engine_config.binary):
-            logger.info(f"Selected scanner engine: {engine_config.type}")
+            logger.debug(f"Selected scanner engine: {engine_config.type}")
             return engine_config
         else:
             logger.warning(
@@ -457,12 +459,12 @@ def select_all_engines(
             continue
 
         if engine_config.python_scanner is not None:
-            logger.info(
+            logger.debug(
                 f"Found available Python scanner: {engine_config.python_scanner.name}"
             )
             available.append(engine_config)
         elif shutil.which(engine_config.binary):
-            logger.info(f"Found available scanner engine: {engine_config.type}")
+            logger.debug(f"Found available scanner engine: {engine_config.type}")
             available.append(engine_config)
         else:
             logger.warning(

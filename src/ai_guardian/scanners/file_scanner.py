@@ -1228,7 +1228,7 @@ def scan_command(args) -> int:
     """
     # Suppress internal logging to stderr unless --verbose (file logging unaffected)
     if not args.verbose:
-        for handler in logging.getLogger().handlers:
+        for handler in logging.getLogger("ai_guardian").handlers:
             if isinstance(handler, logging.StreamHandler) and not isinstance(
                 handler, logging.FileHandler
             ):
