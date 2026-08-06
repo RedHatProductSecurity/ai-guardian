@@ -64,6 +64,13 @@ jobs:
             -t ai-guardian-test \
             .
 
+      - name: Run doctor smoke-test
+        run: |
+          docker run --rm \
+            -e AI_GUARDIAN_PROFILE=${{ matrix.profile }} \
+            ai-guardian-test \
+            ai-guardian doctor --smoke-test
+
       - name: Run ${{ matrix.profile }} scenarios
         run: docker run --rm -e AI_GUARDIAN_PROFILE=${{ matrix.profile }} ai-guardian-test /sandbox/run-scenarios.sh
 
