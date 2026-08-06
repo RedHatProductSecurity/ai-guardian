@@ -232,10 +232,10 @@ class TestScanCommandLoggingSuppression:
         args = _make_args(verbose=False)
         scan_command(args)
 
-        root = self.logging.getLogger()
+        pkg_logger = self.logging.getLogger("ai_guardian")
         stream_handlers = [
             h
-            for h in root.handlers
+            for h in pkg_logger.handlers
             if isinstance(h, self.logging.StreamHandler)
             and not isinstance(h, self.logging.FileHandler)
         ]
@@ -247,10 +247,10 @@ class TestScanCommandLoggingSuppression:
         """With --verbose, stderr handler levels should not be raised."""
         mock_scan.return_value = []
 
-        root = self.logging.getLogger()
+        pkg_logger = self.logging.getLogger("ai_guardian")
         stream_handlers = [
             h
-            for h in root.handlers
+            for h in pkg_logger.handlers
             if isinstance(h, self.logging.StreamHandler)
             and not isinstance(h, self.logging.FileHandler)
         ]

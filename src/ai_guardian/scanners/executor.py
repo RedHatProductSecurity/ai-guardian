@@ -124,7 +124,7 @@ def run_single_engine(
             return scan_result
 
         if result.returncode == engine_config.success_exit_code:
-            logger.info(
+            logger.debug(
                 f"Engine scan complete: engine={engine_config.type} "
                 f"duration_ms={elapsed_ms:.1f} findings=0 has_secrets=False"
             )
@@ -242,7 +242,7 @@ def run_python_scanner(
         elapsed_ms = (time.monotonic() - start_time) * 1000
 
         if not findings:
-            logger.info(
+            logger.debug(
                 f"Engine scan complete: engine={scanner_name} "
                 f"duration_ms={elapsed_ms:.1f} findings=0 has_secrets=False"
             )
@@ -273,7 +273,7 @@ def run_python_scanner(
                 )
             )
 
-        logger.info(
+        logger.debug(
             f"Engine scan complete: engine={scanner_name} "
             f"duration_ms={elapsed_ms:.1f} findings={len(secrets)} has_secrets=True"
         )
@@ -437,7 +437,7 @@ def _parse_secrets_result(
         extra = ""
         if not result.has_secrets:
             extra = " (exit code indicated secrets but parser found none)"
-        logger.info(
+        logger.debug(
             f"Engine scan complete: engine={engine_config.type} "
             f"duration_ms={elapsed_ms:.1f} "
             f"findings={len(result.secrets)} "

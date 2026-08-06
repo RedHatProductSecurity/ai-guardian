@@ -57,24 +57,20 @@ class PatternServerWarningsTest(TestCase):
         self.log_handler.setLevel(logging.DEBUG)
 
         # Store original logging level
-        self.original_level = logging.getLogger().level
+        self._pkg_logger = logging.getLogger("ai_guardian")
+        self.original_level = self._pkg_logger.level
 
-        # Add handler to root logger (module loggers propagate here)
-        logging.getLogger().addHandler(self.log_handler)
-        logging.getLogger().setLevel(logging.DEBUG)
-
-        # Also add to specific loggers for pattern_server
-        logging.getLogger("ai_guardian.patterns.server").addHandler(self.log_handler)
-        logging.getLogger("ai_guardian.patterns.server").setLevel(logging.DEBUG)
+        # Add handler to ai_guardian logger (child loggers propagate here)
+        self._pkg_logger.addHandler(self.log_handler)
+        self._pkg_logger.setLevel(logging.DEBUG)
 
     def tearDown(self):
         """Clean up test fixtures"""
         # Remove handlers
-        logging.getLogger().removeHandler(self.log_handler)
-        logging.getLogger("ai_guardian.patterns.server").removeHandler(self.log_handler)
+        self._pkg_logger.removeHandler(self.log_handler)
 
         # Restore original logging level
-        logging.getLogger().setLevel(self.original_level)
+        self._pkg_logger.setLevel(self.original_level)
 
         # Close handler
         self.log_handler.close()
@@ -609,7 +605,7 @@ class PatternServerWarningsTest(TestCase):
         self.assertFalse(has_secrets, "Operation should succeed with gitleaks")
         self.assertIsNone(error_msg, "No error message")
 
-        # Check that warnings were logged (via setUp's root-logger ListHandler)
+        # Check that warnings were logged (via setUp's ai_guardian ListHandler)
         warning_msgs = [
             r.getMessage() for r in self.log_capture if r.levelno >= logging.WARNING
         ]

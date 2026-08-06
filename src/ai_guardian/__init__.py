@@ -50,24 +50,23 @@ _file_handler.setFormatter(
 
 # Suppress stderr output when --json is requested or running Console TUI (keep file logging)
 _stderr_handler = logging.StreamHandler(sys.stderr)
+_stderr_handler.setFormatter(logging.Formatter("%(message)s"))
 _is_tui_mode = any(cmd in sys.argv for cmd in ("console", "tui"))
 if _is_tui_mode:
     _stderr_handler.setLevel(logging.CRITICAL + 1)
 elif "--json" in sys.argv:
     _stderr_handler.setLevel(logging.WARNING)
 
-# Configure root logger with both stderr and file handlers
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",  # Simple format for stderr
-    handlers=[
-        _stderr_handler,  # Keep stderr output for IDE compatibility
-        _file_handler,  # Add file output
-    ],
-)
+# Configure the ai_guardian logger (not root) so that
+# getLogger("ai_guardian").setLevel(WARNING) actually suppresses children.
+_pkg_logger = logging.getLogger("ai_guardian")
+_pkg_logger.setLevel(logging.INFO)
+_pkg_logger.addHandler(_stderr_handler)
+_pkg_logger.addHandler(_file_handler)
+_pkg_logger.propagate = False
 
 # Global logger instance
-logger = logging.getLogger(__name__)
+logger = _pkg_logger
 
 # Log version at startup (suppress for sanitize/mcp-server/setup --json — stdio must be clean)
 _suppress_logging = (
