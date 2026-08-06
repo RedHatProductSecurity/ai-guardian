@@ -66,6 +66,7 @@ except ImportError:
 
 try:
     from ai_guardian import check_secrets_with_gitleaks
+    from ai_guardian.scanners import secret_scanning as _secret_scanning_mod
 
     HAS_SECRET_SCANNER = True
 except ImportError:
@@ -896,27 +897,37 @@ class FileScanner:
             )
 
             if has_secrets and error_message:
-                line_number = None
-                secret_type = "secret"
-                if error_message:
+                all_findings = _secret_scanning_mod._last_secret_findings
+                if all_findings:
+                    for f in all_findings:
+                        finding = create_secret_finding(
+                            secret_type=f.get("rule_id") or "secret",
+                            file_path=file_path,
+                            line_number=f.get("line_number"),
+                            start_column=f.get("start_column"),
+                        )
+                        self.findings.append(finding)
+                else:
+                    line_number = None
+                    secret_type = "secret"
                     loc_match = re.search(r"Location: .*?:(\d+)", error_message)
                     if loc_match:
                         line_number = int(loc_match.group(1)) or None
                     type_match = re.search(
-                        r"(?:Secret Type|Credential Type|PII Type): (.+)", error_message
+                        r"(?:Secret Type|Credential Type|PII Type): (.+)",
+                        error_message,
                     )
                     if type_match:
                         secret_type = type_match.group(1).strip()
-                finding = create_secret_finding(
-                    secret_type=secret_type,
-                    file_path=file_path,
-                    line_number=line_number,
-                )
-                self.findings.append(finding)
-                if self.verbose:
-                    print(
-                        f"  [SECRET] {error_message.splitlines()[0] if error_message else 'Secret detected'}"
+                    finding = create_secret_finding(
+                        secret_type=secret_type,
+                        file_path=file_path,
+                        line_number=line_number,
                     )
+                    self.findings.append(finding)
+                if self.verbose:
+                    count = len(all_findings) if all_findings else 1
+                    print(f"  [SECRET] {count} secret(s) detected")
         except Exception as e:
             logger.warning(f"Error checking secrets: {e}")
 

@@ -63,6 +63,85 @@ class TestFileScannerSecretScanning:
 
         assert not any(f["rule_id"] == "SECRET-001" for f in findings)
 
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    def test_multiple_secrets_reported(self, mock_gitleaks, tmp_path):
+        """All secrets from _last_secret_findings appear as separate findings."""
+        mock_gitleaks.return_value = (True, "Secret found")
+        import ai_guardian.scanners.secret_scanning as ss_mod
+
+        mock_findings = [
+            {
+                "rule_id": "aws-access-key",
+                "line_number": 3,
+                "start_column": 10,
+                "end_column": 30,
+                "category": "secret",
+            },
+            {
+                "rule_id": "github-pat",
+                "line_number": 7,
+                "start_column": 5,
+                "end_column": 45,
+                "category": "secret",
+            },
+            {
+                "rule_id": "generic-api-key",
+                "line_number": 12,
+                "start_column": 0,
+                "end_column": 20,
+                "category": "secret",
+            },
+        ]
+
+        test_file = tmp_path / "multi.py"
+        test_file.write_text("secrets everywhere")
+
+        original = ss_mod._last_secret_findings
+        try:
+            ss_mod._last_secret_findings = mock_findings
+            scanner = FileScanner(config={"secret_scanning": {"enabled": True}})
+            findings = scanner.scan_directory(str(tmp_path))
+        finally:
+            ss_mod._last_secret_findings = original
+
+        secret_findings = [f for f in findings if f["rule_id"] == "SECRET-001"]
+        assert len(secret_findings) == 3
+
+        assert secret_findings[0]["line_number"] == 3
+        assert secret_findings[0]["start_column"] == 10
+        assert secret_findings[0]["details"]["secret_type"] == "aws-access-key"
+
+        assert secret_findings[1]["line_number"] == 7
+        assert secret_findings[1]["start_column"] == 5
+
+        assert secret_findings[2]["line_number"] == 12
+        assert secret_findings[2]["start_column"] == 0
+
+    @mock.patch("ai_guardian.scanners.file_scanner.check_secrets_with_gitleaks")
+    def test_secrets_fallback_when_no_findings_list(self, mock_gitleaks, tmp_path):
+        """Falls back to regex parsing when _last_secret_findings is empty."""
+        mock_gitleaks.return_value = (
+            True,
+            "Secret Type: github-pat\nLocation: creds.py:5",
+        )
+        import ai_guardian.scanners.secret_scanning as ss_mod
+
+        test_file = tmp_path / "creds.py"
+        test_file.write_text("token = 'ghp_xxx'")
+
+        original = ss_mod._last_secret_findings
+        try:
+            ss_mod._last_secret_findings = []
+            scanner = FileScanner(config={"secret_scanning": {"enabled": True}})
+            findings = scanner.scan_directory(str(tmp_path))
+        finally:
+            ss_mod._last_secret_findings = original
+
+        secret_findings = [f for f in findings if f["rule_id"] == "SECRET-001"]
+        assert len(secret_findings) == 1
+        assert secret_findings[0]["line_number"] == 5
+        assert secret_findings[0]["details"]["secret_type"] == "github-pat"
+
 
 class TestFileScannerPIIDetection:
     """Tests for _check_pii integration."""
