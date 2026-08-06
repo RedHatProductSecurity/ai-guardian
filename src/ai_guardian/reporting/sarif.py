@@ -417,6 +417,7 @@ def create_secret_finding(
     file_path: str,
     line_number: Optional[int] = None,
     snippet: Optional[str] = None,
+    start_column: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Create a SARIF finding for secret detection.
@@ -426,13 +427,14 @@ def create_secret_finding(
         file_path: File containing secret
         line_number: Line number in file
         snippet: Code snippet (should be redacted)
+        start_column: 0-based column number
 
     Returns:
         Finding dictionary for SARIF formatter
     """
     from ai_guardian.scanners.secret_types import get_secret_type_display
 
-    return {
+    result = {
         "rule_id": "SECRET-001",
         "level": "error",
         "message": f"Secret detected: {get_secret_type_display(secret_type)}",
@@ -441,6 +443,9 @@ def create_secret_finding(
         "snippet": snippet,
         "details": {"secret_type": secret_type},
     }
+    if start_column is not None:
+        result["start_column"] = start_column
+    return result
 
 
 def create_pii_finding(
