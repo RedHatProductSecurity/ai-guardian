@@ -317,7 +317,7 @@ class TestOnScanErrorSecretScanning(TestCase):
                 side_effect=RuntimeError("No scanner"),
             ),
         ):
-            has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+            has_secrets, error_msg = ai_guardian.check_secrets(
                 "test content", "test.txt"
             )
             self.assertFalse(has_secrets, "Should fail-open when on_scan_error=allow")
@@ -338,7 +338,7 @@ class TestOnScanErrorSecretScanning(TestCase):
                 side_effect=RuntimeError("No scanner"),
             ),
         ):
-            has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+            has_secrets, error_msg = ai_guardian.check_secrets(
                 "test content", "test.txt"
             )
             self.assertTrue(has_secrets, "Should fail-closed when on_scan_error=block")
@@ -566,7 +566,7 @@ class TestOnScanErrorPiiScanning(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pii_scan_error_no_violation_logged(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -622,7 +622,7 @@ class TestOnScanErrorPiiScanning(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pii_scan_no_pii_no_violation(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -733,7 +733,7 @@ class TestOnScanErrorBackwardCompatibility(TestCase):
     """Test backward compatibility - default behavior unchanged."""
 
     @patch("ai_guardian.hook_processing._load_config_file")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_default_behavior_unchanged(self, mock_check_secrets, mock_load_config):
         """Without on_scan_error config, behavior is fail-open (backward compatible)."""
         mock_load_config.return_value = ({"secret_scanning": {"enabled": True}}, None)

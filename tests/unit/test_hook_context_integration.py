@@ -132,7 +132,7 @@ class TestPostToolUseContextLoading:
 
         # Mock gitleaks to track if it's called
         with patch(
-            "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.secret_scanning.check_secrets"
         ) as mock_gitleaks:
             mock_gitleaks.return_value = (False, None)
             result = ai_guardian.process_hook_data(hook_data, daemon_state=state)
@@ -165,7 +165,7 @@ class TestPostToolUseContextLoading:
         }
 
         with patch(
-            "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.secret_scanning.check_secrets"
         ) as mock_gitleaks:
             mock_gitleaks.return_value = (False, None)
             result = ai_guardian.process_hook_data(hook_data, daemon_state=state)
@@ -221,7 +221,7 @@ class TestIgnoreFilesConsistency:
         }
 
         with patch(
-            "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.secret_scanning.check_secrets"
         ) as mock_gitleaks:
             mock_gitleaks.return_value = (False, None)
             result = ai_guardian.process_hook_data(hook_data, daemon_state=state)
@@ -283,7 +283,7 @@ class TestDaemonModeRoundTrip:
         ) as mock_secret2:
             mock_secret2.return_value = ({"enabled": True}, None)
             with patch(
-                "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+                "ai_guardian.scanners.secret_scanning.check_secrets"
             ) as mock_gitleaks:
                 mock_gitleaks.return_value = (False, None)
                 result2 = ai_guardian.process_hook_data(post_hook, daemon_state=state)
@@ -314,7 +314,7 @@ class TestGracefulFallback:
         }
 
         with patch(
-            "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+            "ai_guardian.scanners.secret_scanning.check_secrets"
         ) as mock_gitleaks:
             mock_gitleaks.return_value = (False, None)
             result = ai_guardian.process_hook_data(hook_data)
@@ -346,7 +346,7 @@ class TestGracefulFallback:
             side_effect=Exception("init failed"),
         ):
             with patch(
-                "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks"
+                "ai_guardian.scanners.secret_scanning.check_secrets"
             ) as mock_gitleaks:
                 mock_gitleaks.return_value = (False, None)
                 result = ai_guardian.process_hook_data(hook_data)

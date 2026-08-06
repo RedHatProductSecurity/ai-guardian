@@ -257,7 +257,7 @@ class MCPSecretScanningTests(TestCase):
         # Action: Attempt to create notebook with secret in title
         title_with_secret = f"Project Notes {attack_constants.SECRET_SLACK_TOKEN}"
 
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             title_with_secret, "notebook_title"
         )
 
@@ -288,7 +288,7 @@ class MCPSecretScanningTests(TestCase):
         - Results: positive
         """
 
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             source_text, "source_content"
         )
 
@@ -318,7 +318,7 @@ class MCPSecretScanningTests(TestCase):
         Token 2: xoxb-987654321098-987654321098-YYYYYYYYYYYYYYYYYYYY  # notsecret - FAKE TEST CREDENTIAL
         """
 
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             content, "multi_secret_test"
         )
 
@@ -339,7 +339,7 @@ class MCPSecretScanningTests(TestCase):
         mock_pattern_config.return_value = None
 
         # Action: Legitimate content
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             attack_constants.LEGITIMATE_NOTEBOOK_TITLE, "title"
         )
 
@@ -348,7 +348,7 @@ class MCPSecretScanningTests(TestCase):
         assert error_msg is None, "No error for clean content"
 
         # Test legitimate source text
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             attack_constants.LEGITIMATE_TEXT_SOURCE, "source"
         )
 
@@ -747,7 +747,7 @@ class MCPCombinedProtectionTests(TestCase):
         """
 
         # Test secret scanning (should BLOCK)
-        has_secrets, secret_error = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, secret_error = ai_guardian.check_secrets(
             malicious_content, "test_content"
         )
 

@@ -85,7 +85,7 @@ class TestBashDirectoryRules(unittest.TestCase):
 
         with patch("sys.stdin", StringIO(stdin_input)):
             with patch(
-                "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+                "ai_guardian.scanners.secret_scanning.check_secrets",
                 return_value=(False, None),
             ):
                 response = process_hook_input()
@@ -117,7 +117,7 @@ class TestBashDirectoryRules(unittest.TestCase):
 
         with patch("sys.stdin", StringIO(stdin_input)):
             with patch(
-                "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+                "ai_guardian.scanners.secret_scanning.check_secrets",
                 return_value=(False, None),
             ):
                 with patch(
@@ -199,7 +199,7 @@ class TestBashDirectoryRules(unittest.TestCase):
 
             with patch("sys.stdin", StringIO(stdin_input_bash)):
                 with patch(
-                    "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+                    "ai_guardian.scanners.secret_scanning.check_secrets",
                     return_value=(False, None),
                 ):
                     with patch(

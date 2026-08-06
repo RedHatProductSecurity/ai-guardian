@@ -28,7 +28,7 @@ class UserExperienceContractTests(TestCase):
     in Claude Code's PreToolUse hook.
     """
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_user_experience_read_with_secret(self, mock_config, mock_check_secrets):
         """
@@ -169,7 +169,7 @@ class UserExperienceContractTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_user_experience_comparison_secret_vs_clean(
         self,

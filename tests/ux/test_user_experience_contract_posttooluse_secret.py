@@ -27,7 +27,7 @@ class PostToolUseSecretBlockingTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_blocks_secret_when_redaction_disabled(
@@ -71,7 +71,7 @@ class PostToolUseSecretBlockingTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_redacts_secret_when_redaction_enabled(
@@ -125,7 +125,7 @@ class PostToolUseSecretBlockingTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_blocks_when_redaction_config_missing(
@@ -172,7 +172,7 @@ class PostToolUseSecretBlockingTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_blocks_when_redaction_config_error(
@@ -208,7 +208,7 @@ class PostToolUseSecretBlockingTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_blocks_when_redactor_finds_zero_redactions(
@@ -262,7 +262,7 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_sends_redacted_output_in_additional_context(
@@ -314,7 +314,7 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_no_redacted_output_when_zero_redactions(
@@ -360,7 +360,7 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_no_redacted_output_when_redaction_disabled(
@@ -398,7 +398,7 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_system_message_indicates_redacted_context(
@@ -455,7 +455,7 @@ class PostToolUseSecretBlockingUXContractTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_user_experience_posttooluse_secret_blocked_no_redaction(
@@ -525,7 +525,7 @@ class PostToolUseSecretBlockingUXContractTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_user_experience_posttooluse_secret_redacted_with_redaction(
@@ -656,7 +656,7 @@ class GitleaksAllowGuidanceTests(TestCase):
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_block_message_says_end_of_line(

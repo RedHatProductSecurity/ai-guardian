@@ -832,7 +832,7 @@ def run_secret_scan(
         allowlist_patterns = config.get("allowlist_patterns", []) if config else []
 
     with (latency_timer or _NULL_TIMER).check("secret_scanning"):
-        has_secrets, error_message = _secret_scanning_mod.check_secrets_with_gitleaks(
+        has_secrets, error_message = _secret_scanning_mod.check_secrets(
             content,
             filename,
             context=context,

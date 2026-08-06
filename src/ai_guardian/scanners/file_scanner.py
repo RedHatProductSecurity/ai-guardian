@@ -65,7 +65,7 @@ except ImportError:
     HAS_SARIF = False
 
 try:
-    from ai_guardian import check_secrets_with_gitleaks
+    from ai_guardian import check_secrets
     from ai_guardian.scanners import secret_scanning as _secret_scanning_mod
 
     HAS_SECRET_SCANNER = True
@@ -888,7 +888,7 @@ class FileScanner:
             if not secret_config.get("enabled", True):
                 return
 
-            has_secrets, error_message = check_secrets_with_gitleaks(
+            has_secrets, error_message = check_secrets(
                 content,
                 filename=os.path.basename(file_path),
                 file_path=absolute_path,

@@ -13,7 +13,7 @@ from unittest.mock import patch, MagicMock
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from ai_guardian import check_secrets_with_gitleaks
+from ai_guardian import check_secrets
 
 
 class TestScannerEngineIntegration(unittest.TestCase):
@@ -36,7 +36,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         )
 
         # Should return warning (not blocking)
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "aws_key=AKIAIOSFODNN7EXAMPLE", filename="test.txt"
         )
 
@@ -86,7 +86,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         )
 
         # Run scan
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "clean content", filename="test.txt"
         )
 
@@ -108,7 +108,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         mock_run.return_value = mock_result
 
         # Run scan
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "clean content", filename="test.txt"
         )
 
@@ -133,7 +133,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         mock_select_engine.side_effect = Exception("Unexpected error")
 
         # Should fail open
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "some content", filename="test.txt"
         )
 
@@ -182,7 +182,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
             scan_time_ms=10.0,
         )
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "AWS_ACCESS_KEY=AKIAIOSFODNN7TESTKEY", filename="test.txt"  # notsecret
         )
 
@@ -228,7 +228,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
             scan_time_ms=10.0,
         )
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "AWS_ACCESS_KEY=AKIAIOSFODNN7TESTKEY", filename="test.txt"  # notsecret
         )
 
@@ -277,7 +277,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
         }
         mock_get_parser.return_value = mock_parser
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "clean content without secrets", filename="test.txt"
         )
 
@@ -320,7 +320,7 @@ class TestScannerEngineIntegration(unittest.TestCase):
             scan_time_ms=10.0,
         )
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "AWS_ACCESS_KEY=AKIAIOSFODNN7TESTKEY", filename="test.txt"  # notsecret
         )
 
@@ -433,7 +433,7 @@ class TestGuardClauseFallthrough(unittest.TestCase):
             scan_time_ms=15.0,
         )
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----",
             filename="test.txt",
         )
@@ -510,7 +510,7 @@ class TestGuardClauseFallthrough(unittest.TestCase):
         }
         mock_get_parser.return_value = mock_parser
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "clean content", filename="test.txt"
         )
 
@@ -600,7 +600,7 @@ class TestGuardClauseFallthrough(unittest.TestCase):
 
         mock_run_single.side_effect = tracking_run_single
 
-        has_secrets, error_msg = check_secrets_with_gitleaks(
+        has_secrets, error_msg = check_secrets(
             "-----BEGIN RSA PRIVATE KEY-----\nMIIE...\n-----END RSA PRIVATE KEY-----",
             filename="test.txt",
         )

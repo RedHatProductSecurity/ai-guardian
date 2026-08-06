@@ -39,7 +39,7 @@ class TranscriptScanningUserExperienceTests(TestCase):
     """
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -116,7 +116,7 @@ class TranscriptScanningUserExperienceTests(TestCase):
         finally:
             os.unlink(transcript_path)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -173,7 +173,7 @@ class TranscriptScanningUserExperienceTests(TestCase):
         finally:
             os.unlink(transcript_path)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -221,7 +221,7 @@ class TranscriptScanningUserExperienceTests(TestCase):
         finally:
             os.unlink(transcript_path)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -265,7 +265,7 @@ class TranscriptScanningUserExperienceTests(TestCase):
         assert "decision" not in response or response.get("decision") != "block"
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -346,7 +346,7 @@ class CopilotCodexTranscriptScanningTests(TestCase):
 
     @patch("ai_guardian.hook_processing._load_security_instructions_config")
     @patch("ai_guardian.hook_processing._scan_for_pii")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -418,7 +418,7 @@ class CopilotCodexTranscriptScanningTests(TestCase):
 
     @patch("ai_guardian.hook_processing._load_security_instructions_config")
     @patch("ai_guardian.hook_processing._scan_for_pii")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_pii_config")

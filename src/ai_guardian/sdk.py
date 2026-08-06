@@ -221,10 +221,10 @@ class _DirectSession(GuardSession):
         if secret_cfg.get("enabled", True):
             try:
                 from ai_guardian.scanners.secret_scanning import (
-                    check_secrets_with_gitleaks,
+                    check_secrets,
                 )
 
-                has_secrets, msg = check_secrets_with_gitleaks(
+                has_secrets, msg = check_secrets(
                     text,
                     filename=filename,
                     secret_config=secret_cfg,

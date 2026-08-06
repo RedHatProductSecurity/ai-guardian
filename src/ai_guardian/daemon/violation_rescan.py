@@ -111,12 +111,12 @@ def _scan_secrets(
             }
 
     try:
-        from ai_guardian.scanners.secret_scanning import check_secrets_with_gitleaks
+        from ai_guardian.scanners.secret_scanning import check_secrets
     except ImportError:
         return {"status": "not_found", "message": "Scanner not available"}
 
     secret_config = config.get("secret_scanning", {})
-    has_secrets, error_msg = check_secrets_with_gitleaks(
+    has_secrets, error_msg = check_secrets(
         content,
         filename=os.path.basename(file_path),
         file_path=file_path,

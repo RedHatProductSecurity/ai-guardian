@@ -4,7 +4,7 @@ Parse project .gitleaks.toml allowlists for engine-agnostic secret filtering.
 When ai-guardian scans content it writes to a temp file outside the project
 tree, so the scanner engine never picks up .gitleaks.toml natively.  This
 module reads .gitleaks.toml once, caches the result, and exposes helpers
-that check_secrets_with_gitleaks() calls as post-processing.
+that check_secrets() calls as post-processing.
 """
 
 import fnmatch

@@ -19,7 +19,7 @@ class AIGuardianTest(TestCase):
     def test_check_secrets_with_clean_content(self):
         """Test that clean content passes secret detection"""
         clean_content = "This is a normal prompt without any secrets"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             clean_content, "test.txt"
         )
 
@@ -36,7 +36,7 @@ class AIGuardianTest(TestCase):
 
         # Agent tool can return list output - should be converted to string
         list_content = ["line 1", "line 2", "line 3"]
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             list_content, "test.txt"
         )
 
@@ -59,7 +59,7 @@ class AIGuardianTest(TestCase):
             "My token: ghp_16C0123456789abcdefghijklmTEST0000",
             "more text",
         ]
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             list_with_secret, "test.txt"
         )
 
@@ -74,7 +74,7 @@ class AIGuardianTest(TestCase):
 
         # Agent tool could return dict output
         dict_content = {"key": "value", "status": "success"}
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             dict_content, "test.txt"
         )
 
@@ -93,7 +93,7 @@ class AIGuardianTest(TestCase):
 
         # Use a token format that gitleaks detects but GitHub ignores (obviously fake)
         secret_content = "My GitHub token: ghp_16C0123456789abcdefghijklmTEST0000"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             secret_content, "test.txt"
         )
 
@@ -114,7 +114,7 @@ v2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Y
 yv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7Yyv2dJ5Y2LtZ7
 Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 -----END RSA PRIVATE KEY-----"""
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             secret_content, "test.txt"
         )
 
@@ -128,7 +128,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_pattern_config.return_value = None
 
         secret_content = "GitLab token: glpat-20_characters_test"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             secret_content, "test.txt"
         )
 
@@ -166,7 +166,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             content, "test.txt"
         )
 
@@ -202,7 +202,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             content, "test.txt"
         )
 
@@ -254,7 +254,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         content = "This is some content to scan"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             content, "test.txt"
         )
 
@@ -287,7 +287,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_run.return_value = mock_result
 
         content = "This is some clean content"
-        has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+        has_secrets, error_msg = ai_guardian.check_secrets(
             content, "test.txt"
         )
 
@@ -295,7 +295,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertIsNone(error_msg, "Should not return error message for empty report")
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_process_hook_input_clean_prompt(
         self, mock_check_secrets, mock_load_config
     ):
@@ -329,7 +329,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_check_secrets.assert_called_once()
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_process_hook_input_with_secret(self, mock_check_secrets, mock_load_config):
         """Test processing prompt with secret"""
         mock_load_config.return_value = (
@@ -401,7 +401,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
         with patch("sys.stdin", StringIO(hook_input)):
             with patch(
-                "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+                "ai_guardian.scanners.secret_scanning.check_secrets",
                 return_value=(False, None),
             ):
                 response = ai_guardian.process_hook_input()
@@ -412,7 +412,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     def test_check_secrets_handles_scanner_errors(self):
         """Test that scanner errors are handled gracefully (fail-open)"""
-        # This tests the exception handling in check_secrets_with_gitleaks
+        # This tests the exception handling in check_secrets
         # If there's an error during scanning, it should return (False, None)
         # rather than raising an exception
 
@@ -428,7 +428,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertIn(response["exit_code"], [0, 2], "Should return valid exit code")
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_process_hook_input_with_multiline_prompt(
         self, mock_check_secrets, mock_load_config
     ):
@@ -453,7 +453,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertEqual(call_args[0], multiline_prompt)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_process_hook_input_with_unicode(
         self, mock_check_secrets, mock_load_config
     ):
@@ -481,7 +481,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         with patch("sys.stdin", StringIO(hook_input)):
             with patch("sys.argv", ["ai-guardian"]):  # Mock argv to avoid pytest args
                 with patch(
-                    "ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks",
+                    "ai_guardian.scanners.secret_scanning.check_secrets",
                     return_value=(False, None),
                 ):
                     with self.assertRaises(SystemExit) as cm:
@@ -499,7 +499,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         before_files = set(Path(temp_dir).glob("tmp*"))
 
         # Run check
-        ai_guardian.check_secrets_with_gitleaks(content, filename)
+        ai_guardian.check_secrets(content, filename)
 
         # Get list of temp files after
         after_files = set(Path(temp_dir).glob("tmp*"))
@@ -509,7 +509,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         # Allow some new temp files from other processes, but not too many
         self.assertLess(len(new_files), 10, "Should not leave many temporary files")
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_error_in_check_secrets_does_not_block(self, mock_check_secrets):
         """Test that errors in secret checking fail-open"""
         # Simulate an exception during secret checking
@@ -587,7 +587,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             ide_type = ai_guardian.detect_ide_type(hook_data)
             self.assertEqual(ide_type, ai_guardian.IDEType.CLAUDE_CODE)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_cursor_format_clean_prompt(self, mock_check_secrets):
         """Test Cursor format with clean prompt"""
         mock_check_secrets.return_value = (False, None)
@@ -613,7 +613,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_cursor_format_with_secret(self, mock_check_secrets, mock_load_config):
         """Test Cursor format with secret"""
         mock_load_config.return_value = (
@@ -1111,7 +1111,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertIsNone(deny_reason)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_pretooluse_hook_with_clean_file(
         self, mock_check_secrets, mock_load_config
     ):
@@ -1166,7 +1166,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.hook_processing.ToolPolicyChecker")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_pretooluse_hook_with_tool_use_input_format(
         self, mock_check_secrets, mock_load_config, mock_policy_checker
     ):
@@ -1221,7 +1221,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
                 os.unlink(temp_path)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_pretooluse_hook_with_secret_file(
         self, mock_check_secrets, mock_load_config
     ):
@@ -1265,7 +1265,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             os.unlink(temp_path)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_cursor_pretooluse_hook(self, mock_check_secrets, mock_load_config):
         """Test Cursor preToolUse hook format"""
         mock_load_config.return_value = (
@@ -1805,7 +1805,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         finally:
             os.unlink(temp_path)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_copilot_pretooluse_hook_clean(self, mock_check_secrets):
         """Test GitHub Copilot preToolUse hook with clean file
 
@@ -1845,7 +1845,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             os.unlink(temp_path)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_copilot_pretooluse_hook_with_secret(
         self, mock_check_secrets, mock_load_config
     ):
@@ -1884,7 +1884,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         finally:
             os.unlink(temp_path)
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_copilot_prompt_hook_clean(self, mock_check_secrets):
         """Test GitHub Copilot userPromptSubmitted with clean prompt"""
         mock_check_secrets.return_value = (False, None)
@@ -1906,7 +1906,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         self.assertIsNone(response["output"])
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_copilot_prompt_hook_with_secret(
         self, mock_check_secrets, mock_load_config
     ):
@@ -1935,7 +1935,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.hook_processing.check_prompt_injection")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_prompt_injection_time_based_disabled(
         self, mock_check_secrets, mock_check_injection, mock_load_config
     ):
@@ -1972,7 +1972,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.hook_events.scanners.PromptInjectionDetector")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_prompt_injection_time_based_expired_auto_enabled(
         self, mock_check_secrets, mock_detector_class, mock_load_config
     ):
@@ -2017,7 +2017,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.hook_processing._load_permissions_config")
     @patch("ai_guardian.hook_processing.ToolPolicyChecker")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_permissions_time_based_disabled(
         self, mock_check_secrets, mock_policy_checker_class, mock_load_config
     ):
@@ -2062,7 +2062,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             os.unlink(temp_path)
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_secret_scanning_time_based_disabled(
         self, mock_check_secrets, mock_load_config
     ):
@@ -2099,7 +2099,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_check_secrets.assert_not_called()
 
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_secret_scanning_time_based_expired_auto_enabled(
         self, mock_check_secrets, mock_load_config
     ):
@@ -2137,7 +2137,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_events.scanners.PromptInjectionDetector")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_multiple_features_different_states(
         self,
         mock_check_secrets,

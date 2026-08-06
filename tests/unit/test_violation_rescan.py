@@ -163,7 +163,7 @@ class TestRescanViolation:
         assert result["status"] == "found"
         assert result["matched_text"] == "blocked_path"
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_secret_scan_found(self, mock_scan, tmp_path):
         """Secret rescan returns matched text when scanner finds secrets."""
         mock_scan.return_value = (True, "Secret detected")
@@ -185,7 +185,7 @@ class TestRescanViolation:
         assert result["status"] == "found"
         assert "API_KEY" in result["matched_text"]
 
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_secret_scan_not_found(self, mock_scan, tmp_path):
         """Secret rescan returns not_found when scanner finds nothing."""
         mock_scan.return_value = (False, None)

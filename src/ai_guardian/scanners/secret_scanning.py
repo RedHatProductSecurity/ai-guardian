@@ -666,7 +666,7 @@ def _apply_secret_validation(
 def _run_secret_validation(secret_config, secrets_list, content, context):
     """Run secret liveness validation and return (validation_info, should_skip).
 
-    Shared helper for the 4 code paths in check_secrets_with_gitleaks that
+    Shared helper for the 4 code paths in check_secrets that
     perform secret validation after detection.
     """
     validation_result = _apply_secret_validation(
@@ -703,7 +703,7 @@ def _extract_matched_text_for_ask(secret_details, content):
     return ""
 
 
-def check_secrets_with_gitleaks(
+def check_secrets(
     content,
     filename="temp_file",
     context: Optional[Dict] = None,

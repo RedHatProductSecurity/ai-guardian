@@ -163,7 +163,7 @@ class PatternServerWarningsTest(TestCase):
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
                         has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                            ai_guardian.check_secrets(content, "test.txt")
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -228,7 +228,7 @@ class PatternServerWarningsTest(TestCase):
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
                         has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                            ai_guardian.check_secrets(content, "test.txt")
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -267,7 +267,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 
@@ -495,7 +495,7 @@ class PatternServerWarningsTest(TestCase):
                         # Mock successful scan with no secrets
                         mock_run.return_value = MagicMock(returncode=0)
                         has_secrets, error_msg = (
-                            ai_guardian.check_secrets_with_gitleaks(content, "test.txt")
+                            ai_guardian.check_secrets(content, "test.txt")
                         )
 
         # Verify: Operation should succeed (fall back to engines)
@@ -538,7 +538,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 
@@ -607,7 +607,7 @@ class PatternServerWarningsTest(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 
@@ -850,7 +850,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", False):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 
@@ -892,7 +892,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 
@@ -931,7 +931,7 @@ class TestContextAwareWarningMessages(TestCase):
         content = "This is test content"
         with patch("ai_guardian.scanners.secret_scanning.HAS_PATTERN_SERVER", True):
             with patch("ai_guardian.scanners.secret_scanning.HAS_SCANNER_ENGINE", True):
-                has_secrets, error_msg = ai_guardian.check_secrets_with_gitleaks(
+                has_secrets, error_msg = ai_guardian.check_secrets(
                     content, "test.txt"
                 )
 

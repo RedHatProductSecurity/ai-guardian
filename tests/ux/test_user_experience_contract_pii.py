@@ -21,7 +21,7 @@ class PIIUserPromptSubmitTests(TestCase):
     """Test PII detection in user prompts (UserPromptSubmit hook)."""
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     def test_user_prompt_with_ssn_blocked(
@@ -65,7 +65,7 @@ class PIIUserPromptSubmitTests(TestCase):
         assert "PII" in output.get("reason", ""), "Should mention PII in reason"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     def test_user_prompt_without_pii_allowed(
@@ -107,7 +107,7 @@ class PIIUserPromptSubmitTests(TestCase):
         assert output.get("decision") != "block", f"Should not block: {output}"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     def test_user_prompt_pii_disabled(self, mock_pi, mock_ss, mock_gitleaks, mock_pii):
@@ -146,7 +146,7 @@ class PIIPostToolUseTests(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_posttooluse_redacts_credit_card(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -206,7 +206,7 @@ class PIIPostToolUseTests(TestCase):
         assert "HIDDEN CREDIT CARD" in updated, "Should contain masked placeholder"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_posttooluse_log_only_mode(self, mock_ss, mock_gitleaks, mock_pii):
         """
@@ -255,7 +255,7 @@ class PIIPostToolUseTests(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_posttooluse_redact_action_replaces_output(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -319,7 +319,7 @@ class PIIPostToolUseTests(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_posttooluse_block_action_blocks_output(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -373,7 +373,7 @@ class PIIPostToolUseTests(TestCase):
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pretooluse_redact_action_blocks(
         self, mock_ss, mock_gitleaks, mock_pii, mock_scan
@@ -440,7 +440,7 @@ class PIIPreToolUseTests(TestCase):
     """Test PII detection in file reads (PreToolUse hook)."""
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pretooluse_warn_allows_read_with_warning(
         self, mock_ss, mock_gitleaks, mock_pii
@@ -499,7 +499,7 @@ class PIIPreToolUseTests(TestCase):
             os.unlink(tmp_path)
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pretooluse_block_action_blocks_read(
         self, mock_ss, mock_gitleaks, mock_pii
@@ -555,7 +555,7 @@ class PIIPreToolUseTests(TestCase):
             os.unlink(tmp_path)
 
     @patch("ai_guardian.config.loaders._load_pii_config")
-    @patch("ai_guardian.scanners.secret_scanning.check_secrets_with_gitleaks")
+    @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     def test_pretooluse_ignore_files_skips_test_file(
         self, mock_ss, mock_gitleaks, mock_pii
