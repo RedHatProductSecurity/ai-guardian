@@ -177,6 +177,45 @@ def send_engine_test(engine_name, text, use_pattern_server=False, timeout=30.0):
         return None
 
 
+def _read_pid_from_file():
+    """Read daemon PID from PID file.
+
+    Returns:
+        int or None: The PID, or None if unreadable
+    """
+    from ai_guardian.daemon import get_pid_path
+
+    pid_path = get_pid_path()
+    try:
+        if pid_path.exists():
+            return json.loads(pid_path.read_text()).get("pid")
+    except (json.JSONDecodeError, OSError):
+        pass
+    return None
+
+
+def wait_for_process_death(pid, timeout=5.0):
+    """Wait for a process to exit.
+
+    Args:
+        pid: Process ID to wait for
+        timeout: Maximum seconds to wait
+
+    Returns:
+        bool: True if process died within timeout
+    """
+    from ai_guardian.daemon import is_pid_alive
+
+    if pid is None:
+        return True
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if not is_pid_alive(pid):
+            return True
+        time.sleep(0.1)
+    return not is_pid_alive(pid)
+
+
 def send_shutdown(timeout=2.0):
     """Send shutdown request to the daemon.
 
@@ -386,6 +425,10 @@ def start_daemon_background():
         marker = get_state_dir() / "daemon.stop-requested"
         if marker.exists():
             logger.debug("Skipping auto-start: stop-requested marker present")
+            return False
+
+        if is_daemon_running():
+            logger.warning("Daemon already running, refusing to start duplicate")
             return False
 
         # Find the ai-guardian command

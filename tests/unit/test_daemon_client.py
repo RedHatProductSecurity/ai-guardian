@@ -16,12 +16,14 @@ _skip_no_unix_socket = pytest.mark.skipif(
 )
 
 from ai_guardian.daemon.client import (
+    _read_pid_from_file,
     is_daemon_running,
     send_hook_request,
     send_reload_config,
     send_shutdown,
     send_status_request,
     start_daemon_background,
+    wait_for_process_death,
 )
 from ai_guardian.daemon.protocol import (
     decode_message,
@@ -206,6 +208,58 @@ class TestStartDaemonBackground:
         with mock.patch("subprocess.Popen") as mock_popen:
             assert not start_daemon_background()
         mock_popen.assert_not_called()
+
+    def test_refuses_when_already_running(self, tmp_path, monkeypatch):
+        """Issue #1820: refuse to start duplicate daemon."""
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        with mock.patch(
+            "ai_guardian.daemon.client.is_daemon_running", return_value=True
+        ):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                assert not start_daemon_background()
+            mock_popen.assert_not_called()
+
+
+class TestWaitForProcessDeath:
+    def test_returns_true_when_pid_is_none(self):
+        assert wait_for_process_death(None) is True
+
+    def test_returns_true_when_process_already_dead(self):
+        with mock.patch("ai_guardian.daemon.is_pid_alive", return_value=False):
+            assert wait_for_process_death(12345, timeout=0.5) is True
+
+    def test_returns_true_when_process_dies_during_wait(self):
+        call_count = 0
+
+        def _dying_process(pid):
+            nonlocal call_count
+            call_count += 1
+            return call_count < 3
+
+        with mock.patch("ai_guardian.daemon.is_pid_alive", side_effect=_dying_process):
+            assert wait_for_process_death(12345, timeout=2.0) is True
+
+    def test_returns_false_on_timeout(self):
+        with mock.patch("ai_guardian.daemon.is_pid_alive", return_value=True):
+            assert wait_for_process_death(12345, timeout=0.3) is False
+
+
+class TestReadPidFromFile:
+    def test_returns_pid(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        pid_path = tmp_path / "daemon.pid"
+        pid_path.write_text(json.dumps({"pid": 42}))
+        assert _read_pid_from_file() == 42
+
+    def test_returns_none_when_no_file(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        assert _read_pid_from_file() is None
+
+    def test_returns_none_on_bad_json(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        pid_path = tmp_path / "daemon.pid"
+        pid_path.write_text("not json")
+        assert _read_pid_from_file() is None
 
 
 class TestClientTimeout:
