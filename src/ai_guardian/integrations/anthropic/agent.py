@@ -166,6 +166,28 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
     def default_cache_ttl(self, max_turns: int) -> Union[str, int]:
         return 0 if max_turns <= 1 else "5m"
 
+    def count_tokens(
+        self,
+        client: Any,
+        model: str,
+        messages: List[Dict[str, Any]],
+        system: str,
+        tools: List[Any],
+    ) -> Optional[int]:
+        try:
+            kwargs: Dict[str, Any] = {"model": model, "messages": messages}
+            if system:
+                kwargs["system"] = system
+            if tools:
+                kwargs["tools"] = tools
+            result = client.messages.count_tokens(**kwargs)
+            return getattr(result, "input_tokens", None)
+        except Exception:
+            logger.debug(
+                "count_tokens failed, falling back to estimation", exc_info=True
+            )
+            return None
+
     def is_server_tool(self, tool_name: str) -> bool:
         return is_server_tool(tool_name)
 
@@ -229,6 +251,10 @@ class GuardedAgent:
         between_turns: Optional[Callable[[list, Any, int], Any]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
         cache_ttl: Optional[Union[str, int]] = None,
+        auto_compact: bool = True,
+        compact_threshold: float = 0.8,
+        compact_keep_turns: int = 5,
+        compact_keep_first: int = 1,
     ):
         self._model = model
         self._system_prompt = system_prompt
@@ -248,6 +274,10 @@ class GuardedAgent:
         self._pre_run = pre_run
         self._post_run = post_run
         self._between_turns = between_turns
+        self._auto_compact = auto_compact
+        self._compact_threshold = compact_threshold
+        self._compact_keep_turns = compact_keep_turns
+        self._compact_keep_first = compact_keep_first
 
         if strategy is not None:
             self._strategy = strategy
@@ -299,6 +329,49 @@ class GuardedAgent:
             if self._post_run:
                 self._post_run(result)
 
+    def _maybe_compact(
+        self,
+        strategy: AgentLoopStrategy,
+        messages: List[Dict[str, Any]],
+        system: str,
+        last_input_tokens: int,
+    ) -> tuple:
+        from ai_guardian.integrations.compaction import (
+            compact_messages,
+            should_compact,
+        )
+
+        context_limit = strategy.context_window_tokens(self._model)
+        if not should_compact(
+            last_input_tokens, context_limit, self._compact_threshold
+        ):
+            return messages, False
+
+        exact_count = strategy.count_tokens(
+            self._client, self._model, messages, system, self._resolved_tools
+        )
+        token_count = exact_count if exact_count is not None else last_input_tokens
+
+        if token_count / context_limit < self._compact_threshold:
+            return messages, False
+
+        result = compact_messages(
+            messages,
+            context_limit=context_limit,
+            threshold=self._compact_threshold,
+            keep_first=self._compact_keep_first,
+            keep_last=self._compact_keep_turns,
+        )
+        if result.compacted:
+            logger.info(
+                "Compacted conversation: %d -> ~%d tokens (%s)",
+                result.tokens_before,
+                result.tokens_after,
+                result.method,
+            )
+            return result.messages, True
+        return messages, False
+
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
         strategy = self._strategy
 
@@ -323,8 +396,17 @@ class GuardedAgent:
             structured_output = None
             final_text = ""
             stop_reason = "max_turns"
+            compaction_count = 0
+            last_input_tokens = 0
 
             for _turn in range(self._max_turns):
+                if self._auto_compact and _turn > 0:
+                    messages, did_compact = self._maybe_compact(
+                        strategy, messages, system, last_input_tokens
+                    )
+                    if did_compact:
+                        compaction_count += 1
+
                 create_kwargs = strategy.build_create_kwargs(
                     model=self._model,
                     max_tokens=self._max_tokens,
@@ -342,6 +424,7 @@ class GuardedAgent:
 
                 for _f in _USAGE_TOKEN_FIELDS:
                     usage_totals[_f] += getattr(parsed, _f, 0)
+                last_input_tokens = parsed.input_tokens
 
                 if self._scan_output and parsed.text:
                     try:
@@ -481,4 +564,5 @@ class GuardedAgent:
                 "messages": messages,
                 "stop_reason": stop_reason,
                 "usage": usage_totals,
+                "compaction_count": compaction_count,
             }

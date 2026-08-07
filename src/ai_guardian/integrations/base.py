@@ -162,6 +162,26 @@ class AgentLoopStrategy(ABC):
         """
         return 0
 
+    def count_tokens(
+        self,
+        client: Any,
+        model: str,
+        messages: List[Dict[str, Any]],
+        system: str,
+        tools: List[Any],
+    ) -> Optional[int]:
+        """Count input tokens for the given messages using the provider API.
+
+        Returns ``None`` if the provider doesn't support token counting.
+        """
+        return None
+
+    def context_window_tokens(self, model: str) -> int:
+        """Return the context window size in tokens for *model*."""
+        from ai_guardian.integrations.compaction import get_context_limit
+
+        return get_context_limit(model)
+
     def is_server_tool(self, tool_name: str) -> bool:
         """Return True if *tool_name* is executed server-side by the provider."""
         return False
