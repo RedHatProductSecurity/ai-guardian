@@ -694,3 +694,67 @@ class TestBootstrapScanIntegration(TestCase):
             ), "Bootstrap scan should run only once even with SESSION_START + PROMPT"
         finally:
             shutil.rmtree(cwd, ignore_errors=True)
+
+
+class TestInjectSecurityOnly(TestCase):
+    """Tests for inject_security_only() — security injection without scanning."""
+
+    def test_returns_security_message_for_prompt(self):
+        hook_data = {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "hello",
+        }
+        result = ai_guardian.inject_security_only(hook_data)
+
+        assert result is not None
+        parsed = json.loads(result["output"])
+        assert "SECURITY RULES" in parsed.get("systemMessage", "")
+        assert result["exit_code"] == 0
+
+    def test_returns_none_for_non_prompt_event(self):
+        hook_data = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ls"},
+        }
+        result = ai_guardian.inject_security_only(hook_data)
+
+        assert result is None
+
+    def test_returns_none_for_non_claude_code(self):
+        hook_data = {
+            "cursor_version": "1.0",
+            "hook_name": "onBeforeToolCall",
+            "tool_name": "Bash",
+        }
+        result = ai_guardian.inject_security_only(hook_data)
+
+        assert result is None
+
+    def test_skips_injection_when_already_injected(self):
+        hook_data = {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "hello",
+            "session_id": "test-session-already-injected",
+        }
+        result1 = ai_guardian.inject_security_only(hook_data)
+        assert result1 is not None
+
+        result2 = ai_guardian.inject_security_only(hook_data)
+        assert result2 is None
+
+    @patch(
+        "ai_guardian.session_state.derive_session_key",
+        side_effect=RuntimeError("corrupt state"),
+    )
+    def test_falls_back_to_defaults_on_session_state_error(self, _mock_key):
+        hook_data = {
+            "hook_event_name": "UserPromptSubmit",
+            "prompt": "hello",
+        }
+        result = ai_guardian.inject_security_only(hook_data)
+
+        assert result is not None
+        parsed = json.loads(result["output"])
+        assert "SECURITY RULES" in parsed.get("systemMessage", "")
+        assert result["exit_code"] == 0

@@ -534,6 +534,56 @@ class TestDaemonServerPausedHook:
         parsed = json.loads(result["output"])
         assert isinstance(parsed, dict)
 
+    def test_handle_hook_request_paused_prompt_injects_security(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        result = server._handle_hook_request(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "test",
+            }
+        )
+
+        parsed = json.loads(result["output"])
+        assert "systemMessage" in parsed
+        assert "SECURITY RULES" in parsed["systemMessage"]
+        assert result["exit_code"] == 0
+
+    def test_handle_hook_request_paused_non_prompt_returns_empty(self, short_state_dir):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        result = server._handle_hook_request(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "tool_input": {"command": "ls"},
+            }
+        )
+
+        assert result["output"] == "{}"
+        assert result["exit_code"] == 0
+
+    def test_handle_hook_request_dir_paused_prompt_injects_security(
+        self, short_state_dir
+    ):
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        test_dir = "/tmp/test_project"
+        server.state.pause_dir(test_dir)
+
+        result = server._handle_hook_request(
+            {
+                "hook_event_name": "UserPromptSubmit",
+                "prompt": "test",
+                "_daemon_cwd": test_dir,
+            }
+        )
+
+        parsed = json.loads(result["output"])
+        assert "systemMessage" in parsed
+        assert "SECURITY RULES" in parsed["systemMessage"]
+
     def test_handle_hook_request_not_paused_processes_normally(self, short_state_dir):
         server = DaemonServer(idle_timeout=30, enable_rest_api=False)
         assert not server.state.paused

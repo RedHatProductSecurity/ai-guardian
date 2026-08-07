@@ -1675,6 +1675,105 @@ class HookContext:
     normalized: Any = None
 
 
+def _build_security_message(hook_data, daemon_state, now):
+    """Build the security instruction message for a session.
+
+    Shared by inject_security_only() and process_hook_data().
+
+    Returns:
+        str or None: The security message text, or None if injection
+        should be skipped (already injected, feature disabled, etc.)
+    """
+    si_config, si_error = _load_security_instructions_config()
+    if si_error:
+        logger.warning(f"Security instructions config error: {si_error}")
+
+    if si_config is not None:
+        if not is_feature_enabled(si_config.get("inject_on_prompt"), now, default=True):
+            return None
+
+    try:
+        from ai_guardian.session_state import (
+            SessionStateManager,
+            derive_session_key,
+        )
+
+        cfg = si_config or {}
+        inject_trigger = cfg.get("inject_trigger", "first_per_session")
+        custom_rules = cfg.get("custom_rules", [])
+        replace_defaults = cfg.get("replace_defaults", False)
+
+        session_key = derive_session_key(hook_data)
+        state_mgr = SessionStateManager(daemon_state=daemon_state)
+
+        if inject_trigger == "every_prompt":
+            should_inject = True
+        elif inject_trigger == "after_block_only":
+            should_inject = state_mgr.has_reinject_pending(session_key)
+        else:
+            should_inject = state_mgr.should_inject_security(session_key)
+
+        if should_inject and inject_trigger != "every_prompt":
+            state_mgr.mark_security_injected(session_key)
+
+        if not should_inject:
+            logger.info(
+                f"Security rules already injected for session {session_key[:16]}..., skipping"
+            )
+            return None
+
+        if replace_defaults:
+            raw = "\n".join(custom_rules) if custom_rules else None
+        elif custom_rules:
+            raw = _SECURITY_SYSTEM_MESSAGE + "\n" + "\n".join(custom_rules)
+        else:
+            raw = _SECURITY_SYSTEM_MESSAGE
+
+        if raw:
+            logger.info(f"Security rules injected for session {session_key[:16]}...")
+        return raw
+    except Exception as e:
+        logger.debug(f"Session state check failed, injecting as fallback: {e}")
+        return _SECURITY_SYSTEM_MESSAGE
+
+
+def inject_security_only(hook_data, daemon_state=None):
+    """Inject security instructions without scanning.
+
+    Used when the daemon is paused — scanning is disabled but security
+    behavioral rules should still reach the AI agent on UserPromptSubmit.
+
+    Returns:
+        dict or None: Response dict with security message, or None if
+        injection is not applicable (non-PROMPT event, non-Claude-Code, etc.)
+    """
+    try:
+        event_name = hook_data.get("hook_event_name") or hook_data.get(
+            "hookEventName", ""
+        )
+        if event_name != "UserPromptSubmit":
+            return None
+
+        adapter = detect_adapter(hook_data)
+        if adapter.ide_type != IDEType.CLAUDE_CODE:
+            return None
+
+        normalized = adapter.normalize_input(hook_data)
+        now = datetime.now(timezone.utc)
+        raw = _build_security_message(hook_data, daemon_state, now)
+        if not raw:
+            return None
+
+        return adapter.format_response(
+            has_secrets=False,
+            hook_event=normalized.event,
+            security_message=raw,
+        )
+    except Exception as e:
+        logger.debug(f"Security-only injection failed (non-fatal): {e}")
+        return None
+
+
 def process_hook_data(hook_data, daemon_state=None):
     """
     Process parsed hook data and return response.
@@ -1829,76 +1928,7 @@ def process_hook_data(hook_data, daemon_state=None):
         security_message = None
         if ide_type == IDEType.CLAUDE_CODE and hook_event == HookEvent.PROMPT:
             try:
-                si_config, si_error = _load_security_instructions_config()
-                if si_error:
-                    logger.warning(f"Security instructions config error: {si_error}")
-                inject = True
-                if si_config is not None:
-                    inject = is_feature_enabled(
-                        si_config.get("inject_on_prompt"), now, default=True
-                    )
-                if inject:
-                    try:
-                        from ai_guardian.session_state import (
-                            SessionStateManager,
-                            derive_session_key,
-                        )
-
-                        inject_trigger = (
-                            si_config.get("inject_trigger", "first_per_session")
-                            if si_config
-                            else "first_per_session"
-                        )
-                        custom_rules = (
-                            si_config.get("custom_rules", []) if si_config else []
-                        )
-                        replace_defaults = (
-                            si_config.get("replace_defaults", False)
-                            if si_config
-                            else False
-                        )
-
-                        session_key = derive_session_key(hook_data)
-                        state_mgr = SessionStateManager(daemon_state=daemon_state)
-
-                        if inject_trigger == "every_prompt":
-                            should_inject = True
-                        elif inject_trigger == "after_block_only":
-                            should_inject = state_mgr.has_reinject_pending(session_key)
-                            if should_inject:
-                                state_mgr.mark_security_injected(session_key)
-                        else:
-                            should_inject = state_mgr.should_inject_security(
-                                session_key
-                            )
-                            if should_inject:
-                                state_mgr.mark_security_injected(session_key)
-
-                        if should_inject:
-                            if replace_defaults:
-                                raw = "\n".join(custom_rules) if custom_rules else None
-                            else:
-                                if custom_rules:
-                                    raw = (
-                                        _SECURITY_SYSTEM_MESSAGE
-                                        + "\n"
-                                        + "\n".join(custom_rules)
-                                    )
-                                else:
-                                    raw = _SECURITY_SYSTEM_MESSAGE
-                            security_message = raw
-                            logger.info(
-                                f"Security rules injected for session {session_key[:16]}..."
-                            )
-                        else:
-                            logger.info(
-                                f"Security rules already injected for session {session_key[:16]}..., skipping"
-                            )
-                    except Exception as e:
-                        logger.debug(
-                            f"Session state check failed, injecting as fallback: {e}"
-                        )
-                        security_message = _SECURITY_SYSTEM_MESSAGE
+                security_message = _build_security_message(hook_data, daemon_state, now)
             except Exception as e:
                 logger.debug(
                     f"Security instructions config load failed (non-fatal): {e}"

@@ -148,6 +148,7 @@ from ai_guardian.hook_processing import (  # noqa: F401
     _annotation_hint,
     _extract_context_snippet,
     _log_directory_blocking_violation,
+    inject_security_only,
     process_hook_data,
     process_hook_input,
     # HAS_* flags and conditionally-imported names
