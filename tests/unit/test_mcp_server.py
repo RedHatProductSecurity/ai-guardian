@@ -1380,6 +1380,76 @@ class TestCheckClientHooks:
         assert "ai-guardian setup" in result
         assert "WARNING" in result
 
+    def test_hooks_missing_sends_notification(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code", "mcp_client_name": "claude-code"}
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.check_hooks_for_ide.return_value = (
+            False,
+            "Claude Code: not configured",
+        )
+
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "claude"
+        with (
+            patch("ai_guardian.setup.IDESetup", MockIDESetup),
+            patch("ai_guardian.tray.notifications.show_notification") as mock_notify,
+        ):
+            _check_client_hooks("claude-code")
+
+        mock_notify.assert_called_once()
+        args = mock_notify.call_args
+        assert (
+            "hooks not installed" in args[0][0].lower() or "hooks" in args[0][0].lower()
+        )
+        assert "Claude Code" in args[0][1]
+
+    def test_hooks_missing_notification_failure_silent(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code", "mcp_client_name": "claude-code"}
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.check_hooks_for_ide.return_value = (
+            False,
+            "Claude Code: not configured",
+        )
+
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "claude"
+        with (
+            patch("ai_guardian.setup.IDESetup", MockIDESetup),
+            patch(
+                "ai_guardian.tray.notifications.show_notification",
+                side_effect=RuntimeError("notification failed"),
+            ),
+        ):
+            result = _check_client_hooks("claude-code")
+
+        assert result is not None
+        assert "WARNING" in result
+
+    def test_hooks_present_no_notification(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code", "mcp_client_name": "claude-code"}
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.check_hooks_for_ide.return_value = (True, "Claude Code: configured")
+
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "claude"
+        with (
+            patch("ai_guardian.setup.IDESetup", MockIDESetup),
+            patch("ai_guardian.tray.notifications.show_notification") as mock_notify,
+        ):
+            result = _check_client_hooks("claude-code")
+
+        assert result is None
+        mock_notify.assert_not_called()
+
     def test_mcp_only_ide_returns_none(self):
         mock_setup = MagicMock()
         mock_setup.IDE_CONFIGS = {
