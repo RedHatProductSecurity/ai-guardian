@@ -953,9 +953,9 @@ class Doctor:
                 results.append(f"{ide_name}: not installed (no config)")
                 continue
 
-            configured = setup.check_hooks_configured(config_path, ide_type)
+            configured, detail = setup.check_hooks_for_ide(ide_type)
+
             if configured:
-                # For Claude Code, check which hooks are present
                 if ide_type in ("claude", "codex"):
                     hook_count = self._count_claude_hooks(config_path)
                     results.append(f"{ide_name}: {hook_count}/5 hooks")
@@ -970,32 +970,32 @@ class Doctor:
                     if hook_count < total:
                         all_configured = False
                 else:
-                    results.append(f"{ide_name}: configured")
+                    results.append(detail)
                 any_configured = True
             else:
-                results.append(f"{ide_name}: not configured")
+                results.append(detail)
                 all_configured = False
 
-        detail = "; ".join(results)
+        detail_str = "; ".join(results)
 
         if all_configured:
             return CheckResult(
                 name="hooks",
                 status=CheckStatus.PASS,
-                message=detail,
+                message=detail_str,
             )
         elif any_configured:
             return CheckResult(
                 name="hooks",
                 status=CheckStatus.WARN,
-                message=detail,
+                message=detail_str,
                 fix_hint="Run: ai-guardian setup",
             )
         else:
             return CheckResult(
                 name="hooks",
                 status=CheckStatus.FAIL,
-                message=detail,
+                message=detail_str,
                 fix_hint="Run: ai-guardian setup",
             )
 

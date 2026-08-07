@@ -47,46 +47,28 @@ try:
 except ImportError:
     HAS_MCP = False
 
-_CLIENT_TO_IDE: Dict[str, str] = {
-    "claude-code": "claude",
-    "cursor": "cursor",
-    "opencode": "opencode",
-    "gemini-cli": "gemini",
-    "windsurf": "windsurf",
-    "github-copilot": "copilot",
-    "codex-cli": "codex",
-    "augment": "augment",
-    "kiro": "kiro",
-}
-
 
 def _check_client_hooks(client_name: str) -> Optional[str]:
     """Check hook status for the connecting MCP client.
 
     Returns a warning string if hooks are missing, None otherwise.
     """
-    ide_type = _CLIENT_TO_IDE.get(client_name)
-    if not ide_type:
-        return None
-
     try:
         from ai_guardian.setup import IDESetup
 
         setup = IDESetup()
-        ide_config = setup.IDE_CONFIGS.get(ide_type, {})
-
-        if ide_config.get("mcp_only"):
+        ide_type = IDESetup.get_ide_for_mcp_client(client_name)
+        if not ide_type:
             return None
 
-        config_path_str = setup.get_config_path(ide_type)
-        if not config_path_str:
+        if not setup.supports_hooks(ide_type):
             return None
 
-        config_path = Path(config_path_str).expanduser()
-        if setup.check_hooks_configured(config_path, ide_type):
+        configured, _ = setup.check_hooks_for_ide(ide_type)
+        if configured:
             return None
 
-        ide_name = ide_config.get("name", ide_type)
+        ide_name = setup.IDE_CONFIGS[ide_type].get("name", ide_type)
         return (
             f"\n\n⚠️ SECURITY WARNING: {ide_name} hooks are NOT installed. "
             f"Security scanning is NOT active for this session. "

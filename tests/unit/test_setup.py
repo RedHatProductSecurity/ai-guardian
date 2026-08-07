@@ -562,6 +562,79 @@ class TestIDESetup:
                 assert "WARNING: Secret scanning will be disabled" in message
                 assert "install gitleaks" in message.lower()
 
+    # ── supports_hooks ──────────────────────────────────────────────────
+
+    def test_supports_hooks_true_for_claude(self):
+        setup = IDESetup()
+        assert setup.supports_hooks("claude") is True
+
+    def test_supports_hooks_false_for_mcp_only(self):
+        setup = IDESetup()
+        assert setup.supports_hooks("junie") is False
+
+    def test_supports_hooks_false_for_unknown(self):
+        setup = IDESetup()
+        assert setup.supports_hooks("nonexistent-ide") is False
+
+    # ── check_hooks_for_ide ─────────────────────────────────────────────
+
+    def test_check_hooks_for_ide_unknown(self):
+        setup = IDESetup()
+        configured, detail = setup.check_hooks_for_ide("nonexistent")
+        assert configured is False
+        assert "Unknown" in detail
+
+    def test_check_hooks_for_ide_mcp_only(self):
+        setup = IDESetup()
+        configured, detail = setup.check_hooks_for_ide("junie")
+        assert configured is True
+        assert "MCP-only" in detail
+
+    def test_check_hooks_for_ide_configured(self, tmp_path):
+        setup = IDESetup()
+        config_file = tmp_path / "settings.json"
+        hooks = {
+            "hooks": {
+                "UserPromptSubmit": [
+                    {
+                        "matcher": "*",
+                        "hooks": [{"type": "command", "command": "ai-guardian"}],
+                    }
+                ]
+            }
+        }
+        config_file.write_text(json.dumps(hooks))
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            configured, detail = setup.check_hooks_for_ide("claude")
+        assert configured is True
+        assert "configured" in detail
+
+    def test_check_hooks_for_ide_not_configured(self, tmp_path):
+        setup = IDESetup()
+        config_file = tmp_path / "settings.json"
+        config_file.write_text("{}")
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            configured, detail = setup.check_hooks_for_ide("claude")
+        assert configured is False
+        assert "not configured" in detail
+
+    # ── get_ide_for_mcp_client ──────────────────────────────────────────
+
+    def test_get_ide_for_mcp_client_known(self):
+        assert IDESetup.get_ide_for_mcp_client("claude-code") == "claude"
+        assert IDESetup.get_ide_for_mcp_client("cursor") == "cursor"
+        assert IDESetup.get_ide_for_mcp_client("github-copilot") == "copilot"
+        assert IDESetup.get_ide_for_mcp_client("codex-cli") == "codex"
+        assert IDESetup.get_ide_for_mcp_client("gemini-cli") == "gemini"
+        assert IDESetup.get_ide_for_mcp_client("windsurf") == "windsurf"
+        assert IDESetup.get_ide_for_mcp_client("opencode") == "opencode"
+        assert IDESetup.get_ide_for_mcp_client("augment") == "augment"
+        assert IDESetup.get_ide_for_mcp_client("kiro") == "kiro"
+
+    def test_get_ide_for_mcp_client_unknown(self):
+        assert IDESetup.get_ide_for_mcp_client("unknown-agent") is None
+        assert IDESetup.get_ide_for_mcp_client("") is None
+
 
 class TestIDESetupParametrized:
     """Parametrized tests covering common IDE setup patterns across all adapters."""
