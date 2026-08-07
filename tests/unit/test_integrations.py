@@ -2474,6 +2474,324 @@ class TestGuardedAgent:
         assert len(post_run_calls) == 1
         assert post_run_calls[0] is None
 
+    # -- between_turns hook --
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_none_continues(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Hello!"
+        hook.assert_called_once()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_string_injects_message(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Here is the test code")],
+            stop_reason="end_turn",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Revised test code")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["pytest output: 1 failed", None])
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.side_effect = [r1, r2]
+
+        result = agent.run("Write a test")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Revised test code"
+        assert client.messages.create.call_count == 2
+        assert hook.call_count == 2
+        msgs = result["messages"]
+        injected = [m for m in msgs if m.get("content") == "pytest output: 1 failed"]
+        assert len(injected) == 1
+        assert injected[0]["role"] == "user"
+        assert msgs[1]["role"] == "assistant"
+        assert msgs[-1] is injected[0]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_false_stops(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=False)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.return_value = response
+
+        result = agent.run("Do work")
+
+        assert result["stop_reason"] == "hook_early_stop"
+        assert client.messages.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_receives_correct_args(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hi")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.return_value = response
+
+        agent.run("Prompt")
+
+        args = hook.call_args[0]
+        assert isinstance(args[0], list)
+        assert args[0][0] == {"role": "user", "content": "Prompt"}
+        assert args[1] is response
+        assert args[2] == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_scanned_when_scan_input(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Code")],
+            stop_reason="end_turn",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["injected text", None])
+        agent, client = self._make_agent(between_turns=hook, scan_input=True)
+        client.messages.create.side_effect = [r1, r2]
+
+        agent.run("Go")
+
+        scan_calls = mock_session.check_content.call_args_list
+        injected_calls = [
+            c
+            for c in scan_calls
+            if c.kwargs.get("filename") == "between_turns_injection"
+        ]
+        assert len(injected_calls) == 1
+        assert injected_calls[0].args[0] == "injected text"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_not_scanned_when_no_scan_input(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Code")],
+            stop_reason="end_turn",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["injected", None])
+        agent, client = self._make_agent(
+            between_turns=hook, scan_input=False, scan_output=False
+        )
+        client.messages.create.side_effect = [r1, r2]
+
+        agent.run("Go")
+
+        scan_calls = mock_session.check_content.call_args_list
+        injected_calls = [
+            c
+            for c in scan_calls
+            if c.kwargs.get("filename") == "between_turns_injection"
+        ]
+        assert len(injected_calls) == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_security_violation(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        from ai_guardian.sdk import CheckResult
+
+        mock_session.check_content.side_effect = [
+            None,
+            None,
+            SecurityViolation(
+                CheckResult(
+                    blocked=True,
+                    detected=True,
+                    violation_type="secret",
+                    message="Secret in injected content",
+                )
+            ),
+        ]
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Code")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value="AKIA secret here")
+        agent, client = self._make_agent(
+            between_turns=hook, scan_input=True, scan_output=False, action="block"
+        )
+        client.messages.create.return_value = r1
+
+        with pytest.raises(SecurityViolation):
+            agent.run("Generate code")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_false_stops_tool_use(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        hook = MagicMock(return_value=False)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.return_value = response
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Do work")
+
+        assert result["stop_reason"] == "hook_early_stop"
+        assert client.messages.create.call_count == 1
+        assert any(m["role"] == "assistant" for m in result["messages"])
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_tool_use_merges(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["extra context", None])
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test tool use")
+
+        assert result["stop_reason"] == "end_turn"
+        assert hook.call_count == 2
+        user_msg_after_tool = result["messages"][2]
+        assert user_msg_after_tool["role"] == "user"
+        assert isinstance(user_msg_after_tool["content"], list)
+        text_blocks = [
+            b for b in user_msg_after_tool["content"] if b.get("type") == "text"
+        ]
+        assert len(text_blocks) == 1
+        assert text_blocks[0]["text"] == "extra context"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_multi_turn(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Attempt 1")],
+            stop_reason="end_turn",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Attempt 2")],
+            stop_reason="end_turn",
+        )
+        r3 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Final")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["feedback 1", "feedback 2", None])
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.side_effect = [r1, r2, r3]
+
+        result = agent.run("Start")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Final"
+        assert client.messages.create.call_count == 3
+        assert hook.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_not_set(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Hello!"
+
 
 # ============================================================================
 # TestGuardedClientHooks
