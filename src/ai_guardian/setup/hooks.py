@@ -31,6 +31,7 @@ class IDESetup:
     IDE_CONFIGS = {
         "claude": {
             "name": "Claude Code",
+            "mcp_client_name": "claude-code",
             "config_path": "~/.claude/settings.json",
             "config_dir_env_var": "CLAUDE_CONFIG_DIR",  # Respects this env var
             "config_filename": "settings.json",
@@ -97,6 +98,7 @@ class IDESetup:
         },
         "cursor": {
             "name": "Cursor IDE",
+            "mcp_client_name": "cursor",
             "config_path": "~/.cursor/hooks.json",
             "config_dir_env_var": None,
             "config_filename": "hooks.json",
@@ -112,6 +114,7 @@ class IDESetup:
         },
         "copilot": {
             "name": "GitHub Copilot",
+            "mcp_client_name": "github-copilot",
             "config_path": "~/.github/hooks/hooks.json",
             "config_dir_env_var": None,
             "config_filename": "hooks.json",
@@ -122,6 +125,7 @@ class IDESetup:
         },
         "codex": {
             "name": "OpenAI Codex",
+            "mcp_client_name": "codex-cli",
             "config_path": "~/.codex/hooks.json",
             "config_dir_env_var": None,
             "config_filename": "hooks.json",
@@ -168,6 +172,7 @@ class IDESetup:
         },
         "windsurf": {
             "name": "Windsurf",
+            "mcp_client_name": "windsurf",
             "config_path": "~/.codeium/windsurf/hooks.json",
             "config_dir_env_var": None,
             "config_filename": "hooks.json",
@@ -187,6 +192,7 @@ class IDESetup:
         },
         "gemini": {
             "name": "Google Gemini CLI",
+            "mcp_client_name": "gemini-cli",
             "config_path": "~/.gemini/settings.json",
             "config_dir_env_var": None,
             "config_filename": "settings.json",
@@ -230,6 +236,7 @@ class IDESetup:
         },
         "kiro": {
             "name": "Kiro",
+            "mcp_client_name": "kiro",
             "config_path": ".kiro/hooks",
             "config_dir_env_var": None,
             "config_filename": None,
@@ -264,6 +271,7 @@ class IDESetup:
         },
         "opencode": {
             "name": "OpenCode",
+            "mcp_client_name": "opencode",
             "config_path": "~/.config/opencode/plugins",
             "config_dir_env_var": None,
             "config_filename": None,
@@ -271,6 +279,7 @@ class IDESetup:
         },
         "augment": {
             "name": "Augment Code",
+            "mcp_client_name": "augment",
             "config_path": "~/.augment/settings.json",
             "config_dir_env_var": None,
             "config_filename": "settings.json",
@@ -390,6 +399,51 @@ class IDESetup:
     def __init__(self):
         """Initialize IDE setup manager."""
         self._last_merged_config: Optional[Dict] = None
+
+    def supports_hooks(self, ide_type: str) -> bool:
+        """Check if an IDE supports hook installation.
+
+        Returns False for mcp_only IDEs and unknown IDE types.
+        """
+        ide_config = self.IDE_CONFIGS.get(ide_type)
+        if not ide_config:
+            return False
+        return not ide_config.get("mcp_only", False)
+
+    def check_hooks_for_ide(self, ide_type: str) -> Tuple[bool, str]:
+        """Check if hooks are configured for a specific IDE.
+
+        Returns (configured: bool, detail: str).
+        """
+        ide_config = self.IDE_CONFIGS.get(ide_type)
+        if not ide_config:
+            return False, f"Unknown IDE type: {ide_type}"
+
+        ide_name = ide_config.get("name", ide_type)
+
+        if ide_config.get("mcp_only"):
+            return True, f"{ide_name}: MCP-only (no hooks needed)"
+
+        config_path_str = self.get_config_path(ide_type)
+        if not config_path_str:
+            return False, f"{ide_name}: no config path"
+
+        config_path = Path(config_path_str).expanduser()
+        configured = self.check_hooks_configured(config_path, ide_type)
+        if configured:
+            return True, f"{ide_name}: configured"
+        return False, f"{ide_name}: not configured"
+
+    @classmethod
+    def get_ide_for_mcp_client(cls, client_name: str) -> Optional[str]:
+        """Reverse-lookup IDE type from an MCP client name.
+
+        Returns the IDE key (e.g. 'claude') or None if no match.
+        """
+        for ide_type, ide_config in cls.IDE_CONFIGS.items():
+            if ide_config.get("mcp_client_name") == client_name:
+                return ide_type
+        return None
 
     def verify_gitleaks_installed(self) -> Tuple[bool, str]:
         """

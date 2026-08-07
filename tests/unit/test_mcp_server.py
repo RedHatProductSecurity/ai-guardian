@@ -1346,22 +1346,33 @@ class TestCheckClientHooks:
 
     def test_hooks_present_returns_none(self):
         mock_setup = MagicMock()
-        mock_setup.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
-        mock_setup.get_config_path.return_value = "/tmp/settings.json"
-        mock_setup.check_hooks_configured.return_value = True
+        mock_setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code", "mcp_client_name": "claude-code"}
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.check_hooks_for_ide.return_value = (True, "Claude Code: configured")
 
-        with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "claude"
+        with patch("ai_guardian.setup.IDESetup", MockIDESetup):
             result = _check_client_hooks("claude-code")
 
         assert result is None
 
     def test_hooks_missing_returns_warning(self):
         mock_setup = MagicMock()
-        mock_setup.IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
-        mock_setup.get_config_path.return_value = "/tmp/settings.json"
-        mock_setup.check_hooks_configured.return_value = False
+        mock_setup.IDE_CONFIGS = {
+            "claude": {"name": "Claude Code", "mcp_client_name": "claude-code"}
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.check_hooks_for_ide.return_value = (
+            False,
+            "Claude Code: not configured",
+        )
 
-        with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "claude"
+        with patch("ai_guardian.setup.IDESetup", MockIDESetup):
             result = _check_client_hooks("claude-code")
 
         assert result is not None
@@ -1371,12 +1382,15 @@ class TestCheckClientHooks:
 
     def test_mcp_only_ide_returns_none(self):
         mock_setup = MagicMock()
-        mock_setup.IDE_CONFIGS = {"junie": {"name": "Junie", "mcp_only": True}}
-        mock_setup.get_config_path.return_value = "/tmp/junie"
+        mock_setup.IDE_CONFIGS = {
+            "junie": {"name": "Junie", "mcp_only": True, "mcp_client_name": "junie-cli"}
+        }
+        mock_setup.supports_hooks.return_value = False
 
-        with patch("ai_guardian.mcp.server._CLIENT_TO_IDE", {"junie-cli": "junie"}):
-            with patch("ai_guardian.setup.IDESetup", return_value=mock_setup):
-                result = _check_client_hooks("junie-cli")
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "junie"
+        with patch("ai_guardian.setup.IDESetup", MockIDESetup):
+            result = _check_client_hooks("junie-cli")
 
         assert result is None
 
