@@ -457,6 +457,14 @@ def get_config_dir() -> Path:
     return Path("~/.config/ai-guardian").expanduser()
 
 
+def get_config() -> dict:
+    """Return the merged ai-guardian configuration as a dict."""
+    from ai_guardian.config.loaders import _load_config_file
+
+    config, _ = _load_config_file()
+    return config or {}
+
+
 def get_state_dir() -> Path:
     """
     Get ai-guardian state directory (logs, violations).
