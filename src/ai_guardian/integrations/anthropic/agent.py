@@ -14,8 +14,7 @@ from ai_guardian.integrations.base import (
     ParsedResponse,
     ToolCall,
     _try_sanitize_text,
-    detect_loop_strategy,
-    register_loop_strategy,
+    _strategy_registry,
 )
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -207,7 +206,7 @@ for _name in (
     "AnthropicFoundry",
     "AsyncAnthropicFoundry",
 ):
-    register_loop_strategy(f"anthropic.{_name}", AnthropicLoopStrategy)
+    _strategy_registry.register(f"anthropic.{_name}", AnthropicLoopStrategy)
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +283,7 @@ class GuardedAgent:
             self._client = client or strategy.create_default_client()
         elif client is not None:
             self._client = client
-            self._strategy = detect_loop_strategy(client)
+            self._strategy = _strategy_registry.detect(client)
         else:
             self._strategy = AnthropicLoopStrategy()
             self._client = self._strategy.create_default_client()

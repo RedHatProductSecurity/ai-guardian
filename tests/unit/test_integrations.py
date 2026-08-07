@@ -16,11 +16,9 @@ from ai_guardian.integrations.base import (
     _GuardedClient,
     _MethodChainProxy,
     _StreamProxy,
-    _detect_extractor,
-    _REGISTRY,
-    detect_loop_strategy,
+    _extractor_registry,
+    _strategy_registry,
     guarded,
-    register_extractor,
 )
 from ai_guardian.integrations.anthropic import (
     AnthropicExtractor,
@@ -108,12 +106,12 @@ class TestRegistry:
     def test_anthropic_extractor_registered(self):
         for name in AnthropicExtractor._CLIENT_NAMES:
             key = f"anthropic.{name}"
-            assert key in _REGISTRY, f"{key} not registered"
-            assert _REGISTRY[key] is AnthropicExtractor
+            assert key in _extractor_registry, f"{key} not registered"
+            assert _extractor_registry[key] is AnthropicExtractor
 
     def test_detect_raises_for_unknown_client(self):
-        with pytest.raises(ValueError, match="No provider extractor found"):
-            _detect_extractor({"not": "a client"})
+        with pytest.raises(ValueError, match="No extractor found"):
+            _extractor_registry.detect({"not": "a client"})
 
     def test_register_custom_extractor(self):
         class FakeExtractor(ProviderExtractor):
@@ -130,9 +128,9 @@ class TestRegistry:
             def extract_output(self, method_name, response):
                 return []
 
-        register_extractor("test_pkg.FakeClient", FakeExtractor)
-        assert "test_pkg.FakeClient" in _REGISTRY
-        del _REGISTRY["test_pkg.FakeClient"]
+        _extractor_registry.register("test_pkg.FakeClient", FakeExtractor)
+        assert "test_pkg.FakeClient" in _extractor_registry
+        del _extractor_registry["test_pkg.FakeClient"]
 
 
 # ============================================================================
@@ -285,7 +283,7 @@ class TestGuardedFunction:
     """The guarded() factory function."""
 
     def test_raises_value_error_for_unknown_client(self):
-        with pytest.raises(ValueError, match="No provider extractor found"):
+        with pytest.raises(ValueError, match="No extractor found"):
             guarded({"not": "a client"})
 
     def test_auto_detects_anthropic(self):
@@ -964,8 +962,8 @@ class TestOpenAIExtractor:
     def test_registered_in_registry(self):
         for name in OpenAIExtractor._CLIENT_NAMES:
             key = f"openai.{name}"
-            assert key in _REGISTRY, f"{key} not registered"
-            assert _REGISTRY[key] is OpenAIExtractor
+            assert key in _extractor_registry, f"{key} not registered"
+            assert _extractor_registry[key] is OpenAIExtractor
 
 
 # ============================================================================
@@ -3571,19 +3569,19 @@ class TestStrategyDetection:
         mock_mod = SimpleNamespace(Anthropic=type("Anthropic", (), {}))
         with patch.dict(sys.modules, {"anthropic": mock_mod}):
             client = mock_mod.Anthropic()
-            strategy = detect_loop_strategy(client)
+            strategy = _strategy_registry.detect(client)
             assert isinstance(strategy, AnthropicLoopStrategy)
 
     def test_detect_openai_strategy(self):
         mock_mod = SimpleNamespace(OpenAI=type("OpenAI", (), {}))
         with patch.dict(sys.modules, {"openai": mock_mod}):
             client = mock_mod.OpenAI()
-            strategy = detect_loop_strategy(client)
+            strategy = _strategy_registry.detect(client)
             assert isinstance(strategy, OpenAILoopStrategy)
 
     def test_unknown_client_raises(self):
         with pytest.raises(ValueError, match="No loop strategy found"):
-            detect_loop_strategy(object())
+            _strategy_registry.detect(object())
 
 
 # ============================================================================
