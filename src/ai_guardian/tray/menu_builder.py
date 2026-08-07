@@ -645,6 +645,18 @@ class TrayMenuBuilder:
             self._tray._health._restart_in_progress = True
             self._tray._dispatch_to_main(self._tray._refresh_menu)
 
+            import json as _json
+
+            from ai_guardian.daemon import get_pid_path
+
+            pid_path = get_pid_path()
+            old_pid = None
+            try:
+                if pid_path.exists():
+                    old_pid = _json.loads(pid_path.read_text()).get("pid")
+            except Exception:
+                pass
+
             cmd = tray_plugins.resolve_cli_cmd("daemon", "restart")
             import subprocess as _sp
 
@@ -663,18 +675,6 @@ class TrayMenuBuilder:
                 return
 
             def _poll_for_new_daemon():
-                import json as _json
-
-                from ai_guardian.daemon import get_pid_path
-
-                pid_path = get_pid_path()
-                old_pid = None
-                try:
-                    if pid_path.exists():
-                        old_pid = _json.loads(pid_path.read_text()).get("pid")
-                except Exception:
-                    pass
-
                 for _ in range(100):
                     time.sleep(0.1)
                     try:

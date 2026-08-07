@@ -257,7 +257,12 @@ def _handle_daemon_command(args):
             return 0
 
     elif cmd == "stop":
-        from ai_guardian.daemon.client import is_daemon_running, send_shutdown
+        from ai_guardian.daemon.client import (
+            is_daemon_running,
+            send_shutdown,
+            _read_pid_from_file,
+            wait_for_process_death,
+        )
         from ai_guardian.daemon import get_pid_path, get_state_dir
 
         # Write stop-requested marker so auto-start is suppressed briefly
@@ -279,7 +284,15 @@ def _handle_daemon_command(args):
             print("ai-guardian daemon is not running")
             return 0
 
+        old_pid = _read_pid_from_file()
         if send_shutdown(timeout=_get_client_timeout()):
+            if old_pid and not wait_for_process_death(old_pid, timeout=5.0):
+                print(
+                    f"Warning: daemon (PID {old_pid}) acknowledged stop but "
+                    "did not exit within 5s",
+                    file=sys.stderr,
+                )
+                return 1
             print("ai-guardian daemon stopped")
             return 0
         else:
@@ -380,13 +393,21 @@ def _handle_daemon_command(args):
         return 0
 
     elif cmd == "restart":
-        from ai_guardian.daemon.client import is_daemon_running, send_shutdown
+        from ai_guardian.daemon.client import (
+            is_daemon_running,
+            send_shutdown,
+            _read_pid_from_file,
+            wait_for_process_death,
+        )
 
         if is_daemon_running():
+            old_pid = _read_pid_from_file()
             send_shutdown(timeout=_get_client_timeout())
-            import time
-
-            time.sleep(0.5)
+            if old_pid and not wait_for_process_death(old_pid, timeout=5.0):
+                print(
+                    f"Warning: old daemon (PID {old_pid}) did not exit within 5s",
+                    file=sys.stderr,
+                )
 
         args.daemon_command = "start"
         args.background = True
