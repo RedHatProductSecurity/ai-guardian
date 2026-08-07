@@ -4,7 +4,7 @@ import logging
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Type, Union
+from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
 
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -197,48 +197,83 @@ class AgentLoopStrategy(ABC):
 
 
 # ---------------------------------------------------------------------------
+# Generic type registry
+# ---------------------------------------------------------------------------
+
+T = TypeVar("T")
+
+
+def _resolve_class(dotted: str) -> Optional[type]:
+    """Resolve ``"pkg.ClassName"`` to the actual class, or *None*."""
+    parts = dotted.rsplit(".", 1)
+    if len(parts) != 2:
+        return None
+    mod_name, cls_name = parts
+    mod = sys.modules.get(mod_name)
+    if mod is None:
+        return None
+    return getattr(mod, cls_name, None)
+
+
+class TypeRegistry(Generic[T]):
+    """Generic registry mapping dotted client-type paths to handler classes.
+
+    Detection tries ``isinstance`` matching via lazily resolved
+    ``sys.modules`` lookups, then falls back to ``cls.detect(client)``
+    on each registered class.
+    """
+
+    def __init__(self, label: str):
+        self._entries: Dict[str, Type[T]] = {}
+        self._label = label
+
+    def register(self, client_type_path: str, cls: Type[T]) -> None:
+        """Register *cls* for the dotted *client_type_path*."""
+        self._entries[client_type_path] = cls
+
+    def detect(self, client: Any) -> T:
+        """Return an instance for *client*, or raise ``ValueError``."""
+        for dotted, cls in self._entries.items():
+            resolved = _resolve_class(dotted)
+            if resolved is not None and isinstance(client, resolved):
+                return cls()
+
+        seen: set = set()
+        for cls in self._entries.values():
+            if cls in seen:
+                continue
+            seen.add(cls)
+            if cls.detect(client):
+                return cls()
+
+        client_type = f"{type(client).__module__}.{type(client).__qualname__}"
+        raise ValueError(
+            f"No {self._label} found for {client_type}. "
+            f"Pass {self._label.replace(' ', '_')}= explicitly or "
+            f"install a supported provider: pip install ai-guardian[anthropic]"
+        )
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._entries
+
+    def __getitem__(self, key: str) -> Type[T]:
+        return self._entries[key]
+
+    def __delitem__(self, key: str) -> None:
+        del self._entries[key]
+
+    def items(self):
+        return self._entries.items()
+
+    def values(self):
+        return self._entries.values()
+
+
+# ---------------------------------------------------------------------------
 # Strategy registry
 # ---------------------------------------------------------------------------
 
-_STRATEGY_REGISTRY: Dict[str, Type[AgentLoopStrategy]] = {}
-
-
-def register_loop_strategy(
-    client_type_path: str, strategy_class: Type[AgentLoopStrategy]
-):
-    """Register a loop strategy for a provider client type.
-
-    *client_type_path* is a dotted path like ``"anthropic.Anthropic"``.
-    """
-    _STRATEGY_REGISTRY[client_type_path] = strategy_class
-
-
-def detect_loop_strategy(client: Any) -> AgentLoopStrategy:
-    """Return a strategy instance for *client*, or raise ``ValueError``.
-
-    First tries ``isinstance`` via the registry.  Falls back to
-    duck-typing (``client.messages`` → Anthropic, ``client.chat`` →
-    OpenAI) so mock clients work without an explicit *strategy*.
-    """
-    for dotted, strat_cls in _STRATEGY_REGISTRY.items():
-        resolved = _resolve_class(dotted)
-        if resolved is not None and isinstance(client, resolved):
-            return strat_cls()
-
-    seen: set = set()
-    for strat_cls in _STRATEGY_REGISTRY.values():
-        if strat_cls in seen:
-            continue
-        seen.add(strat_cls)
-        if strat_cls.detect(client):
-            return strat_cls()
-
-    client_type = f"{type(client).__module__}.{type(client).__qualname__}"
-    raise ValueError(
-        f"No loop strategy found for {client_type}. "
-        f"Pass strategy= explicitly or install a supported provider: "
-        f"pip install ai-guardian[anthropic]"
-    )
+_strategy_registry: TypeRegistry[AgentLoopStrategy] = TypeRegistry("loop strategy")
 
 
 # ---------------------------------------------------------------------------
@@ -283,42 +318,7 @@ class ProviderExtractor(ABC):
 # Extractor registry
 # ---------------------------------------------------------------------------
 
-_REGISTRY: Dict[str, Type[ProviderExtractor]] = {}
-
-
-def register_extractor(client_type_path: str, extractor_class: Type[ProviderExtractor]):
-    """Register an extractor for a provider client type.
-
-    *client_type_path* is a dotted path like ``"anthropic.Anthropic"``
-    used for lazy ``isinstance()`` resolution via ``sys.modules``.
-    """
-    _REGISTRY[client_type_path] = extractor_class
-
-
-def _resolve_class(dotted: str) -> Optional[type]:
-    """Resolve ``"pkg.ClassName"`` to the actual class, or *None*."""
-    parts = dotted.rsplit(".", 1)
-    if len(parts) != 2:
-        return None
-    mod_name, cls_name = parts
-    mod = sys.modules.get(mod_name)
-    if mod is None:
-        return None
-    return getattr(mod, cls_name, None)
-
-
-def _detect_extractor(client: Any) -> ProviderExtractor:
-    """Return an extractor instance for *client*, or raise ``ValueError``."""
-    for dotted, ext_cls in _REGISTRY.items():
-        resolved = _resolve_class(dotted)
-        if resolved is not None and isinstance(client, resolved):
-            return ext_cls()
-    client_type = f"{type(client).__module__}.{type(client).__qualname__}"
-    raise ValueError(
-        f"No provider extractor found for {client_type}. "
-        f"Pass extractor= explicitly or install a supported provider: "
-        f"pip install ai-guardian[anthropic]"
-    )
+_extractor_registry: TypeRegistry[ProviderExtractor] = TypeRegistry("extractor")
 
 
 # ---------------------------------------------------------------------------
@@ -605,7 +605,7 @@ def guarded(
 
         client = create_client()
     if extractor is None:
-        extractor = _detect_extractor(client)
+        extractor = _extractor_registry.detect(client)
     return _GuardedClient(
         client,
         extractor,

@@ -4,7 +4,7 @@ import os
 import sys
 from typing import Any, List
 
-from ai_guardian.integrations.base import ProviderExtractor, register_extractor
+from ai_guardian.integrations.base import ProviderExtractor, _extractor_registry
 
 
 class AnthropicExtractor(ProviderExtractor):
@@ -81,7 +81,7 @@ class AnthropicExtractor(ProviderExtractor):
 
 
 for _name in AnthropicExtractor._CLIENT_NAMES:
-    register_extractor(f"anthropic.{_name}", AnthropicExtractor)
+    _extractor_registry.register(f"anthropic.{_name}", AnthropicExtractor)
 
 
 # ---------------------------------------------------------------------------

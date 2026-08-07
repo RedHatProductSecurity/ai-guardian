@@ -9,8 +9,8 @@ from ai_guardian.integrations.base import (
     ParsedResponse,
     ProviderExtractor,
     ToolCall,
-    register_extractor,
-    register_loop_strategy,
+    _extractor_registry,
+    _strategy_registry,
 )
 
 
@@ -76,7 +76,7 @@ class OpenAIExtractor(ProviderExtractor):
 
 
 for _name in OpenAIExtractor._CLIENT_NAMES:
-    register_extractor(f"openai.{_name}", OpenAIExtractor)
+    _extractor_registry.register(f"openai.{_name}", OpenAIExtractor)
 
 
 # ---------------------------------------------------------------------------
@@ -388,4 +388,4 @@ class OpenAILoopStrategy(AgentLoopStrategy):
 
 
 for _name in OpenAIExtractor._CLIENT_NAMES:
-    register_loop_strategy(f"openai.{_name}", OpenAILoopStrategy)
+    _strategy_registry.register(f"openai.{_name}", OpenAILoopStrategy)
