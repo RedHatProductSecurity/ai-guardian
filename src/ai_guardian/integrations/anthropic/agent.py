@@ -21,8 +21,6 @@ from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
 
-_VALID_CACHE_TTLS = {0, "5m", "1h"}
-
 _USAGE_TOKEN_FIELDS = (
     "input_tokens",
     "output_tokens",
@@ -42,6 +40,8 @@ def _get_usage_field(usage: Any, field: str) -> int:
 
 class AnthropicLoopStrategy(AgentLoopStrategy):
     """Agent loop strategy for Anthropic's messages API."""
+
+    _valid_cache_ttls = frozenset({0, "5m", "1h"})
 
     @property
     def api_method_name(self) -> str:
@@ -163,6 +163,9 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
         else:
             messages.append({"role": "user", "content": text})
 
+    def default_cache_ttl(self, max_turns: int) -> Union[str, int]:
+        return 0 if max_turns <= 1 else "5m"
+
     def is_server_tool(self, tool_name: str) -> bool:
         return is_server_tool(tool_name)
 
@@ -246,17 +249,6 @@ class GuardedAgent:
         self._post_run = post_run
         self._between_turns = between_turns
 
-        if cache_ttl is not None:
-            if cache_ttl not in _VALID_CACHE_TTLS:
-                raise ValueError(
-                    f"cache_ttl must be 0, '5m', or '1h', got {cache_ttl!r}"
-                )
-            self._cache_ttl = cache_ttl
-        elif max_turns <= 1:
-            self._cache_ttl = 0
-        else:
-            self._cache_ttl = "5m"
-
         if strategy is not None:
             self._strategy = strategy
             self._client = client or strategy.create_default_client()
@@ -266,6 +258,12 @@ class GuardedAgent:
         else:
             self._strategy = AnthropicLoopStrategy()
             self._client = self._strategy.create_default_client()
+
+        if cache_ttl is not None:
+            self._strategy.validate_cache_ttl(cache_ttl)
+            self._cache_ttl = cache_ttl
+        else:
+            self._cache_ttl = self._strategy.default_cache_ttl(max_turns)
 
         self._resolved_tools = self._strategy.resolve_tools(tools, tool_types)
 
