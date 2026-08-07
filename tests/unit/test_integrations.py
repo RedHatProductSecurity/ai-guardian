@@ -3529,3 +3529,183 @@ class TestAnthropicLoopStrategy:
         strategy = AnthropicLoopStrategy()
         assert strategy.is_server_tool("web_search") is True
         assert strategy.is_server_tool("bash") is False
+
+    def test_build_create_kwargs_cache_ttl_5m(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            system="You are helpful.",
+            cache_ttl="5m",
+        )
+        assert kwargs["system"] == [
+            {
+                "type": "text",
+                "text": "You are helpful.",
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+    def test_build_create_kwargs_cache_ttl_1h(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            system="You are helpful.",
+            cache_ttl="1h",
+        )
+        assert kwargs["system"] == [
+            {
+                "type": "text",
+                "text": "You are helpful.",
+                "cache_control": {"type": "ephemeral", "ttl": "1h"},
+            }
+        ]
+
+    def test_build_create_kwargs_cache_ttl_disabled(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            system="You are helpful.",
+            cache_ttl=0,
+        )
+        assert kwargs["system"] == "You are helpful."
+
+    def test_build_create_kwargs_cache_ttl_no_system(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            system="",
+            cache_ttl="5m",
+        )
+        assert "system" not in kwargs
+
+    def test_parse_response_cache_tokens(self):
+        strategy = AnthropicLoopStrategy()
+        usage = SimpleNamespace(
+            input_tokens=100,
+            output_tokens=50,
+            cache_creation_input_tokens=2000,
+            cache_read_input_tokens=1500,
+        )
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="cached")],
+            stop_reason="end_turn",
+            usage=usage,
+        )
+        parsed = strategy.parse_response(response)
+        assert parsed.cache_creation_input_tokens == 2000
+        assert parsed.cache_read_input_tokens == 1500
+
+    def test_parse_response_no_cache_tokens(self):
+        strategy = AnthropicLoopStrategy()
+        usage = SimpleNamespace(input_tokens=100, output_tokens=50)
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="no cache")],
+            stop_reason="end_turn",
+            usage=usage,
+        )
+        parsed = strategy.parse_response(response)
+        assert parsed.cache_creation_input_tokens == 0
+        assert parsed.cache_read_input_tokens == 0
+
+
+class TestGuardedAgentCacheTtl:
+    """Tests for GuardedAgent cache_ttl parameter."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    def test_default_multi_turn(self):
+        agent, _ = self._make_agent(max_turns=10)
+        assert agent._cache_ttl == "5m"
+
+    def test_default_single_turn(self):
+        agent, _ = self._make_agent(max_turns=1)
+        assert agent._cache_ttl == 0
+
+    def test_explicit_1h(self):
+        agent, _ = self._make_agent(cache_ttl="1h")
+        assert agent._cache_ttl == "1h"
+
+    def test_explicit_disabled(self):
+        agent, _ = self._make_agent(cache_ttl=0)
+        assert agent._cache_ttl == 0
+
+    def test_explicit_overrides_single_turn_default(self):
+        agent, _ = self._make_agent(max_turns=1, cache_ttl="5m")
+        assert agent._cache_ttl == "5m"
+
+    def test_invalid_cache_ttl_raises(self):
+        with pytest.raises(ValueError, match="cache_ttl must be"):
+            self._make_agent(cache_ttl="10m")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_cache_tokens_in_usage(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        usage = SimpleNamespace(
+            input_tokens=100,
+            output_tokens=50,
+            cache_creation_input_tokens=2000,
+            cache_read_input_tokens=0,
+        )
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+            usage=usage,
+        )
+
+        agent, client = self._make_agent(cache_ttl="5m")
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["usage"]["cache_creation_input_tokens"] == 2000
+        assert result["usage"]["cache_read_input_tokens"] == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_system_formatted_with_cache_control(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(system_prompt="Be helpful.", cache_ttl="5m")
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        call_kwargs = client.messages.create.call_args[1]
+        assert isinstance(call_kwargs["system"], list)
+        assert call_kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}

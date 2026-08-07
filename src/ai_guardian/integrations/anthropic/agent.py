@@ -21,6 +21,19 @@ from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
 
+_VALID_CACHE_TTLS = {0, "5m", "1h"}
+
+_USAGE_TOKEN_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _get_usage_field(usage: Any, field: str) -> int:
+    return getattr(usage, field, 0) if usage else 0
+
 
 # ---------------------------------------------------------------------------
 # Anthropic loop strategy
@@ -66,6 +79,7 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
         tools: List[Any],
         messages: List[Dict[str, Any]],
         system: str,
+        cache_ttl: Optional[Union[str, int]] = None,
     ) -> Dict[str, Any]:
         kwargs: Dict[str, Any] = {
             "model": model,
@@ -74,7 +88,19 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
             "messages": messages,
         }
         if system:
-            kwargs["system"] = system
+            if cache_ttl:
+                cache_block: Dict[str, str] = {"type": "ephemeral"}
+                if cache_ttl == "1h":
+                    cache_block["ttl"] = "1h"
+                kwargs["system"] = [
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": cache_block,
+                    }
+                ]
+            else:
+                kwargs["system"] = system
         return kwargs
 
     def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
@@ -107,8 +133,7 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
             text="\n".join(text_parts),
             tool_calls=tool_calls,
             raw_content=content,
-            input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
-            output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
+            **{f: _get_usage_field(usage, f) for f in _USAGE_TOKEN_FIELDS},
         )
 
     def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
@@ -200,6 +225,7 @@ class GuardedAgent:
         post_run: Optional[Callable[[dict], None]] = None,
         between_turns: Optional[Callable[[list, Any, int], Any]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
+        cache_ttl: Optional[Union[str, int]] = None,
     ):
         self._model = model
         self._system_prompt = system_prompt
@@ -219,6 +245,17 @@ class GuardedAgent:
         self._pre_run = pre_run
         self._post_run = post_run
         self._between_turns = between_turns
+
+        if cache_ttl is not None:
+            if cache_ttl not in _VALID_CACHE_TTLS:
+                raise ValueError(
+                    f"cache_ttl must be 0, '5m', or '1h', got {cache_ttl!r}"
+                )
+            self._cache_ttl = cache_ttl
+        elif max_turns <= 1:
+            self._cache_ttl = 0
+        else:
+            self._cache_ttl = "5m"
 
         if strategy is not None:
             self._strategy = strategy
@@ -284,10 +321,7 @@ class GuardedAgent:
                     "tool with your final structured output."
                 )
 
-            usage_totals: Dict[str, int] = {
-                "input_tokens": 0,
-                "output_tokens": 0,
-            }
+            usage_totals: Dict[str, int] = {f: 0 for f in _USAGE_TOKEN_FIELDS}
             structured_output = None
             final_text = ""
             stop_reason = "max_turns"
@@ -299,6 +333,7 @@ class GuardedAgent:
                     tools=self._resolved_tools,
                     messages=messages,
                     system=system,
+                    cache_ttl=self._cache_ttl,
                 )
 
                 if self._before_call:
@@ -307,8 +342,8 @@ class GuardedAgent:
                 response = strategy.call_api(self._client, create_kwargs)
                 parsed = strategy.parse_response(response)
 
-                usage_totals["input_tokens"] += parsed.input_tokens
-                usage_totals["output_tokens"] += parsed.output_tokens
+                for _f in _USAGE_TOKEN_FIELDS:
+                    usage_totals[_f] += getattr(parsed, _f, 0)
 
                 if self._scan_output and parsed.text:
                     try:
