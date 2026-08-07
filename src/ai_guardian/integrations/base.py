@@ -142,6 +142,26 @@ class AgentLoopStrategy(ABC):
         """Append a user text injection after tool-result messages."""
         messages.append({"role": "user", "content": text})
 
+    _valid_cache_ttls: frozenset = frozenset({0})
+
+    def validate_cache_ttl(self, value: Union[str, int]) -> None:
+        """Validate a *cache_ttl* value for this provider.
+
+        Raise ``ValueError`` if the value is not in
+        ``_valid_cache_ttls``.  Subclasses override the class attribute
+        to widen the accepted set.
+        """
+        if value not in self._valid_cache_ttls:
+            valid = ", ".join(repr(v) for v in sorted(self._valid_cache_ttls, key=str))
+            raise ValueError(f"cache_ttl must be one of {valid}, got {value!r}")
+
+    def default_cache_ttl(self, max_turns: int) -> Union[str, int]:
+        """Return the default *cache_ttl* for this provider.
+
+        Base implementation returns ``0`` (caching disabled).
+        """
+        return 0
+
     def is_server_tool(self, tool_name: str) -> bool:
         """Return True if *tool_name* is executed server-side by the provider."""
         return False

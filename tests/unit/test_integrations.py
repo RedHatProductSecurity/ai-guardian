@@ -3460,6 +3460,20 @@ class TestOpenAILoopStrategy:
         assert messages[0]["content"] == "thinking"
         assert messages[1] == tool_results[0]
 
+    def test_validate_cache_ttl_accepts_zero(self):
+        strategy = OpenAILoopStrategy()
+        strategy.validate_cache_ttl(0)
+
+    def test_validate_cache_ttl_rejects_nonzero(self):
+        strategy = OpenAILoopStrategy()
+        with pytest.raises(ValueError, match="cache_ttl must be"):
+            strategy.validate_cache_ttl("5m")
+
+    def test_default_cache_ttl_always_zero(self):
+        strategy = OpenAILoopStrategy()
+        assert strategy.default_cache_ttl(1) == 0
+        assert strategy.default_cache_ttl(10) == 0
+
 
 # ============================================================================
 # TestAnthropicLoopStrategy
@@ -3529,6 +3543,24 @@ class TestAnthropicLoopStrategy:
         strategy = AnthropicLoopStrategy()
         assert strategy.is_server_tool("web_search") is True
         assert strategy.is_server_tool("bash") is False
+
+    def test_validate_cache_ttl_accepts_valid_values(self):
+        strategy = AnthropicLoopStrategy()
+        for val in (0, "5m", "1h"):
+            strategy.validate_cache_ttl(val)
+
+    def test_validate_cache_ttl_rejects_invalid(self):
+        strategy = AnthropicLoopStrategy()
+        with pytest.raises(ValueError, match="cache_ttl must be"):
+            strategy.validate_cache_ttl("10m")
+
+    def test_default_cache_ttl_multi_turn(self):
+        strategy = AnthropicLoopStrategy()
+        assert strategy.default_cache_ttl(10) == "5m"
+
+    def test_default_cache_ttl_single_turn(self):
+        strategy = AnthropicLoopStrategy()
+        assert strategy.default_cache_ttl(1) == 0
 
     def test_build_create_kwargs_cache_ttl_5m(self):
         strategy = AnthropicLoopStrategy()
