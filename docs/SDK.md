@@ -416,6 +416,7 @@ print(result["output"])  # validated structured object
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
+| `between_turns` | callable | `None` | `(messages: list, response: Any, turn: int) -> str \| None \| False` — called after each successful assistant turn. Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
 
 ### Hooks
 
@@ -438,12 +439,60 @@ agent.run("prompt")
   ├── Turn 1:
   │     ├── before_call(...)           ← per turn
   │     ├── messages.create()
-  │     └── after_call(...)            ← per turn (return False to stop)
+  │     ├── after_call(...)            ← per turn (return False to stop)
+  │     └── between_turns(...)         ← per successful turn (return str to inject)
   ├── Turn 2: ...
   └── post_run(result)                 ← once, after loop (even on exception)
 ```
 
 The `config` dict passed to `pre_run` contains: `model`, `tools`, `system_prompt`, `max_turns`, `max_budget_tokens`.
+
+### `between_turns` Hook
+
+Runs after each successful assistant turn — both `end_turn` (text response) and `tool_use` (after tool execution). Does **not** fire on refusal, budget exceeded, or output-schema nudges.
+
+| Return | Behavior |
+|--------|----------|
+| `str` | Injected as next user message, loop continues |
+| `None` | Normal loop behavior (tool execution or end) |
+| `False` | Stop the loop (`stop_reason: "hook_early_stop"`) |
+
+Injected messages are scanned by ai-guardian when `scan_input=True`.
+
+**Use case — external execution between turns:**
+
+```python
+import subprocess
+
+def run_pytest_between_turns(messages, response, turn):
+    """Run pytest on generated test code, feed results back."""
+    # Extract test code from the assistant's response
+    text = getattr(response.content[0], "text", "")
+    if "def test_" not in text:
+        return None  # No test code, let the loop end normally
+
+    # Write and run the test
+    with open("/tmp/test_generated.py", "w") as f:
+        f.write(text)
+    result = subprocess.run(
+        ["pytest", "/tmp/test_generated.py", "-v"],
+        capture_output=True, text=True, timeout=30,
+    )
+
+    if result.returncode == 0:
+        return False  # Tests pass, stop the loop
+
+    # Tests failed — send output back for revision
+    return f"Tests failed. Fix the code:\n{result.stdout}\n{result.stderr}"
+
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools=[],
+    max_turns=5,
+    between_turns=run_pytest_between_turns,
+)
+result = agent.run("Write a pytest test for the calculate_discount function...")
+```
 
 ### `agent.run(prompt)` Return Value
 

@@ -49,6 +49,7 @@ class GuardedAgent:
         after_call: Optional[Callable[[str, Any], Any]] = None,
         pre_run: Optional[Callable[[str, dict], None]] = None,
         post_run: Optional[Callable[[dict], None]] = None,
+        between_turns: Optional[Callable[[list, Any, int], Any]] = None,
     ):
         self._model = model
         self._system_prompt = system_prompt
@@ -67,6 +68,7 @@ class GuardedAgent:
         self._after_call = after_call
         self._pre_run = pre_run
         self._post_run = post_run
+        self._between_turns = between_turns
 
         self._client = client or self._create_client()
         self._resolved_tools = resolve_tools(tools, tool_types)
@@ -219,6 +221,23 @@ class GuardedAgent:
                             }
                         )
                         continue
+
+                    if self._between_turns:
+                        hook_result = self._between_turns(messages, response, _turn)
+                        if hook_result is False:
+                            final_text = self._extract_text(content)
+                            stop_reason = "hook_early_stop"
+                            break
+                        if isinstance(hook_result, str):
+                            if self._scan_input:
+                                session.check_content(
+                                    hook_result,
+                                    filename="between_turns_injection",
+                                )
+                            messages.append({"role": "assistant", "content": content})
+                            messages.append({"role": "user", "content": hook_result})
+                            continue
+
                     final_text = self._extract_text(content)
                     stop_reason = "end_turn"
                     break
@@ -275,6 +294,28 @@ class GuardedAgent:
                     if structured_output is not None:
                         stop_reason = "end_turn"
                         break
+
+                    if self._between_turns:
+                        hook_result = self._between_turns(messages, response, _turn)
+                        if hook_result is False:
+                            final_text = self._extract_text(content)
+                            stop_reason = "hook_early_stop"
+                            break
+                        if isinstance(hook_result, str):
+                            if self._scan_input:
+                                session.check_content(
+                                    hook_result,
+                                    filename="between_turns_injection",
+                                )
+                            last_content = messages[-1]["content"]
+                            if isinstance(last_content, list):
+                                last_content.append(
+                                    {"type": "text", "text": hook_result}
+                                )
+                            else:
+                                messages.append(
+                                    {"role": "user", "content": hook_result}
+                                )
 
                     continue
 
