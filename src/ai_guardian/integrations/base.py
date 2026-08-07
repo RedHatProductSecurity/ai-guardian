@@ -40,6 +40,8 @@ class ParsedResponse:
     raw_content: Any = None
     input_tokens: int = 0
     output_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+    cache_read_input_tokens: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,7 @@ class AgentLoopStrategy(ABC):
         tools: List[Any],
         messages: List[Dict[str, Any]],
         system: str,
+        cache_ttl: Optional[Union[str, int]] = None,
     ) -> Dict[str, Any]:
         """Build the kwargs dict for the provider's create/completions call."""
 

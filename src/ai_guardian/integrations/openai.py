@@ -275,6 +275,7 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         tools: List[Any],
         messages: List[Dict[str, Any]],
         system: str,
+        cache_ttl: Optional[Union[str, int]] = None,
     ) -> Dict[str, Any]:
         if system:
             full_messages = [{"role": "system", "content": system}] + messages
