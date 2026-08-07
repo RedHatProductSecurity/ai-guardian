@@ -416,13 +416,13 @@ class DaemonServer:
             pass
 
         if self.state.paused:
-            return {"output": "{}", "exit_code": 0}
+            return self._paused_hook_response(hook_data)
 
         self.state.record_activity()
 
         # Per-directory pause (#958): skip scanning if this directory is paused
         if cwd and self.state.is_dir_paused(cwd):
-            return {"output": "{}", "exit_code": 0}
+            return self._paused_hook_response(hook_data)
         if cwd:
             from ai_guardian.config.utils import (
                 set_project_dir_override,
@@ -463,6 +463,13 @@ class DaemonServer:
         result.pop("_log_only", None)
         result.pop("_violation_type", None)
         return result
+
+    def _paused_hook_response(self, hook_data):
+        """Return a paused response, still injecting security instructions."""
+        from ai_guardian import inject_security_only
+
+        result = inject_security_only(hook_data, daemon_state=self.state)
+        return result if result is not None else {"output": "{}", "exit_code": 0}
 
     def _handle_sdk_check(self, data):
         """Process an SDK security check request.
