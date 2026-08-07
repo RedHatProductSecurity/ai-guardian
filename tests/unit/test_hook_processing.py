@@ -743,7 +743,10 @@ class TestInjectSecurityOnly(TestCase):
         result2 = ai_guardian.inject_security_only(hook_data)
         assert result2 is None
 
-    @patch("ai_guardian.session_state.derive_session_key", side_effect=RuntimeError("corrupt state"))
+    @patch(
+        "ai_guardian.session_state.derive_session_key",
+        side_effect=RuntimeError("corrupt state"),
+    )
     def test_falls_back_to_defaults_on_session_state_error(self, _mock_key):
         hook_data = {
             "hook_event_name": "UserPromptSubmit",
