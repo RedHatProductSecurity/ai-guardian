@@ -5,10 +5,29 @@ Provides test isolation for configuration directories and common test utilities.
 """
 
 import json
+import logging
 import os
 from unittest import mock
 
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _capture_package_logs(caplog):
+    """Attach caplog handler to the ai_guardian logger.
+
+    The ai_guardian package logger sets propagate=False so log messages
+    don't reach root where caplog's handler lives.  pytest >=9.0 handles
+    this automatically; this fixture provides the same behaviour on
+    pytest 8.x (used on Python 3.9 CI).
+    """
+    pkg_logger = logging.getLogger("ai_guardian")
+    already_attached = caplog.handler in pkg_logger.handlers
+    if not already_attached:
+        pkg_logger.addHandler(caplog.handler)
+    yield
+    if not already_attached:
+        pkg_logger.removeHandler(caplog.handler)
 
 
 @pytest.fixture(autouse=True)
