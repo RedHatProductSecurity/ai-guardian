@@ -9,17 +9,25 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_guardian.integrations.base import (
+    AgentLoopStrategy,
+    ParsedResponse,
     ProviderExtractor,
+    ToolCall,
     _GuardedClient,
     _MethodChainProxy,
     _StreamProxy,
     _detect_extractor,
     _REGISTRY,
+    detect_loop_strategy,
     guarded,
     register_extractor,
 )
-from ai_guardian.integrations.anthropic import AnthropicExtractor, create_client
-from ai_guardian.integrations.openai import OpenAIExtractor
+from ai_guardian.integrations.anthropic import (
+    AnthropicExtractor,
+    AnthropicLoopStrategy,
+    create_client,
+)
+from ai_guardian.integrations.openai import OpenAIExtractor, OpenAILoopStrategy
 from ai_guardian.sdk import SecurityViolation
 
 # ---------------------------------------------------------------------------
@@ -2936,3 +2944,588 @@ class TestGuardedClientHooks:
         wrapped = guarded(object(), extractor=CustomExt())
         assert wrapped._before_call is None
         assert wrapped._after_call is None
+
+
+# ============================================================================
+# TestOpenAIGuardedAgent
+# ============================================================================
+
+
+def _make_openai_agent_response(
+    content=None,
+    tool_calls=None,
+    finish_reason="stop",
+    usage=None,
+):
+    """Build a mock OpenAI ChatCompletion response."""
+    message = SimpleNamespace(content=content, tool_calls=tool_calls)
+    choice = SimpleNamespace(message=message, finish_reason=finish_reason)
+    if usage is None:
+        usage = SimpleNamespace(prompt_tokens=100, completion_tokens=50)
+    return SimpleNamespace(choices=[choice], usage=usage)
+
+
+def _make_openai_tool_call(tool_id, name, arguments):
+    """Build a mock OpenAI tool_call object."""
+    import json
+
+    return SimpleNamespace(
+        id=tool_id,
+        type="function",
+        function=SimpleNamespace(
+            name=name,
+            arguments=(
+                json.dumps(arguments) if isinstance(arguments, dict) else arguments
+            ),
+        ),
+    )
+
+
+class TestOpenAIGuardedAgent:
+    """GuardedAgent tests with OpenAI loop strategy."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        strategy = OpenAILoopStrategy()
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_completions = SimpleNamespace(create=mock_create)
+            mock_chat = SimpleNamespace(completions=mock_completions)
+            mock_client = SimpleNamespace(chat=mock_chat)
+
+        defaults = {
+            "model": "gpt-4o",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+            "strategy": strategy,
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_single_turn_no_tools(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="Hello!")
+
+        agent, client = self._make_agent()
+        client.chat.completions.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["output"] == "Hello!"
+        assert result["stop_reason"] == "end_turn"
+        content_args = [
+            call.args[0] for call in mock_session.check_content.call_args_list
+        ]
+        assert "Hi" in content_args
+        assert "Hello!" in content_args
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_use_loop(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call("call_1", "bash", {"command": "echo test"}),
+            ],
+            finish_reason="tool_calls",
+        )
+        final_response = _make_openai_agent_response(content="Done!")
+
+        agent, client = self._make_agent()
+        client.chat.completions.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="test output",
+        ):
+            result = agent.run("Run echo test")
+
+        assert result["output"] == "Done!"
+        assert client.chat.completions.create.call_count == 2
+        scanned = [call.args[0] for call in mock_session.check_content.call_args_list]
+        assert "test output" in scanned
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_result_format(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call("call_1", "bash", {"command": "echo hi"}),
+            ],
+            finish_reason="tool_calls",
+        )
+        final_response = _make_openai_agent_response(content="Done")
+
+        agent, client = self._make_agent()
+        client.chat.completions.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test")
+
+        msgs = result["messages"]
+        tool_result_msgs = [m for m in msgs if m.get("role") == "tool"]
+        assert len(tool_result_msgs) == 1
+        assert tool_result_msgs[0]["tool_call_id"] == "call_1"
+        assert tool_result_msgs[0]["content"] == "hi"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_max_turns_limit(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call("call_1", "bash", {"command": "echo loop"}),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        agent, client = self._make_agent(max_turns=3)
+        client.chat.completions.create.return_value = tool_response
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            result = agent.run("Loop forever")
+
+        assert result["stop_reason"] == "max_turns"
+        assert client.chat.completions.create.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_structured_output(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call(
+                    "call_1", "submit_result", {"findings": ["bug1", "bug2"]}
+                ),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"findings": {"type": "array"}},
+        }
+        agent, client = self._make_agent(output_schema=schema)
+        client.chat.completions.create.return_value = tool_response
+
+        result = agent.run("Find bugs")
+
+        assert result["output"] == {"findings": ["bug1", "bug2"]}
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_system_prompt_as_message(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="OK")
+
+        agent, client = self._make_agent(system_prompt="You are helpful.")
+        client.chat.completions.create.return_value = response
+
+        agent.run("Hello")
+
+        call_kwargs = client.chat.completions.create.call_args[1]
+        msgs = call_kwargs["messages"]
+        assert msgs[0]["role"] == "system"
+        assert msgs[0]["content"] == "You are helpful."
+        assert msgs[1]["role"] == "user"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_no_server_tools(self, mock_monitor):
+        """OpenAI strategy has no server-side tools."""
+        strategy = OpenAILoopStrategy()
+        assert strategy.is_server_tool("web_search") is False
+        assert strategy.is_server_tool("bash") is False
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_scan_disabled(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="Hello")
+
+        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        client.chat.completions.create.return_value = response
+
+        agent.run("Hi")
+
+        mock_session.check_content.assert_not_called()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_usage_accumulation(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call("c1", "bash", {"command": "echo hi"}),
+            ],
+            finish_reason="tool_calls",
+            usage=SimpleNamespace(prompt_tokens=100, completion_tokens=50),
+        )
+        r2 = _make_openai_agent_response(
+            content="Done",
+            usage=SimpleNamespace(prompt_tokens=200, completion_tokens=30),
+        )
+
+        agent, client = self._make_agent()
+        client.chat.completions.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Test")
+
+        assert result["usage"]["input_tokens"] == 300
+        assert result["usage"]["output_tokens"] == 80
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_budget_exceeded(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(
+            content="Partial",
+            usage=SimpleNamespace(prompt_tokens=600, completion_tokens=400),
+        )
+
+        agent, client = self._make_agent(max_budget_tokens=500)
+        client.chat.completions.create.return_value = response
+
+        result = agent.run("Test budget")
+
+        assert result["stop_reason"] == "budget_exceeded"
+        assert result["output"] == "Partial"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_before_call_hook(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="Hello!")
+
+        calls = []
+
+        def on_call(method_name, args, kwargs):
+            calls.append({"method": method_name, "model": kwargs.get("model")})
+
+        agent, client = self._make_agent(before_call=on_call)
+        client.chat.completions.create.return_value = response
+
+        agent.run("Hi")
+
+        assert len(calls) == 1
+        assert calls[0]["method"] == "chat.completions.create"
+        assert calls[0]["model"] == "gpt-4o"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_string_injects(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_openai_agent_response(content="Code here")
+        r2 = _make_openai_agent_response(content="Revised code")
+
+        hook = MagicMock(side_effect=["test output: 1 failed", None])
+        agent, client = self._make_agent(between_turns=hook)
+        client.chat.completions.create.side_effect = [r1, r2]
+
+        result = agent.run("Write a test")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Revised code"
+        assert client.chat.completions.create.call_count == 2
+        msgs = result["messages"]
+        injected = [m for m in msgs if m.get("content") == "test output: 1 failed"]
+        assert len(injected) == 1
+        assert injected[0]["role"] == "user"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_false_stops(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="Done")
+
+        hook = MagicMock(return_value=False)
+        agent, client = self._make_agent(between_turns=hook)
+        client.chat.completions.create.return_value = response
+
+        result = agent.run("Do work")
+
+        assert result["stop_reason"] == "hook_early_stop"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_output_violation_attaches_response(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret in response",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content="leaked secret")
+
+        agent, client = self._make_agent(action="block")
+        client.chat.completions.create.return_value = response
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            agent.run("Hi")
+
+        exc = exc_info.value
+        assert exc.response is response
+        assert exc.sanitized_text == "[REDACTED]"
+
+
+# ============================================================================
+# TestStrategyDetection
+# ============================================================================
+
+
+class TestStrategyDetection:
+    """Tests for auto-detection of loop strategies."""
+
+    def test_detect_anthropic_strategy(self):
+        mock_mod = SimpleNamespace(Anthropic=type("Anthropic", (), {}))
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            client = mock_mod.Anthropic()
+            strategy = detect_loop_strategy(client)
+            assert isinstance(strategy, AnthropicLoopStrategy)
+
+    def test_detect_openai_strategy(self):
+        mock_mod = SimpleNamespace(OpenAI=type("OpenAI", (), {}))
+        with patch.dict(sys.modules, {"openai": mock_mod}):
+            client = mock_mod.OpenAI()
+            strategy = detect_loop_strategy(client)
+            assert isinstance(strategy, OpenAILoopStrategy)
+
+    def test_unknown_client_raises(self):
+        with pytest.raises(ValueError, match="No loop strategy found"):
+            detect_loop_strategy(object())
+
+
+# ============================================================================
+# TestOpenAILoopStrategy
+# ============================================================================
+
+
+class TestOpenAILoopStrategy:
+    """Unit tests for OpenAILoopStrategy methods."""
+
+    def test_parse_response_text(self):
+        strategy = OpenAILoopStrategy()
+        response = _make_openai_agent_response(content="Hello world")
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.text == "Hello world"
+        assert parsed.tool_calls == []
+        assert parsed.input_tokens == 100
+        assert parsed.output_tokens == 50
+
+    def test_parse_response_tool_calls(self):
+        strategy = OpenAILoopStrategy()
+        response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call("c1", "bash", {"command": "ls"}),
+                _make_openai_tool_call("c2", "grep", {"pattern": "foo"}),
+            ],
+            finish_reason="tool_calls",
+        )
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "tool_use"
+        assert len(parsed.tool_calls) == 2
+        assert parsed.tool_calls[0].name == "bash"
+        assert parsed.tool_calls[0].input == {"command": "ls"}
+        assert parsed.tool_calls[1].name == "grep"
+
+    def test_format_tool_result(self):
+        strategy = OpenAILoopStrategy()
+        result = strategy.format_tool_result("call_123", "output text")
+        assert result == {
+            "role": "tool",
+            "tool_call_id": "call_123",
+            "content": "output text",
+        }
+
+    def test_build_create_kwargs_system_as_message(self):
+        strategy = OpenAILoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="gpt-4o",
+            max_tokens=1000,
+            tools=[],
+            messages=[{"role": "user", "content": "hi"}],
+            system="You are helpful.",
+        )
+        assert kwargs["messages"][0] == {
+            "role": "system",
+            "content": "You are helpful.",
+        }
+        assert kwargs["messages"][1] == {"role": "user", "content": "hi"}
+        assert "tools" not in kwargs
+
+    def test_build_create_kwargs_no_system(self):
+        strategy = OpenAILoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="gpt-4o",
+            max_tokens=1000,
+            tools=[{"type": "function", "function": {"name": "bash"}}],
+            messages=[{"role": "user", "content": "hi"}],
+            system="",
+        )
+        assert kwargs["messages"] == [{"role": "user", "content": "hi"}]
+        assert len(kwargs["tools"]) == 1
+
+    def test_format_submit_result_tool(self):
+        strategy = OpenAILoopStrategy()
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+        tool = strategy.format_submit_result_tool(schema)
+        assert tool["type"] == "function"
+        assert tool["function"]["name"] == "submit_result"
+        assert tool["function"]["parameters"] is schema
+
+    def test_resolve_tools_preset(self):
+        strategy = OpenAILoopStrategy()
+        tools = strategy.resolve_tools("coding")
+        assert len(tools) == 4
+        names = [t["function"]["name"] for t in tools]
+        assert "bash" in names
+        assert "grep" in names
+
+    def test_inject_user_text_after_results(self):
+        strategy = OpenAILoopStrategy()
+        messages = [{"role": "tool", "tool_call_id": "c1", "content": "ok"}]
+        strategy.inject_user_text_after_results(messages, "extra context")
+        assert messages[-1] == {"role": "user", "content": "extra context"}
+
+    def test_append_assistant_and_results(self):
+        strategy = OpenAILoopStrategy()
+        messages = []
+        raw_msg = SimpleNamespace(content="thinking", tool_calls=None)
+        tool_results = [
+            {"role": "tool", "tool_call_id": "c1", "content": "result"},
+        ]
+        strategy.append_assistant_and_results(messages, raw_msg, tool_results)
+        assert messages[0]["role"] == "assistant"
+        assert messages[0]["content"] == "thinking"
+        assert messages[1] == tool_results[0]
+
+
+# ============================================================================
+# TestAnthropicLoopStrategy
+# ============================================================================
+
+
+class TestAnthropicLoopStrategy:
+    """Unit tests for AnthropicLoopStrategy methods."""
+
+    def test_parse_response_text(self):
+        strategy = AnthropicLoopStrategy()
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello")],
+            stop_reason="end_turn",
+        )
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.text == "Hello"
+        assert parsed.tool_calls == []
+
+    def test_parse_response_tool_use(self):
+        strategy = AnthropicLoopStrategy()
+        response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use", name="bash", id="t1", input={"command": "ls"}
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "tool_use"
+        assert len(parsed.tool_calls) == 1
+        assert parsed.tool_calls[0].name == "bash"
+        assert parsed.tool_calls[0].id == "t1"
+
+    def test_format_tool_result(self):
+        strategy = AnthropicLoopStrategy()
+        result = strategy.format_tool_result("t1", "output")
+        assert result == {
+            "type": "tool_result",
+            "tool_use_id": "t1",
+            "content": "output",
+        }
+
+    def test_inject_user_text_merges_into_list(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "t1", "content": "ok"}
+                ],
+            }
+        ]
+        strategy.inject_user_text_after_results(messages, "extra")
+        last = messages[-1]["content"]
+        assert isinstance(last, list)
+        assert last[-1] == {"type": "text", "text": "extra"}
+
+    def test_api_method_name(self):
+        assert AnthropicLoopStrategy().api_method_name == "messages.create"
+
+    def test_is_server_tool(self):
+        strategy = AnthropicLoopStrategy()
+        assert strategy.is_server_tool("web_search") is True
+        assert strategy.is_server_tool("bash") is False

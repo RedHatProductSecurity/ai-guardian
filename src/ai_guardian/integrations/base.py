@@ -3,11 +3,200 @@
 import logging
 import sys
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, List, Optional, Type
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional, Type, Union
 
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Agent loop strategy — dataclasses
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ToolCall:
+    """Normalized tool call extracted from a provider response."""
+
+    id: str
+    name: str
+    input: Dict[str, Any]
+
+
+@dataclass
+class ParsedResponse:
+    """Provider-normalized response from a single LLM turn.
+
+    ``stop_reason`` uses normalized values:
+    ``"end_turn"``, ``"tool_use"``, ``"refusal"``, ``"pause_turn"``,
+    or the raw provider value if unmapped.
+    """
+
+    stop_reason: str
+    text: str
+    tool_calls: List[ToolCall] = field(default_factory=list)
+    raw_content: Any = None
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Agent loop strategy — ABC
+# ---------------------------------------------------------------------------
+
+
+class AgentLoopStrategy(ABC):
+    """Abstract base for provider-specific agent loop behaviour.
+
+    Each method isolates one protocol difference between providers
+    (Anthropic messages API vs OpenAI chat completions, etc.).
+    """
+
+    @property
+    @abstractmethod
+    def api_method_name(self) -> str:
+        """Dotted method path shown in hooks (e.g. ``"messages.create"``)."""
+
+    @abstractmethod
+    def create_default_client(self) -> Any:
+        """Create a provider client from environment variables."""
+
+    @abstractmethod
+    def resolve_tools(
+        self,
+        tools: Union[str, List[Any]],
+        tool_types: Optional[Dict[str, str]] = None,
+    ) -> List[Any]:
+        """Resolve a tool specification into provider-formatted dicts."""
+
+    @abstractmethod
+    def format_submit_result_tool(
+        self, output_schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Return a provider-formatted tool definition for ``submit_result``."""
+
+    @abstractmethod
+    def build_create_kwargs(
+        self,
+        *,
+        model: str,
+        max_tokens: int,
+        tools: List[Any],
+        messages: List[Dict[str, Any]],
+        system: str,
+    ) -> Dict[str, Any]:
+        """Build the kwargs dict for the provider's create/completions call."""
+
+    @abstractmethod
+    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+        """Send the request and return the raw provider response."""
+
+    @abstractmethod
+    def parse_response(self, response: Any) -> ParsedResponse:
+        """Normalize a raw provider response into a ``ParsedResponse``."""
+
+    @abstractmethod
+    def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
+        """Format a single tool result for inclusion in the message history."""
+
+    @abstractmethod
+    def append_assistant_and_results(
+        self,
+        messages: List[Dict[str, Any]],
+        raw_content: Any,
+        tool_results: List[Dict[str, Any]],
+    ) -> None:
+        """Append the assistant turn and tool results to *messages*."""
+
+    def serialize_assistant_content(self, raw_content: Any) -> Any:
+        """Convert a provider response's raw content to a serializable form.
+
+        Default returns *raw_content* unchanged (works for Anthropic).
+        Override for providers whose SDK returns non-dict message objects.
+        """
+        return raw_content
+
+    def append_assistant_message(
+        self,
+        messages: List[Dict[str, Any]],
+        raw_content: Any,
+    ) -> None:
+        """Append just the assistant turn (no tool results) to *messages*."""
+        messages.append(
+            {
+                "role": "assistant",
+                "content": self.serialize_assistant_content(raw_content),
+            }
+        )
+
+    def inject_user_text_after_results(
+        self,
+        messages: List[Dict[str, Any]],
+        text: str,
+    ) -> None:
+        """Append a user text injection after tool-result messages."""
+        messages.append({"role": "user", "content": text})
+
+    def is_server_tool(self, tool_name: str) -> bool:
+        """Return True if *tool_name* is executed server-side by the provider."""
+        return False
+
+    @classmethod
+    def detect(cls, client: Any) -> bool:
+        """Return True if this strategy handles *client* (duck-typing fallback).
+
+        Called when ``isinstance`` matching via the registry fails (e.g.
+        mock clients).  Default returns ``False``.
+        """
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Strategy registry
+# ---------------------------------------------------------------------------
+
+_STRATEGY_REGISTRY: Dict[str, Type[AgentLoopStrategy]] = {}
+
+
+def register_loop_strategy(
+    client_type_path: str, strategy_class: Type[AgentLoopStrategy]
+):
+    """Register a loop strategy for a provider client type.
+
+    *client_type_path* is a dotted path like ``"anthropic.Anthropic"``.
+    """
+    _STRATEGY_REGISTRY[client_type_path] = strategy_class
+
+
+def detect_loop_strategy(client: Any) -> AgentLoopStrategy:
+    """Return a strategy instance for *client*, or raise ``ValueError``.
+
+    First tries ``isinstance`` via the registry.  Falls back to
+    duck-typing (``client.messages`` → Anthropic, ``client.chat`` →
+    OpenAI) so mock clients work without an explicit *strategy*.
+    """
+    for dotted, strat_cls in _STRATEGY_REGISTRY.items():
+        resolved = _resolve_class(dotted)
+        if resolved is not None and isinstance(client, resolved):
+            return strat_cls()
+
+    seen: set = set()
+    for strat_cls in _STRATEGY_REGISTRY.values():
+        if strat_cls in seen:
+            continue
+        seen.add(strat_cls)
+        if strat_cls.detect(client):
+            return strat_cls()
+
+    client_type = f"{type(client).__module__}.{type(client).__qualname__}"
+    raise ValueError(
+        f"No loop strategy found for {client_type}. "
+        f"Pass strategy= explicitly or install a supported provider: "
+        f"pip install ai-guardian[anthropic]"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Provider extractor interface

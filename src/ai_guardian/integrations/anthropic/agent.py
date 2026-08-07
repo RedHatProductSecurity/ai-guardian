@@ -9,23 +9,172 @@ from ai_guardian.integrations.anthropic.tools import (
     is_server_tool,
     resolve_tools,
 )
-from ai_guardian.integrations.base import _try_sanitize_text
+from ai_guardian.integrations.base import (
+    AgentLoopStrategy,
+    ParsedResponse,
+    ToolCall,
+    _try_sanitize_text,
+    detect_loop_strategy,
+    register_loop_strategy,
+)
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
 
-_API_METHOD = "messages.create"
+
+# ---------------------------------------------------------------------------
+# Anthropic loop strategy
+# ---------------------------------------------------------------------------
+
+
+class AnthropicLoopStrategy(AgentLoopStrategy):
+    """Agent loop strategy for Anthropic's messages API."""
+
+    @property
+    def api_method_name(self) -> str:
+        return "messages.create"
+
+    def create_default_client(self) -> Any:
+        from ai_guardian.integrations.anthropic._extractor import create_client
+
+        return create_client()
+
+    def resolve_tools(
+        self,
+        tools: Union[str, List[Any]],
+        tool_types: Optional[Dict[str, str]] = None,
+    ) -> List[Any]:
+        return resolve_tools(tools, tool_types)
+
+    def format_submit_result_tool(
+        self, output_schema: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        return {
+            "name": "submit_result",
+            "description": (
+                "Submit the final structured result. "
+                "Call this as your last action when the task is complete."
+            ),
+            "input_schema": output_schema,
+        }
+
+    def build_create_kwargs(
+        self,
+        *,
+        model: str,
+        max_tokens: int,
+        tools: List[Any],
+        messages: List[Dict[str, Any]],
+        system: str,
+    ) -> Dict[str, Any]:
+        kwargs: Dict[str, Any] = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "tools": tools,
+            "messages": messages,
+        }
+        if system:
+            kwargs["system"] = system
+        return kwargs
+
+    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+        return client.messages.create(**kwargs)
+
+    def parse_response(self, response: Any) -> ParsedResponse:
+        content = getattr(response, "content", [])
+        stop = getattr(response, "stop_reason", "end_turn")
+        usage = getattr(response, "usage", None)
+
+        text_parts: List[str] = []
+        tool_calls: List[ToolCall] = []
+        for block in content:
+            bt = getattr(block, "type", None)
+            if bt == "text":
+                t = getattr(block, "text", "")
+                if t:
+                    text_parts.append(t)
+            elif bt == "tool_use":
+                tool_calls.append(
+                    ToolCall(
+                        id=getattr(block, "id", ""),
+                        name=getattr(block, "name", ""),
+                        input=getattr(block, "input", {}),
+                    )
+                )
+
+        return ParsedResponse(
+            stop_reason=stop,
+            text="\n".join(text_parts),
+            tool_calls=tool_calls,
+            raw_content=content,
+            input_tokens=getattr(usage, "input_tokens", 0) if usage else 0,
+            output_tokens=getattr(usage, "output_tokens", 0) if usage else 0,
+        )
+
+    def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
+        return {
+            "type": "tool_result",
+            "tool_use_id": tool_call_id,
+            "content": content,
+        }
+
+    def append_assistant_and_results(
+        self,
+        messages: List[Dict[str, Any]],
+        raw_content: Any,
+        tool_results: List[Dict[str, Any]],
+    ) -> None:
+        messages.append({"role": "assistant", "content": raw_content})
+        messages.append({"role": "user", "content": tool_results})
+
+    def inject_user_text_after_results(
+        self,
+        messages: List[Dict[str, Any]],
+        text: str,
+    ) -> None:
+        last_content = messages[-1]["content"]
+        if isinstance(last_content, list):
+            last_content.append({"type": "text", "text": text})
+        else:
+            messages.append({"role": "user", "content": text})
+
+    def is_server_tool(self, tool_name: str) -> bool:
+        return is_server_tool(tool_name)
+
+    @classmethod
+    def detect(cls, client: Any) -> bool:
+        return hasattr(client, "messages")
+
+
+# Register for all Anthropic client types
+for _name in (
+    "Anthropic",
+    "AsyncAnthropic",
+    "AnthropicVertex",
+    "AsyncAnthropicVertex",
+    "AnthropicBedrock",
+    "AsyncAnthropicBedrock",
+    "AnthropicFoundry",
+    "AsyncAnthropicFoundry",
+):
+    register_loop_strategy(f"anthropic.{_name}", AnthropicLoopStrategy)
+
+
+# ---------------------------------------------------------------------------
+# GuardedAgent
+# ---------------------------------------------------------------------------
 
 
 class GuardedAgent:
     """Tool-use agent loop that scans every message for security threats.
 
-    Wraps the Anthropic messages API with an agentic tool-use loop.
+    Wraps an LLM API with an agentic tool-use loop.
     Every message — prompts, tool results, intermediate responses — is
     scanned for prompt injection, secrets, and PII via ai-guardian.
 
-    Supports Anthropic direct, Vertex AI, and Bedrock backends
-    (auto-detected from env vars, or pass an explicit *client*).
+    Auto-detects the provider from the *client* type and selects the
+    matching loop strategy.  Supports Anthropic (direct, Vertex AI,
+    Bedrock) and OpenAI out of the box.
     """
 
     def __init__(
@@ -50,6 +199,7 @@ class GuardedAgent:
         pre_run: Optional[Callable[[str, dict], None]] = None,
         post_run: Optional[Callable[[dict], None]] = None,
         between_turns: Optional[Callable[[list, Any, int], Any]] = None,
+        strategy: Optional[AgentLoopStrategy] = None,
     ):
         self._model = model
         self._system_prompt = system_prompt
@@ -70,26 +220,22 @@ class GuardedAgent:
         self._post_run = post_run
         self._between_turns = between_turns
 
-        self._client = client or self._create_client()
-        self._resolved_tools = resolve_tools(tools, tool_types)
+        if strategy is not None:
+            self._strategy = strategy
+            self._client = client or strategy.create_default_client()
+        elif client is not None:
+            self._client = client
+            self._strategy = detect_loop_strategy(client)
+        else:
+            self._strategy = AnthropicLoopStrategy()
+            self._client = self._strategy.create_default_client()
+
+        self._resolved_tools = self._strategy.resolve_tools(tools, tool_types)
 
         if output_schema:
             self._resolved_tools.append(
-                {
-                    "name": "submit_result",
-                    "description": (
-                        "Submit the final structured result. "
-                        "Call this as your last action when the task is complete."
-                    ),
-                    "input_schema": output_schema,
-                }
+                self._strategy.format_submit_result_tool(output_schema)
             )
-
-    @staticmethod
-    def _create_client() -> Any:
-        from ai_guardian.integrations.anthropic._extractor import create_client
-
-        return create_client()
 
     def run(self, prompt: str) -> Dict[str, Any]:
         """Run the agent loop and return the result.
@@ -119,6 +265,8 @@ class GuardedAgent:
                 self._post_run(result)
 
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
+        strategy = self._strategy
+
         with monitor(
             action=self._action, mode=self._mode, config=self._config
         ) as session:
@@ -145,51 +293,36 @@ class GuardedAgent:
             stop_reason = "max_turns"
 
             for _turn in range(self._max_turns):
-                create_kwargs: Dict[str, Any] = {
-                    "model": self._model,
-                    "max_tokens": self._max_tokens,
-                    "tools": self._resolved_tools,
-                    "messages": messages,
-                }
-                if system:
-                    create_kwargs["system"] = system
+                create_kwargs = strategy.build_create_kwargs(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    tools=self._resolved_tools,
+                    messages=messages,
+                    system=system,
+                )
 
                 if self._before_call:
-                    self._before_call(_API_METHOD, (), create_kwargs)
+                    self._before_call(strategy.api_method_name, (), create_kwargs)
 
-                response = self._client.messages.create(**create_kwargs)
+                response = strategy.call_api(self._client, create_kwargs)
+                parsed = strategy.parse_response(response)
 
-                resp_usage = getattr(response, "usage", None)
-                if resp_usage:
-                    usage_totals["input_tokens"] += getattr(
-                        resp_usage, "input_tokens", 0
-                    )
-                    usage_totals["output_tokens"] += getattr(
-                        resp_usage, "output_tokens", 0
-                    )
+                usage_totals["input_tokens"] += parsed.input_tokens
+                usage_totals["output_tokens"] += parsed.output_tokens
 
-                content = getattr(response, "content", [])
-                resp_stop = getattr(response, "stop_reason", "end_turn")
-
-                try:
-                    for block in content:
-                        block_type = getattr(block, "type", None)
-                        if block_type == "text" and self._scan_output:
-                            text = getattr(block, "text", "")
-                            if text:
-                                session.check_content(
-                                    text, filename="assistant_response"
-                                )
-                except SecurityViolation as exc:
-                    exc.response = response
-                    exc.sanitized_text = _try_sanitize_text(
-                        session, self._extract_text(content)
-                    )
-                    raise
+                if self._scan_output and parsed.text:
+                    try:
+                        session.check_content(
+                            parsed.text, filename="assistant_response"
+                        )
+                    except SecurityViolation as exc:
+                        exc.response = response
+                        exc.sanitized_text = _try_sanitize_text(session, parsed.text)
+                        raise
 
                 early_stop = False
                 if self._after_call:
-                    hook_result = self._after_call(_API_METHOD, response)
+                    hook_result = self._after_call(strategy.api_method_name, response)
                     if hook_result is False:
                         early_stop = True
 
@@ -198,18 +331,18 @@ class GuardedAgent:
                         usage_totals["input_tokens"] + usage_totals["output_tokens"]
                     )
                     if total_spent >= self._max_budget_tokens:
-                        final_text = self._extract_text(content)
+                        final_text = parsed.text
                         stop_reason = "budget_exceeded"
                         break
 
                 if early_stop:
-                    final_text = self._extract_text(content)
+                    final_text = parsed.text
                     stop_reason = "hook_early_stop"
                     break
 
-                if resp_stop == "end_turn":
+                if parsed.stop_reason == "end_turn":
                     if self._output_schema and structured_output is None:
-                        messages.append({"role": "assistant", "content": content})
+                        strategy.append_assistant_message(messages, parsed.raw_content)
                         messages.append(
                             {
                                 "role": "user",
@@ -225,7 +358,7 @@ class GuardedAgent:
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
-                            final_text = self._extract_text(content)
+                            final_text = parsed.text
                             stop_reason = "hook_early_stop"
                             break
                         if isinstance(hook_result, str):
@@ -234,62 +367,50 @@ class GuardedAgent:
                                     hook_result,
                                     filename="between_turns_injection",
                                 )
-                            messages.append({"role": "assistant", "content": content})
+                            strategy.append_assistant_message(
+                                messages, parsed.raw_content
+                            )
                             messages.append({"role": "user", "content": hook_result})
                             continue
 
-                    final_text = self._extract_text(content)
+                    final_text = parsed.text
                     stop_reason = "end_turn"
                     break
 
-                if resp_stop == "refusal":
-                    final_text = self._extract_text(content)
+                if parsed.stop_reason == "refusal":
+                    final_text = parsed.text
                     stop_reason = "refusal"
                     break
 
-                if resp_stop in ("tool_use", "pause_turn"):
+                if parsed.stop_reason in ("tool_use", "pause_turn"):
                     tool_results: List[Dict[str, Any]] = []
-                    for block in content:
-                        block_type = getattr(block, "type", None)
-                        if block_type != "tool_use":
-                            continue
-
-                        tool_name = getattr(block, "name", "")
-                        tool_id = getattr(block, "id", "")
-                        tool_input = getattr(block, "input", {})
-
-                        if tool_name == "submit_result":
-                            structured_output = tool_input
+                    for tc in parsed.tool_calls:
+                        if tc.name == "submit_result":
+                            structured_output = tc.input
                             tool_results.append(
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": tool_id,
-                                    "content": "Result submitted.",
-                                }
+                                strategy.format_tool_result(tc.id, "Result submitted.")
                             )
                             continue
 
-                        if is_server_tool(tool_name):
+                        if strategy.is_server_tool(tc.name):
                             continue
 
-                        result_text = execute_tool(tool_name, tool_input, self._cwd)
+                        result_text = execute_tool(tc.name, tc.input, self._cwd)
 
                         if self._scan_output and result_text:
                             session.check_content(
-                                result_text, filename=f"tool_result:{tool_name}"
+                                result_text,
+                                filename=f"tool_result:{tc.name}",
                             )
 
                         tool_results.append(
-                            {
-                                "type": "tool_result",
-                                "tool_use_id": tool_id,
-                                "content": result_text,
-                            }
+                            strategy.format_tool_result(tc.id, result_text)
                         )
 
                     if tool_results:
-                        messages.append({"role": "assistant", "content": content})
-                        messages.append({"role": "user", "content": tool_results})
+                        strategy.append_assistant_and_results(
+                            messages, parsed.raw_content, tool_results
+                        )
 
                     if structured_output is not None:
                         stop_reason = "end_turn"
@@ -298,7 +419,7 @@ class GuardedAgent:
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
-                            final_text = self._extract_text(content)
+                            final_text = parsed.text
                             stop_reason = "hook_early_stop"
                             break
                         if isinstance(hook_result, str):
@@ -307,21 +428,15 @@ class GuardedAgent:
                                     hook_result,
                                     filename="between_turns_injection",
                                 )
-                            last_content = messages[-1]["content"]
-                            if isinstance(last_content, list):
-                                last_content.append(
-                                    {"type": "text", "text": hook_result}
-                                )
-                            else:
-                                messages.append(
-                                    {"role": "user", "content": hook_result}
-                                )
+                            strategy.inject_user_text_after_results(
+                                messages, hook_result
+                            )
 
                     continue
 
-                logger.warning("Unknown stop_reason: %s", resp_stop)
-                final_text = self._extract_text(content)
-                stop_reason = resp_stop
+                logger.warning("Unknown stop_reason: %s", parsed.stop_reason)
+                final_text = parsed.text
+                stop_reason = parsed.stop_reason
                 break
 
             output: Any = final_text
@@ -334,14 +449,3 @@ class GuardedAgent:
                 "stop_reason": stop_reason,
                 "usage": usage_totals,
             }
-
-    @staticmethod
-    def _extract_text(content: Any) -> str:
-        parts: List[str] = []
-        if isinstance(content, list):
-            for block in content:
-                if getattr(block, "type", None) == "text":
-                    text = getattr(block, "text", "")
-                    if text:
-                        parts.append(text)
-        return "\n".join(parts)
