@@ -2947,6 +2947,240 @@ class TestGuardedClientHooks:
 
 
 # ============================================================================
+# TestGuardedAgentCompaction
+# ============================================================================
+
+
+class TestGuardedAgentCompaction:
+    """Auto-compaction tests for GuardedAgent."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_count = MagicMock(return_value=SimpleNamespace(input_tokens=1000))
+            mock_messages = SimpleNamespace(create=mock_create, count_tokens=mock_count)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_auto_compact_disabled(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=190_000, output_tokens=50),
+        )
+        agent, client = self._make_agent(auto_compact=False)
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+        assert result["compaction_count"] == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_auto_compact_triggers_on_high_input_tokens(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        big_tool_output = "\n".join(["x" * 200] * 5000)
+
+        def _tool_resp(tid, input_toks):
+            return _make_agent_response(
+                [
+                    SimpleNamespace(
+                        type="tool_use",
+                        name="bash",
+                        id=tid,
+                        input={"command": "cat big.log"},
+                    ),
+                ],
+                stop_reason="tool_use",
+                usage=SimpleNamespace(input_tokens=input_toks, output_tokens=100),
+            )
+
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=50_000, output_tokens=50),
+        )
+        agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
+        client.messages.create.side_effect = [
+            _tool_resp("t1", 130_000),
+            _tool_resp("t2", 180_000),
+            final_response,
+        ]
+        client.messages.count_tokens.return_value = SimpleNamespace(
+            input_tokens=180_000
+        )
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value=big_tool_output,
+        ):
+            result = agent.run("Analyze big.log")
+
+        assert result["compaction_count"] >= 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_auto_compact_count_tokens_fallback(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        big_output = "\n".join(["y" * 200] * 5000)
+
+        def _tool_resp(tid, input_toks):
+            return _make_agent_response(
+                [
+                    SimpleNamespace(
+                        type="tool_use",
+                        name="bash",
+                        id=tid,
+                        input={"command": "echo hi"},
+                    ),
+                ],
+                stop_reason="tool_use",
+                usage=SimpleNamespace(input_tokens=input_toks, output_tokens=100),
+            )
+
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=50_000, output_tokens=50),
+        )
+        agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
+        client.messages.create.side_effect = [
+            _tool_resp("t1", 130_000),
+            _tool_resp("t2", 180_000),
+            final_response,
+        ]
+        client.messages.count_tokens.side_effect = Exception("API error")
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value=big_output,
+        ):
+            result = agent.run("Do something")
+
+        assert result["compaction_count"] >= 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_compaction_count_in_result(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hi")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hello")
+        assert "compaction_count" in result
+        assert result["compaction_count"] == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_loop_continues_after_compaction(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_resp1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo 1"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=170_000, output_tokens=100),
+        )
+        tool_resp2 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t2",
+                    input={"command": "echo 2"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=50_000, output_tokens=100),
+        )
+        final_resp = _make_agent_response(
+            [SimpleNamespace(type="text", text="All done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=30_000, output_tokens=50),
+        )
+        agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
+        client.messages.create.side_effect = [tool_resp1, tool_resp2, final_resp]
+        client.messages.count_tokens.return_value = SimpleNamespace(
+            input_tokens=170_000
+        )
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="x" * 100_000,
+        ):
+            result = agent.run("Run two commands")
+
+        assert result["output"] == "All done"
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_no_compaction_below_threshold(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=10_000, output_tokens=50),
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=10_500, output_tokens=50),
+        )
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="small output",
+        ):
+            result = agent.run("Quick task")
+
+        assert result["compaction_count"] == 0
+
+
+# ============================================================================
 # TestOpenAIGuardedAgent
 # ============================================================================
 
