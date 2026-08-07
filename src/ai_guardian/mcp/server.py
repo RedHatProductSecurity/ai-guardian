@@ -69,11 +69,23 @@ def _check_client_hooks(client_name: str) -> Optional[str]:
             return None
 
         ide_name = setup.IDE_CONFIGS[ide_type].get("name", ide_type)
-        return (
+        warning = (
             f"\n\n⚠️ SECURITY WARNING: {ide_name} hooks are NOT installed. "
             f"Security scanning is NOT active for this session. "
             f"Run `ai-guardian setup` to install hooks."
         )
+
+        try:
+            from ai_guardian.tray.notifications import show_notification
+
+            show_notification(
+                "⚠️ Security hooks not installed",
+                f"{ide_name} hooks are missing. Run: ai-guardian setup",
+            )
+        except Exception:
+            pass
+
+        return warning
     except Exception as exc:
         logger.debug("Hook check failed for %s: %s", client_name, exc)
         return None
