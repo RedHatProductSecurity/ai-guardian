@@ -2,6 +2,7 @@
 
 import logging
 import os
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from ai_guardian.integrations.anthropic.tools import (
@@ -21,6 +22,82 @@ from ai_guardian.integrations.base import (
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class TurnEvent:
+    """Structured event emitted by ``on_turn`` and stored in ``trace``.
+
+    Fields vary by ``type``:
+
+    * ``"system"`` — ``preamble``, ``system_prompt``, ``user_prompt``
+    * ``"response"`` — ``text``, ``stop_reason``, ``usage``
+    * ``"tool_call"`` — ``name``, ``input``
+    * ``"tool_result"`` — ``name``, ``output``
+    * ``"scan"`` — ``scanned``, ``violations``
+    """
+
+    type: str
+    text: Optional[str] = None
+    name: Optional[str] = None
+    input: Optional[dict] = None
+    output: Optional[str] = None
+    preamble: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None
+    usage: Optional[dict] = None
+    stop_reason: Optional[str] = None
+    violations: Optional[list] = field(default_factory=list)
+    scanned: Optional[str] = None
+
+    def __str__(self) -> str:
+        if self.type == "system":
+            parts = []
+            if self.preamble:
+                parts.append(f"preamble: {self.preamble[:50]}...")
+            if self.system_prompt:
+                parts.append(f"prompt: {self.system_prompt[:50]}...")
+            if self.user_prompt:
+                parts.append(f"user: {self.user_prompt[:50]}...")
+            return f"[system] {', '.join(parts)}"
+        if self.type == "response":
+            preview = (self.text or "")[:100]
+            ellipsis = "..." if len(self.text or "") > 100 else ""
+            return f"[response] {preview}{ellipsis}"
+        if self.type == "tool_call":
+            return f"[tool_call] {self.name}({self.input})"
+        if self.type == "tool_result":
+            preview = (self.output or "")[:100]
+            ellipsis = "..." if len(self.output or "") > 100 else ""
+            return f"[tool_result] {self.name}: {preview}{ellipsis}"
+        if self.type == "scan":
+            v = self.violations or []
+            if v:
+                return f"[scan] {self.scanned}: {len(v)} violation(s)"
+            return f"[scan] {self.scanned}: clean"
+        return f"[{self.type}]"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to a trace-ready dict, omitting ``None`` fields."""
+        d: Dict[str, Any] = {"type": self.type}
+        for attr in (
+            "text",
+            "name",
+            "input",
+            "output",
+            "preamble",
+            "system_prompt",
+            "user_prompt",
+            "usage",
+            "stop_reason",
+            "violations",
+            "scanned",
+        ):
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        return d
+
 
 _USAGE_TOKEN_FIELDS = (
     "input_tokens",
@@ -264,6 +341,7 @@ class GuardedAgent:
         pre_run: Optional[Callable[[str, dict], None]] = None,
         post_run: Optional[Callable[[dict], None]] = None,
         between_turns: Optional[Callable[[list, Any, int], Any]] = None,
+        on_turn: Optional[Callable[[int, TurnEvent], None]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
         cache_ttl: Optional[Union[str, int]] = None,
         auto_compact: bool = True,
@@ -291,6 +369,9 @@ class GuardedAgent:
         self._pre_run = pre_run
         self._post_run = post_run
         self._between_turns = between_turns
+        self._on_turn = on_turn
+        self._preamble: Optional[str] = None
+        self._original_system_prompt = system_prompt
         self._auto_compact = auto_compact
         self._compact_threshold = compact_threshold
         self._compact_keep_turns = compact_keep_turns
@@ -347,6 +428,7 @@ class GuardedAgent:
                 tools_spec = config_value
             elif param == "system_prompt_preamble":
                 if config_value:
+                    self._preamble = config_value
                     self._system_prompt = (
                         f"{_PREAMBLE_PREFIX}{config_value}\n\n" f"{self._system_prompt}"
                     )
@@ -442,14 +524,34 @@ class GuardedAgent:
 
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
         strategy = self._strategy
+        trace: List[Dict[str, Any]] = []
+
+        def _emit(turn: int, event: TurnEvent) -> None:
+            entry = event.to_dict()
+            entry["turn"] = turn
+            trace.append(entry)
+            if self._on_turn:
+                self._on_turn(turn, event)
 
         with monitor(
             action=self._action, mode=self._mode, config=self._config
         ) as session:
+            _emit(
+                0,
+                TurnEvent(
+                    type="system",
+                    preamble=self._preamble,
+                    system_prompt=self._original_system_prompt,
+                    user_prompt=prompt,
+                ),
+            )
+
             if self._scan_input and self._system_prompt:
                 session.check_content(self._system_prompt, filename="system_prompt")
+                _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
             if self._scan_input:
                 session.check_content(prompt, filename="user_prompt")
+                _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
 
             messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
 
@@ -468,6 +570,8 @@ class GuardedAgent:
             last_input_tokens = 0
 
             for _turn in range(self._max_turns):
+                turn_num = _turn + 1
+
                 if self._auto_compact and _turn > 0:
                     messages, did_compact = self._maybe_compact(
                         strategy, messages, last_input_tokens
@@ -490,16 +594,43 @@ class GuardedAgent:
                 response = strategy.call_api(self._client, create_kwargs)
                 parsed = strategy.parse_response(response)
 
-                for _f in _USAGE_TOKEN_FIELDS:
-                    usage_totals[_f] += getattr(parsed, _f, 0)
+                turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
+                for _f, _v in turn_usage.items():
+                    usage_totals[_f] += _v
                 last_input_tokens = parsed.input_tokens
+                _emit(
+                    turn_num,
+                    TurnEvent(
+                        type="response",
+                        text=parsed.text,
+                        stop_reason=parsed.stop_reason,
+                        usage=turn_usage,
+                    ),
+                )
 
                 if self._scan_output and parsed.text:
                     try:
                         session.check_content(
                             parsed.text, filename="assistant_response"
                         )
+                        _emit(
+                            turn_num,
+                            TurnEvent(type="scan", scanned="assistant_response"),
+                        )
                     except SecurityViolation as exc:
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="scan",
+                                scanned="assistant_response",
+                                violations=[
+                                    {
+                                        "type": exc.result.violation_type,
+                                        "message": exc.result.message,
+                                    }
+                                ],
+                            ),
+                        )
                         exc.response = response
                         exc.sanitized_text = _try_sanitize_text(session, parsed.text)
                         raise
@@ -579,12 +710,31 @@ class GuardedAgent:
                         if strategy.is_server_tool(tc.name):
                             continue
 
+                        _emit(
+                            turn_num,
+                            TurnEvent(type="tool_call", name=tc.name, input=tc.input),
+                        )
+
                         result_text = execute_tool(tc.name, tc.input, self._cwd)
+
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="tool_result", name=tc.name, output=result_text
+                            ),
+                        )
 
                         if self._scan_output and result_text:
                             session.check_content(
                                 result_text,
                                 filename=f"tool_result:{tc.name}",
+                            )
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="scan",
+                                    scanned=f"tool_result:{tc.name}",
+                                ),
                             )
 
                         tool_results.append(
@@ -633,4 +783,5 @@ class GuardedAgent:
                 "stop_reason": stop_reason,
                 "usage": usage_totals,
                 "compaction_count": compaction_count,
+                "trace": trace,
             }

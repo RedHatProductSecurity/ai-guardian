@@ -4093,3 +4093,575 @@ class TestGuardedAgentCacheTtl:
         call_kwargs = client.messages.create.call_args[1]
         assert isinstance(call_kwargs["system"], list)
         assert call_kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
+
+
+# ============================================================================
+# TestTurnEvent
+# ============================================================================
+
+
+class TestTurnEvent:
+    """TurnEvent dataclass and __str__ formatting."""
+
+    def test_system_event_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(
+            type="system",
+            preamble="POLICY: be safe",
+            system_prompt="You are a code reviewer.",
+            user_prompt="Review this code",
+        )
+        s = str(ev)
+        assert "[system]" in s
+        assert "preamble:" in s
+        assert "prompt:" in s
+        assert "user:" in s
+
+    def test_response_event_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="response", text="Hello world", stop_reason="end_turn")
+        s = str(ev)
+        assert "[response]" in s
+        assert "Hello world" in s
+
+    def test_response_event_str_truncates(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="response", text="x" * 200)
+        s = str(ev)
+        assert s.endswith("...")
+
+    def test_tool_call_event_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="tool_call", name="bash", input={"command": "ls"})
+        s = str(ev)
+        assert "[tool_call]" in s
+        assert "bash" in s
+
+    def test_tool_result_event_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="tool_result", name="bash", output="file1.py\nfile2.py")
+        s = str(ev)
+        assert "[tool_result]" in s
+        assert "bash" in s
+
+    def test_scan_clean_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="scan", scanned="assistant_response", violations=[])
+        s = str(ev)
+        assert "[scan]" in s
+        assert "clean" in s
+
+    def test_scan_violations_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(
+            type="scan",
+            scanned="assistant_response",
+            violations=[{"type": "secret", "message": "AWS key detected"}],
+        )
+        s = str(ev)
+        assert "1 violation" in s
+
+    def test_unknown_type_str(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="custom")
+        assert str(ev) == "[custom]"
+
+    def test_to_dict_omits_none(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="response", text="hello", stop_reason="end_turn")
+        d = ev.to_dict()
+        assert d["type"] == "response"
+        assert d["text"] == "hello"
+        assert d["stop_reason"] == "end_turn"
+        assert "name" not in d
+        assert "input" not in d
+        assert "preamble" not in d
+
+    def test_to_dict_includes_empty_violations(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="scan", scanned="user_prompt", violations=[])
+        d = ev.to_dict()
+        assert d["violations"] == []
+
+    def test_print_works_as_on_turn(self):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        ev = TurnEvent(type="response", text="Hello!")
+        output = str(ev)
+        assert isinstance(output, str)
+
+
+# ============================================================================
+# TestGuardedAgentTrace
+# ============================================================================
+
+
+class TestGuardedAgentTrace:
+    """Trace collection and on_turn callback tests."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_in_result(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert "trace" in result
+        assert isinstance(result["trace"], list)
+        assert len(result["trace"]) > 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_starts_with_system_event(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(system_prompt="You are helpful.")
+        client.messages.create.return_value = response
+
+        result = agent.run("Hello")
+        trace = result["trace"]
+
+        assert trace[0]["turn"] == 0
+        assert trace[0]["type"] == "system"
+        assert trace[0]["system_prompt"] == "You are helpful."
+        assert trace[0]["user_prompt"] == "Hello"
+        assert trace[0].get("preamble") is None
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_system_event_no_system_prompt(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hello")
+        trace = result["trace"]
+
+        assert trace[0]["type"] == "system"
+        assert trace[0]["system_prompt"] == ""
+        assert trace[0]["user_prompt"] == "Hello"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_has_scan_events(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(system_prompt="Be helpful.")
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+        trace = result["trace"]
+
+        scan_events = [e for e in trace if e["type"] == "scan"]
+        assert len(scan_events) >= 2
+        scanned_targets = [e["scanned"] for e in scan_events]
+        assert "user_prompt" in scanned_targets
+        assert "assistant_response" in scanned_targets
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_no_scan_when_disabled(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+        trace = result["trace"]
+
+        scan_events = [e for e in trace if e["type"] == "scan"]
+        assert len(scan_events) == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_response_event(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=100, output_tokens=50),
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+        trace = result["trace"]
+
+        resp_events = [e for e in trace if e["type"] == "response"]
+        assert len(resp_events) == 1
+        assert resp_events[0]["turn"] == 1
+        assert resp_events[0]["text"] == "Hello!"
+        assert resp_events[0]["stop_reason"] == "end_turn"
+        assert resp_events[0]["usage"]["input_tokens"] == 100
+        assert resp_events[0]["usage"]["output_tokens"] == 50
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_tool_events(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo test"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="test output",
+        ):
+            result = agent.run("Run echo")
+
+        trace = result["trace"]
+
+        tc_events = [e for e in trace if e["type"] == "tool_call"]
+        assert len(tc_events) == 1
+        assert tc_events[0]["turn"] == 1
+        assert tc_events[0]["name"] == "bash"
+        assert tc_events[0]["input"] == {"command": "echo test"}
+
+        tr_events = [e for e in trace if e["type"] == "tool_result"]
+        assert len(tr_events) == 1
+        assert tr_events[0]["turn"] == 1
+        assert tr_events[0]["name"] == "bash"
+        assert tr_events[0]["output"] == "test output"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_tool_result_scan(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            result = agent.run("Test")
+
+        trace = result["trace"]
+        scan_events = [e for e in trace if e["type"] == "scan"]
+        tool_scans = [e for e in scan_events if "tool_result" in e.get("scanned", "")]
+        assert len(tool_scans) == 1
+        assert tool_scans[0]["scanned"] == "tool_result:bash"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_on_turn_callback_fires(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        events = []
+
+        def handler(turn, event):
+            events.append((turn, event))
+
+        agent, client = self._make_agent(on_turn=handler)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        assert len(events) > 0
+        turns_seen = [t for t, _ in events]
+        assert 0 in turns_seen
+        assert 1 in turns_seen
+        types_seen = [e.type for _, e in events]
+        assert "system" in types_seen
+        assert "response" in types_seen
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_on_turn_receives_turn_event_instances(self, mock_monitor):
+        from ai_guardian.integrations.anthropic.agent import TurnEvent
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        events = []
+        agent, client = self._make_agent(on_turn=lambda t, e: events.append(e))
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        for ev in events:
+            assert isinstance(ev, TurnEvent)
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_multi_turn(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo 1"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            result = agent.run("Test")
+
+        trace = result["trace"]
+        resp_events = [e for e in trace if e["type"] == "response"]
+        assert len(resp_events) == 2
+        assert resp_events[0]["turn"] == 1
+        assert resp_events[1]["turn"] == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_server_tools_no_trace_events(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="web_search",
+                    id="tool_1",
+                    input={"query": "test"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Found it")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(tools=["bash", "web_search"])
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool"
+        ) as mock_exec:
+            result = agent.run("Search")
+            mock_exec.assert_not_called()
+
+        trace = result["trace"]
+        tc_events = [e for e in trace if e["type"] == "tool_call"]
+        assert len(tc_events) == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_on_turn_not_set_still_collects_trace(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert "trace" in result
+        assert len(result["trace"]) > 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_event_order(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            result = agent.run("Test order")
+
+        types = [e["type"] for e in result["trace"]]
+        assert types[0] == "system"
+        assert "scan" in types
+        assert "response" in types
+        assert "tool_call" in types
+        assert "tool_result" in types
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_scan_violation_recorded(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret detected",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="leaked secret")],
+            stop_reason="end_turn",
+        )
+
+        events = []
+        agent, client = self._make_agent(
+            action="block", on_turn=lambda t, e: events.append((t, e))
+        )
+        client.messages.create.return_value = response
+
+        with pytest.raises(SecurityViolation):
+            agent.run("Hi")
+
+        scan_events = [(t, e) for t, e in events if e.type == "scan"]
+        violation_scans = [
+            (t, e) for t, e in scan_events if e.violations and len(e.violations) > 0
+        ]
+        assert len(violation_scans) == 1
+        assert violation_scans[0][1].scanned == "assistant_response"
+        assert violation_scans[0][1].violations[0]["type"] == "secret"
