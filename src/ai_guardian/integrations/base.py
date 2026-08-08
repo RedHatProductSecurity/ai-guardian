@@ -452,6 +452,37 @@ class _StreamProxy:
 # ---------------------------------------------------------------------------
 
 
+_PREAMBLE_PREFIX = (
+    "Before processing the following instructions, apply these policies:\n"
+)
+
+
+def _inject_preamble(kwargs, preamble):
+    """Prepend a system prompt preamble into API call kwargs.
+
+    Handles Anthropic (``system`` kwarg as str or content-block list)
+    and OpenAI (system role in ``messages`` list).
+    """
+    prefix = f"{_PREAMBLE_PREFIX}{preamble}\n\n"
+    if "system" in kwargs:
+        sys_val = kwargs["system"]
+        if isinstance(sys_val, str):
+            kwargs["system"] = prefix + sys_val
+        elif isinstance(sys_val, list):
+            kwargs["system"] = [{"type": "text", "text": prefix}] + list(sys_val)
+    elif "messages" in kwargs:
+        messages = kwargs["messages"]
+        if (
+            messages
+            and isinstance(messages[0], dict)
+            and messages[0].get("role") == "system"
+        ):
+            content = messages[0].get("content", "")
+            kwargs["messages"] = [dict(messages[0], content=prefix + content)] + list(
+                messages[1:]
+            )
+
+
 def _try_sanitize_text(session, text):
     """Sanitize *text* via *session*, returning ``None`` on failure."""
     if not text:
@@ -526,6 +557,9 @@ class _GuardedClient:
         response_parser=None,
         before_call=None,
         after_call=None,
+        model_override=None,
+        max_tokens_override=None,
+        system_prompt_preamble=None,
     ):
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_extractor", extractor)
@@ -537,6 +571,9 @@ class _GuardedClient:
         object.__setattr__(self, "_response_parser", response_parser)
         object.__setattr__(self, "_before_call", before_call)
         object.__setattr__(self, "_after_call", after_call)
+        object.__setattr__(self, "_model_override", model_override)
+        object.__setattr__(self, "_max_tokens_override", max_tokens_override)
+        object.__setattr__(self, "_system_prompt_preamble", system_prompt_preamble)
 
         methods = extractor.methods_to_wrap()
         object.__setattr__(self, "_wrapped_methods", set(methods))
@@ -562,6 +599,13 @@ class _GuardedClient:
         gc = self
 
         def wrapper(*args, **kwargs):
+            if gc._model_override and "model" in kwargs:
+                kwargs["model"] = gc._model_override
+            if gc._max_tokens_override and "max_tokens" in kwargs:
+                kwargs["max_tokens"] = gc._max_tokens_override
+            if gc._system_prompt_preamble:
+                _inject_preamble(kwargs, gc._system_prompt_preamble)
+
             with monitor(
                 action=gc._action, mode=gc._mode, config=gc._config
             ) as session:
@@ -620,9 +664,13 @@ class _GuardedClient:
 _MISSING = object()
 
 
+_OVERRIDABLE_CLIENT_PARAMS = frozenset({"action", "scan_input", "scan_output", "mode"})
+
+
 def guarded(
     client: Any = _MISSING,
     *,
+    name: Optional[str] = None,
     action: str = "block",
     mode: str = "direct",
     config: Optional[Dict[str, Any]] = None,
@@ -644,6 +692,9 @@ def guarded(
     Args:
         client: An LLM provider client (e.g. ``anthropic.Anthropic()``).
             If omitted, auto-created from env vars.
+        name: Optional profile name linking to ``sdk.clients.<name>`` in
+            ``ai-guardian.json``.  Config values override code-provided
+            parameters.
         action: ``"block"``, ``"warn"``, or ``"log"``
         mode: ``"direct"`` (in-process) or ``"rest"`` (daemon)
         config: Optional config dict override
@@ -676,6 +727,64 @@ def guarded(
         client = create_client()
     if extractor is None:
         extractor = _extractor_registry.detect(client)
+
+    from ai_guardian.config.loaders import _load_sdk_profile
+
+    model_override = None
+    max_tokens_override = None
+    preamble = None
+    profile = _load_sdk_profile("clients", name)
+    if profile:
+        display_name = name or "_default"
+        param_map = {
+            "action": action,
+            "scan_input": scan_input,
+            "scan_output": scan_output,
+            "mode": mode,
+        }
+        for param in _OVERRIDABLE_CLIENT_PARAMS:
+            if param in profile:
+                config_value = profile[param]
+                code_value = param_map[param]
+                if config_value != code_value:
+                    logger.info(
+                        "guarded '%s': %s=%r " "(config override, code value: %r)",
+                        display_name,
+                        param,
+                        config_value,
+                        code_value,
+                    )
+                param_map[param] = config_value
+        action = param_map["action"]
+        scan_input = param_map["scan_input"]
+        scan_output = param_map["scan_output"]
+        mode = param_map["mode"]
+
+        if "model" in profile:
+            model_override = profile["model"]
+            logger.info(
+                "guarded '%s': model=%r (config override, injected into API calls)",
+                display_name,
+                model_override,
+            )
+        if "max_tokens" in profile:
+            max_tokens_override = profile["max_tokens"]
+            logger.info(
+                "guarded '%s': max_tokens=%r "
+                "(config override, injected into API calls)",
+                display_name,
+                max_tokens_override,
+            )
+
+        if profile.get("system_prompt_preamble"):
+            preamble = profile["system_prompt_preamble"]
+            logger.info(
+                "guarded '%s': system_prompt_preamble applied "
+                "(%d chars from config)",
+                display_name,
+                len(preamble),
+            )
+
     return _GuardedClient(
         client,
         extractor,
@@ -687,4 +796,7 @@ def guarded(
         response_parser=response_parser,
         before_call=before_call,
         after_call=after_call,
+        model_override=model_override,
+        max_tokens_override=max_tokens_override,
+        system_prompt_preamble=preamble,
     )

@@ -14,6 +14,7 @@ from ai_guardian.integrations.base import (
     AgentLoopStrategy,
     ParsedResponse,
     ToolCall,
+    _PREAMBLE_PREFIX,
     _try_sanitize_text,
     _strategy_registry,
 )
@@ -227,6 +228,20 @@ class GuardedAgent:
     Bedrock) and OpenAI out of the box.
     """
 
+    _OVERRIDABLE_PARAMS = frozenset(
+        {
+            "max_turns",
+            "max_tokens",
+            "max_budget_tokens",
+            "action",
+            "scan_input",
+            "scan_output",
+            "mode",
+            "model",
+            "cwd",
+        }
+    )
+
     def __init__(
         self,
         model: str = "claude-sonnet-5",
@@ -255,7 +270,9 @@ class GuardedAgent:
         compact_threshold: float = 1.0,
         compact_keep_turns: int = 5,
         compact_keep_first: int = 1,
+        name: Optional[str] = None,
     ):
+        self._name = name
         self._model = model
         self._system_prompt = system_prompt
         self._cwd = cwd or os.getcwd()
@@ -289,19 +306,69 @@ class GuardedAgent:
             self._strategy = AnthropicLoopStrategy()
             self._client = self._strategy.create_default_client()
 
+        tools = self._apply_config_profile(tools)
+
         if cache_ttl is not None:
             self._strategy.validate_cache_ttl(cache_ttl)
             self._cache_ttl = cache_ttl
         else:
-            self._cache_ttl = self._strategy.default_cache_ttl(max_turns)
+            self._cache_ttl = self._strategy.default_cache_ttl(self._max_turns)
 
         self._resolved_tools = self._strategy.resolve_tools(tools, tool_types)
-        validate_tools(self._resolved_tools, model)
+        validate_tools(self._resolved_tools, self._model)
 
         if output_schema:
             self._resolved_tools.append(
                 self._strategy.format_submit_result_tool(output_schema)
             )
+
+    def _apply_config_profile(
+        self, tools_spec: Union[str, List[Any]]
+    ) -> Union[str, List[Any]]:
+        """Apply config profile overrides, returning the (possibly updated) tools spec."""
+        from ai_guardian.config.loaders import _load_sdk_profile
+
+        profile = _load_sdk_profile("agents", self._name)
+        if not profile:
+            return tools_spec
+
+        display_name = self._name or "_default"
+
+        for param, config_value in profile.items():
+            if param == "tools":
+                if config_value != tools_spec:
+                    logger.info(
+                        "GuardedAgent '%s': tools=%r "
+                        "(config override, code value: %r)",
+                        display_name,
+                        config_value,
+                        tools_spec,
+                    )
+                tools_spec = config_value
+            elif param == "system_prompt_preamble":
+                if config_value:
+                    self._system_prompt = (
+                        f"{_PREAMBLE_PREFIX}{config_value}\n\n" f"{self._system_prompt}"
+                    )
+                    logger.info(
+                        "GuardedAgent '%s': system_prompt_preamble applied "
+                        "(%d chars from config)",
+                        display_name,
+                        len(config_value),
+                    )
+            elif param in self._OVERRIDABLE_PARAMS:
+                code_value = getattr(self, f"_{param}", None)
+                if config_value != code_value:
+                    logger.info(
+                        "GuardedAgent '%s': %s=%r " "(config override, code value: %r)",
+                        display_name,
+                        param,
+                        config_value,
+                        code_value,
+                    )
+                setattr(self, f"_{param}", config_value)
+
+        return tools_spec
 
     def run(self, prompt: str) -> Dict[str, Any]:
         """Run the agent loop and return the result.
