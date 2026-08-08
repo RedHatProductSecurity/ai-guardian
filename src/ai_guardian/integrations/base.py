@@ -1,6 +1,7 @@
 """Provider-agnostic LLM client wrapper with auto-detected extractors."""
 
 import logging
+import re
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -9,6 +10,8 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar, 
 from ai_guardian.sdk import SecurityViolation, monitor
 
 logger = logging.getLogger(__name__)
+
+_CODE_BLOCK_RE = re.compile(r"```[^\n]*\n.*?```", re.DOTALL)
 
 
 # ---------------------------------------------------------------------------
@@ -181,6 +184,73 @@ class AgentLoopStrategy(ABC):
         from ai_guardian.integrations.compaction import get_context_limit
 
         return get_context_limit(model)
+
+    def truncate_tool_result(self, message: Dict[str, Any], max_lines: int) -> None:
+        """Truncate tool-result content in *message* in-place.
+
+        Default handles Anthropic's content-block format where tool
+        results live inside ``role: user`` messages as
+        ``{"type": "tool_result", "content": "..."}`` blocks.
+        """
+        if message.get("role") != "user":
+            return
+        content = message.get("content")
+        if not isinstance(content, list):
+            return
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            text = block.get("content", "")
+            if not isinstance(text, str):
+                continue
+            lines = text.split("\n")
+            if len(lines) > max_lines:
+                block["content"] = (
+                    f"[truncated: {len(lines) - max_lines} lines removed]\n"
+                    + "\n".join(lines[-max_lines:])
+                )
+
+    def strip_code_blocks(self, message: Dict[str, Any]) -> None:
+        """Remove fenced code blocks from *message* content in-place.
+
+        Default handles Anthropic's content-block list and plain-string
+        formats for ``role: assistant`` messages.
+        """
+        if message.get("role") != "assistant":
+            return
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = _CODE_BLOCK_RE.sub("[code block removed]", content)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text = block.get("text", "")
+                    if "```" in text:
+                        block["text"] = _CODE_BLOCK_RE.sub("[code block removed]", text)
+
+    def create_compaction_boundary(self, dropped_count: int) -> List[Dict[str, Any]]:
+        """Return ``[assistant, user]`` boundary messages for compaction.
+
+        Default returns Anthropic content-block format.
+        """
+        return [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            f"[Conversation compacted: {dropped_count} turn(s) "
+                            f"removed to stay within context window]"
+                        ),
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": "Continue from the remaining context.",
+            },
+        ]
 
     def is_server_tool(self, tool_name: str) -> bool:
         """Return True if *tool_name* is executed server-side by the provider."""
