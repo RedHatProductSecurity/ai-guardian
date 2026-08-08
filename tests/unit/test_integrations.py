@@ -1454,7 +1454,7 @@ class TestToolResolution:
 
         tools = resolve_tools("readonly")
         names = [t["name"] for t in tools]
-        assert names == ["str_replace_based_edit_tool", "grep", "glob"]
+        assert names == ["read_file", "grep", "glob"]
 
     def test_preset_browser(self):
         from ai_guardian.integrations.anthropic.tools import resolve_tools
@@ -1678,6 +1678,52 @@ class TestToolExecution:
         )
         assert "Error" in result
         assert "escapes" in result
+
+    def test_execute_read_file(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "hello.txt").write_text("line1\nline2\nline3\n")
+        result = execute_tool("read_file", {"path": "hello.txt"}, str(tmp_path))
+        assert "line1" in result
+        assert "line3" in result
+
+    def test_execute_read_file_offset_limit(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "nums.txt").write_text("a\nb\nc\nd\ne\n")
+        result = execute_tool(
+            "read_file", {"path": "nums.txt", "offset": 1, "limit": 2}, str(tmp_path)
+        )
+        assert "b" in result
+        assert "c" in result
+        assert "a" not in result
+        assert "d" not in result
+
+    def test_execute_read_file_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "read_file", {"path": "../../../etc/passwd"}, str(tmp_path)
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_read_file_not_found(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "read_file", {"path": "nonexistent.txt"}, str(tmp_path)
+        )
+        assert "Error" in result
+        assert "does not exist" in result
+
+    def test_execute_read_file_directory(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "subdir").mkdir()
+        (tmp_path / "subdir" / "a.txt").write_text("")
+        result = execute_tool("read_file", {"path": "subdir"}, str(tmp_path))
+        assert "a.txt" in result
 
     def test_unknown_tool(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool

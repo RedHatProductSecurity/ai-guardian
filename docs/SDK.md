@@ -354,6 +354,7 @@ agent = GuardedAgent(
 
 | Name | Description |
 |------|-------------|
+| `read_file` | Read a file (with optional offset/limit) |
 | `grep` | Search for a pattern in files |
 | `glob` | List files matching a pattern |
 
@@ -361,7 +362,7 @@ agent = GuardedAgent(
 
 ```python
 tools="coding"    # bash + text_editor + grep + glob
-tools="readonly"  # text_editor + grep + glob
+tools="readonly"  # read_file + grep + glob
 tools="browser"   # computer + bash
 ```
 
