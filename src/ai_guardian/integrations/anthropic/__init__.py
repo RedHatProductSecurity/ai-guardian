@@ -8,6 +8,7 @@ from ai_guardian.integrations.anthropic._extractor import (
 from ai_guardian.integrations.anthropic.agent import (
     AnthropicLoopStrategy,
     GuardedAgent,
+    TurnEvent,
 )
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "AnthropicLoopStrategy",
     "create_client",
     "GuardedAgent",
+    "TurnEvent",
     "_ENV_DETECTORS",
 ]

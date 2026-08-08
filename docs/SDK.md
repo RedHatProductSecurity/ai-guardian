@@ -418,6 +418,7 @@ print(result["output"])  # validated structured object
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
 | `between_turns` | callable | `None` | `(messages: list, response: Any, turn: int) -> str \| None \| False` — called after each successful assistant turn. Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
 | `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
 | `auto_compact` | bool | `True` | Enable context-window monitoring. When `True`, checks token usage each turn |
@@ -527,6 +528,89 @@ To fully disable context monitoring (no check, no error), set `auto_compact=Fals
 
 **Provider support:** Compaction handles both Anthropic and OpenAI message formats automatically via the `AgentLoopStrategy`. Anthropic uses content-block lists; OpenAI uses top-level `role: tool` messages and plain string content. The correct format is selected based on the active strategy.
 
+### Observability
+
+`GuardedAgent` provides two observability surfaces: a live `on_turn` callback for interactive use, and a structured `trace` in the `run()` result for post-run debugging/audit.
+
+#### `on_turn` — Live Callback
+
+Fires each turn with a structured `TurnEvent`:
+
+```python
+from ai_guardian.integrations.anthropic import GuardedAgent, TurnEvent
+
+def my_handler(turn: int, event: TurnEvent):
+    if event.type == "system":
+        print(f"[init] prompt: {event.system_prompt[:50]}...")
+    elif event.type == "response":
+        print(f"[turn {turn}] {event.text[:100]}...")
+    elif event.type == "tool_call":
+        print(f"[turn {turn}] tool: {event.name}({event.input})")
+    elif event.type == "tool_result":
+        print(f"[turn {turn}] result: {event.output[:100]}...")
+    elif event.type == "scan":
+        if event.violations:
+            print(f"[turn {turn}] {len(event.violations)} violations")
+
+agent = GuardedAgent(
+    name="code-reviewer",
+    on_turn=my_handler,
+)
+```
+
+For quick debugging, `on_turn=print` works — `TurnEvent` has a readable `__str__`.
+
+#### `trace` — Post-Run Log
+
+Always collected (no opt-in needed). Returned in `run()` result:
+
+```python
+result = agent.run("review this code")
+
+result["trace"] = [
+    {"turn": 0, "type": "system", "system_prompt": "You are...", "user_prompt": "review this code"},
+    {"turn": 1, "type": "response", "text": "I'll start by reading...", "stop_reason": "tool_use",
+     "usage": {"input_tokens": 500, "output_tokens": 120}},
+    {"turn": 1, "type": "tool_call", "name": "bash", "input": {"command": "grep -rn 'TODO' src/"}},
+    {"turn": 1, "type": "tool_result", "name": "bash", "output": "src/main.py:42: # TODO fix auth"},
+    {"turn": 1, "type": "scan", "scanned": "assistant_response", "violations": []},
+    {"turn": 1, "type": "scan", "scanned": "tool_result:bash", "violations": []},
+    {"turn": 2, "type": "response", "text": "Found one issue...", "stop_reason": "end_turn",
+     "usage": {"input_tokens": 800, "output_tokens": 200}},
+    {"turn": 2, "type": "scan", "scanned": "assistant_response", "violations": []},
+]
+```
+
+#### Event Types
+
+| Turn | Event type | Fields |
+|------|-----------|--------|
+| 0 | `system` | `preamble` (from config, once), `system_prompt` (from code, once), `user_prompt` |
+| 0 | `scan` | `scanned` (`"system_prompt"` or `"user_prompt"`), `violations` |
+| N | `response` | `text`, `stop_reason`, `usage` |
+| N | `tool_call` | `name`, `input` |
+| N | `tool_result` | `name`, `output` |
+| N | `scan` | `scanned` (what was scanned), `violations` (list) |
+
+#### `TurnEvent` Dataclass
+
+```python
+@dataclass
+class TurnEvent:
+    type: str           # "system" | "response" | "tool_call" | "tool_result" | "scan"
+    text: str = None
+    name: str = None
+    input: dict = None
+    output: str = None
+    preamble: str = None
+    system_prompt: str = None
+    user_prompt: str = None
+    usage: dict = None
+    stop_reason: str = None
+    violations: list = []
+    scanned: str = None
+```
+
 ### `agent.run(prompt)` Return Value
 
 ```python
@@ -541,6 +625,7 @@ To fully disable context monitoring (no check, no error), set `auto_compact=Fals
         "cache_read_input_tokens": 0,
     },
     "compaction_count": 0, # number of times compaction was triggered
+    "trace": [...],        # structured event trace (see Observability)
 }
 ```
 
