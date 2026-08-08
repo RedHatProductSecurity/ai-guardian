@@ -774,6 +774,51 @@ def load_scanner_config(project_root=None):
     return config
 
 
+def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
+    """Load an SDK agent or client profile from merged config.
+
+    Resolves ``sdk.<section>`` from the merged config (global + project +
+    overlay), then returns the effective profile for *name*.
+
+    Resolution order:
+    1. Start with ``_default`` profile (if defined).
+    2. Merge the named profile on top (if *name* matches a key).
+    3. If *name* is ``None`` or has no matching key, ``_default`` alone.
+    4. If neither exists, return ``{}``.
+
+    Args:
+        section: ``"agents"`` or ``"clients"``
+        name: Profile name, or ``None`` for ``_default`` only.
+
+    Returns:
+        Merged profile dict, or empty dict if nothing configured.
+    """
+    config, error_msg = _load_config_file()
+    if error_msg or config is None:
+        return {}
+
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return {}
+
+    profiles = sdk.get(section)
+    if not isinstance(profiles, dict):
+        return {}
+
+    default_profile = profiles.get("_default", {})
+    if not isinstance(default_profile, dict):
+        default_profile = {}
+
+    if name and name in profiles:
+        named = profiles[name]
+        if isinstance(named, dict):
+            result = dict(default_profile)
+            result.update(named)
+            return result
+
+    return dict(default_profile)
+
+
 def _get_on_scan_error_action() -> str:
     """
     Load the global on_scan_error setting from ai-guardian.json.
