@@ -1,5 +1,6 @@
 """Tests for the LLM client integration wrapper."""
 
+import logging
 import os
 import sys
 import warnings
@@ -1549,6 +1550,103 @@ class TestToolResolution:
 
 
 # ============================================================================
+# TestToolValidation
+# ============================================================================
+
+
+class TestToolValidation:
+    """Startup tool validation tests."""
+
+    def test_known_tools_no_warnings(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import (
+            resolve_tools,
+            validate_tools,
+        )
+
+        tools = resolve_tools("coding")
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools, "test-model")
+        assert not caplog.records
+
+    def test_unknown_tool_warns(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import validate_tools
+
+        tools = [{"name": "bah", "input_schema": {"type": "object"}}]
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools, "test-model")
+        assert len(caplog.records) == 1
+        assert "bah" in caplog.records[0].message
+        assert "no registered executor" in caplog.records[0].message
+
+    def test_server_tools_no_warning(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import (
+            resolve_tools,
+            validate_tools,
+        )
+
+        tools = resolve_tools(["web_search", "web_fetch", "code_execution"])
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools)
+        assert not caplog.records
+
+    def test_server_tool_type_prefix_no_warning(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import validate_tools
+
+        tools = [{"name": "web_search", "type": "web_search_20260209"}]
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools)
+        assert not caplog.records
+
+    def test_sdk_version_mismatch_logs_info(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import (
+            _detected_cache,
+            validate_tools,
+        )
+
+        _detected_cache.clear()
+        tools = [{"name": "bash", "type": "bash_20200101"}]
+        fake_types = SimpleNamespace()
+        fake_types.ToolBash20250124Param = True
+        fake_anthropic = SimpleNamespace(types=fake_types)
+
+        with patch.dict(sys.modules, {"anthropic": fake_anthropic}):
+            with caplog.at_level(logging.INFO):
+                validate_tools(tools, "test-model")
+        assert any(
+            "bash_20200101" in r.message and "bash_20250124" in r.message
+            for r in caplog.records
+        )
+        _detected_cache.clear()
+
+    def test_empty_tool_warns(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import validate_tools
+
+        with caplog.at_level(logging.WARNING):
+            validate_tools([{}])
+        assert len(caplog.records) == 1
+        assert "no name or type" in caplog.records[0].message
+
+    def test_custom_schema_tools_no_warning(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import (
+            resolve_tools,
+            validate_tools,
+        )
+
+        tools = resolve_tools(["grep", "glob", "read_file"])
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools)
+        assert not caplog.records
+
+    def test_prefix_includes_model(self, caplog):
+        from ai_guardian.integrations.anthropic.tools import validate_tools
+
+        tools = [{"name": "nope", "input_schema": {"type": "object"}}]
+        with caplog.at_level(logging.WARNING):
+            validate_tools(tools, "claude-sonnet-5")
+        assert "GuardedAgent(claude-sonnet-5)" in caplog.records[0].message
+
+
+# ============================================================================
 # TestToolExecution
 # ============================================================================
 
@@ -1711,9 +1809,7 @@ class TestToolExecution:
     def test_execute_read_file_not_found(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool
 
-        result = execute_tool(
-            "read_file", {"path": "nonexistent.txt"}, str(tmp_path)
-        )
+        result = execute_tool("read_file", {"path": "nonexistent.txt"}, str(tmp_path))
         assert "Error" in result
         assert "does not exist" in result
 
