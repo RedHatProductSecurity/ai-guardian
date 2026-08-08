@@ -8,6 +8,7 @@ from ai_guardian.integrations.anthropic.tools import (
     execute_tool,
     is_server_tool,
     resolve_tools,
+    validate_tools,
 )
 from ai_guardian.integrations.base import (
     AgentLoopStrategy,
@@ -295,6 +296,7 @@ class GuardedAgent:
             self._cache_ttl = self._strategy.default_cache_ttl(max_turns)
 
         self._resolved_tools = self._strategy.resolve_tools(tools, tool_types)
+        validate_tools(self._resolved_tools, model)
 
         if output_schema:
             self._resolved_tools.append(

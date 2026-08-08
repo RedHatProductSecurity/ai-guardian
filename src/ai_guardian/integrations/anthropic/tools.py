@@ -34,6 +34,12 @@ _TOOL_NAMES: Dict[str, str] = {
 
 SERVER_TOOLS = frozenset({"web_search", "web_fetch", "code_execution"})
 
+_CLIENT_EXECUTOR_NAMES = frozenset(
+    {"bash", "text_editor", "str_replace_based_edit_tool", "read_file", "grep", "glob"}
+)
+
+_API_NAME_TO_LOGICAL: Dict[str, str] = {v: k for k, v in _TOOL_NAMES.items()}
+
 # ---------------------------------------------------------------------------
 # Auto-detect latest tool type versions from installed SDK
 # ---------------------------------------------------------------------------
@@ -86,6 +92,51 @@ def _discover_tool_type(tool_name: str) -> Optional[str]:
     _detected_cache[tool_name] = result
     logger.debug("Auto-detected %s tool type: %s", tool_name, result)
     return result
+
+
+def validate_tools(
+    resolved_tools: List[Dict[str, Any]],
+    model: str = "",
+) -> None:
+    """Log warnings for tools that have no executor or a version mismatch.
+
+    Called at ``GuardedAgent`` startup so configuration errors surface
+    immediately rather than mid-conversation.
+    """
+    prefix = f"GuardedAgent({model})" if model else "GuardedAgent"
+
+    for tool in resolved_tools:
+        name = tool.get("name", "")
+        tool_type = tool.get("type", "")
+
+        if not name and not tool_type:
+            logger.warning("%s: tool with no name or type: %r", prefix, tool)
+            continue
+
+        if name in SERVER_TOOLS or tool_type.startswith(
+            ("web_search", "web_fetch", "code_execution")
+        ):
+            continue
+
+        if name and name not in _CLIENT_EXECUTOR_NAMES:
+            logger.warning(
+                "%s: tool '%s' has no registered executor "
+                "— model calls to it will return an error",
+                prefix,
+                name,
+            )
+
+        logical = _API_NAME_TO_LOGICAL.get(name)
+        if logical and tool_type:
+            detected = _discover_tool_type(logical)
+            if detected and detected != tool_type:
+                logger.info(
+                    "%s: tool '%s' using %s, SDK has %s",
+                    prefix,
+                    name,
+                    tool_type,
+                    detected,
+                )
 
 
 def get_tool_type(
