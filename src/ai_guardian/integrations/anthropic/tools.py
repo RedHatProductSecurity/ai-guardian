@@ -112,7 +112,7 @@ def get_tool_type(
 
 _PRESETS: Dict[str, List[str]] = {
     "coding": ["bash", "text_editor", "grep", "glob"],
-    "readonly": ["text_editor", "grep", "glob"],
+    "readonly": ["read_file", "grep", "glob"],
     "browser": ["computer", "bash"],
 }
 
@@ -121,6 +121,28 @@ _PRESETS: Dict[str, List[str]] = {
 # ---------------------------------------------------------------------------
 
 _CUSTOM_TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
+    "read_file": {
+        "name": "read_file",
+        "description": "Read a file from the local filesystem.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Absolute or relative path to the file to read.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Line number to start reading from (0-based).",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of lines to read.",
+                },
+            },
+            "required": ["path"],
+        },
+    },
     "grep": {
         "name": "grep",
         "description": "Search for a pattern in files using regex.",
@@ -237,6 +259,14 @@ def is_server_tool(tool_name: str) -> bool:
 _BASH_TIMEOUT = 120
 
 
+def _resolve_safe_path(raw_path: str, cwd: str) -> Union[Path, str]:
+    """Resolve *raw_path* against *cwd*, returning the ``Path`` or an error."""
+    resolved = (Path(cwd) / raw_path).resolve()
+    if not resolved.is_relative_to(Path(cwd).resolve()):
+        return f"Error: path escapes working directory: {raw_path}"
+    return resolved
+
+
 def execute_tool(
     name: str,
     tool_input: Dict[str, Any],
@@ -249,6 +279,8 @@ def execute_tool(
         return _execute_bash(tool_input, cwd)
     if name in ("text_editor", "str_replace_based_edit_tool"):
         return _execute_text_editor(tool_input, cwd)
+    if name == "read_file":
+        return _execute_read_file(tool_input, cwd)
     if name == "grep":
         return _execute_grep(tool_input, cwd)
     if name == "glob":
@@ -292,13 +324,9 @@ def _execute_text_editor(tool_input: Dict[str, Any], cwd: str) -> str:
     if not raw_path:
         return "Error: path is required."
 
-    file_path = Path(cwd) / raw_path
-    resolved = file_path.resolve()
-    cwd_resolved = Path(cwd).resolve()
-    try:
-        resolved.relative_to(cwd_resolved)
-    except ValueError:
-        return f"Error: path escapes working directory: {raw_path}"
+    resolved = _resolve_safe_path(raw_path, cwd)
+    if isinstance(resolved, str):
+        return resolved
 
     if command == "view":
         if not resolved.exists():
@@ -360,6 +388,40 @@ def _execute_text_editor(tool_input: Dict[str, Any], cwd: str) -> str:
     return f"Error: unknown text_editor command: {command!r}"
 
 
+def _execute_read_file(tool_input: Dict[str, Any], cwd: str) -> str:
+    raw_path = tool_input.get("path", "")
+    if not raw_path:
+        return "Error: path is required."
+
+    resolved = _resolve_safe_path(raw_path, cwd)
+    if isinstance(resolved, str):
+        return resolved
+
+    if not resolved.exists():
+        return f"Error: {raw_path} does not exist."
+    if resolved.is_dir():
+        entries = sorted(str(p.relative_to(resolved)) for p in resolved.iterdir())
+        return "\n".join(entries) if entries else "(empty directory)"
+
+    try:
+        text = resolved.read_text(encoding="utf-8", errors="replace")
+    except Exception as e:
+        return f"Error reading {raw_path}: {e}"
+
+    offset = tool_input.get("offset", 0)
+    limit = tool_input.get("limit")
+    if not offset and limit is None:
+        return text or "(empty file)"
+
+    lines = text.splitlines(keepends=True)
+    if offset:
+        lines = lines[offset:]
+    if limit is not None:
+        lines = lines[:limit]
+
+    return "".join(lines) or "(empty file)"
+
+
 def _execute_grep(tool_input: Dict[str, Any], cwd: str) -> str:
     from ai_guardian.patterns.language import SKIP_DIRS
 
@@ -368,9 +430,9 @@ def _execute_grep(tool_input: Dict[str, Any], cwd: str) -> str:
         return "Error: pattern is required."
 
     search_path = tool_input.get("path", ".")
-    search_resolved = (Path(cwd) / search_path).resolve()
-    if not search_resolved.is_relative_to(Path(cwd).resolve()):
-        return "Error: search path escapes working directory."
+    safe = _resolve_safe_path(search_path, cwd)
+    if isinstance(safe, str):
+        return safe
 
     exclude_flags = [f"--exclude-dir={d}" for d in SKIP_DIRS if "*" not in d]
     include_flags = (
@@ -400,9 +462,9 @@ def _execute_glob(tool_input: Dict[str, Any], cwd: str) -> str:
     if not pattern:
         return "Error: pattern is required."
 
-    base = Path(cwd) / tool_input.get("path", ".")
-    if not base.resolve().is_relative_to(Path(cwd).resolve()):
-        return "Error: glob path escapes working directory."
+    base = _resolve_safe_path(tool_input.get("path", "."), cwd)
+    if isinstance(base, str):
+        return base
 
     try:
         matches = sorted(
