@@ -2172,7 +2172,7 @@ class TestGuardedAgent:
             usage=SimpleNamespace(input_tokens=500000, output_tokens=500000),
         )
 
-        agent, client = self._make_agent(max_budget_tokens=-1)
+        agent, client = self._make_agent(max_budget_tokens=-1, auto_compact=False)
         client.messages.create.side_effect = [r1, r2]
 
         with patch(
@@ -2957,8 +2957,7 @@ class TestGuardedAgentCompaction:
 
         if mock_client is None:
             mock_create = MagicMock()
-            mock_count = MagicMock(return_value=SimpleNamespace(input_tokens=1000))
-            mock_messages = SimpleNamespace(create=mock_create, count_tokens=mock_count)
+            mock_messages = SimpleNamespace(create=mock_create)
             mock_client = SimpleNamespace(messages=mock_messages)
 
         defaults = {
@@ -2986,6 +2985,34 @@ class TestGuardedAgentCompaction:
 
         result = agent.run("Hi")
         assert result["compaction_count"] == 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_context_exhausted_raises_without_compaction(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_resp = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+            usage=SimpleNamespace(input_tokens=200_000, output_tokens=100),
+        )
+        agent, client = self._make_agent()
+        client.messages.create.return_value = tool_resp
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="output",
+        ):
+            with pytest.raises(RuntimeError, match="compact_threshold"):
+                agent.run("Fill context")
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_auto_compact_triggers_on_high_input_tokens(self, mock_monitor):
@@ -3020,58 +3047,12 @@ class TestGuardedAgentCompaction:
             _tool_resp("t2", 180_000),
             final_response,
         ]
-        client.messages.count_tokens.return_value = SimpleNamespace(
-            input_tokens=180_000
-        )
 
         with patch(
             "ai_guardian.integrations.anthropic.agent.execute_tool",
             return_value=big_tool_output,
         ):
             result = agent.run("Analyze big.log")
-
-        assert result["compaction_count"] >= 1
-
-    @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_auto_compact_count_tokens_fallback(self, mock_monitor):
-        mock_session = MagicMock()
-        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
-
-        big_output = "\n".join(["y" * 200] * 5000)
-
-        def _tool_resp(tid, input_toks):
-            return _make_agent_response(
-                [
-                    SimpleNamespace(
-                        type="tool_use",
-                        name="bash",
-                        id=tid,
-                        input={"command": "echo hi"},
-                    ),
-                ],
-                stop_reason="tool_use",
-                usage=SimpleNamespace(input_tokens=input_toks, output_tokens=100),
-            )
-
-        final_response = _make_agent_response(
-            [SimpleNamespace(type="text", text="Done")],
-            stop_reason="end_turn",
-            usage=SimpleNamespace(input_tokens=50_000, output_tokens=50),
-        )
-        agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
-        client.messages.create.side_effect = [
-            _tool_resp("t1", 130_000),
-            _tool_resp("t2", 180_000),
-            final_response,
-        ]
-        client.messages.count_tokens.side_effect = Exception("API error")
-
-        with patch(
-            "ai_guardian.integrations.anthropic.agent.execute_tool",
-            return_value=big_output,
-        ):
-            result = agent.run("Do something")
 
         assert result["compaction_count"] >= 1
 
@@ -3129,9 +3110,6 @@ class TestGuardedAgentCompaction:
         )
         agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
         client.messages.create.side_effect = [tool_resp1, tool_resp2, final_resp]
-        client.messages.count_tokens.return_value = SimpleNamespace(
-            input_tokens=170_000
-        )
 
         with patch(
             "ai_guardian.integrations.anthropic.agent.execute_tool",

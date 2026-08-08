@@ -293,9 +293,9 @@ client = guarded(
 )
 ```
 
-## GuardedAgent (Anthropic)
+## GuardedAgent
 
-`GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII.
+`GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII. Supports Anthropic and OpenAI providers.
 
 ### Usage
 
@@ -402,10 +402,10 @@ print(result["output"])  # validated structured object
 | `tools` | str or list | `"coding"` | Tool preset, list of names/dicts, or mixed |
 | `cwd` | str | `os.getcwd()` | Working directory for tool execution |
 | `max_turns` | int | `100` | Max tool-use loop iterations |
-| `max_tokens` | int | `16000` | Max tokens per API call |
+| `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
 | `action` | str | `"block"` | `"block"`, `"warn"`, or `"log"` |
-| `client` | Any | `None` | Anthropic client (auto-detected if omitted) |
+| `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
 | `output_schema` | dict | `None` | JSON schema for structured output |
@@ -417,6 +417,12 @@ print(result["output"])  # validated structured object
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
 | `between_turns` | callable | `None` | `(messages: list, response: Any, turn: int) -> str \| None \| False` — called after each successful assistant turn. Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
+| `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
+| `auto_compact` | bool | `True` | Enable context-window monitoring. When `True`, checks token usage each turn |
+| `compact_threshold` | float | `1.0` | Ratio of input tokens to context window that triggers compaction. `1.0` = no compaction (raises `RuntimeError` when context exhausted). Set to `0.8` to compact at 80% usage |
+| `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
+| `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 
 ### Hooks
 
@@ -441,7 +447,12 @@ agent.run("prompt")
   │     ├── messages.create()
   │     ├── after_call(...)            ← per turn (return False to stop)
   │     └── between_turns(...)         ← per successful turn (return str to inject)
-  ├── Turn 2: ...
+  ├── Turn 2+:
+  │     ├── auto_compact check         ← compacts or raises if context exhausted
+  │     ├── before_call(...)
+  │     ├── messages.create()
+  │     ├── after_call(...)
+  │     └── between_turns(...)
   └── post_run(result)                 ← once, after loop (even on exception)
 ```
 
@@ -494,6 +505,27 @@ agent = GuardedAgent(
 result = agent.run("Write a pytest test for the calculate_discount function...")
 ```
 
+### Auto-Compaction
+
+Long conversations can exceed the model's context window. Auto-compaction shrinks the conversation by truncating old tool results, stripping code blocks, and dropping middle turns.
+
+By default, compaction is **disabled** (`compact_threshold=1.0`). When the context window is exhausted, a `RuntimeError` is raised with instructions to enable compaction.
+
+```python
+# Enable compaction at 80% of context window
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools="coding",
+    compact_threshold=0.8,
+)
+```
+
+Compaction preserves the first turn pair (`compact_keep_first`) and the most recent turn pairs (`compact_keep_turns`), dropping everything in between. A boundary message marks where turns were removed.
+
+To fully disable context monitoring (no check, no error), set `auto_compact=False`.
+
+**Provider support:** Compaction handles both Anthropic and OpenAI message formats automatically via the `AgentLoopStrategy`. Anthropic uses content-block lists; OpenAI uses top-level `role: tool` messages and plain string content. The correct format is selected based on the active strategy.
+
 ### `agent.run(prompt)` Return Value
 
 ```python
@@ -504,7 +536,10 @@ result = agent.run("Write a pytest test for the calculate_discount function...")
     "usage": {
         "input_tokens": 1234,
         "output_tokens": 567,
+        "cache_creation_input_tokens": 0,
+        "cache_read_input_tokens": 0,
     },
+    "compaction_count": 0, # number of times compaction was triggered
 }
 ```
 

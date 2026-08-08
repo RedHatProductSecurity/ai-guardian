@@ -9,6 +9,7 @@ from ai_guardian.integrations.base import (
     ParsedResponse,
     ProviderExtractor,
     ToolCall,
+    _CODE_BLOCK_RE,
     _extractor_registry,
     _strategy_registry,
 )
@@ -359,6 +360,41 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         messages.append(self._message_to_dict(raw_content))
         for tr in tool_results:
             messages.append(tr)
+
+    def truncate_tool_result(self, message: Dict[str, Any], max_lines: int) -> None:
+        if message.get("role") != "tool":
+            return
+        text = message.get("content", "")
+        if not isinstance(text, str):
+            return
+        lines = text.split("\n")
+        if len(lines) > max_lines:
+            message["content"] = (
+                f"[truncated: {len(lines) - max_lines} lines removed]\n"
+                + "\n".join(lines[-max_lines:])
+            )
+
+    def strip_code_blocks(self, message: Dict[str, Any]) -> None:
+        if message.get("role") != "assistant":
+            return
+        content = message.get("content")
+        if isinstance(content, str):
+            message["content"] = _CODE_BLOCK_RE.sub("[code block removed]", content)
+
+    def create_compaction_boundary(self, dropped_count: int) -> List[Dict[str, Any]]:
+        return [
+            {
+                "role": "assistant",
+                "content": (
+                    f"[Conversation compacted: {dropped_count} turn(s) "
+                    f"removed to stay within context window]"
+                ),
+            },
+            {
+                "role": "user",
+                "content": "Continue from the remaining context.",
+            },
+        ]
 
     @classmethod
     def detect(cls, client: Any) -> bool:

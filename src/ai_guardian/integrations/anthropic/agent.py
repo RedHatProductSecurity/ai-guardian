@@ -251,7 +251,7 @@ class GuardedAgent:
         strategy: Optional[AgentLoopStrategy] = None,
         cache_ttl: Optional[Union[str, int]] = None,
         auto_compact: bool = True,
-        compact_threshold: float = 0.8,
+        compact_threshold: float = 1.0,
         compact_keep_turns: int = 5,
         compact_keep_first: int = 1,
     ):
@@ -332,31 +332,31 @@ class GuardedAgent:
         self,
         strategy: AgentLoopStrategy,
         messages: List[Dict[str, Any]],
-        system: str,
         last_input_tokens: int,
     ) -> tuple:
-        from ai_guardian.integrations.compaction import (
-            compact_messages,
-            should_compact,
-        )
+        from ai_guardian.integrations.compaction import compact_messages
 
         context_limit = strategy.context_window_tokens(self._model)
-        if not should_compact(
-            last_input_tokens, context_limit, self._compact_threshold
+        if (
+            last_input_tokens <= 0
+            or context_limit <= 0
+            or last_input_tokens / context_limit < self._compact_threshold
         ):
             return messages, False
 
-        exact_count = strategy.count_tokens(
-            self._client, self._model, messages, system, self._resolved_tools
-        )
-        token_count = exact_count if exact_count is not None else last_input_tokens
-
-        if token_count / context_limit < self._compact_threshold:
-            return messages, False
+        if self._compact_threshold >= 1.0:
+            raise RuntimeError(
+                f"Context window nearly exhausted: "
+                f"{last_input_tokens:,} / {context_limit:,} tokens. "
+                f"Enable auto-compaction with "
+                f"GuardedAgent(compact_threshold=0.8) to continue "
+                f"long conversations."
+            )
 
         result = compact_messages(
             messages,
             context_limit=context_limit,
+            strategy=strategy,
             threshold=self._compact_threshold,
             keep_first=self._compact_keep_first,
             keep_last=self._compact_keep_turns,
@@ -401,7 +401,7 @@ class GuardedAgent:
             for _turn in range(self._max_turns):
                 if self._auto_compact and _turn > 0:
                     messages, did_compact = self._maybe_compact(
-                        strategy, messages, system, last_input_tokens
+                        strategy, messages, last_input_tokens
                     )
                     if did_compact:
                         compaction_count += 1
