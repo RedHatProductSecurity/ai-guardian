@@ -5,6 +5,7 @@ from ai_guardian.integrations.base import (
     ParsedResponse,
     ProviderExtractor,
     ToolCall,
+    TurnEvent,
     guarded,
 )
 from ai_guardian.integrations.anthropic import create_client  # noqa: F401
@@ -19,6 +20,7 @@ __all__ = [
     "ParsedResponse",
     "ProviderExtractor",
     "ToolCall",
+    "TurnEvent",
     "create_client",
     "guarded",
 ]

@@ -8,8 +8,8 @@ from ai_guardian.integrations.anthropic._extractor import (
 from ai_guardian.integrations.anthropic.agent import (
     AnthropicLoopStrategy,
     GuardedAgent,
-    TurnEvent,
 )
+from ai_guardian.integrations.base import TurnEvent
 
 __all__ = [
     "AnthropicExtractor",
