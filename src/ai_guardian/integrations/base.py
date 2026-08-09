@@ -339,6 +339,17 @@ class AgentLoopStrategy(ABC):
         """Return True if *tool_name* is executed server-side by the provider."""
         return False
 
+    def inject_preamble(self, kwargs: Dict[str, Any], preamble: str) -> None:
+        """Prepend a policy preamble into API call *kwargs* in-place.
+
+        Each provider overrides this to handle its own system-prompt
+        format (e.g. Anthropic's ``system`` kwarg vs OpenAI's
+        system-role message).
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} must implement inject_preamble()"
+        )
+
     @classmethod
     def detect(cls, client: Any) -> bool:
         """Return True if this strategy handles *client* (duck-typing fallback).
@@ -540,32 +551,6 @@ _PREAMBLE_PREFIX = (
 )
 
 
-def _inject_preamble(kwargs, preamble):
-    """Prepend a system prompt preamble into API call kwargs.
-
-    Handles Anthropic (``system`` kwarg as str or content-block list)
-    and OpenAI (system role in ``messages`` list).
-    """
-    prefix = f"{_PREAMBLE_PREFIX}{preamble}\n\n"
-    if "system" in kwargs:
-        sys_val = kwargs["system"]
-        if isinstance(sys_val, str):
-            kwargs["system"] = prefix + sys_val
-        elif isinstance(sys_val, list):
-            kwargs["system"] = [{"type": "text", "text": prefix}] + list(sys_val)
-    elif "messages" in kwargs:
-        messages = kwargs["messages"]
-        if (
-            messages
-            and isinstance(messages[0], dict)
-            and messages[0].get("role") == "system"
-        ):
-            content = messages[0].get("content", "")
-            kwargs["messages"] = [dict(messages[0], content=prefix + content)] + list(
-                messages[1:]
-            )
-
-
 def _try_sanitize_text(session, text):
     """Sanitize *text* via *session*, returning ``None`` on failure."""
     if not text:
@@ -658,6 +643,18 @@ class _GuardedClient:
         object.__setattr__(self, "_max_tokens_override", max_tokens_override)
         object.__setattr__(self, "_system_prompt_preamble", system_prompt_preamble)
 
+        strategy = None
+        if system_prompt_preamble:
+            try:
+                strategy = _strategy_registry.detect(client)
+            except ValueError:
+                logger.warning(
+                    "system_prompt_preamble configured but no loop strategy "
+                    "detected for %s — preamble will not be injected",
+                    type(client).__name__,
+                )
+        object.__setattr__(self, "_strategy", strategy)
+
         methods = extractor.methods_to_wrap()
         object.__setattr__(self, "_wrapped_methods", set(methods))
         prefixes = set()
@@ -686,8 +683,8 @@ class _GuardedClient:
                 kwargs["model"] = gc._model_override
             if gc._max_tokens_override and "max_tokens" in kwargs:
                 kwargs["max_tokens"] = gc._max_tokens_override
-            if gc._system_prompt_preamble:
-                _inject_preamble(kwargs, gc._system_prompt_preamble)
+            if gc._system_prompt_preamble and gc._strategy:
+                gc._strategy.inject_preamble(kwargs, gc._system_prompt_preamble)
 
             with monitor(
                 action=gc._action, mode=gc._mode, config=gc._config

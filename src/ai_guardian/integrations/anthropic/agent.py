@@ -67,6 +67,16 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
             "input_schema": output_schema,
         }
 
+    def inject_preamble(self, kwargs: Dict[str, Any], preamble: str) -> None:
+        prefix = f"{_PREAMBLE_PREFIX}{preamble}\n\n"
+        if "system" not in kwargs:
+            return
+        sys_val = kwargs["system"]
+        if isinstance(sys_val, str):
+            kwargs["system"] = prefix + sys_val
+        elif isinstance(sys_val, list):
+            kwargs["system"] = [{"type": "text", "text": prefix}] + list(sys_val)
+
     def build_create_kwargs(
         self,
         *,
