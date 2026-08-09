@@ -537,7 +537,8 @@ To fully disable context monitoring (no check, no error), set `auto_compact=Fals
 Fires each turn with a structured `TurnEvent`:
 
 ```python
-from ai_guardian.integrations.anthropic import GuardedAgent, TurnEvent
+from ai_guardian.integrations.anthropic import GuardedAgent
+from ai_guardian.integrations import TurnEvent
 
 def my_handler(turn: int, event: TurnEvent):
     if event.type == "system":

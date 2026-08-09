@@ -4104,7 +4104,7 @@ class TestTurnEvent:
     """TurnEvent dataclass and __str__ formatting."""
 
     def test_system_event_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(
             type="system",
@@ -4119,7 +4119,7 @@ class TestTurnEvent:
         assert "user:" in s
 
     def test_response_event_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="response", text="Hello world", stop_reason="end_turn")
         s = str(ev)
@@ -4127,14 +4127,14 @@ class TestTurnEvent:
         assert "Hello world" in s
 
     def test_response_event_str_truncates(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="response", text="x" * 200)
         s = str(ev)
         assert s.endswith("...")
 
     def test_tool_call_event_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="tool_call", name="bash", input={"command": "ls"})
         s = str(ev)
@@ -4142,7 +4142,7 @@ class TestTurnEvent:
         assert "bash" in s
 
     def test_tool_result_event_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="tool_result", name="bash", output="file1.py\nfile2.py")
         s = str(ev)
@@ -4150,7 +4150,7 @@ class TestTurnEvent:
         assert "bash" in s
 
     def test_scan_clean_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="scan", scanned="assistant_response", violations=[])
         s = str(ev)
@@ -4158,7 +4158,7 @@ class TestTurnEvent:
         assert "clean" in s
 
     def test_scan_violations_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(
             type="scan",
@@ -4169,13 +4169,13 @@ class TestTurnEvent:
         assert "1 violation" in s
 
     def test_unknown_type_str(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="custom")
         assert str(ev) == "[custom]"
 
     def test_to_dict_omits_none(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="response", text="hello", stop_reason="end_turn")
         d = ev.to_dict()
@@ -4187,14 +4187,14 @@ class TestTurnEvent:
         assert "preamble" not in d
 
     def test_to_dict_includes_empty_violations(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="scan", scanned="user_prompt", violations=[])
         d = ev.to_dict()
         assert d["violations"] == []
 
     def test_print_works_as_on_turn(self):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         ev = TurnEvent(type="response", text="Hello!")
         output = str(ev)
@@ -4472,7 +4472,7 @@ class TestGuardedAgentTrace:
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_on_turn_receives_turn_event_instances(self, mock_monitor):
-        from ai_guardian.integrations.anthropic.agent import TurnEvent
+        from ai_guardian.integrations.base import TurnEvent
 
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)

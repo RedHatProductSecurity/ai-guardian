@@ -20,6 +20,81 @@ _CODE_BLOCK_RE = re.compile(r"```[^\n]*\n.*?```", re.DOTALL)
 
 
 @dataclass
+class TurnEvent:
+    """Structured event emitted by ``on_turn`` and stored in ``trace``.
+
+    Fields vary by ``type``:
+
+    * ``"system"`` — ``preamble``, ``system_prompt``, ``user_prompt``
+    * ``"response"`` — ``text``, ``stop_reason``, ``usage``
+    * ``"tool_call"`` — ``name``, ``input``
+    * ``"tool_result"`` — ``name``, ``output``
+    * ``"scan"`` — ``scanned``, ``violations``
+    """
+
+    type: str
+    text: Optional[str] = None
+    name: Optional[str] = None
+    input: Optional[dict] = None
+    output: Optional[str] = None
+    preamble: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None
+    usage: Optional[dict] = None
+    stop_reason: Optional[str] = None
+    violations: Optional[list] = field(default_factory=list)
+    scanned: Optional[str] = None
+
+    def __str__(self) -> str:
+        if self.type == "system":
+            parts = []
+            if self.preamble:
+                parts.append(f"preamble: {self.preamble[:50]}...")
+            if self.system_prompt:
+                parts.append(f"prompt: {self.system_prompt[:50]}...")
+            if self.user_prompt:
+                parts.append(f"user: {self.user_prompt[:50]}...")
+            return f"[system] {', '.join(parts)}"
+        if self.type == "response":
+            preview = (self.text or "")[:100]
+            ellipsis = "..." if len(self.text or "") > 100 else ""
+            return f"[response] {preview}{ellipsis}"
+        if self.type == "tool_call":
+            return f"[tool_call] {self.name}({self.input})"
+        if self.type == "tool_result":
+            preview = (self.output or "")[:100]
+            ellipsis = "..." if len(self.output or "") > 100 else ""
+            return f"[tool_result] {self.name}: {preview}{ellipsis}"
+        if self.type == "scan":
+            v = self.violations or []
+            if v:
+                return f"[scan] {self.scanned}: {len(v)} violation(s)"
+            return f"[scan] {self.scanned}: clean"
+        return f"[{self.type}]"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to a trace-ready dict, omitting ``None`` fields."""
+        d: Dict[str, Any] = {"type": self.type}
+        for attr in (
+            "text",
+            "name",
+            "input",
+            "output",
+            "preamble",
+            "system_prompt",
+            "user_prompt",
+            "usage",
+            "stop_reason",
+            "violations",
+            "scanned",
+        ):
+            val = getattr(self, attr)
+            if val is not None:
+                d[attr] = val
+        return d
+
+
+@dataclass
 class ToolCall:
     """Normalized tool call extracted from a provider response."""
 
@@ -45,6 +120,14 @@ class ParsedResponse:
     output_tokens: int = 0
     cache_creation_input_tokens: int = 0
     cache_read_input_tokens: int = 0
+
+
+_USAGE_TOKEN_FIELDS = (
+    "input_tokens",
+    "output_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
 
 
 # ---------------------------------------------------------------------------
