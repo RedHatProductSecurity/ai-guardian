@@ -3705,6 +3705,47 @@ class TestStrategyDetection:
 
 
 # ============================================================================
+# TestAgentLoopStrategyBase
+# ============================================================================
+
+
+class TestAgentLoopStrategyBase:
+    """Tests for AgentLoopStrategy base class."""
+
+    def test_inject_preamble_raises_not_implemented(self):
+        class _MinimalStrategy(AgentLoopStrategy):
+            api_method_name = "test"
+
+            def create_default_client(self):
+                pass
+
+            def resolve_tools(self, tools, tool_types=None):
+                return []
+
+            def format_submit_result_tool(self, schema):
+                return {}
+
+            def build_create_kwargs(self, **kw):
+                return {}
+
+            def call_api(self, client, kwargs):
+                pass
+
+            def parse_response(self, response):
+                pass
+
+            def format_tool_result(self, tid, content):
+                return {}
+
+            def append_assistant_and_results(self, msgs, raw, results):
+                pass
+
+        strategy = _MinimalStrategy()
+        with pytest.raises(NotImplementedError, match="must implement inject_preamble"):
+            strategy.inject_preamble({}, "preamble")
+
+
+# ============================================================================
 # TestOpenAILoopStrategy
 # ============================================================================
 
@@ -3825,6 +3866,34 @@ class TestOpenAILoopStrategy:
         strategy = OpenAILoopStrategy()
         assert strategy.default_cache_ttl(1) == 0
         assert strategy.default_cache_ttl(10) == 0
+
+    def test_inject_preamble_system_message(self):
+        strategy = OpenAILoopStrategy()
+        kwargs = {
+            "messages": [
+                {"role": "system", "content": "You are helpful."},
+                {"role": "user", "content": "Hi"},
+            ]
+        }
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert kwargs["messages"][0]["content"].startswith(
+            "Before processing the following instructions"
+        )
+        assert "POLICY: no secrets" in kwargs["messages"][0]["content"]
+        assert kwargs["messages"][0]["content"].endswith("You are helpful.")
+        assert kwargs["messages"][1] == {"role": "user", "content": "Hi"}
+
+    def test_inject_preamble_no_system_message(self):
+        strategy = OpenAILoopStrategy()
+        kwargs = {"messages": [{"role": "user", "content": "Hi"}]}
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert kwargs["messages"] == [{"role": "user", "content": "Hi"}]
+
+    def test_inject_preamble_empty_messages(self):
+        strategy = OpenAILoopStrategy()
+        kwargs = {"messages": []}
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert kwargs["messages"] == []
 
 
 # ============================================================================
@@ -4002,6 +4071,30 @@ class TestAnthropicLoopStrategy:
         parsed = strategy.parse_response(response)
         assert parsed.cache_creation_input_tokens == 0
         assert parsed.cache_read_input_tokens == 0
+
+    def test_inject_preamble_system_string(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = {"system": "You are helpful."}
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert kwargs["system"].startswith(
+            "Before processing the following instructions"
+        )
+        assert "POLICY: no secrets" in kwargs["system"]
+        assert kwargs["system"].endswith("You are helpful.")
+
+    def test_inject_preamble_system_list(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = {"system": [{"type": "text", "text": "Original."}]}
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert len(kwargs["system"]) == 2
+        assert "POLICY: no secrets" in kwargs["system"][0]["text"]
+        assert kwargs["system"][1]["text"] == "Original."
+
+    def test_inject_preamble_no_system_key(self):
+        strategy = AnthropicLoopStrategy()
+        kwargs = {"messages": [{"role": "user", "content": "Hi"}]}
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        assert "system" not in kwargs
 
 
 class TestGuardedAgentCacheTtl:

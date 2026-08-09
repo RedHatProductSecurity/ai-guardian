@@ -903,19 +903,22 @@ class TestGuardedFunctionConfigProfile:
     def setup_method(self):
         _clear_config_cache()
 
-    def _make_guarded(self, profile_config=None, **kwargs):
+    def _make_guarded(self, profile_config=None, client=None, **kwargs):
         from ai_guardian.integrations.base import guarded
 
         defaults = {"extractor": _make_stub_extractor()}
         defaults.update(kwargs)
+
+        if client is None:
+            client = object()
 
         if profile_config is not None:
             with mock.patch(
                 "ai_guardian.config.loaders._load_sdk_profile",
                 return_value=profile_config,
             ):
-                return guarded(object(), **defaults)
-        return guarded(object(), **defaults)
+                return guarded(client, **defaults)
+        return guarded(client, **defaults)
 
     def test_no_profile_uses_code_values(self):
         wrapped = self._make_guarded(profile_config={})
@@ -1034,8 +1037,10 @@ class TestGuardedFunctionConfigProfile:
         assert wrapped._system_prompt_preamble == "POLICY: No secrets."
 
     def test_preamble_injected_into_system_string(self):
+        anthropic_client = MagicMock(spec=["messages"])
         wrapped = self._make_guarded(
             profile_config={"system_prompt_preamble": "POLICY: No secrets."},
+            client=anthropic_client,
         )
         original_method = MagicMock(return_value="response")
 
@@ -1061,8 +1066,10 @@ class TestGuardedFunctionConfigProfile:
         assert call_kwargs["system"].endswith("You are helpful.")
 
     def test_preamble_injected_into_system_list(self):
+        anthropic_client = MagicMock(spec=["messages"])
         wrapped = self._make_guarded(
             profile_config={"system_prompt_preamble": "POLICY: No secrets."},
+            client=anthropic_client,
         )
         original_method = MagicMock(return_value="response")
 
@@ -1083,8 +1090,10 @@ class TestGuardedFunctionConfigProfile:
         assert call_kwargs["system"][1]["text"] == "Original."
 
     def test_preamble_injected_into_openai_messages(self):
+        openai_client = MagicMock(spec=["chat"])
         wrapped = self._make_guarded(
             profile_config={"system_prompt_preamble": "POLICY: No secrets."},
+            client=openai_client,
         )
         original_method = MagicMock(return_value="response")
 

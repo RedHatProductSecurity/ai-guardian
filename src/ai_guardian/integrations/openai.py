@@ -10,6 +10,7 @@ from ai_guardian.integrations.base import (
     ProviderExtractor,
     ToolCall,
     _CODE_BLOCK_RE,
+    _PREAMBLE_PREFIX,
     _extractor_registry,
     _strategy_registry,
 )
@@ -267,6 +268,17 @@ class OpenAILoopStrategy(AgentLoopStrategy):
                 "parameters": output_schema,
             },
         }
+
+    def inject_preamble(self, kwargs: Dict[str, Any], preamble: str) -> None:
+        prefix = f"{_PREAMBLE_PREFIX}{preamble}\n\n"
+        messages = kwargs.get("messages")
+        if not messages:
+            return
+        if isinstance(messages[0], dict) and messages[0].get("role") == "system":
+            content = messages[0].get("content", "")
+            kwargs["messages"] = [dict(messages[0], content=prefix + content)] + list(
+                messages[1:]
+            )
 
     def build_create_kwargs(
         self,
