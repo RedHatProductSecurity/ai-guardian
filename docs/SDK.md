@@ -148,7 +148,7 @@ client = create_client(timeout=30.0)
 
 Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
 
-### `guarded(client, *, action, mode, config, extractor, scan_input, scan_output, response_parser, before_call, after_call)`
+### `guarded(client, *, name, action, mode, config, extractor, scan_input, scan_output, response_parser, before_call, after_call)`
 
 Wraps an LLM client with automatic security scanning.
 
@@ -157,6 +157,7 @@ Wraps an LLM client with automatic security scanning.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
+| `name` | str | `None` | Profile name linking to `sdk.clients.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `action` | str | `"block"` | `"block"` raises `SecurityViolation`, `"warn"` emits warning, `"log"` records silently |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
@@ -330,16 +331,24 @@ agent = GuardedAgent(
 
 ### Tools
 
+#### Tool Execution Model
+
+Tools fall into two categories based on where they run:
+
+- **Client tools** (`bash`, `text_editor`, `read_file`, `grep`, `glob`): GuardedAgent executes these locally in the agent's `cwd`. Tool output (results) is scanned by ai-guardian before returning to the model.
+- **Server tools** (`web_search`, `web_fetch`, `code_execution`): Anthropic executes these on their infrastructure. Results pass through ai-guardian output scanning when returned.
+- **`computer`**: Declared as a client tool but requires external desktop integration to execute. GuardedAgent passes it to the API but has no built-in executor — typically used with the `"browser"` preset in environments that provide screenshot/input handling.
+
 #### Anthropic Built-In Tools
 
-| Name | Anthropic Type | Side |
-|------|---------------|------|
-| `bash` | `bash_YYYYMMDD` | Client — GuardedAgent executes |
-| `text_editor` | `text_editor_YYYYMMDD` | Client — GuardedAgent executes |
-| `computer` | `computer_YYYYMMDD` | Client — GuardedAgent executes |
-| `web_search` | `web_search_YYYYMMDD` | Server — Anthropic executes |
-| `web_fetch` | `web_fetch_YYYYMMDD` | Server — Anthropic executes |
-| `code_execution` | `code_execution_YYYYMMDD` | Server — Anthropic executes |
+| Name | Anthropic Type | Description |
+|------|---------------|-------------|
+| `bash` | `bash_YYYYMMDD` | Execute shell commands in the agent's working directory |
+| `text_editor` | `text_editor_YYYYMMDD` | View, create, and edit files (`view`, `create`, `str_replace`, `insert` commands) |
+| `computer` | `computer_YYYYMMDD` | Interact with a desktop environment via screenshots and mouse/keyboard |
+| `web_search` | `web_search_YYYYMMDD` | Search the web (server-side, Anthropic executes) |
+| `web_fetch` | `web_fetch_YYYYMMDD` | Fetch content from a URL (server-side, Anthropic executes) |
+| `code_execution` | `code_execution_YYYYMMDD` | Run code in a sandboxed container (server-side, Anthropic executes) |
 
 Tool type versions are auto-detected from the installed Anthropic SDK. Override with `tool_types`:
 
@@ -352,25 +361,82 @@ agent = GuardedAgent(
 
 #### Custom Tools
 
+These are lightweight tools implemented by GuardedAgent itself (not Anthropic built-ins). They are executed in-process and their schemas are sent to the model as standard tool definitions.
+
 | Name | Description |
 |------|-------------|
-| `read_file` | Read a file (with optional offset/limit) |
-| `grep` | Search for a pattern in files |
-| `glob` | List files matching a pattern |
+| `read_file` | Read a file from the local filesystem (with optional offset/limit) |
+| `grep` | Search for a regex pattern in files (uses system `grep -rn`, skips common non-code directories) |
+| `glob` | List files matching a glob pattern (skips common non-code directories) |
+
+##### Input Schemas
+
+**`read_file`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | yes | Absolute or relative path to the file to read |
+| `offset` | integer | no | Line number to start reading from (0-based) |
+| `limit` | integer | no | Maximum number of lines to read |
+
+**`grep`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pattern` | string | yes | Regex pattern to search for |
+| `path` | string | no | Directory or file to search in (defaults to cwd) |
+| `include` | string | no | Glob pattern to filter files (e.g. `'*.py'`) |
+
+**`glob`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pattern` | string | yes | Glob pattern (e.g. `'**/*.py'`) |
+| `path` | string | no | Base directory (defaults to cwd) |
 
 #### Presets
 
+| Preset | Tools | Use when |
+|--------|-------|----------|
+| `"coding"` | `bash` + `text_editor` + `grep` + `glob` | Agent needs to read, write, and execute code |
+| `"readonly"` | `read_file` + `grep` + `glob` | Agent should only read and search code, not modify it |
+| `"browser"` | `computer` + `bash` | Agent needs to interact with a GUI/desktop |
+
 ```python
-tools="coding"    # bash + text_editor + grep + glob
-tools="readonly"  # read_file + grep + glob
-tools="browser"   # computer + bash
+agent = GuardedAgent(tools="coding")
 ```
 
-Mix presets, names, and raw Anthropic tool dicts:
+Mix presets, names, and raw tool dicts:
 
 ```python
 tools=["coding", "web_search", {"name": "my_tool", "input_schema": {...}}]
 ```
+
+#### Adding Custom Tools
+
+Pass raw tool dicts alongside built-in names to define additional tools the model can call. GuardedAgent dispatches tool calls by name — built-in names (`bash`, `text_editor`, `read_file`, `grep`, `glob`) route to their executors; unknown names return `"Error: no executor for tool 'name'"` as the tool result.
+
+Custom tool dicts are sent to the Anthropic API as standard tool definitions, so the model can call them. However, GuardedAgent has no executor for them — the error result is what gets sent back to the model. To properly execute custom tools, you have two options:
+
+**Option 1: Subclass GuardedAgent** and override the tool execution path. This gives full control but requires understanding the internals.
+
+**Option 2: Use `between_turns`** to correct the error result. The hook fires after tool execution (including the error result for unknown tools), giving you a chance to inject the real result as a follow-up message:
+
+```python
+def handle_custom_tools(messages, response, turn):
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "my_tool":
+            result = my_tool_executor(block.input)
+            return f"Tool result for my_tool: {result}"
+    return None
+
+agent = GuardedAgent(
+    tools=["bash", {"name": "my_tool", "description": "...", "input_schema": {...}}],
+    between_turns=handle_custom_tools,
+)
+```
+
+> **Note:** The injected string becomes the next user message, not a proper `tool_result` block. For production use cases requiring custom tools, consider using `guarded()` with your own agent loop instead of `GuardedAgent`.
 
 ### Structured Output
 
@@ -425,6 +491,7 @@ print(result["output"])  # validated structured object
 | `compact_threshold` | float | `1.0` | Ratio of input tokens to context window that triggers compaction. `1.0` = no compaction (raises `RuntimeError` when context exhausted). Set to `0.8` to compact at 80% usage |
 | `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
+| `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 
 ### Hooks
 
@@ -598,18 +665,18 @@ result["trace"] = [
 ```python
 @dataclass
 class TurnEvent:
-    type: str           # "system" | "response" | "tool_call" | "tool_result" | "scan"
-    text: str = None
-    name: str = None
-    input: dict = None
-    output: str = None
-    preamble: str = None
-    system_prompt: str = None
-    user_prompt: str = None
-    usage: dict = None
-    stop_reason: str = None
-    violations: list = []
-    scanned: str = None
+    type: str                          # "system" | "response" | "tool_call" | "tool_result" | "scan"
+    text: Optional[str] = None
+    name: Optional[str] = None
+    input: Optional[dict] = None
+    output: Optional[str] = None
+    preamble: Optional[str] = None
+    system_prompt: Optional[str] = None
+    user_prompt: Optional[str] = None
+    usage: Optional[dict] = None
+    stop_reason: Optional[str] = None
+    violations: Optional[list] = field(default_factory=list)
+    scanned: Optional[str] = None
 ```
 
 ### `agent.run(prompt)` Return Value
@@ -618,7 +685,7 @@ class TurnEvent:
 {
     "output": "...",       # final text or structured object
     "messages": [...],     # full conversation history
-    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", "budget_exceeded", or "hook_early_stop"
+    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", "budget_exceeded", "hook_early_stop", or "pause_turn"
     "usage": {
         "input_tokens": 1234,
         "output_tokens": 567,
