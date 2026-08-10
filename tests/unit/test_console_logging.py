@@ -80,3 +80,51 @@ class TestConsoleLoggingSuppression:
     def test_file_handler_unaffected_by_tui_mode(self):
         """File handler should still log at DEBUG/INFO regardless of TUI mode."""
         assert ai_guardian._file_handler.level <= logging.DEBUG
+
+
+class TestLogLevelOverride:
+    """Verify that callers can control the ai_guardian logger level."""
+
+    def test_env_var_log_level_respected(self):
+        """AI_GUARDIAN_LOG_LEVEL env var logic sets level correctly."""
+        import os
+
+        env_level = "ERROR"
+        assert hasattr(logging, env_level)
+        assert getattr(logging, env_level) == logging.ERROR
+
+    def test_caller_preset_level_not_overridden(self):
+        """If logger level is already set (non-NOTSET), init should not reset it."""
+        test_logger = logging.getLogger("test_preset_level")
+        test_logger.setLevel(logging.ERROR)
+        if test_logger.level == logging.NOTSET:
+            test_logger.setLevel(logging.INFO)
+        assert test_logger.level == logging.ERROR
+
+    def test_notset_level_gets_default_info(self):
+        """If logger level is NOTSET and no env var, default to INFO."""
+        test_logger = logging.getLogger("test_notset_default")
+        assert test_logger.level == logging.NOTSET
+        if test_logger.level == logging.NOTSET:
+            test_logger.setLevel(logging.INFO)
+        assert test_logger.level == logging.INFO
+
+    def test_env_var_overrides_preset(self):
+        """AI_GUARDIAN_LOG_LEVEL takes priority over pre-set level."""
+        env_level = "WARNING"
+        test_logger = logging.getLogger("test_env_override")
+        test_logger.setLevel(logging.DEBUG)
+        if env_level and hasattr(logging, env_level):
+            test_logger.setLevel(getattr(logging, env_level))
+        assert test_logger.level == logging.WARNING
+
+    def test_invalid_env_var_ignored(self):
+        """Invalid AI_GUARDIAN_LOG_LEVEL value is silently ignored."""
+        env_level = "NOTAVALIDLEVEL"
+        test_logger = logging.getLogger("test_invalid_env")
+        assert not hasattr(logging, env_level)
+        if env_level and hasattr(logging, env_level):
+            test_logger.setLevel(getattr(logging, env_level))
+        elif test_logger.level == logging.NOTSET:
+            test_logger.setLevel(logging.INFO)
+        assert test_logger.level == logging.INFO

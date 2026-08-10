@@ -60,7 +60,11 @@ elif "--json" in sys.argv:
 # Configure the ai_guardian logger (not root) so that
 # getLogger("ai_guardian").setLevel(WARNING) actually suppresses children.
 _pkg_logger = logging.getLogger("ai_guardian")
-_pkg_logger.setLevel(logging.INFO)
+_env_log_level = os.environ.get("AI_GUARDIAN_LOG_LEVEL", "").upper()
+if _env_log_level and hasattr(logging, _env_log_level):
+    _pkg_logger.setLevel(getattr(logging, _env_log_level))
+elif _pkg_logger.level == logging.NOTSET:
+    _pkg_logger.setLevel(logging.INFO)
 _pkg_logger.addHandler(_stderr_handler)
 _pkg_logger.addHandler(_file_handler)
 _pkg_logger.propagate = False
@@ -84,11 +88,11 @@ if _quiet_stderr:
 elif _scan_quiet:
     import platform
 elif not _suppress_logging:
-    logger.info(f"AI Guardian v{__version__} initialized")
-    logger.info(f"Python {sys.version.split()[0]}")
+    logger.debug(f"AI Guardian v{__version__} initialized")
+    logger.debug(f"Python {sys.version.split()[0]}")
     import platform
 
-    logger.info(f"Platform: {platform.platform()}")
+    logger.debug(f"Platform: {platform.platform()}")
 else:
     import platform
 
