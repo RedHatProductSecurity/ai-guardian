@@ -343,7 +343,15 @@ class GuardedAgent:
         self, tools_spec: Union[str, List[Any]]
     ) -> Union[str, List[Any]]:
         """Apply config profile overrides, returning the (possibly updated) tools spec."""
-        from ai_guardian.config.loaders import _load_sdk_profile
+        from ai_guardian.config.loaders import _load_sdk_profile, _sdk_enabled
+
+        if not _sdk_enabled("agents", self._name):
+            logger.info(
+                "ai-guardian SDK disabled via config — GuardedAgent scanning skipped"
+            )
+            self._scan_input = False
+            self._scan_output = False
+            return tools_spec
 
         profile = _load_sdk_profile("agents", self._name)
         if not profile:

@@ -27,6 +27,7 @@ from ai_guardian.config.loaders import (
     _load_config_file,
     _load_sdk_profile,
     _resolve_sdk_overlay,
+    _sdk_enabled,
     configure,
 )
 
@@ -1164,3 +1165,224 @@ class TestGuardedFunctionConfigProfile:
 
         assert wrapped._action == "block"
         assert wrapped._scan_input is False
+
+
+# ============================================================================
+# SDK Enabled Flag (Issue #1868)
+# ============================================================================
+
+
+class TestSDKEnabled:
+    """Tests for _sdk_enabled()."""
+
+    def setup_method(self):
+        _clear_config_cache()
+
+    def test_default_true_no_config(self):
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file", return_value=(None, None)
+        ):
+            assert _sdk_enabled() is True
+
+    def test_default_true_no_sdk_section(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps({"secret_scanning": {"enabled": True}})
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled() is True
+
+    def test_globally_disabled(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps({"sdk": {"enabled": False}})
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled() is False
+
+    def test_globally_enabled_explicit(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps({"sdk": {"enabled": True}})
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled() is True
+
+    def test_per_agent_override_disabled(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps(
+                {
+                    "sdk": {
+                        "enabled": True,
+                        "agents": {"dev-agent": {"enabled": False}},
+                    }
+                }
+            )
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled("agents", "dev-agent") is False
+
+    def test_per_agent_override_enabled_when_global_disabled(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps(
+                {
+                    "sdk": {
+                        "enabled": False,
+                        "agents": {"prod-agent": {"enabled": True}},
+                    }
+                }
+            )
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled("agents", "prod-agent") is True
+
+    def test_unnamed_agent_uses_global(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps({"sdk": {"enabled": False}})
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled("agents", None) is False
+
+    def test_per_client_override(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(
+            json.dumps(
+                {
+                    "sdk": {
+                        "enabled": True,
+                        "clients": {"debug-client": {"enabled": False}},
+                    }
+                }
+            )
+        )
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled("clients", "debug-client") is False
+
+    def test_config_error_returns_true(self):
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, "parse error"),
+        ):
+            assert _sdk_enabled() is True
+
+    def test_sdk_not_dict_returns_true(self, tmp_path):
+        config_dir = tmp_path / "config"
+        config_dir.mkdir()
+        (config_dir / "ai-guardian.json").write_text(json.dumps({"sdk": "invalid"}))
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
+            _clear_config_cache()
+            assert _sdk_enabled() is True
+
+
+class TestGuardedSDKDisabled:
+    """guarded() returns unwrapped client when sdk.enabled=false."""
+
+    def setup_method(self):
+        _clear_config_cache()
+
+    def test_guarded_returns_unwrapped_client(self):
+        from ai_guardian.integrations.base import guarded
+
+        client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
+
+        with mock.patch(
+            "ai_guardian.config.loaders._sdk_enabled", return_value=False
+        ):
+            result = guarded(client, extractor=_make_stub_extractor())
+
+        assert result is client
+
+    def test_guarded_returns_unwrapped_with_name(self):
+        from ai_guardian.integrations.base import guarded
+
+        client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
+
+        with mock.patch(
+            "ai_guardian.config.loaders._sdk_enabled", return_value=False
+        ):
+            result = guarded(
+                client, name="disabled-client", extractor=_make_stub_extractor()
+            )
+
+        assert result is client
+
+    def test_guarded_logs_disabled_message(self, caplog):
+        from ai_guardian.integrations.base import guarded
+
+        client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
+
+        with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
+            with mock.patch(
+                "ai_guardian.config.loaders._sdk_enabled", return_value=False
+            ):
+                guarded(client, extractor=_make_stub_extractor())
+
+        assert "SDK disabled via config" in caplog.text
+        assert "unwrapped client" in caplog.text
+
+
+class TestGuardedAgentSDKDisabled:
+    """GuardedAgent skips scanning when sdk.enabled=false."""
+
+    def setup_method(self):
+        _clear_config_cache()
+
+    def _make_agent(self, sdk_enabled=False, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        mock_create = MagicMock()
+        mock_messages = SimpleNamespace(create=mock_create)
+        mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+
+        with (
+            mock.patch(
+                "ai_guardian.config.loaders._sdk_enabled",
+                return_value=sdk_enabled,
+            ),
+            mock.patch(
+                "ai_guardian.config.loaders._load_sdk_profile",
+                return_value={},
+            ),
+        ):
+            return GuardedAgent(**defaults)
+
+    def test_scanning_disabled(self):
+        agent = self._make_agent(sdk_enabled=False)
+        assert agent._scan_input is False
+        assert agent._scan_output is False
+
+    def test_scanning_enabled_by_default(self):
+        agent = self._make_agent(sdk_enabled=True)
+        assert agent._scan_input is True
+        assert agent._scan_output is True
+
+    def test_logs_disabled_message(self, caplog):
+        with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
+            self._make_agent(sdk_enabled=False)
+        assert "SDK disabled via config" in caplog.text
+        assert "scanning skipped" in caplog.text
