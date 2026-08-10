@@ -2208,7 +2208,7 @@ class TestGuardedAgent:
         mock_session = MagicMock()
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
                         blocked=True,
@@ -3822,7 +3822,7 @@ class TestOpenAIGuardedAgent:
         mock_session = MagicMock()
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
                         blocked=True,
@@ -4419,7 +4419,7 @@ class TestTurnEvent:
     def test_scan_clean_str(self):
         from ai_guardian.integrations.base import TurnEvent
 
-        ev = TurnEvent(type="scan", scanned="assistant_response", violations=[])
+        ev = TurnEvent(type="scan", scanned="agent_response", violations=[])
         s = str(ev)
         assert "[scan]" in s
         assert "clean" in s
@@ -4429,7 +4429,7 @@ class TestTurnEvent:
 
         ev = TurnEvent(
             type="scan",
-            scanned="assistant_response",
+            scanned="agent_response",
             violations=[{"type": "secret", "message": "AWS key detected"}],
         )
         s = str(ev)
@@ -4578,7 +4578,7 @@ class TestGuardedAgentTrace:
         assert len(scan_events) >= 2
         scanned_targets = [e["scanned"] for e in scan_events]
         assert "user_prompt" in scanned_targets
-        assert "assistant_response" in scanned_targets
+        assert "agent_response" in scanned_targets
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_no_scan_when_disabled(self, mock_monitor):
@@ -4895,7 +4895,7 @@ class TestGuardedAgentTrace:
         mock_session = MagicMock()
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
                         blocked=True,
@@ -4930,7 +4930,7 @@ class TestGuardedAgentTrace:
             (t, e) for t, e in scan_events if e.violations and len(e.violations) > 0
         ]
         assert len(violation_scans) == 1
-        assert violation_scans[0][1].scanned == "assistant_response"
+        assert violation_scans[0][1].scanned == "agent_response"
         assert violation_scans[0][1].violations[0]["type"] == "secret"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -4981,15 +4981,15 @@ class TestGuardedAgentTrace:
         assert content[0]["content"] == "[SECRET REDACTED]"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_assistant_response_sanitized_in_warn_mode(self, mock_monitor):
-        """Assistant text with detected violation is sanitized before entering messages (#1880)."""
+    def test_agent_response_sanitized_in_warn_mode(self, mock_monitor):
+        """Agent response text with detected violation is sanitized before entering messages (#1880)."""
         from ai_guardian.sdk import CheckResult
 
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[SECRET REDACTED]"}
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret found")
             return CheckResult(blocked=False, detected=False)
 
@@ -5037,15 +5037,15 @@ class TestGuardedAgentTrace:
         assert "AKIA_FAKE_SECRET" not in str(content)
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_assistant_response_sanitized_output_text(self, mock_monitor):
-        """Sanitized assistant text is reflected in output on end_turn (#1880)."""
+    def test_agent_response_sanitized_output_text(self, mock_monitor):
+        """Sanitized agent response text is reflected in output on end_turn (#1880)."""
         from ai_guardian.sdk import CheckResult
 
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret")
             return CheckResult(blocked=False, detected=False)
 
@@ -5065,14 +5065,14 @@ class TestGuardedAgentTrace:
         assert result["output"] == "[REDACTED]"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_assistant_response_block_mode_still_raises(self, mock_monitor):
-        """Block mode still raises SecurityViolation for assistant response (#1880)."""
+    def test_agent_response_block_mode_still_raises(self, mock_monitor):
+        """Block mode still raises SecurityViolation for agent response (#1880)."""
         from ai_guardian.sdk import CheckResult, SecurityViolation
 
         mock_session = MagicMock()
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(blocked=True, detected=True, message="blocked")
                 )
@@ -5094,7 +5094,7 @@ class TestGuardedAgentTrace:
             agent.run("test")
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_assistant_response_trace_records_raw_text(self, mock_monitor):
+    def test_agent_response_trace_records_raw_text(self, mock_monitor):
         """Trace records raw text before sanitization (#1880)."""
         from ai_guardian.sdk import CheckResult
 
@@ -5102,7 +5102,7 @@ class TestGuardedAgentTrace:
         mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
 
         def check_side_effect(text, filename="input"):
-            if filename == "assistant_response":
+            if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret")
             return CheckResult(blocked=False, detected=False)
 

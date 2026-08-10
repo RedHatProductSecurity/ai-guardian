@@ -615,11 +615,11 @@ class GuardedAgent:
                 if self._scan_output and parsed.text:
                     try:
                         scan_result = session.check_content(
-                            parsed.text, filename="assistant_response"
+                            parsed.text, filename="agent_response"
                         )
                         _emit(
                             turn_num,
-                            TurnEvent(type="scan", scanned="assistant_response"),
+                            TurnEvent(type="scan", scanned="agent_response"),
                         )
                         if scan_result.detected:
                             sanitized = _try_sanitize_text(session, parsed.text)
@@ -633,7 +633,7 @@ class GuardedAgent:
                             turn_num,
                             TurnEvent(
                                 type="scan",
-                                scanned="assistant_response",
+                                scanned="agent_response",
                                 violations=[
                                     {
                                         "type": exc.result.violation_type,
