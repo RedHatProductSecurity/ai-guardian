@@ -4980,6 +4980,150 @@ class TestGuardedAgentTrace:
         assert isinstance(content, list)
         assert content[0]["content"] == "[SECRET REDACTED]"
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_assistant_response_sanitized_in_warn_mode(self, mock_monitor):
+        """Assistant text with detected violation is sanitized before entering messages (#1880)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.sanitize.return_value = {"sanitized_text": "[SECRET REDACTED]"}
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                return CheckResult(blocked=False, detected=True, message="secret found")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(type="text", text="The key is AKIA_FAKE_SECRET"),
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo done"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(action="warn")
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="ok",
+        ):
+            result = agent.run("show the key")
+
+        messages = result["messages"]
+        assistant_msg = messages[1]
+        assert assistant_msg["role"] == "assistant"
+        content = assistant_msg["content"]
+        text_block = next(
+            b
+            for b in content
+            if (b.get("type") if isinstance(b, dict) else getattr(b, "type", None))
+            == "text"
+        )
+        assert text_block["text"] == "[SECRET REDACTED]"
+        assert "AKIA_FAKE_SECRET" not in str(content)
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_assistant_response_sanitized_output_text(self, mock_monitor):
+        """Sanitized assistant text is reflected in output on end_turn (#1880)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                return CheckResult(blocked=False, detected=True, message="secret")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret-value-here")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(action="warn")
+        client.messages.create.return_value = response
+        result = agent.run("tell me")
+
+        assert result["output"] == "[REDACTED]"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_assistant_response_block_mode_still_raises(self, mock_monitor):
+        """Block mode still raises SecurityViolation for assistant response (#1880)."""
+        from ai_guardian.sdk import CheckResult, SecurityViolation
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                raise SecurityViolation(
+                    CheckResult(blocked=True, detected=True, message="blocked")
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(action="block")
+        client.messages.create.return_value = response
+
+        with pytest.raises(SecurityViolation):
+            agent.run("test")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_assistant_response_trace_records_raw_text(self, mock_monitor):
+        """Trace records raw text before sanitization (#1880)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+
+        def check_side_effect(text, filename="input"):
+            if filename == "assistant_response":
+                return CheckResult(blocked=False, detected=True, message="secret")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="raw-secret-text")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(action="log")
+        client.messages.create.return_value = response
+        result = agent.run("test")
+
+        trace = result["trace"]
+        response_events = [e for e in trace if e.get("type") == "response"]
+        assert len(response_events) == 1
+        assert response_events[0]["text"] == "raw-secret-text"
+
 
 class TestGuardedAgentTraceDir:
     """Tests for auto-persist trace logs to disk (#1877)."""
