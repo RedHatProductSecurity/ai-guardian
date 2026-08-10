@@ -2963,6 +2963,118 @@ class TestGuardedAgent:
         assert result["stop_reason"] == "end_turn"
         assert result["output"] == "Hello!"
 
+    # -- between_turns + output_schema interaction (#1870) --
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_fires_with_output_schema(self, mock_monitor):
+        """between_turns must fire even when submit_result is called."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="t1",
+                    input={"test_code": "assert True"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.messages.create.return_value = response
+
+        result = agent.run("generate test code")
+
+        hook.assert_called_once()
+        assert result["output"] == {"test_code": "assert True"}
+        assert result["stop_reason"] == "end_turn"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_string_continues_after_submit_result(self, mock_monitor):
+        """Returning a string from between_turns rejects submit_result and continues."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="t1",
+                    input={"test_code": "pass"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        r2 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="t2",
+                    input={"test_code": "assert 1 + 1 == 2"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(side_effect=["Tests failed, try again", None])
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.messages.create.side_effect = [r1, r2]
+
+        result = agent.run("generate test code")
+
+        assert hook.call_count == 2
+        assert result["output"] == {"test_code": "assert 1 + 1 == 2"}
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_false_stops_with_output_schema(self, mock_monitor):
+        """Returning False from between_turns stops even with submit_result."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="t1",
+                    input={"test_code": "assert True"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(return_value=False)
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.messages.create.return_value = response
+
+        result = agent.run("generate test code")
+
+        hook.assert_called_once()
+        assert result["stop_reason"] == "hook_early_stop"
+
 
 # ============================================================================
 # TestGuardedClientHooks
@@ -3663,6 +3775,39 @@ class TestOpenAIGuardedAgent:
         result = agent.run("Do work")
 
         assert result["stop_reason"] == "hook_early_stop"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_fires_with_output_schema(self, mock_monitor):
+        """between_turns fires when submit_result is called (#1870)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call(
+                    "call_1",
+                    "submit_result",
+                    {"test_code": "assert True"},
+                ),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.chat.completions.create.return_value = response
+
+        result = agent.run("generate test code")
+
+        hook.assert_called_once()
+        assert result["output"] == {"test_code": "assert True"}
+        assert result["stop_reason"] == "end_turn"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_output_violation_attaches_response(self, mock_monitor):

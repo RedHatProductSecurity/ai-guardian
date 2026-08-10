@@ -693,10 +693,6 @@ class GuardedAgent:
                             messages, parsed.raw_content, tool_results
                         )
 
-                    if structured_output is not None:
-                        stop_reason = "end_turn"
-                        break
-
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
@@ -712,6 +708,12 @@ class GuardedAgent:
                             strategy.inject_user_text_after_results(
                                 messages, hook_result
                             )
+                            structured_output = None
+                            continue
+
+                    if structured_output is not None:
+                        stop_reason = "end_turn"
+                        break
 
                     continue
 
