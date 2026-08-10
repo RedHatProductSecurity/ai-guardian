@@ -981,6 +981,25 @@ AI_GUARDIAN_CONFIG_OVERLAY=/path/to/overlay.json ai-guardian scan
 AI_GUARDIAN_CONFIG_INLINE='{"preferred_ui":"headless","prompt_injection":{"action":"block"}}' ai-guardian scan
 ```
 
+#### Logging Control
+
+Suppress ai-guardian's stderr output by setting the log level:
+
+```bash
+# Suppress all messages except errors
+AI_GUARDIAN_LOG_LEVEL=ERROR python my_agent.py
+```
+
+Or programmatically before importing:
+
+```python
+import logging
+logging.getLogger("ai_guardian").setLevel(logging.ERROR)
+from ai_guardian.sdk import monitor  # respects the pre-set level
+```
+
+Valid values: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`.
+
 ### Overlay Priority
 
 When multiple overlay sources are active, they merge in this order (lowest to highest):
