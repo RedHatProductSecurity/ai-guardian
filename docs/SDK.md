@@ -132,6 +132,129 @@ response = client.chat.completions.create(
 )
 ```
 
+### OpenAI-Compatible Providers
+
+Any LLM server that exposes an OpenAI-compatible `/v1/chat/completions` endpoint works with `guarded()` and `GuardedAgent` — no code changes needed. Point the standard `OpenAI` client at the provider's URL.
+
+**Ollama**:
+
+```python
+from openai import OpenAI
+from ai_guardian.integrations import guarded
+
+client = guarded(
+    OpenAI(base_url="http://localhost:11434/v1", api_key="ollama"),
+    action="block",
+)
+response = client.chat.completions.create(
+    model="llama3.1",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+`api_key="ollama"` is required by the OpenAI client but ignored by the Ollama server.
+
+**llama.cpp**:
+
+```python
+client = guarded(
+    OpenAI(base_url="http://localhost:8080/v1", api_key="not-needed"),
+    action="block",
+)
+response = client.chat.completions.create(
+    model="local-model",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**vLLM**:
+
+```python
+client = guarded(
+    OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed"),
+    action="block",
+)
+response = client.chat.completions.create(
+    model="meta-llama/Llama-3.1-8B-Instruct",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+**LiteLLM** (proxy that routes to any provider):
+
+```python
+client = guarded(
+    OpenAI(base_url="http://localhost:4000/v1", api_key="not-needed"),
+    action="block",
+)
+```
+
+**Mistral** (via OpenAI-compatible endpoint):
+
+```python
+client = guarded(
+    OpenAI(base_url="https://api.mistral.ai/v1", api_key=os.environ["MISTRAL_API_KEY"]),
+    action="block",
+)
+response = client.chat.completions.create(
+    model="mistral-large-latest",
+    messages=[{"role": "user", "content": user_input}],
+)
+```
+
+#### GuardedAgent with Local Models
+
+`GuardedAgent` works with OpenAI-compatible providers via the `strategy` parameter:
+
+```python
+from openai import OpenAI
+from ai_guardian.integrations.anthropic import GuardedAgent
+from ai_guardian.integrations.openai import OpenAILoopStrategy
+
+agent = GuardedAgent(
+    client=OpenAI(base_url="http://localhost:11434/v1", api_key="ollama"),
+    model="llama3.1",
+    tools="coding",
+    strategy=OpenAILoopStrategy(),
+)
+result = agent.run("find bugs in this file")
+```
+
+#### Config Profile for Local Models
+
+Use named agent profiles in `ai-guardian.json` to avoid hardcoding connection details:
+
+```json
+{
+    "sdk": {
+        "agents": {
+            "local-reviewer": {
+                "model": "llama3.1",
+                "max_turns": 10,
+                "action": "warn"
+            }
+        }
+    }
+}
+```
+
+```python
+agent = GuardedAgent(
+    client=OpenAI(base_url="http://localhost:11434/v1", api_key="ollama"),
+    name="local-reviewer",
+)
+```
+
+#### Caveats
+
+| Topic | Details |
+|-------|---------|
+| **Tool calling** | Requires a model with tool/function calling support (llama3.1, qwen2.5, mistral-large). Models without it will fail in `GuardedAgent` |
+| **Streaming** | Delta format may differ between providers. Not all implement SSE identically |
+| **Stop reasons** | Providers may return different `finish_reason` values. `GuardedAgent` checks for `"stop"` (OpenAI standard) |
+| **Security scanning** | ai-guardian scans identically regardless of provider — secrets, PII, prompt injection all work the same |
+| **Install** | Requires `pip install ai-guardian[openai]` |
+
 ### `create_client(**kwargs)`
 
 Auto-detect and create an Anthropic client from environment variables.
@@ -204,6 +327,7 @@ with client.messages.stream(
 |----------|-------------|-----------------|
 | Anthropic | `Anthropic`, `AsyncAnthropic`, `AnthropicVertex`, `AnthropicBedrock`, `AnthropicFoundry` (+ async variants) | `messages.create`, `messages.stream` |
 | OpenAI | `OpenAI`, `AsyncOpenAI`, `AzureOpenAI`, `AsyncAzureOpenAI` | `chat.completions.create` |
+| OpenAI-compatible | Ollama, llama.cpp, vLLM, LiteLLM, Mistral — via `OpenAI(base_url=...)` | `chat.completions.create` |
 
 ### Custom Extractors
 
