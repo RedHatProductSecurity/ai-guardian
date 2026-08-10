@@ -673,9 +673,7 @@ class GuardedAgent:
                                 ),
                             )
 
-                        is_error = result_text.startswith(
-                            "Error: no executor"
-                        )
+                        is_error = result_text.startswith("Error: no executor")
                         tool_results.append(
                             strategy.format_tool_result(
                                 tc.id, result_text, is_error=is_error
