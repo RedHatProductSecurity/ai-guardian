@@ -5186,7 +5186,9 @@ class TestGuardedAgentTraceDir:
         import json
 
         mock_session = MagicMock()
-        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_session.sanitize_batch.side_effect = lambda texts: [
+            "[REDACTED]" for _ in texts
+        ]
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -5222,7 +5224,7 @@ class TestGuardedAgentTraceDir:
         import json
 
         mock_session = MagicMock()
-        mock_session.sanitize.side_effect = Exception("sanitize failed")
+        mock_session.sanitize_batch.side_effect = Exception("sanitize failed")
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 

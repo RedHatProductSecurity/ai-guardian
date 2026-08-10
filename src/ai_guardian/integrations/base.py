@@ -567,6 +567,16 @@ def _try_sanitize_text(session, text):
         return None
 
 
+def _try_sanitize_batch(session, texts: List[str]) -> List[str]:
+    """Batch-sanitize *texts* via *session*, returning originals on failure."""
+    if not texts:
+        return []
+    try:
+        return session.sanitize_batch(texts)
+    except Exception:
+        return list(texts)
+
+
 def _sanitize_response_text(session, extractor, method_name, response):
     """Extract all text from *response* and return a sanitized version."""
     try:
