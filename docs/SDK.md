@@ -492,6 +492,7 @@ print(result["output"])  # validated structured object
 | `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
+| `trace_dir` | str | `None` | Directory for auto-persisted trace logs. Each `run()` writes a sanitized JSON trace file. Relative paths resolve against `cwd`. Also configurable via `sdk.agents.<name>.trace_dir` in `ai-guardian.json` |
 
 ### Hooks
 
@@ -677,6 +678,59 @@ class TurnEvent:
     stop_reason: Optional[str] = None
     violations: Optional[list] = field(default_factory=list)
     scanned: Optional[str] = None
+```
+
+#### Auto-Persist Traces to Disk
+
+Set `trace_dir` to auto-write sanitized trace logs after each `run()`:
+
+```python
+agent = GuardedAgent(
+    name="triage-verifier",
+    trace_dir="logs/agents",   # relative to cwd
+    ...
+)
+result = agent.run(prompt)
+# Trace written to: logs/agents/triage-verifier_20260810-153042.json
+```
+
+File naming: `<agent-name>_<YYYYMMDD-HHMMSS>.json`
+
+Trace file content:
+
+```json
+{
+  "agent_name": "triage-verifier",
+  "model": "claude-sonnet-5",
+  "started_at": "2026-08-10T15:30:42+00:00",
+  "stop_reason": "end_turn",
+  "usage": {"input_tokens": 12345, "output_tokens": 678},
+  "trace": [...]
+}
+```
+
+Behavior:
+- `trace_dir=None` (default): no persistence, same as before
+- Directory created if it doesn't exist
+- Text fields are sanitized (secrets/PII redacted) before writing
+- Errors writing the trace are logged but don't fail the agent
+- Relative paths resolve against `cwd`
+
+Also configurable via `ai-guardian.json`:
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "_default": {
+        "trace_dir": "logs/agents"
+      },
+      "triage-verifier": {
+        "trace_dir": "cases/verify"
+      }
+    }
+  }
+}
 ```
 
 ### `agent.run(prompt)` Return Value

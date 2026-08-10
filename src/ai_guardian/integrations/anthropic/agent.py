@@ -1,7 +1,9 @@
 """GuardedAgent — tool-use agent loop with security scanning."""
 
+import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from ai_guardian.integrations.anthropic.tools import (
@@ -241,6 +243,8 @@ class GuardedAgent:
     Bedrock) and OpenAI out of the box.
     """
 
+    _TRACE_TEXT_FIELDS = ("text", "system_prompt", "user_prompt", "output", "preamble")
+
     _OVERRIDABLE_PARAMS = frozenset(
         {
             "max_turns",
@@ -252,6 +256,7 @@ class GuardedAgent:
             "mode",
             "model",
             "cwd",
+            "trace_dir",
         }
     )
 
@@ -285,8 +290,10 @@ class GuardedAgent:
         compact_keep_turns: int = 5,
         compact_keep_first: int = 1,
         name: Optional[str] = None,
+        trace_dir: Optional[str] = None,
     ):
         self._name = name
+        self._trace_dir = trace_dir
         self._model = model
         self._system_prompt = system_prompt
         self._cwd = cwd or os.getcwd()
@@ -324,6 +331,9 @@ class GuardedAgent:
             self._client = self._strategy.create_default_client()
 
         tools = self._apply_config_profile(tools)
+
+        if self._trace_dir and not os.path.isabs(self._trace_dir):
+            self._trace_dir = os.path.join(self._cwd, self._trace_dir)
 
         if cache_ttl is not None:
             self._strategy.validate_cache_ttl(cache_ttl)
@@ -423,6 +433,46 @@ class GuardedAgent:
             if self._post_run:
                 self._post_run(result)
 
+    def _persist_trace(
+        self, result: Dict[str, Any], started_at: datetime, session: Any
+    ) -> None:
+        try:
+            os.makedirs(self._trace_dir, exist_ok=True)
+            agent_name = self._name or "agent"
+            timestamp = started_at.strftime("%Y%m%d-%H%M%S")
+            filename = f"{agent_name}_{timestamp}.json"
+            filepath = os.path.join(self._trace_dir, filename)
+
+            sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
+
+            trace_doc = {
+                "agent_name": agent_name,
+                "model": self._model,
+                "started_at": started_at.isoformat(),
+                "stop_reason": result.get("stop_reason"),
+                "usage": result.get("usage"),
+                "trace": sanitized_trace,
+            }
+            with open(filepath, "w", encoding="utf-8") as fh:
+                json.dump(trace_doc, fh, indent=2, default=str)
+            logger.debug("Trace written to %s", filepath)
+        except Exception:
+            logger.warning("Failed to persist trace", exc_info=True)
+
+    @classmethod
+    def _sanitize_trace(
+        cls, trace: List[Dict[str, Any]], session: Any
+    ) -> List[Dict[str, Any]]:
+        sanitized = []
+        for entry in trace:
+            entry_copy = dict(entry)
+            for field in cls._TRACE_TEXT_FIELDS:
+                val = entry_copy.get(field)
+                if val and isinstance(val, str):
+                    entry_copy[field] = _try_sanitize_text(session, val) or val
+            sanitized.append(entry_copy)
+        return sanitized
+
     def _maybe_compact(
         self,
         strategy: AgentLoopStrategy,
@@ -477,6 +527,7 @@ class GuardedAgent:
             if self._on_turn:
                 self._on_turn(turn, event)
 
+        started_at = datetime.now(timezone.utc)
         with monitor(
             action=self._action, mode=self._mode, config=self._config
         ) as session:
@@ -669,7 +720,7 @@ class GuardedAgent:
                         )
 
                         if self._scan_output and result_text:
-                            session.check_content(
+                            scan_result = session.check_content(
                                 result_text,
                                 filename=f"tool_result:{tc.name}",
                             )
@@ -680,6 +731,10 @@ class GuardedAgent:
                                     scanned=f"tool_result:{tc.name}",
                                 ),
                             )
+                            if scan_result.detected:
+                                sanitized = _try_sanitize_text(session, result_text)
+                                if sanitized:
+                                    result_text = sanitized
 
                         is_error = result_text.startswith("Error: no executor")
                         tool_results.append(
@@ -726,7 +781,7 @@ class GuardedAgent:
             if structured_output is not None:
                 output = structured_output
 
-            return {
+            result = {
                 "output": output,
                 "messages": messages,
                 "stop_reason": stop_reason,
@@ -734,3 +789,8 @@ class GuardedAgent:
                 "compaction_count": compaction_count,
                 "trace": trace,
             }
+
+            if self._trace_dir:
+                self._persist_trace(result, started_at, session)
+
+            return result
