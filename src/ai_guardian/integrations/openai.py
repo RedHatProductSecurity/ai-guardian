@@ -353,7 +353,12 @@ class OpenAILoopStrategy(AgentLoopStrategy):
             output_tokens=output_tokens,
         )
 
-    def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
+    def format_tool_result(
+        self,
+        tool_call_id: str,
+        content: str,
+        is_error: bool = False,
+    ) -> Dict[str, Any]:
         return {
             "role": "tool",
             "tool_call_id": tool_call_id,

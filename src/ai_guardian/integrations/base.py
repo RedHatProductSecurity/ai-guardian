@@ -187,7 +187,12 @@ class AgentLoopStrategy(ABC):
         """Normalize a raw provider response into a ``ParsedResponse``."""
 
     @abstractmethod
-    def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
+    def format_tool_result(
+        self,
+        tool_call_id: str,
+        content: str,
+        is_error: bool = False,
+    ) -> Dict[str, Any]:
         """Format a single tool result for inclusion in the message history."""
 
     @abstractmethod
