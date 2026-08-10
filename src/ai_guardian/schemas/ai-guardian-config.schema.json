@@ -1952,6 +1952,9 @@
     },
     "support": {
       "$ref": "#/definitions/support"
+    },
+    "sdk": {
+      "$ref": "#/definitions/sdk"
     }
   },
   "definitions": {
@@ -2631,6 +2634,96 @@
           "$ref": "#/definitions/time_based_pattern"
         }
       ]
+    },
+    "sdk_agent_profile": {
+      "type": "object",
+      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override _default values.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable SDK scanning for this agent. Overrides sdk.enabled.",
+          "default": true
+        },
+        "trace_dir": {
+          "type": "string",
+          "description": "Directory for auto-persisted trace logs. Each run() writes a sanitized JSON trace file named <agent-name>_<YYYYMMDD-HHMMSS>.json. Relative paths resolve against the agent's cwd."
+        },
+        "action": {
+          "type": "string",
+          "enum": ["block", "warn", "log"],
+          "description": "Security action mode for this agent."
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["direct", "rest"],
+          "description": "Scanning mode."
+        },
+        "model": {
+          "type": "string",
+          "description": "LLM model ID override."
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tool-use loop iterations."
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum output tokens per API call."
+        },
+        "max_budget_tokens": {
+          "type": "integer",
+          "description": "Maximum cumulative tokens (input + output). -1 = no limit."
+        },
+        "scan_input": {
+          "type": "boolean",
+          "description": "Scan prompts before sending to the model."
+        },
+        "scan_output": {
+          "type": "boolean",
+          "description": "Scan responses and tool results."
+        },
+        "tools": {
+          "description": "Tool preset name or list of tool definitions.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array" }
+          ]
+        },
+        "system_prompt_preamble": {
+          "type": "string",
+          "description": "Text prepended to the system prompt via config."
+        }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "description": "SDK configuration for programmatic security checking (GuardedAgent, guarded() wrapper, monitor()). Controls scanning behavior, agent profiles, and client profiles.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Global enable/disable for all SDK scanning. Per-profile 'enabled' keys override this.",
+          "default": true
+        },
+        "agents": {
+          "type": "object",
+          "description": "GuardedAgent profiles. Use '_default' for defaults applied to all agents. Named keys match the agent's 'name' parameter.",
+          "additionalProperties": {
+            "$ref": "#/definitions/sdk_agent_profile"
+          }
+        },
+        "clients": {
+          "type": "object",
+          "description": "guarded() client profiles. Use '_default' for defaults applied to all clients.",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      }
     }
   }
 }

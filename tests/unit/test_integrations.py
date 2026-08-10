@@ -4926,3 +4926,336 @@ class TestGuardedAgentTrace:
         assert len(violation_scans) == 1
         assert violation_scans[0][1].scanned == "assistant_response"
         assert violation_scans[0][1].violations[0]["type"] == "secret"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_result_sanitized_before_next_turn(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.sanitize.return_value = {"sanitized_text": "[SECRET REDACTED]"}
+
+        def check_side_effect(text, filename="input"):
+            if filename.startswith("tool_result:"):
+                return CheckResult(blocked=False, detected=True, message="secret found")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "cat secret.txt"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="AKIA_FAKE_SECRET_KEY",
+        ):
+            result = agent.run("read the file")
+
+        messages = result["messages"]
+        tool_result_msg = messages[2]
+        content = tool_result_msg["content"]
+        assert isinstance(content, list)
+        assert content[0]["content"] == "[SECRET REDACTED]"
+
+
+class TestGuardedAgentTraceDir:
+    """Tests for auto-persist trace logs to disk (#1877)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_written_to_disk(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="triage-verifier", trace_dir=trace_dir)
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        files = os.listdir(trace_dir)
+        assert len(files) == 1
+        assert files[0].startswith("triage-verifier_")
+        assert files[0].endswith(".json")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_file_content(self, mock_monitor, tmp_path):
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="my-agent", trace_dir=trace_dir)
+        client.messages.create.return_value = response
+        agent.run("test prompt")
+
+        files = os.listdir(trace_dir)
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+
+        assert doc["agent_name"] == "my-agent"
+        assert doc["model"] == "claude-sonnet-5"
+        assert doc["stop_reason"] == "end_turn"
+        assert "started_at" in doc
+        assert "usage" in doc
+        assert isinstance(doc["trace"], list)
+        assert len(doc["trace"]) > 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_dir_created_if_missing(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        nested = str(tmp_path / "a" / "b" / "c")
+        agent, client = self._make_agent(name="test", trace_dir=nested)
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        assert os.path.isdir(nested)
+        assert len(os.listdir(nested)) == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_no_trace_when_trace_dir_none(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(name="test")
+        client.messages.create.return_value = response
+        result = agent.run("Hi")
+
+        assert "trace" in result
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_write_error_does_not_fail_agent(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(
+            name="test", trace_dir="/nonexistent/readonly/path"
+        )
+        client.messages.create.return_value = response
+        result = agent.run("Hi")
+
+        assert result["output"] == "OK"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_default_agent_name(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(trace_dir=trace_dir)
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        files = os.listdir(trace_dir)
+        assert files[0].startswith("agent_")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_dir_from_config(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "config-traces")
+        with (
+            patch(
+                "ai_guardian.config.loaders._load_sdk_profile",
+                return_value={"trace_dir": trace_dir},
+            ),
+            patch(
+                "ai_guardian.config.loaders._sdk_enabled",
+                return_value=True,
+            ),
+        ):
+            agent, client = self._make_agent(name="cfg-agent")
+            client.messages.create.return_value = response
+            agent.run("Hi")
+
+        assert os.path.isdir(trace_dir)
+        files = os.listdir(trace_dir)
+        assert len(files) == 1
+        assert files[0].startswith("cfg-agent_")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_post_run_still_called_with_trace_dir(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        post_run_called = []
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(
+            name="test",
+            trace_dir=trace_dir,
+            post_run=lambda r: post_run_called.append(r),
+        )
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        assert len(post_run_called) == 1
+        assert post_run_called[0]["output"] == "OK"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_content_is_sanitized(self, mock_monitor, tmp_path):
+        import json
+
+        mock_session = MagicMock()
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret-key-12345")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(
+            name="test",
+            trace_dir=trace_dir,
+            system_prompt="my system prompt",
+        )
+        client.messages.create.return_value = response
+        agent.run("user prompt with secret")
+
+        files = os.listdir(trace_dir)
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+
+        for entry in doc["trace"]:
+            for field in ("text", "system_prompt", "user_prompt", "output"):
+                val = entry.get(field)
+                if val:
+                    assert val == "[REDACTED]", (
+                        f"Field '{field}' not sanitized in "
+                        f"trace entry type={entry['type']}"
+                    )
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_sanitize_failure_falls_back_to_raw(self, mock_monitor, tmp_path):
+        import json
+
+        mock_session = MagicMock()
+        mock_session.sanitize.side_effect = Exception("sanitize failed")
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="some text")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="test", trace_dir=trace_dir)
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        files = os.listdir(trace_dir)
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+
+        response_events = [e for e in doc["trace"] if e["type"] == "response"]
+        assert response_events[0]["text"] == "some text"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_relative_dir_resolved_to_cwd(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(
+            name="test",
+            trace_dir="logs/agents",
+            cwd=str(tmp_path),
+        )
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        expected_dir = tmp_path / "logs" / "agents"
+        assert expected_dir.is_dir()
+        assert len(list(expected_dir.iterdir())) == 1
