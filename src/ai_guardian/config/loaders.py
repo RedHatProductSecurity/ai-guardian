@@ -819,6 +819,41 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     return dict(default_profile)
 
 
+def _sdk_enabled(section: str = "clients", name: Optional[str] = None) -> bool:
+    """Check whether the SDK is globally enabled.
+
+    Reads ``sdk.enabled`` from the merged config.  If a per-profile
+    ``enabled`` key exists in ``sdk.<section>.<name>``, it takes
+    precedence over the global flag.
+
+    Args:
+        section: ``"agents"`` or ``"clients"``
+        name: Profile name for per-agent/client override lookup.
+
+    Returns:
+        ``True`` (default) if scanning should be active, ``False`` to
+        bypass all SDK scanning.
+    """
+    config, error_msg = _load_config_file()
+    if error_msg or config is None:
+        return True
+
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return True
+
+    # Per-profile override takes precedence
+    if name:
+        profiles = sdk.get(section)
+        if isinstance(profiles, dict):
+            named = profiles.get(name)
+            if isinstance(named, dict) and "enabled" in named:
+                return bool(named["enabled"])
+
+    # Global sdk.enabled
+    return sdk.get("enabled", True)
+
+
 def _get_on_scan_error_action() -> str:
     """
     Load the global on_scan_error setting from ai-guardian.json.

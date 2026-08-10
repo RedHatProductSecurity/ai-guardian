@@ -810,10 +810,15 @@ def guarded(
         from ai_guardian.integrations.anthropic import create_client
 
         client = create_client()
+
+    from ai_guardian.config.loaders import _load_sdk_profile, _sdk_enabled
+
+    if not _sdk_enabled("clients", name):
+        logger.info("ai-guardian SDK disabled via config — returning unwrapped client")
+        return client
+
     if extractor is None:
         extractor = _extractor_registry.detect(client)
-
-    from ai_guardian.config.loaders import _load_sdk_profile
 
     model_override = None
     max_tokens_override = None
