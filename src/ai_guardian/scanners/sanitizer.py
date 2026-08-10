@@ -101,7 +101,28 @@ def _sanitize_unicode(text: str) -> tuple:
     return "".join(result), changes
 
 
-def _sanitize_prompt_injection(text: str) -> tuple:
+_PII_TYPES = frozenset(
+    {
+        "SSN",
+        "Credit Card Number",
+        "US Phone Number",
+        "Email Address",
+        "US Passport Number",
+        "IBAN",
+        "International Phone Number",
+    }
+)
+
+_PI_DETECTOR_CONFIG = {
+    "enabled": True,
+    "sensitivity": "high",
+    "allowlist_patterns": [],
+    "ignore_files": [],
+    "ignore_tools": [],
+}
+
+
+def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
     """
     Detect and replace prompt injection patterns with [SANITIZED].
 
@@ -110,15 +131,8 @@ def _sanitize_prompt_injection(text: str) -> tuple:
     """
     from ai_guardian.scanners.prompt_injection import PromptInjectionDetector
 
-    detector = PromptInjectionDetector(
-        {
-            "enabled": True,
-            "sensitivity": "high",
-            "allowlist_patterns": [],
-            "ignore_files": [],
-            "ignore_tools": [],
-        }
-    )
+    if detector is None:
+        detector = PromptInjectionDetector(_PI_DETECTOR_CONFIG)
 
     redactions = []
 
@@ -214,15 +228,7 @@ def sanitize_text(
 
         for r in result.get("redactions", []):
             rtype = r.get("type", "")
-            is_pii = rtype in (
-                "SSN",
-                "Credit Card Number",
-                "US Phone Number",
-                "Email Address",
-                "US Passport Number",
-                "IBAN",
-                "International Phone Number",
-            )
+            is_pii = rtype in _PII_TYPES
             if is_pii:
                 stats["pii"] += 1
             else:
@@ -242,6 +248,46 @@ def sanitize_text(
         "redactions": all_redactions,
         "stats": stats,
     }
+
+
+def sanitize_text_batch(texts: List[str]) -> List[str]:
+    """Batch-sanitize texts, reusing compiled patterns across all entries.
+
+    Creates one ``SecretRedactor`` and one ``PromptInjectionDetector`` instance
+    and applies them to every text, avoiding repeated TOML loads and regex
+    compilations.  Returns sanitized strings in the same order as *texts*.
+    """
+    if not texts:
+        return []
+
+    from ai_guardian.scanners.prompt_injection import PromptInjectionDetector
+    from ai_guardian.scanners.secret_redactor import SecretRedactor
+
+    config = get_sanitize_config()
+    redactor = SecretRedactor(
+        config={"enabled": True},
+        pii_config=config["scan_pii"],
+    )
+    detector = PromptInjectionDetector(_PI_DETECTOR_CONFIG)
+
+    results = []
+    for text in texts:
+        if not text:
+            results.append(text)
+            continue
+
+        sanitized = text
+
+        sanitized, _ = _sanitize_unicode(sanitized)
+
+        redact_result = redactor.redact(sanitized)
+        sanitized = redact_result["redacted_text"]
+
+        sanitized, _ = _sanitize_prompt_injection(sanitized, detector=detector)
+
+        results.append(sanitized)
+
+    return results
 
 
 def _write_bytes(data: bytes, output_path: Optional[str]) -> None:

@@ -19,6 +19,7 @@ from ai_guardian.integrations.base import (
     TurnEvent,
     _PREAMBLE_PREFIX,
     _USAGE_TOKEN_FIELDS,
+    _try_sanitize_batch,
     _try_sanitize_text,
     _strategy_registry,
 )
@@ -463,15 +464,23 @@ class GuardedAgent:
     def _sanitize_trace(
         cls, trace: List[Dict[str, Any]], session: Any
     ) -> List[Dict[str, Any]]:
-        sanitized = []
-        for entry in trace:
-            entry_copy = dict(entry)
+        items: List[tuple] = []
+        for i, entry in enumerate(trace):
             for field in cls._TRACE_TEXT_FIELDS:
-                val = entry_copy.get(field)
+                val = entry.get(field)
                 if val and isinstance(val, str):
-                    entry_copy[field] = _try_sanitize_text(session, val) or val
-            sanitized.append(entry_copy)
-        return sanitized
+                    items.append((i, field, val))
+
+        if not items:
+            return list(trace)
+
+        texts = [val for _, _, val in items]
+        sanitized_texts = _try_sanitize_batch(session, texts)
+
+        entry_copies = [dict(e) for e in trace]
+        for (i, field, original), sanitized in zip(items, sanitized_texts):
+            entry_copies[i][field] = sanitized or original
+        return entry_copies
 
     def _maybe_compact(
         self,

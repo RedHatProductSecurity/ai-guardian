@@ -103,6 +103,25 @@ class GuardSession:
         """Sanitize text, redacting secrets and PII."""
         raise NotImplementedError
 
+    def sanitize_batch(self, texts: List[str]) -> List[str]:
+        """Batch-sanitize texts, reusing compiled patterns across all entries.
+
+        Returns sanitized strings in the same order as *texts*.
+        Default implementation loops over :meth:`sanitize`; subclasses
+        override to amortize pattern compilation.
+        """
+        results = []
+        for text in texts:
+            if not text:
+                results.append(text)
+                continue
+            try:
+                result = self.sanitize(text)
+                results.append(result.get("sanitized_text", text))
+            except Exception:
+                results.append(text)
+        return results
+
     def get_violations(
         self,
         *,
@@ -405,6 +424,11 @@ class _DirectSession(GuardSession):
         from ai_guardian.scanners.sanitizer import sanitize_text
 
         return sanitize_text(text)
+
+    def sanitize_batch(self, texts: List[str]) -> List[str]:
+        from ai_guardian.scanners.sanitizer import sanitize_text_batch
+
+        return sanitize_text_batch(texts)
 
     def get_violations(
         self,
