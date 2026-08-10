@@ -3294,6 +3294,9 @@ class TestGuardedAgentCompaction:
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_auto_compact_triggers_on_high_input_tokens(self, mock_monitor):
         mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -3544,6 +3547,9 @@ class TestOpenAIGuardedAgent:
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_tool_result_format(self, mock_monitor):
         mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
