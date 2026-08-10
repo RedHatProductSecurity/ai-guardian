@@ -935,11 +935,11 @@ def check_secrets(
 
                     # Log context about why we're using scanner engines
                     if pattern_server_attempted:
-                        logger.info(
+                        logger.debug(
                             f"Using {engine_config.type} scanner (pattern server unavailable)"
                         )
                     else:
-                        logger.info(f"Using {engine_config.type} scanner")
+                        logger.debug(f"Using {engine_config.type} scanner")
 
                     config_source = f"{engine_config.type} defaults"
 

@@ -245,7 +245,7 @@ class RemoteFetcher:
                     )
                     return None
 
-            logger.info(f"Successfully loaded local config: {file_path}")
+            logger.debug(f"Successfully loaded local config: {file_path}")
             return config
 
         except Exception as e:

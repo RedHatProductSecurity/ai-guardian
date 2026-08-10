@@ -279,7 +279,7 @@ class UnicodeAttackDetector:
         # Load from pattern server if configured, otherwise use TOML/hardcoded defaults
         pattern_server_config = self.config.get("pattern_server")
         if pattern_server_config:
-            logger.info(
+            logger.debug(
                 "Unicode Attack Detection: Loading homoglyph patterns via pattern server"
             )
             homoglyph_patterns = self._load_homoglyphs_via_server(pattern_server_config)
@@ -291,7 +291,7 @@ class UnicodeAttackDetector:
         self._homoglyph_map = {
             homoglyph: latin for homoglyph, latin in homoglyph_patterns
         }
-        logger.info(
+        logger.debug(
             f"Unicode Attack Detection: Loaded {len(self._homoglyph_map)} homoglyph patterns"
         )
 
@@ -354,7 +354,7 @@ class UnicodeAttackDetector:
                     homoglyph_list.append((pattern[0], pattern[1]))
 
             if homoglyph_list:
-                logger.info(
+                logger.debug(
                     f"Loaded {len(homoglyph_list)} homoglyph patterns from pattern server/cache/defaults"
                 )
                 return homoglyph_list
@@ -371,7 +371,7 @@ class UnicodeAttackDetector:
             return self.HOMOGLYPH_PATTERNS
         except Exception as e:
             logger.error(f"Error loading homoglyphs from pattern server: {e}")
-            logger.info("Falling back to hardcoded default patterns")
+            logger.debug("Falling back to hardcoded default patterns")
             return self.HOMOGLYPH_PATTERNS
 
     def _is_emoji_context(self, text: str, position: int) -> bool:

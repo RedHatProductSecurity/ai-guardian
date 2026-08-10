@@ -191,7 +191,7 @@ class ConfigFileScanner:
         # Load patterns using pattern loader if pattern_server configured
         pattern_server_config = self.config.get("pattern_server")
         if pattern_server_config:
-            logger.info("Config File Scanner: Loading patterns via pattern server")
+            logger.debug("Config File Scanner: Loading patterns via pattern server")
             merged_patterns = self._load_patterns_via_server(pattern_server_config)
             self.all_patterns = merged_patterns.get("patterns", [])
         else:
@@ -301,7 +301,7 @@ class ConfigFileScanner:
             return {"patterns": self.CORE_EXFIL_PATTERNS}
         except Exception as e:
             logger.error(f"Error loading patterns from pattern server: {e}")
-            logger.info("Falling back to hardcoded default patterns")
+            logger.debug("Falling back to hardcoded default patterns")
             return {"patterns": self.CORE_EXFIL_PATTERNS}
 
     def _is_config_file(self, file_path: str) -> bool:

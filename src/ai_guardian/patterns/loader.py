@@ -134,7 +134,7 @@ class PatternLoader(ABC):
                 logger.warning(
                     f"{self.feature_name}: Error loading from pattern server: {e}"
                 )
-                logger.info(f"{self.feature_name}: Falling back to default patterns")
+                logger.debug(f"{self.feature_name}: Falling back to default patterns")
 
         # If no server patterns, use defaults
         if server_patterns is None:

@@ -87,7 +87,7 @@ class SecretRedactor:
             # Skip all secret patterns, only PII patterns will be loaded below
             patterns_to_use = []
         elif pattern_server_config:
-            logger.info("Secret Redaction: Loading patterns via pattern server")
+            logger.debug("Secret Redaction: Loading patterns via pattern server")
             patterns_to_use = self._load_patterns_via_server(pattern_server_config)
         else:
             # Load from bundled TOML file (primary source)
@@ -171,17 +171,17 @@ class SecretRedactor:
                         logger.warning(
                             f"Failed to compile PII pattern for {label}: {e}"
                         )
-            logger.info(f"PII Detection: Loaded patterns for {pii_types}")
+            logger.debug(f"PII Detection: Loaded patterns for {pii_types}")
 
         # Compile PII allowlist patterns (Issue #357)
         raw_allowlist = self.pii_config.get("allowlist_patterns", [])
         self._compiled_pii_allowlist = allowlist_utils.compile_allowlist(raw_allowlist)
         if self._compiled_pii_allowlist:
-            logger.info(
+            logger.debug(
                 f"PII Allowlist: {len(self._compiled_pii_allowlist)} active patterns"
             )
 
-        logger.info(f"Secret Redaction: Loaded {len(self.compiled_patterns)} patterns")
+        logger.debug(f"Secret Redaction: Loaded {len(self.compiled_patterns)} patterns")
 
     def _load_patterns_from_toml(self) -> List:
         """Load secret patterns from bundled TOML file (Issue #841)."""

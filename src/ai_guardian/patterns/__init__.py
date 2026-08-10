@@ -58,7 +58,7 @@ def load_bundled_rules(
         if toml_path and toml_path.exists():
             raw_rules = load_toml_file(toml_path)
             result = transform(raw_rules)
-            _logger.info(
+            _logger.debug(
                 f"{feature_name}: Loaded {len(result)} rules from {category}.toml"
             )
             return result
