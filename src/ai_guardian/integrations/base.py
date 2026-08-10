@@ -212,6 +212,27 @@ class AgentLoopStrategy(ABC):
         """
         return raw_content
 
+    def replace_response_text(self, raw_content: Any, sanitized_text: str) -> Any:
+        """Return *raw_content* with text blocks replaced by *sanitized_text*.
+
+        Default handles Anthropic-style list-of-content-blocks.
+        Override for providers with different raw_content formats.
+        """
+        if not isinstance(raw_content, list):
+            return raw_content
+        result = []
+        text_replaced = False
+        for block in raw_content:
+            bt = getattr(block, "type", None)
+            if bt is None and isinstance(block, dict):
+                bt = block.get("type")
+            if bt == "text" and not text_replaced:
+                result.append({"type": "text", "text": sanitized_text})
+                text_replaced = True
+            elif bt != "text":
+                result.append(block)
+        return result if text_replaced else raw_content
+
     def append_assistant_message(
         self,
         messages: List[Dict[str, Any]],
@@ -562,7 +583,8 @@ def _try_sanitize_text(session, text):
         return None
     try:
         result = session.sanitize(text)
-        return result.get("sanitized_text", text)
+        sanitized = result.get("sanitized_text", text)
+        return sanitized if isinstance(sanitized, str) else None
     except Exception:
         return None
 

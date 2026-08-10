@@ -614,13 +614,20 @@ class GuardedAgent:
 
                 if self._scan_output and parsed.text:
                     try:
-                        session.check_content(
+                        scan_result = session.check_content(
                             parsed.text, filename="assistant_response"
                         )
                         _emit(
                             turn_num,
                             TurnEvent(type="scan", scanned="assistant_response"),
                         )
+                        if scan_result.detected:
+                            sanitized = _try_sanitize_text(session, parsed.text)
+                            if sanitized:
+                                parsed.text = sanitized
+                                parsed.raw_content = strategy.replace_response_text(
+                                    parsed.raw_content, sanitized
+                                )
                     except SecurityViolation as exc:
                         _emit(
                             turn_num,
