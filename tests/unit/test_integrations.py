@@ -1838,7 +1838,9 @@ class TestToolExecution:
         from ai_guardian.integrations.anthropic.agent import AnthropicLoopStrategy
 
         strategy = AnthropicLoopStrategy.__new__(AnthropicLoopStrategy)
-        result = strategy.format_tool_result("id-1", "Error: no executor", is_error=True)
+        result = strategy.format_tool_result(
+            "id-1", "Error: no executor", is_error=True
+        )
         assert result["is_error"] is True
 
     def test_format_tool_result_no_error_by_default(self):
