@@ -1302,9 +1302,7 @@ class TestGuardedSDKDisabled:
 
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
 
-        with mock.patch(
-            "ai_guardian.config.loaders._sdk_enabled", return_value=False
-        ):
+        with mock.patch("ai_guardian.config.loaders._sdk_enabled", return_value=False):
             result = guarded(client, extractor=_make_stub_extractor())
 
         assert result is client
@@ -1314,9 +1312,7 @@ class TestGuardedSDKDisabled:
 
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
 
-        with mock.patch(
-            "ai_guardian.config.loaders._sdk_enabled", return_value=False
-        ):
+        with mock.patch("ai_guardian.config.loaders._sdk_enabled", return_value=False):
             result = guarded(
                 client, name="disabled-client", extractor=_make_stub_extractor()
             )
