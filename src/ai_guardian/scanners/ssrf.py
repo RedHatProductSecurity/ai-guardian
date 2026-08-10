@@ -208,7 +208,7 @@ class SSRFProtector:
         # Load patterns using pattern loader if pattern_server configured
         pattern_server_config = self.config.get("pattern_server")
         if pattern_server_config:
-            logger.info("SSRF Protection: Loading patterns via pattern server")
+            logger.debug("SSRF Protection: Loading patterns via pattern server")
             merged_patterns = self._load_patterns_via_server(pattern_server_config)
             ip_ranges_to_use = merged_patterns.get("blocked_ip_ranges", [])
             domains_to_use = merged_patterns.get("blocked_domains", [])
@@ -365,7 +365,7 @@ class SSRFProtector:
             }
         except Exception as e:
             logger.error(f"Error loading patterns from pattern server: {e}")
-            logger.info("Falling back to hardcoded default patterns")
+            logger.debug("Falling back to hardcoded default patterns")
             return {
                 "blocked_ip_ranges": [
                     {"cidr": cidr} for cidr in self.CORE_BLOCKED_IP_RANGES

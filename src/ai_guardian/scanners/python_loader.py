@@ -194,10 +194,10 @@ def load_python_scanner(engine_spec: Dict[str, Any]) -> Scanner:
     scanner_config = engine_spec.get("scanner_config", {})
 
     if module_path and class_name:
-        logger.info(f"Loading Python scanner from module: {module_path}::{class_name}")
+        logger.debug(f"Loading Python scanner from module: {module_path}::{class_name}")
         cls = load_from_module(module_path, class_name)
     elif file_path and class_name:
-        logger.info(f"Loading Python scanner from file: {file_path}::{class_name}")
+        logger.debug(f"Loading Python scanner from file: {file_path}::{class_name}")
         cls = load_from_file(file_path, class_name)
     else:
         raise ValueError(

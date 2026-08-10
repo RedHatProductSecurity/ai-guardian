@@ -260,7 +260,7 @@ def load_and_compile(path: Path, category: str) -> List[CompiledRule]:
             compiled.append(rule)
         except ValueError as e:
             logger.warning(f"Skipping invalid rule in {path}: {e}")
-    logger.info(
+    logger.debug(
         f"Loaded {len(compiled)}/{len(raw_rules)} rules from {path.name} ({category})"
     )
     return compiled

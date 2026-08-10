@@ -53,7 +53,7 @@ class AIGuardianParser(PatternServerParser):
         if not isinstance(rules, list):
             logger.warning("ai-guardian parser: 'rules' is not a list")
             return []
-        logger.info(f"ai-guardian parser: parsed {len(rules)} rules")
+        logger.debug(f"ai-guardian parser: parsed {len(rules)} rules")
         return rules
 
 
@@ -96,7 +96,7 @@ class GitleaksParser(PatternServerParser):
             except Exception as e:
                 logger.warning(f"gitleaks parser: skipping rule: {e}")
 
-        logger.info(f"gitleaks parser: converted {len(converted)}/{len(rules)} rules")
+        logger.debug(f"gitleaks parser: converted {len(converted)}/{len(rules)} rules")
         return converted
 
 

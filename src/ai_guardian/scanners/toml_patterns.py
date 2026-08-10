@@ -56,7 +56,7 @@ class TomlPatternsScanner(Scanner):
         if toml_paths:
             self._cache.load(*toml_paths)
         self._stopwords = load_stopwords()
-        logger.info(
+        logger.debug(
             f"TomlPatternsScanner: loaded {self._cache.rule_count} rules, "
             f"{len(self._stopwords)} stopwords"
         )
@@ -113,7 +113,7 @@ class TomlPatternsScanner(Scanner):
                 rules = parser.parse(raw_data)
                 if rules:
                     self._cache.load_rules(rules, category="secrets")
-                    logger.info(
+                    logger.debug(
                         f"TomlPatternsScanner: loaded {len(rules)} rules from server ({fmt})"
                     )
         except Exception as e:

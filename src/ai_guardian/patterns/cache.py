@@ -110,7 +110,7 @@ class PatternCache:
                 "PatternCache: loaded 0 rules from %d file(s) — scanning will find nothing",
                 len(toml_paths),
             )
-        logger.info(
+        logger.debug(
             f"PatternCache loaded: {len(self._rules)} rules across "
             f"{len(self._rules_by_category)} categories"
         )
