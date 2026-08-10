@@ -337,6 +337,7 @@ def execute_tool(
     if name == "glob":
         return _execute_glob(tool_input, cwd)
 
+    logger.warning("Tool %r called but has no registered executor", name)
     return f"Error: no executor for tool {name!r}"
 
 

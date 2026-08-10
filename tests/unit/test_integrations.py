@@ -1827,6 +1827,27 @@ class TestToolExecution:
         result = execute_tool("unknown_tool", {}, str(tmp_path))
         assert "Error" in result
 
+    def test_unknown_tool_logs_warning(self, tmp_path, caplog):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        with caplog.at_level(logging.WARNING):
+            execute_tool("hallucinated_tool", {}, str(tmp_path))
+        assert any("hallucinated_tool" in r.message for r in caplog.records)
+
+    def test_format_tool_result_is_error(self):
+        from ai_guardian.integrations.anthropic.agent import AnthropicLoopStrategy
+
+        strategy = AnthropicLoopStrategy.__new__(AnthropicLoopStrategy)
+        result = strategy.format_tool_result("id-1", "Error: no executor", is_error=True)
+        assert result["is_error"] is True
+
+    def test_format_tool_result_no_error_by_default(self):
+        from ai_guardian.integrations.anthropic.agent import AnthropicLoopStrategy
+
+        strategy = AnthropicLoopStrategy.__new__(AnthropicLoopStrategy)
+        result = strategy.format_tool_result("id-1", "hello")
+        assert "is_error" not in result
+
 
 # ============================================================================
 # TestGuardedAgent

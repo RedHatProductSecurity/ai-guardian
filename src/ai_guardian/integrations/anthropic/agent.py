@@ -142,12 +142,20 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
             **{f: _get_usage_field(usage, f) for f in _USAGE_TOKEN_FIELDS},
         )
 
-    def format_tool_result(self, tool_call_id: str, content: str) -> Dict[str, Any]:
-        return {
+    def format_tool_result(
+        self,
+        tool_call_id: str,
+        content: str,
+        is_error: bool = False,
+    ) -> Dict[str, Any]:
+        result: Dict[str, Any] = {
             "type": "tool_result",
             "tool_use_id": tool_call_id,
             "content": content,
         }
+        if is_error:
+            result["is_error"] = True
+        return result
 
     def append_assistant_and_results(
         self,
@@ -665,8 +673,13 @@ class GuardedAgent:
                                 ),
                             )
 
+                        is_error = result_text.startswith(
+                            "Error: no executor"
+                        )
                         tool_results.append(
-                            strategy.format_tool_result(tc.id, result_text)
+                            strategy.format_tool_result(
+                                tc.id, result_text, is_error=is_error
+                            )
                         )
 
                     if tool_results:
