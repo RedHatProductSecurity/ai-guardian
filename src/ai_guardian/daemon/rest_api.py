@@ -598,7 +598,7 @@ class _RestHandler(BaseHTTPRequestHandler):
             from ai_guardian.sdk import _DirectSession
 
             cfg = self.server.daemon_state.get_config()
-            session = _DirectSession(action="log", config=cfg)
+            session = _DirectSession(config=cfg)
 
             findings = []
 
