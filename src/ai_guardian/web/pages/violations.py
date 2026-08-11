@@ -28,6 +28,7 @@ DETAIL_FIELDS = {
     ],
     "secret_detected": [
         ("File", "file_path"),
+        ("Source Command", "source_command"),
         ("Source", "source"),
         ("Line", "line_number"),
         ("Column", "start_column"),
@@ -49,6 +50,7 @@ DETAIL_FIELDS = {
     ],
     "secret_redaction": [
         ("Tool", "tool"),
+        ("Source Command", "source_command"),
         ("Command", "command"),
         ("File", "file_path"),
         ("Line", "line_number"),
@@ -59,6 +61,7 @@ DETAIL_FIELDS = {
     "pii_detected": [
         ("Hook", "hook"),
         ("Tool", "tool"),
+        ("Source Command", "source_command"),
         ("Command", "command"),
         ("File", "file_path"),
         ("Line", "line_number"),

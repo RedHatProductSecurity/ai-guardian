@@ -410,7 +410,7 @@ class TestGuardedClientProxy:
         mock_session = MagicMock()
         call_count = [0]
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             call_count[0] += 1
             if filename == "llm_output":
                 raise SecurityViolation(
@@ -446,7 +446,7 @@ class TestGuardedClientProxy:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "llm_output":
                 raise SecurityViolation(
                     CheckResult(
@@ -1122,7 +1122,7 @@ class TestResponseParser:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "llm_output":
                 raise SecurityViolation(
                     CheckResult(
@@ -1168,7 +1168,7 @@ class TestResponseParser:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "llm_output":
                 raise SecurityViolation(
                     CheckResult(
@@ -1207,7 +1207,7 @@ class TestResponseParser:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "llm_output":
                 raise SecurityViolation(
                     CheckResult(
@@ -2160,7 +2160,7 @@ class TestGuardedAgent:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
@@ -3770,7 +3770,7 @@ class TestOpenAIGuardedAgent:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
@@ -4842,7 +4842,7 @@ class TestGuardedAgentTrace:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(
@@ -4886,7 +4886,7 @@ class TestGuardedAgentTrace:
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[SECRET REDACTED]"}
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename.startswith("tool_result:"):
                 return CheckResult(blocked=False, detected=True, message="secret found")
             return CheckResult(blocked=False, detected=False)
@@ -4934,7 +4934,7 @@ class TestGuardedAgentTrace:
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[SECRET REDACTED]"}
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret found")
             return CheckResult(blocked=False, detected=False)
@@ -4990,7 +4990,7 @@ class TestGuardedAgentTrace:
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret")
             return CheckResult(blocked=False, detected=False)
@@ -5017,7 +5017,7 @@ class TestGuardedAgentTrace:
 
         mock_session = MagicMock()
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 raise SecurityViolation(
                     CheckResult(blocked=True, detected=True, message="blocked")
@@ -5047,7 +5047,7 @@ class TestGuardedAgentTrace:
         mock_session = MagicMock()
         mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
 
-        def check_side_effect(text, filename="input"):
+        def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
                 return CheckResult(blocked=False, detected=True, message="secret")
             return CheckResult(blocked=False, detected=False)

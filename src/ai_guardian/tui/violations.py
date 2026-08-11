@@ -759,10 +759,16 @@ class ViolationCard(Vertical):
             end_line = blocked.get("end_line")
             secret_type = blocked.get("secret_type", "Unknown")
             total_findings = blocked.get("total_findings")
+            source_command = blocked.get("source_command")
 
             # Location with path and line number
             position = blocked.get("position")
             start_col = blocked.get("start_column")
+            if source_command:
+                yield Static(
+                    f"Command: {escape(source_command[:120])}",
+                    classes="violation-detail",
+                )
             if file_path:
                 location_text = f"File: {escape(file_path)}"
                 if line_number:
@@ -858,9 +864,15 @@ class ViolationCard(Vertical):
             redaction_count = blocked.get("redaction_count", 0)
             redacted_types = blocked.get("redacted_types", [])
             command = blocked.get("command")
+            source_command = blocked.get("source_command")
             context_snippet = blocked.get("context_snippet")
             yield Static(f"Tool: {escape(tool)}", classes="violation-detail")
-            if command:
+            if source_command:
+                yield Static(
+                    f"Source Command: {escape(source_command[:120])}",
+                    classes="violation-detail",
+                )
+            elif command:
                 yield Static(
                     f"Command: {escape(command[:120])}", classes="violation-detail"
                 )
@@ -898,10 +910,16 @@ class ViolationCard(Vertical):
             pii_count = blocked.get("pii_count", 0)
             pii_types = blocked.get("pii_types", [])
             command = blocked.get("command")
+            source_command = blocked.get("source_command")
             context_snippet = blocked.get("context_snippet")
             yield Static(f"Hook: {escape(hook)}", classes="violation-detail")
             yield Static(f"Tool: {escape(tool)}", classes="violation-detail")
-            if command:
+            if source_command:
+                yield Static(
+                    f"Source Command: {escape(source_command[:120])}",
+                    classes="violation-detail",
+                )
+            elif command:
                 yield Static(
                     f"Command: {escape(command[:120])}", classes="violation-detail"
                 )
