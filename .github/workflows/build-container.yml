@@ -70,7 +70,6 @@ jobs:
             echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
             echo "wheel_source=build" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
-            echo "expires_label=quay.expires-after=24h" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout code
@@ -141,7 +140,7 @@ jobs:
             || echo "exists=false" >> "$GITHUB_OUTPUT"
 
       # --- Build and push image ---
-      # main merge → :latest + :sha  |  release tag → :<version> + :sha
+      # Named tag: :latest / :<version> / custom (permanent)
       - name: Build and push image
         if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
         uses: docker/build-push-action@v7
@@ -149,10 +148,20 @@ jobs:
           context: container/
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}
-            quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
-          labels: ${{ steps.params.outputs.expires_label }}
+          tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}
+          build-args: |
+            AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
+
+      # SHA tag: 24h expiry so commit-tagged images don't accumulate (#1895)
+      - name: Push SHA-tagged image (24h expiry)
+        if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: container/
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
+          labels: quay.expires-after=24h
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
