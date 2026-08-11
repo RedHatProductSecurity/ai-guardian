@@ -489,7 +489,7 @@ class DaemonServer:
         try:
             from ai_guardian.sdk import _DirectSession
 
-            session = _DirectSession(action="log", config=self.state.get_config())
+            session = _DirectSession(config=self.state.get_config())
 
             if check_type == "content":
                 result = session.check_content(
