@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -442,7 +443,8 @@ class GuardedAgent:
             os.makedirs(self._trace_dir, exist_ok=True)
             agent_name = self._name or "agent"
             timestamp = started_at.strftime("%Y%m%d-%H%M%S")
-            filename = f"{agent_name}_{timestamp}.json"
+            unique = uuid.uuid4().hex[:8]
+            filename = f"{agent_name}_{timestamp}_{unique}.json"
             filepath = os.path.join(self._trace_dir, filename)
 
             sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
