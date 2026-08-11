@@ -252,9 +252,6 @@ class GuardedAgent:
             "max_turns",
             "max_tokens",
             "max_budget_tokens",
-            "action",
-            "scan_input",
-            "scan_output",
             "mode",
             "model",
             "cwd",
@@ -271,14 +268,11 @@ class GuardedAgent:
         max_turns: int = 100,
         max_tokens: int = 16000,
         max_budget_tokens: int = -1,
-        action: str = "block",
         client: Any = None,
         mode: str = "direct",
         config: Optional[Dict[str, Any]] = None,
         output_schema: Optional[Dict[str, Any]] = None,
         tool_types: Optional[Dict[str, str]] = None,
-        scan_input: bool = True,
-        scan_output: bool = True,
         before_call: Optional[Callable[[str, tuple, dict], None]] = None,
         after_call: Optional[Callable[[str, Any], Any]] = None,
         pre_run: Optional[Callable[[str, dict], None]] = None,
@@ -305,13 +299,11 @@ class GuardedAgent:
         self._max_turns = max_turns
         self._max_tokens = max_tokens
         self._max_budget_tokens = max_budget_tokens
-        self._action = action
         self._mode = mode
         self._config = config
         self._output_schema = output_schema
         self._tool_types = tool_types
-        self._scan_input = scan_input
-        self._scan_output = scan_output
+        self._scanning = True
         self._before_call = before_call
         self._after_call = after_call
         self._pre_run = pre_run
@@ -358,14 +350,13 @@ class GuardedAgent:
         self, tools_spec: Union[str, List[Any]]
     ) -> Union[str, List[Any]]:
         """Apply config profile overrides, returning the (possibly updated) tools spec."""
-        from ai_guardian.config.loaders import _load_sdk_profile, _sdk_enabled
+        from ai_guardian.config.loaders import _load_sdk_profile, _sdk_scanning
 
-        if not _sdk_enabled("agents", self._name):
+        if not _sdk_scanning("agents", self._name):
             logger.info(
-                "ai-guardian SDK disabled via config — GuardedAgent scanning skipped"
+                "ai-guardian SDK scanning disabled via config — GuardedAgent scanning skipped"
             )
-            self._scan_input = False
-            self._scan_output = False
+            self._scanning = False
             return tools_spec
 
         profile = _load_sdk_profile("agents", self._name)
@@ -564,9 +555,7 @@ class GuardedAgent:
                 self._on_turn(turn, event)
 
         started_at = datetime.now(timezone.utc)
-        with monitor(
-            action=self._action, mode=self._mode, config=self._config
-        ) as session:
+        with monitor(mode=self._mode, config=self._config) as session:
             try:
                 return self._run_loop_inner(
                     prompt, strategy, trace, _emit, session, started_at
@@ -597,10 +586,10 @@ class GuardedAgent:
             ),
         )
 
-        if self._scan_input and self._system_prompt:
+        if self._scanning and self._system_prompt:
             session.check_content(self._system_prompt, filename="system_prompt")
             _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
-        if self._scan_input:
+        if self._scanning:
             session.check_content(prompt, filename="user_prompt")
             _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
 
@@ -659,7 +648,7 @@ class GuardedAgent:
                 ),
             )
 
-            if self._scan_output and parsed.text:
+            if self._scanning and parsed.text:
                 try:
                     scan_result = session.check_content(
                         parsed.text, filename="agent_response"
@@ -735,7 +724,7 @@ class GuardedAgent:
                         stop_reason = "hook_early_stop"
                         break
                     if isinstance(hook_result, str):
-                        if self._scan_input:
+                        if self._scanning:
                             session.check_content(
                                 hook_result,
                                 filename="between_turns_injection",
@@ -778,7 +767,7 @@ class GuardedAgent:
                         TurnEvent(type="tool_result", name=tc.name, output=result_text),
                     )
 
-                    if self._scan_output and result_text:
+                    if self._scanning and result_text:
                         scan_result = session.check_content(
                             result_text,
                             filename=f"tool_result:{tc.name}",
@@ -814,7 +803,7 @@ class GuardedAgent:
                         stop_reason = "hook_early_stop"
                         break
                     if isinstance(hook_result, str):
-                        if self._scan_input:
+                        if self._scanning:
                             session.check_content(
                                 hook_result,
                                 filename="between_turns_injection",

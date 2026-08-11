@@ -328,8 +328,7 @@ class TestGuardedFunction:
             def extract_output(self, method_name, response):
                 return []
 
-        wrapped = guarded(object(), extractor=CustomExt(), action="warn", mode="rest")
-        assert wrapped._action == "warn"
+        wrapped = guarded(object(), extractor=CustomExt(), mode="rest")
         assert wrapped._mode == "rest"
 
 
@@ -354,7 +353,7 @@ class TestGuardedClientProxy:
         mock_create.return_value = _make_mock_response(["response text"])
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log")
+        wrapped = _GuardedClient(client, ext)
         result = wrapped.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=100,
@@ -394,7 +393,7 @@ class TestGuardedClientProxy:
 
         client, mock_create, _ = _make_mock_anthropic_client()
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation, match="Secret detected"):
             wrapped.messages.create(
@@ -431,7 +430,7 @@ class TestGuardedClientProxy:
         client, mock_create, _ = _make_mock_anthropic_client()
         mock_create.return_value = _make_mock_response(["leaked secret"])
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation, match="Secret in response"):
             wrapped.messages.create(
@@ -468,7 +467,7 @@ class TestGuardedClientProxy:
         original_response = _make_mock_response(["leaked secret"])
         mock_create.return_value = original_response
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation) as exc_info:
             wrapped.messages.create(
@@ -500,7 +499,7 @@ class TestGuardedClientProxy:
 
         client, mock_create, _ = _make_mock_anthropic_client()
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation) as exc_info:
             wrapped.messages.create(
@@ -514,7 +513,7 @@ class TestGuardedClientProxy:
         assert exc.sanitized_text is None
 
     @patch("ai_guardian.integrations.base.monitor")
-    def test_log_action_no_exception(self, mock_monitor):
+    def test_detected_not_blocked_no_exception(self, mock_monitor):
         mock_session = MagicMock()
         mock_session.check_content.return_value = MagicMock(
             blocked=False, detected=True
@@ -525,7 +524,7 @@ class TestGuardedClientProxy:
         client, mock_create, _ = _make_mock_anthropic_client()
         mock_create.return_value = _make_mock_response(["output"])
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log")
+        wrapped = _GuardedClient(client, ext)
 
         result = wrapped.messages.create(
             model="claude-sonnet-4-20250514",
@@ -533,50 +532,6 @@ class TestGuardedClientProxy:
             messages=[{"role": "user", "content": "test"}],
         )
         assert result is not None
-
-    @patch("ai_guardian.integrations.base.monitor")
-    def test_scan_input_false_skips_input(self, mock_monitor):
-        mock_session = MagicMock()
-        mock_session.check_content.return_value = MagicMock(
-            blocked=False, detected=False
-        )
-        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
-
-        client, mock_create, _ = _make_mock_anthropic_client()
-        mock_create.return_value = _make_mock_response(["output"])
-        ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log", scan_input=False)
-
-        wrapped.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=100,
-            messages=[{"role": "user", "content": "test"}],
-        )
-        assert mock_session.check_content.call_count == 1
-        assert mock_session.check_content.call_args[1]["filename"] == "llm_output"
-
-    @patch("ai_guardian.integrations.base.monitor")
-    def test_scan_output_false_skips_output(self, mock_monitor):
-        mock_session = MagicMock()
-        mock_session.check_content.return_value = MagicMock(
-            blocked=False, detected=False
-        )
-        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
-        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
-
-        client, mock_create, _ = _make_mock_anthropic_client()
-        mock_create.return_value = _make_mock_response(["output"])
-        ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log", scan_output=False)
-
-        wrapped.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=100,
-            messages=[{"role": "user", "content": "test"}],
-        )
-        assert mock_session.check_content.call_count == 1
-        assert mock_session.check_content.call_args[1]["filename"] == "llm_input"
 
     @patch("ai_guardian.integrations.base.monitor")
     def test_stream_method_returns_stream_proxy(self, mock_monitor):
@@ -592,7 +547,7 @@ class TestGuardedClientProxy:
         mock_stream_method.return_value = mock_stream_ctx
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log")
+        wrapped = _GuardedClient(client, ext)
 
         result = wrapped.messages.stream(
             model="claude-sonnet-4-20250514",
@@ -806,7 +761,7 @@ class TestGuardedAutoClient:
                 "ai_guardian.integrations.anthropic.create_client",
                 return_value=mock_client,
             ):
-                wrapped = guarded(action="log")
+                wrapped = guarded()
         assert isinstance(wrapped, _GuardedClient)
 
 
@@ -988,7 +943,7 @@ class TestOpenAIGuardedProxy:
         mock_create.return_value = _make_openai_response(["response text"])
 
         ext = OpenAIExtractor()
-        wrapped = _GuardedClient(client, ext, action="log")
+        wrapped = _GuardedClient(client, ext)
         result = wrapped.chat.completions.create(
             model="gpt-4o",
             messages=[{"role": "user", "content": "test input"}],
@@ -1025,7 +980,7 @@ class TestOpenAIGuardedProxy:
 
         client, mock_create = _make_mock_openai_client()
         ext = OpenAIExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation, match="Prompt injection detected"):
             wrapped.chat.completions.create(
@@ -1127,7 +1082,7 @@ class TestResponseParser:
 
         ext = AnthropicExtractor()
         parser = self._make_parser()
-        wrapped = _GuardedClient(client, ext, action="log", response_parser=parser)
+        wrapped = _GuardedClient(client, ext, response_parser=parser)
 
         result = wrapped.messages.create(
             model="claude-sonnet-4-20250514",
@@ -1151,7 +1106,7 @@ class TestResponseParser:
         mock_create.return_value = original_response
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log")
+        wrapped = _GuardedClient(client, ext)
 
         result = wrapped.messages.create(
             model="claude-sonnet-4-20250514",
@@ -1190,7 +1145,7 @@ class TestResponseParser:
 
         ext = AnthropicExtractor()
         parser = self._make_parser()
-        wrapped = _GuardedClient(client, ext, action="block", response_parser=parser)
+        wrapped = _GuardedClient(client, ext, response_parser=parser)
 
         with pytest.raises(SecurityViolation) as exc_info:
             wrapped.messages.create(
@@ -1234,7 +1189,7 @@ class TestResponseParser:
         mock_create.return_value = _make_mock_response(["secret"])
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block")
+        wrapped = _GuardedClient(client, ext)
 
         with pytest.raises(SecurityViolation) as exc_info:
             wrapped.messages.create(
@@ -1276,9 +1231,7 @@ class TestResponseParser:
         mock_create.return_value = _make_mock_response(["secret"])
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(
-            client, ext, action="block", response_parser=bad_parser
-        )
+        wrapped = _GuardedClient(client, ext, response_parser=bad_parser)
 
         with pytest.raises(SecurityViolation) as exc_info:
             wrapped.messages.create(
@@ -1387,7 +1340,7 @@ class TestCustomExtractor:
     def test_custom_extractor_wraps_client(self):
         ext = self._make_custom_extractor()
         client = SimpleNamespace(generate=MagicMock(), name="my-llm")
-        wrapped = guarded(client, extractor=ext, action="log")
+        wrapped = guarded(client, extractor=ext)
         assert isinstance(wrapped, _GuardedClient)
         assert wrapped.name == "my-llm"
 
@@ -1403,7 +1356,7 @@ class TestCustomExtractor:
         ext = self._make_custom_extractor()
         mock_generate = MagicMock(return_value=SimpleNamespace(text="generated output"))
         client = SimpleNamespace(generate=mock_generate)
-        wrapped = guarded(client, extractor=ext, action="log")
+        wrapped = guarded(client, extractor=ext)
 
         result = wrapped.generate(prompt="hello")
 
@@ -1428,7 +1381,7 @@ class TestCustomExtractor:
         ext = self._make_custom_extractor()
         mock_generate = MagicMock()
         client = SimpleNamespace(generate=mock_generate)
-        wrapped = guarded(client, extractor=ext, action="block")
+        wrapped = guarded(client, extractor=ext)
 
         with pytest.raises(SecurityViolation):
             wrapped.generate(prompt="secret data")
@@ -1881,7 +1834,6 @@ class TestGuardedAgent:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -2194,7 +2146,8 @@ class TestGuardedAgent:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        agent, client = self._make_agent()
+        agent._scanning = False
         client.messages.create.return_value = response
 
         agent.run("Hi")
@@ -2229,7 +2182,7 @@ class TestGuardedAgent:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(action="block")
+        agent, client = self._make_agent()
         client.messages.create.return_value = response
 
         with pytest.raises(SecurityViolation) as exc_info:
@@ -2637,7 +2590,7 @@ class TestGuardedAgent:
         def on_end(result):
             post_run_calls.append(result)
 
-        agent, client = self._make_agent(post_run=on_end, action="block")
+        agent, client = self._make_agent(post_run=on_end)
 
         with pytest.raises(SecurityViolation):
             agent.run("secret data")
@@ -2744,7 +2697,7 @@ class TestGuardedAgent:
         assert args[2] == 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_between_turns_scanned_when_scan_input(self, mock_monitor):
+    def test_between_turns_scanned_when_scanning_enabled(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
@@ -2759,7 +2712,7 @@ class TestGuardedAgent:
         )
 
         hook = MagicMock(side_effect=["injected text", None])
-        agent, client = self._make_agent(between_turns=hook, scan_input=True)
+        agent, client = self._make_agent(between_turns=hook)
         client.messages.create.side_effect = [r1, r2]
 
         agent.run("Go")
@@ -2774,7 +2727,7 @@ class TestGuardedAgent:
         assert injected_calls[0].args[0] == "injected text"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_between_turns_not_scanned_when_no_scan_input(self, mock_monitor):
+    def test_between_turns_not_scanned_when_scanning_disabled(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
@@ -2789,9 +2742,8 @@ class TestGuardedAgent:
         )
 
         hook = MagicMock(side_effect=["injected", None])
-        agent, client = self._make_agent(
-            between_turns=hook, scan_input=False, scan_output=False
-        )
+        agent, client = self._make_agent(between_turns=hook)
+        agent._scanning = False
         client.messages.create.side_effect = [r1, r2]
 
         agent.run("Go")
@@ -2813,8 +2765,8 @@ class TestGuardedAgent:
         from ai_guardian.sdk import CheckResult
 
         mock_session.check_content.side_effect = [
-            None,
-            None,
+            CheckResult(blocked=False, detected=False),
+            CheckResult(blocked=False, detected=False),
             SecurityViolation(
                 CheckResult(
                     blocked=True,
@@ -2831,9 +2783,7 @@ class TestGuardedAgent:
         )
 
         hook = MagicMock(return_value="AKIA secret here")
-        agent, client = self._make_agent(
-            between_turns=hook, scan_input=True, scan_output=False, action="block"
-        )
+        agent, client = self._make_agent(between_turns=hook)
         client.messages.create.return_value = r1
 
         with pytest.raises(SecurityViolation):
@@ -3102,7 +3052,7 @@ class TestGuardedClientHooks:
             calls.append(method_name)
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log", before_call=on_call)
+        wrapped = _GuardedClient(client, ext, before_call=on_call)
 
         wrapped.messages.create(
             model="claude-sonnet-4-20250514",
@@ -3131,7 +3081,7 @@ class TestGuardedClientHooks:
             responses.append((method_name, resp))
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="log", after_call=on_response)
+        wrapped = _GuardedClient(client, ext, after_call=on_response)
 
         wrapped.messages.create(
             model="claude-sonnet-4-20250514",
@@ -3167,7 +3117,7 @@ class TestGuardedClientHooks:
             after_calls.append(True)
 
         ext = AnthropicExtractor()
-        wrapped = _GuardedClient(client, ext, action="block", after_call=on_response)
+        wrapped = _GuardedClient(client, ext, after_call=on_response)
 
         with pytest.raises(SecurityViolation):
             wrapped.messages.create(
@@ -3241,7 +3191,6 @@ class TestGuardedAgentCompaction:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -3488,7 +3437,6 @@ class TestOpenAIGuardedAgent:
             "model": "gpt-4o",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
             "strategy": strategy,
         }
         defaults.update(kwargs)
@@ -3664,7 +3612,8 @@ class TestOpenAIGuardedAgent:
 
         response = _make_openai_agent_response(content="Hello")
 
-        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        agent, client = self._make_agent()
+        agent._scanning = False
         client.chat.completions.create.return_value = response
 
         agent.run("Hi")
@@ -3840,7 +3789,7 @@ class TestOpenAIGuardedAgent:
 
         response = _make_openai_agent_response(content="leaked secret")
 
-        agent, client = self._make_agent(action="block")
+        agent, client = self._make_agent()
         client.chat.completions.create.return_value = response
 
         with pytest.raises(SecurityViolation) as exc_info:
@@ -4286,7 +4235,6 @@ class TestGuardedAgentCacheTtl:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -4488,7 +4436,6 @@ class TestGuardedAgentTrace:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -4591,7 +4538,8 @@ class TestGuardedAgentTrace:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(scan_input=False, scan_output=False)
+        agent, client = self._make_agent()
+        agent._scanning = False
         client.messages.create.return_value = response
 
         result = agent.run("Hi")
@@ -4917,9 +4865,7 @@ class TestGuardedAgentTrace:
         )
 
         events = []
-        agent, client = self._make_agent(
-            action="block", on_turn=lambda t, e: events.append((t, e))
-        )
+        agent, client = self._make_agent(on_turn=lambda t, e: events.append((t, e)))
         client.messages.create.return_value = response
 
         with pytest.raises(SecurityViolation):
@@ -5014,7 +4960,7 @@ class TestGuardedAgentTrace:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(action="warn")
+        agent, client = self._make_agent()
         client.messages.create.side_effect = [tool_response, final_response]
 
         with patch(
@@ -5058,7 +5004,7 @@ class TestGuardedAgentTrace:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(action="warn")
+        agent, client = self._make_agent()
         client.messages.create.return_value = response
         result = agent.run("tell me")
 
@@ -5087,7 +5033,7 @@ class TestGuardedAgentTrace:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(action="block")
+        agent, client = self._make_agent()
         client.messages.create.return_value = response
 
         with pytest.raises(SecurityViolation):
@@ -5115,7 +5061,7 @@ class TestGuardedAgentTrace:
             stop_reason="end_turn",
         )
 
-        agent, client = self._make_agent(action="log")
+        agent, client = self._make_agent()
         client.messages.create.return_value = response
         result = agent.run("test")
 
@@ -5140,7 +5086,6 @@ class TestGuardedAgentPartialTrace:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -5196,7 +5141,7 @@ class TestGuardedAgentPartialTrace:
         violation_result.message = "Threat detected"
         mock_session.check_content.side_effect = SecurityViolation(violation_result)
 
-        agent, client = self._make_agent(scan_input=True)
+        agent, client = self._make_agent()
         client.messages.create.return_value = response
 
         with pytest.raises(SecurityViolation) as exc_info:
@@ -5327,7 +5272,6 @@ class TestGuardedAgentTraceDir:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
@@ -5475,7 +5419,7 @@ class TestGuardedAgentTraceDir:
                 return_value={"trace_dir": trace_dir},
             ),
             patch(
-                "ai_guardian.config.loaders._sdk_enabled",
+                "ai_guardian.config.loaders._sdk_scanning",
                 return_value=True,
             ),
         ):
@@ -5639,7 +5583,6 @@ class TestTracePathFn:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client

@@ -2637,22 +2637,12 @@
     },
     "sdk_agent_profile": {
       "type": "object",
-      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override * (wildcard) values.",
+      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override * (wildcard) values. Operational params only — scanning behavior is controlled at sdk level.",
       "additionalProperties": true,
       "properties": {
-        "enabled": {
-          "type": "boolean",
-          "description": "Enable or disable SDK scanning for this agent. Overrides sdk.enabled.",
-          "default": true
-        },
         "trace_dir": {
           "type": "string",
           "description": "Directory for auto-persisted trace logs. Each run() writes a sanitized JSON trace file named <agent-name>_<YYYYMMDD-HHMMSS>.json. Relative paths resolve against the agent's cwd."
-        },
-        "action": {
-          "type": "string",
-          "enum": ["block", "warn", "log"],
-          "description": "Security action mode for this agent."
         },
         "mode": {
           "type": "string",
@@ -2677,14 +2667,6 @@
           "type": "integer",
           "description": "Maximum cumulative tokens (input + output). -1 = no limit."
         },
-        "scan_input": {
-          "type": "boolean",
-          "description": "Scan prompts before sending to the model."
-        },
-        "scan_output": {
-          "type": "boolean",
-          "description": "Scan responses and tool results."
-        },
         "tools": {
           "description": "Tool preset name or list of tool definitions.",
           "oneOf": [
@@ -2703,9 +2685,14 @@
       "description": "SDK configuration for programmatic security checking (GuardedAgent, guarded() wrapper, monitor()). Controls scanning behavior, agent profiles, and client profiles.",
       "additionalProperties": false,
       "properties": {
-        "enabled": {
+        "scanning": {
           "type": "boolean",
-          "description": "Global enable/disable for all SDK scanning. Per-profile 'enabled' keys override this.",
+          "description": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",
+          "default": true
+        },
+        "use_global_config": {
+          "type": "boolean",
+          "description": "When true, SDK uses global ai-guardian.json scanner settings (per-scanner actions, thresholds, allowlists). When false, SDK runs standalone without global config.",
           "default": true
         },
         "agents": {

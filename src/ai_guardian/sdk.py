@@ -11,13 +11,13 @@ Usage:
     from ai_guardian.sdk import monitor
 
     # Direct mode (default) — in-process, no daemon
-    with monitor(action="block") as session:
+    with monitor() as session:
         session.check_content(text)
         session.check_file("/path/to/file")
         session.check_command("curl http://example.com")
 
     # REST mode — delegates to daemon, auto-starts if needed
-    with monitor(action="block", mode="rest") as session:
+    with monitor(mode="rest") as session:
         session.check_content(text)
 
     # Config overlay — deep-merge on top of global + project config
@@ -52,7 +52,7 @@ class CheckResult:
 
 
 class SecurityViolation(Exception):
-    """Raised when action='block' and a threat is detected."""
+    """Raised when a blocked finding is detected."""
 
     def __init__(
         self,
@@ -69,7 +69,7 @@ class SecurityViolation(Exception):
 
 
 class _SecurityWarning(UserWarning):
-    """Warning category for action='warn' detections."""
+    """Warning category for detected-but-not-blocked findings."""
 
     pass
 
@@ -77,8 +77,7 @@ class _SecurityWarning(UserWarning):
 class GuardSession:
     """Base session with shared action-handling logic."""
 
-    def __init__(self, action: str, config: Optional[Dict[str, Any]] = None):
-        self._action = action
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
         self._config = config
         self._results: List[CheckResult] = []
 
@@ -150,9 +149,9 @@ class GuardSession:
     def _handle_result(self, result: CheckResult) -> CheckResult:
         """Apply action policy to a result."""
         self._results.append(result)
-        if result.blocked and self._action == "block":
+        if result.blocked:
             raise SecurityViolation(result)
-        if result.detected and self._action == "warn":
+        if result.detected:
             warnings.warn(
                 result.message or "Security issue detected",
                 _SecurityWarning,
@@ -222,16 +221,22 @@ class GuardSession:
 class _DirectSession(GuardSession):
     """In-process detection — calls detection functions directly."""
 
-    def __init__(self, action: str, config: Optional[Dict[str, Any]] = None):
-        super().__init__(action, config)
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        super().__init__(config)
         self._ensure_config()
 
     def _ensure_config(self):
         if self._config is None:
-            from ai_guardian.config.loaders import _load_config_file
+            from ai_guardian.config.loaders import (
+                _load_config_file,
+                _sdk_use_global_config,
+            )
 
-            cfg, _ = _load_config_file()
-            self._config = cfg or {}
+            if _sdk_use_global_config():
+                cfg, _ = _load_config_file()
+                self._config = cfg or {}
+            else:
+                self._config = {}
 
     def check_content(self, text: str, *, filename: str = "input") -> CheckResult:
         results = []
@@ -455,8 +460,8 @@ class _DirectSession(GuardSession):
 class _RestSession(GuardSession):
     """Daemon-delegated detection via socket protocol."""
 
-    def __init__(self, action: str, config: Optional[Dict[str, Any]] = None):
-        super().__init__(action, config)
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        super().__init__(config)
         self._ensure_daemon()
 
     def _ensure_daemon(self):
@@ -552,29 +557,28 @@ class _RestSession(GuardSession):
 
 
 @contextmanager
-def monitor(
-    action: str = "block", mode: str = "direct", config: Optional[Dict[str, Any]] = None
-):
+def monitor(mode: str = "direct", config: Optional[Dict[str, Any]] = None):
     """Create a guarded session for security checks.
 
+    Blocked findings raise ``SecurityViolation``; detected-but-not-blocked
+    findings emit ``warnings.warn``.  Per-scanner actions in the global
+    config control which findings are blocked vs. detected.
+
     Args:
-        action: "block" (raise SecurityViolation), "warn" (warnings.warn),
-                or "log" (silent recording)
         mode: "direct" (in-process, no daemon) or "rest" (daemon, auto-start)
-        config: Optional config dict override. If None, loads from ai-guardian.json.
+        config: Optional config dict override. If None, loads from ai-guardian.json
+                (respects ``sdk.use_global_config``).
 
     Yields:
         GuardSession with check_content(), check_file(), check_command(),
         sanitize() methods.
     """
-    if action not in ("block", "warn", "log"):
-        raise ValueError(f"action must be 'block', 'warn', or 'log', got {action!r}")
     if mode not in ("direct", "rest"):
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 
     if mode == "direct":
-        session = _DirectSession(action=action, config=config)
+        session = _DirectSession(config=config)
     else:
-        session = _RestSession(action=action, config=config)
+        session = _RestSession(config=config)
 
     yield session
