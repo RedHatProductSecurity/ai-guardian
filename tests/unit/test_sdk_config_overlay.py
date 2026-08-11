@@ -27,7 +27,7 @@ from ai_guardian.config.loaders import (
     _load_config_file,
     _load_sdk_profile,
     _resolve_sdk_overlay,
-    _sdk_enabled,
+    _sdk_scanning,
     configure,
 )
 
@@ -555,7 +555,7 @@ class TestSDKMonitorWithOverlay:
             )
             from ai_guardian.sdk import monitor
 
-            with monitor(action="log") as session:
+            with monitor() as session:
                 assert session._config["secret_scanning"]["enabled"] is True
                 assert session._config["ssrf_protection"]["action"] == "block"
 
@@ -564,7 +564,7 @@ class TestSDKMonitorWithOverlay:
         custom_config = {"my_custom": True}
         from ai_guardian.sdk import monitor
 
-        with monitor(action="log", config=custom_config) as session:
+        with monitor(config=custom_config) as session:
             assert session._config == {"my_custom": True}
             assert "ssrf_protection" not in session._config
 
@@ -601,14 +601,12 @@ class TestLoadSDKProfile:
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
-            json.dumps(
-                {"sdk": {"agents": {"*": {"action": "block", "scan_input": True}}}}
-            )
+            json.dumps({"sdk": {"agents": {"*": {"max_turns": 50, "mode": "rest"}}}})
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
             result = _load_sdk_profile("agents", "unknown-agent")
-        assert result == {"action": "block", "scan_input": True}
+        assert result == {"max_turns": 50, "mode": "rest"}
 
     def test_named_profile_merges_with_default(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -619,13 +617,12 @@ class TestLoadSDKProfile:
                     "sdk": {
                         "agents": {
                             "*": {
-                                "action": "block",
-                                "scan_input": True,
+                                "mode": "rest",
                                 "max_turns": 50,
                             },
                             "code-reviewer": {
                                 "max_turns": 20,
-                                "action": "warn",
+                                "model": "claude-haiku-4-5-20251001",
                             },
                         }
                     }
@@ -636,21 +633,21 @@ class TestLoadSDKProfile:
             _clear_config_cache()
             result = _load_sdk_profile("agents", "code-reviewer")
         assert result["max_turns"] == 20
-        assert result["action"] == "warn"
-        assert result["scan_input"] is True
+        assert result["model"] == "claude-haiku-4-5-20251001"
+        assert result["mode"] == "rest"
 
     def test_named_profile_without_default(self, tmp_path):
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
             json.dumps(
-                {"sdk": {"agents": {"quick-chat": {"max_turns": 5, "action": "warn"}}}}
+                {"sdk": {"agents": {"quick-chat": {"max_turns": 5, "mode": "rest"}}}}
             )
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
             result = _load_sdk_profile("agents", "quick-chat")
-        assert result == {"max_turns": 5, "action": "warn"}
+        assert result == {"max_turns": 5, "mode": "rest"}
 
     def test_none_name_returns_default(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -660,8 +657,8 @@ class TestLoadSDKProfile:
                 {
                     "sdk": {
                         "agents": {
-                            "*": {"action": "block"},
-                            "named": {"action": "warn"},
+                            "*": {"max_turns": 50},
+                            "named": {"max_turns": 10},
                         }
                     }
                 }
@@ -670,7 +667,7 @@ class TestLoadSDKProfile:
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
             result = _load_sdk_profile("agents", None)
-        assert result == {"action": "block"}
+        assert result == {"max_turns": 50}
 
     def test_clients_section(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -681,8 +678,8 @@ class TestLoadSDKProfile:
                     "sdk": {
                         "clients": {
                             "api-scanner": {
-                                "action": "block",
-                                "scan_output": False,
+                                "mode": "rest",
+                                "model": "claude-haiku-4-5-20251001",
                             }
                         }
                     }
@@ -692,7 +689,7 @@ class TestLoadSDKProfile:
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
             result = _load_sdk_profile("clients", "api-scanner")
-        assert result == {"action": "block", "scan_output": False}
+        assert result == {"mode": "rest", "model": "claude-haiku-4-5-20251001"}
 
 
 class TestGuardedAgentConfigProfile:
@@ -712,7 +709,6 @@ class TestGuardedAgentConfigProfile:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
 
@@ -726,17 +722,17 @@ class TestGuardedAgentConfigProfile:
 
     def test_no_profile_uses_code_values(self):
         agent = self._make_agent(profile_config={})
-        assert agent._action == "log"
+        assert agent._scanning is True
         assert agent._max_turns == 100
 
     def test_overrides_simple_params(self):
         agent = self._make_agent(
-            profile_config={"action": "block", "max_turns": 20},
-            action="warn",
+            profile_config={"max_turns": 20, "mode": "rest"},
             max_turns=100,
+            mode="direct",
         )
-        assert agent._action == "block"
         assert agent._max_turns == 20
+        assert agent._mode == "rest"
 
     def test_overrides_model(self):
         agent = self._make_agent(
@@ -744,13 +740,6 @@ class TestGuardedAgentConfigProfile:
             model="claude-sonnet-5",
         )
         assert agent._model == "claude-haiku-4-5-20251001"
-
-    def test_overrides_scan_flags(self):
-        agent = self._make_agent(
-            profile_config={"scan_input": False, "scan_output": False},
-        )
-        assert agent._scan_input is False
-        assert agent._scan_output is False
 
     def test_overrides_cwd(self):
         agent = self._make_agent(
@@ -797,29 +786,29 @@ class TestGuardedAgentConfigProfile:
     def test_override_logging(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             self._make_agent(
-                profile_config={"action": "block", "max_turns": 20},
+                profile_config={"max_turns": 20, "mode": "rest"},
                 name="code-reviewer",
-                action="warn",
                 max_turns=100,
+                mode="direct",
             )
-        assert "GuardedAgent 'code-reviewer': action='block'" in caplog.text
-        assert "code value: 'warn'" in caplog.text
         assert "GuardedAgent 'code-reviewer': max_turns=20" in caplog.text
         assert "code value: 100" in caplog.text
+        assert "GuardedAgent 'code-reviewer': mode='rest'" in caplog.text
+        assert "code value: 'direct'" in caplog.text
 
     def test_override_logging_unnamed_shows_default(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             self._make_agent(
-                profile_config={"action": "block"},
-                action="warn",
+                profile_config={"max_turns": 20},
+                max_turns=100,
             )
-        assert "GuardedAgent '*': action='block'" in caplog.text
+        assert "GuardedAgent '*': max_turns=20" in caplog.text
 
     def test_same_value_no_log(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             self._make_agent(
-                profile_config={"action": "log"},
-                action="log",
+                profile_config={"max_turns": 100},
+                max_turns=100,
             )
         assert "config override" not in caplog.text
 
@@ -844,10 +833,10 @@ class TestGuardedAgentConfigProfile:
                 {
                     "sdk": {
                         "agents": {
-                            "*": {"action": "block"},
+                            "*": {"mode": "rest"},
                             "code-reviewer": {
                                 "max_turns": 20,
-                                "action": "warn",
+                                "model": "claude-haiku-4-5-20251001",
                             },
                         }
                     }
@@ -866,11 +855,10 @@ class TestGuardedAgentConfigProfile:
                 model="claude-sonnet-5",
                 tools=["bash"],
                 client=mock_client,
-                action="log",
                 max_turns=100,
             )
 
-        assert agent._action == "warn"
+        assert agent._model == "claude-haiku-4-5-20251001"
         assert agent._max_turns == 20
 
 
@@ -919,22 +907,7 @@ class TestGuardedFunctionConfigProfile:
 
     def test_no_profile_uses_code_values(self):
         wrapped = self._make_guarded(profile_config={})
-        assert wrapped._action == "block"
-        assert wrapped._scan_input is True
-
-    def test_overrides_action(self):
-        wrapped = self._make_guarded(
-            profile_config={"action": "warn"},
-            action="block",
-        )
-        assert wrapped._action == "warn"
-
-    def test_overrides_scan_flags(self):
-        wrapped = self._make_guarded(
-            profile_config={"scan_input": False, "scan_output": False},
-        )
-        assert wrapped._scan_input is False
-        assert wrapped._scan_output is False
+        assert wrapped._mode == "direct"
 
     def test_overrides_mode(self):
         wrapped = self._make_guarded(
@@ -946,20 +919,20 @@ class TestGuardedFunctionConfigProfile:
     def test_override_logging(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             self._make_guarded(
-                profile_config={"action": "warn"},
+                profile_config={"mode": "rest"},
                 name="api-scanner",
-                action="block",
+                mode="direct",
             )
-        assert "guarded 'api-scanner': action='warn'" in caplog.text
-        assert "code value: 'block'" in caplog.text
+        assert "guarded 'api-scanner': mode='rest'" in caplog.text
+        assert "code value: 'direct'" in caplog.text
 
     def test_override_logging_unnamed_shows_default(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             self._make_guarded(
-                profile_config={"action": "warn"},
-                action="block",
+                profile_config={"mode": "rest"},
+                mode="direct",
             )
-        assert "guarded '*': action='warn'" in caplog.text
+        assert "guarded '*': mode='rest'" in caplog.text
 
     def test_model_override_stored(self):
         wrapped = self._make_guarded(
@@ -1122,11 +1095,10 @@ class TestGuardedFunctionConfigProfile:
 
     def test_unknown_profile_keys_ignored(self):
         wrapped = self._make_guarded(
-            profile_config={"max_turns": 20, "action": "warn"},
-            action="block",
+            profile_config={"max_turns": 20, "cwd": "/tmp"},
         )
-        assert wrapped._action == "warn"
         assert not hasattr(wrapped, "_max_turns")
+        assert not hasattr(wrapped, "_cwd")
 
     def test_profile_integration_with_config_file(self, tmp_path):
         """End-to-end: guarded() reads from ai-guardian.json file."""
@@ -1140,8 +1112,8 @@ class TestGuardedFunctionConfigProfile:
                     "sdk": {
                         "clients": {
                             "api-scanner": {
-                                "action": "block",
-                                "scan_input": False,
+                                "mode": "rest",
+                                "model": "claude-haiku-4-5-20251001",
                             }
                         }
                     }
@@ -1155,21 +1127,20 @@ class TestGuardedFunctionConfigProfile:
                 object(),
                 name="api-scanner",
                 extractor=_make_stub_extractor(),
-                action="warn",
-                scan_input=True,
+                mode="direct",
             )
 
-        assert wrapped._action == "block"
-        assert wrapped._scan_input is False
+        assert wrapped._mode == "rest"
+        assert wrapped._model_override == "claude-haiku-4-5-20251001"
 
 
 # ============================================================================
-# SDK Enabled Flag (Issue #1868)
+# SDK Scanning Flag (Issue #1868)
 # ============================================================================
 
 
-class TestSDKEnabled:
-    """Tests for _sdk_enabled()."""
+class TestSDKScanning:
+    """Tests for _sdk_scanning()."""
 
     def setup_method(self):
         _clear_config_cache()
@@ -1178,7 +1149,7 @@ class TestSDKEnabled:
         with mock.patch(
             "ai_guardian.config.loaders._load_config_file", return_value=(None, None)
         ):
-            assert _sdk_enabled() is True
+            assert _sdk_scanning() is True
 
     def test_default_true_no_sdk_section(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -1188,95 +1159,44 @@ class TestSDKEnabled:
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            assert _sdk_enabled() is True
+            assert _sdk_scanning() is True
 
     def test_globally_disabled(self, tmp_path):
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
-            json.dumps({"sdk": {"enabled": False}})
+            json.dumps({"sdk": {"scanning": False}})
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            assert _sdk_enabled() is False
+            assert _sdk_scanning() is False
 
     def test_globally_enabled_explicit(self, tmp_path):
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
-            json.dumps({"sdk": {"enabled": True}})
+            json.dumps({"sdk": {"scanning": True}})
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            assert _sdk_enabled() is True
-
-    def test_per_agent_override_disabled(self, tmp_path):
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
-        (config_dir / "ai-guardian.json").write_text(
-            json.dumps(
-                {
-                    "sdk": {
-                        "enabled": True,
-                        "agents": {"dev-agent": {"enabled": False}},
-                    }
-                }
-            )
-        )
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
-            _clear_config_cache()
-            assert _sdk_enabled("agents", "dev-agent") is False
-
-    def test_per_agent_override_enabled_when_global_disabled(self, tmp_path):
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
-        (config_dir / "ai-guardian.json").write_text(
-            json.dumps(
-                {
-                    "sdk": {
-                        "enabled": False,
-                        "agents": {"prod-agent": {"enabled": True}},
-                    }
-                }
-            )
-        )
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
-            _clear_config_cache()
-            assert _sdk_enabled("agents", "prod-agent") is True
+            assert _sdk_scanning() is True
 
     def test_unnamed_agent_uses_global(self, tmp_path):
         config_dir = tmp_path / "config"
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
-            json.dumps({"sdk": {"enabled": False}})
+            json.dumps({"sdk": {"scanning": False}})
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            assert _sdk_enabled("agents", None) is False
-
-    def test_per_client_override(self, tmp_path):
-        config_dir = tmp_path / "config"
-        config_dir.mkdir()
-        (config_dir / "ai-guardian.json").write_text(
-            json.dumps(
-                {
-                    "sdk": {
-                        "enabled": True,
-                        "clients": {"debug-client": {"enabled": False}},
-                    }
-                }
-            )
-        )
-        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
-            _clear_config_cache()
-            assert _sdk_enabled("clients", "debug-client") is False
+            assert _sdk_scanning("agents", None) is False
 
     def test_config_error_returns_true(self):
         with mock.patch(
             "ai_guardian.config.loaders._load_config_file",
             return_value=(None, "parse error"),
         ):
-            assert _sdk_enabled() is True
+            assert _sdk_scanning() is True
 
     def test_sdk_not_dict_returns_true(self, tmp_path):
         config_dir = tmp_path / "config"
@@ -1284,11 +1204,11 @@ class TestSDKEnabled:
         (config_dir / "ai-guardian.json").write_text(json.dumps({"sdk": "invalid"}))
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            assert _sdk_enabled() is True
+            assert _sdk_scanning() is True
 
 
 class TestGuardedSDKDisabled:
-    """guarded() returns unwrapped client when sdk.enabled=false."""
+    """guarded() returns unwrapped client when sdk.scanning=false."""
 
     def setup_method(self):
         _clear_config_cache()
@@ -1298,7 +1218,7 @@ class TestGuardedSDKDisabled:
 
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
 
-        with mock.patch("ai_guardian.config.loaders._sdk_enabled", return_value=False):
+        with mock.patch("ai_guardian.config.loaders._sdk_scanning", return_value=False):
             result = guarded(client, extractor=_make_stub_extractor())
 
         assert result is client
@@ -1308,7 +1228,7 @@ class TestGuardedSDKDisabled:
 
         client = SimpleNamespace(messages=SimpleNamespace(create=lambda: None))
 
-        with mock.patch("ai_guardian.config.loaders._sdk_enabled", return_value=False):
+        with mock.patch("ai_guardian.config.loaders._sdk_scanning", return_value=False):
             result = guarded(
                 client, name="disabled-client", extractor=_make_stub_extractor()
             )
@@ -1322,21 +1242,21 @@ class TestGuardedSDKDisabled:
 
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
             with mock.patch(
-                "ai_guardian.config.loaders._sdk_enabled", return_value=False
+                "ai_guardian.config.loaders._sdk_scanning", return_value=False
             ):
                 guarded(client, extractor=_make_stub_extractor())
 
-        assert "SDK disabled via config" in caplog.text
+        assert "SDK scanning disabled via config" in caplog.text
         assert "unwrapped client" in caplog.text
 
 
 class TestGuardedAgentSDKDisabled:
-    """GuardedAgent skips scanning when sdk.enabled=false."""
+    """GuardedAgent skips scanning when sdk.scanning=false."""
 
     def setup_method(self):
         _clear_config_cache()
 
-    def _make_agent(self, sdk_enabled=False, **kwargs):
+    def _make_agent(self, sdk_scanning=False, **kwargs):
         from ai_guardian.integrations.anthropic.agent import GuardedAgent
 
         mock_create = MagicMock()
@@ -1347,14 +1267,13 @@ class TestGuardedAgentSDKDisabled:
             "model": "claude-sonnet-5",
             "tools": ["bash"],
             "client": mock_client,
-            "action": "log",
         }
         defaults.update(kwargs)
 
         with (
             mock.patch(
-                "ai_guardian.config.loaders._sdk_enabled",
-                return_value=sdk_enabled,
+                "ai_guardian.config.loaders._sdk_scanning",
+                return_value=sdk_scanning,
             ),
             mock.patch(
                 "ai_guardian.config.loaders._load_sdk_profile",
@@ -1364,17 +1283,15 @@ class TestGuardedAgentSDKDisabled:
             return GuardedAgent(**defaults)
 
     def test_scanning_disabled(self):
-        agent = self._make_agent(sdk_enabled=False)
-        assert agent._scan_input is False
-        assert agent._scan_output is False
+        agent = self._make_agent(sdk_scanning=False)
+        assert agent._scanning is False
 
     def test_scanning_enabled_by_default(self):
-        agent = self._make_agent(sdk_enabled=True)
-        assert agent._scan_input is True
-        assert agent._scan_output is True
+        agent = self._make_agent(sdk_scanning=True)
+        assert agent._scanning is True
 
     def test_logs_disabled_message(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
-            self._make_agent(sdk_enabled=False)
-        assert "SDK disabled via config" in caplog.text
+            self._make_agent(sdk_scanning=False)
+        assert "SDK scanning disabled via config" in caplog.text
         assert "scanning skipped" in caplog.text

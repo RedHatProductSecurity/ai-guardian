@@ -819,16 +819,14 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     return dict(default_profile)
 
 
-def _sdk_enabled(section: str = "clients", name: Optional[str] = None) -> bool:
-    """Check whether the SDK is globally enabled.
+def _sdk_scanning(section: str = "clients", name: Optional[str] = None) -> bool:
+    """Check whether SDK scanning is active.
 
-    Reads ``sdk.enabled`` from the merged config.  If a per-profile
-    ``enabled`` key exists in ``sdk.<section>.<name>``, it takes
-    precedence over the global flag.
+    Reads ``sdk.scanning`` from the merged config.
 
     Args:
         section: ``"agents"`` or ``"clients"``
-        name: Profile name for per-agent/client override lookup.
+        name: Profile name (unused, kept for call-site compat).
 
     Returns:
         ``True`` (default) if scanning should be active, ``False`` to
@@ -842,16 +840,26 @@ def _sdk_enabled(section: str = "clients", name: Optional[str] = None) -> bool:
     if not isinstance(sdk, dict):
         return True
 
-    # Per-profile override takes precedence
-    if name:
-        profiles = sdk.get(section)
-        if isinstance(profiles, dict):
-            named = profiles.get(name)
-            if isinstance(named, dict) and "enabled" in named:
-                return bool(named["enabled"])
+    return sdk.get("scanning", True)
 
-    # Global sdk.enabled
-    return sdk.get("enabled", True)
+
+def _sdk_use_global_config() -> bool:
+    """Check whether the SDK should use global ai-guardian.json scanner settings.
+
+    Reads ``sdk.use_global_config`` from the merged config.
+
+    Returns:
+        ``True`` (default) to use global config, ``False`` for standalone mode.
+    """
+    config, error_msg = _load_config_file()
+    if error_msg or config is None:
+        return True
+
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return True
+
+    return sdk.get("use_global_config", True)
 
 
 def _get_on_scan_error_action() -> str:

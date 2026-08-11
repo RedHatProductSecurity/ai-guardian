@@ -654,11 +654,8 @@ class _GuardedClient:
         self,
         client,
         extractor,
-        action="block",
         mode="direct",
         config=None,
-        scan_input=True,
-        scan_output=True,
         response_parser=None,
         before_call=None,
         after_call=None,
@@ -668,11 +665,8 @@ class _GuardedClient:
     ):
         object.__setattr__(self, "_client", client)
         object.__setattr__(self, "_extractor", extractor)
-        object.__setattr__(self, "_action", action)
         object.__setattr__(self, "_mode", mode)
         object.__setattr__(self, "_config", config)
-        object.__setattr__(self, "_scan_input", scan_input)
-        object.__setattr__(self, "_scan_output", scan_output)
         object.__setattr__(self, "_response_parser", response_parser)
         object.__setattr__(self, "_before_call", before_call)
         object.__setattr__(self, "_after_call", after_call)
@@ -723,45 +717,39 @@ class _GuardedClient:
             if gc._system_prompt_preamble and gc._strategy:
                 gc._strategy.inject_preamble(kwargs, gc._system_prompt_preamble)
 
-            with monitor(
-                action=gc._action, mode=gc._mode, config=gc._config
-            ) as session:
+            with monitor(mode=gc._mode, config=gc._config) as session:
                 if gc._before_call:
                     gc._before_call(method_name, args, kwargs)
 
-                if gc._scan_input:
-                    for text in gc._extractor.extract_input(method_name, args, kwargs):
-                        if text:
-                            session.check_content(text, filename="llm_input")
+                for text in gc._extractor.extract_input(method_name, args, kwargs):
+                    if text:
+                        session.check_content(text, filename="llm_input")
 
                 response = real_method(*args, **kwargs)
 
                 if gc._is_stream_method(method_name):
-                    if gc._scan_output:
-                        return _StreamProxy(
-                            response,
-                            gc._extractor,
-                            method_name,
-                            session,
-                            response_parser=gc._response_parser,
-                        )
-                    return response
+                    return _StreamProxy(
+                        response,
+                        gc._extractor,
+                        method_name,
+                        session,
+                        response_parser=gc._response_parser,
+                    )
 
-                if gc._scan_output:
-                    try:
-                        for text in gc._extractor.extract_output(method_name, response):
-                            if text:
-                                session.check_content(text, filename="llm_output")
-                    except SecurityViolation as exc:
-                        _enrich_violation(
-                            exc,
-                            response,
-                            session,
-                            gc._extractor,
-                            method_name,
-                            gc._response_parser,
-                        )
-                        raise
+                try:
+                    for text in gc._extractor.extract_output(method_name, response):
+                        if text:
+                            session.check_content(text, filename="llm_output")
+                except SecurityViolation as exc:
+                    _enrich_violation(
+                        exc,
+                        response,
+                        session,
+                        gc._extractor,
+                        method_name,
+                        gc._response_parser,
+                    )
+                    raise
 
                 if gc._after_call:
                     gc._after_call(method_name, response)
@@ -781,19 +769,16 @@ class _GuardedClient:
 _MISSING = object()
 
 
-_OVERRIDABLE_CLIENT_PARAMS = frozenset({"action", "scan_input", "scan_output", "mode"})
+_OVERRIDABLE_CLIENT_PARAMS = frozenset({"mode"})
 
 
 def guarded(
     client: Any = _MISSING,
     *,
     name: Optional[str] = None,
-    action: str = "block",
     mode: str = "direct",
     config: Optional[Dict[str, Any]] = None,
     extractor: Optional[ProviderExtractor] = None,
-    scan_input: bool = True,
-    scan_output: bool = True,
     response_parser: Optional[Callable[[str, Any], Any]] = None,
     before_call: Optional[Callable[[str, tuple, dict], None]] = None,
     after_call: Optional[Callable[[str, Any], Any]] = None,
@@ -812,12 +797,9 @@ def guarded(
         name: Optional profile name linking to ``sdk.clients.<name>`` in
             ``ai-guardian.json``.  Config values override code-provided
             parameters.
-        action: ``"block"``, ``"warn"``, or ``"log"``
         mode: ``"direct"`` (in-process) or ``"rest"`` (daemon)
         config: Optional config dict override
         extractor: Explicit ``ProviderExtractor`` instance (skips auto-detect)
-        scan_input: Scan prompts before sending (default ``True``)
-        scan_output: Scan responses after receiving (default ``True``)
         response_parser: Optional callable ``(client_type: str, response) -> Any``
             that transforms native LLM responses into a caller-defined format.
             If ``None`` (default), the native response object is returned unchanged.
@@ -834,7 +816,7 @@ def guarded(
     Raises:
         ValueError: If no extractor matches and none provided explicitly,
             or if conflicting provider env vars are set.
-        SecurityViolation: When ``action="block"`` and a threat is detected.
+        SecurityViolation: When a blocked finding is detected.
             If *response_parser* is set, the exception's ``sanitized_parsed``
             attribute contains the parser applied to the violating response.
     """
@@ -843,10 +825,12 @@ def guarded(
 
         client = create_client()
 
-    from ai_guardian.config.loaders import _load_sdk_profile, _sdk_enabled
+    from ai_guardian.config.loaders import _load_sdk_profile, _sdk_scanning
 
-    if not _sdk_enabled("clients", name):
-        logger.info("ai-guardian SDK disabled via config — returning unwrapped client")
+    if not _sdk_scanning("clients", name):
+        logger.info(
+            "ai-guardian SDK scanning disabled via config — returning unwrapped client"
+        )
         return client
 
     if extractor is None:
@@ -859,9 +843,6 @@ def guarded(
     if profile:
         display_name = name or "*"
         param_map = {
-            "action": action,
-            "scan_input": scan_input,
-            "scan_output": scan_output,
             "mode": mode,
         }
         for param in _OVERRIDABLE_CLIENT_PARAMS:
@@ -877,9 +858,6 @@ def guarded(
                         code_value,
                     )
                 param_map[param] = config_value
-        action = param_map["action"]
-        scan_input = param_map["scan_input"]
-        scan_output = param_map["scan_output"]
         mode = param_map["mode"]
 
         if "model" in profile:
@@ -910,11 +888,8 @@ def guarded(
     return _GuardedClient(
         client,
         extractor,
-        action=action,
         mode=mode,
         config=config,
-        scan_input=scan_input,
-        scan_output=scan_output,
         response_parser=response_parser,
         before_call=before_call,
         after_call=after_call,

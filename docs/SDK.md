@@ -22,7 +22,7 @@ pip install ai-guardian
 from ai_guardian.sdk import monitor
 
 # Check content for threats (secrets, prompt injection, context poisoning)
-with monitor(action="block") as session:
+with monitor() as session:
     session.check_content(user_input)
     session.check_file("/path/to/config.json")
     session.check_command("curl http://example.com")
@@ -50,7 +50,7 @@ from ai_guardian.integrations import guarded
 #   ANTHROPIC_API_KEY            → Anthropic()
 #   ANTHROPIC_VERTEX_PROJECT_ID  → AnthropicVertex()
 #   ANTHROPIC_BEDROCK_BASE_URL   → AnthropicBedrock()
-client = guarded(action="block")
+client = guarded()
 response = client.messages.create(
     model="claude-sonnet-4-20250514",
     max_tokens=1024,
@@ -64,7 +64,7 @@ response = client.messages.create(
 from anthropic import Anthropic
 from ai_guardian.integrations import guarded
 
-client = guarded(Anthropic(), action="block")
+client = guarded(Anthropic())
 response = client.messages.create(
     model="claude-sonnet-4-20250514",
     max_tokens=1024,
@@ -80,7 +80,6 @@ from ai_guardian.integrations import guarded
 
 client = guarded(
     AnthropicVertex(project_id="my-project", region="us-east5"),
-    action="block",
 )
 response = client.messages.create(
     model="claude-sonnet-4@20250514",
@@ -95,7 +94,7 @@ response = client.messages.create(
 from anthropic import AnthropicBedrock
 from ai_guardian.integrations import guarded
 
-client = guarded(AnthropicBedrock(), action="block")
+client = guarded(AnthropicBedrock())
 response = client.messages.create(
     model="anthropic.claude-sonnet-4-20250514-v1:0",
     max_tokens=1024,
@@ -109,7 +108,7 @@ response = client.messages.create(
 from openai import OpenAI
 from ai_guardian.integrations import guarded
 
-client = guarded(OpenAI(), action="block")
+client = guarded(OpenAI())
 response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": user_input}],
@@ -124,7 +123,6 @@ from ai_guardian.integrations import guarded
 
 client = guarded(
     AzureOpenAI(azure_endpoint="https://my-resource.openai.azure.com"),
-    action="block",
 )
 response = client.chat.completions.create(
     model="gpt-4o",
@@ -144,7 +142,6 @@ from ai_guardian.integrations import guarded
 
 client = guarded(
     OpenAI(base_url="http://localhost:11434/v1", api_key="ollama"),
-    action="block",
 )
 response = client.chat.completions.create(
     model="llama3.1",
@@ -159,7 +156,6 @@ response = client.chat.completions.create(
 ```python
 client = guarded(
     OpenAI(base_url="http://localhost:8080/v1", api_key="not-needed"),
-    action="block",
 )
 response = client.chat.completions.create(
     model="local-model",
@@ -172,7 +168,6 @@ response = client.chat.completions.create(
 ```python
 client = guarded(
     OpenAI(base_url="http://localhost:8000/v1", api_key="not-needed"),
-    action="block",
 )
 response = client.chat.completions.create(
     model="meta-llama/Llama-3.1-8B-Instruct",
@@ -185,7 +180,6 @@ response = client.chat.completions.create(
 ```python
 client = guarded(
     OpenAI(base_url="http://localhost:4000/v1", api_key="not-needed"),
-    action="block",
 )
 ```
 
@@ -194,7 +188,6 @@ client = guarded(
 ```python
 client = guarded(
     OpenAI(base_url="https://api.mistral.ai/v1", api_key=os.environ["MISTRAL_API_KEY"]),
-    action="block",
 )
 response = client.chat.completions.create(
     model="mistral-large-latest",
@@ -230,8 +223,7 @@ Use named agent profiles in `ai-guardian.json` to avoid hardcoding connection de
         "agents": {
             "local-reviewer": {
                 "model": "llama3.1",
-                "max_turns": 10,
-                "action": "warn"
+                "max_turns": 10
             }
         }
     }
@@ -271,7 +263,7 @@ client = create_client(timeout=30.0)
 
 Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
 
-### `guarded(client, *, name, action, mode, config, extractor, scan_input, scan_output, response_parser, before_call, after_call)`
+### `guarded(client, *, name, mode, config, extractor, response_parser, before_call, after_call)`
 
 Wraps an LLM client with automatic security scanning.
 
@@ -281,12 +273,9 @@ Wraps an LLM client with automatic security scanning.
 |-----------|------|---------|-------------|
 | `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
 | `name` | str | `None` | Profile name linking to `sdk.clients.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
-| `action` | str | `"block"` | `"block"` raises `SecurityViolation`, `"warn"` emits warning, `"log"` records silently |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
 | `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |
-| `scan_input` | bool | `True` | Scan prompts before sending to LLM |
-| `scan_output` | bool | `True` | Scan responses after receiving from LLM |
 | `response_parser` | callable | `None` | `(client_type: str, response) -> Any` — transforms native responses into a caller-defined format. If `None`, native response returned unchanged. |
 | `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each API call |
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> None` — called after each successful API call. Not called on `SecurityViolation` |
@@ -296,7 +285,7 @@ Wraps an LLM client with automatic security scanning.
 **Raises:**
 
 - `ValueError` if no extractor matches the client type and none provided explicitly
-- `SecurityViolation` when `action="block"` and a threat is detected. If `response_parser` is set, the exception's `sanitized_parsed` attribute contains the parser applied to the violating response.
+- `SecurityViolation` when a blocked finding is detected (per-scanner `action` in global config controls what is blocked). If `response_parser` is set, the exception's `sanitized_parsed` attribute contains the parser applied to the violating response. Detected-but-not-blocked findings emit `warnings.warn`.
 
 ### What Gets Scanned
 
@@ -309,7 +298,7 @@ Wraps an LLM client with automatic security scanning.
 For `messages.stream()`, input is scanned before the stream starts. Output is scanned on the accumulated final message when the stream context exits — individual chunks are not scanned.
 
 ```python
-client = guarded(Anthropic(), action="block")
+client = guarded(Anthropic())
 
 with client.messages.stream(
     model="claude-sonnet-4-20250514",
@@ -377,11 +366,11 @@ def my_parser(client_type: str, response) -> dict:
         }
 
 # Without parser — native response (default, backward compatible)
-client = guarded(Anthropic(), action="block")
+client = guarded(Anthropic())
 response = client.messages.create(...)  # returns Anthropic Message object
 
 # With parser — caller's unified format
-client = guarded(Anthropic(), action="block", response_parser=my_parser)
+client = guarded(Anthropic(), response_parser=my_parser)
 result = client.messages.create(...)  # returns my_parser's dict
 print(result["text"])
 ```
@@ -412,7 +401,6 @@ def on_response(method_name, response):
 
 client = guarded(
     Anthropic(),
-    action="block",
     before_call=on_call,
     after_call=on_response,
 )
@@ -433,7 +421,6 @@ agent = GuardedAgent(
     tools=["bash", "text_editor", "grep", "glob"],
     cwd="/path/to/repo",
     max_turns=100,
-    action="block",
 )
 result = agent.run("Find and fix the bug described in JIRA-123")
 print(result["output"])
@@ -595,14 +582,11 @@ print(result["output"])  # validated structured object
 | `max_turns` | int | `100` | Max tool-use loop iterations |
 | `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
-| `action` | str | `"block"` | `"block"`, `"warn"`, or `"log"` |
 | `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
 | `output_schema` | dict | `None` | JSON schema for structured output |
 | `tool_types` | dict | `None` | Override tool type versions |
-| `scan_input` | bool | `True` | Scan prompts before sending |
-| `scan_output` | bool | `True` | Scan responses and tool results |
 | `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each `messages.create()` |
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
@@ -663,7 +647,7 @@ Runs after each successful assistant turn — both `end_turn` (text response) an
 | `None` | Normal loop behavior (tool execution or end) |
 | `False` | Stop the loop (`stop_reason: "hook_early_stop"`) |
 
-Injected messages are scanned by ai-guardian when `scan_input=True`.
+Injected messages are scanned by ai-guardian.
 
 **Use case — external execution between turns:**
 
@@ -898,15 +882,14 @@ Also configurable via `ai-guardian.json`:
 
 ## API Reference
 
-### `monitor(action, mode, config)`
+### `monitor(mode, config)`
 
-Context manager that creates a guarded session.
+Context manager that creates a guarded session. Blocked findings raise `SecurityViolation`; detected-but-not-blocked findings emit `warnings.warn`. Per-scanner `action` settings in the global config control what is blocked vs. warned.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `action` | str | `"block"` | `"block"` raises `SecurityViolation`, `"warn"` emits warning, `"log"` records silently |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
 
@@ -968,7 +951,7 @@ Dataclass returned by all check methods.
 
 ### `SecurityViolation`
 
-Exception raised when `action="block"` and a threat is detected.
+Exception raised when a blocked finding is detected. Per-scanner `action` settings in the global config control which findings are blocked.
 
 **Attributes:**
 
@@ -981,7 +964,7 @@ Exception raised when `action="block"` and a threat is detected.
 
 ```python
 try:
-    with monitor(action="block") as session:
+    with monitor() as session:
         session.check_content(untrusted_text)
 except SecurityViolation as e:
     print(f"Blocked: {e.result.violation_type} — {e.result.message}")
@@ -1016,38 +999,36 @@ with monitor(mode="rest") as session:
 4. Proceeds with checks via daemon
 5. Does **not** stop daemon on session exit (other programs may use it)
 
-## Action Modes
+## Action Behavior
 
-### `"block"` (default)
+Actions are controlled per-scanner in the global config (`ai-guardian.json`), not in SDK calls. Each scanner's `action` field determines what happens when that scanner detects a finding:
 
-Raises `SecurityViolation` immediately when a threat is detected. Use for strict enforcement.
+- **`"block"`** — the SDK raises `SecurityViolation` immediately
+- **`"warn"`** — the SDK emits a Python `warnings.warn` and continues execution
+- **`"log"`** — silently recorded; access via `session.results`
 
 ```python
-with monitor(action="block") as session:
-    session.check_content(text)  # raises SecurityViolation if threat found
+with monitor() as session:
+    session.check_content(text)  # raises SecurityViolation for blocked findings
 ```
 
-### `"warn"`
-
-Emits a Python `UserWarning` when a threat is detected. Execution continues.
+To treat warnings as errors:
 
 ```python
 import warnings
-warnings.filterwarnings("error", category=UserWarning)  # optional: treat as error
+warnings.filterwarnings("error", category=UserWarning)
 
-with monitor(action="warn") as session:
-    session.check_content(text)  # warnings.warn() if threat found
+with monitor() as session:
+    session.check_content(text)  # warnings promoted to exceptions
 ```
 
-### `"log"`
-
-Silently records results. No exceptions, no warnings. Access results via `session.results`.
+Access all results (including non-blocked detections) via `session.results`:
 
 ```python
-with monitor(action="log") as session:
+with monitor() as session:
     session.check_content(text1)
     session.check_content(text2)
-    
+
 for result in session.results:
     if result.detected:
         print(f"Found: {result.violation_type}")
@@ -1061,7 +1042,7 @@ for result in session.results:
 from ai_guardian.sdk import monitor, SecurityViolation
 
 def safe_agent_call(prompt):
-    with monitor(action="block") as guard:
+    with monitor() as guard:
         # Check user input before sending to LLM
         guard.check_content(prompt)
         
@@ -1079,7 +1060,7 @@ def safe_agent_call(prompt):
 ```python
 from ai_guardian.sdk import monitor
 
-with monitor(action="warn") as guard:
+with monitor() as guard:
     for path in uploaded_files:
         content = open(path).read()
         result = guard.check_file(path, content=content)
@@ -1102,7 +1083,7 @@ with monitor() as guard:
 ```python
 from ai_guardian.sdk import monitor
 
-with monitor(action="log") as guard:
+with monitor() as guard:
     for item in documents:
         guard.check_content(item.text)
     
@@ -1112,7 +1093,23 @@ with monitor(action="log") as guard:
 
 ## Configuration
 
-The SDK respects `ai-guardian.json` configuration. Features can be enabled/disabled:
+The SDK respects `ai-guardian.json` configuration. SDK-specific settings live under the `sdk` key:
+
+```json
+{
+    "sdk": {
+        "scanning": true,
+        "use_global_config": true
+    }
+}
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `sdk.scanning` | bool | `true` | Enable or disable SDK scanning. When `false`, `guarded()` and `GuardedAgent` pass through without scanning |
+| `sdk.use_global_config` | bool | `true` | When `true`, the SDK inherits per-scanner settings (including `action`) from the global config. When `false`, uses only the SDK-local config |
+
+Per-scanner features can be enabled/disabled and their action controlled:
 
 ```json
 {
@@ -1123,6 +1120,8 @@ The SDK respects `ai-guardian.json` configuration. Features can be enabled/disab
     "supply_chain": {"enabled": true}
 }
 ```
+
+Scanning always covers both input and output when enabled. There is no option for partial (input-only or output-only) scanning.
 
 Override configuration per-session (full replacement — no merge):
 
