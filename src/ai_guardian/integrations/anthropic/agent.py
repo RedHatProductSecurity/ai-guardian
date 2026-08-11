@@ -255,6 +255,8 @@ class GuardedAgent:
             "mode",
             "model",
             "cwd",
+            "allowed_paths",
+            "follow_symlinks",
             "trace_dir",
             "compact_threshold",
             "compact_keep_turns",
@@ -290,6 +292,8 @@ class GuardedAgent:
         name: Optional[str] = None,
         trace_dir: Optional[str] = None,
         trace_path_fn: Optional[Callable[[str, Dict[str, Any]], str]] = None,
+        allowed_paths: Optional[List[str]] = None,
+        follow_symlinks: bool = False,
     ):
         self._name = name
         self._trace_dir = trace_dir
@@ -298,6 +302,8 @@ class GuardedAgent:
         self._model = model
         self._system_prompt = system_prompt
         self._cwd = cwd or os.getcwd()
+        self._allowed_paths = list(allowed_paths) if allowed_paths else None
+        self._follow_symlinks = follow_symlinks
         self._max_turns = max_turns
         self._max_tokens = max_tokens
         self._max_budget_tokens = max_budget_tokens
@@ -760,7 +766,13 @@ class GuardedAgent:
                         TurnEvent(type="tool_call", name=tc.name, input=tc.input),
                     )
 
-                    result_text = execute_tool(tc.name, tc.input, self._cwd)
+                    result_text = execute_tool(
+                        tc.name,
+                        tc.input,
+                        self._cwd,
+                        self._allowed_paths,
+                        self._follow_symlinks,
+                    )
 
                     _emit(
                         turn_num,
