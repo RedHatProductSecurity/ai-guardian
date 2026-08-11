@@ -485,6 +485,11 @@ class DirectoryScanContent(ScrollableContainer):
                     id="ds-config-only",
                     value=False,
                 )
+                yield Checkbox(
+                    "Skip hidden dirs",
+                    id="ds-skip-hidden",
+                    value=True,
+                )
 
             with Horizontal(classes="ds-row"):
                 yield Button("Scan", variant="primary", id="ds-scan-btn")
@@ -584,6 +589,7 @@ class DirectoryScanContent(ScrollableContainer):
 
         self._scan_path = str(resolved)
         config_only = self.query_one("#ds-config-only", Checkbox).value
+        skip_hidden = self.query_one("#ds-skip-hidden", Checkbox).value
         self._cancel_event.clear()
         self._show_running()
         self.query_one("#ds-scan-btn").disabled = True
@@ -612,6 +618,7 @@ class DirectoryScanContent(ScrollableContainer):
                         config_only=config_only,
                         progress_callback=on_progress,
                         cancel_event=self._cancel_event,
+                        skip_hidden=skip_hidden,
                     )
                     elapsed_ms = (time.monotonic_ns() // 1_000_000) - start_ms
                     cancelled = self._cancel_event.is_set()
@@ -622,7 +629,15 @@ class DirectoryScanContent(ScrollableContainer):
                         )
 
                     file_count = (
-                        len(scanner._discover_files(resolved, None, None, False))
+                        len(
+                            scanner._discover_files(
+                                resolved,
+                                None,
+                                None,
+                                False,
+                                skip_hidden=skip_hidden,
+                            )
+                        )
                         if resolved.is_dir()
                         else 1
                     )

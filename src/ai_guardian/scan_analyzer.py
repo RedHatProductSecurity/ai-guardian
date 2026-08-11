@@ -39,6 +39,7 @@ def run_scan_pipeline(
     cancel_event: "threading.Event",
     on_phase: Optional[Callable[[str], None]] = None,
     on_file_progress: Optional[Callable[[str, int, int], None]] = None,
+    skip_hidden: bool = True,
 ) -> Optional[ScanPipelineResult]:
     """Run the full scan-and-analyze pipeline.
 
@@ -73,6 +74,7 @@ def run_scan_pipeline(
         str(initializer.project_dir),
         progress_callback=on_file_progress,
         cancel_event=cancel_event,
+        skip_hidden=skip_hidden,
     )
     if cancel_event.is_set():
         return None

@@ -278,6 +278,7 @@ class FileScanner:
         config_only: bool = False,
         progress_callback=None,
         cancel_event=None,
+        skip_hidden: bool = True,
     ) -> List[Dict[str, Any]]:
         """
         Scan directory for security issues.
@@ -289,6 +290,7 @@ class FileScanner:
             config_only: Only scan AI config files
             progress_callback: Optional callable(file_path, index, total)
             cancel_event: Optional threading.Event — set to stop scan early
+            skip_hidden: Skip directories starting with '.' (default True)
 
         Returns:
             List of findings (partial if cancelled)
@@ -309,7 +311,11 @@ class FileScanner:
                 self._scan_file(scan_path, scan_path.parent)
         else:
             files_to_scan = self._discover_files(
-                scan_path, include_patterns, exclude_patterns, config_only
+                scan_path,
+                include_patterns,
+                exclude_patterns,
+                config_only,
+                skip_hidden=skip_hidden,
             )
 
             if self.verbose:
@@ -415,22 +421,26 @@ class FileScanner:
         include_patterns: Optional[List[str]],
         exclude_patterns: Optional[List[str]],
         config_only: bool,
+        skip_hidden: bool = True,
     ) -> List[Path]:
         """
         Discover files to scan.
+
+        Uses os.walk() to prune excluded directories during traversal
+        instead of rglob("*") which walks the entire tree first.
 
         Args:
             base_path: Base directory to search
             include_patterns: File patterns to include
             exclude_patterns: File patterns to exclude
             config_only: Only include config files
+            skip_hidden: Skip directories starting with '.'
 
         Returns:
             List of file paths to scan
         """
         files: Set[Path] = set()
 
-        # Default exclude patterns
         default_excludes = [
             ".git/*",
             ".git/**/*",
@@ -449,36 +459,67 @@ class FileScanner:
 
         exclude_patterns = (exclude_patterns or []) + default_excludes
 
-        if config_only:
-            # Only scan config files
-            for pattern in CONFIG_FILE_PATTERNS:
-                for file_path in base_path.rglob(pattern):
-                    if file_path.is_file() and not self._is_excluded(
-                        file_path, base_path, exclude_patterns
+        pruned_dirs = {
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+        }
+
+        for dirpath, dirnames, filenames in os.walk(base_path):
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if d not in pruned_dirs
+                and not (skip_hidden and d.startswith("."))
+                and not self._is_excluded_dir(d, dirpath, base_path, exclude_patterns)
+            ]
+
+            for fname in filenames:
+                file_path = Path(dirpath) / fname
+                if not file_path.is_file():
+                    continue
+                if self._is_excluded(file_path, base_path, exclude_patterns):
+                    continue
+
+                if config_only:
+                    if any(fnmatch.fnmatch(fname, pat) for pat in CONFIG_FILE_PATTERNS):
+                        files.add(file_path)
+                elif include_patterns:
+                    if any(
+                        fnmatch.fnmatch(fname, pat)
+                        or fnmatch.fnmatch(str(file_path.relative_to(base_path)), pat)
+                        for pat in include_patterns
                     ):
                         files.add(file_path)
-        elif include_patterns:
-            # Scan files matching include patterns
-            for pattern in include_patterns:
-                for file_path in base_path.rglob(pattern):
-                    if file_path.is_file() and not self._is_excluded(
-                        file_path, base_path, exclude_patterns
+                else:
+                    if self._is_text_file(file_path) or self._is_scannable_image(
+                        file_path
                     ):
                         files.add(file_path)
-        else:
-            # Scan all text files and image files (when OCR is available)
-            for file_path in base_path.rglob("*"):
-                if (
-                    file_path.is_file()
-                    and not self._is_excluded(file_path, base_path, exclude_patterns)
-                    and (
-                        self._is_text_file(file_path)
-                        or self._is_scannable_image(file_path)
-                    )
-                ):
-                    files.add(file_path)
 
         return sorted(files)
+
+    def _is_excluded_dir(
+        self,
+        dirname: str,
+        dirpath: str,
+        base_path: Path,
+        exclude_patterns: List[str],
+    ) -> bool:
+        """Check if a directory should be pruned during traversal."""
+        try:
+            rel = Path(dirpath, dirname).relative_to(base_path)
+        except ValueError:
+            return True
+        rel_str = str(rel)
+        for pattern in exclude_patterns:
+            if fnmatch.fnmatch(rel_str, pattern.rstrip("/*")):
+                return True
+            if fnmatch.fnmatch(f"{rel_str}/x", pattern):
+                return True
+        return False
 
     def _is_excluded(
         self, file_path: Path, base_path: Path, exclude_patterns: List[str]

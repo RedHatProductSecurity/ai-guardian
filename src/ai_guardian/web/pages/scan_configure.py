@@ -79,7 +79,7 @@ def _deserialize_result(data):
     )
 
 
-def _run_scan(project_dir, threshold, cancel_event, progress_state):
+def _run_scan(project_dir, threshold, cancel_event, progress_state, skip_hidden=True):
     """Run project scan and analysis in a background thread."""
     from ai_guardian.scan_analyzer import run_scan_pipeline
 
@@ -97,6 +97,7 @@ def _run_scan(project_dir, threshold, cancel_event, progress_state):
         cancel_event,
         on_phase=on_phase,
         on_file_progress=on_file_progress,
+        skip_hidden=skip_hidden,
     )
 
 
@@ -271,6 +272,12 @@ def create_scan_configure_page(service, daemon_name: str):
                     "Patterns appearing in this many files are treated "
                     "as false positives."
                 ).classes("text-xs text-grey-6")
+
+            with ui.row().classes("items-center gap-4"):
+                skip_hidden_check = ui.checkbox(
+                    "Skip hidden directories (starting with .)",
+                    value=True,
+                )
 
         results_container = ui.column().classes("w-full gap-4")
         scan_result = [None]
@@ -463,7 +470,12 @@ def create_scan_configure_page(service, daemon_name: str):
 
             try:
                 result = await run.io_bound(
-                    _run_scan, project_dir, threshold, cancel_event, progress_state
+                    _run_scan,
+                    project_dir,
+                    threshold,
+                    cancel_event,
+                    progress_state,
+                    skip_hidden_check.value,
                 )
                 progress_timer.deactivate()
 
