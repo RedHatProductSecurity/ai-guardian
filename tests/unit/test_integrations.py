@@ -5598,3 +5598,27 @@ class TestGuardedAgentTraceDir:
         expected_dir = tmp_path / "logs" / "agents"
         assert expected_dir.is_dir()
         assert len(list(expected_dir.iterdir())) == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_concurrent_traces_no_collision(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agents = []
+        for _ in range(5):
+            agent, client = self._make_agent(name="worker", trace_dir=trace_dir)
+            client.messages.create.return_value = response
+            agents.append(agent)
+
+        for agent in agents:
+            agent.run("Hi")
+
+        files = os.listdir(trace_dir)
+        assert len(files) == 5, f"Expected 5 unique files, got {len(files)}: {files}"
