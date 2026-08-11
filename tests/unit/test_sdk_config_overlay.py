@@ -777,11 +777,23 @@ class TestGuardedAgentConfigProfile:
 
     def test_non_overridable_params_ignored(self):
         agent = self._make_agent(
-            profile_config={"system_prompt": "hijacked", "auto_compact": False},
+            profile_config={"system_prompt": "hijacked", "scanning": False},
             system_prompt="original",
         )
         assert agent._system_prompt == "original"
-        assert agent._auto_compact is True
+        assert agent._scanning is True
+
+    def test_compact_params_overridable(self):
+        agent = self._make_agent(
+            profile_config={
+                "compact_threshold": 0.6,
+                "compact_keep_turns": 10,
+                "compact_keep_first": 2,
+            },
+        )
+        assert agent._compact_threshold == 0.6
+        assert agent._compact_keep_turns == 10
+        assert agent._compact_keep_first == 2
 
     def test_override_logging(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):

@@ -2282,15 +2282,15 @@ class TestGuardedAgent:
                 ),
             ],
             stop_reason="tool_use",
-            usage=SimpleNamespace(input_tokens=500000, output_tokens=500000),
+            usage=SimpleNamespace(input_tokens=50000, output_tokens=50000),
         )
         r2 = _make_agent_response(
             [SimpleNamespace(type="text", text="Done")],
             stop_reason="end_turn",
-            usage=SimpleNamespace(input_tokens=500000, output_tokens=500000),
+            usage=SimpleNamespace(input_tokens=50000, output_tokens=50000),
         )
 
-        agent, client = self._make_agent(max_budget_tokens=-1, auto_compact=False)
+        agent, client = self._make_agent(max_budget_tokens=-1, compact_threshold=1.0)
         client.messages.create.side_effect = [r1, r2]
 
         with patch(
@@ -3196,7 +3196,7 @@ class TestGuardedAgentCompaction:
         return GuardedAgent(**defaults), mock_client
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_auto_compact_disabled(self, mock_monitor):
+    def test_compact_disabled_via_threshold(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
@@ -3206,7 +3206,7 @@ class TestGuardedAgentCompaction:
             stop_reason="end_turn",
             usage=SimpleNamespace(input_tokens=190_000, output_tokens=50),
         )
-        agent, client = self._make_agent(auto_compact=False)
+        agent, client = self._make_agent(compact_threshold=1.0)
         client.messages.create.return_value = response
 
         result = agent.run("Hi")
@@ -3230,7 +3230,7 @@ class TestGuardedAgentCompaction:
             stop_reason="tool_use",
             usage=SimpleNamespace(input_tokens=200_000, output_tokens=100),
         )
-        agent, client = self._make_agent()
+        agent, client = self._make_agent(compact_threshold=1.0)
         client.messages.create.return_value = tool_resp
 
         with patch(
@@ -3241,7 +3241,7 @@ class TestGuardedAgentCompaction:
                 agent.run("Fill context")
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_auto_compact_triggers_on_high_input_tokens(self, mock_monitor):
+    def test_compact_triggers_on_high_input_tokens(self, mock_monitor):
         mock_session = MagicMock()
         mock_session.check_content.return_value = MagicMock(
             blocked=False, detected=False

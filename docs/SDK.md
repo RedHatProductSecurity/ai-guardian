@@ -595,8 +595,7 @@ print(result["output"])  # validated structured object
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
 | `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
-| `auto_compact` | bool | `True` | Enable context-window monitoring. When `True`, checks token usage each turn |
-| `compact_threshold` | float | `1.0` | Ratio of input tokens to context window that triggers compaction. `1.0` = no compaction (raises `RuntimeError` when context exhausted). Set to `0.8` to compact at 80% usage |
+| `compact_threshold` | float | `0.8` | Ratio of input tokens to context window that triggers compaction. `0.8` = compact at 80% usage. `1.0` = disabled (raises `RuntimeError` when context exhausted) |
 | `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
@@ -627,7 +626,7 @@ agent.run("prompt")
   │     ├── after_call(...)            ← per turn (return False to stop)
   │     └── between_turns(...)         ← per successful turn (return str to inject)
   ├── Turn 2+:
-  │     ├── auto_compact check         ← compacts or raises if context exhausted
+  │     ├── compact check              ← compacts or raises if context exhausted
   │     ├── before_call(...)
   │     ├── messages.create()
   │     ├── after_call(...)
@@ -688,20 +687,20 @@ result = agent.run("Write a pytest test for the calculate_discount function...")
 
 Long conversations can exceed the model's context window. Auto-compaction shrinks the conversation by truncating old tool results, stripping code blocks, and dropping middle turns.
 
-By default, compaction is **disabled** (`compact_threshold=1.0`). When the context window is exhausted, a `RuntimeError` is raised with instructions to enable compaction.
+By default, compaction is **enabled** at 80% of the context window (`compact_threshold=0.8`). When context usage exceeds the threshold, older turns are summarized automatically.
 
 ```python
-# Enable compaction at 80% of context window
+# Disable compaction (raises RuntimeError when context exhausted)
 agent = GuardedAgent(
     model="claude-sonnet-5",
     tools="coding",
-    compact_threshold=0.8,
+    compact_threshold=1.0,
 )
 ```
 
 Compaction preserves the first turn pair (`compact_keep_first`) and the most recent turn pairs (`compact_keep_turns`), dropping everything in between. A boundary message marks where turns were removed.
 
-To fully disable context monitoring (no check, no error), set `auto_compact=False`.
+To fully disable compaction (raises `RuntimeError` when context exhausted), set `compact_threshold=1.0`.
 
 **Provider support:** Compaction handles both Anthropic and OpenAI message formats automatically via the `AgentLoopStrategy`. Anthropic uses content-block lists; OpenAI uses top-level `role: tool` messages and plain string content. The correct format is selected based on the active strategy.
 

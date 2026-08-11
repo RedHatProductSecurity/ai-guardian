@@ -2677,6 +2677,25 @@
         "system_prompt_preamble": {
           "type": "string",
           "description": "Text prepended to the system prompt via config."
+        },
+        "compact_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Ratio of input_tokens / context_window that triggers compaction. 1.0 = disabled (raises RuntimeError when exhausted).",
+          "default": 0.8
+        },
+        "compact_keep_turns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Recent turns preserved verbatim during compaction.",
+          "default": 5
+        },
+        "compact_keep_first": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Initial turns preserved verbatim during compaction (system prompt).",
+          "default": 1
         }
       }
     },
