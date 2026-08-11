@@ -310,18 +310,45 @@ def is_server_tool(tool_name: str) -> bool:
 _BASH_TIMEOUT = 120
 
 
-def _resolve_safe_path(raw_path: str, cwd: str) -> Union[Path, str]:
-    """Resolve *raw_path* against *cwd*, returning the ``Path`` or an error."""
+def _resolve_safe_path(
+    raw_path: str,
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> Union[Path, str]:
+    """Resolve *raw_path* against *cwd*, returning the ``Path`` or an error.
+
+    When *follow_symlinks* is ``True`` the **logical** path (symlinks not
+    resolved) is checked against *cwd*.  If the logical path is inside
+    *cwd* the real (resolved) path is returned — even when the symlink
+    target lives outside *cwd*.
+
+    When *follow_symlinks* is ``False`` (default) the real path must be
+    inside *cwd* **or** inside one of *allowed_paths*.
+    """
     resolved = (Path(cwd) / raw_path).resolve()
-    if not resolved.is_relative_to(Path(cwd).resolve()):
-        return f"Error: path escapes working directory: {raw_path}"
-    return resolved
+    cwd_resolved = Path(cwd).resolve()
+    if resolved.is_relative_to(cwd_resolved):
+        return resolved
+    if follow_symlinks:
+        logical = Path(os.path.normpath(os.path.join(cwd, raw_path)))
+        cwd_normed = Path(os.path.normpath(cwd))
+        if logical.is_relative_to(cwd_normed):
+            return resolved
+    if allowed_paths:
+        for ap in allowed_paths:
+            ap_resolved = Path(ap).resolve()
+            if resolved.is_relative_to(ap_resolved):
+                return resolved
+    return f"Error: path escapes working directory: {raw_path}"
 
 
 def execute_tool(
     name: str,
     tool_input: Dict[str, Any],
     cwd: Optional[str] = None,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
 ) -> str:
     """Execute a client-side tool and return the result string."""
     cwd = cwd or os.getcwd()
@@ -329,13 +356,13 @@ def execute_tool(
     if name == "bash":
         return _execute_bash(tool_input, cwd)
     if name in ("text_editor", "str_replace_based_edit_tool"):
-        return _execute_text_editor(tool_input, cwd)
+        return _execute_text_editor(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "read_file":
-        return _execute_read_file(tool_input, cwd)
+        return _execute_read_file(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "grep":
-        return _execute_grep(tool_input, cwd)
+        return _execute_grep(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "glob":
-        return _execute_glob(tool_input, cwd)
+        return _execute_glob(tool_input, cwd, allowed_paths, follow_symlinks)
 
     logger.warning("Tool %r called but has no registered executor", name)
     return f"Error: no executor for tool {name!r}"
@@ -369,14 +396,19 @@ def _execute_bash(tool_input: Dict[str, Any], cwd: str) -> str:
         return f"Error executing command: {e}"
 
 
-def _execute_text_editor(tool_input: Dict[str, Any], cwd: str) -> str:
+def _execute_text_editor(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
     command = tool_input.get("command", "")
     raw_path = tool_input.get("path", "")
 
     if not raw_path:
         return "Error: path is required."
 
-    resolved = _resolve_safe_path(raw_path, cwd)
+    resolved = _resolve_safe_path(raw_path, cwd, allowed_paths, follow_symlinks)
     if isinstance(resolved, str):
         return resolved
 
@@ -440,12 +472,17 @@ def _execute_text_editor(tool_input: Dict[str, Any], cwd: str) -> str:
     return f"Error: unknown text_editor command: {command!r}"
 
 
-def _execute_read_file(tool_input: Dict[str, Any], cwd: str) -> str:
+def _execute_read_file(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
     raw_path = tool_input.get("path", "")
     if not raw_path:
         return "Error: path is required."
 
-    resolved = _resolve_safe_path(raw_path, cwd)
+    resolved = _resolve_safe_path(raw_path, cwd, allowed_paths, follow_symlinks)
     if isinstance(resolved, str):
         return resolved
 
@@ -474,7 +511,12 @@ def _execute_read_file(tool_input: Dict[str, Any], cwd: str) -> str:
     return "".join(lines) or "(empty file)"
 
 
-def _execute_grep(tool_input: Dict[str, Any], cwd: str) -> str:
+def _execute_grep(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
     from ai_guardian.patterns.language import SKIP_DIRS
 
     pattern = tool_input.get("pattern", "")
@@ -482,7 +524,7 @@ def _execute_grep(tool_input: Dict[str, Any], cwd: str) -> str:
         return "Error: pattern is required."
 
     search_path = tool_input.get("path", ".")
-    safe = _resolve_safe_path(search_path, cwd)
+    safe = _resolve_safe_path(search_path, cwd, allowed_paths, follow_symlinks)
     if isinstance(safe, str):
         return safe
 
@@ -507,14 +549,21 @@ def _execute_grep(tool_input: Dict[str, Any], cwd: str) -> str:
         return f"Error running grep: {e}"
 
 
-def _execute_glob(tool_input: Dict[str, Any], cwd: str) -> str:
+def _execute_glob(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
     from ai_guardian.patterns.language import SKIP_DIRS
 
     pattern = tool_input.get("pattern", "")
     if not pattern:
         return "Error: pattern is required."
 
-    base = _resolve_safe_path(tool_input.get("path", "."), cwd)
+    base = _resolve_safe_path(
+        tool_input.get("path", "."), cwd, allowed_paths, follow_symlinks
+    )
     if isinstance(base, str):
         return base
 

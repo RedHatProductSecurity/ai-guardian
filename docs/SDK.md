@@ -505,6 +505,47 @@ These are lightweight tools implemented by GuardedAgent itself (not Anthropic bu
 | `pattern` | string | yes | Glob pattern (e.g. `'**/*.py'`) |
 | `path` | string | no | Base directory (defaults to cwd) |
 
+#### Symlinked Directories
+
+Built-in tools reject files whose real path resolves outside `cwd`. When `cwd` contains symlinks to external directories (common in pipelines that symlink source repos), two options:
+
+**Option 1: `follow_symlinks=True`** — trust all symlinks inside `cwd`:
+
+```python
+agent = GuardedAgent(
+    cwd="/project/data/",
+    tools="readonly",
+    follow_symlinks=True,
+)
+# Any symlink inside data/ is followed, even if target is outside
+```
+
+**Option 2: `allowed_paths`** — whitelist specific external directories:
+
+```python
+agent = GuardedAgent(
+    cwd="/project/data/",
+    tools="readonly",
+    allowed_paths=["/other/path/my-repo"],
+)
+# Only /other/path/my-repo is accessible through symlinks
+```
+
+Both are configurable via `ai-guardian.json`:
+
+```json
+{
+    "sdk": {
+        "agents": {
+            "my-agent": {
+                "follow_symlinks": true,
+                "allowed_paths": ["/other/path/my-repo"]
+            }
+        }
+    }
+}
+```
+
 #### Presets
 
 | Preset | Tools | Use when |
@@ -601,6 +642,8 @@ print(result["output"])  # validated structured object
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `trace_dir` | str | `None` | Directory for auto-persisted trace logs. Each `run()` writes a sanitized JSON trace file. Relative paths resolve against `cwd`. Also configurable via `sdk.agents.<name>.trace_dir` in `ai-guardian.json` |
 | `trace_path_fn` | callable | `None` | Callback `(agent_name: str, context: dict) -> str` that returns a path segment injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. `context` contains `model`, `stop_reason`, `usage`, `turn_count` |
+| `allowed_paths` | list[str] | `None` | Additional directories that built-in tools may access. By default, tools reject any path that resolves outside `cwd` (e.g. symlinks pointing to external directories). List absolute paths here to whitelist them |
+| `follow_symlinks` | bool | `False` | When `True`, built-in tools allow access through symlinks inside `cwd` even when the real target is outside `cwd`. The logical (unresolved) path must still be within `cwd`. Simpler than `allowed_paths` when all symlinks in the working tree are trusted |
 
 ### Hooks
 

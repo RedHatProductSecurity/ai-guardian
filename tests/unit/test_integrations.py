@@ -1796,6 +1796,210 @@ class TestToolExecution:
         )
         assert result["is_error"] is True
 
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_symlink_inside_cwd_to_outside_rejected_without_allowed_paths(
+        self, tmp_path
+    ):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "external"
+        external.mkdir()
+        (external / "data.txt").write_text("external content")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "repo").symlink_to(external)
+
+        result = execute_tool("read_file", {"path": "repo/data.txt"}, str(workspace))
+        assert "Error" in result
+        assert "escapes" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_symlink_inside_cwd_allowed_via_allowed_paths(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "external"
+        external.mkdir()
+        (external / "data.txt").write_text("external content")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "repo").symlink_to(external)
+
+        result = execute_tool(
+            "read_file",
+            {"path": "repo/data.txt"},
+            str(workspace),
+            allowed_paths=[str(external)],
+        )
+        assert "external content" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_allowed_paths_text_editor_view(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "ext"
+        external.mkdir()
+        (external / "code.py").write_text("print('hello')")
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "src").symlink_to(external)
+
+        result = execute_tool(
+            "text_editor",
+            {"command": "view", "path": "src/code.py"},
+            str(workspace),
+            allowed_paths=[str(external)],
+        )
+        assert "print('hello')" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_allowed_paths_does_not_allow_unrelated_external(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        allowed_dir = tmp_path / "allowed"
+        allowed_dir.mkdir()
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        (other_dir / "secret.txt").write_text("secret")
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "link").symlink_to(other_dir)
+
+        result = execute_tool(
+            "read_file",
+            {"path": "link/secret.txt"},
+            str(workspace),
+            allowed_paths=[str(allowed_dir)],
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_allowed_paths_glob(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "ext"
+        external.mkdir()
+        (external / "a.py").write_text("")
+        (external / "b.txt").write_text("")
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "src").symlink_to(external)
+
+        result = execute_tool(
+            "glob",
+            {"pattern": "*.py", "path": "src"},
+            str(workspace),
+            allowed_paths=[str(external)],
+        )
+        assert "a.py" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_allowed_paths_grep_no_escape_error(self, tmp_path):
+        """Grep with allowed_paths does not reject the symlinked path."""
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "ext"
+        external.mkdir()
+        (external / "code.py").write_text("def my_func():\n    pass\n")
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "src").symlink_to(external)
+
+        # Without allowed_paths: rejected
+        result_denied = execute_tool(
+            "grep", {"pattern": "my_func", "path": "src"}, str(workspace)
+        )
+        assert "escapes" in result_denied
+
+        # With allowed_paths: no escape error
+        result_allowed = execute_tool(
+            "grep",
+            {"pattern": "my_func", "path": "src"},
+            str(workspace),
+            allowed_paths=[str(external)],
+        )
+        assert "escapes" not in result_allowed
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_follow_symlinks_allows_symlinked_path(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "external"
+        external.mkdir()
+        (external / "data.txt").write_text("symlinked content")
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (workspace / "repo").symlink_to(external)
+
+        result = execute_tool(
+            "read_file",
+            {"path": "repo/data.txt"},
+            str(workspace),
+            follow_symlinks=True,
+        )
+        assert "symlinked content" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_follow_symlinks_still_blocks_dotdot_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        result = execute_tool(
+            "read_file",
+            {"path": "../../../etc/passwd"},
+            str(workspace),
+            follow_symlinks=True,
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="symlinks need privileges on Windows"
+    )
+    def test_follow_symlinks_text_editor(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        external = tmp_path / "ext"
+        external.mkdir()
+        (external / "file.py").write_text("hello = 1")
+
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        (workspace / "linked").symlink_to(external)
+
+        result = execute_tool(
+            "text_editor",
+            {"command": "view", "path": "linked/file.py"},
+            str(workspace),
+            follow_symlinks=True,
+        )
+        assert "hello = 1" in result
+
     def test_format_tool_result_no_error_by_default(self):
         from ai_guardian.integrations.anthropic.agent import AnthropicLoopStrategy
 

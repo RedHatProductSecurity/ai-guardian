@@ -2696,6 +2696,22 @@
           "minimum": 0,
           "description": "Initial turns preserved verbatim during compaction (system prompt).",
           "default": 1
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for tool execution. Overrides the code-provided value."
+        },
+        "allowed_paths": {
+          "type": "array",
+          "description": "Additional directories that built-in tools may access. Paths resolving outside cwd (e.g. via symlinks) are normally rejected; directories listed here are whitelisted.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "follow_symlinks": {
+          "type": "boolean",
+          "description": "When true, built-in tools allow access through symlinks inside cwd even when the real target is outside cwd. The logical (unresolved) path must still be within cwd.",
+          "default": false
         }
       }
     },
