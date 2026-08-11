@@ -293,9 +293,11 @@ class GuardedAgent:
         compact_keep_first: int = 1,
         name: Optional[str] = None,
         trace_dir: Optional[str] = None,
+        trace_path_fn: Optional[Callable[[str, Dict[str, Any]], str]] = None,
     ):
         self._name = name
         self._trace_dir = trace_dir
+        self._trace_path_fn = trace_path_fn
         self._last_trace: List[Dict[str, Any]] = []
         self._model = model
         self._system_prompt = system_prompt
@@ -440,12 +442,33 @@ class GuardedAgent:
         self, result: Dict[str, Any], started_at: datetime, session: Any
     ) -> None:
         try:
-            os.makedirs(self._trace_dir, exist_ok=True)
             agent_name = self._name or "agent"
             timestamp = started_at.strftime("%Y%m%d-%H%M%S")
             unique = uuid.uuid4().hex[:8]
             filename = f"{agent_name}_{timestamp}_{unique}.json"
-            filepath = os.path.join(self._trace_dir, filename)
+
+            middle = ""
+            if self._trace_path_fn:
+                ctx = {
+                    "model": self._model,
+                    "stop_reason": result.get("stop_reason"),
+                    "usage": result.get("usage"),
+                    "turn_count": len(
+                        [
+                            e
+                            for e in result.get("trace", [])
+                            if e.get("type") == "response"
+                        ]
+                    ),
+                }
+                middle = self._trace_path_fn(agent_name, ctx) or ""
+
+            if middle.endswith("/"):
+                filepath = os.path.join(self._trace_dir, middle, filename)
+            else:
+                filepath = os.path.join(self._trace_dir, middle + filename)
+
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
             sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
 
