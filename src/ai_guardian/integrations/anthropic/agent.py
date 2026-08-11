@@ -256,6 +256,9 @@ class GuardedAgent:
             "model",
             "cwd",
             "trace_dir",
+            "compact_threshold",
+            "compact_keep_turns",
+            "compact_keep_first",
         }
     )
 
@@ -281,8 +284,7 @@ class GuardedAgent:
         on_turn: Optional[Callable[[int, TurnEvent], None]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
         cache_ttl: Optional[Union[str, int]] = None,
-        auto_compact: bool = True,
-        compact_threshold: float = 1.0,
+        compact_threshold: float = 0.8,
         compact_keep_turns: int = 5,
         compact_keep_first: int = 1,
         name: Optional[str] = None,
@@ -312,7 +314,6 @@ class GuardedAgent:
         self._on_turn = on_turn
         self._preamble: Optional[str] = None
         self._original_system_prompt = system_prompt
-        self._auto_compact = auto_compact
         self._compact_threshold = compact_threshold
         self._compact_keep_turns = compact_keep_turns
         self._compact_keep_first = compact_keep_first
@@ -519,9 +520,8 @@ class GuardedAgent:
             raise RuntimeError(
                 f"Context window nearly exhausted: "
                 f"{last_input_tokens:,} / {context_limit:,} tokens. "
-                f"Enable auto-compaction with "
-                f"GuardedAgent(compact_threshold=0.8) to continue "
-                f"long conversations."
+                f"Set compact_threshold < 1.0 (e.g. 0.8) to enable "
+                f"compaction for long conversations."
             )
 
         result = compact_messages(
@@ -612,7 +612,7 @@ class GuardedAgent:
         for _turn in range(self._max_turns):
             turn_num = _turn + 1
 
-            if self._auto_compact and _turn > 0:
+            if _turn > 0:
                 messages, did_compact = self._maybe_compact(
                     strategy, messages, last_input_tokens
                 )
