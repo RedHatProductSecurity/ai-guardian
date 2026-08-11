@@ -364,6 +364,73 @@ class TestTomlPatternsGapFillingRules:
         assert not self._find("shortQ~val", "azure-ad-client-secret")
 
 
+class TestTomlPatternsMultiLineColumns:
+    """Tests for column calculation when match spans multiple lines (#1902)."""
+
+    def test_single_line_match_no_end_line(self):
+        scanner = TomlPatternsScanner()
+        scanner._cache = PatternCache()
+        scanner._cache.load_rules(
+            [
+                {
+                    "id": "test-col",
+                    "match_type": "regex",
+                    "regex": r"sk-[a-z]{20,}",
+                }
+            ],
+            category="secrets",
+        )
+        content = "prefix sk-abcdefghijklmnopqrstuvwxyz suffix"
+        findings = scanner.scan(content)
+        assert len(findings) >= 1
+        f = findings[0]
+        assert f.end_line is None
+        assert f.start_column is not None
+        assert f.end_column is not None
+        assert f.start_column <= f.end_column
+
+    def test_multi_line_match_sets_end_line(self):
+        scanner = TomlPatternsScanner()
+        scanner._cache = PatternCache()
+        scanner._cache.load_rules(
+            [
+                {
+                    "id": "test-multiline",
+                    "match_type": "regex",
+                    "regex": r"BEGIN[\s\S]{5,50}END",
+                }
+            ],
+            category="secrets",
+        )
+        content = "line1 BEGIN\nsome content\nmore END here"
+        findings = scanner.scan(content)
+        assert len(findings) >= 1
+        f = findings[0]
+        assert f.end_line is not None
+        assert f.end_line > f.line_number
+
+    def test_multi_line_match_columns_are_line_relative(self):
+        scanner = TomlPatternsScanner()
+        scanner._cache = PatternCache()
+        scanner._cache.load_rules(
+            [
+                {
+                    "id": "test-multiline",
+                    "match_type": "regex",
+                    "regex": r"BEGIN[\s\S]{5,50}END",
+                }
+            ],
+            category="secrets",
+        )
+        content = "aaaa BEGIN\nbbbb\ncc END rest"
+        findings = scanner.scan(content)
+        assert len(findings) >= 1
+        f = findings[0]
+        assert f.start_column == 5
+        assert f.end_column is not None
+        assert f.end_column <= len("cc END rest")
+
+
 class TestTomlPatternsEngineBuilder:
 
     def test_select_toml_patterns_engine(self):
