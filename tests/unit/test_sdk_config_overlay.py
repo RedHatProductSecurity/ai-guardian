@@ -602,11 +602,7 @@ class TestLoadSDKProfile:
         config_dir.mkdir()
         (config_dir / "ai-guardian.json").write_text(
             json.dumps(
-                {
-                    "sdk": {
-                        "agents": {"*": {"action": "block", "scan_input": True}}
-                    }
-                }
+                {"sdk": {"agents": {"*": {"action": "block", "scan_input": True}}}}
             )
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
