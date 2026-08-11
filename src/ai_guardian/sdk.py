@@ -221,8 +221,13 @@ class GuardSession:
 class _DirectSession(GuardSession):
     """In-process detection — calls detection functions directly."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        config: Optional[Dict[str, Any]] = None,
+        cwd: Optional[str] = None,
+    ):
         super().__init__(config)
+        self._cwd = cwd
         self._ensure_config()
 
     def _ensure_config(self):
@@ -231,12 +236,42 @@ class _DirectSession(GuardSession):
                 _load_config_file,
                 _sdk_use_global_config,
             )
+            from ai_guardian.config.utils import (
+                clear_project_dir_override,
+                set_project_dir_override,
+                _clear_project_config_cache,
+            )
 
-            if _sdk_use_global_config():
-                cfg, _ = _load_config_file()
-                self._config = cfg or {}
-            else:
-                self._config = {}
+            if self._cwd:
+                set_project_dir_override(self._cwd)
+                _clear_project_config_cache()
+
+            try:
+                if _sdk_use_global_config():
+                    cfg, _ = _load_config_file()
+                    self._config = cfg or {}
+                else:
+                    self._config = {}
+            finally:
+                if self._cwd:
+                    clear_project_dir_override()
+                    _clear_project_config_cache()
+
+    def _apply_language_overlays(self, scanner_cfg: Dict[str, Any]) -> Dict[str, Any]:
+        """Merge auto-detected language false positive patterns into scanner config."""
+        cwd = self._cwd
+        if not cwd:
+            return scanner_cfg
+        try:
+            from ai_guardian.project_init import get_language_allowlist_patterns
+
+            auto_patterns = get_language_allowlist_patterns(cwd, "prompt_injection")
+            if auto_patterns:
+                existing = scanner_cfg.get("allowlist_patterns", [])
+                return {**scanner_cfg, "allowlist_patterns": existing + auto_patterns}
+        except Exception:
+            logger.debug("Language detection unavailable", exc_info=True)
+        return scanner_cfg
 
     def check_content(self, text: str, *, filename: str = "input") -> CheckResult:
         results = []
@@ -270,9 +305,10 @@ class _DirectSession(GuardSession):
             try:
                 from ai_guardian.scanners.prompt_injection import check_prompt_injection
 
+                pi_cfg_overlaid = self._apply_language_overlays(pi_cfg)
                 should_block, msg, detected = check_prompt_injection(
                     text,
-                    self._config,
+                    pi_cfg_overlaid,
                 )
                 if detected:
                     results.append(
@@ -460,8 +496,13 @@ class _DirectSession(GuardSession):
 class _RestSession(GuardSession):
     """Daemon-delegated detection via socket protocol."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        config: Optional[Dict[str, Any]] = None,
+        cwd: Optional[str] = None,
+    ):
         super().__init__(config)
+        self._cwd = cwd
         self._ensure_daemon()
 
     def _ensure_daemon(self):
@@ -557,7 +598,11 @@ class _RestSession(GuardSession):
 
 
 @contextmanager
-def monitor(mode: str = "direct", config: Optional[Dict[str, Any]] = None):
+def monitor(
+    mode: str = "direct",
+    config: Optional[Dict[str, Any]] = None,
+    cwd: Optional[str] = None,
+):
     """Create a guarded session for security checks.
 
     Blocked findings raise ``SecurityViolation``; detected-but-not-blocked
@@ -568,6 +613,8 @@ def monitor(mode: str = "direct", config: Optional[Dict[str, Any]] = None):
         mode: "direct" (in-process, no daemon) or "rest" (daemon, auto-start)
         config: Optional config dict override. If None, loads from ai-guardian.json
                 (respects ``sdk.use_global_config``).
+        cwd: Project directory for config discovery and language detection.
+             If None, falls back to os.getcwd().
 
     Yields:
         GuardSession with check_content(), check_file(), check_command(),
@@ -577,8 +624,8 @@ def monitor(mode: str = "direct", config: Optional[Dict[str, Any]] = None):
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 
     if mode == "direct":
-        session = _DirectSession(config=config)
+        session = _DirectSession(config=config, cwd=cwd)
     else:
-        session = _RestSession(config=config)
+        session = _RestSession(config=config, cwd=cwd)
 
     yield session

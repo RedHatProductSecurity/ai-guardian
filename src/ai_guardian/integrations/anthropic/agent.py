@@ -555,7 +555,7 @@ class GuardedAgent:
                 self._on_turn(turn, event)
 
         started_at = datetime.now(timezone.utc)
-        with monitor(mode=self._mode, config=self._config) as session:
+        with monitor(mode=self._mode, config=self._config, cwd=self._cwd) as session:
             try:
                 return self._run_loop_inner(
                     prompt, strategy, trace, _emit, session, started_at
