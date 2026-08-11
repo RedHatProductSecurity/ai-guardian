@@ -175,6 +175,10 @@ def create_directory_scan_page(service, daemon_name: str):
             with ui.row().classes("items-center gap-4"):
                 recursive_check = ui.checkbox("Recursive", value=True)
                 config_only_check = ui.checkbox("Config files only", value=False)
+                skip_hidden_check = ui.checkbox(
+                    "Skip hidden directories (starting with .)",
+                    value=True,
+                )
 
         results_container = ui.column().classes("w-full gap-4")
 
@@ -257,6 +261,7 @@ def create_directory_scan_page(service, daemon_name: str):
                         config_only_check.value,
                         progress_state,
                         cancel_event,
+                        skip_hidden_check.value,
                     )
 
                 progress_timer.deactivate()
@@ -305,6 +310,7 @@ def _local_scan_with_progress(
     config_only,
     progress_state,
     cancel_event=None,
+    skip_hidden=True,
 ):
     """Local scan with progress updates and cancellation support."""
     import time
@@ -334,6 +340,7 @@ def _local_scan_with_progress(
                         config_only=config_only,
                         progress_callback=on_progress,
                         cancel_event=cancel_event,
+                        skip_hidden=skip_hidden,
                     )
                 )
     else:
@@ -342,6 +349,7 @@ def _local_scan_with_progress(
             config_only=config_only,
             progress_callback=on_progress,
             cancel_event=cancel_event,
+            skip_hidden=skip_hidden,
         )
 
     elapsed_ms = round((time.monotonic() - start) * 1000)

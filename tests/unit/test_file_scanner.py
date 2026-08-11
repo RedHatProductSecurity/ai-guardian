@@ -772,3 +772,105 @@ class TestFileScannerAnnotationSuppression:
             if mock_detector.detect.called:
                 pi_content = mock_detector.detect.call_args[0][0]
                 assert "ignore previous instructions" in pi_content
+
+
+class TestDiscoverFilesSkipHidden:
+    """Tests for _discover_files os.walk pruning and skip_hidden."""
+
+    def test_skip_hidden_dirs_by_default(self, tmp_path):
+        """Hidden directories are skipped when skip_hidden=True (default)."""
+        visible = tmp_path / "src" / "main.py"
+        visible.parent.mkdir(parents=True)
+        visible.write_text("print('hello')")
+
+        hidden = tmp_path / ".secret_cache" / "data.py"
+        hidden.parent.mkdir(parents=True)
+        hidden.write_text("password = 'x'")
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        names = [f.name for f in files]
+        assert "main.py" in names
+        assert "data.py" not in names
+
+    def test_skip_hidden_false_includes_hidden_dirs(self, tmp_path):
+        """Hidden directories are included when skip_hidden=False."""
+        visible = tmp_path / "src" / "main.py"
+        visible.parent.mkdir(parents=True)
+        visible.write_text("print('hello')")
+
+        hidden = tmp_path / ".config" / "settings.py"
+        hidden.parent.mkdir(parents=True)
+        hidden.write_text("debug = True")
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False, skip_hidden=False)
+        names = [f.name for f in files]
+        assert "main.py" in names
+        assert "settings.py" in names
+
+    def test_venv_always_pruned(self, tmp_path):
+        """.venv and venv are pruned regardless of skip_hidden."""
+        src = tmp_path / "app.py"
+        src.write_text("import os")
+
+        venv_file = tmp_path / "venv" / "lib" / "site.py"
+        venv_file.parent.mkdir(parents=True)
+        venv_file.write_text("# venv internals")
+
+        dot_venv = tmp_path / ".venv" / "lib" / "site.py"
+        dot_venv.parent.mkdir(parents=True)
+        dot_venv.write_text("# .venv internals")
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False, skip_hidden=False)
+        rel_paths = [str(f.relative_to(tmp_path)) for f in files]
+        assert "app.py" in rel_paths
+        assert not any(
+            p.startswith("venv/") or p.startswith(".venv/") for p in rel_paths
+        )
+
+    def test_node_modules_pruned(self, tmp_path):
+        """node_modules is pruned during traversal."""
+        src = tmp_path / "index.js"
+        src.write_text("console.log('hi')")
+
+        nm = tmp_path / "node_modules" / "pkg" / "index.js"
+        nm.parent.mkdir(parents=True)
+        nm.write_text("module.exports = {}")
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        rel_paths = [str(f.relative_to(tmp_path)) for f in files]
+        assert not any(p.startswith("node_modules/") for p in rel_paths)
+
+    def test_scan_directory_passes_skip_hidden(self, tmp_path):
+        """scan_directory(skip_hidden=False) includes hidden dir files."""
+        hidden = tmp_path / ".data" / "config.txt"
+        hidden.parent.mkdir(parents=True)
+        hidden.write_text("key=value")
+
+        scanner = FileScanner(config={})
+
+        with mock.patch.object(scanner, "_scan_file"):
+            findings_hidden = scanner.scan_directory(str(tmp_path), skip_hidden=True)
+
+        with mock.patch.object(scanner, "_scan_file") as mock_scan:
+            findings_visible = scanner.scan_directory(str(tmp_path), skip_hidden=False)
+            scanned_paths = [str(call[0][0]) for call in mock_scan.call_args_list]
+            assert any(".data" in p for p in scanned_paths)
+
+    def test_include_patterns_with_os_walk(self, tmp_path):
+        """include_patterns work correctly with os.walk traversal."""
+        py_file = tmp_path / "src" / "app.py"
+        py_file.parent.mkdir(parents=True)
+        py_file.write_text("x = 1")
+
+        txt_file = tmp_path / "src" / "readme.txt"
+        txt_file.write_text("hello")
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, ["*.py"], None, False)
+        names = [f.name for f in files]
+        assert "app.py" in names
+        assert "readme.txt" not in names
