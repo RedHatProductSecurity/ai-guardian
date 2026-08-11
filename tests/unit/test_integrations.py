@@ -5622,3 +5622,141 @@ class TestGuardedAgentTraceDir:
 
         files = os.listdir(trace_dir)
         assert len(files) == 5, f"Expected 5 unique files, got {len(files)}: {files}"
+
+
+class TestTracePathFn:
+    """Tests for trace_path_fn callback (#1892)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    def _run_with_trace(self, tmp_path, trace_path_fn, name="test-agent"):
+        from unittest.mock import patch
+
+        mock_session = MagicMock()
+        with patch("ai_guardian.integrations.anthropic.agent.monitor") as mock_monitor:
+            mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+            response = _make_agent_response(
+                [SimpleNamespace(type="text", text="OK")],
+                stop_reason="end_turn",
+            )
+
+            trace_dir = str(tmp_path / "traces")
+            agent, client = self._make_agent(
+                name=name,
+                trace_dir=trace_dir,
+                trace_path_fn=trace_path_fn,
+            )
+            client.messages.create.return_value = response
+            agent.run("Hi")
+            return tmp_path / "traces"
+
+    def test_subdir_when_trailing_slash(self, tmp_path):
+        """Return 'case-123/' creates subdirectory."""
+        traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123/")
+        subdir = traces / "case-123"
+        assert subdir.is_dir()
+        files = list(subdir.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("test-agent_")
+
+    def test_prefix_when_no_trailing_slash(self, tmp_path):
+        """Return 'case-123_' becomes filename prefix."""
+        traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123_")
+        files = list(traces.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("case-123_test-agent_")
+
+    def test_mixed_subdir_and_prefix(self, tmp_path):
+        """Return 'case-123/obs-456_' creates subdir with prefix."""
+        traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123/obs-456_")
+        subdir = traces / "case-123"
+        assert subdir.is_dir()
+        files = list(subdir.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("obs-456_test-agent_")
+
+    def test_none_return_uses_default(self, tmp_path):
+        """Return None falls back to default behavior."""
+        traces = self._run_with_trace(tmp_path, lambda name, ctx: None)
+        files = list(traces.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("test-agent_")
+
+    def test_no_callback_uses_default(self, tmp_path):
+        """No trace_path_fn set at all uses default."""
+        traces = self._run_with_trace(tmp_path, None)
+        files = list(traces.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("test-agent_")
+
+    def test_callback_receives_agent_name_and_context(self, tmp_path):
+        """Callback receives (agent_name, context_dict)."""
+        captured = {}
+
+        def capture_fn(name, ctx):
+            captured["name"] = name
+            captured["ctx"] = ctx
+            return ""
+
+        self._run_with_trace(tmp_path, capture_fn, name="triage-verifier")
+
+        assert captured["name"] == "triage-verifier"
+        ctx = captured["ctx"]
+        assert ctx["model"] == "claude-sonnet-5"
+        assert ctx["stop_reason"] == "end_turn"
+        assert "usage" in ctx
+        assert "turn_count" in ctx
+
+    def test_callback_receives_default_name_when_unnamed(self, tmp_path):
+        """Unnamed agent passes 'agent' to callback."""
+        captured = {}
+
+        def capture_fn(name, ctx):
+            captured["name"] = name
+            return ""
+
+        from unittest.mock import patch
+
+        mock_session = MagicMock()
+        with patch("ai_guardian.integrations.anthropic.agent.monitor") as mock_monitor:
+            mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+            mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+            response = _make_agent_response(
+                [SimpleNamespace(type="text", text="OK")],
+                stop_reason="end_turn",
+            )
+
+            trace_dir = str(tmp_path / "traces")
+            agent, client = self._make_agent(
+                trace_dir=trace_dir,
+                trace_path_fn=capture_fn,
+            )
+            client.messages.create.return_value = response
+            agent.run("Hi")
+
+        assert captured["name"] == "agent"
+
+    def test_empty_string_return_uses_default(self, tmp_path):
+        """Return '' uses default behavior."""
+        traces = self._run_with_trace(tmp_path, lambda name, ctx: "")
+        files = list(traces.iterdir())
+        assert len(files) == 1
+        assert files[0].name.startswith("test-agent_")

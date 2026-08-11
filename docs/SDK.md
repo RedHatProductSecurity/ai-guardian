@@ -617,6 +617,7 @@ print(result["output"])  # validated structured object
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `trace_dir` | str | `None` | Directory for auto-persisted trace logs. Each `run()` writes a sanitized JSON trace file. Relative paths resolve against `cwd`. Also configurable via `sdk.agents.<name>.trace_dir` in `ai-guardian.json` |
+| `trace_path_fn` | callable | `None` | Callback `(agent_name: str, context: dict) -> str` that returns a path segment injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. `context` contains `model`, `stop_reason`, `usage`, `turn_count` |
 
 ### Hooks
 
@@ -832,6 +833,26 @@ Trace file content:
   "trace": [...]
 }
 ```
+
+Use `trace_path_fn` to organize traces dynamically (e.g., by case ID):
+
+```python
+agent = GuardedAgent(
+    name="triage-verifier",
+    trace_dir="agents-trace",
+    trace_path_fn=lambda name, ctx: f"{case_id}/",
+)
+# Trace written to: agents-trace/nexus-focus-lost/triage-verifier_20260811-100338_a1b2c3d4.json
+```
+
+| `trace_path_fn` return | Result |
+|------------------------|--------|
+| `"case-123/"` | Subdirectory: `agents-trace/case-123/triage-verifier_20260811.json` |
+| `"case-123_"` | Prefix: `agents-trace/case-123_triage-verifier_20260811.json` |
+| `"case-123/obs-456_"` | Both: `agents-trace/case-123/obs-456_triage-verifier_20260811.json` |
+| `None` or not set | Default: `agents-trace/triage-verifier_20260811.json` |
+
+The `context` dict passed to `trace_path_fn` contains: `model`, `stop_reason`, `usage`, `turn_count`.
 
 Behavior:
 - `trace_dir=None` (default): no persistence, same as before
