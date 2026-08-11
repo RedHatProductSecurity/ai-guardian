@@ -5125,6 +5125,193 @@ class TestGuardedAgentTrace:
         assert response_events[0]["text"] == "raw-secret-text"
 
 
+class TestGuardedAgentPartialTrace:
+    """Tests for partial trace preservation on failure (#1887)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+            "action": "log",
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_last_trace_available_on_success(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+        result = agent.run("Hi")
+
+        assert agent._last_trace is result["trace"]
+        assert len(agent._last_trace) > 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_last_trace_preserved_on_api_error(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = RuntimeError("API overloaded")
+
+        with pytest.raises(RuntimeError, match="API overloaded") as exc_info:
+            agent.run("Hi")
+
+        assert hasattr(exc_info.value, "trace")
+        assert len(exc_info.value.trace) > 0
+        assert exc_info.value.trace[0]["type"] == "system"
+        assert agent._last_trace is exc_info.value.trace
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_last_trace_preserved_on_security_violation(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret data")],
+            stop_reason="end_turn",
+        )
+
+        violation_result = MagicMock()
+        violation_result.violation_type = "prompt_injection"
+        violation_result.message = "Threat detected"
+        mock_session.check_content.side_effect = SecurityViolation(violation_result)
+
+        agent, client = self._make_agent(scan_input=True)
+        client.messages.create.return_value = response
+
+        with pytest.raises(SecurityViolation) as exc_info:
+            agent.run("Hi")
+
+        assert hasattr(exc_info.value, "trace")
+        assert len(exc_info.value.trace) > 0
+        assert agent._last_trace is exc_info.value.trace
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_partial_trace_has_turns_before_failure(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(detected=False)
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        good_response = _make_agent_response(
+            [
+                SimpleNamespace(type="text", text="step 1"),
+                SimpleNamespace(
+                    type="tool_use", id="t1", name="bash", input={"command": "echo hi"}
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        call_count = [0]
+        original_create = MagicMock()
+
+        def create_side_effect(**kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return good_response
+            raise RuntimeError("API died on turn 2")
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = create_side_effect
+
+        with pytest.raises(RuntimeError, match="API died on turn 2") as exc_info:
+            agent.run("multi-turn task")
+
+        trace = exc_info.value.trace
+        assert any(e["type"] == "system" for e in trace)
+        assert any(e["type"] == "response" and e["turn"] == 1 for e in trace)
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_partial_trace_persisted_to_disk(self, mock_monitor, tmp_path):
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        agent, client = self._make_agent(
+            name="crash-agent", trace_dir=str(tmp_path / "traces")
+        )
+        client.messages.create.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            agent.run("Hi")
+
+        trace_dir = str(tmp_path / "traces")
+        files = os.listdir(trace_dir)
+        assert len(files) == 1
+        assert files[0].startswith("crash-agent_")
+
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+        assert doc["stop_reason"] == "error"
+        assert len(doc["trace"]) > 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_last_trace_reset_each_run(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        agent.run("first")
+        first_trace = agent._last_trace
+
+        agent.run("second")
+        second_trace = agent._last_trace
+
+        assert first_trace is not second_trace
+        assert second_trace[0]["user_prompt"] == "second"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_post_run_receives_none_on_failure(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        post_run_args = []
+
+        agent, client = self._make_agent(
+            post_run=lambda r: post_run_args.append(r),
+        )
+        client.messages.create.side_effect = RuntimeError("crash")
+
+        with pytest.raises(RuntimeError):
+            agent.run("Hi")
+
+        assert len(post_run_args) == 1
+        assert post_run_args[0] is None
+        assert len(agent._last_trace) > 0
+
+
 class TestGuardedAgentTraceDir:
     """Tests for auto-persist trace logs to disk (#1877)."""
 

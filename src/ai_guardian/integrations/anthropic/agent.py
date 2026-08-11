@@ -295,6 +295,7 @@ class GuardedAgent:
     ):
         self._name = name
         self._trace_dir = trace_dir
+        self._last_trace: List[Dict[str, Any]] = []
         self._model = model
         self._system_prompt = system_prompt
         self._cwd = cwd or os.getcwd()
@@ -527,7 +528,8 @@ class GuardedAgent:
 
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
         strategy = self._strategy
-        trace: List[Dict[str, Any]] = []
+        self._last_trace = []
+        trace = self._last_trace
 
         def _emit(turn: int, event: TurnEvent) -> None:
             entry = event.to_dict()
@@ -540,273 +542,287 @@ class GuardedAgent:
         with monitor(
             action=self._action, mode=self._mode, config=self._config
         ) as session:
+            try:
+                return self._run_loop_inner(
+                    prompt, strategy, trace, _emit, session, started_at
+                )
+            except BaseException as exc:
+                exc.trace = trace
+                if self._trace_dir:
+                    partial = {"trace": trace, "stop_reason": "error"}
+                    self._persist_trace(partial, started_at, session)
+                raise
+
+    def _run_loop_inner(
+        self,
+        prompt: str,
+        strategy: AgentLoopStrategy,
+        trace: List[Dict[str, Any]],
+        _emit: Callable,
+        session: Any,
+        started_at: datetime,
+    ) -> Dict[str, Any]:
+        _emit(
+            0,
+            TurnEvent(
+                type="system",
+                preamble=self._preamble,
+                system_prompt=self._original_system_prompt,
+                user_prompt=prompt,
+            ),
+        )
+
+        if self._scan_input and self._system_prompt:
+            session.check_content(self._system_prompt, filename="system_prompt")
+            _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
+        if self._scan_input:
+            session.check_content(prompt, filename="user_prompt")
+            _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
+
+        messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
+
+        system = self._system_prompt
+        if self._output_schema:
+            system = (system + "\n\n" if system else "") + (
+                "When you have completed the task, call the submit_result "
+                "tool with your final structured output."
+            )
+
+        usage_totals: Dict[str, int] = {f: 0 for f in _USAGE_TOKEN_FIELDS}
+        structured_output = None
+        final_text = ""
+        stop_reason = "max_turns"
+        compaction_count = 0
+        last_input_tokens = 0
+
+        for _turn in range(self._max_turns):
+            turn_num = _turn + 1
+
+            if self._auto_compact and _turn > 0:
+                messages, did_compact = self._maybe_compact(
+                    strategy, messages, last_input_tokens
+                )
+                if did_compact:
+                    compaction_count += 1
+
+            create_kwargs = strategy.build_create_kwargs(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                tools=self._resolved_tools,
+                messages=messages,
+                system=system,
+                cache_ttl=self._cache_ttl,
+            )
+
+            if self._before_call:
+                self._before_call(strategy.api_method_name, (), create_kwargs)
+
+            response = strategy.call_api(self._client, create_kwargs)
+            parsed = strategy.parse_response(response)
+
+            turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
+            for _f, _v in turn_usage.items():
+                usage_totals[_f] += _v
+            last_input_tokens = parsed.input_tokens
             _emit(
-                0,
+                turn_num,
                 TurnEvent(
-                    type="system",
-                    preamble=self._preamble,
-                    system_prompt=self._original_system_prompt,
-                    user_prompt=prompt,
+                    type="response",
+                    text=parsed.text,
+                    stop_reason=parsed.stop_reason,
+                    usage=turn_usage,
                 ),
             )
 
-            if self._scan_input and self._system_prompt:
-                session.check_content(self._system_prompt, filename="system_prompt")
-                _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
-            if self._scan_input:
-                session.check_content(prompt, filename="user_prompt")
-                _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
-
-            messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
-
-            system = self._system_prompt
-            if self._output_schema:
-                system = (system + "\n\n" if system else "") + (
-                    "When you have completed the task, call the submit_result "
-                    "tool with your final structured output."
-                )
-
-            usage_totals: Dict[str, int] = {f: 0 for f in _USAGE_TOKEN_FIELDS}
-            structured_output = None
-            final_text = ""
-            stop_reason = "max_turns"
-            compaction_count = 0
-            last_input_tokens = 0
-
-            for _turn in range(self._max_turns):
-                turn_num = _turn + 1
-
-                if self._auto_compact and _turn > 0:
-                    messages, did_compact = self._maybe_compact(
-                        strategy, messages, last_input_tokens
+            if self._scan_output and parsed.text:
+                try:
+                    scan_result = session.check_content(
+                        parsed.text, filename="agent_response"
                     )
-                    if did_compact:
-                        compaction_count += 1
+                    _emit(
+                        turn_num,
+                        TurnEvent(type="scan", scanned="agent_response"),
+                    )
+                    if scan_result.detected:
+                        sanitized = _try_sanitize_text(session, parsed.text)
+                        if sanitized:
+                            parsed.text = sanitized
+                            parsed.raw_content = strategy.replace_response_text(
+                                parsed.raw_content, sanitized
+                            )
+                except SecurityViolation as exc:
+                    _emit(
+                        turn_num,
+                        TurnEvent(
+                            type="scan",
+                            scanned="agent_response",
+                            violations=[
+                                {
+                                    "type": exc.result.violation_type,
+                                    "message": exc.result.message,
+                                }
+                            ],
+                        ),
+                    )
+                    exc.response = response
+                    exc.sanitized_text = _try_sanitize_text(session, parsed.text)
+                    raise
 
-                create_kwargs = strategy.build_create_kwargs(
-                    model=self._model,
-                    max_tokens=self._max_tokens,
-                    tools=self._resolved_tools,
-                    messages=messages,
-                    system=system,
-                    cache_ttl=self._cache_ttl,
+            early_stop = False
+            if self._after_call:
+                hook_result = self._after_call(strategy.api_method_name, response)
+                if hook_result is False:
+                    early_stop = True
+
+            if self._max_budget_tokens > 0:
+                total_spent = (
+                    usage_totals["input_tokens"] + usage_totals["output_tokens"]
                 )
+                if total_spent >= self._max_budget_tokens:
+                    final_text = parsed.text
+                    stop_reason = "budget_exceeded"
+                    break
 
-                if self._before_call:
-                    self._before_call(strategy.api_method_name, (), create_kwargs)
+            if early_stop:
+                final_text = parsed.text
+                stop_reason = "hook_early_stop"
+                break
 
-                response = strategy.call_api(self._client, create_kwargs)
-                parsed = strategy.parse_response(response)
+            if parsed.stop_reason == "end_turn":
+                if self._output_schema and structured_output is None:
+                    strategy.append_assistant_message(messages, parsed.raw_content)
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You must call the submit_result tool with "
+                                "your structured output. Do not respond with "
+                                "plain text."
+                            ),
+                        }
+                    )
+                    continue
 
-                turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
-                for _f, _v in turn_usage.items():
-                    usage_totals[_f] += _v
-                last_input_tokens = parsed.input_tokens
-                _emit(
-                    turn_num,
-                    TurnEvent(
-                        type="response",
-                        text=parsed.text,
-                        stop_reason=parsed.stop_reason,
-                        usage=turn_usage,
-                    ),
-                )
+                if self._between_turns:
+                    hook_result = self._between_turns(messages, response, _turn)
+                    if hook_result is False:
+                        final_text = parsed.text
+                        stop_reason = "hook_early_stop"
+                        break
+                    if isinstance(hook_result, str):
+                        if self._scan_input:
+                            session.check_content(
+                                hook_result,
+                                filename="between_turns_injection",
+                            )
+                        strategy.append_assistant_message(messages, parsed.raw_content)
+                        messages.append({"role": "user", "content": hook_result})
+                        continue
 
-                if self._scan_output and parsed.text:
-                    try:
+                final_text = parsed.text
+                stop_reason = "end_turn"
+                break
+
+            if parsed.stop_reason == "refusal":
+                final_text = parsed.text
+                stop_reason = "refusal"
+                break
+
+            if parsed.stop_reason in ("tool_use", "pause_turn"):
+                tool_results: List[Dict[str, Any]] = []
+                for tc in parsed.tool_calls:
+                    if tc.name == "submit_result":
+                        structured_output = tc.input
+                        tool_results.append(
+                            strategy.format_tool_result(tc.id, "Result submitted.")
+                        )
+                        continue
+
+                    if strategy.is_server_tool(tc.name):
+                        continue
+
+                    _emit(
+                        turn_num,
+                        TurnEvent(type="tool_call", name=tc.name, input=tc.input),
+                    )
+
+                    result_text = execute_tool(tc.name, tc.input, self._cwd)
+
+                    _emit(
+                        turn_num,
+                        TurnEvent(type="tool_result", name=tc.name, output=result_text),
+                    )
+
+                    if self._scan_output and result_text:
                         scan_result = session.check_content(
-                            parsed.text, filename="agent_response"
+                            result_text,
+                            filename=f"tool_result:{tc.name}",
                         )
-                        _emit(
-                            turn_num,
-                            TurnEvent(type="scan", scanned="agent_response"),
-                        )
-                        if scan_result.detected:
-                            sanitized = _try_sanitize_text(session, parsed.text)
-                            if sanitized:
-                                parsed.text = sanitized
-                                parsed.raw_content = strategy.replace_response_text(
-                                    parsed.raw_content, sanitized
-                                )
-                    except SecurityViolation as exc:
                         _emit(
                             turn_num,
                             TurnEvent(
                                 type="scan",
-                                scanned="agent_response",
-                                violations=[
-                                    {
-                                        "type": exc.result.violation_type,
-                                        "message": exc.result.message,
-                                    }
-                                ],
+                                scanned=f"tool_result:{tc.name}",
                             ),
                         )
-                        exc.response = response
-                        exc.sanitized_text = _try_sanitize_text(session, parsed.text)
-                        raise
+                        if scan_result.detected:
+                            sanitized = _try_sanitize_text(session, result_text)
+                            if sanitized:
+                                result_text = sanitized
 
-                early_stop = False
-                if self._after_call:
-                    hook_result = self._after_call(strategy.api_method_name, response)
-                    if hook_result is False:
-                        early_stop = True
-
-                if self._max_budget_tokens > 0:
-                    total_spent = (
-                        usage_totals["input_tokens"] + usage_totals["output_tokens"]
-                    )
-                    if total_spent >= self._max_budget_tokens:
-                        final_text = parsed.text
-                        stop_reason = "budget_exceeded"
-                        break
-
-                if early_stop:
-                    final_text = parsed.text
-                    stop_reason = "hook_early_stop"
-                    break
-
-                if parsed.stop_reason == "end_turn":
-                    if self._output_schema and structured_output is None:
-                        strategy.append_assistant_message(messages, parsed.raw_content)
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "You must call the submit_result tool with "
-                                    "your structured output. Do not respond with "
-                                    "plain text."
-                                ),
-                            }
+                    is_error = result_text.startswith("Error: no executor")
+                    tool_results.append(
+                        strategy.format_tool_result(
+                            tc.id, result_text, is_error=is_error
                         )
+                    )
+
+                if tool_results:
+                    strategy.append_assistant_and_results(
+                        messages, parsed.raw_content, tool_results
+                    )
+
+                if self._between_turns:
+                    hook_result = self._between_turns(messages, response, _turn)
+                    if hook_result is False:
+                        final_text = parsed.text
+                        stop_reason = "hook_early_stop"
+                        break
+                    if isinstance(hook_result, str):
+                        if self._scan_input:
+                            session.check_content(
+                                hook_result,
+                                filename="between_turns_injection",
+                            )
+                        strategy.inject_user_text_after_results(messages, hook_result)
+                        structured_output = None
                         continue
 
-                    if self._between_turns:
-                        hook_result = self._between_turns(messages, response, _turn)
-                        if hook_result is False:
-                            final_text = parsed.text
-                            stop_reason = "hook_early_stop"
-                            break
-                        if isinstance(hook_result, str):
-                            if self._scan_input:
-                                session.check_content(
-                                    hook_result,
-                                    filename="between_turns_injection",
-                                )
-                            strategy.append_assistant_message(
-                                messages, parsed.raw_content
-                            )
-                            messages.append({"role": "user", "content": hook_result})
-                            continue
-
-                    final_text = parsed.text
+                if structured_output is not None:
                     stop_reason = "end_turn"
                     break
 
-                if parsed.stop_reason == "refusal":
-                    final_text = parsed.text
-                    stop_reason = "refusal"
-                    break
+                continue
 
-                if parsed.stop_reason in ("tool_use", "pause_turn"):
-                    tool_results: List[Dict[str, Any]] = []
-                    for tc in parsed.tool_calls:
-                        if tc.name == "submit_result":
-                            structured_output = tc.input
-                            tool_results.append(
-                                strategy.format_tool_result(tc.id, "Result submitted.")
-                            )
-                            continue
+            logger.warning("Unknown stop_reason: %s", parsed.stop_reason)
+            final_text = parsed.text
+            stop_reason = parsed.stop_reason
+            break
 
-                        if strategy.is_server_tool(tc.name):
-                            continue
+        output: Any = final_text
+        if structured_output is not None:
+            output = structured_output
 
-                        _emit(
-                            turn_num,
-                            TurnEvent(type="tool_call", name=tc.name, input=tc.input),
-                        )
+        result = {
+            "output": output,
+            "messages": messages,
+            "stop_reason": stop_reason,
+            "usage": usage_totals,
+            "compaction_count": compaction_count,
+            "trace": trace,
+        }
 
-                        result_text = execute_tool(tc.name, tc.input, self._cwd)
+        if self._trace_dir:
+            self._persist_trace(result, started_at, session)
 
-                        _emit(
-                            turn_num,
-                            TurnEvent(
-                                type="tool_result", name=tc.name, output=result_text
-                            ),
-                        )
-
-                        if self._scan_output and result_text:
-                            scan_result = session.check_content(
-                                result_text,
-                                filename=f"tool_result:{tc.name}",
-                            )
-                            _emit(
-                                turn_num,
-                                TurnEvent(
-                                    type="scan",
-                                    scanned=f"tool_result:{tc.name}",
-                                ),
-                            )
-                            if scan_result.detected:
-                                sanitized = _try_sanitize_text(session, result_text)
-                                if sanitized:
-                                    result_text = sanitized
-
-                        is_error = result_text.startswith("Error: no executor")
-                        tool_results.append(
-                            strategy.format_tool_result(
-                                tc.id, result_text, is_error=is_error
-                            )
-                        )
-
-                    if tool_results:
-                        strategy.append_assistant_and_results(
-                            messages, parsed.raw_content, tool_results
-                        )
-
-                    if self._between_turns:
-                        hook_result = self._between_turns(messages, response, _turn)
-                        if hook_result is False:
-                            final_text = parsed.text
-                            stop_reason = "hook_early_stop"
-                            break
-                        if isinstance(hook_result, str):
-                            if self._scan_input:
-                                session.check_content(
-                                    hook_result,
-                                    filename="between_turns_injection",
-                                )
-                            strategy.inject_user_text_after_results(
-                                messages, hook_result
-                            )
-                            structured_output = None
-                            continue
-
-                    if structured_output is not None:
-                        stop_reason = "end_turn"
-                        break
-
-                    continue
-
-                logger.warning("Unknown stop_reason: %s", parsed.stop_reason)
-                final_text = parsed.text
-                stop_reason = parsed.stop_reason
-                break
-
-            output: Any = final_text
-            if structured_output is not None:
-                output = structured_output
-
-            result = {
-                "output": output,
-                "messages": messages,
-                "stop_reason": stop_reason,
-                "usage": usage_totals,
-                "compaction_count": compaction_count,
-                "trace": trace,
-            }
-
-            if self._trace_dir:
-                self._persist_trace(result, started_at, session)
-
-            return result
+        return result
