@@ -2637,7 +2637,7 @@
     },
     "sdk_agent_profile": {
       "type": "object",
-      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override _default values.",
+      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override * (wildcard) values.",
       "additionalProperties": true,
       "properties": {
         "enabled": {
@@ -2710,14 +2710,14 @@
         },
         "agents": {
           "type": "object",
-          "description": "GuardedAgent profiles. Use '_default' for defaults applied to all agents. Named keys match the agent's 'name' parameter.",
+          "description": "GuardedAgent profiles. Use '*' for defaults applied to all agents. Named keys match the agent's 'name' parameter.",
           "additionalProperties": {
             "$ref": "#/definitions/sdk_agent_profile"
           }
         },
         "clients": {
           "type": "object",
-          "description": "guarded() client profiles. Use '_default' for defaults applied to all clients.",
+          "description": "guarded() client profiles. Use '*' for defaults applied to all clients.",
           "additionalProperties": {
             "type": "object",
             "additionalProperties": true

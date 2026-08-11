@@ -857,7 +857,7 @@ def guarded(
     preamble = None
     profile = _load_sdk_profile("clients", name)
     if profile:
-        display_name = name or "_default"
+        display_name = name or "*"
         param_map = {
             "action": action,
             "scan_input": scan_input,

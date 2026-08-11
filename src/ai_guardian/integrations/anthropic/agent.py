@@ -372,7 +372,7 @@ class GuardedAgent:
         if not profile:
             return tools_spec
 
-        display_name = self._name or "_default"
+        display_name = self._name or "*"
 
         for param, config_value in profile.items():
             if param == "tools":

@@ -8,7 +8,7 @@ Tests cover:
 - Cache invalidation: mtime, inline value, SDK overlay id
 - Doctor check_config_overlay: source detection
 - SDK monitor() integration with overlay
-- _load_sdk_profile(): agent/client profile loading with _default fallback
+- _load_sdk_profile(): agent/client profile loading with * (wildcard) fallback
 - GuardedAgent config profile overrides (name param, logging, system_prompt_preamble)
 - guarded() config profile overrides (name param, logging)
 """
@@ -604,7 +604,7 @@ class TestLoadSDKProfile:
             json.dumps(
                 {
                     "sdk": {
-                        "agents": {"_default": {"action": "block", "scan_input": True}}
+                        "agents": {"*": {"action": "block", "scan_input": True}}
                     }
                 }
             )
@@ -622,7 +622,7 @@ class TestLoadSDKProfile:
                 {
                     "sdk": {
                         "agents": {
-                            "_default": {
+                            "*": {
                                 "action": "block",
                                 "scan_input": True,
                                 "max_turns": 50,
@@ -664,7 +664,7 @@ class TestLoadSDKProfile:
                 {
                     "sdk": {
                         "agents": {
-                            "_default": {"action": "block"},
+                            "*": {"action": "block"},
                             "named": {"action": "warn"},
                         }
                     }
@@ -817,7 +817,7 @@ class TestGuardedAgentConfigProfile:
                 profile_config={"action": "block"},
                 action="warn",
             )
-        assert "GuardedAgent '_default': action='block'" in caplog.text
+        assert "GuardedAgent '*': action='block'" in caplog.text
 
     def test_same_value_no_log(self, caplog):
         with caplog.at_level(logging.INFO, logger="ai_guardian.integrations"):
@@ -848,7 +848,7 @@ class TestGuardedAgentConfigProfile:
                 {
                     "sdk": {
                         "agents": {
-                            "_default": {"action": "block"},
+                            "*": {"action": "block"},
                             "code-reviewer": {
                                 "max_turns": 20,
                                 "action": "warn",
@@ -963,7 +963,7 @@ class TestGuardedFunctionConfigProfile:
                 profile_config={"action": "warn"},
                 action="block",
             )
-        assert "guarded '_default': action='warn'" in caplog.text
+        assert "guarded '*': action='warn'" in caplog.text
 
     def test_model_override_stored(self):
         wrapped = self._make_guarded(
