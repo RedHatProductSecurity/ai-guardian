@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 _MAX_REDACTED_CONTEXT_BYTES = 102400
+_MAX_SOURCE_COMMAND_LEN = 500
 
 
 # Deferred-import wrappers for functions defined in hook_processing.py.
@@ -51,6 +52,19 @@ def _extract_context_snippet(text, line_number):
     from ai_guardian.hook_processing import _extract_context_snippet as _ecs
 
     return _ecs(text, line_number)
+
+
+def _sanitize_source_command(command: str) -> str:
+    """Sanitize a Bash command through secret scanning before storing."""
+    try:
+        from ai_guardian.scanners.secret_scanning import check_secrets
+
+        has_secrets, _ = check_secrets(command, filename="source_command")
+        if has_secrets:
+            return "[redacted — command contains secrets]"
+    except Exception:
+        pass
+    return command[:_MAX_SOURCE_COMMAND_LEN]
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +290,7 @@ def _log_pii_violation(
     hook_session_id=None,
     bash_command=None,
     pretool_ctx=None,
+    source_command=None,
 ):
     """Log a PII violation and return (pii_action, pii_types)."""
     pii_action = pii_config.get("action", "block")
@@ -306,6 +321,8 @@ def _log_pii_violation(
         pii_blocked["end_column"] = pii_end_column
     if bash_command:
         pii_blocked["command"] = bash_command
+    if source_command and file_path and str(file_path).startswith("tool_result:"):
+        pii_blocked["source_command"] = source_command
     snippet = _extract_context_snippet(snippet_text, pii_first_line)
     if snippet:
         pii_blocked["context_snippet"] = snippet
@@ -411,10 +428,12 @@ def handle_post_tool_use(ctx=None, **kwargs):
 
     # Extract command for Bash tool (for violation context)
     bash_command = None
+    source_command = None
     if tool_name == "Bash":
         raw_cmd = tool_input.get("command", "")
         if raw_cmd:
-            bash_command = raw_cmd[:500]
+            bash_command = raw_cmd[:_MAX_SOURCE_COMMAND_LEN]
+            source_command = _sanitize_source_command(raw_cmd)
 
     # Load PreToolUse context for cross-hook correlation (#366)
     pretool_ctx = None
@@ -515,6 +534,8 @@ def handle_post_tool_use(ctx=None, **kwargs):
         post_secret_ctx["tool_use_id"] = hook_tool_use_id
     if hook_session_id:
         post_secret_ctx["session_id"] = hook_session_id
+    if source_command:
+        post_secret_ctx["source_command"] = source_command
 
     if skip_secret_scan:
         has_secrets = False
@@ -639,6 +660,12 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 }
                 if bash_command:
                     blocked_info["command"] = bash_command
+                if (
+                    source_command
+                    and file_path_for_ctx
+                    and str(file_path_for_ctx).startswith("tool_result:")
+                ):
+                    blocked_info["source_command"] = source_command
                 snippet = _extract_context_snippet(redacted_text, first_line)
                 if snippet:
                     blocked_info["context_snippet"] = snippet
@@ -795,6 +822,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     hook_session_id=hook_session_id,
                     bash_command=bash_command,
                     pretool_ctx=pretool_ctx,
+                    source_command=source_command,
                 )
                 logger.warning(f"PII detected in {tool_identifier} output: {pii_types}")
 

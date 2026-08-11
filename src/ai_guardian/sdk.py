@@ -86,7 +86,13 @@ class GuardSession:
         """All results collected during this session."""
         return list(self._results)
 
-    def check_content(self, text: str, *, filename: str = "input") -> CheckResult:
+    def check_content(
+        self,
+        text: str,
+        *,
+        filename: str = "input",
+        source_command: Optional[str] = None,
+    ) -> CheckResult:
         """Check text for secrets, prompt injection, context poisoning."""
         raise NotImplementedError
 
@@ -273,8 +279,20 @@ class _DirectSession(GuardSession):
             logger.debug("Language detection unavailable", exc_info=True)
         return scanner_cfg
 
-    def check_content(self, text: str, *, filename: str = "input") -> CheckResult:
+    def check_content(
+        self,
+        text: str,
+        *,
+        filename: str = "input",
+        source_command: Optional[str] = None,
+    ) -> CheckResult:
         results = []
+
+        ctx = None
+        if source_command and filename.startswith("tool_result:"):
+            from ai_guardian.hook_events.post_tool_use import _sanitize_source_command
+
+            ctx = {"source_command": _sanitize_source_command(source_command)}
 
         secret_cfg = self._config.get("secret_scanning", {})
         if secret_cfg.get("enabled", True):
@@ -287,6 +305,7 @@ class _DirectSession(GuardSession):
                     text,
                     filename=filename,
                     secret_config=secret_cfg,
+                    context=ctx,
                 )
                 if has_secrets:
                     results.append(

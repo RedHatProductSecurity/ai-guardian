@@ -768,9 +768,13 @@ class GuardedAgent:
                     )
 
                     if self._scanning and result_text:
+                        bash_cmd = (
+                            tc.input.get("command") if tc.name == "Bash" else None
+                        )
                         scan_result = session.check_content(
                             result_text,
                             filename=f"tool_result:{tc.name}",
+                            source_command=bash_cmd,
                         )
                         _emit(
                             turn_num,

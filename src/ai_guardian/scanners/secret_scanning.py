@@ -118,6 +118,18 @@ def _build_violation_context(context, hook_context):
     return violation_ctx
 
 
+def _inject_source_command(blocked_info, context):
+    """Copy source_command from context into blocked_info for tool_result violations."""
+    if not context:
+        return
+    src_cmd = context.get("source_command")
+    if not src_cmd:
+        return
+    fp = blocked_info.get("file_path") or ""
+    if str(fp).startswith("tool_result:"):
+        blocked_info["source_command"] = src_cmd
+
+
 def _enrich_blocked_from_details(blocked_info, details):
     """Add line_number, end_line, column, total_findings, validation from scan details."""
     if details.get("line_number"):
@@ -165,6 +177,7 @@ def _log_secret_detection_violation(
             "reason": f"{engine_name} detected sensitive information",
         }
         _enrich_blocked_from_details(blocked_info, details)
+        _inject_source_command(blocked_info, context)
 
         from ai_guardian.violations.redact import sanitize_blocked_for_secret
 
@@ -263,6 +276,7 @@ def _log_finding_violation(
             "reason": f"{engine_name}: {reason_label} ({rule_id})",
         }
         _enrich_blocked_from_details(blocked_info, details)
+        _inject_source_command(blocked_info, context)
 
         from ai_guardian.violations.redact import (
             REDACT_VIOLATION_TYPES,
