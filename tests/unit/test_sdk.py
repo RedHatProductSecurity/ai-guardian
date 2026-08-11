@@ -829,3 +829,116 @@ class TestRestSessionGetViolations:
         session = _RestSession()
         violations = session.get_violations()
         assert violations == []
+
+
+# ---------------------------------------------------------------------------
+# monitor() cwd parameter
+# ---------------------------------------------------------------------------
+
+
+class TestMonitorCwd:
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_cwd_passed_to_direct_session(self, mock_config):
+        with monitor(cwd="/some/project") as s:
+            assert isinstance(s, _DirectSession)
+            assert s._cwd == "/some/project"
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_cwd_none_by_default(self, mock_config):
+        with monitor() as s:
+            assert s._cwd is None
+
+    @patch("ai_guardian.sdk._RestSession._ensure_daemon")
+    def test_cwd_passed_to_rest_session(self, mock_daemon):
+        with monitor(mode="rest", cwd="/some/project") as s:
+            assert isinstance(s, _RestSession)
+            assert s._cwd == "/some/project"
+
+
+# ---------------------------------------------------------------------------
+# _DirectSession — language overlay via cwd
+# ---------------------------------------------------------------------------
+
+
+class TestDirectSessionLanguageOverlay:
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_apply_language_overlays_python_project(self, mock_config, tmp_path):
+        """Python project cwd → __init__ added to allowlist."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+
+        session = _DirectSession(config={}, cwd=str(tmp_path))
+        result = session._apply_language_overlays({})
+        assert "__init__" in result.get("allowlist_patterns", [])
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_apply_language_overlays_no_cwd(self, mock_config):
+        """No cwd → no overlay applied."""
+        session = _DirectSession(config={})
+        result = session._apply_language_overlays({})
+        assert result == {}
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_apply_language_overlays_preserves_existing(self, mock_config, tmp_path):
+        """Existing allowlist_patterns preserved alongside auto-detected ones."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+
+        session = _DirectSession(config={}, cwd=str(tmp_path))
+        result = session._apply_language_overlays(
+            {"allowlist_patterns": ["custom_pattern"]}
+        )
+        assert "custom_pattern" in result["allowlist_patterns"]
+        assert "__init__" in result["allowlist_patterns"]
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_apply_language_overlays_non_python_project(self, mock_config, tmp_path):
+        """Non-Python project cwd → no Python dunders in allowlist."""
+        (tmp_path / "go.mod").write_text("module example.com/test\n")
+
+        session = _DirectSession(config={}, cwd=str(tmp_path))
+        result = session._apply_language_overlays({})
+        assert "__init__" not in result.get("allowlist_patterns", [])
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_check_content_uses_language_overlay(self, mock_config, tmp_path):
+        """check_content passes overlaid PI config to check_prompt_injection."""
+        (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
+
+        session = _DirectSession(
+            config={
+                "secret_scanning": {"enabled": False},
+                "prompt_injection": {"enabled": True},
+                "context_poisoning": {"enabled": False},
+            },
+            cwd=str(tmp_path),
+        )
+
+        with patch(
+            "ai_guardian.scanners.prompt_injection.check_prompt_injection",
+            return_value=(False, None, False),
+        ) as mock_pi:
+            session.check_content("__init__.py pyproject.toml")
+            pi_cfg = mock_pi.call_args[0][1]
+            assert "__init__" in pi_cfg.get("allowlist_patterns", [])
+
+
+# ---------------------------------------------------------------------------
+# _DirectSession — cwd-based project config discovery
+# ---------------------------------------------------------------------------
+
+
+class TestDirectSessionCwdConfig:
+    def test_cwd_used_for_project_config_discovery(self, tmp_path):
+        """Project config from cwd is loaded, not from os.getcwd()."""
+        ai_guardian_dir = tmp_path / ".ai-guardian"
+        ai_guardian_dir.mkdir()
+        config_file = ai_guardian_dir / "ai-guardian.json"
+        config_file.write_text('{"prompt_injection": {"sensitivity": "low"}}')
+
+        with patch(
+            "ai_guardian.config.loaders._sdk_use_global_config",
+            return_value=True,
+        ):
+            session = _DirectSession(cwd=str(tmp_path))
+            assert (
+                session._config.get("prompt_injection", {}).get("sensitivity") == "low"
+            )
