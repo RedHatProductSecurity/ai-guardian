@@ -846,7 +846,7 @@ Also configurable via `ai-guardian.json`:
 {
   "sdk": {
     "agents": {
-      "_default": {
+      "*": {
         "trace_dir": "logs/agents"
       },
       "triage-verifier": {

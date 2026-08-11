@@ -781,14 +781,14 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     overlay), then returns the effective profile for *name*.
 
     Resolution order:
-    1. Start with ``_default`` profile (if defined).
+    1. Start with ``*`` (wildcard) profile (if defined).
     2. Merge the named profile on top (if *name* matches a key).
-    3. If *name* is ``None`` or has no matching key, ``_default`` alone.
+    3. If *name* is ``None`` or has no matching key, ``*`` alone.
     4. If neither exists, return ``{}``.
 
     Args:
         section: ``"agents"`` or ``"clients"``
-        name: Profile name, or ``None`` for ``_default`` only.
+        name: Profile name, or ``None`` for ``*`` only.
 
     Returns:
         Merged profile dict, or empty dict if nothing configured.
@@ -805,7 +805,7 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     if not isinstance(profiles, dict):
         return {}
 
-    default_profile = profiles.get("_default", {})
+    default_profile = profiles.get("*", {})
     if not isinstance(default_profile, dict):
         default_profile = {}
 
