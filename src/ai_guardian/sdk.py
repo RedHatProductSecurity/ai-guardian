@@ -295,114 +295,42 @@ class _DirectSession(GuardSession):
         return self._handle_result(merged)
 
     def check_file(self, file_path: str, content: Optional[str] = None) -> CheckResult:
-        results = []
+        from ai_guardian.scanners.pipeline import scan_file
 
-        try:
-            from ai_guardian.hook_processing import check_directory_denied
+        scan_results = scan_file(
+            file_path,
+            content=content,
+            config=self._config,
+            cwd=self._cwd,
+        )
 
-            is_denied, denied_dir, warning_msg, pattern = check_directory_denied(
-                file_path,
-                self._config,
+        results = [
+            CheckResult(
+                blocked=r.should_block,
+                detected=r.detected,
+                violation_type=r.violation_type,
+                message=r.error_message,
             )
-            if is_denied:
-                results.append(
-                    CheckResult(
-                        blocked=True,
-                        detected=True,
-                        violation_type="directory_blocked",
-                        message=warning_msg or f"Access denied: {file_path}",
-                    )
-                )
-        except Exception as e:
-            logger.debug("Directory check unavailable: %s", e)
-
-        if content is not None:
-            cfg_scanner_cfg = self._config.get("config_scanner", {})
-            if cfg_scanner_cfg.get("enabled", True):
-                try:
-                    from ai_guardian.scanners.config_scanner import (
-                        check_config_file_threats,
-                    )
-
-                    should_block, msg, details = check_config_file_threats(
-                        file_path,
-                        content,
-                        self._config,
-                    )
-                    if should_block:
-                        results.append(
-                            CheckResult(
-                                blocked=True,
-                                detected=True,
-                                violation_type="config_file_exfil",
-                                message=msg,
-                                details=details,
-                            )
-                        )
-                except Exception as e:
-                    logger.debug("Config file check unavailable: %s", e)
-
-            sc_cfg = self._config.get("supply_chain", {})
-            if sc_cfg.get("enabled", True):
-                try:
-                    from ai_guardian.scanners.supply_chain import (
-                        check_supply_chain_threats,
-                    )
-
-                    should_block, msg, details = check_supply_chain_threats(
-                        file_path,
-                        content,
-                        self._config,
-                    )
-                    if should_block:
-                        results.append(
-                            CheckResult(
-                                blocked=True,
-                                detected=True,
-                                violation_type="supply_chain_threat",
-                                message=msg,
-                                details=details,
-                            )
-                        )
-                except Exception as e:
-                    logger.debug("Supply chain check unavailable: %s", e)
-
-            try:
-                content_result = self.check_content(content, filename=file_path)
-            finally:
-                self._results.pop()
-            if content_result.detected:
-                results.append(content_result)
+            for r in scan_results
+        ]
 
         merged = self._merge_results(results)
         return self._handle_result(merged)
 
     def check_command(self, command: str) -> CheckResult:
-        results = []
+        from ai_guardian.scanners.pipeline import scan_command
 
-        cfg_scanner_cfg = self._config.get("config_scanner", {})
-        if cfg_scanner_cfg.get("enabled", True):
-            try:
-                from ai_guardian.scanners.config_scanner import (
-                    check_bash_command_threats,
-                )
+        scan_results = scan_command(command, config=self._config)
 
-                should_block, msg, details = check_bash_command_threats(
-                    command,
-                    self._config,
-                )
-                if should_block:
-                    results.append(
-                        CheckResult(
-                            blocked=True,
-                            detected=True,
-                            violation_type="config_file_exfil",
-                            message=msg,
-                            details=details,
-                        )
-                    )
-            except Exception as e:
-                logger.debug("Command check unavailable: %s", e)
+        results = [
+            CheckResult(
+                blocked=r.should_block,
+                detected=r.detected,
+                violation_type=r.violation_type,
+                message=r.error_message,
+            )
+            for r in scan_results
+        ]
 
         merged = self._merge_results(results)
         return self._handle_result(merged)
