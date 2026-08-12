@@ -1413,9 +1413,7 @@ class TestSdkProfileKeyBaseDir:
         ai_guardian_dir.mkdir()
         config_file = ai_guardian_dir / "ai-guardian.json"
         config_file.write_text(
-            json.dumps(
-                {"sdk": {"agents": {"my-agent": {"trace_dir": "named-traces"}}}}
-            )
+            json.dumps({"sdk": {"agents": {"my-agent": {"trace_dir": "named-traces"}}}})
         )
         global_dir = tmp_path / "global"
         global_dir.mkdir()
