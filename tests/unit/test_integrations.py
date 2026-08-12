@@ -3588,6 +3588,66 @@ class TestGuardedAgentCompaction:
 
         assert result["compaction_count"] == 0
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_compaction_trace_entry(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = MagicMock(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        big_tool_output = "\n".join(["x" * 200] * 5000)
+
+        def _tool_resp(tid, input_toks):
+            return _make_agent_response(
+                [
+                    SimpleNamespace(
+                        type="tool_use",
+                        name="bash",
+                        id=tid,
+                        input={"command": "cat big.log"},
+                    ),
+                ],
+                stop_reason="tool_use",
+                usage=SimpleNamespace(input_tokens=input_toks, output_tokens=100),
+            )
+
+        final_resp = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+            usage=SimpleNamespace(input_tokens=50_000, output_tokens=50),
+        )
+
+        agent, client = self._make_agent(compact_threshold=0.8, compact_keep_turns=1)
+        client.messages.create.side_effect = [
+            _tool_resp("t1", 130_000),
+            _tool_resp("t2", 180_000),
+            final_resp,
+        ]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value=big_tool_output,
+        ):
+            result = agent.run("Analyze big.log")
+
+        assert result["compaction_count"] >= 1
+
+        compaction_entries = [
+            e for e in result["trace"] if e.get("type") == "compaction"
+        ]
+        assert len(compaction_entries) >= 1
+        entry = compaction_entries[0]
+        assert "tokens_before" in entry
+        assert "tokens_after" in entry
+        assert "method" in entry
+        assert entry["tokens_before"] > entry["tokens_after"]
+        assert isinstance(entry["method"], str)
+        assert "turn" in entry
+        assert "api_call" in entry
+        assert "seq" in entry
+
 
 # ============================================================================
 # TestOpenAIGuardedAgent

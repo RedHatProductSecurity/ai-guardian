@@ -743,6 +743,8 @@ agent = GuardedAgent(
 
 Compaction preserves the first turn pair (`compact_keep_first`) and the most recent turn pairs (`compact_keep_turns`), dropping everything in between. A boundary message marks where turns were removed.
 
+When compaction fires, a `type: "compaction"` trace entry is emitted with `tokens_before`, `tokens_after`, and `method` fields. This appears in both the `on_turn` callback and the `trace` list in the result dict.
+
 To fully disable compaction (raises `RuntimeError` when context exhausted), set `compact_threshold=1.0`.
 
 **Provider support:** Compaction handles both Anthropic and OpenAI message formats automatically via the `AgentLoopStrategy`. Anthropic uses content-block lists; OpenAI uses top-level `role: tool` messages and plain string content. The correct format is selected based on the active strategy.
@@ -827,7 +829,7 @@ Group by `turn` for conversation flow, by `api_call` for per-request details, so
 ```python
 @dataclass
 class TurnEvent:
-    type: str                          # "system" | "response" | "tool_call" | "tool_result" | "scan"
+    type: str                          # "system" | "response" | "tool_call" | "tool_result" | "scan" | "compaction"
     text: Optional[str] = None
     name: Optional[str] = None
     input: Optional[dict] = None
@@ -839,6 +841,9 @@ class TurnEvent:
     stop_reason: Optional[str] = None
     violations: Optional[list] = field(default_factory=list)
     scanned: Optional[str] = None
+    tokens_before: Optional[int] = None  # compaction only
+    tokens_after: Optional[int] = None   # compaction only
+    method: Optional[str] = None         # compaction only
 ```
 
 #### Auto-Persist Traces to Disk
