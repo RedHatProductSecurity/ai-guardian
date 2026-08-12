@@ -917,6 +917,86 @@ class TestDirectSessionLanguageOverlay:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# secret_redaction_enabled
+# ---------------------------------------------------------------------------
+
+
+class TestSecretRedactionEnabled:
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_defaults_false(self, mock_config):
+        """SDK sessions default secret_redaction_enabled to False."""
+        with monitor() as s:
+            assert s.secret_redaction_enabled is False
+
+    @patch(
+        "ai_guardian.config.loaders._load_config_file",
+        return_value=({"secret_redaction": {"enabled": True}}, None),
+    )
+    def test_global_config_true(self, mock_load):
+        """Global secret_redaction.enabled=true propagates to SDK session."""
+        session = _DirectSession()
+        assert session.secret_redaction_enabled is True
+
+    @patch(
+        "ai_guardian.config.loaders._load_config_file",
+        return_value=(
+            {
+                "secret_redaction": {"enabled": True},
+                "sdk": {"secret_redaction": {"enabled": False}},
+            },
+            None,
+        ),
+    )
+    def test_sdk_override_wins(self, mock_load):
+        """sdk.secret_redaction.enabled overrides global."""
+        session = _DirectSession()
+        assert session.secret_redaction_enabled is False
+
+    @patch(
+        "ai_guardian.config.loaders._load_config_file",
+        return_value=(
+            {"sdk": {"secret_redaction": {"enabled": True}}},
+            None,
+        ),
+    )
+    def test_sdk_override_true(self, mock_load):
+        """sdk.secret_redaction.enabled=true works without global."""
+        session = _DirectSession()
+        assert session.secret_redaction_enabled is True
+
+    @patch(
+        "ai_guardian.config.loaders._load_config_file",
+        return_value=({}, None),
+    )
+    def test_empty_config_defaults_false(self, mock_load):
+        """Empty config defaults to False for SDK."""
+        session = _DirectSession()
+        assert session.secret_redaction_enabled is False
+
+    def test_explicit_config_with_redaction(self):
+        """Explicit config dict respects secret_redaction.enabled."""
+        session = _DirectSession(config={"secret_redaction": {"enabled": True}})
+        assert session.secret_redaction_enabled is True
+
+    def test_explicit_config_without_redaction(self):
+        """Explicit config dict without secret_redaction defaults False."""
+        session = _DirectSession(config={"prompt_injection": {"enabled": True}})
+        assert session.secret_redaction_enabled is False
+
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    def test_rest_session_defaults_false(self, mock_running):
+        """REST session also defaults to False."""
+        session = _RestSession()
+        assert session.secret_redaction_enabled is False
+
+    @patch("ai_guardian.daemon.client.is_daemon_running", return_value=True)
+    def test_rest_session_with_config(self, mock_running):
+        """REST session respects explicit config."""
+        session = _RestSession(config={"secret_redaction": {"enabled": True}})
+        assert session.secret_redaction_enabled is True
+
+
 class TestDirectSessionCwdConfig:
     def test_cwd_used_for_project_config_discovery(self, tmp_path):
         """Project config from cwd is loaded, not from os.getcwd()."""

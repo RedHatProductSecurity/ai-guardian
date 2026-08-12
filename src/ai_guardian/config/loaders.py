@@ -916,6 +916,42 @@ def _sdk_use_global_config() -> bool:
     return sdk.get("use_global_config", True)
 
 
+def _sdk_secret_redaction_enabled(config: Optional[Dict[str, Any]] = None) -> bool:
+    """Check whether secret redaction is enabled for SDK context.
+
+    Resolution order:
+    1. ``sdk.secret_redaction.enabled`` (SDK-specific override)
+    2. ``secret_redaction.enabled`` (global setting)
+    3. Default: ``False`` (SDK default — hooks default to ``True``)
+
+    SDK defaults to ``False`` because redacting secrets in content flowing
+    between agent turns breaks code and confuses the agent.  Traces are
+    always sanitized independently of this flag.
+
+    Args:
+        config: Pre-loaded config dict, or ``None`` to load from file.
+
+    Returns:
+        ``True`` to redact secrets in live SDK content, ``False`` to skip.
+    """
+    if config is None:
+        config, error_msg = _load_config_file()
+        if error_msg or config is None:
+            return False
+
+    sdk = config.get("sdk")
+    if isinstance(sdk, dict):
+        sdk_redaction = sdk.get("secret_redaction")
+        if isinstance(sdk_redaction, dict) and "enabled" in sdk_redaction:
+            return bool(sdk_redaction["enabled"])
+
+    redaction = config.get("secret_redaction")
+    if isinstance(redaction, dict) and "enabled" in redaction:
+        return bool(redaction["enabled"])
+
+    return False
+
+
 def _get_on_scan_error_action() -> str:
     """
     Load the global on_scan_error setting from ai-guardian.json.
