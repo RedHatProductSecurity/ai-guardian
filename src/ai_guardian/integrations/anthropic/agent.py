@@ -553,12 +553,22 @@ class GuardedAgent:
         self._last_trace = []
         trace = self._last_trace
 
-        def _emit(turn: int, event: TurnEvent) -> None:
+        _trace_state = {"turn": 0, "api_call": -1, "seq": 0}
+
+        def _emit(api_call: int, event: TurnEvent) -> None:
             entry = event.to_dict()
-            entry["turn"] = turn
+            if api_call != _trace_state["api_call"]:
+                _trace_state["api_call"] = api_call
+                _trace_state["seq"] = 0
+            entry["turn"] = _trace_state["turn"]
+            entry["api_call"] = api_call
+            entry["seq"] = _trace_state["seq"]
+            _trace_state["seq"] += 1
+            if event.type == "response":
+                _trace_state["turn"] += 1
             trace.append(entry)
             if self._on_turn:
-                self._on_turn(turn, event)
+                self._on_turn(api_call, event)
 
         started_at = datetime.now(timezone.utc)
         with monitor(mode=self._mode, config=self._config, cwd=self._cwd) as session:
