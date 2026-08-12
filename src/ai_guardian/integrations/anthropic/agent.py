@@ -461,12 +461,11 @@ class GuardedAgent:
                     "model": self._model,
                     "stop_reason": result.get("stop_reason"),
                     "usage": result.get("usage"),
-                    "turn_count": len(
-                        [
-                            e
-                            for e in result.get("trace", [])
-                            if e.get("type") == "response"
-                        ]
+                    "turn_count": sum(
+                        1
+                        for turn_obj in result.get("trace", [])
+                        for step in turn_obj.get("steps", [])
+                        if step.get("type") == "response"
                     ),
                 }
                 middle = self._trace_path_fn(agent_name, ctx) or ""
@@ -499,22 +498,28 @@ class GuardedAgent:
         cls, trace: List[Dict[str, Any]], session: Any
     ) -> List[Dict[str, Any]]:
         items: List[tuple] = []
-        for i, entry in enumerate(trace):
-            for field in cls._TRACE_TEXT_FIELDS:
-                val = entry.get(field)
-                if val and isinstance(val, str):
-                    items.append((i, field, val))
+        for ti, turn_obj in enumerate(trace):
+            for si, step in enumerate(turn_obj.get("steps", [])):
+                for fld in cls._TRACE_TEXT_FIELDS:
+                    val = step.get(fld)
+                    if val and isinstance(val, str):
+                        items.append((ti, si, fld, val))
 
         if not items:
             return list(trace)
 
-        texts = [val for _, _, val in items]
+        texts = [val for _, _, _, val in items]
         sanitized_texts = _try_sanitize_batch(session, texts)
 
-        entry_copies = [dict(e) for e in trace]
-        for (i, field, original), sanitized in zip(items, sanitized_texts):
-            entry_copies[i][field] = sanitized or original
-        return entry_copies
+        trace_copy: List[Dict[str, Any]] = []
+        for turn_obj in trace:
+            turn_copy = dict(turn_obj)
+            turn_copy["steps"] = [dict(s) for s in turn_obj.get("steps", [])]
+            trace_copy.append(turn_copy)
+
+        for (ti, si, fld, original), sanitized in zip(items, sanitized_texts):
+            trace_copy[ti]["steps"][si][fld] = sanitized or original
+        return trace_copy
 
     def _maybe_compact(
         self,
@@ -563,22 +568,15 @@ class GuardedAgent:
         self._last_trace = []
         trace = self._last_trace
 
-        _trace_state = {"turn": 0, "api_call": -1, "seq": 0}
-
-        def _emit(api_call: int, event: TurnEvent) -> None:
+        def _emit(turn_num: int, event: TurnEvent) -> None:
             entry = event.to_dict()
-            if api_call != _trace_state["api_call"]:
-                _trace_state["api_call"] = api_call
-                _trace_state["seq"] = 0
-            entry["turn"] = _trace_state["turn"]
-            entry["api_call"] = api_call
-            entry["seq"] = _trace_state["seq"]
-            _trace_state["seq"] += 1
-            if event.type == "response":
-                _trace_state["turn"] += 1
-            trace.append(entry)
+            if not trace or trace[-1]["turn"] != turn_num:
+                trace.append({"turn": turn_num, "steps": []})
+            current_turn = trace[-1]
+            entry["step"] = len(current_turn["steps"])
+            current_turn["steps"].append(entry)
             if self._on_turn:
-                self._on_turn(api_call, event)
+                self._on_turn(turn_num, event)
 
         started_at = datetime.now(timezone.utc)
         with monitor(mode=self._mode, config=self._config, cwd=self._cwd) as session:
@@ -637,6 +635,8 @@ class GuardedAgent:
 
         for _turn in range(self._max_turns):
             turn_num = _turn + 1
+            did_compact = False
+            compact_result = None
 
             if _turn > 0:
                 messages, did_compact, compact_result = self._maybe_compact(
@@ -644,15 +644,26 @@ class GuardedAgent:
                 )
                 if did_compact:
                     compaction_count += 1
-                    _emit(
-                        turn_num,
-                        TurnEvent(
-                            type="compaction",
-                            tokens_before=compact_result.tokens_before,
-                            tokens_after=compact_result.tokens_after,
-                            method=compact_result.method,
-                        ),
-                    )
+
+            _emit(
+                turn_num,
+                TurnEvent(
+                    type="input",
+                    messages_count=len(messages),
+                    compacted=did_compact,
+                ),
+            )
+
+            if did_compact:
+                _emit(
+                    turn_num,
+                    TurnEvent(
+                        type="compaction",
+                        tokens_before=compact_result.tokens_before,
+                        tokens_after=compact_result.tokens_after,
+                        method=compact_result.method,
+                    ),
+                )
 
             create_kwargs = strategy.build_create_kwargs(
                 model=self._model,
@@ -673,13 +684,21 @@ class GuardedAgent:
             for _f, _v in turn_usage.items():
                 usage_totals[_f] += _v
             last_input_tokens = parsed.input_tokens
+            total_input = turn_usage.get("input_tokens", 0)
+            cached = turn_usage.get("cache_read_input_tokens", 0)
+            trace_usage = {
+                "total_input_tokens": total_input,
+                "cached_tokens": cached,
+                "new_input_tokens": total_input - cached,
+                "output_tokens": turn_usage.get("output_tokens", 0),
+            }
             _emit(
                 turn_num,
                 TurnEvent(
                     type="response",
                     text=parsed.text,
                     stop_reason=parsed.stop_reason,
-                    usage=turn_usage,
+                    usage=trace_usage,
                 ),
             )
 

@@ -26,6 +26,7 @@ class TurnEvent:
     Fields vary by ``type``:
 
     * ``"system"`` — ``preamble``, ``system_prompt``, ``user_prompt``
+    * ``"input"`` — ``messages_count``, ``compacted``
     * ``"response"`` — ``text``, ``stop_reason``, ``usage``
     * ``"tool_call"`` — ``name``, ``input``
     * ``"tool_result"`` — ``name``, ``output``
@@ -48,6 +49,8 @@ class TurnEvent:
     tokens_before: Optional[int] = None
     tokens_after: Optional[int] = None
     method: Optional[str] = None
+    messages_count: Optional[int] = None
+    compacted: Optional[bool] = None
 
     def __str__(self) -> str:
         if self.type == "system":
@@ -79,6 +82,9 @@ class TurnEvent:
                 f"[compaction] {self.tokens_before} -> {self.tokens_after}"
                 f" ({self.method})"
             )
+        if self.type == "input":
+            c = " (compacted)" if self.compacted else ""
+            return f"[input] {self.messages_count} messages{c}"
         return f"[{self.type}]"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -99,6 +105,8 @@ class TurnEvent:
             "tokens_before",
             "tokens_after",
             "method",
+            "messages_count",
+            "compacted",
         ):
             val = getattr(self, attr)
             if val is not None:
