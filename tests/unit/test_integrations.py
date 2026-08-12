@@ -5839,6 +5839,110 @@ class TestGuardedAgentTraceDir:
         files = os.listdir(trace_dir)
         assert len(files) == 5, f"Expected 5 unique files, got {len(files)}: {files}"
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_relative_trace_dir_from_project_config(self, mock_monitor, tmp_path):
+        """Relative trace_dir from project config resolves from project root (#1916)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        project_root = str(tmp_path / "my-project")
+        os.makedirs(project_root)
+
+        with (
+            patch(
+                "ai_guardian.config.loaders._load_sdk_profile",
+                return_value={"trace_dir": "agents-trace"},
+            ),
+            patch(
+                "ai_guardian.config.loaders._sdk_scanning",
+                return_value=True,
+            ),
+            patch(
+                "ai_guardian.config.loaders._sdk_profile_key_base_dir",
+                return_value=project_root,
+            ),
+        ):
+            agent, client = self._make_agent(
+                name="worker", cwd=str(tmp_path / "other-dir")
+            )
+            client.messages.create.return_value = response
+            agent.run("Hi")
+
+        expected_dir = tmp_path / "my-project" / "agents-trace"
+        assert expected_dir.is_dir()
+        assert len(list(expected_dir.iterdir())) == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_relative_trace_dir_from_global_config(self, mock_monitor, tmp_path):
+        """Relative trace_dir from global config resolves from config dir (#1916)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        config_dir = str(tmp_path / "config")
+        os.makedirs(config_dir)
+
+        with (
+            patch(
+                "ai_guardian.config.loaders._load_sdk_profile",
+                return_value={"trace_dir": "agents-trace"},
+            ),
+            patch(
+                "ai_guardian.config.loaders._sdk_scanning",
+                return_value=True,
+            ),
+            patch(
+                "ai_guardian.config.loaders._sdk_profile_key_base_dir",
+                return_value=config_dir,
+            ),
+        ):
+            agent, client = self._make_agent(
+                name="worker", cwd=str(tmp_path / "other-dir")
+            )
+            client.messages.create.return_value = response
+            agent.run("Hi")
+
+        expected_dir = tmp_path / "config" / "agents-trace"
+        assert expected_dir.is_dir()
+        assert len(list(expected_dir.iterdir())) == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_code_passed_trace_dir_still_resolves_from_cwd(
+        self, mock_monitor, tmp_path
+    ):
+        """Code-passed trace_dir ignores config base dir (#1916)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(
+            name="test",
+            trace_dir="my-traces",
+            cwd=str(tmp_path),
+        )
+        client.messages.create.return_value = response
+        agent.run("Hi")
+
+        expected_dir = tmp_path / "my-traces"
+        assert expected_dir.is_dir()
+        assert len(list(expected_dir.iterdir())) == 1
+
 
 class TestTracePathFn:
     """Tests for trace_path_fn callback (#1892)."""

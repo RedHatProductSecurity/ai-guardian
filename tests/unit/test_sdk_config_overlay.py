@@ -27,6 +27,7 @@ from ai_guardian.config.loaders import (
     _load_config_file,
     _load_sdk_profile,
     _resolve_sdk_overlay,
+    _sdk_profile_key_base_dir,
     _sdk_scanning,
     configure,
 )
@@ -1307,3 +1308,165 @@ class TestGuardedAgentSDKDisabled:
             self._make_agent(sdk_scanning=False)
         assert "SDK scanning disabled via config" in caplog.text
         assert "scanning skipped" in caplog.text
+
+
+class TestSdkProfileKeyBaseDir:
+    """Tests for _sdk_profile_key_base_dir() — trace_dir provenance (#1916)."""
+
+    def setup_method(self):
+        _clear_config_cache()
+        configure(None)
+
+    def teardown_method(self):
+        _clear_config_cache()
+        configure(None)
+
+    def test_key_from_project_config(self, tmp_path):
+        project_dir = str(tmp_path / "proj")
+        os.makedirs(project_dir)
+        config_dir = tmp_path / "proj" / ".ai-guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(
+            json.dumps({"sdk": {"agents": {"*": {"trace_dir": "traces"}}}})
+        )
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=config_file,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_project_dir",
+                return_value=project_dir,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=global_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
+
+        assert result == project_dir
+
+    def test_key_from_global_config(self, tmp_path):
+        config_dir = tmp_path / "global"
+        config_dir.mkdir()
+        global_config = config_dir / "ai-guardian.json"
+        global_config.write_text(
+            json.dumps({"sdk": {"agents": {"*": {"trace_dir": "traces"}}}})
+        )
+
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=None,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=config_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
+
+        assert result == str(config_dir)
+
+    def test_key_from_overlay_returns_none(self, tmp_path):
+        config_dir = tmp_path / "global"
+        config_dir.mkdir()
+
+        configure({"sdk": {"agents": {"*": {"trace_dir": "traces"}}}})
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=None,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=config_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
+
+        assert result is None
+
+    def test_key_not_in_any_config_returns_none(self, tmp_path):
+        config_dir = tmp_path / "global"
+        config_dir.mkdir()
+
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=None,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=config_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
+
+        assert result is None
+
+    def test_named_profile_takes_priority(self, tmp_path):
+        project_dir = str(tmp_path / "proj")
+        os.makedirs(project_dir)
+        config_dir = tmp_path / "proj" / ".ai-guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(
+            json.dumps({"sdk": {"agents": {"my-agent": {"trace_dir": "named-traces"}}}})
+        )
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=config_file,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_project_dir",
+                return_value=project_dir,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=global_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", "my-agent", "trace_dir")
+
+        assert result == project_dir
+
+    def test_overlay_wins_over_project(self, tmp_path):
+        project_dir = str(tmp_path / "proj")
+        os.makedirs(project_dir)
+        config_dir = tmp_path / "proj" / ".ai-guardian"
+        config_dir.mkdir()
+        config_file = config_dir / "ai-guardian.json"
+        config_file.write_text(
+            json.dumps({"sdk": {"agents": {"*": {"trace_dir": "proj-traces"}}}})
+        )
+        global_dir = tmp_path / "global"
+        global_dir.mkdir()
+
+        configure({"sdk": {"agents": {"*": {"trace_dir": "overlay-traces"}}}})
+        with (
+            patch(
+                "ai_guardian.config.loaders.get_project_config_path",
+                return_value=config_file,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_project_dir",
+                return_value=project_dir,
+            ),
+            patch(
+                "ai_guardian.config.loaders.get_config_dir",
+                return_value=global_dir,
+            ),
+        ):
+            result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
+
+        assert result is None
