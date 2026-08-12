@@ -819,6 +819,60 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     return dict(default_profile)
 
 
+def _sdk_profile_key_base_dir(
+    section: str, name: Optional[str], key: str
+) -> Optional[str]:
+    """Return the base directory for resolving a relative config path.
+
+    Checks which config layer defined *key* in the SDK profile
+    (highest-priority layer wins, matching merge order):
+    overlay → project → global.
+
+    Returns:
+        Project root (str) when defined in project config,
+        global config dir (str) when defined in global config,
+        or ``None`` (overlay / not in config → caller uses cwd).
+    """
+    overlay = _resolve_sdk_overlay()
+    if overlay and _sdk_profile_has_key(overlay, section, name, key):
+        return None
+
+    project_path = get_project_config_path()
+    if project_path:
+        project_config, _ = _load_json_config(project_path)
+        if project_config and _sdk_profile_has_key(project_config, section, name, key):
+            return get_project_dir()
+
+    config_dir = get_config_dir()
+    global_path = config_dir / "ai-guardian.json"
+    if _get_mtime(global_path) is not None:
+        global_config, _ = _load_json_config(global_path)
+        if global_config and _sdk_profile_has_key(global_config, section, name, key):
+            return str(config_dir)
+
+    return None
+
+
+def _sdk_profile_has_key(
+    config: Dict[str, Any], section: str, name: Optional[str], key: str
+) -> bool:
+    """Check if a config dict has *key* in an SDK profile."""
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return False
+    profiles = sdk.get(section)
+    if not isinstance(profiles, dict):
+        return False
+    if name and name in profiles:
+        profile = profiles[name]
+        if isinstance(profile, dict) and key in profile:
+            return True
+    wildcard = profiles.get("*")
+    if isinstance(wildcard, dict) and key in wildcard:
+        return True
+    return False
+
+
 def _sdk_scanning(section: str = "clients", name: Optional[str] = None) -> bool:
     """Check whether SDK scanning is active.
 

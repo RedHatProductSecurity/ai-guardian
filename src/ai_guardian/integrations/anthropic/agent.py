@@ -334,10 +334,20 @@ class GuardedAgent:
             self._strategy = AnthropicLoopStrategy()
             self._client = self._strategy.create_default_client()
 
+        code_trace_dir = self._trace_dir
         tools = self._apply_config_profile(tools)
 
         if self._trace_dir and not os.path.isabs(self._trace_dir):
-            self._trace_dir = os.path.join(self._cwd, self._trace_dir)
+            base = self._cwd
+            if code_trace_dir is None:
+                from ai_guardian.config.loaders import _sdk_profile_key_base_dir
+
+                config_base = _sdk_profile_key_base_dir(
+                    "agents", self._name, "trace_dir"
+                )
+                if config_base is not None:
+                    base = config_base
+            self._trace_dir = os.path.join(base, self._trace_dir)
 
         if cache_ttl is not None:
             self._strategy.validate_cache_ttl(cache_ttl)
