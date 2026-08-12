@@ -657,11 +657,74 @@ class GuardedAgent:
         )
 
         if self._scanning and self._system_prompt:
-            session.check_content(self._system_prompt, filename="system_prompt")
-            _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
+            try:
+                session.check_content(self._system_prompt, filename="system_prompt")
+                _emit(0, TurnEvent(type="scan", scanned="system_prompt"))
+            except SecurityViolation as exc:
+                _emit(
+                    0,
+                    TurnEvent(
+                        type="scan",
+                        scanned="system_prompt",
+                        violations=[
+                            {
+                                "type": exc.result.violation_type,
+                                "message": exc.result.message,
+                            }
+                        ],
+                    ),
+                )
+                logger.warning(
+                    "System prompt blocked by security scan: %s",
+                    exc.result.message,
+                )
+                result = {
+                    "output": "",
+                    "messages": [],
+                    "stop_reason": "security_violation",
+                    "usage": {f: 0 for f in _USAGE_TOKEN_FIELDS},
+                    "compaction_count": 0,
+                    "trace": trace,
+                    "error": "System prompt blocked by security scan",
+                }
+                if self._trace_dir:
+                    self._persist_trace(result, started_at, session)
+                return result
+
         if self._scanning:
-            session.check_content(prompt, filename="user_prompt")
-            _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
+            try:
+                session.check_content(prompt, filename="user_prompt")
+                _emit(0, TurnEvent(type="scan", scanned="user_prompt"))
+            except SecurityViolation as exc:
+                _emit(
+                    0,
+                    TurnEvent(
+                        type="scan",
+                        scanned="user_prompt",
+                        violations=[
+                            {
+                                "type": exc.result.violation_type,
+                                "message": exc.result.message,
+                            }
+                        ],
+                    ),
+                )
+                logger.warning(
+                    "User prompt blocked by security scan: %s",
+                    exc.result.message,
+                )
+                result = {
+                    "output": "",
+                    "messages": [],
+                    "stop_reason": "security_violation",
+                    "usage": {f: 0 for f in _USAGE_TOKEN_FIELDS},
+                    "compaction_count": 0,
+                    "trace": trace,
+                    "error": "User prompt blocked by security scan",
+                }
+                if self._trace_dir:
+                    self._persist_trace(result, started_at, session)
+                return result
 
         messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
 
