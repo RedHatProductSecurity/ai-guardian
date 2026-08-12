@@ -1322,11 +1322,11 @@ class TestSdkProfileKeyBaseDir:
         configure(None)
 
     def test_key_from_project_config(self, tmp_path):
-        project_dir = str(tmp_path / "proj")
-        os.makedirs(project_dir)
-        config_dir = tmp_path / "proj" / ".ai-guardian"
-        config_dir.mkdir()
-        config_file = config_dir / "ai-guardian.json"
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        ai_guardian_dir = project_dir / ".ai-guardian"
+        ai_guardian_dir.mkdir()
+        config_file = ai_guardian_dir / "ai-guardian.json"
         config_file.write_text(
             json.dumps({"sdk": {"agents": {"*": {"trace_dir": "traces"}}}})
         )
@@ -1339,17 +1339,13 @@ class TestSdkProfileKeyBaseDir:
                 return_value=config_file,
             ),
             patch(
-                "ai_guardian.config.loaders.get_project_dir",
-                return_value=project_dir,
-            ),
-            patch(
                 "ai_guardian.config.loaders.get_config_dir",
                 return_value=global_dir,
             ),
         ):
             result = _sdk_profile_key_base_dir("agents", None, "trace_dir")
 
-        assert result == project_dir
+        assert result == str(ai_guardian_dir)
 
     def test_key_from_global_config(self, tmp_path):
         config_dir = tmp_path / "global"
@@ -1411,13 +1407,15 @@ class TestSdkProfileKeyBaseDir:
         assert result is None
 
     def test_named_profile_takes_priority(self, tmp_path):
-        project_dir = str(tmp_path / "proj")
-        os.makedirs(project_dir)
-        config_dir = tmp_path / "proj" / ".ai-guardian"
-        config_dir.mkdir()
-        config_file = config_dir / "ai-guardian.json"
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        ai_guardian_dir = project_dir / ".ai-guardian"
+        ai_guardian_dir.mkdir()
+        config_file = ai_guardian_dir / "ai-guardian.json"
         config_file.write_text(
-            json.dumps({"sdk": {"agents": {"my-agent": {"trace_dir": "named-traces"}}}})
+            json.dumps(
+                {"sdk": {"agents": {"my-agent": {"trace_dir": "named-traces"}}}}
+            )
         )
         global_dir = tmp_path / "global"
         global_dir.mkdir()
@@ -1428,24 +1426,20 @@ class TestSdkProfileKeyBaseDir:
                 return_value=config_file,
             ),
             patch(
-                "ai_guardian.config.loaders.get_project_dir",
-                return_value=project_dir,
-            ),
-            patch(
                 "ai_guardian.config.loaders.get_config_dir",
                 return_value=global_dir,
             ),
         ):
             result = _sdk_profile_key_base_dir("agents", "my-agent", "trace_dir")
 
-        assert result == project_dir
+        assert result == str(ai_guardian_dir)
 
     def test_overlay_wins_over_project(self, tmp_path):
-        project_dir = str(tmp_path / "proj")
-        os.makedirs(project_dir)
-        config_dir = tmp_path / "proj" / ".ai-guardian"
-        config_dir.mkdir()
-        config_file = config_dir / "ai-guardian.json"
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        ai_guardian_dir = project_dir / ".ai-guardian"
+        ai_guardian_dir.mkdir()
+        config_file = ai_guardian_dir / "ai-guardian.json"
         config_file.write_text(
             json.dumps({"sdk": {"agents": {"*": {"trace_dir": "proj-traces"}}}})
         )
@@ -1457,10 +1451,6 @@ class TestSdkProfileKeyBaseDir:
             patch(
                 "ai_guardian.config.loaders.get_project_config_path",
                 return_value=config_file,
-            ),
-            patch(
-                "ai_guardian.config.loaders.get_project_dir",
-                return_value=project_dir,
             ),
             patch(
                 "ai_guardian.config.loaders.get_config_dir",
