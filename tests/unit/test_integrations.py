@@ -3132,8 +3132,19 @@ class TestGuardedAgent:
         agent, client = self._make_agent(between_turns=hook)
         client.messages.create.return_value = r1
 
-        with pytest.raises(SecurityViolation):
-            agent.run("Generate code")
+        result = agent.run("Generate code")
+        assert result["stop_reason"] == "end_turn"
+        assert not any(
+            m.get("content") == "AKIA secret here" for m in result["messages"]
+        )
+        violations = [
+            step
+            for turn in result["trace"]
+            for step in turn.get("steps", [])
+            if step.get("violations")
+        ]
+        assert len(violations) == 1
+        assert violations[0]["violations"][0]["type"] == "secret"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_between_turns_false_stops_tool_use(self, mock_monitor):

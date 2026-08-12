@@ -880,14 +880,39 @@ class GuardedAgent:
                         stop_reason = "hook_early_stop"
                         break
                     if isinstance(hook_result, str):
+                        _injection_blocked = False
                         if self._scanning:
-                            session.check_content(
-                                hook_result,
-                                filename="between_turns_injection",
+                            try:
+                                session.check_content(
+                                    hook_result,
+                                    filename="between_turns_injection",
+                                )
+                            except SecurityViolation as exc:
+                                _emit(
+                                    turn_num,
+                                    TurnEvent(
+                                        type="scan",
+                                        scanned="between_turns_injection",
+                                        violations=[
+                                            {
+                                                "type": exc.result.violation_type,
+                                                "message": exc.result.message,
+                                            }
+                                        ],
+                                    ),
+                                )
+                                logger.warning(
+                                    "between_turns injection blocked by "
+                                    "security scan: %s",
+                                    exc.result.message,
+                                )
+                                _injection_blocked = True
+                        if not _injection_blocked:
+                            strategy.append_assistant_message(
+                                messages, parsed.raw_content
                             )
-                        strategy.append_assistant_message(messages, parsed.raw_content)
-                        messages.append({"role": "user", "content": hook_result})
-                        continue
+                            messages.append({"role": "user", "content": hook_result})
+                            continue
 
                 final_text = parsed.text
                 stop_reason = "end_turn"
@@ -933,19 +958,41 @@ class GuardedAgent:
                         bash_cmd = (
                             tc.input.get("command") if tc.name == "Bash" else None
                         )
-                        scan_result = session.check_content(
-                            result_text,
-                            filename=f"tool_result:{tc.name}",
-                            source_command=bash_cmd,
-                        )
-                        _emit(
-                            turn_num,
-                            TurnEvent(
-                                type="scan",
-                                scanned=f"tool_result:{tc.name}",
-                            ),
-                        )
-                        if scan_result.detected:
+                        try:
+                            scan_result = session.check_content(
+                                result_text,
+                                filename=f"tool_result:{tc.name}",
+                                source_command=bash_cmd,
+                            )
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="scan",
+                                    scanned=f"tool_result:{tc.name}",
+                                ),
+                            )
+                            if scan_result.detected:
+                                sanitized = _try_sanitize_text(session, result_text)
+                                if sanitized:
+                                    result_text = sanitized
+                        except SecurityViolation as exc:
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="scan",
+                                    scanned=f"tool_result:{tc.name}",
+                                    violations=[
+                                        {
+                                            "type": exc.result.violation_type,
+                                            "message": exc.result.message,
+                                        }
+                                    ],
+                                ),
+                            )
+                            logger.warning(
+                                "tool_result scan violation: %s",
+                                exc.result.message,
+                            )
                             sanitized = _try_sanitize_text(session, result_text)
                             if sanitized:
                                 result_text = sanitized
@@ -969,14 +1016,39 @@ class GuardedAgent:
                         stop_reason = "hook_early_stop"
                         break
                     if isinstance(hook_result, str):
+                        _injection_blocked = False
                         if self._scanning:
-                            session.check_content(
-                                hook_result,
-                                filename="between_turns_injection",
+                            try:
+                                session.check_content(
+                                    hook_result,
+                                    filename="between_turns_injection",
+                                )
+                            except SecurityViolation as exc:
+                                _emit(
+                                    turn_num,
+                                    TurnEvent(
+                                        type="scan",
+                                        scanned="between_turns_injection",
+                                        violations=[
+                                            {
+                                                "type": exc.result.violation_type,
+                                                "message": exc.result.message,
+                                            }
+                                        ],
+                                    ),
+                                )
+                                logger.warning(
+                                    "between_turns injection blocked by "
+                                    "security scan: %s",
+                                    exc.result.message,
+                                )
+                                _injection_blocked = True
+                        if not _injection_blocked:
+                            strategy.inject_user_text_after_results(
+                                messages, hook_result
                             )
-                        strategy.inject_user_text_after_results(messages, hook_result)
-                        structured_output = None
-                        continue
+                            structured_output = None
+                            continue
 
                 if structured_output is not None:
                     stop_reason = "end_turn"
