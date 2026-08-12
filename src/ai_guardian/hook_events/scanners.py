@@ -93,13 +93,15 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 
-def apply_language_overlays(config: dict, scanner_name: str) -> dict:
+def apply_language_overlays(config: dict, scanner_name: str, cwd=None) -> dict:
     """Merge auto-detected language false positive patterns into scanner config.
 
     Returns a shallow copy of *config* with ``allowlist_patterns`` extended,
     or the original dict unchanged if no patterns apply.
+
+    *cwd* overrides ``get_project_dir()`` when provided (used by SDK).
     """
-    project_dir = get_project_dir()
+    project_dir = cwd or get_project_dir()
     auto_patterns = (
         get_language_allowlist_patterns(project_dir, scanner_name)
         if project_dir

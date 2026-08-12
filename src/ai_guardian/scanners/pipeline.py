@@ -6,10 +6,11 @@ per-scanner action modes.  See issue #1927.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.hook_events.scanners import (
+    apply_language_overlays,
     run_context_poisoning_scan,
     run_prompt_injection_scan,
     run_secret_scan,
@@ -53,7 +54,8 @@ def scan_content(
         pi_cfg = _resolve_scanner_config(
             config, "prompt_injection", _loaders._load_prompt_injection_config
         )
-        pi_cfg = _apply_language_overlay(pi_cfg, "prompt_injection", cwd)
+        if pi_cfg:
+            pi_cfg = apply_language_overlays(pi_cfg, "prompt_injection", cwd=cwd)
         result = run_prompt_injection_scan(
             text,
             config=pi_cfg,
@@ -61,10 +63,10 @@ def scan_content(
             tool_name=tool_name,
             source_type=source_type,
         )
-        if result is not None:
+        if result is not None and result.detected:
             results.append(result)
     except Exception:
-        logger.debug("Prompt injection scan error (fail-open)", exc_info=True)
+        logger.warning("Prompt injection scan error (fail-open)", exc_info=True)
 
     # --- Context poisoning ---
     try:
@@ -77,10 +79,10 @@ def scan_content(
             file_path=file_path,
             tool_name=tool_name,
         )
-        if result is not None:
+        if result is not None and result.detected:
             results.append(result)
     except Exception:
-        logger.debug("Context poisoning scan error (fail-open)", exc_info=True)
+        logger.warning("Context poisoning scan error (fail-open)", exc_info=True)
 
     # --- Secret scanning ---
     try:
@@ -95,7 +97,7 @@ def scan_content(
                 )
 
                 ctx = {"source_command": _sanitize_source_command(source_command)}
-            except Exception:
+            except Exception:  # intentionally silent — import guard + sanitize fallback
                 pass
         result = run_secret_scan(
             text,
@@ -105,15 +107,19 @@ def scan_content(
             file_path=file_path,
             tool_name=tool_name,
         )
-        if result is not None:
+        if result is not None and result.detected:
             results.append(result)
     except Exception:
-        logger.debug("Secret scan error (fail-open)", exc_info=True)
+        logger.warning("Secret scan error (fail-open)", exc_info=True)
 
     return results
 
 
-def _resolve_scanner_config(full_config, section_key, loader_fn):
+def _resolve_scanner_config(
+    full_config: Optional[Dict[str, Any]],
+    section_key: str,
+    loader_fn: Callable[[], Tuple[Optional[Dict[str, Any]], Any]],
+) -> Optional[Dict[str, Any]]:
     """Extract scanner config from *full_config*, falling back to file.
 
     Returns ``None`` when the section is absent or empty so that
@@ -126,23 +132,3 @@ def _resolve_scanner_config(full_config, section_key, loader_fn):
         return section or None
     config, _ = loader_fn()
     return config or None
-
-
-def _apply_language_overlay(config, scanner_name, cwd=None):
-    """Merge auto-detected language allowlist patterns into scanner config."""
-    if not config:
-        return config
-    try:
-        from ai_guardian.config.utils import get_project_dir
-        from ai_guardian.project_init import get_language_allowlist_patterns
-
-        project_dir = cwd or get_project_dir()
-        if not project_dir:
-            return config
-        auto_patterns = get_language_allowlist_patterns(project_dir, scanner_name)
-        if auto_patterns:
-            existing = config.get("allowlist_patterns", [])
-            return {**config, "allowlist_patterns": existing + auto_patterns}
-    except Exception:
-        logger.debug("Language detection unavailable", exc_info=True)
-    return config

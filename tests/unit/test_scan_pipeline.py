@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from ai_guardian.hook_events.scanners import apply_language_overlays
 from ai_guardian.scanners.pipeline import (
-    _apply_language_overlay,
     _resolve_scanner_config,
     scan_content,
 )
@@ -56,33 +56,32 @@ class TestResolveScannerConfig:
 # ---------------------------------------------------------------------------
 
 
-class TestApplyLanguageOverlay:
-    def test_none_config_unchanged(self):
-        assert _apply_language_overlay(None, "prompt_injection") is None
-
+class TestApplyLanguageOverlays:
     def test_no_project_dir_unchanged(self):
         cfg = {"enabled": True}
-        with patch("ai_guardian.config.utils.get_project_dir", return_value=None):
-            result = _apply_language_overlay(cfg, "prompt_injection")
+        with patch(
+            "ai_guardian.hook_events.scanners.get_project_dir", return_value=None
+        ):
+            result = apply_language_overlays(cfg, "prompt_injection")
         assert result is cfg
 
     def test_cwd_used_over_project_dir(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
         cfg = {"enabled": True}
-        result = _apply_language_overlay(cfg, "prompt_injection", cwd=str(tmp_path))
+        result = apply_language_overlays(cfg, "prompt_injection", cwd=str(tmp_path))
         assert "__init__" in result.get("allowlist_patterns", [])
 
     def test_preserves_existing_patterns(self, tmp_path):
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
         cfg = {"enabled": True, "allowlist_patterns": ["custom"]}
-        result = _apply_language_overlay(cfg, "prompt_injection", cwd=str(tmp_path))
+        result = apply_language_overlays(cfg, "prompt_injection", cwd=str(tmp_path))
         assert "custom" in result["allowlist_patterns"]
         assert "__init__" in result["allowlist_patterns"]
 
     def test_non_python_project_no_overlay(self, tmp_path):
         (tmp_path / "go.mod").write_text("module example.com/test\n")
         cfg = {"enabled": True}
-        result = _apply_language_overlay(cfg, "prompt_injection", cwd=str(tmp_path))
+        result = apply_language_overlays(cfg, "prompt_injection", cwd=str(tmp_path))
         assert "__init__" not in result.get("allowlist_patterns", [])
 
 
@@ -111,6 +110,30 @@ class TestScanContent:
         mock_pi.assert_called_once()
         mock_cp.assert_called_once()
         mock_secret.assert_called_once()
+
+    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.scanners.pipeline.run_context_poisoning_scan")
+    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    def test_non_detection_results_filtered(self, mock_pi, mock_cp, mock_secret):
+        """ScanResults with detected=False should not appear in output."""
+        mock_pi.return_value = ScanResult.from_prompt_injection(
+            should_block=False,
+            error_message=None,
+            detected=False,
+        )
+        mock_cp.return_value = ScanResult.from_context_poisoning(
+            should_block=False,
+            error_message=None,
+            detected=False,
+        )
+        mock_secret.return_value = ScanResult.from_secret_scan(
+            has_secrets=False,
+            error_message=None,
+        )
+        results = scan_content(
+            "clean text", config={"prompt_injection": {"enabled": True}}
+        )
+        assert results == []
 
     @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
     @patch(
@@ -178,7 +201,7 @@ class TestScanContent:
     )
     @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
     @patch(
-        "ai_guardian.scanners.pipeline._apply_language_overlay",
+        "ai_guardian.scanners.pipeline.apply_language_overlays",
         side_effect=lambda c, *a, **kw: c,
     )
     def test_passes_config_section_to_scanner(
