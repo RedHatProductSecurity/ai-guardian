@@ -798,7 +798,7 @@ result["trace"] = [
     {"turn": 1, "steps": [
         {"step": 0, "type": "input", "messages_count": 1, "compacted": False},
         {"step": 1, "type": "response", "text": "I'll start by reading...", "model_signal": "tool_use",
-         "usage": {"total_input_tokens": 500, "cached_tokens": 0, "new_input_tokens": 500, "output_tokens": 120}},
+         "usage": {"input_tokens": 500, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 120}},
         {"step": 2, "type": "scan", "scanned": "agent_response", "violations": []},
         {"step": 3, "type": "tool_call", "name": "bash", "input": {"command": "grep -rn 'TODO' src/"}},
         {"step": 4, "type": "tool_result", "name": "bash", "output": "src/main.py:42: # TODO fix auth"},
@@ -807,7 +807,7 @@ result["trace"] = [
     {"turn": 2, "steps": [
         {"step": 0, "type": "input", "messages_count": 4, "compacted": False},
         {"step": 1, "type": "response", "text": "Found one issue...", "model_signal": "end_turn",
-         "usage": {"total_input_tokens": 800, "cached_tokens": 500, "new_input_tokens": 300, "output_tokens": 200}},
+         "usage": {"input_tokens": 800, "cache_read_input_tokens": 500, "cache_creation_input_tokens": 0, "output_tokens": 200}},
         {"step": 2, "type": "scan", "scanned": "agent_response", "violations": []},
     ]},
 ]
@@ -817,7 +817,7 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 
 - **`turn`** — on the parent object. `0` = setup, `1`+ = loop iterations (aligns with `max_turns`).
 - **`step`** — 0-based index within a turn's `steps` array.
-- **`new_input_tokens`** on `response` = billable input tokens (`total_input_tokens - cached_tokens`).
+- **`input_tokens`** on `response` = non-cached input tokens (Anthropic's field, not derived). Total context = `input_tokens + cache_read_input_tokens + cache_creation_input_tokens`.
 - **`compacted: true`** on `input` means context was compressed before this API call.
 
 #### Event Types
@@ -828,7 +828,7 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | 0 | `scan` | `scanned` (`"system_prompt"` or `"user_prompt"`) |
 | N | `input` | `messages_count`, `compacted` |
 | N | `compaction` | `tokens_before`, `tokens_after`, `method` (only when compaction fired) |
-| N | `response` | `text`, `model_signal`, `usage` (`total_input_tokens`, `cached_tokens`, `new_input_tokens`, `output_tokens`) |
+| N | `response` | `text`, `model_signal`, `usage` (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`) |
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
