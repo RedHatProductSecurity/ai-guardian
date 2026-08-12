@@ -27,7 +27,7 @@ class TurnEvent:
 
     * ``"system"`` — ``preamble``, ``system_prompt``, ``user_prompt``
     * ``"input"`` — ``messages_count``, ``compacted``
-    * ``"response"`` — ``text``, ``stop_reason``, ``usage``
+    * ``"response"`` — ``text``, ``model_signal``, ``usage``
     * ``"tool_call"`` — ``name``, ``input``
     * ``"tool_result"`` — ``name``, ``output``
     * ``"scan"`` — ``scanned``, ``violations``
@@ -43,8 +43,8 @@ class TurnEvent:
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
     usage: Optional[dict] = None
-    stop_reason: Optional[str] = None
-    violations: Optional[list] = field(default_factory=list)
+    model_signal: Optional[str] = None
+    violations: Optional[list] = None
     scanned: Optional[str] = None
     tokens_before: Optional[int] = None
     tokens_after: Optional[int] = None
@@ -99,8 +99,7 @@ class TurnEvent:
             "system_prompt",
             "user_prompt",
             "usage",
-            "stop_reason",
-            "violations",
+            "model_signal",
             "scanned",
             "tokens_before",
             "tokens_after",
@@ -111,6 +110,8 @@ class TurnEvent:
             val = getattr(self, attr)
             if val is not None:
                 d[attr] = val
+        if self.type == "scan":
+            d["violations"] = self.violations or []
         return d
 
 
