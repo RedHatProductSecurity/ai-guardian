@@ -4993,9 +4993,9 @@ class TestGuardedAgentTrace:
         assert len(resp_events) == 1
         assert resp_events[0]["text"] == "Hello!"
         assert resp_events[0]["stop_reason"] == "end_turn"
-        assert resp_events[0]["usage"]["total_input_tokens"] == 100
-        assert resp_events[0]["usage"]["cached_tokens"] == 0
-        assert resp_events[0]["usage"]["new_input_tokens"] == 100
+        assert resp_events[0]["usage"]["input_tokens"] == 100
+        assert resp_events[0]["usage"]["cache_read_input_tokens"] == 0
+        assert resp_events[0]["usage"]["cache_creation_input_tokens"] == 0
         assert resp_events[0]["usage"]["output_tokens"] == 50
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")

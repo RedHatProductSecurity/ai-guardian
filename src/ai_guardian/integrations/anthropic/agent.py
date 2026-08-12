@@ -730,14 +730,7 @@ class GuardedAgent:
             for _f, _v in turn_usage.items():
                 usage_totals[_f] += _v
             last_input_tokens = parsed.input_tokens
-            total_input = turn_usage.get("input_tokens", 0)
-            cached = turn_usage.get("cache_read_input_tokens", 0)
-            trace_usage = {
-                "total_input_tokens": total_input,
-                "cached_tokens": cached,
-                "new_input_tokens": total_input - cached,
-                "output_tokens": turn_usage.get("output_tokens", 0),
-            }
+            trace_usage = {f: turn_usage.get(f, 0) for f in _USAGE_TOKEN_FIELDS}
             _emit(
                 turn_num,
                 TurnEvent(
