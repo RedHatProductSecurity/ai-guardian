@@ -11,9 +11,14 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.hook_events.scanners import (
     apply_language_overlays,
+    run_bash_exfil_scan,
+    run_config_file_scan,
     run_context_poisoning_scan,
+    run_directory_check,
+    run_exfil_detection_scan,
     run_prompt_injection_scan,
     run_secret_scan,
+    run_supply_chain_scan,
 )
 from ai_guardian.scanners.scan_result import ScanResult
 
@@ -111,6 +116,120 @@ def scan_content(
             results.append(result)
     except Exception:
         logger.warning("Secret scan error (fail-open)", exc_info=True)
+
+    return results
+
+
+def scan_file(
+    file_path: str,
+    *,
+    content: Optional[str] = None,
+    config: Optional[Dict[str, Any]] = None,
+    cwd: Optional[str] = None,
+) -> List[ScanResult]:
+    """Run all enabled file scanners on *file_path* (and optionally *content*).
+
+    Scanners executed:
+      1. Directory rules check (always)
+      2. Config file threat scan (when *content* is provided)
+      3. Supply chain scan (when *content* is provided)
+      4. Content scanning via ``scan_content()`` (when *content* is provided)
+
+    Config resolution follows the same ``_resolve_scanner_config`` pattern
+    as ``scan_content``.  Returns only ``ScanResult`` objects where a
+    detection occurred.
+    """
+    if not file_path:
+        return []
+
+    results: List[ScanResult] = []
+
+    # --- Directory rules ---
+    try:
+        result = run_directory_check(file_path, config=config)
+        if result is not None and result.detected:
+            results.append(result)
+    except Exception:
+        logger.warning("Directory check error (fail-open)", exc_info=True)
+
+    if content is not None:
+        # --- Config file threats ---
+        try:
+            cfg_scanner_cfg = _resolve_scanner_config(
+                config, "config_scanner", _loaders._load_config_scanner_config
+            )
+            result = run_config_file_scan(file_path, content, config=cfg_scanner_cfg)
+            if result is not None and result.detected:
+                results.append(result)
+        except Exception:
+            logger.warning("Config file scan error (fail-open)", exc_info=True)
+
+        # --- Supply chain threats ---
+        try:
+            sc_cfg = _resolve_scanner_config(
+                config, "supply_chain", _loaders._load_supply_chain_config
+            )
+            result = run_supply_chain_scan(content, file_path, config=sc_cfg)
+            if result is not None and result.detected:
+                results.append(result)
+        except Exception:
+            logger.warning("Supply chain scan error (fail-open)", exc_info=True)
+
+        # --- Content scanning (PI, CP, secrets) ---
+        try:
+            content_results = scan_content(
+                content,
+                config=config,
+                cwd=cwd,
+                filename=file_path,
+                source_type="file_content",
+            )
+            results.extend(content_results)
+        except Exception:
+            logger.warning("Content scan error (fail-open)", exc_info=True)
+
+    return results
+
+
+def scan_command(
+    command: str,
+    *,
+    config: Optional[Dict[str, Any]] = None,
+) -> List[ScanResult]:
+    """Run all enabled command scanners on *command*.
+
+    Scanners executed:
+      1. Bash command exfiltration check (config file exfil patterns)
+      2. Exfiltration behaviour detection (credential theft, etc.)
+
+    Returns only ``ScanResult`` objects where a detection occurred.
+    """
+    if not command:
+        return []
+
+    results: List[ScanResult] = []
+
+    # --- Bash command exfil (config scanner) ---
+    try:
+        cfg_scanner_cfg = _resolve_scanner_config(
+            config, "config_scanner", _loaders._load_config_scanner_config
+        )
+        result = run_bash_exfil_scan(command, config=cfg_scanner_cfg)
+        if result is not None and result.detected:
+            results.append(result)
+    except Exception:
+        logger.warning("Bash exfil scan error (fail-open)", exc_info=True)
+
+    # --- Exfiltration behaviour detection ---
+    try:
+        exfil_cfg = _resolve_scanner_config(
+            config, "exfil_detection", _loaders._load_exfil_detection_config
+        )
+        result = run_exfil_detection_scan(command, config=exfil_cfg)
+        if result is not None and result.detected:
+            results.append(result)
+    except Exception:
+        logger.warning("Exfil detection scan error (fail-open)", exc_info=True)
 
     return results
 
