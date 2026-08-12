@@ -736,7 +736,7 @@ class GuardedAgent:
                 TurnEvent(
                     type="response",
                     text=parsed.text,
-                    stop_reason=parsed.stop_reason,
+                    model_signal=parsed.stop_reason,
                     usage=trace_usage,
                 ),
             )

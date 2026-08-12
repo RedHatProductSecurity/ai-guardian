@@ -4750,7 +4750,7 @@ class TestTurnEvent:
     def test_response_event_str(self):
         from ai_guardian.integrations.base import TurnEvent
 
-        ev = TurnEvent(type="response", text="Hello world", stop_reason="end_turn")
+        ev = TurnEvent(type="response", text="Hello world", model_signal="end_turn")
         s = str(ev)
         assert "[response]" in s
         assert "Hello world" in s
@@ -4806,21 +4806,37 @@ class TestTurnEvent:
     def test_to_dict_omits_none(self):
         from ai_guardian.integrations.base import TurnEvent
 
-        ev = TurnEvent(type="response", text="hello", stop_reason="end_turn")
+        ev = TurnEvent(type="response", text="hello", model_signal="end_turn")
         d = ev.to_dict()
         assert d["type"] == "response"
         assert d["text"] == "hello"
-        assert d["stop_reason"] == "end_turn"
+        assert d["model_signal"] == "end_turn"
         assert "name" not in d
         assert "input" not in d
         assert "preamble" not in d
 
-    def test_to_dict_includes_empty_violations(self):
+    def test_to_dict_includes_violations_only_on_scan(self):
         from ai_guardian.integrations.base import TurnEvent
 
-        ev = TurnEvent(type="scan", scanned="user_prompt", violations=[])
-        d = ev.to_dict()
+        scan_ev = TurnEvent(type="scan", scanned="user_prompt")
+        d = scan_ev.to_dict()
         assert d["violations"] == []
+
+        scan_with = TurnEvent(
+            type="scan",
+            scanned="agent_response",
+            violations=[{"type": "secret", "message": "key"}],
+        )
+        d2 = scan_with.to_dict()
+        assert d2["violations"] == [{"type": "secret", "message": "key"}]
+
+        response_ev = TurnEvent(type="response", text="hi")
+        d3 = response_ev.to_dict()
+        assert "violations" not in d3
+
+        input_ev = TurnEvent(type="input", messages_count=3)
+        d4 = input_ev.to_dict()
+        assert "violations" not in d4
 
     def test_print_works_as_on_turn(self):
         from ai_guardian.integrations.base import TurnEvent
@@ -4992,7 +5008,7 @@ class TestGuardedAgentTrace:
         resp_events = [s for s in steps if s["type"] == "response"]
         assert len(resp_events) == 1
         assert resp_events[0]["text"] == "Hello!"
-        assert resp_events[0]["stop_reason"] == "end_turn"
+        assert resp_events[0]["model_signal"] == "end_turn"
         assert resp_events[0]["usage"]["input_tokens"] == 100
         assert resp_events[0]["usage"]["cache_read_input_tokens"] == 0
         assert resp_events[0]["usage"]["cache_creation_input_tokens"] == 0

@@ -792,23 +792,23 @@ result = agent.run("review this code")
 result["trace"] = [
     {"turn": 0, "steps": [
         {"step": 0, "type": "system", "system_prompt": "You are...", "user_prompt": "review this code"},
-        {"step": 1, "type": "scan", "scanned": "system_prompt"},
-        {"step": 2, "type": "scan", "scanned": "user_prompt"},
+        {"step": 1, "type": "scan", "scanned": "system_prompt", "violations": []},
+        {"step": 2, "type": "scan", "scanned": "user_prompt", "violations": []},
     ]},
     {"turn": 1, "steps": [
         {"step": 0, "type": "input", "messages_count": 1, "compacted": False},
-        {"step": 1, "type": "response", "text": "I'll start by reading...", "stop_reason": "tool_use",
+        {"step": 1, "type": "response", "text": "I'll start by reading...", "model_signal": "tool_use",
          "usage": {"input_tokens": 500, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0, "output_tokens": 120}},
-        {"step": 2, "type": "scan", "scanned": "agent_response"},
+        {"step": 2, "type": "scan", "scanned": "agent_response", "violations": []},
         {"step": 3, "type": "tool_call", "name": "bash", "input": {"command": "grep -rn 'TODO' src/"}},
         {"step": 4, "type": "tool_result", "name": "bash", "output": "src/main.py:42: # TODO fix auth"},
-        {"step": 5, "type": "scan", "scanned": "tool_result:bash"},
+        {"step": 5, "type": "scan", "scanned": "tool_result:bash", "violations": []},
     ]},
     {"turn": 2, "steps": [
         {"step": 0, "type": "input", "messages_count": 4, "compacted": False},
-        {"step": 1, "type": "response", "text": "Found one issue...", "stop_reason": "end_turn",
+        {"step": 1, "type": "response", "text": "Found one issue...", "model_signal": "end_turn",
          "usage": {"input_tokens": 800, "cache_read_input_tokens": 500, "cache_creation_input_tokens": 0, "output_tokens": 200}},
-        {"step": 2, "type": "scan", "scanned": "agent_response"},
+        {"step": 2, "type": "scan", "scanned": "agent_response", "violations": []},
     ]},
 ]
 ```
@@ -828,7 +828,7 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | 0 | `scan` | `scanned` (`"system_prompt"` or `"user_prompt"`) |
 | N | `input` | `messages_count`, `compacted` |
 | N | `compaction` | `tokens_before`, `tokens_after`, `method` (only when compaction fired) |
-| N | `response` | `text`, `stop_reason`, `usage` (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`) |
+| N | `response` | `text`, `model_signal`, `usage` (`input_tokens`, `cache_read_input_tokens`, `cache_creation_input_tokens`, `output_tokens`) |
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
@@ -847,8 +847,8 @@ class TurnEvent:
     system_prompt: Optional[str] = None
     user_prompt: Optional[str] = None
     usage: Optional[dict] = None
-    stop_reason: Optional[str] = None
-    violations: Optional[list] = field(default_factory=list)
+    model_signal: Optional[str] = None
+    violations: Optional[list] = None
     scanned: Optional[str] = None
     tokens_before: Optional[int] = None  # compaction only
     tokens_after: Optional[int] = None   # compaction only
