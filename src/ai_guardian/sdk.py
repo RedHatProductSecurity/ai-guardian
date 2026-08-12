@@ -263,22 +263,6 @@ class _DirectSession(GuardSession):
                     clear_project_dir_override()
                     _clear_project_config_cache()
 
-    def _apply_language_overlays(self, scanner_cfg: Dict[str, Any]) -> Dict[str, Any]:
-        """Merge auto-detected language false positive patterns into scanner config."""
-        cwd = self._cwd
-        if not cwd:
-            return scanner_cfg
-        try:
-            from ai_guardian.project_init import get_language_allowlist_patterns
-
-            auto_patterns = get_language_allowlist_patterns(cwd, "prompt_injection")
-            if auto_patterns:
-                existing = scanner_cfg.get("allowlist_patterns", [])
-                return {**scanner_cfg, "allowlist_patterns": existing + auto_patterns}
-        except Exception:
-            logger.debug("Language detection unavailable", exc_info=True)
-        return scanner_cfg
-
     def check_content(
         self,
         text: str,
@@ -286,83 +270,26 @@ class _DirectSession(GuardSession):
         filename: str = "input",
         source_command: Optional[str] = None,
     ) -> CheckResult:
-        results = []
+        from ai_guardian.scanners.pipeline import scan_content
 
-        ctx = None
-        if source_command and filename.startswith("tool_result:"):
-            from ai_guardian.hook_events.post_tool_use import _sanitize_source_command
+        scan_results = scan_content(
+            text,
+            config=self._config,
+            cwd=self._cwd,
+            filename=filename,
+            source_type="file_content",
+            source_command=source_command,
+        )
 
-            ctx = {"source_command": _sanitize_source_command(source_command)}
-
-        secret_cfg = self._config.get("secret_scanning", {})
-        if secret_cfg.get("enabled", True):
-            try:
-                from ai_guardian.scanners.secret_scanning import (
-                    check_secrets,
-                )
-
-                has_secrets, msg = check_secrets(
-                    text,
-                    filename=filename,
-                    secret_config=secret_cfg,
-                    context=ctx,
-                )
-                if has_secrets:
-                    results.append(
-                        CheckResult(
-                            blocked=True,
-                            detected=True,
-                            violation_type="secret_detected",
-                            message=msg,
-                        )
-                    )
-            except Exception as e:
-                logger.debug("Secret scanning unavailable: %s", e)
-
-        pi_cfg = self._config.get("prompt_injection", {})
-        if pi_cfg.get("enabled", True):
-            try:
-                from ai_guardian.scanners.prompt_injection import check_prompt_injection
-
-                pi_cfg_overlaid = self._apply_language_overlays(pi_cfg)
-                should_block, msg, detected = check_prompt_injection(
-                    text,
-                    pi_cfg_overlaid,
-                )
-                if detected:
-                    results.append(
-                        CheckResult(
-                            blocked=should_block,
-                            detected=True,
-                            violation_type="prompt_injection",
-                            message=msg,
-                        )
-                    )
-            except Exception as e:
-                logger.debug("Prompt injection check unavailable: %s", e)
-
-        cp_cfg = self._config.get("context_poisoning", {})
-        if cp_cfg.get("enabled", True):
-            try:
-                from ai_guardian.scanners.context_poisoning import (
-                    check_context_poisoning,
-                )
-
-                should_block, msg, detected = check_context_poisoning(
-                    text,
-                    self._config,
-                )
-                if detected:
-                    results.append(
-                        CheckResult(
-                            blocked=should_block,
-                            detected=True,
-                            violation_type="context_poisoning",
-                            message=msg,
-                        )
-                    )
-            except Exception as e:
-                logger.debug("Context poisoning check unavailable: %s", e)
+        results = [
+            CheckResult(
+                blocked=r.should_block,
+                detected=r.detected,
+                violation_type=r.violation_type,
+                message=r.error_message,
+            )
+            for r in scan_results
+        ]
 
         merged = self._merge_results(results)
         return self._handle_result(merged)
