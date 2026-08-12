@@ -4465,7 +4465,9 @@ class TestAnthropicLoopStrategy:
             {"role": "assistant", "content": [{"type": "text", "text": "hello"}]},
             {
                 "role": "user",
-                "content": [{"type": "tool_result", "tool_use_id": "1", "content": "ok"}],
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "1", "content": "ok"}
+                ],
             },
         ]
         strategy.build_create_kwargs(
@@ -4546,12 +4548,26 @@ class TestAnthropicLoopStrategy:
             {
                 "role": "assistant",
                 "content": [
-                    {"type": "text", "text": "old", "cache_control": {"type": "ephemeral"}}
+                    {
+                        "type": "text",
+                        "text": "old",
+                        "cache_control": {"type": "ephemeral"},
+                    }
                 ],
             },
-            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "1", "content": "r1"}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "1", "content": "r1"}
+                ],
+            },
             {"role": "assistant", "content": [{"type": "text", "text": "new"}]},
-            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "2", "content": "r2"}]},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "2", "content": "r2"}
+                ],
+            },
         ]
         strategy.build_create_kwargs(
             model="claude-sonnet-5",
