@@ -30,6 +30,7 @@ class TurnEvent:
     * ``"tool_call"`` — ``name``, ``input``
     * ``"tool_result"`` — ``name``, ``output``
     * ``"scan"`` — ``scanned``, ``violations``
+    * ``"compaction"`` — ``tokens_before``, ``tokens_after``, ``method``
     """
 
     type: str
@@ -44,6 +45,9 @@ class TurnEvent:
     stop_reason: Optional[str] = None
     violations: Optional[list] = field(default_factory=list)
     scanned: Optional[str] = None
+    tokens_before: Optional[int] = None
+    tokens_after: Optional[int] = None
+    method: Optional[str] = None
 
     def __str__(self) -> str:
         if self.type == "system":
@@ -70,6 +74,11 @@ class TurnEvent:
             if v:
                 return f"[scan] {self.scanned}: {len(v)} violation(s)"
             return f"[scan] {self.scanned}: clean"
+        if self.type == "compaction":
+            return (
+                f"[compaction] {self.tokens_before} -> {self.tokens_after}"
+                f" ({self.method})"
+            )
         return f"[{self.type}]"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -87,6 +96,9 @@ class TurnEvent:
             "stop_reason",
             "violations",
             "scanned",
+            "tokens_before",
+            "tokens_after",
+            "method",
         ):
             val = getattr(self, attr)
             if val is not None:

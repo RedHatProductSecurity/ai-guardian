@@ -520,7 +520,7 @@ class GuardedAgent:
             or context_limit <= 0
             or last_input_tokens / context_limit < self._compact_threshold
         ):
-            return messages, False
+            return messages, False, None
 
         if self._compact_threshold >= 1.0:
             raise RuntimeError(
@@ -545,8 +545,8 @@ class GuardedAgent:
                 result.tokens_after,
                 result.method,
             )
-            return result.messages, True
-        return messages, False
+            return result.messages, True, result
+        return messages, False, None
 
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
         strategy = self._strategy
@@ -629,11 +629,20 @@ class GuardedAgent:
             turn_num = _turn + 1
 
             if _turn > 0:
-                messages, did_compact = self._maybe_compact(
+                messages, did_compact, compact_result = self._maybe_compact(
                     strategy, messages, last_input_tokens
                 )
                 if did_compact:
                     compaction_count += 1
+                    _emit(
+                        turn_num,
+                        TurnEvent(
+                            type="compaction",
+                            tokens_before=compact_result.tokens_before,
+                            tokens_after=compact_result.tokens_after,
+                            method=compact_result.method,
+                        ),
+                    )
 
             create_kwargs = strategy.build_create_kwargs(
                 model=self._model,
