@@ -3635,7 +3635,7 @@ class TestGuardedAgentCompaction:
         assert result["compaction_count"] >= 1
 
         compaction_entries = [
-            e for e in result["trace"] if e.get("type") == "compaction"
+            s for s in _all_steps(result["trace"]) if s.get("type") == "compaction"
         ]
         assert len(compaction_entries) >= 1
         entry = compaction_entries[0]
@@ -3644,9 +3644,7 @@ class TestGuardedAgentCompaction:
         assert "method" in entry
         assert entry["tokens_before"] > entry["tokens_after"]
         assert isinstance(entry["method"], str)
-        assert "turn" in entry
-        assert "api_call" in entry
-        assert "seq" in entry
+        assert "step" in entry
 
 
 # ============================================================================
@@ -4685,6 +4683,11 @@ class TestTurnEvent:
 # ============================================================================
 
 
+def _all_steps(trace):
+    """Flatten nested trace turns into a list of step dicts."""
+    return [step for turn_obj in trace for step in turn_obj.get("steps", [])]
+
+
 class TestGuardedAgentTrace:
     """Trace collection and on_turn callback tests."""
 
@@ -4742,12 +4745,11 @@ class TestGuardedAgentTrace:
         trace = result["trace"]
 
         assert trace[0]["turn"] == 0
-        assert trace[0]["api_call"] == 0
-        assert trace[0]["seq"] == 0
-        assert trace[0]["type"] == "system"
-        assert trace[0]["system_prompt"] == "You are helpful."
-        assert trace[0]["user_prompt"] == "Hello"
-        assert trace[0].get("preamble") is None
+        assert trace[0]["steps"][0]["step"] == 0
+        assert trace[0]["steps"][0]["type"] == "system"
+        assert trace[0]["steps"][0]["system_prompt"] == "You are helpful."
+        assert trace[0]["steps"][0]["user_prompt"] == "Hello"
+        assert trace[0]["steps"][0].get("preamble") is None
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_system_event_no_system_prompt(self, mock_monitor):
@@ -4766,9 +4768,9 @@ class TestGuardedAgentTrace:
         result = agent.run("Hello")
         trace = result["trace"]
 
-        assert trace[0]["type"] == "system"
-        assert trace[0]["system_prompt"] == ""
-        assert trace[0]["user_prompt"] == "Hello"
+        assert trace[0]["steps"][0]["type"] == "system"
+        assert trace[0]["steps"][0]["system_prompt"] == ""
+        assert trace[0]["steps"][0]["user_prompt"] == "Hello"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_has_scan_events(self, mock_monitor):
@@ -4787,9 +4789,10 @@ class TestGuardedAgentTrace:
         result = agent.run("Hi")
         trace = result["trace"]
 
-        scan_events = [e for e in trace if e["type"] == "scan"]
+        steps = _all_steps(trace)
+        scan_events = [s for s in steps if s["type"] == "scan"]
         assert len(scan_events) >= 2
-        scanned_targets = [e["scanned"] for e in scan_events]
+        scanned_targets = [s["scanned"] for s in scan_events]
         assert "user_prompt" in scanned_targets
         assert "agent_response" in scanned_targets
 
@@ -4811,7 +4814,8 @@ class TestGuardedAgentTrace:
         result = agent.run("Hi")
         trace = result["trace"]
 
-        scan_events = [e for e in trace if e["type"] == "scan"]
+        steps = _all_steps(trace)
+        scan_events = [s for s in steps if s["type"] == "scan"]
         assert len(scan_events) == 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -4832,14 +4836,14 @@ class TestGuardedAgentTrace:
         result = agent.run("Hi")
         trace = result["trace"]
 
-        resp_events = [e for e in trace if e["type"] == "response"]
+        steps = _all_steps(trace)
+        resp_events = [s for s in steps if s["type"] == "response"]
         assert len(resp_events) == 1
-        assert resp_events[0]["api_call"] == 1
-        assert resp_events[0]["turn"] == 0
-        assert resp_events[0]["seq"] == 0
         assert resp_events[0]["text"] == "Hello!"
         assert resp_events[0]["stop_reason"] == "end_turn"
-        assert resp_events[0]["usage"]["input_tokens"] == 100
+        assert resp_events[0]["usage"]["total_input_tokens"] == 100
+        assert resp_events[0]["usage"]["cached_tokens"] == 0
+        assert resp_events[0]["usage"]["new_input_tokens"] == 100
         assert resp_events[0]["usage"]["output_tokens"] == 50
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -4875,17 +4879,14 @@ class TestGuardedAgentTrace:
 
         trace = result["trace"]
 
-        tc_events = [e for e in trace if e["type"] == "tool_call"]
+        steps = _all_steps(trace)
+        tc_events = [s for s in steps if s["type"] == "tool_call"]
         assert len(tc_events) == 1
-        assert tc_events[0]["api_call"] == 1
-        assert tc_events[0]["turn"] == 1
         assert tc_events[0]["name"] == "bash"
         assert tc_events[0]["input"] == {"command": "echo test"}
 
-        tr_events = [e for e in trace if e["type"] == "tool_result"]
+        tr_events = [s for s in steps if s["type"] == "tool_result"]
         assert len(tr_events) == 1
-        assert tr_events[0]["api_call"] == 1
-        assert tr_events[0]["turn"] == 1
         assert tr_events[0]["name"] == "bash"
         assert tr_events[0]["output"] == "test output"
 
@@ -4921,8 +4922,9 @@ class TestGuardedAgentTrace:
             result = agent.run("Test")
 
         trace = result["trace"]
-        scan_events = [e for e in trace if e["type"] == "scan"]
-        tool_scans = [e for e in scan_events if "tool_result" in e.get("scanned", "")]
+        steps = _all_steps(trace)
+        scan_events = [s for s in steps if s["type"] == "scan"]
+        tool_scans = [s for s in scan_events if "tool_result" in s.get("scanned", "")]
         assert len(tool_scans) == 1
         assert tool_scans[0]["scanned"] == "tool_result:bash"
 
@@ -5009,12 +5011,11 @@ class TestGuardedAgentTrace:
             result = agent.run("Test")
 
         trace = result["trace"]
-        resp_events = [e for e in trace if e["type"] == "response"]
+        steps = _all_steps(trace)
+        resp_events = [s for s in steps if s["type"] == "response"]
         assert len(resp_events) == 2
-        assert resp_events[0]["api_call"] == 1
-        assert resp_events[0]["turn"] == 0
-        assert resp_events[1]["api_call"] == 2
-        assert resp_events[1]["turn"] == 1
+        assert trace[1]["turn"] == 1
+        assert trace[2]["turn"] == 2
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_server_tools_no_trace_events(self, mock_monitor):
@@ -5048,7 +5049,8 @@ class TestGuardedAgentTrace:
             mock_exec.assert_not_called()
 
         trace = result["trace"]
-        tc_events = [e for e in trace if e["type"] == "tool_call"]
+        steps = _all_steps(trace)
+        tc_events = [s for s in steps if s["type"] == "tool_call"]
         assert len(tc_events) == 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -5101,7 +5103,8 @@ class TestGuardedAgentTrace:
         ):
             result = agent.run("Test order")
 
-        types = [e["type"] for e in result["trace"]]
+        steps = _all_steps(result["trace"])
+        types = [s["type"] for s in steps]
         assert types[0] == "system"
         assert "scan" in types
         assert "response" in types
@@ -5338,7 +5341,7 @@ class TestGuardedAgentTrace:
         result = agent.run("test")
 
         trace = result["trace"]
-        response_events = [e for e in trace if e.get("type") == "response"]
+        response_events = [s for s in _all_steps(trace) if s.get("type") == "response"]
         assert len(response_events) == 1
         assert response_events[0]["text"] == "raw-secret-text"
 
@@ -5394,7 +5397,7 @@ class TestGuardedAgentPartialTrace:
 
         assert hasattr(exc_info.value, "trace")
         assert len(exc_info.value.trace) > 0
-        assert exc_info.value.trace[0]["type"] == "system"
+        assert exc_info.value.trace[0]["steps"][0]["type"] == "system"
         assert agent._last_trace is exc_info.value.trace
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -5456,8 +5459,9 @@ class TestGuardedAgentPartialTrace:
             agent.run("multi-turn task")
 
         trace = exc_info.value.trace
-        assert any(e["type"] == "system" for e in trace)
-        assert any(e["type"] == "response" and e["api_call"] == 1 for e in trace)
+        steps = _all_steps(trace)
+        assert any(s["type"] == "system" for s in steps)
+        assert any(s["type"] == "response" for s in steps)
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_partial_trace_persisted_to_disk(self, mock_monitor, tmp_path):
@@ -5506,7 +5510,7 @@ class TestGuardedAgentPartialTrace:
         second_trace = agent._last_trace
 
         assert first_trace is not second_trace
-        assert second_trace[0]["user_prompt"] == "second"
+        assert second_trace[0]["steps"][0]["user_prompt"] == "second"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_post_run_receives_none_on_failure(self, mock_monitor):
@@ -5757,13 +5761,13 @@ class TestGuardedAgentTraceDir:
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
-        for entry in doc["trace"]:
+        for step in _all_steps(doc["trace"]):
             for field in ("text", "system_prompt", "user_prompt", "output"):
-                val = entry.get(field)
+                val = step.get(field)
                 if val:
                     assert val == "[REDACTED]", (
                         f"Field '{field}' not sanitized in "
-                        f"trace entry type={entry['type']}"
+                        f"trace step type={step['type']}"
                     )
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -5789,7 +5793,9 @@ class TestGuardedAgentTraceDir:
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
-        response_events = [e for e in doc["trace"] if e["type"] == "response"]
+        response_events = [
+            s for s in _all_steps(doc["trace"]) if s["type"] == "response"
+        ]
         assert response_events[0]["text"] == "some text"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
