@@ -5667,6 +5667,165 @@ class TestGuardedAgentTrace:
         assert response_events[0]["text"] == "raw-secret-text"
 
 
+class TestGuardedAgentSecretRedactionGating:
+    """Tests for secret_redaction_enabled gating in agent loop (#1931)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_no_sanitization_when_redaction_disabled(self, mock_monitor):
+        """Content flows unchanged when secret_redaction_enabled=False (#1931)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.secret_redaction_enabled = False
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+
+        def check_side_effect(text, filename="input", **kwargs):
+            if filename == "agent_response":
+                return CheckResult(blocked=False, detected=True, message="secret")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="The key is AKIA_FAKE")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+        result = agent.run("show key")
+
+        assert result["output"] == "The key is AKIA_FAKE"
+        mock_session.sanitize.assert_not_called()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_result_not_sanitized_when_redaction_disabled(self, mock_monitor):
+        """Tool result content flows unchanged when secret_redaction_enabled=False (#1931)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.secret_redaction_enabled = False
+        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+
+        def check_side_effect(text, filename="input", **kwargs):
+            if filename.startswith("tool_result:"):
+                return CheckResult(blocked=False, detected=True, message="secret")
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "cat secret.txt"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="AKIA_FAKE_SECRET_KEY",
+        ):
+            result = agent.run("read the file")
+
+        messages = result["messages"]
+        tool_result_msg = messages[2]
+        content = tool_result_msg["content"]
+        assert isinstance(content, list)
+        assert content[0]["content"] == "AKIA_FAKE_SECRET_KEY"
+        mock_session.sanitize.assert_not_called()
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_block_still_raises_when_redaction_disabled(self, mock_monitor):
+        """Blocked violations still raise even when redaction is disabled (#1931)."""
+        from ai_guardian.sdk import CheckResult, SecurityViolation
+
+        mock_session = MagicMock()
+        mock_session.secret_redaction_enabled = False
+
+        def check_side_effect(text, filename="input", **kwargs):
+            if filename == "agent_response":
+                raise SecurityViolation(
+                    CheckResult(blocked=True, detected=True, message="blocked")
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        with pytest.raises(SecurityViolation):
+            agent.run("test")
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_sanitized_even_when_redaction_disabled(self, mock_monitor):
+        """Traces always sanitized regardless of secret_redaction_enabled (#1931)."""
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        mock_session.secret_redaction_enabled = False
+        mock_session.sanitize_batch.return_value = ["[SANITIZED]"]
+
+        mock_session.check_content.return_value = CheckResult(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret-in-response")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(trace_dir="/tmp/traces")
+        client.messages.create.return_value = response
+
+        with patch("builtins.open", MagicMock()):
+            with patch("os.makedirs"):
+                result = agent.run("test")
+
+        mock_session.sanitize_batch.assert_called()
+
+
 class TestGuardedAgentPartialTrace:
     """Tests for partial trace preservation on failure (#1887)."""
 

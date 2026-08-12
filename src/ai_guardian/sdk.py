@@ -80,11 +80,22 @@ class GuardSession:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self._config = config
         self._results: List[CheckResult] = []
+        self._secret_redaction_enabled: bool = False
 
     @property
     def results(self) -> List[CheckResult]:
         """All results collected during this session."""
         return list(self._results)
+
+    @property
+    def secret_redaction_enabled(self) -> bool:
+        """Whether to redact secrets in live content (not traces).
+
+        SDK defaults to ``False`` — content flows unchanged between agent
+        turns.  Set to ``True`` via config to sanitize content same as hooks.
+        Trace sanitization is independent of this flag.
+        """
+        return self._secret_redaction_enabled
 
     def check_content(
         self,
@@ -240,6 +251,7 @@ class _DirectSession(GuardSession):
         if self._config is None:
             from ai_guardian.config.loaders import (
                 _load_config_file,
+                _sdk_secret_redaction_enabled,
                 _sdk_use_global_config,
             )
             from ai_guardian.config.utils import (
@@ -258,10 +270,17 @@ class _DirectSession(GuardSession):
                     self._config = cfg or {}
                 else:
                     self._config = {}
+                self._secret_redaction_enabled = _sdk_secret_redaction_enabled(
+                    self._config
+                )
             finally:
                 if self._cwd:
                     clear_project_dir_override()
                     _clear_project_config_cache()
+        else:
+            from ai_guardian.config.loaders import _sdk_secret_redaction_enabled
+
+            self._secret_redaction_enabled = _sdk_secret_redaction_enabled(self._config)
 
     def check_content(
         self,
@@ -377,7 +396,13 @@ class _RestSession(GuardSession):
     ):
         super().__init__(config)
         self._cwd = cwd
+        self._resolve_redaction_flag()
         self._ensure_daemon()
+
+    def _resolve_redaction_flag(self):
+        from ai_guardian.config.loaders import _sdk_secret_redaction_enabled
+
+        self._secret_redaction_enabled = _sdk_secret_redaction_enabled(self._config)
 
     def _ensure_daemon(self):
         from ai_guardian.daemon.client import (

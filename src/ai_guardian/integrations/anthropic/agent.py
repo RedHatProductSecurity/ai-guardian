@@ -813,7 +813,7 @@ class GuardedAgent:
                         turn_num,
                         TurnEvent(type="scan", scanned="agent_response"),
                     )
-                    if scan_result.detected:
+                    if session.secret_redaction_enabled and scan_result.detected:
                         sanitized = _try_sanitize_text(session, parsed.text)
                         if sanitized:
                             parsed.text = sanitized
@@ -971,7 +971,10 @@ class GuardedAgent:
                                     scanned=f"tool_result:{tc.name}",
                                 ),
                             )
-                            if scan_result.detected:
+                            if (
+                                session.secret_redaction_enabled
+                                and scan_result.detected
+                            ):
                                 sanitized = _try_sanitize_text(session, result_text)
                                 if sanitized:
                                     result_text = sanitized
