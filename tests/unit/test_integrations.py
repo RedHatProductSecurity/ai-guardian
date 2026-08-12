@@ -4682,6 +4682,8 @@ class TestGuardedAgentTrace:
         trace = result["trace"]
 
         assert trace[0]["turn"] == 0
+        assert trace[0]["api_call"] == 0
+        assert trace[0]["seq"] == 0
         assert trace[0]["type"] == "system"
         assert trace[0]["system_prompt"] == "You are helpful."
         assert trace[0]["user_prompt"] == "Hello"
@@ -4772,7 +4774,9 @@ class TestGuardedAgentTrace:
 
         resp_events = [e for e in trace if e["type"] == "response"]
         assert len(resp_events) == 1
-        assert resp_events[0]["turn"] == 1
+        assert resp_events[0]["api_call"] == 1
+        assert resp_events[0]["turn"] == 0
+        assert resp_events[0]["seq"] == 0
         assert resp_events[0]["text"] == "Hello!"
         assert resp_events[0]["stop_reason"] == "end_turn"
         assert resp_events[0]["usage"]["input_tokens"] == 100
@@ -4813,12 +4817,14 @@ class TestGuardedAgentTrace:
 
         tc_events = [e for e in trace if e["type"] == "tool_call"]
         assert len(tc_events) == 1
+        assert tc_events[0]["api_call"] == 1
         assert tc_events[0]["turn"] == 1
         assert tc_events[0]["name"] == "bash"
         assert tc_events[0]["input"] == {"command": "echo test"}
 
         tr_events = [e for e in trace if e["type"] == "tool_result"]
         assert len(tr_events) == 1
+        assert tr_events[0]["api_call"] == 1
         assert tr_events[0]["turn"] == 1
         assert tr_events[0]["name"] == "bash"
         assert tr_events[0]["output"] == "test output"
@@ -4945,8 +4951,10 @@ class TestGuardedAgentTrace:
         trace = result["trace"]
         resp_events = [e for e in trace if e["type"] == "response"]
         assert len(resp_events) == 2
-        assert resp_events[0]["turn"] == 1
-        assert resp_events[1]["turn"] == 2
+        assert resp_events[0]["api_call"] == 1
+        assert resp_events[0]["turn"] == 0
+        assert resp_events[1]["api_call"] == 2
+        assert resp_events[1]["turn"] == 1
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_server_tools_no_trace_events(self, mock_monitor):
@@ -5389,7 +5397,7 @@ class TestGuardedAgentPartialTrace:
 
         trace = exc_info.value.trace
         assert any(e["type"] == "system" for e in trace)
-        assert any(e["type"] == "response" and e["turn"] == 1 for e in trace)
+        assert any(e["type"] == "response" and e["api_call"] == 1 for e in trace)
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_partial_trace_persisted_to_disk(self, mock_monitor, tmp_path):

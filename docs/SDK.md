@@ -788,25 +788,35 @@ Always collected (no opt-in needed). Returned in `run()` result:
 result = agent.run("review this code")
 
 result["trace"] = [
-    {"turn": 0, "type": "system", "system_prompt": "You are...", "user_prompt": "review this code"},
-    {"turn": 1, "type": "response", "text": "I'll start by reading...", "stop_reason": "tool_use",
+    {"turn": 0, "api_call": 0, "seq": 0, "type": "system", "system_prompt": "You are...", "user_prompt": "review this code"},
+    {"turn": 0, "api_call": 0, "seq": 1, "type": "scan", "scanned": "system_prompt"},
+    {"turn": 0, "api_call": 0, "seq": 2, "type": "scan", "scanned": "user_prompt"},
+    {"turn": 0, "api_call": 1, "seq": 0, "type": "response", "text": "I'll start by reading...", "stop_reason": "tool_use",
      "usage": {"input_tokens": 500, "output_tokens": 120}},
-    {"turn": 1, "type": "tool_call", "name": "bash", "input": {"command": "grep -rn 'TODO' src/"}},
-    {"turn": 1, "type": "tool_result", "name": "bash", "output": "src/main.py:42: # TODO fix auth"},
-    {"turn": 1, "type": "scan", "scanned": "assistant_response", "violations": []},
-    {"turn": 1, "type": "scan", "scanned": "tool_result:bash", "violations": []},
-    {"turn": 2, "type": "response", "text": "Found one issue...", "stop_reason": "end_turn",
+    {"turn": 1, "api_call": 1, "seq": 1, "type": "scan", "scanned": "assistant_response"},
+    {"turn": 1, "api_call": 1, "seq": 2, "type": "tool_call", "name": "bash", "input": {"command": "grep -rn 'TODO' src/"}},
+    {"turn": 1, "api_call": 1, "seq": 3, "type": "tool_result", "name": "bash", "output": "src/main.py:42: # TODO fix auth"},
+    {"turn": 1, "api_call": 1, "seq": 4, "type": "scan", "scanned": "tool_result:bash"},
+    {"turn": 1, "api_call": 2, "seq": 0, "type": "response", "text": "Found one issue...", "stop_reason": "end_turn",
      "usage": {"input_tokens": 800, "output_tokens": 200}},
-    {"turn": 2, "type": "scan", "scanned": "assistant_response", "violations": []},
+    {"turn": 2, "api_call": 2, "seq": 1, "type": "scan", "scanned": "assistant_response"},
 ]
 ```
 
+Each trace entry has three numbering fields:
+
+- **`turn`** — conversation exchange (request + response + tools). Increments after each response.
+- **`api_call`** — API call iteration (0 = setup, 1+ = loop iterations). Maps to `max_turns`.
+- **`seq`** — sequence within an `api_call` (resets to 0 at each new API call).
+
+Group by `turn` for conversation flow, by `api_call` for per-request details, sort by `api_call` + `seq` for chronological order.
+
 #### Event Types
 
-| Turn | Event type | Fields |
-|------|-----------|--------|
+| api_call | Event type | Fields |
+|----------|-----------|--------|
 | 0 | `system` | `preamble` (from config, once), `system_prompt` (from code, once), `user_prompt` |
-| 0 | `scan` | `scanned` (`"system_prompt"` or `"user_prompt"`), `violations` |
+| 0 | `scan` | `scanned` (`"system_prompt"` or `"user_prompt"`) |
 | N | `response` | `text`, `stop_reason`, `usage` |
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
