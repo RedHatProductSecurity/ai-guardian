@@ -5841,7 +5841,7 @@ class TestGuardedAgentTraceDir:
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_relative_trace_dir_from_project_config(self, mock_monitor, tmp_path):
-        """Relative trace_dir from project config resolves from project root (#1916)."""
+        """Relative trace_dir from project config resolves from .ai-guardian/ (#1916)."""
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
@@ -5851,8 +5851,8 @@ class TestGuardedAgentTraceDir:
             stop_reason="end_turn",
         )
 
-        project_root = str(tmp_path / "my-project")
-        os.makedirs(project_root)
+        ai_guardian_dir = str(tmp_path / "my-project" / ".ai-guardian")
+        os.makedirs(ai_guardian_dir)
 
         with (
             patch(
@@ -5865,7 +5865,7 @@ class TestGuardedAgentTraceDir:
             ),
             patch(
                 "ai_guardian.config.loaders._sdk_profile_key_base_dir",
-                return_value=project_root,
+                return_value=ai_guardian_dir,
             ),
         ):
             agent, client = self._make_agent(
@@ -5874,7 +5874,7 @@ class TestGuardedAgentTraceDir:
             client.messages.create.return_value = response
             agent.run("Hi")
 
-        expected_dir = tmp_path / "my-project" / "agents-trace"
+        expected_dir = tmp_path / "my-project" / ".ai-guardian" / "agents-trace"
         assert expected_dir.is_dir()
         assert len(list(expected_dir.iterdir())) == 1
 

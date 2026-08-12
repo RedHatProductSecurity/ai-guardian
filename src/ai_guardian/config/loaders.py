@@ -829,8 +829,8 @@ def _sdk_profile_key_base_dir(
     overlay → project → global.
 
     Returns:
-        Project root (str) when defined in project config,
-        global config dir (str) when defined in global config,
+        Directory containing the config file (str) — ``.ai-guardian/``
+        for project config, ``~/.config/ai-guardian/`` for global —
         or ``None`` (overlay / not in config → caller uses cwd).
     """
     overlay = _resolve_sdk_overlay()
@@ -841,7 +841,7 @@ def _sdk_profile_key_base_dir(
     if project_path:
         project_config, _ = _load_json_config(project_path)
         if project_config and _sdk_profile_has_key(project_config, section, name, key):
-            return get_project_dir()
+            return str(project_path.parent)
 
     config_dir = get_config_dir()
     global_path = config_dir / "ai-guardian.json"
