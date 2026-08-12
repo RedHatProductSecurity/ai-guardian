@@ -4428,6 +4428,142 @@ class TestAnthropicLoopStrategy:
         )
         assert "system" not in kwargs
 
+    def test_message_cache_breakpoint_single_message_noop(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [{"role": "user", "content": "hi"}]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="5m",
+        )
+        assert messages[0]["content"] == "hi"
+
+    def test_message_cache_breakpoint_disabled_noop(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": [{"type": "text", "text": "hello"}]},
+            {"role": "user", "content": "bye"},
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl=0,
+        )
+        assert "cache_control" not in messages[1]["content"][0]
+
+    def test_message_cache_breakpoint_dict_content(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": [{"type": "text", "text": "hello"}]},
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "1", "content": "ok"}],
+            },
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="5m",
+        )
+        assert messages[1]["content"][0]["cache_control"] == {"type": "ephemeral"}
+        assert "cache_control" not in messages[2]["content"][0]
+
+    def test_message_cache_breakpoint_1h_ttl(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": [{"type": "text", "text": "hello"}]},
+            {"role": "user", "content": "bye"},
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="1h",
+        )
+        assert messages[1]["content"][0]["cache_control"] == {
+            "type": "ephemeral",
+            "ttl": "1h",
+        }
+
+    def test_message_cache_breakpoint_string_content(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {"role": "user", "content": "first"},
+            {"role": "user", "content": "second"},
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="5m",
+        )
+        assert messages[0]["content"] == [
+            {
+                "type": "text",
+                "text": "first",
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
+
+    def test_message_cache_breakpoint_simplenamespace(self):
+        strategy = AnthropicLoopStrategy()
+        block = SimpleNamespace(type="text", text="hello")
+        messages = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": [block]},
+            {"role": "user", "content": "bye"},
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="5m",
+        )
+        assert block.cache_control == {"type": "ephemeral"}
+
+    def test_message_cache_breakpoint_clears_previous(self):
+        strategy = AnthropicLoopStrategy()
+        messages = [
+            {"role": "user", "content": "hi"},
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "old", "cache_control": {"type": "ephemeral"}}
+                ],
+            },
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "1", "content": "r1"}]},
+            {"role": "assistant", "content": [{"type": "text", "text": "new"}]},
+            {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "2", "content": "r2"}]},
+        ]
+        strategy.build_create_kwargs(
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            tools=[],
+            messages=messages,
+            system="sys",
+            cache_ttl="5m",
+        )
+        assert "cache_control" not in messages[1]["content"][0]
+        assert messages[3]["content"][0]["cache_control"] == {"type": "ephemeral"}
+
     def test_parse_response_cache_tokens(self):
         strategy = AnthropicLoopStrategy()
         usage = SimpleNamespace(

@@ -111,7 +111,53 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
                 ]
             else:
                 kwargs["system"] = system
+
+        self._apply_message_cache_breakpoints(messages, cache_ttl)
         return kwargs
+
+    def _apply_message_cache_breakpoints(
+        self,
+        messages: List[Dict[str, Any]],
+        cache_ttl: Optional[Union[str, int]],
+    ) -> None:
+        """Set cache_control on the second-to-last message (sliding breakpoint).
+
+        Anthropic caches everything up to and including the last
+        ``cache_control`` marker.  By sliding it to ``messages[-2]``,
+        only the newest message is billed as new input each turn.
+        """
+        if not cache_ttl or len(messages) < 2:
+            return
+
+        cache_block: Dict[str, str] = {"type": "ephemeral"}
+        if cache_ttl == "1h":
+            cache_block["ttl"] = "1h"
+
+        for msg in messages:
+            content = msg.get("content")
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict):
+                        block.pop("cache_control", None)
+                    elif hasattr(block, "cache_control"):
+                        block.cache_control = None
+
+        target = messages[-2]
+        content = target.get("content")
+        if isinstance(content, list) and content:
+            last_block = content[-1]
+            if isinstance(last_block, dict):
+                last_block["cache_control"] = cache_block
+            else:
+                last_block.cache_control = cache_block
+        elif isinstance(content, str):
+            target["content"] = [
+                {
+                    "type": "text",
+                    "text": content,
+                    "cache_control": cache_block,
+                }
+            ]
 
     def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
         return client.messages.create(**kwargs)
