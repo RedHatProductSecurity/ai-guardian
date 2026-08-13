@@ -968,7 +968,7 @@ Also configurable via `ai-guardian.json`:
 {
     "output": "...",       # final text or structured object
     "messages": [...],     # full conversation history
-    "stop_reason": "...",  # "end_turn", "refusal", "max_turns", "budget_exceeded", "hook_early_stop", or "pause_turn"
+    "stop_reason": "...",  # see stop_reason table below
     "usage": {
         "input_tokens": 1234,
         "output_tokens": 567,
@@ -979,6 +979,19 @@ Also configurable via `ai-guardian.json`:
     "trace": [...],        # structured event trace (see Observability)
 }
 ```
+
+#### `stop_reason` Values
+
+| Value | Meaning |
+|-------|---------|
+| `end_turn` | Model returned a text response with no tool calls — natural completion |
+| `hook_early_stop` | `after_call` or `between_turns` callback returned `False` to stop the loop |
+| `max_turns` | Reached the `max_turns` limit without the model finishing |
+| `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
+| `refusal` | Model refused to respond |
+| `security_violation` | Response or tool result blocked by a security scan |
+| `error` | Exception during the agent loop (partial trace persisted) |
+| `in_progress` | Agent is still running (only appears in incremental trace files) |
 
 ## API Reference
 

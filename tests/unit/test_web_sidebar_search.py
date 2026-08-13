@@ -200,7 +200,7 @@ class TestNavGroupsConsistency:
         from ai_guardian.web.components.header import NAV_GROUPS
 
         total = sum(len(items) for _, items in NAV_GROUPS)
-        assert total == 47
+        assert total == 48
 
     def test_first_item_is_dashboard(self):
         from ai_guardian.web.components.header import NAV_GROUPS

@@ -160,6 +160,7 @@ NAV_GROUPS = [
             ("Metrics & Audit", "panel-metrics"),
             ("Performance", "panel-performance"),
             ("Logs", "panel-logs"),
+            ("Trace Viewer", "panel-traces"),
         ],
     ),
     (
@@ -798,6 +799,18 @@ HELP_DOCS = {
         "  - Auto-refresh with live log streaming\n"
         "  - Filter by log level\n"
         "  - Clear log display"
+    ),
+    "panel-traces": (
+        "[bold]Trace Viewer[/bold]\n\n"
+        "View conversation traces from GuardedAgent runs.\n\n"
+        "[bold]Features:[/bold]\n"
+        "  - List all trace files with agent name, model, status\n"
+        "  - Active conversations marked with green indicator\n"
+        "  - Per-turn token breakdown and violation highlights\n\n"
+        "[bold]Configuration:[/bold]\n"
+        "  sdk.agents.*.trace_dir — trace file location\n\n"
+        "[bold]Keyboard shortcuts:[/bold]\n"
+        "  [bold]r[/bold]  Refresh trace list"
     ),
     "panel-directory-rules": (
         "[bold]Directory Rules[/bold]\n\n"
@@ -1512,6 +1525,11 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.logs import LogsContent
 
                     yield LogsContent()
+
+                with Container(id="panel-traces"):
+                    from ai_guardian.tui.traces import TracesContent
+
+                    yield TracesContent()
 
                 with Container(id="panel-directory-rules"):
                     from ai_guardian.tui.directory_rules import DirectoryRulesContent

@@ -546,6 +546,8 @@ class GuardedAgent:
                 file=sys.stderr,
                 flush=True,
             )
+
+            self._push_trace_to_daemon(os.path.basename(filepath), trace_doc)
         except Exception as exc:
             import sys
 
@@ -555,6 +557,39 @@ class GuardedAgent:
                 flush=True,
             )
             logger.warning("Failed to persist trace", exc_info=True)
+
+    @staticmethod
+    def _push_trace_to_daemon(filename: str, trace_doc: Dict[str, Any]) -> None:
+        """Push trace document to daemon REST API for container mode viewers."""
+        try:
+            from ai_guardian.daemon import get_pid_path
+
+            pid_path = get_pid_path()
+            if not pid_path.exists():
+                return
+            pid_info = json.loads(pid_path.read_text())
+            rest_port = pid_info.get("rest_port")
+            if not rest_port:
+                return
+
+            auth_token = pid_info.get("auth_token")
+            payload = json.dumps(
+                {"filename": filename, "trace_doc": trace_doc}, default=str
+            ).encode("utf-8")
+
+            from urllib.request import Request, urlopen
+
+            req = Request(
+                f"http://127.0.0.1:{rest_port}/api/traces",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            if auth_token:
+                req.add_header("Authorization", f"Bearer {auth_token}")
+            urlopen(req, timeout=3)
+        except Exception as exc:
+            logger.debug("Failed to push trace to daemon: %s", exc)
 
     @classmethod
     def _sanitize_trace(
@@ -1002,6 +1037,14 @@ class GuardedAgent:
                 for tc in parsed.tool_calls:
                     if tc.name == "submit_result":
                         structured_output = tc.input
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="tool_call",
+                                name=tc.name,
+                                input=tc.input,
+                            ),
+                        )
                         tool_results.append(
                             strategy.format_tool_result(tc.id, "Result submitted.")
                         )
@@ -1084,6 +1127,14 @@ class GuardedAgent:
                     strategy.append_assistant_and_results(
                         messages, parsed.raw_content, tool_results
                     )
+
+                if trace_filepath:
+                    partial = {
+                        "trace": trace,
+                        "stop_reason": "in_progress",
+                        "usage": usage_totals,
+                    }
+                    self._persist_trace(partial, started_at, session, trace_filepath)
 
                 if self._between_turns:
                     hook_result = self._between_turns(messages, response, _turn)

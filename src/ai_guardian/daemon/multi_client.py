@@ -1083,6 +1083,81 @@ class MultiDaemonClient:
                 results.append(f"{ptype}: error ({exc})")
         return {"result": "; ".join(results)}
 
+    def get_traces(
+        self,
+        target: DaemonTarget,
+        agent_name: Optional[str] = None,
+        directory: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Get trace file listing from a daemon.
+
+        Always uses REST — the daemon process has project config knowledge
+        needed to resolve trace directories from external projects.
+        """
+        parts = []
+        if agent_name:
+            parts.append(f"agent_name={agent_name}")
+        if directory:
+            import urllib.parse
+
+            parts.append(f"directory={urllib.parse.quote(directory, safe='')}")
+        params = f"?{'&'.join(parts)}" if parts else ""
+        result = self._rest_request(target, "GET", f"/api/traces{params}")
+        if result is not None:
+            return result
+        return self._local_traces(agent_name, directory)
+
+    @staticmethod
+    def _local_traces(
+        agent_name: Optional[str] = None, directory: Optional[str] = None
+    ) -> dict:
+        from ai_guardian.daemon.traces import list_traces, resolve_trace_dirs
+
+        if directory:
+            trace_dirs = [directory]
+        else:
+            trace_dirs = resolve_trace_dirs()
+        return {"traces": list_traces(trace_dirs, agent_name)}
+
+    def get_trace_detail(
+        self,
+        target: DaemonTarget,
+        filename: str,
+        directory: Optional[str] = None,
+    ) -> Optional[dict]:
+        """Get full trace detail from a daemon.
+
+        Always uses REST — the daemon resolves trace directories from
+        all known project configs.
+        """
+        import urllib.parse
+
+        path = f"/api/traces/{urllib.parse.quote(filename, safe='/')}"
+        if directory:
+            path += f"?directory={urllib.parse.quote(directory, safe='')}"
+        result = self._rest_request(target, "GET", path)
+        if result is not None:
+            return result
+        return self._local_trace_detail(filename, directory)
+
+    @staticmethod
+    def _local_trace_detail(
+        filename: str, directory: Optional[str] = None
+    ) -> Optional[dict]:
+        from ai_guardian.daemon.traces import (
+            read_trace_detail,
+            resolve_trace_dirs,
+            validate_filename,
+        )
+
+        if not validate_filename(filename):
+            return None
+        if directory:
+            trace_dirs = [directory]
+        else:
+            trace_dirs = resolve_trace_dirs()
+        return read_trace_detail(trace_dirs, filename)
+
     def export_support(self, target: DaemonTarget) -> Optional[str]:
         """Export support bundle."""
         cmd = ["ai-guardian", "support", "prepare"]

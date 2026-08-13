@@ -137,6 +137,10 @@ class DaemonState:
         self._pending_prompts_lock = threading.Lock()
         self._prompt_counter = 0
 
+        # Pushed traces from container SDK (#1951)
+        self._pushed_traces = {}  # filename -> trace_doc dict
+        self._pushed_traces_lock = threading.Lock()
+
         # Pause state persistence (#1319)
         self._pause_file = pause_file or self._default_pause_path()
 
@@ -450,6 +454,23 @@ class DaemonState:
                 prompt.decision_event.set()
             if expired:
                 logger.debug("Cleaned up %d expired pending prompts", len(expired))
+
+    # --- Pushed traces for container SDK (#1951) ---
+
+    def store_pushed_trace(self, filename, trace_doc):
+        """Store a trace document pushed via POST /api/traces."""
+        with self._pushed_traces_lock:
+            self._pushed_traces[filename] = trace_doc
+
+    def get_pushed_traces(self):
+        """Return a copy of all pushed traces."""
+        with self._pushed_traces_lock:
+            return dict(self._pushed_traces)
+
+    def get_pushed_trace(self, filename):
+        """Return a specific pushed trace by filename."""
+        with self._pushed_traces_lock:
+            return self._pushed_traces.get(filename)
 
     # --- Security injection tracking (#584) ---
 

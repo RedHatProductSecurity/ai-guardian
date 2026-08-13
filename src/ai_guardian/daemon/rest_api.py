@@ -119,6 +119,16 @@ class _RestHandler(BaseHTTPRequestHandler):
         elif path == "/api/pending-prompts":
             prompts = self.server.daemon_state.get_pending_prompts()
             self._send_json({"prompts": prompts})
+        elif path == "/api/traces":
+            qs = urllib.parse.parse_qs(parsed.query)
+            agent_name = qs.get("agent_name", [None])[0]
+            directory = qs.get("directory", [None])[0]
+            self._send_json(self._get_traces(agent_name, directory))
+        elif path.startswith("/api/traces/"):
+            filename = path[len("/api/traces/") :]
+            qs = urllib.parse.parse_qs(parsed.query)
+            directory = qs.get("directory", [None])[0]
+            self._send_json(self._get_trace_detail(filename, directory))
         else:
             self._send_error(404, "Not found")
 
@@ -252,6 +262,21 @@ class _RestHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             self._handle_prompt_decision(body)
+        elif self.path == "/api/traces":
+            body = self._read_body(max_size=self._MAX_CONTENT_SIZE)
+            if body is None:
+                return
+            self._handle_push_trace(body)
+        elif self.path == "/api/register-project":
+            body = self._read_body()
+            if body is None:
+                return
+            project_dir = body.get("project_dir", "")
+            if project_dir:
+                self.server.daemon_state.check_project_config(project_dir)
+                self._send_json({"status": "registered", "project_dir": project_dir})
+            else:
+                self._send_error(400, "project_dir is required")
         else:
             self._send_error(404, "Not found")
 
@@ -976,6 +1001,93 @@ class _RestHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error("Redact endpoint failed: %s", e)
             self._send_error(500, "Internal error")
+
+    # --- Trace viewer endpoints (#1951) ---
+
+    def _get_traces(self, agent_name=None, directory=None):
+        """Handle GET /api/traces — list trace files."""
+        try:
+            from ai_guardian.daemon.traces import (
+                list_traces,
+                pushed_trace_to_summary,
+                resolve_trace_dirs,
+            )
+
+            if directory:
+                trace_dirs = [directory]
+            else:
+                trace_dirs = resolve_trace_dirs()
+            file_traces = list_traces(trace_dirs, agent_name)
+
+            seen_basenames = {t["filename"].split("/")[-1] for t in file_traces}
+
+            pushed = self.server.daemon_state.get_pushed_traces()
+            for fn, doc in pushed.items():
+                if agent_name and doc.get("agent_name") != agent_name:
+                    continue
+                basename = fn.split("/")[-1]
+                if basename in seen_basenames:
+                    continue
+                seen_basenames.add(basename)
+                file_traces.append(pushed_trace_to_summary(fn, doc))
+
+            file_traces.sort(key=lambda t: t.get("started_at", ""), reverse=True)
+            return {"traces": file_traces}
+        except Exception as exc:
+            logger.debug("Failed to list traces: %s", exc)
+            return {"traces": []}
+
+    def _get_trace_detail(self, filename, directory=None):
+        """Handle GET /api/traces/{filename} — get trace detail."""
+        try:
+            from ai_guardian.daemon.traces import (
+                compute_token_summary,
+                read_trace_detail,
+                resolve_trace_dirs,
+                validate_filename,
+            )
+
+            if not validate_filename(filename):
+                return {"error": "Invalid filename"}
+
+            if directory:
+                trace_dirs = [directory]
+            else:
+                trace_dirs = resolve_trace_dirs()
+            result = read_trace_detail(trace_dirs, filename)
+
+            if result is None:
+                pushed = self.server.daemon_state.get_pushed_trace(filename)
+                if pushed:
+                    result = dict(pushed)
+                    usage = result.get("usage") or {}
+                    trace = result.get("trace") or []
+                    model = result.get("model", "")
+                    result["computed"] = compute_token_summary(trace, usage, model)
+                    result["is_active"] = result.get("stop_reason") == "in_progress"
+
+            if result is None:
+                return {"error": "Trace not found"}
+            return result
+        except Exception as exc:
+            logger.debug("Failed to read trace: %s", exc)
+            return {"error": str(exc)}
+
+    def _handle_push_trace(self, body):
+        """Handle POST /api/traces — SDK pushes trace data."""
+        filename = body.get("filename")
+        trace_doc = body.get("trace_doc")
+        if not filename or not trace_doc:
+            self._send_error(400, "filename and trace_doc are required")
+            return
+
+        from ai_guardian.daemon.traces import validate_filename
+
+        if not validate_filename(filename):
+            self._send_error(400, "Invalid filename format")
+            return
+        self.server.daemon_state.store_pushed_trace(filename, trace_doc)
+        self._send_json({"status": "stored", "filename": filename})
 
     def _read_body(self, max_size=None):
         limit = max_size or self._MAX_BODY_SIZE
