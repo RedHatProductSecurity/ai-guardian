@@ -3234,6 +3234,7 @@ class TestGuardedAgent:
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_between_turns_security_violation(self, mock_monitor):
+        """Blocked between_turns injection informs LLM and continues (#1946)."""
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
@@ -3241,8 +3242,8 @@ class TestGuardedAgent:
         from ai_guardian.sdk import CheckResult
 
         mock_session.check_content.side_effect = [
-            CheckResult(blocked=False, detected=False),
-            CheckResult(blocked=False, detected=False),
+            CheckResult(blocked=False, detected=False),  # user_prompt
+            CheckResult(blocked=False, detected=False),  # agent_response t1
             SecurityViolation(
                 CheckResult(
                     blocked=True,
@@ -3250,23 +3251,35 @@ class TestGuardedAgent:
                     violation_type="secret",
                     message="Secret in injected content",
                 )
-            ),
+            ),  # between_turns_injection
+            CheckResult(blocked=False, detected=False),  # agent_response t2
         ]
 
         r1 = _make_agent_response(
             [SimpleNamespace(type="text", text="Code")],
             stop_reason="end_turn",
         )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Acknowledged")],
+            stop_reason="end_turn",
+        )
 
-        hook = MagicMock(return_value="AKIA secret here")
+        hook = MagicMock(side_effect=["AKIA secret here", None])
         agent, client = self._make_agent(between_turns=hook)
-        client.messages.create.return_value = r1
+        client.messages.create.side_effect = [r1, r2]
 
         result = agent.run("Generate code")
         assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
         assert not any(
             m.get("content") == "AKIA secret here" for m in result["messages"]
         )
+        warning_found = any(
+            "[ai-guardian] Injected content was blocked: secret"
+            in str(m.get("content", ""))
+            for m in result["messages"]
+        )
+        assert warning_found
         violations = [
             step
             for turn in result["trace"]
@@ -3275,6 +3288,67 @@ class TestGuardedAgent:
         ]
         assert len(violations) == 1
         assert violations[0]["violations"][0]["type"] == "secret"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_security_violation_tool_use(self, mock_monitor):
+        """Blocked between_turns on tool_use path informs LLM (#1946)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        from ai_guardian.sdk import CheckResult
+
+        mock_session.check_content.side_effect = [
+            CheckResult(blocked=False, detected=False),  # user_prompt
+            CheckResult(blocked=False, detected=False),  # tool_result:bash
+            SecurityViolation(
+                CheckResult(
+                    blocked=True,
+                    detected=True,
+                    violation_type="prompt_injection",
+                    message="Injection in injected content",
+                )
+            ),  # between_turns_injection
+            CheckResult(blocked=False, detected=False),  # agent_response t2
+        ]
+
+        r1 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        r2 = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(side_effect=["<script>alert(1)</script>", None])
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.side_effect = [r1, r2]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Run a command")
+
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
+        assert not any(
+            "<script>" in str(m.get("content", "")) for m in result["messages"]
+        )
+        warning_found = any(
+            "[ai-guardian] Injected content was blocked: prompt_injection"
+            in str(m.get("content", ""))
+            for m in result["messages"]
+        )
+        assert warning_found
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_between_turns_false_stops_tool_use(self, mock_monitor):
