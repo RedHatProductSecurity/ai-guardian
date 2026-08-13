@@ -86,6 +86,7 @@ jobs:
           echo $installDir | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Install scanners from pyproject.toml
+        shell: bash
         run: |
           # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
           # This ensures CI uses the same versions as users and maintains single source of truth
