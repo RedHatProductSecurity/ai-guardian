@@ -86,26 +86,12 @@ jobs:
           echo $installDir | Out-File -FilePath $env:GITHUB_PATH -Append
 
       - name: Install scanners from pyproject.toml
-        shell: bash
         run: |
           # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
           # This ensures CI uses the same versions as users and maintains single source of truth
-          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
-          install_with_retry() {
-            local scanner=$1
-            for attempt in 1 2 3; do
-              if ai-guardian scanner install "$scanner" --use-pinned; then
-                return 0
-              fi
-              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
-              sleep "$attempt"
-            done
-            echo "Failed to install $scanner after 3 attempts"
-            return 1
-          }
-          install_with_retry gitleaks
-          install_with_retry betterleaks
-          install_with_retry leaktk
+          ai-guardian scanner install gitleaks --use-pinned
+          ai-guardian scanner install betterleaks --use-pinned
+          ai-guardian scanner install leaktk --use-pinned
 
       - name: Run tests with coverage
         env:

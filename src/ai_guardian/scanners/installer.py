@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import zipfile
 from enum import Enum
 from pathlib import Path
@@ -382,6 +383,42 @@ class ScannerInstaller:
         logger.debug(f"No package manager available for {system}")
         return False
 
+    @staticmethod
+    def _download_with_retry(
+        url: str, timeout: int = 60, max_attempts: int = 3
+    ) -> "requests.Response":
+        """Download a URL with retry and exponential backoff.
+
+        Args:
+            url: URL to download
+            timeout: Request timeout in seconds
+            max_attempts: Maximum number of attempts
+
+        Returns:
+            requests.Response object
+
+        Raises:
+            RuntimeError: If all attempts fail
+        """
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = requests.get(url, timeout=timeout)
+                response.raise_for_status()
+                return response
+            except Exception as e:
+                last_error = e
+                if attempt < max_attempts:
+                    wait = attempt * 2
+                    logger.warning(
+                        f"Download attempt {attempt}/{max_attempts} failed for "
+                        f"{url}: {e}. Retrying in {wait}s..."
+                    )
+                    time.sleep(wait)
+        raise RuntimeError(
+            f"Failed to download {url} after {max_attempts} attempts: {last_error}"
+        )
+
     def _download_checksums(
         self, scanner_name: str, version: str, repo: str
     ) -> Optional[str]:
@@ -415,8 +452,7 @@ class ScannerInstaller:
 
         try:
             logger.info(f"Downloading checksums from {checksums_url}")
-            response = requests.get(checksums_url, timeout=30)
-            response.raise_for_status()
+            response = self._download_with_retry(checksums_url, timeout=30)
 
             # Validate content is not empty or malformed
             content = response.text.strip()
@@ -607,8 +643,7 @@ class ScannerInstaller:
             archive_path = temp_path / filename
 
             try:
-                response = requests.get(download_url, timeout=60)
-                response.raise_for_status()
+                response = self._download_with_retry(download_url, timeout=60)
 
                 with open(archive_path, "wb") as f:
                     f.write(response.content)
