@@ -492,39 +492,38 @@ class GuardedAgent:
             if self._post_run:
                 self._post_run(result)
 
+    def _resolve_trace_filepath(self, started_at: datetime) -> str:
+        """Compute the trace file path once per run for reuse."""
+        agent_name = self._name or "agent"
+        timestamp = started_at.strftime("%Y%m%d-%H%M%S")
+        unique = uuid.uuid4().hex[:8]
+        filename = f"{agent_name}_{timestamp}_{unique}.json"
+
+        middle = ""
+        if self._trace_path_fn:
+            ctx = {"model": self._model}
+            middle = self._trace_path_fn(agent_name, ctx) or ""
+
+        if middle.endswith("/"):
+            return os.path.join(self._trace_dir, middle, filename)
+        return os.path.join(self._trace_dir, middle + filename)
+
     def _persist_trace(
-        self, result: Dict[str, Any], started_at: datetime, session: Any
+        self,
+        result: Dict[str, Any],
+        started_at: datetime,
+        session: Any,
+        filepath: Optional[str] = None,
     ) -> None:
         try:
-            agent_name = self._name or "agent"
-            timestamp = started_at.strftime("%Y%m%d-%H%M%S")
-            unique = uuid.uuid4().hex[:8]
-            filename = f"{agent_name}_{timestamp}_{unique}.json"
-
-            middle = ""
-            if self._trace_path_fn:
-                ctx = {
-                    "model": self._model,
-                    "stop_reason": result.get("stop_reason"),
-                    "usage": result.get("usage"),
-                    "turn_count": sum(
-                        1
-                        for turn_obj in result.get("trace", [])
-                        for step in turn_obj.get("steps", [])
-                        if step.get("type") == "response"
-                    ),
-                }
-                middle = self._trace_path_fn(agent_name, ctx) or ""
-
-            if middle.endswith("/"):
-                filepath = os.path.join(self._trace_dir, middle, filename)
-            else:
-                filepath = os.path.join(self._trace_dir, middle + filename)
+            if filepath is None:
+                filepath = self._resolve_trace_filepath(started_at)
 
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
 
             sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
 
+            agent_name = self._name or "agent"
             trace_doc = {
                 "agent_name": agent_name,
                 "model": self._model,
@@ -536,7 +535,20 @@ class GuardedAgent:
             with open(filepath, "w", encoding="utf-8") as fh:
                 json.dump(trace_doc, fh, indent=2, default=str)
             logger.debug("Trace written to %s", filepath)
-        except Exception:
+            import sys
+            print(
+                f"  [trace] {result.get('stop_reason')} "
+                f"turns={len(trace_doc['trace'])} -> {filepath}",
+                file=sys.stderr,
+                flush=True,
+            )
+        except Exception as exc:
+            import sys
+            print(
+                f"  [trace] FAILED: {exc} -> {filepath}",
+                file=sys.stderr,
+                flush=True,
+            )
             logger.warning("Failed to persist trace", exc_info=True)
 
     @classmethod
@@ -625,16 +637,26 @@ class GuardedAgent:
                 self._on_turn(turn_num, event)
 
         started_at = datetime.now(timezone.utc)
+        trace_filepath = None
+        if self._trace_dir:
+            trace_filepath = self._resolve_trace_filepath(started_at)
+
         with monitor(mode=self._mode, config=self._config, cwd=self._cwd) as session:
             try:
                 return self._run_loop_inner(
-                    prompt, strategy, trace, _emit, session, started_at
+                    prompt,
+                    strategy,
+                    trace,
+                    _emit,
+                    session,
+                    started_at,
+                    trace_filepath,
                 )
             except BaseException as exc:
                 exc.trace = trace
                 if self._trace_dir:
                     partial = {"trace": trace, "stop_reason": "error"}
-                    self._persist_trace(partial, started_at, session)
+                    self._persist_trace(partial, started_at, session, trace_filepath)
                 raise
 
     def _run_loop_inner(
@@ -645,6 +667,7 @@ class GuardedAgent:
         _emit: Callable,
         session: Any,
         started_at: datetime,
+        trace_filepath: Optional[str] = None,
     ) -> Dict[str, Any]:
         _emit(
             0,
@@ -688,7 +711,7 @@ class GuardedAgent:
                     "error": "System prompt blocked by security scan",
                 }
                 if self._trace_dir:
-                    self._persist_trace(result, started_at, session)
+                    self._persist_trace(result, started_at, session, trace_filepath)
                 return result
 
         if self._scanning:
@@ -723,7 +746,7 @@ class GuardedAgent:
                     "error": "User prompt blocked by security scan",
                 }
                 if self._trace_dir:
-                    self._persist_trace(result, started_at, session)
+                    self._persist_trace(result, started_at, session, trace_filepath)
                 return result
 
         messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
@@ -803,6 +826,14 @@ class GuardedAgent:
                     usage=trace_usage,
                 ),
             )
+
+            if trace_filepath:
+                partial = {
+                    "trace": trace,
+                    "stop_reason": "in_progress",
+                    "usage": usage_totals,
+                }
+                self._persist_trace(partial, started_at, session, trace_filepath)
 
             if self._scanning and parsed.text:
                 try:
@@ -1119,6 +1150,6 @@ class GuardedAgent:
         }
 
         if self._trace_dir:
-            self._persist_trace(result, started_at, session)
+            self._persist_trace(result, started_at, session, trace_filepath)
 
         return result
