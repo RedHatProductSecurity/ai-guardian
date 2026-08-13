@@ -536,6 +536,7 @@ class GuardedAgent:
                 json.dump(trace_doc, fh, indent=2, default=str)
             logger.debug("Trace written to %s", filepath)
             import sys
+
             print(
                 f"  [trace] {result.get('stop_reason')} "
                 f"turns={len(trace_doc['trace'])} -> {filepath}",
@@ -544,6 +545,7 @@ class GuardedAgent:
             )
         except Exception as exc:
             import sys
+
             print(
                 f"  [trace] FAILED: {exc} -> {filepath}",
                 file=sys.stderr,
