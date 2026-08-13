@@ -12,6 +12,7 @@ from ai_guardian.scanners.pipeline import (
     scan_file,
 )
 from ai_guardian.scanners.scan_result import ScanResult
+from ai_guardian.scanners.scanner_registry import ScannerName
 
 # ---------------------------------------------------------------------------
 # _resolve_scanner_config
@@ -290,13 +291,13 @@ class TestScanContent:
         "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
     )
     @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline._loaders._load_prompt_injection_config")
+    @patch("ai_guardian.scanners.pipeline._loaders._load_config_section")
     def test_loads_config_from_file_when_none(
         self, mock_loader, mock_pi, mock_cp, mock_secret
     ):
         mock_loader.return_value = ({"enabled": True, "action": "block"}, None)
         scan_content("test")
-        mock_loader.assert_called_once()
+        assert mock_loader.call_count >= 1
 
     @patch("ai_guardian.scanners.pipeline.run_secret_scan")
     @patch(
@@ -367,15 +368,11 @@ class TestScanFile:
         assert scan_file(None) == []
 
     @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_clean_file_returns_empty(self, mock_dir, mock_cfg, mock_sc, mock_content):
+    def test_clean_file_returns_empty(self, mock_dir, mock_content):
         results = scan_file("/safe/file.py", content="clean code", config={})
         assert results == []
         mock_dir.assert_called_once()
-        mock_cfg.assert_called_once()
-        mock_sc.assert_called_once()
         mock_content.assert_called_once()
 
     @patch("ai_guardian.scanners.pipeline.run_directory_check")
@@ -396,46 +393,38 @@ class TestScanFile:
         results = scan_file("/safe/file.py", config={})
         assert results == []
 
-    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan")
+    @patch("ai_guardian.scanners.pipeline.scan_content")
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_config_file_threat_detected(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
-        mock_cfg.return_value = ScanResult.from_config_exfil(
-            should_block=True,
-            error_message="Config exfil detected",
-            details={"pattern": "cat"},
-        )
+    def test_config_file_threat_detected(self, mock_dir, mock_content):
+        mock_content.return_value = [
+            ScanResult.from_config_exfil(
+                should_block=True,
+                error_message="Config exfil detected",
+                details={"pattern": "cat"},
+            )
+        ]
         results = scan_file("/app/.env", content="SECRET=abc", config={})
         assert len(results) == 1
         assert results[0].violation_type == "config_file_exfil"
 
-    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan")
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
+    @patch("ai_guardian.scanners.pipeline.scan_content")
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_supply_chain_threat_detected(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
-        mock_sc.return_value = ScanResult.from_supply_chain(
-            should_block=True,
-            error_message="Suspicious MCP config",
-            details={"category": "mcp"},
-            file_path="mcp.json",
-        )
+    def test_supply_chain_threat_detected(self, mock_dir, mock_content):
+        mock_content.return_value = [
+            ScanResult.from_supply_chain(
+                should_block=True,
+                error_message="Suspicious MCP config",
+                details={"category": "mcp"},
+                file_path="mcp.json",
+            )
+        ]
         results = scan_file("mcp.json", content='{"mcpServers":{}}', config={})
         assert len(results) == 1
         assert results[0].violation_type == "supply_chain"
 
     @patch("ai_guardian.scanners.pipeline.scan_content")
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_content_scan_results_included(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
+    def test_content_scan_results_included(self, mock_dir, mock_content):
         mock_content.return_value = [
             ScanResult.from_prompt_injection(
                 should_block=True, error_message="PI", detected=True
@@ -446,82 +435,61 @@ class TestScanFile:
         assert results[0].violation_type == "prompt_injection"
 
     @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
     @patch(
         "ai_guardian.scanners.pipeline.run_directory_check",
         side_effect=RuntimeError("scanner crashed"),
     )
-    def test_fail_open_on_directory_check_exception(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
+    def test_fail_open_on_directory_check_exception(self, mock_dir, mock_content):
         results = scan_file("/some/path", content="text", config={})
         assert isinstance(results, list)
 
-    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
     @patch(
-        "ai_guardian.scanners.pipeline.run_supply_chain_scan",
+        "ai_guardian.scanners.pipeline.scan_content",
         side_effect=RuntimeError("scanner crashed"),
     )
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_fail_open_on_supply_chain_exception(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
+    def test_fail_open_on_supply_chain_exception(self, mock_dir, mock_content):
+        """Content scan exception handled by scan_file fail-open wrapper."""
         results = scan_file("/some/path", content="text", config={})
         assert isinstance(results, list)
 
     @patch("ai_guardian.scanners.pipeline.scan_content")
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan", return_value=None)
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_passes_cwd_to_scan_content(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
+    def test_passes_cwd_to_scan_content(self, mock_dir, mock_content):
         mock_content.return_value = []
         scan_file("/app/main.py", content="code", config={}, cwd="/my/project")
         assert mock_content.call_args.kwargs["cwd"] == "/my/project"
 
     @patch("ai_guardian.scanners.pipeline.scan_content")
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan")
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
-    def test_passes_config_section_to_scanners(
-        self, mock_dir, mock_cfg, mock_sc, mock_content
-    ):
-        mock_cfg.return_value = None
+    def test_passes_config_section_to_scanners(self, mock_dir, mock_content):
+        """scan_file passes config through to scan_content."""
         mock_content.return_value = []
         full_config = {
             "config_scanner": {"enabled": True, "action": "warn"},
         }
         scan_file("/app/.env", content="text", config=full_config)
-        assert mock_cfg.call_args.kwargs["config"] == {
-            "enabled": True,
-            "action": "warn",
-        }
+        assert mock_content.call_args.kwargs["config"] == full_config
 
     @patch("ai_guardian.scanners.pipeline.scan_content")
-    @patch("ai_guardian.scanners.pipeline.run_supply_chain_scan")
-    @patch("ai_guardian.scanners.pipeline.run_config_file_scan")
     @patch("ai_guardian.scanners.pipeline.run_directory_check")
-    def test_multiple_detections(self, mock_dir, mock_cfg, mock_sc, mock_content):
+    def test_multiple_detections(self, mock_dir, mock_content):
         mock_dir.return_value = ScanResult.from_directory_rules(
             decision="deny",
             action="block",
             matched_pattern="/etc/**",
             file_path="/etc/passwd",
         )
-        mock_cfg.return_value = ScanResult.from_config_exfil(
-            should_block=True,
-            error_message="exfil",
-            details={},
-        )
-        mock_sc.return_value = None
         mock_content.return_value = [
+            ScanResult.from_config_exfil(
+                should_block=True,
+                error_message="exfil",
+                details={},
+            ),
             ScanResult.from_secret_scan(
                 has_secrets=True,
                 error_message="secret",
-            )
+            ),
         ]
         results = scan_file("/etc/passwd", content="secret", config={})
         assert len(results) == 3
