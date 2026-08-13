@@ -1136,27 +1136,28 @@ class DaemonState:
             return "unknown"
 
     # Directories (relative to package root) whose changes require daemon restart
-    _DAEMON_SOURCE_DIRS = frozenset({"daemon", "hook_adapters", "patterns", "scanners"})
+    _DAEMON_SOURCE_DIRS = frozenset(
+        {
+            "daemon",
+            "hook_adapters",
+            "hook_events",
+            "patterns",
+            "scanners",
+            "config",
+            "integrations",
+        }
+    )
     # Top-level files (no subdirectory) that require daemon restart
     _DAEMON_SOURCE_FILES = frozenset(
         {
             "hook_processing.py",
-            "config_loaders.py",
-            "config_utils.py",
-            "scanner.py",
-            "bandit_scanner.py",
-            "canary_detection.py",
-            "exfil_detection.py",
-            "aiguardignore.py",
-            "tool_policy.py",
-            "prompt_injection.py",
-            "secret_redactor.py",
-            "scan_result.py",
+            "sdk.py",
             "constants.py",
             "annotations.py",
-            "supply_chain.py",
-            "context_poisoning.py",
-            "offensive_language.py",
+            "aiguardignore.py",
+            "response_format.py",
+            "allowlist_utils.py",
+            "ask_mode.py",
         }
     )
 
