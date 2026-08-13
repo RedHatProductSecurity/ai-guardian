@@ -2145,6 +2145,61 @@ class TestGuardedAgent:
         assert any("tool_result" in f for f in scanned_filenames)
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_tool_result_violation_replaces_with_block_message(self, mock_monitor):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+
+        def check_side_effect(text, filename="input", **kwargs):
+            if filename == "tool_result:bash":
+                raise SecurityViolation(
+                    CheckResult(
+                        blocked=True,
+                        detected=True,
+                        violation_type="secret",
+                        message="Secret detected in tool output",
+                    )
+                )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.secret_redaction_enabled = False
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "cat secret.txt"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Understood, trying differently")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="AKIA1234SECRET",
+        ):
+            result = agent.run("Read secret")
+
+        assert result["stop_reason"] == "end_turn"
+        tool_result_msg = result["messages"][2]["content"]
+        tool_result_content = tool_result_msg[0]["content"]
+        assert "[ai-guardian] Content blocked" in tool_result_content
+        assert "secret" in tool_result_content
+        assert "AKIA1234SECRET" not in tool_result_content
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_max_turns_limit(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -2501,42 +2556,117 @@ class TestGuardedAgent:
         ]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_output_violation_attaches_response(self, mock_monitor):
+    def test_output_violation_injects_warning_and_continues(self, mock_monitor):
         from ai_guardian.sdk import CheckResult
 
         mock_session = MagicMock()
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(
-                    CheckResult(
-                        blocked=True,
-                        detected=True,
-                        violation_type="secret",
-                        message="Secret in assistant response",
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(
+                            blocked=True,
+                            detected=True,
+                            violation_type="secret",
+                            message="Secret in assistant response",
+                        )
                     )
-                )
             return CheckResult(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
-        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_session.secret_redaction_enabled = False
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
-        response = _make_agent_response(
+        blocked_response = _make_agent_response(
             [SimpleNamespace(type="text", text="leaked secret")],
+            stop_reason="end_turn",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Here is the safe answer")],
             stop_reason="end_turn",
         )
 
         agent, client = self._make_agent()
-        client.messages.create.return_value = response
+        client.messages.create.side_effect = [blocked_response, clean_response]
 
-        with pytest.raises(SecurityViolation) as exc_info:
-            agent.run("Hi")
+        result = agent.run("Hi")
 
-        exc = exc_info.value
-        assert exc.response is response
-        assert exc.sanitized_text == "[REDACTED]"
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Here is the safe answer"
+        assert client.messages.create.call_count == 2
+        warning_msg = result["messages"][2]
+        assert warning_msg["role"] == "user"
+        assert "[ai-guardian]" in warning_msg["content"]
+        assert "secret" in warning_msg["content"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_output_violation_with_tool_calls_creates_blocked_results(
+        self, mock_monitor
+    ):
+        from ai_guardian.sdk import CheckResult
+
+        mock_session = MagicMock()
+        call_count = {"agent_response": 0}
+
+        def check_side_effect(text, filename="input", **kwargs):
+            if filename == "agent_response":
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(
+                            blocked=True,
+                            detected=True,
+                            violation_type="secret",
+                            message="Secret in response",
+                        )
+                    )
+            return CheckResult(blocked=False, detected=False)
+
+        mock_session.check_content.side_effect = check_side_effect
+        mock_session.secret_redaction_enabled = False
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        blocked_response = _make_agent_response(
+            [
+                SimpleNamespace(type="text", text="leaked secret"),
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="t1",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Fixed answer")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [blocked_response, clean_response]
+
+        result = agent.run("Hi")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Fixed answer"
+        assert client.messages.create.call_count == 2
+        user_msg = result["messages"][2]
+        assert user_msg["role"] == "user"
+        content = user_msg["content"]
+        assert isinstance(content, list)
+        tool_result_block = content[0]
+        assert tool_result_block["type"] == "tool_result"
+        assert tool_result_block["is_error"] is True
+        assert "blocked" in tool_result_block["content"]
+        text_block = content[-1]
+        assert text_block["type"] == "text"
+        assert "[ai-guardian]" in text_block["text"]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_usage_accumulation(self, mock_monitor):
@@ -4180,39 +4310,45 @@ class TestOpenAIGuardedAgent:
         assert result["stop_reason"] == "end_turn"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_output_violation_attaches_response(self, mock_monitor):
+    def test_output_violation_injects_warning_and_continues(self, mock_monitor):
         from ai_guardian.sdk import CheckResult
 
         mock_session = MagicMock()
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(
-                    CheckResult(
-                        blocked=True,
-                        detected=True,
-                        violation_type="secret",
-                        message="Secret in response",
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(
+                            blocked=True,
+                            detected=True,
+                            violation_type="secret",
+                            message="Secret in response",
+                        )
                     )
-                )
             return CheckResult(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
-        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_session.secret_redaction_enabled = False
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
-        response = _make_openai_agent_response(content="leaked secret")
+        blocked_response = _make_openai_agent_response(content="leaked secret")
+        clean_response = _make_openai_agent_response(content="Safe answer")
 
         agent, client = self._make_agent()
-        client.chat.completions.create.return_value = response
+        client.chat.completions.create.side_effect = [
+            blocked_response,
+            clean_response,
+        ]
 
-        with pytest.raises(SecurityViolation) as exc_info:
-            agent.run("Hi")
+        result = agent.run("Hi")
 
-        exc = exc_info.value
-        assert exc.response is response
-        assert exc.sanitized_text == "[REDACTED]"
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Safe answer"
+        assert client.chat.completions.create.call_count == 2
 
 
 # ============================================================================
@@ -5434,39 +5570,47 @@ class TestGuardedAgentTrace:
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_scan_violation_recorded(self, mock_monitor):
+        """agent_response block emits scan event and continues (#1939)."""
         from ai_guardian.sdk import CheckResult
 
         mock_session = MagicMock()
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(
-                    CheckResult(
-                        blocked=True,
-                        detected=True,
-                        violation_type="secret",
-                        message="Secret detected",
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(
+                            blocked=True,
+                            detected=True,
+                            violation_type="secret",
+                            message="Secret detected",
+                        )
                     )
-                )
             return CheckResult(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
-        mock_session.sanitize.return_value = {"sanitized_text": "[REDACTED]"}
+        mock_session.secret_redaction_enabled = False
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
-        response = _make_agent_response(
+        blocked_response = _make_agent_response(
             [SimpleNamespace(type="text", text="leaked secret")],
+            stop_reason="end_turn",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="safe")],
             stop_reason="end_turn",
         )
 
         events = []
         agent, client = self._make_agent(on_turn=lambda t, e: events.append((t, e)))
-        client.messages.create.return_value = response
+        client.messages.create.side_effect = [blocked_response, clean_response]
 
-        with pytest.raises(SecurityViolation):
-            agent.run("Hi")
+        result = agent.run("Hi")
 
+        assert result["stop_reason"] == "end_turn"
         scan_events = [(t, e) for t, e in events if e.type == "scan"]
         violation_scans = [
             (t, e) for t, e in scan_events if e.violations and len(e.violations) > 0
@@ -5607,33 +5751,44 @@ class TestGuardedAgentTrace:
         assert result["output"] == "[REDACTED]"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_agent_response_block_mode_still_raises(self, mock_monitor):
-        """Block mode still raises SecurityViolation for agent response (#1880)."""
+    def test_agent_response_block_injects_warning(self, mock_monitor):
+        """Block mode injects warning and continues (#1939)."""
         from ai_guardian.sdk import CheckResult, SecurityViolation
 
         mock_session = MagicMock()
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(
-                    CheckResult(blocked=True, detected=True, message="blocked")
-                )
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(blocked=True, detected=True, message="blocked")
+                    )
             return CheckResult(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
+        mock_session.secret_redaction_enabled = False
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
-        response = _make_agent_response(
+        blocked_response = _make_agent_response(
             [SimpleNamespace(type="text", text="secret")],
+            stop_reason="end_turn",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="safe")],
             stop_reason="end_turn",
         )
 
         agent, client = self._make_agent()
-        client.messages.create.return_value = response
+        client.messages.create.side_effect = [blocked_response, clean_response]
 
-        with pytest.raises(SecurityViolation):
-            agent.run("test")
+        result = agent.run("test")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "safe"
+        assert client.messages.create.call_count == 2
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_agent_response_trace_records_raw_text(self, mock_monitor):
@@ -5767,34 +5922,44 @@ class TestGuardedAgentSecretRedactionGating:
         mock_session.sanitize.assert_not_called()
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_block_still_raises_when_redaction_disabled(self, mock_monitor):
-        """Blocked violations still raise even when redaction is disabled (#1931)."""
+    def test_block_continues_loop_when_redaction_disabled(self, mock_monitor):
+        """Blocked violations inject warning and continue (#1939)."""
         from ai_guardian.sdk import CheckResult, SecurityViolation
 
         mock_session = MagicMock()
         mock_session.secret_redaction_enabled = False
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(
-                    CheckResult(blocked=True, detected=True, message="blocked")
-                )
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(
+                        CheckResult(blocked=True, detected=True, message="blocked")
+                    )
             return CheckResult(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
 
-        response = _make_agent_response(
+        blocked_response = _make_agent_response(
             [SimpleNamespace(type="text", text="secret")],
+            stop_reason="end_turn",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="safe")],
             stop_reason="end_turn",
         )
 
         agent, client = self._make_agent()
-        client.messages.create.return_value = response
+        client.messages.create.side_effect = [blocked_response, clean_response]
 
-        with pytest.raises(SecurityViolation):
-            agent.run("test")
+        result = agent.run("test")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "safe"
+        assert client.messages.create.call_count == 2
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_sanitized_even_when_redaction_disabled(self, mock_monitor):
@@ -5900,37 +6065,44 @@ class TestGuardedAgentPartialTrace:
         assert len(agent._last_trace) > 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
-    def test_last_trace_preserved_on_response_security_violation(self, mock_monitor):
+    def test_trace_preserved_on_response_security_violation(self, mock_monitor):
+        """Trace records violation when agent_response blocked (#1939)."""
         mock_session = MagicMock()
+        mock_session.secret_redaction_enabled = False
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
         mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
-
-        response = _make_agent_response(
-            [SimpleNamespace(type="text", text="secret data")],
-            stop_reason="end_turn",
-        )
 
         violation_result = MagicMock()
         violation_result.violation_type = "secret"
         violation_result.message = "Secret in response"
+        call_count = {"agent_response": 0}
 
         def check_side_effect(text, filename="input", **kwargs):
             if filename == "agent_response":
-                raise SecurityViolation(violation_result)
+                call_count["agent_response"] += 1
+                if call_count["agent_response"] == 1:
+                    raise SecurityViolation(violation_result)
             return MagicMock(blocked=False, detected=False)
 
         mock_session.check_content.side_effect = check_side_effect
-        mock_session.sanitize.return_value = {}
+
+        blocked_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="secret data")],
+            stop_reason="end_turn",
+        )
+        clean_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="safe")],
+            stop_reason="end_turn",
+        )
 
         agent, client = self._make_agent()
-        client.messages.create.return_value = response
+        client.messages.create.side_effect = [blocked_response, clean_response]
 
-        with pytest.raises(SecurityViolation) as exc_info:
-            agent.run("Hi")
+        result = agent.run("Hi")
 
-        assert hasattr(exc_info.value, "trace")
-        assert len(exc_info.value.trace) > 0
-        assert agent._last_trace is exc_info.value.trace
+        assert result["stop_reason"] == "end_turn"
+        assert len(result["trace"]) > 0
+        assert agent._last_trace is result["trace"]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_partial_trace_has_turns_before_failure(self, mock_monitor):
