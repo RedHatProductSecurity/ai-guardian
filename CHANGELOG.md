@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **SDK: `between_turns` blocked injection now informs LLM** — when a `between_turns` callback returns content that is blocked by a security scan, the agent now receives a warning message (`[ai-guardian] Injected content was blocked: <type>`) instead of the content being silently dropped. This applies to both `end_turn` and `tool_use` code paths. Previously the agent loop would either end or continue without the LLM knowing content was blocked (#1946)
+
 ### Added
 
 - **GuardedAgent symlink support** — two new parameters for accessing files through symlinks that resolve outside `cwd`: `follow_symlinks=True` trusts all symlinks inside `cwd`; `allowed_paths=[...]` whitelists specific external directories. Both configurable via `sdk.agents.<name>` in `ai-guardian.json` (#1907)

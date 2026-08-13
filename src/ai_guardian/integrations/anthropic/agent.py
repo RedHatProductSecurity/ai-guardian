@@ -925,12 +925,26 @@ class GuardedAgent:
                                     exc.result.message,
                                 )
                                 _injection_blocked = True
-                        if not _injection_blocked:
+                                _violation_type = exc.result.violation_type
+                        if _injection_blocked:
                             strategy.append_assistant_message(
                                 messages, parsed.raw_content
                             )
-                            messages.append({"role": "user", "content": hook_result})
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "[ai-guardian] Injected content was "
+                                        f"blocked: {_violation_type}. "
+                                        "The content contained flagged patterns "
+                                        "and was not added to context."
+                                    ),
+                                }
+                            )
                             continue
+                        strategy.append_assistant_message(messages, parsed.raw_content)
+                        messages.append({"role": "user", "content": hook_result})
+                        continue
 
                 final_text = parsed.text
                 stop_reason = "end_turn"
@@ -1063,12 +1077,20 @@ class GuardedAgent:
                                     exc.result.message,
                                 )
                                 _injection_blocked = True
-                        if not _injection_blocked:
+                                _violation_type = exc.result.violation_type
+                        if _injection_blocked:
                             strategy.inject_user_text_after_results(
-                                messages, hook_result
+                                messages,
+                                "[ai-guardian] Injected content was "
+                                f"blocked: {_violation_type}. "
+                                "The content contained flagged patterns "
+                                "and was not added to context.",
                             )
                             structured_output = None
                             continue
+                        strategy.inject_user_text_after_results(messages, hook_result)
+                        structured_output = None
+                        continue
 
                 if structured_output is not None:
                     stop_reason = "end_turn"

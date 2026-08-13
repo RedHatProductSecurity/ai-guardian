@@ -689,7 +689,10 @@ Runs after each successful assistant turn — both `end_turn` (text response) an
 | `None` | Normal loop behavior (tool execution or end) |
 | `False` | Stop the loop (`stop_reason: "hook_early_stop"`) |
 
-Injected messages are scanned by ai-guardian.
+Injected messages are scanned by ai-guardian. If a scan blocks the
+injected content, the LLM receives a warning message
+(`[ai-guardian] Injected content was blocked: <violation_type>`) and the
+loop continues so the agent can adapt.
 
 **Use case — external execution between turns:**
 
