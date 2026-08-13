@@ -834,9 +834,27 @@ class GuardedAgent:
                             ],
                         ),
                     )
-                    exc.response = response
-                    exc.sanitized_text = _try_sanitize_text(session, parsed.text)
-                    raise
+                    warning = (
+                        f"[ai-guardian] Your response was blocked: "
+                        f"{exc.result.violation_type}.\n"
+                        f"Rephrase without the flagged content."
+                    )
+                    strategy.append_assistant_message(messages, parsed.raw_content)
+                    if parsed.tool_calls:
+                        blocked_results = [
+                            strategy.format_tool_result(
+                                tc.id,
+                                "[ai-guardian] Response blocked "
+                                "— tool execution skipped.",
+                                is_error=True,
+                            )
+                            for tc in parsed.tool_calls
+                        ]
+                        blocked_results.append({"type": "text", "text": warning})
+                        messages.append({"role": "user", "content": blocked_results})
+                    else:
+                        messages.append({"role": "user", "content": warning})
+                    continue
 
             early_stop = False
             if self._after_call:
@@ -979,6 +997,12 @@ class GuardedAgent:
                                 if sanitized:
                                     result_text = sanitized
                         except SecurityViolation as exc:
+                            result_text = (
+                                f"[ai-guardian] Content blocked: "
+                                f"{exc.result.violation_type}.\n"
+                                f"{exc.result.message}\n"
+                                f"Try a different approach."
+                            )
                             _emit(
                                 turn_num,
                                 TurnEvent(
@@ -992,13 +1016,6 @@ class GuardedAgent:
                                     ],
                                 ),
                             )
-                            logger.warning(
-                                "tool_result scan violation: %s",
-                                exc.result.message,
-                            )
-                            sanitized = _try_sanitize_text(session, result_text)
-                            if sanitized:
-                                result_text = sanitized
 
                     is_error = result_text.startswith("Error: no executor")
                     tool_results.append(
