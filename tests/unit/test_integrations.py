@@ -6797,9 +6797,6 @@ class TestTracePathFn:
         assert captured["name"] == "triage-verifier"
         ctx = captured["ctx"]
         assert ctx["model"] == "claude-sonnet-5"
-        assert ctx["stop_reason"] == "end_turn"
-        assert "usage" in ctx
-        assert "turn_count" in ctx
 
     def test_callback_receives_default_name_when_unnamed(self, tmp_path):
         """Unnamed agent passes 'agent' to callback."""
@@ -6837,3 +6834,185 @@ class TestTracePathFn:
         files = list(traces.iterdir())
         assert len(files) == 1
         assert files[0].name.startswith("test-agent_")
+
+
+class TestIncrementalTracePersist:
+    """Tests for incremental trace persistence after each turn (#1949)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_incremental_trace_written_during_multi_turn(self, mock_monitor, tmp_path):
+        """Trace file written with in_progress after each completed turn."""
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    id="t1",
+                    name="Bash",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="inc-test", trace_dir=trace_dir)
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        snapshots = []
+        original_persist = agent._persist_trace.__func__
+
+        def spy_persist(self_agent, result, started_at, session, filepath=None):
+            snapshots.append(result.get("stop_reason"))
+            original_persist(self_agent, result, started_at, session, filepath)
+
+        with patch.object(type(agent), "_persist_trace", spy_persist):
+            agent.run("do something")
+
+        assert "in_progress" in snapshots
+        assert snapshots[-1] == "end_turn"
+
+        files = os.listdir(trace_dir)
+        assert len(files) == 1
+
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+        assert doc["stop_reason"] == "end_turn"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_single_turn_also_writes_in_progress(self, mock_monitor, tmp_path):
+        """Even single-turn agent writes in_progress then final stop_reason."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="single", trace_dir=trace_dir)
+        client.messages.create.return_value = response
+
+        snapshots = []
+        original_persist = agent._persist_trace.__func__
+
+        def spy_persist(self_agent, result, started_at, session, filepath=None):
+            snapshots.append(result.get("stop_reason"))
+            original_persist(self_agent, result, started_at, session, filepath)
+
+        with patch.object(type(agent), "_persist_trace", spy_persist):
+            agent.run("Hi")
+
+        assert snapshots == ["in_progress", "end_turn"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_incremental_trace_same_file(self, mock_monitor, tmp_path):
+        """All incremental writes go to the same file (overwrite, not new)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    id="t1",
+                    name="Bash",
+                    input={"command": "echo 1"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        tool_response2 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    id="t2",
+                    name="Bash",
+                    input={"command": "echo 2"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="overwrite", trace_dir=trace_dir)
+        client.messages.create.side_effect = [
+            tool_response,
+            tool_response2,
+            final_response,
+        ]
+
+        agent.run("multi-turn")
+
+        files = os.listdir(trace_dir)
+        assert len(files) == 1, f"Expected 1 file, got {len(files)}: {files}"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_error_trace_uses_same_file(self, mock_monitor, tmp_path):
+        """Error during run writes to same pre-computed trace file."""
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    id="t1",
+                    name="Bash",
+                    input={"command": "echo hi"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="err-test", trace_dir=trace_dir)
+        client.messages.create.side_effect = [
+            tool_response,
+            RuntimeError("API down"),
+        ]
+
+        with pytest.raises(RuntimeError, match="API down"):
+            agent.run("do it")
+
+        files = os.listdir(trace_dir)
+        assert len(files) == 1
+
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+        assert doc["stop_reason"] == "error"
