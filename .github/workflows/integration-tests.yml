@@ -70,10 +70,23 @@ jobs:
         run: |
           # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
           # This ensures CI uses the same versions as users and maintains single source of truth
-          ai-guardian scanner install gitleaks --use-pinned
-          ai-guardian scanner install betterleaks --use-pinned
-          ai-guardian scanner install leaktk --use-pinned
-          ai-guardian scanner install detect-secrets --use-pinned
+          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
+          install_with_retry() {
+            local scanner=$1
+            for attempt in 1 2 3; do
+              if ai-guardian scanner install "$scanner" --use-pinned; then
+                return 0
+              fi
+              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
+              sleep "$attempt"
+            done
+            echo "Failed to install $scanner after 3 attempts"
+            return 1
+          }
+          install_with_retry gitleaks
+          install_with_retry betterleaks
+          install_with_retry leaktk
+          install_with_retry detect-secrets
           # TruffleHog (AGPL-3.0) - skipped in CI, tested via mock data in unit tests
 
       - name: Run MCP Integration Tests
@@ -160,10 +173,23 @@ jobs:
         run: |
           # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
           # This ensures CI uses the same versions as users and maintains single source of truth
-          ai-guardian scanner install gitleaks --use-pinned
-          ai-guardian scanner install betterleaks --use-pinned
-          ai-guardian scanner install leaktk --use-pinned
-          ai-guardian scanner install detect-secrets --use-pinned
+          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
+          install_with_retry() {
+            local scanner=$1
+            for attempt in 1 2 3; do
+              if ai-guardian scanner install "$scanner" --use-pinned; then
+                return 0
+              fi
+              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
+              sleep "$attempt"
+            done
+            echo "Failed to install $scanner after 3 attempts"
+            return 1
+          }
+          install_with_retry gitleaks
+          install_with_retry betterleaks
+          install_with_retry leaktk
+          install_with_retry detect-secrets
           # TruffleHog (AGPL-3.0) - skipped in CI, tested via mock data in unit tests
 
       - name: Verify test isolation
@@ -372,10 +398,23 @@ jobs:
         run: |
           # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
           # This ensures CI uses the same versions as users and maintains single source of truth
-          ai-guardian scanner install gitleaks --use-pinned
-          ai-guardian scanner install betterleaks --use-pinned
-          ai-guardian scanner install leaktk --use-pinned
-          ai-guardian scanner install detect-secrets --use-pinned
+          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
+          install_with_retry() {
+            local scanner=$1
+            for attempt in 1 2 3; do
+              if ai-guardian scanner install "$scanner" --use-pinned; then
+                return 0
+              fi
+              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
+              sleep "$attempt"
+            done
+            echo "Failed to install $scanner after 3 attempts"
+            return 1
+          }
+          install_with_retry gitleaks
+          install_with_retry betterleaks
+          install_with_retry leaktk
+          install_with_retry detect-secrets
           # TruffleHog (AGPL-3.0) - skipped in CI, tested via mock data in unit tests
 
       - name: Check test execution time
