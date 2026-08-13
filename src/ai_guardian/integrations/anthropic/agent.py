@@ -899,6 +899,7 @@ class GuardedAgent:
                         break
                     if isinstance(hook_result, str):
                         _injection_blocked = False
+                        _violation_type = ""
                         if self._scanning:
                             try:
                                 session.check_content(
@@ -1051,6 +1052,7 @@ class GuardedAgent:
                         break
                     if isinstance(hook_result, str):
                         _injection_blocked = False
+                        _violation_type = ""
                         if self._scanning:
                             try:
                                 session.check_content(
