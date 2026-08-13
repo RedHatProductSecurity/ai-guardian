@@ -77,8 +77,13 @@ class _SecurityWarning(UserWarning):
 class GuardSession:
     """Base session with shared action-handling logic."""
 
-    def __init__(self, config: Optional[Dict[str, Any]] = None):
+    def __init__(
+        self,
+        config: Optional[Dict[str, Any]] = None,
+        target_dir: Optional[str] = None,
+    ):
         self._config = config
+        self._target_dir = target_dir
         self._results: List[CheckResult] = []
         self._secret_redaction_enabled: bool = False
 
@@ -242,8 +247,9 @@ class _DirectSession(GuardSession):
         self,
         config: Optional[Dict[str, Any]] = None,
         cwd: Optional[str] = None,
+        target_dir: Optional[str] = None,
     ):
-        super().__init__(config)
+        super().__init__(config, target_dir=target_dir)
         self._cwd = cwd
         self._ensure_config()
 
@@ -281,6 +287,11 @@ class _DirectSession(GuardSession):
             from ai_guardian.config.loaders import _sdk_secret_redaction_enabled
 
             self._secret_redaction_enabled = _sdk_secret_redaction_enabled(self._config)
+
+        if self._target_dir:
+            from ai_guardian.config.target_config import merge_target_allowlists
+
+            self._config = merge_target_allowlists(self._config, self._target_dir)
 
     def check_content(
         self,
@@ -393,9 +404,16 @@ class _RestSession(GuardSession):
         self,
         config: Optional[Dict[str, Any]] = None,
         cwd: Optional[str] = None,
+        target_dir: Optional[str] = None,
     ):
-        super().__init__(config)
+        super().__init__(config, target_dir=target_dir)
         self._cwd = cwd
+        if target_dir:
+            logger.warning(
+                "target_dir=%s not yet supported in REST mode — "
+                "allowlists will not be merged",
+                target_dir,
+            )
         self._resolve_redaction_flag()
         self._ensure_daemon()
 
@@ -501,6 +519,7 @@ def monitor(
     mode: str = "direct",
     config: Optional[Dict[str, Any]] = None,
     cwd: Optional[str] = None,
+    target_dir: Optional[str] = None,
 ):
     """Create a guarded session for security checks.
 
@@ -514,6 +533,13 @@ def monitor(
                 (respects ``sdk.use_global_config``).
         cwd: Project directory for config discovery and language detection.
              If None, falls back to os.getcwd().
+        target_dir: Directory whose allowlists to trust.  When set,
+            ai-guardian discovers ``.ai-guardian/ai-guardian.json``,
+            ``.aiguardignore.toml``, and ``.gitleaks.toml`` in
+            *target_dir* and merges their suppression data (allowlist
+            patterns, ignore files/tools) into the running config.
+            Separate from *cwd* — ``cwd`` is where to run tools,
+            ``target_dir`` is whose allowlists to apply.
 
     Yields:
         GuardSession with check_content(), check_file(), check_command(),
@@ -523,8 +549,8 @@ def monitor(
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 
     if mode == "direct":
-        session = _DirectSession(config=config, cwd=cwd)
+        session = _DirectSession(config=config, cwd=cwd, target_dir=target_dir)
     else:
-        session = _RestSession(config=config, cwd=cwd)
+        session = _RestSession(config=config, cwd=cwd, target_dir=target_dir)
 
     yield session

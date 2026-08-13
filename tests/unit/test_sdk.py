@@ -1013,3 +1013,78 @@ class TestDirectSessionCwdConfig:
             assert (
                 session._config.get("prompt_injection", {}).get("sensitivity") == "low"
             )
+
+
+class TestDirectSessionTargetDir:
+    def test_target_dir_merges_allowlists(self, tmp_path):
+        """Target dir allowlists are merged into session config."""
+        target = tmp_path / "target-repo"
+        ai_dir = target / ".ai-guardian"
+        ai_dir.mkdir(parents=True)
+        (ai_dir / "ai-guardian.json").write_text(
+            '{"prompt_injection": {"allowlist_patterns": ["target-pat"]}}'
+        )
+
+        base_config = {
+            "prompt_injection": {
+                "enabled": True,
+                "action": "block",
+                "allowlist_patterns": ["base-pat"],
+            },
+        }
+        session = _DirectSession(config=base_config, target_dir=str(target))
+        pi = session._config["prompt_injection"]
+        assert "base-pat" in pi["allowlist_patterns"]
+        assert "target-pat" in pi["allowlist_patterns"]
+        assert pi["enabled"] is True
+        assert pi["action"] == "block"
+
+    def test_target_dir_none_no_merge(self):
+        """No merge when target_dir is None."""
+        base_config = {
+            "prompt_injection": {
+                "allowlist_patterns": ["only-base"],
+            },
+        }
+        session = _DirectSession(config=base_config)
+        assert session._config["prompt_injection"]["allowlist_patterns"] == [
+            "only-base"
+        ]
+
+    def test_target_dir_nonexistent_no_crash(self, tmp_path):
+        """Non-existent target_dir doesn't crash."""
+        session = _DirectSession(
+            config={"prompt_injection": {"enabled": True}},
+            target_dir=str(tmp_path / "no-such-dir"),
+        )
+        assert session._config["prompt_injection"]["enabled"] is True
+
+    def test_rest_mode_target_dir_logs_warning(self, caplog):
+        """REST mode logs warning when target_dir is provided but unsupported."""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="ai_guardian.sdk"):
+            with patch("ai_guardian.sdk._RestSession._resolve_redaction_flag"):
+                with patch("ai_guardian.sdk._RestSession._ensure_daemon"):
+                    session = _RestSession(
+                        config={"prompt_injection": {"enabled": True}},
+                        target_dir="/some/project",
+                    )
+        assert any("not yet supported in REST mode" in msg for msg in caplog.messages)
+        assert session._target_dir == "/some/project"
+
+    def test_monitor_passes_target_dir(self, tmp_path):
+        """monitor() passes target_dir through to session."""
+        target = tmp_path / "target"
+        ai_dir = target / ".ai-guardian"
+        ai_dir.mkdir(parents=True)
+        (ai_dir / "ai-guardian.json").write_text(
+            '{"prompt_injection": {"allowlist_patterns": ["from-target"]}}'
+        )
+
+        with monitor(
+            config={"prompt_injection": {"enabled": True}},
+            target_dir=str(target),
+        ) as session:
+            pi = session._config["prompt_injection"]
+            assert "from-target" in pi["allowlist_patterns"]
