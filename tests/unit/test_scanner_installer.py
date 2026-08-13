@@ -1182,3 +1182,92 @@ class TestWindowsSupport:
                 assert version == "8.30.1"
                 called_path = mock_run.call_args[0][0][0]
                 assert called_path.endswith("gitleaks.exe")
+
+
+class TestDownloadWithRetry:
+    """Tests for _download_with_retry retry logic."""
+
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_succeeds_first_attempt(self, mock_requests):
+        """Download succeeds on first try — no retry."""
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_requests.get.return_value = mock_response
+
+        result = ScannerInstaller._download_with_retry(
+            "https://example.com/file.tar.gz"
+        )
+        assert result is mock_response
+        assert mock_requests.get.call_count == 1
+
+    @mock.patch("ai_guardian.scanners.installer.time")
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_succeeds_after_transient_failure(self, mock_requests, mock_time):
+        """Download fails once then succeeds — retries work."""
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_requests.get.side_effect = [
+            Exception("Connection reset"),
+            mock_response,
+        ]
+
+        result = ScannerInstaller._download_with_retry(
+            "https://example.com/file.tar.gz"
+        )
+        assert result is mock_response
+        assert mock_requests.get.call_count == 2
+        mock_time.sleep.assert_called_once_with(2)
+
+    @mock.patch("ai_guardian.scanners.installer.time")
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_all_attempts_fail(self, mock_requests, mock_time):
+        """All 3 attempts fail — raises RuntimeError."""
+        mock_requests.get.side_effect = Exception("Network error")
+
+        with pytest.raises(RuntimeError, match="after 3 attempts"):
+            ScannerInstaller._download_with_retry("https://example.com/file.tar.gz")
+        assert mock_requests.get.call_count == 3
+        assert mock_time.sleep.call_count == 2
+
+    @mock.patch("ai_guardian.scanners.installer.time")
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_exponential_backoff(self, mock_requests, mock_time):
+        """Backoff waits 2s then 4s between attempts."""
+        mock_requests.get.side_effect = Exception("timeout")
+
+        with pytest.raises(RuntimeError):
+            ScannerInstaller._download_with_retry("https://example.com/file.tar.gz")
+        mock_time.sleep.assert_any_call(2)
+        mock_time.sleep.assert_any_call(4)
+
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_passes_timeout_to_requests(self, mock_requests):
+        """Custom timeout forwarded to requests.get."""
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_requests.get.return_value = mock_response
+
+        ScannerInstaller._download_with_retry(
+            "https://example.com/file.tar.gz", timeout=120
+        )
+        mock_requests.get.assert_called_once_with(
+            "https://example.com/file.tar.gz", timeout=120
+        )
+
+    @mock.patch("ai_guardian.scanners.installer.time")
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_http_error_triggers_retry(self, mock_requests, mock_time):
+        """HTTP 500 triggers retry via raise_for_status."""
+        bad_response = mock.Mock()
+        bad_response.raise_for_status.side_effect = Exception("500 Server Error")
+
+        good_response = mock.Mock()
+        good_response.raise_for_status = mock.Mock()
+
+        mock_requests.get.side_effect = [bad_response, good_response]
+
+        result = ScannerInstaller._download_with_retry(
+            "https://example.com/file.tar.gz"
+        )
+        assert result is good_response
+        assert mock_requests.get.call_count == 2

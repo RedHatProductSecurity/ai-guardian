@@ -29,20 +29,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .
-          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
-          install_with_retry() {
-            local scanner=$1
-            for attempt in 1 2 3; do
-              if ai-guardian scanner install "$scanner" --use-pinned; then
-                return 0
-              fi
-              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
-              sleep "$attempt"
-            done
-            echo "Failed to install $scanner after 3 attempts"
-            return 1
-          }
-          install_with_retry gitleaks
+          ai-guardian scanner install gitleaks --use-pinned
 
       - name: Create config
         run: |
@@ -391,20 +378,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .
-          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
-          install_with_retry() {
-            local scanner=$1
-            for attempt in 1 2 3; do
-              if ai-guardian scanner install "$scanner" --use-pinned; then
-                return 0
-              fi
-              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
-              sleep "$attempt"
-            done
-            echo "Failed to install $scanner after 3 attempts"
-            return 1
-          }
-          install_with_retry gitleaks
+          ai-guardian scanner install gitleaks --use-pinned
 
       - name: Create config
         run: |
@@ -499,20 +473,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install .
-          # Retry wrapper: GitHub Releases downloads occasionally drop connections (see #1942)
-          install_with_retry() {
-            local scanner=$1
-            for attempt in 1 2 3; do
-              if ai-guardian scanner install "$scanner" --use-pinned; then
-                return 0
-              fi
-              echo "Attempt $attempt failed for $scanner, retrying in ${attempt}s..."
-              sleep "$attempt"
-            done
-            echo "Failed to install $scanner after 3 attempts"
-            return 1
-          }
-          install_with_retry gitleaks
+          ai-guardian scanner install gitleaks --use-pinned
 
       - name: Create config
         run: |
