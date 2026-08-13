@@ -301,6 +301,7 @@ class GuardedAgent:
             "mode",
             "model",
             "cwd",
+            "target_dir",
             "allowed_paths",
             "follow_symlinks",
             "trace_dir",
@@ -338,10 +339,12 @@ class GuardedAgent:
         name: Optional[str] = None,
         trace_dir: Optional[str] = None,
         trace_path_fn: Optional[Callable[[str, Dict[str, Any]], str]] = None,
+        target_dir: Optional[str] = None,
         allowed_paths: Optional[List[str]] = None,
         follow_symlinks: bool = False,
     ):
         self._name = name
+        self._target_dir = target_dir
         self._trace_dir = trace_dir
         self._trace_path_fn = trace_path_fn
         self._last_trace: List[Dict[str, Any]] = []
@@ -643,7 +646,12 @@ class GuardedAgent:
         if self._trace_dir:
             trace_filepath = self._resolve_trace_filepath(started_at)
 
-        with monitor(mode=self._mode, config=self._config, cwd=self._cwd) as session:
+        with monitor(
+            mode=self._mode,
+            config=self._config,
+            cwd=self._cwd,
+            target_dir=self._target_dir,
+        ) as session:
             try:
                 return self._run_loop_inner(
                     prompt,

@@ -426,6 +426,35 @@ result = agent.run("Find and fix the bug described in JIRA-123")
 print(result["output"])
 ```
 
+### Target Project Allowlists
+
+When the agent operates on code from a different repo, use `target_dir` to load that project's suppression config (allowlists, ignore patterns):
+
+```python
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools=["bash", "text_editor"],
+    cwd="/workspace/target-repo",        # where to run tools
+    target_dir="/workspace/target-repo",  # whose allowlists to trust
+)
+```
+
+`target_dir` auto-discovers config files from the target directory:
+- `.ai-guardian/ai-guardian.json` — per-scanner allowlist patterns
+- `.aiguardignore.toml` — per-scanner file ignore paths
+- `.gitleaks.toml` — secret scanning path allowlist
+
+Only suppression data is merged (allowlist patterns, ignore files/tools). Scanner settings like `enabled`, `action`, and `sensitivity` are never imported from the target. Dangerous patterns (e.g., `.*`) are blocked by validation.
+
+`target_dir` is separate from `cwd` — `cwd` controls where tools execute, `target_dir` controls whose allowlists are applied. Both can point to the same directory. `target_dir` requires direct mode (the default); in REST mode the parameter is accepted but allowlists are not merged.
+
+The `monitor()` context manager also accepts `target_dir`:
+
+```python
+with monitor(target_dir="/path/to/target-repo") as session:
+    session.check_content(text)
+```
+
 ### Backend Auto-Detection
 
 Same as `guarded()` — detected from environment variables, or pass an explicit client:
