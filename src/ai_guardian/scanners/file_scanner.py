@@ -31,6 +31,7 @@ try:
     from ai_guardian.scanners.prompt_injection import (
         UnicodeAttackDetector,
         _offset_to_line_number,
+        get_cached_unicode_detector,
     )
 
     HAS_UNICODE = True
@@ -83,6 +84,7 @@ try:
     from ai_guardian.scanners.prompt_injection import (
         check_prompt_injection,
         PromptInjectionDetector,
+        get_cached_detector,
     )
 
     HAS_PROMPT_INJECTION = True
@@ -220,7 +222,7 @@ class FileScanner:
         ssrf_cfg["action"] = "block"
         self.ssrf_protector = SSRFProtector(ssrf_cfg) if HAS_SSRF else None
         self.unicode_detector = (
-            UnicodeAttackDetector(config.get("prompt_injection", {}))
+            get_cached_unicode_detector(config.get("prompt_injection", {}))
             if HAS_UNICODE
             else None
         )
@@ -1014,7 +1016,7 @@ class FileScanner:
             if not injection_config.get("enabled", True):
                 return
 
-            detector = PromptInjectionDetector(injection_config)
+            detector = get_cached_detector(injection_config)
             _should_block, error_message, detected = detector.detect(
                 content,
                 file_path=file_path,

@@ -129,10 +129,10 @@ def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
     Returns:
         Tuple of (sanitized_text, list of redactions)
     """
-    from ai_guardian.scanners.prompt_injection import PromptInjectionDetector
+    from ai_guardian.scanners.prompt_injection import get_cached_detector
 
     if detector is None:
-        detector = PromptInjectionDetector(_PI_DETECTOR_CONFIG)
+        detector = get_cached_detector(_PI_DETECTOR_CONFIG)
 
     redactions = []
 
@@ -260,7 +260,7 @@ def sanitize_text_batch(texts: List[str]) -> List[str]:
     if not texts:
         return []
 
-    from ai_guardian.scanners.prompt_injection import PromptInjectionDetector
+    from ai_guardian.scanners.prompt_injection import get_cached_detector
     from ai_guardian.scanners.secret_redactor import SecretRedactor
 
     config = get_sanitize_config()
@@ -268,7 +268,7 @@ def sanitize_text_batch(texts: List[str]) -> List[str]:
         config={"enabled": True},
         pii_config=config["scan_pii"],
     )
-    detector = PromptInjectionDetector(_PI_DETECTOR_CONFIG)
+    detector = get_cached_detector(_PI_DETECTOR_CONFIG)
 
     results = []
     for text in texts:

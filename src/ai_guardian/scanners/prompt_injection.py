@@ -17,6 +17,8 @@ NEW in v1.5.0: Optional pattern server support for homoglyph patterns.
 """
 
 import fnmatch
+import hashlib
+import json
 import logging
 import os
 import re
@@ -890,7 +892,7 @@ class PromptInjectionDetector:
         # If unicode_detection is not explicitly configured, enable by default
         if "enabled" not in unicode_config:
             unicode_config["enabled"] = True
-        self.unicode_detector = UnicodeAttackDetector(unicode_config)
+        self.unicode_detector = get_cached_unicode_detector(unicode_config)
 
     @staticmethod
     def _load_patterns_from_toml() -> Dict[str, List[str]]:
@@ -1499,6 +1501,13 @@ class PromptInjectionDetector:
             - detected: Whether injection was detected (True even in log mode, for violation logging)
         """
         self.findings = []
+        self.last_attack_type = "injection"
+        self.last_matched_pattern = None
+        self.last_matched_text = None
+        self.last_confidence = None
+        self.last_line_number = None
+        self.last_start_column = None
+        self.last_end_column = None
 
         if not self.enabled:
             return False, None, False
@@ -1764,6 +1773,46 @@ class PromptInjectionDetector:
         return self.findings
 
 
+def _config_hash(config: Optional[Dict[str, Any]]) -> str:
+    """Stable hash of a config dict for detector caching."""
+    blob = json.dumps(config or {}, sort_keys=True, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()
+
+
+_pi_detector_cache: Dict[str, "PromptInjectionDetector"] = {}
+_unicode_detector_cache: Dict[str, "UnicodeAttackDetector"] = {}
+
+
+def get_cached_detector(
+    config: Optional[Dict[str, Any]] = None,
+) -> "PromptInjectionDetector":
+    """Return a cached PromptInjectionDetector, reusing compiled patterns."""
+    key = _config_hash(config)
+    detector = _pi_detector_cache.get(key)
+    if detector is None:
+        detector = PromptInjectionDetector(config)
+        _pi_detector_cache[key] = detector
+    return detector
+
+
+def get_cached_unicode_detector(
+    config: Optional[Dict[str, Any]] = None,
+) -> "UnicodeAttackDetector":
+    """Return a cached UnicodeAttackDetector, reusing compiled patterns."""
+    key = _config_hash(config)
+    detector = _unicode_detector_cache.get(key)
+    if detector is None:
+        detector = UnicodeAttackDetector(config)
+        _unicode_detector_cache[key] = detector
+    return detector
+
+
+def invalidate_detector_cache() -> None:
+    """Clear all cached detector instances (e.g. after config reload)."""
+    _pi_detector_cache.clear()
+    _unicode_detector_cache.clear()
+
+
 def check_prompt_injection(
     content: str,
     config: Optional[Dict[str, Any]] = None,
@@ -1787,7 +1836,7 @@ def check_prompt_injection(
         - error_message: Error message if should_block is True, None otherwise
         - detected: Whether injection was detected (True even in log mode, for violation logging)
     """
-    detector = PromptInjectionDetector(config)
+    detector = get_cached_detector(config)
     return detector.detect(
         content, file_path=file_path, tool_name=tool_name, source_type=source_type
     )

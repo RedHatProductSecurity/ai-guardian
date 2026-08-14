@@ -227,7 +227,7 @@ class TestOnScanErrorPromptInjection(TestCase):
         with (
             patch("ai_guardian.hook_events.scanners.HAS_PROMPT_INJECTION", True),
             patch(
-                "ai_guardian.hook_events.scanners.PromptInjectionDetector",
+                "ai_guardian.hook_events.scanners.get_cached_detector",
                 side_effect=Exception("Injection check crashed"),
             ),
         ):
@@ -280,7 +280,7 @@ class TestOnScanErrorPromptInjection(TestCase):
         with (
             patch("ai_guardian.hook_events.scanners.HAS_PROMPT_INJECTION", True),
             patch(
-                "ai_guardian.hook_events.scanners.PromptInjectionDetector",
+                "ai_guardian.hook_events.scanners.get_cached_detector",
                 side_effect=Exception("Injection check crashed"),
             ),
         ):

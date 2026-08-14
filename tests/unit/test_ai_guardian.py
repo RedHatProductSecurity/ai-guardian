@@ -1949,10 +1949,10 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         mock_check_injection.assert_not_called()
 
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
-    @patch("ai_guardian.hook_events.scanners.PromptInjectionDetector")
+    @patch("ai_guardian.hook_events.scanners.get_cached_detector")
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_prompt_injection_time_based_expired_auto_enabled(
-        self, mock_check_secrets, mock_detector_class, mock_load_config
+        self, mock_check_secrets, mock_get_detector, mock_load_config
     ):
         """Test prompt injection detection auto-enabled after disable period expires"""
 
@@ -1970,7 +1970,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
         )
 
         mock_check_secrets.return_value = (False, None)
-        mock_instance = mock_detector_class.return_value
+        mock_instance = mock_get_detector.return_value
         mock_instance.detect.return_value = (True, "Injection detected", True)
         mock_instance.last_attack_type = "injection"
 
@@ -2114,12 +2114,12 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
     @patch("ai_guardian.config.loaders._load_prompt_injection_config")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
-    @patch("ai_guardian.hook_events.scanners.PromptInjectionDetector")
+    @patch("ai_guardian.hook_events.scanners.get_cached_detector")
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     def test_multiple_features_different_states(
         self,
         mock_check_secrets,
-        mock_detector_class,
+        mock_get_detector,
         mock_secret_config,
         mock_injection_config,
     ):
@@ -2137,7 +2137,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
             None,
         )
 
-        mock_instance = mock_detector_class.return_value
+        mock_instance = mock_get_detector.return_value
         mock_instance.detect.return_value = (False, None, False)
         mock_instance.last_attack_type = "injection"
         mock_check_secrets.return_value = (True, "Secret detected")

@@ -66,8 +66,13 @@ def _isolate_config_dir(tmp_path):
 
         _cl._sdk_overlay = None
         _cl._clear_config_cache()
+        # Clear cached detector instances to prevent cross-test leaks
+        from ai_guardian.scanners.prompt_injection import invalidate_detector_cache
+
+        invalidate_detector_cache()
         yield config_dir
         _cl._sdk_overlay = None
+        invalidate_detector_cache()
 
 
 @pytest.fixture
