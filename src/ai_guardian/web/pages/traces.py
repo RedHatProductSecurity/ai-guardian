@@ -39,8 +39,9 @@ def create_traces_page(service, daemon_name: str):
             ).classes("w-48")
 
             async def _on_refresh():
-                if state["load_fn"]:
-                    await state["load_fn"]()
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
 
             ui.button("Refresh", icon="refresh", on_click=_on_refresh).props(
                 "dense outline"
