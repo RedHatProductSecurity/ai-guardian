@@ -160,6 +160,13 @@ NAV_GROUPS = [
             ("Metrics & Audit", "panel-metrics"),
             ("Performance", "panel-performance"),
             ("Logs", "panel-logs"),
+        ],
+    ),
+    (
+        "SDK",
+        [
+            ("Agent Profiles", "panel-sdk-agents"),
+            ("SDK Settings", "panel-sdk-settings"),
             ("Trace Viewer", "panel-traces"),
         ],
     ),
@@ -811,6 +818,47 @@ HELP_DOCS = {
         "  ~/.local/state/ai-guardian/sdk/traces/\n\n"
         "[bold]Keyboard shortcuts:[/bold]\n"
         "  [bold]r[/bold]  Refresh trace list"
+    ),
+    "SDK": (
+        "[bold]SDK[/bold]\n\n"
+        "Configure the AI Guardian SDK for programmatic security "
+        "checking (GuardedAgent, guarded() wrapper).\n\n"
+        "[bold]Sections:[/bold]\n"
+        "  [bold]Agent Profiles[/bold] — Per-agent configuration "
+        "(model, max_turns, tools, mode)\n"
+        "  [bold]SDK Settings[/bold] — Global scanning and secret "
+        "redaction toggles\n"
+        "  [bold]Trace Viewer[/bold] — Conversation traces from "
+        "GuardedAgent runs"
+    ),
+    "panel-sdk-agents": (
+        "[bold]Agent Profiles[/bold]\n\n"
+        "Configure GuardedAgent profiles. The '*' profile provides "
+        "defaults applied to all agents. Named profiles override "
+        "wildcard values.\n\n"
+        "[bold]Profile fields:[/bold]\n"
+        "  [bold]Model[/bold] — LLM model ID override\n"
+        "  [bold]Max Turns[/bold] — Maximum tool-use loop iterations\n"
+        "  [bold]Tools[/bold] — Tool preset (coding, readonly) or list\n"
+        "  [bold]Mode[/bold] — Scanning mode (direct or rest)\n"
+        "  [bold]Compact Threshold[/bold] — Context compaction trigger "
+        "(0.0-1.0)\n\n"
+        "[bold]Actions:[/bold]\n"
+        "  Add Profile — Create a new named profile\n"
+        "  Delete Profile — Remove selected (cannot delete *)"
+    ),
+    "panel-sdk-settings": (
+        "[bold]SDK Settings[/bold]\n\n"
+        "Global SDK scanning and secret redaction toggles.\n\n"
+        "[bold]Settings:[/bold]\n"
+        "  [bold]Scanning[/bold] — Global enable/disable for all SDK "
+        "scanning. When off, SDK skips all input/output scanning.\n"
+        "  [bold]Secret Redaction[/bold] — Redact detected secrets in "
+        "live SDK content. Off by default because redaction breaks "
+        "code in the agentic loop.\n\n"
+        "[bold]Note:[/bold]\n"
+        "  Traces are always sanitized independently of the secret "
+        "redaction toggle."
     ),
     "panel-directory-rules": (
         "[bold]Directory Rules[/bold]\n\n"
@@ -1525,6 +1573,16 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.logs import LogsContent
 
                     yield LogsContent()
+
+                with Container(id="panel-sdk-agents"):
+                    from ai_guardian.tui.sdk_agents import SDKAgentsContent
+
+                    yield SDKAgentsContent()
+
+                with Container(id="panel-sdk-settings"):
+                    from ai_guardian.tui.sdk_settings import SDKSettingsContent
+
+                    yield SDKSettingsContent()
 
                 with Container(id="panel-traces"):
                     from ai_guardian.tui.traces import TracesContent
