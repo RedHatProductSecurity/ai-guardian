@@ -1104,6 +1104,112 @@ HELP_DOCS = {
 # ai-guardian:end-allow
 
 
+class ProjectDirModal(ModalScreen):
+    """Modal for entering a project directory path."""
+
+    CSS = """
+    ProjectDirModal {
+        align: center middle;
+    }
+
+    #project-dir-container {
+        width: 72;
+        height: auto;
+        max-height: 50%;
+        background: $panel;
+        border: thick $primary;
+        padding: 1 2;
+    }
+
+    #project-dir-title {
+        margin: 0 0 1 0;
+        text-align: center;
+        text-style: bold;
+        color: $accent;
+    }
+
+    #project-dir-input {
+        margin: 1 0;
+    }
+
+    #project-dir-error {
+        color: $error;
+        margin: 0 0 1 0;
+    }
+
+    #project-dir-footer {
+        margin: 1 0 0 0;
+        height: auto;
+        align: center middle;
+    }
+
+    #project-dir-footer Button {
+        margin: 0 1 0 0;
+    }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel", show=False),
+    ]
+
+    def __init__(self, current_dir: str = "", *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._current_dir = current_dir
+
+    def compose(self) -> ComposeResult:
+        from pathlib import Path
+
+        default = self._current_dir or str(Path.cwd())
+        with Container(id="project-dir-container"):
+            yield Static(
+                "[bold $accent]Select Project Directory[/bold $accent]",
+                id="project-dir-title",
+            )
+            yield Static(
+                "Enter the path to a project directory:",
+                classes="muted",
+            )
+            yield Input(
+                value=default,
+                placeholder="/path/to/project",
+                id="project-dir-input",
+            )
+            yield Static("", id="project-dir-error")
+            with Horizontal(id="project-dir-footer"):
+                yield Button("Cancel (ESC)", id="cancel-project", variant="default")
+                yield Button("Select", id="select-project", variant="primary")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self._try_select()
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "cancel-project":
+            self.dismiss(None)
+        elif event.button.id == "select-project":
+            self._try_select()
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+
+    def _try_select(self) -> None:
+        from pathlib import Path
+
+        path_input = self.query_one("#project-dir-input", Input)
+        error_label = self.query_one("#project-dir-error", Static)
+        value = path_input.value.strip()
+
+        if not value:
+            error_label.update("[red]Path cannot be empty[/red]")
+            return
+
+        p = Path(value).expanduser().resolve()
+        if not p.is_dir():
+            error_label.update(f"[red]Not a directory: {p}[/red]")
+            return
+
+        self.dismiss(str(p))
+
+
 class HelpModal(ModalScreen):
     """Modal for displaying inline help documentation."""
 
@@ -1926,15 +2032,34 @@ class AIGuardianTUI(App):
         return True
 
     def action_scope_project(self) -> None:
-        """Switch to project scope."""
-        self.config_scope = "project"
-        self.sub_title = "[Project]"
-        self.refresh_bindings()
-        self._refresh_scope_panels()
-        self.notify("Scope: Project", severity="information")
+        """Prompt for project directory, then switch to project scope."""
+
+        def on_result(project_dir: Optional[str]) -> None:
+            if project_dir is None:
+                return
+            from ai_guardian.config.utils import set_project_dir_override
+
+            set_project_dir_override(project_dir)
+            self.config_scope = "project"
+            self.sub_title = f"[Project: {project_dir}]"
+            self.refresh_bindings()
+            self._refresh_scope_panels()
+            self.notify(f"Scope: Project ({project_dir})", severity="information")
+
+        current = ""
+        try:
+            from ai_guardian.config.utils import get_project_dir
+
+            current = get_project_dir()
+        except Exception:
+            pass
+        self.push_screen(ProjectDirModal(current_dir=current), on_result)
 
     def action_scope_global(self) -> None:
         """Switch to global scope."""
+        from ai_guardian.config.utils import clear_project_dir_override
+
+        clear_project_dir_override()
         self.config_scope = "global"
         self.sub_title = ""
         self.refresh_bindings()

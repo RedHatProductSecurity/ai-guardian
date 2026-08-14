@@ -1,10 +1,14 @@
 """Shared header and navigation components for the web console."""
 
+from pathlib import Path
+
 from nicegui import ui
 
 from ai_guardian import __version__
 
 from ai_guardian.constants import SLUG_TO_CONFIG_SECTION
+
+_BROWSE_SENTINEL = "__browse__"
 
 _show_disabled_scanners = True
 
@@ -490,11 +494,140 @@ def _create_scope_toggle():
         scope_toggle.on_value_change(on_scope_change)
 
 
+def _get_custom_project_dirs():
+    """Read user-added custom project directories from session storage."""
+    try:
+        from nicegui import app
+
+        return list(app.storage.user.get("custom_project_dirs") or [])
+    except Exception:
+        return []
+
+
+def _add_custom_project_dir(directory: str):
+    """Add a directory to the custom project dirs list in session storage."""
+    try:
+        from nicegui import app
+
+        dirs = list(app.storage.user.get("custom_project_dirs") or [])
+        if directory not in dirs:
+            dirs.append(directory)
+            app.storage.user["custom_project_dirs"] = dirs
+    except Exception:
+        pass
+
+
+def _open_project_browse_dialog(project_select):
+    """Open a directory browser dialog for selecting a project directory.
+
+    On selection, the directory is added to custom_project_dirs in session
+    storage, set as the active project, and the page reloads.
+    """
+    from ai_guardian.web.config_helpers import set_current_project_dir
+
+    try:
+        from nicegui import app
+
+        current = app.storage.user.get("project_dir") or ""
+    except Exception:
+        current = ""
+
+    try:
+        browse_path = Path(current).resolve() if current else Path.home()
+        if not browse_path.is_dir():
+            browse_path = browse_path.parent
+    except Exception:
+        browse_path = Path.home()
+
+    state = {"current": browse_path}
+
+    with ui.dialog() as dlg, ui.card().classes("w-full max-w-lg"):
+        ui.label("Browse for Project Directory").classes("text-lg font-bold")
+        current_label = (
+            ui.label(str(state["current"]))
+            .classes("text-xs text-grey-4")
+            .style("font-family: monospace; word-break: break-all")
+        )
+
+        file_list = ui.column().classes("w-full")
+
+        def refresh_listing():
+            file_list.clear()
+            p = state["current"]
+            current_label.text = str(p)
+
+            with file_list:
+                if p.parent != p:
+                    ui.button(
+                        ".. (parent)",
+                        icon="arrow_upward",
+                        on_click=lambda: go_to(p.parent),
+                    ).props("dense flat no-caps align=left").classes("w-full")
+
+                try:
+                    entries = sorted(
+                        p.iterdir(),
+                        key=lambda e: (not e.is_dir(), e.name.lower()),
+                    )
+                except PermissionError:
+                    ui.label("Permission denied").classes("text-red text-sm")
+                    return
+
+                dirs_shown = 0
+                for entry in entries:
+                    if entry.name.startswith("."):
+                        continue
+                    if entry.is_dir():
+                        dirs_shown += 1
+                        if dirs_shown > 50:
+                            ui.label("... and more directories").classes(
+                                "text-xs text-grey-6"
+                            )
+                            break
+                        ui.button(
+                            entry.name,
+                            icon="folder",
+                            on_click=lambda e=entry: go_to(e),
+                        ).props("dense flat no-caps align=left").classes("w-full")
+
+        def go_to(new_path):
+            state["current"] = new_path.resolve()
+            refresh_listing()
+
+        with ui.scroll_area().classes("w-full").style("height: 350px"):
+            refresh_listing()
+
+        with ui.row().classes("w-full justify-end mt-2"):
+            ui.button("Cancel", on_click=dlg.close).props("flat")
+
+            async def on_select():
+                selected = str(state["current"])
+                _add_custom_project_dir(selected)
+                try:
+                    from nicegui import app as _app
+
+                    _app.storage.user["project_dir"] = selected
+                except Exception:
+                    pass
+                set_current_project_dir(selected)
+                dlg.close()
+                await ui.run_javascript("location.reload()")
+
+            ui.button(
+                "Select",
+                on_click=on_select,
+            ).props("color=positive")
+
+    dlg.open()
+
+
 def _create_project_selector(daemon_name: str):
     """Create a project directory selector for daemon config pages.
 
     Shows for all daemons (local and remote). Populates from the daemon's
-    tracked project directories (active_project_dirs from /api/stats).
+    tracked project directories (active_project_dirs from /api/stats)
+    merged with user-added custom directories. Includes a "Browse..."
+    option to add undiscovered project directories.
     Stores selection in session state and reloads the page on change.
     """
     if not daemon_name:
@@ -519,6 +652,7 @@ def _create_project_selector(daemon_name: str):
         initial_options = {"": "Global only"}
         if current:
             initial_options[current] = _shorten_project_path(current)
+        initial_options[_BROWSE_SENTINEL] = "Browse..."
 
         project_select = (
             ui.select(
@@ -535,15 +669,31 @@ def _create_project_selector(daemon_name: str):
 
         async def _populate():
             dirs = await run.io_bound(load_web_projects)
+            custom = _get_custom_project_dirs()
+            all_dirs = sorted(set(dirs) | set(custom))
             options = {"": "Global only"}
-            for d in dirs:
+            for d in all_dirs:
                 options[d] = _shorten_project_path(d)
+            options[_BROWSE_SENTINEL] = "Browse..."
             project_select.options = options
             project_select.update()
             if current and current not in options:
                 project_select.value = ""
 
+        _browsing = {"active": False}
+
         async def on_project_change(e):
+            if e.value == _BROWSE_SENTINEL:
+                if not _browsing["active"]:
+                    _browsing["active"] = True
+                    project_select.value = current
+                    ui.timer(
+                        0.1,
+                        lambda: _open_project_browse_dialog(project_select),
+                        once=True,
+                    )
+                return
+            _browsing["active"] = False
             try:
                 from nicegui import app as _app
 
