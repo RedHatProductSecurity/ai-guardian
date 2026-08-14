@@ -53,6 +53,15 @@ ai-guardian daemon start -b        # background daemon (faster hook processing)
 ai-guardian tray start -b          # system tray (optional — manage daemons visually)
 ```
 
+### 4. Open the Console
+
+```bash
+ai-guardian console              # web console (recommended, Python 3.10+)
+ai-guardian tui                  # terminal console (all Python versions)
+```
+
+Manage settings, view violations, and scan projects. See [docs/CONSOLE.md](docs/CONSOLE.md).
+
 Done. Open your IDE and start coding — ai-guardian protects automatically.
 
 > **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
