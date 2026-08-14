@@ -37,6 +37,7 @@ NAV_GROUPS = [
             ("Metrics & Audit", "/metrics"),
             ("Performance", "/performance"),
             ("Logs", "/logs"),
+            ("Trace Viewer", "/traces"),
         ],
     ),
     (

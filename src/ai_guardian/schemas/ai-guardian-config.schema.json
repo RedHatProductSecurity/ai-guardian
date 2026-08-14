@@ -2744,6 +2744,20 @@
             "type": "object",
             "additionalProperties": true
           }
+        },
+        "trace_viewer": {
+          "type": "object",
+          "description": "Console trace viewer settings. The trace directory is read from sdk.agents.*.trace_dir.",
+          "additionalProperties": false,
+          "properties": {
+            "auto_refresh_interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300,
+              "description": "Polling interval in seconds for auto-refresh of active conversations in the web console.",
+              "default": 5
+            }
+          }
         }
       }
     }
