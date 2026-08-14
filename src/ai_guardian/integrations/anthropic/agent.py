@@ -3,6 +3,7 @@
 import json
 import logging
 import os
+import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
@@ -511,6 +512,8 @@ class GuardedAgent:
         started_at: datetime,
         session: Any,
         filepath: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        run_start_mono: Optional[float] = None,
     ) -> None:
         try:
             if filepath is None:
@@ -520,15 +523,24 @@ class GuardedAgent:
 
             sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
 
+            ended_at = datetime.now(timezone.utc)
             agent_name = self._name or "agent"
             trace_doc = {
                 "agent_name": agent_name,
                 "model": self._model,
                 "started_at": started_at.isoformat(),
+                "ended_at": ended_at.isoformat(),
                 "stop_reason": result.get("stop_reason"),
                 "usage": result.get("usage"),
+                "max_tokens": self._max_tokens,
                 "trace": sanitized_trace,
             }
+            if trace_id:
+                trace_doc["trace_id"] = trace_id
+            if run_start_mono is not None:
+                trace_doc["duration_ms"] = int(
+                    (time.monotonic() - run_start_mono) * 1000
+                )
             with open(filepath, "w", encoding="utf-8") as fh:
                 json.dump(trace_doc, fh, indent=2, default=str)
             logger.debug("Trace written to %s", filepath)
@@ -671,6 +683,8 @@ class GuardedAgent:
                 self._on_turn(turn_num, event)
 
         started_at = datetime.now(timezone.utc)
+        run_start_mono = time.monotonic()
+        trace_id = uuid.uuid4().hex
         trace_filepath = None
         if self._trace_dir:
             trace_filepath = self._resolve_trace_filepath(started_at)
@@ -690,12 +704,21 @@ class GuardedAgent:
                     session,
                     started_at,
                     trace_filepath,
+                    trace_id=trace_id,
+                    run_start_mono=run_start_mono,
                 )
             except BaseException as exc:
                 exc.trace = trace
                 if self._trace_dir:
                     partial = {"trace": trace, "stop_reason": "error"}
-                    self._persist_trace(partial, started_at, session, trace_filepath)
+                    self._persist_trace(
+                        partial,
+                        started_at,
+                        session,
+                        trace_filepath,
+                        trace_id=trace_id,
+                        run_start_mono=run_start_mono,
+                    )
                 raise
 
     def _run_loop_inner(
@@ -707,7 +730,10 @@ class GuardedAgent:
         session: Any,
         started_at: datetime,
         trace_filepath: Optional[str] = None,
+        trace_id: Optional[str] = None,
+        run_start_mono: Optional[float] = None,
     ) -> Dict[str, Any]:
+        parent_span_id = uuid.uuid4().hex
         _emit(
             0,
             TurnEvent(
@@ -750,7 +776,14 @@ class GuardedAgent:
                     "error": "System prompt blocked by security scan",
                 }
                 if self._trace_dir:
-                    self._persist_trace(result, started_at, session, trace_filepath)
+                    self._persist_trace(
+                        result,
+                        started_at,
+                        session,
+                        trace_filepath,
+                        trace_id=trace_id,
+                        run_start_mono=run_start_mono,
+                    )
                 return result
 
         if self._scanning:
@@ -785,7 +818,14 @@ class GuardedAgent:
                     "error": "User prompt blocked by security scan",
                 }
                 if self._trace_dir:
-                    self._persist_trace(result, started_at, session, trace_filepath)
+                    self._persist_trace(
+                        result,
+                        started_at,
+                        session,
+                        trace_filepath,
+                        trace_id=trace_id,
+                        run_start_mono=run_start_mono,
+                    )
                 return result
 
         messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
@@ -806,321 +846,72 @@ class GuardedAgent:
 
         for _turn in range(self._max_turns):
             turn_num = _turn + 1
+            turn_start_mono = time.monotonic()
+            turn_started_at = datetime.now(timezone.utc)
+            span_id = uuid.uuid4().hex
             did_compact = False
             compact_result = None
 
-            if _turn > 0:
-                messages, did_compact, compact_result = self._maybe_compact(
-                    strategy, messages, last_input_tokens
-                )
-                if did_compact:
-                    compaction_count += 1
+            try:
+                if _turn > 0:
+                    messages, did_compact, compact_result = self._maybe_compact(
+                        strategy, messages, last_input_tokens
+                    )
+                    if did_compact:
+                        compaction_count += 1
 
-            _emit(
-                turn_num,
-                TurnEvent(
-                    type="input",
-                    messages_count=len(messages),
-                    compacted=did_compact,
-                ),
-            )
-
-            if did_compact:
                 _emit(
                     turn_num,
                     TurnEvent(
-                        type="compaction",
-                        tokens_before=compact_result.tokens_before,
-                        tokens_after=compact_result.tokens_after,
-                        method=compact_result.method,
+                        type="input",
+                        messages_count=len(messages),
+                        compacted=did_compact,
                     ),
                 )
 
-            create_kwargs = strategy.build_create_kwargs(
-                model=self._model,
-                max_tokens=self._max_tokens,
-                tools=self._resolved_tools,
-                messages=messages,
-                system=system,
-                cache_ttl=self._cache_ttl,
-            )
-
-            if self._before_call:
-                self._before_call(strategy.api_method_name, (), create_kwargs)
-
-            response = strategy.call_api(self._client, create_kwargs)
-            parsed = strategy.parse_response(response)
-
-            turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
-            for _f, _v in turn_usage.items():
-                usage_totals[_f] += _v
-            last_input_tokens = parsed.input_tokens
-            trace_usage = {f: turn_usage.get(f, 0) for f in _USAGE_TOKEN_FIELDS}
-            _emit(
-                turn_num,
-                TurnEvent(
-                    type="response",
-                    text=parsed.text,
-                    model_signal=parsed.stop_reason,
-                    usage=trace_usage,
-                ),
-            )
-
-            if trace_filepath:
-                partial = {
-                    "trace": trace,
-                    "stop_reason": "in_progress",
-                    "usage": usage_totals,
-                }
-                self._persist_trace(partial, started_at, session, trace_filepath)
-
-            if self._scanning and parsed.text:
-                try:
-                    scan_result = session.check_content(
-                        parsed.text, filename="agent_response"
-                    )
-                    _emit(
-                        turn_num,
-                        TurnEvent(type="scan", scanned="agent_response"),
-                    )
-                    if session.secret_redaction_enabled and scan_result.detected:
-                        sanitized = _try_sanitize_text(session, parsed.text)
-                        if sanitized:
-                            parsed.text = sanitized
-                            parsed.raw_content = strategy.replace_response_text(
-                                parsed.raw_content, sanitized
-                            )
-                except SecurityViolation as exc:
+                if did_compact:
                     _emit(
                         turn_num,
                         TurnEvent(
-                            type="scan",
-                            scanned="agent_response",
-                            violations=[
-                                {
-                                    "type": exc.result.violation_type,
-                                    "message": exc.result.message,
-                                }
-                            ],
+                            type="compaction",
+                            tokens_before=compact_result.tokens_before,
+                            tokens_after=compact_result.tokens_after,
+                            method=compact_result.method,
                         ),
                     )
-                    warning = (
-                        f"[ai-guardian] Your response was blocked: "
-                        f"{exc.result.violation_type}.\n"
-                        f"Rephrase without the flagged content."
-                    )
-                    strategy.append_assistant_message(messages, parsed.raw_content)
-                    if parsed.tool_calls:
-                        blocked_results = [
-                            strategy.format_tool_result(
-                                tc.id,
-                                "[ai-guardian] Response blocked "
-                                "— tool execution skipped.",
-                                is_error=True,
-                            )
-                            for tc in parsed.tool_calls
-                        ]
-                        blocked_results.append({"type": "text", "text": warning})
-                        messages.append({"role": "user", "content": blocked_results})
-                    else:
-                        messages.append({"role": "user", "content": warning})
-                    continue
 
-            early_stop = False
-            if self._after_call:
-                hook_result = self._after_call(strategy.api_method_name, response)
-                if hook_result is False:
-                    early_stop = True
-
-            if self._max_budget_tokens > 0:
-                total_spent = (
-                    usage_totals["input_tokens"] + usage_totals["output_tokens"]
+                create_kwargs = strategy.build_create_kwargs(
+                    model=self._model,
+                    max_tokens=self._max_tokens,
+                    tools=self._resolved_tools,
+                    messages=messages,
+                    system=system,
+                    cache_ttl=self._cache_ttl,
                 )
-                if total_spent >= self._max_budget_tokens:
-                    final_text = parsed.text
-                    stop_reason = "budget_exceeded"
-                    break
 
-            if early_stop:
-                final_text = parsed.text
-                stop_reason = "hook_early_stop"
-                break
+                if self._before_call:
+                    self._before_call(strategy.api_method_name, (), create_kwargs)
 
-            if parsed.stop_reason == "end_turn":
-                if self._output_schema and structured_output is None:
-                    strategy.append_assistant_message(messages, parsed.raw_content)
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": (
-                                "You must call the submit_result tool with "
-                                "your structured output. Do not respond with "
-                                "plain text."
-                            ),
-                        }
-                    )
-                    continue
+                api_start = time.monotonic()
+                response = strategy.call_api(self._client, create_kwargs)
+                api_latency_ms = int((time.monotonic() - api_start) * 1000)
+                parsed = strategy.parse_response(response)
 
-                if self._between_turns:
-                    hook_result = self._between_turns(messages, response, _turn)
-                    if hook_result is False:
-                        final_text = parsed.text
-                        stop_reason = "hook_early_stop"
-                        break
-                    if isinstance(hook_result, str):
-                        _injection_blocked = False
-                        _violation_type = ""
-                        if self._scanning:
-                            try:
-                                session.check_content(
-                                    hook_result,
-                                    filename="between_turns_injection",
-                                )
-                            except SecurityViolation as exc:
-                                _emit(
-                                    turn_num,
-                                    TurnEvent(
-                                        type="scan",
-                                        scanned="between_turns_injection",
-                                        violations=[
-                                            {
-                                                "type": exc.result.violation_type,
-                                                "message": exc.result.message,
-                                            }
-                                        ],
-                                    ),
-                                )
-                                logger.warning(
-                                    "between_turns injection blocked by "
-                                    "security scan: %s",
-                                    exc.result.message,
-                                )
-                                _injection_blocked = True
-                                _violation_type = exc.result.violation_type
-                        if _injection_blocked:
-                            strategy.append_assistant_message(
-                                messages, parsed.raw_content
-                            )
-                            messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "[ai-guardian] Injected content was "
-                                        f"blocked: {_violation_type}. "
-                                        "The content contained flagged patterns "
-                                        "and was not added to context."
-                                    ),
-                                }
-                            )
-                            continue
-                        strategy.append_assistant_message(messages, parsed.raw_content)
-                        messages.append({"role": "user", "content": hook_result})
-                        continue
-
-                final_text = parsed.text
-                stop_reason = "end_turn"
-                break
-
-            if parsed.stop_reason == "refusal":
-                final_text = parsed.text
-                stop_reason = "refusal"
-                break
-
-            if parsed.stop_reason in ("tool_use", "pause_turn"):
-                tool_results: List[Dict[str, Any]] = []
-                for tc in parsed.tool_calls:
-                    if tc.name == "submit_result":
-                        structured_output = tc.input
-                        _emit(
-                            turn_num,
-                            TurnEvent(
-                                type="tool_call",
-                                name=tc.name,
-                                input=tc.input,
-                            ),
-                        )
-                        tool_results.append(
-                            strategy.format_tool_result(tc.id, "Result submitted.")
-                        )
-                        continue
-
-                    if strategy.is_server_tool(tc.name):
-                        continue
-
-                    _emit(
-                        turn_num,
-                        TurnEvent(type="tool_call", name=tc.name, input=tc.input),
-                    )
-
-                    result_text = execute_tool(
-                        tc.name,
-                        tc.input,
-                        self._cwd,
-                        self._allowed_paths,
-                        self._follow_symlinks,
-                    )
-
-                    _emit(
-                        turn_num,
-                        TurnEvent(type="tool_result", name=tc.name, output=result_text),
-                    )
-
-                    if self._scanning and result_text:
-                        bash_cmd = (
-                            tc.input.get("command") if tc.name == "Bash" else None
-                        )
-                        try:
-                            scan_result = session.check_content(
-                                result_text,
-                                filename=f"tool_result:{tc.name}",
-                                source_command=bash_cmd,
-                            )
-                            _emit(
-                                turn_num,
-                                TurnEvent(
-                                    type="scan",
-                                    scanned=f"tool_result:{tc.name}",
-                                ),
-                            )
-                            if (
-                                session.secret_redaction_enabled
-                                and scan_result.detected
-                            ):
-                                sanitized = _try_sanitize_text(session, result_text)
-                                if sanitized:
-                                    result_text = sanitized
-                        except SecurityViolation as exc:
-                            result_text = (
-                                f"[ai-guardian] Content blocked: "
-                                f"{exc.result.violation_type}.\n"
-                                f"{exc.result.message}\n"
-                                f"Try a different approach."
-                            )
-                            _emit(
-                                turn_num,
-                                TurnEvent(
-                                    type="scan",
-                                    scanned=f"tool_result:{tc.name}",
-                                    violations=[
-                                        {
-                                            "type": exc.result.violation_type,
-                                            "message": exc.result.message,
-                                        }
-                                    ],
-                                ),
-                            )
-
-                    is_error = result_text.startswith("Error: no executor")
-                    tool_results.append(
-                        strategy.format_tool_result(
-                            tc.id, result_text, is_error=is_error
-                        )
-                    )
-
-                if tool_results:
-                    strategy.append_assistant_and_results(
-                        messages, parsed.raw_content, tool_results
-                    )
+                turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
+                for _f, _v in turn_usage.items():
+                    usage_totals[_f] += _v
+                last_input_tokens = parsed.input_tokens
+                trace_usage = {f: turn_usage.get(f, 0) for f in _USAGE_TOKEN_FIELDS}
+                _emit(
+                    turn_num,
+                    TurnEvent(
+                        type="response",
+                        text=parsed.text,
+                        model_signal=parsed.stop_reason,
+                        usage=trace_usage,
+                        latency_ms=api_latency_ms,
+                    ),
+                )
 
                 if trace_filepath:
                     partial = {
@@ -1128,29 +919,258 @@ class GuardedAgent:
                         "stop_reason": "in_progress",
                         "usage": usage_totals,
                     }
-                    self._persist_trace(partial, started_at, session, trace_filepath)
+                    self._persist_trace(
+                        partial,
+                        started_at,
+                        session,
+                        trace_filepath,
+                        trace_id=trace_id,
+                        run_start_mono=run_start_mono,
+                    )
 
-                if self._between_turns:
-                    hook_result = self._between_turns(messages, response, _turn)
-                    if hook_result is False:
-                        final_text = parsed.text
-                        stop_reason = "hook_early_stop"
-                        break
-                    if isinstance(hook_result, str):
-                        _injection_blocked = False
-                        _violation_type = ""
-                        if self._scanning:
-                            try:
-                                session.check_content(
-                                    hook_result,
-                                    filename="between_turns_injection",
+                if self._scanning and parsed.text:
+                    try:
+                        scan_result = session.check_content(
+                            parsed.text, filename="agent_response"
+                        )
+                        _emit(
+                            turn_num,
+                            TurnEvent(type="scan", scanned="agent_response"),
+                        )
+                        if session.secret_redaction_enabled and scan_result.detected:
+                            sanitized = _try_sanitize_text(session, parsed.text)
+                            if sanitized:
+                                parsed.text = sanitized
+                                parsed.raw_content = strategy.replace_response_text(
+                                    parsed.raw_content, sanitized
                                 )
-                            except SecurityViolation as exc:
+                    except SecurityViolation as exc:
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="scan",
+                                scanned="agent_response",
+                                violations=[
+                                    {
+                                        "type": exc.result.violation_type,
+                                        "message": exc.result.message,
+                                    }
+                                ],
+                            ),
+                        )
+                        warning = (
+                            f"[ai-guardian] Your response was blocked: "
+                            f"{exc.result.violation_type}.\n"
+                            f"Rephrase without the flagged content."
+                        )
+                        strategy.append_assistant_message(messages, parsed.raw_content)
+                        if parsed.tool_calls:
+                            blocked_results = [
+                                strategy.format_tool_result(
+                                    tc.id,
+                                    "[ai-guardian] Response blocked "
+                                    "— tool execution skipped.",
+                                    is_error=True,
+                                )
+                                for tc in parsed.tool_calls
+                            ]
+                            blocked_results.append({"type": "text", "text": warning})
+                            messages.append(
+                                {"role": "user", "content": blocked_results}
+                            )
+                        else:
+                            messages.append({"role": "user", "content": warning})
+                        continue
+
+                early_stop = False
+                if self._after_call:
+                    hook_result = self._after_call(strategy.api_method_name, response)
+                    if hook_result is False:
+                        early_stop = True
+
+                if self._max_budget_tokens > 0:
+                    total_spent = (
+                        usage_totals["input_tokens"] + usage_totals["output_tokens"]
+                    )
+                    if total_spent >= self._max_budget_tokens:
+                        final_text = parsed.text
+                        stop_reason = "budget_exceeded"
+                        break
+
+                if early_stop:
+                    final_text = parsed.text
+                    stop_reason = "hook_early_stop"
+                    break
+
+                if parsed.stop_reason == "end_turn":
+                    if self._output_schema and structured_output is None:
+                        strategy.append_assistant_message(messages, parsed.raw_content)
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You must call the submit_result tool with "
+                                    "your structured output. Do not respond "
+                                    "with plain text."
+                                ),
+                            }
+                        )
+                        continue
+
+                    if self._between_turns:
+                        hook_result = self._between_turns(messages, response, _turn)
+                        if hook_result is False:
+                            final_text = parsed.text
+                            stop_reason = "hook_early_stop"
+                            break
+                        if isinstance(hook_result, str):
+                            _injection_blocked = False
+                            _violation_type = ""
+                            if self._scanning:
+                                try:
+                                    session.check_content(
+                                        hook_result,
+                                        filename="between_turns_injection",
+                                    )
+                                except SecurityViolation as exc:
+                                    _emit(
+                                        turn_num,
+                                        TurnEvent(
+                                            type="scan",
+                                            scanned="between_turns_injection",
+                                            violations=[
+                                                {
+                                                    "type": exc.result.violation_type,
+                                                    "message": exc.result.message,
+                                                }
+                                            ],
+                                        ),
+                                    )
+                                    logger.warning(
+                                        "between_turns injection blocked by "
+                                        "security scan: %s",
+                                        exc.result.message,
+                                    )
+                                    _injection_blocked = True
+                                    _violation_type = exc.result.violation_type
+                            if _injection_blocked:
+                                strategy.append_assistant_message(
+                                    messages, parsed.raw_content
+                                )
+                                messages.append(
+                                    {
+                                        "role": "user",
+                                        "content": (
+                                            "[ai-guardian] Injected content was "
+                                            f"blocked: {_violation_type}. "
+                                            "The content contained flagged "
+                                            "patterns and was not added to "
+                                            "context."
+                                        ),
+                                    }
+                                )
+                                continue
+                            strategy.append_assistant_message(
+                                messages, parsed.raw_content
+                            )
+                            messages.append({"role": "user", "content": hook_result})
+                            continue
+
+                    final_text = parsed.text
+                    stop_reason = "end_turn"
+                    break
+
+                if parsed.stop_reason == "refusal":
+                    final_text = parsed.text
+                    stop_reason = "refusal"
+                    break
+
+                if parsed.stop_reason in ("tool_use", "pause_turn"):
+                    tool_results: List[Dict[str, Any]] = []
+                    for tc in parsed.tool_calls:
+                        if tc.name == "submit_result":
+                            structured_output = tc.input
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="tool_call",
+                                    name=tc.name,
+                                    input=tc.input,
+                                ),
+                            )
+                            tool_results.append(
+                                strategy.format_tool_result(tc.id, "Result submitted.")
+                            )
+                            continue
+
+                        if strategy.is_server_tool(tc.name):
+                            continue
+
+                        _emit(
+                            turn_num,
+                            TurnEvent(type="tool_call", name=tc.name, input=tc.input),
+                        )
+
+                        tool_start = time.monotonic()
+                        result_text = execute_tool(
+                            tc.name,
+                            tc.input,
+                            self._cwd,
+                            self._allowed_paths,
+                            self._follow_symlinks,
+                        )
+                        tool_latency_ms = int((time.monotonic() - tool_start) * 1000)
+                        tool_output_bytes = (
+                            len(result_text.encode("utf-8")) if result_text else 0
+                        )
+
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="tool_result",
+                                name=tc.name,
+                                output=result_text,
+                                latency_ms=tool_latency_ms,
+                                output_bytes=tool_output_bytes,
+                            ),
+                        )
+
+                        if self._scanning and result_text:
+                            bash_cmd = (
+                                tc.input.get("command") if tc.name == "Bash" else None
+                            )
+                            try:
+                                scan_result = session.check_content(
+                                    result_text,
+                                    filename=f"tool_result:{tc.name}",
+                                    source_command=bash_cmd,
+                                )
                                 _emit(
                                     turn_num,
                                     TurnEvent(
                                         type="scan",
-                                        scanned="between_turns_injection",
+                                        scanned=f"tool_result:{tc.name}",
+                                    ),
+                                )
+                                if (
+                                    session.secret_redaction_enabled
+                                    and scan_result.detected
+                                ):
+                                    sanitized = _try_sanitize_text(session, result_text)
+                                    if sanitized:
+                                        result_text = sanitized
+                            except SecurityViolation as exc:
+                                result_text = (
+                                    f"[ai-guardian] Content blocked: "
+                                    f"{exc.result.violation_type}.\n"
+                                    f"{exc.result.message}\n"
+                                    f"Try a different approach."
+                                )
+                                _emit(
+                                    turn_num,
+                                    TurnEvent(
+                                        type="scan",
+                                        scanned=f"tool_result:{tc.name}",
                                         violations=[
                                             {
                                                 "type": exc.result.violation_type,
@@ -1159,37 +1179,111 @@ class GuardedAgent:
                                         ],
                                     ),
                                 )
-                                logger.warning(
-                                    "between_turns injection blocked by "
-                                    "security scan: %s",
-                                    exc.result.message,
+
+                        is_error = result_text.startswith("Error: no executor")
+                        tool_results.append(
+                            strategy.format_tool_result(
+                                tc.id, result_text, is_error=is_error
+                            )
+                        )
+
+                    if tool_results:
+                        strategy.append_assistant_and_results(
+                            messages, parsed.raw_content, tool_results
+                        )
+
+                    if trace_filepath:
+                        partial = {
+                            "trace": trace,
+                            "stop_reason": "in_progress",
+                            "usage": usage_totals,
+                        }
+                        self._persist_trace(
+                            partial,
+                            started_at,
+                            session,
+                            trace_filepath,
+                            trace_id=trace_id,
+                            run_start_mono=run_start_mono,
+                        )
+
+                    if self._between_turns:
+                        hook_result = self._between_turns(messages, response, _turn)
+                        if hook_result is False:
+                            final_text = parsed.text
+                            stop_reason = "hook_early_stop"
+                            break
+                        if isinstance(hook_result, str):
+                            _injection_blocked = False
+                            _violation_type = ""
+                            if self._scanning:
+                                try:
+                                    session.check_content(
+                                        hook_result,
+                                        filename="between_turns_injection",
+                                    )
+                                except SecurityViolation as exc:
+                                    _emit(
+                                        turn_num,
+                                        TurnEvent(
+                                            type="scan",
+                                            scanned="between_turns_injection",
+                                            violations=[
+                                                {
+                                                    "type": exc.result.violation_type,
+                                                    "message": exc.result.message,
+                                                }
+                                            ],
+                                        ),
+                                    )
+                                    logger.warning(
+                                        "between_turns injection blocked by "
+                                        "security scan: %s",
+                                        exc.result.message,
+                                    )
+                                    _injection_blocked = True
+                                    _violation_type = exc.result.violation_type
+                            if _injection_blocked:
+                                strategy.inject_user_text_after_results(
+                                    messages,
+                                    "[ai-guardian] Injected content was "
+                                    f"blocked: {_violation_type}. "
+                                    "The content contained flagged patterns "
+                                    "and was not added to context.",
                                 )
-                                _injection_blocked = True
-                                _violation_type = exc.result.violation_type
-                        if _injection_blocked:
+                                structured_output = None
+                                continue
                             strategy.inject_user_text_after_results(
-                                messages,
-                                "[ai-guardian] Injected content was "
-                                f"blocked: {_violation_type}. "
-                                "The content contained flagged patterns "
-                                "and was not added to context.",
+                                messages, hook_result
                             )
                             structured_output = None
                             continue
-                        strategy.inject_user_text_after_results(messages, hook_result)
-                        structured_output = None
-                        continue
 
-                if structured_output is not None:
-                    stop_reason = "end_turn"
-                    break
+                    if structured_output is not None:
+                        stop_reason = "end_turn"
+                        break
 
-                continue
+                    continue
 
-            logger.warning("Unknown stop_reason: %s", parsed.stop_reason)
-            final_text = parsed.text
-            stop_reason = parsed.stop_reason
-            break
+                logger.warning("Unknown stop_reason: %s", parsed.stop_reason)
+                final_text = parsed.text
+                stop_reason = parsed.stop_reason
+                break
+            finally:
+                if trace and trace[-1].get("turn") == turn_num:
+                    turn_end_mono = time.monotonic()
+                    trace[-1].update(
+                        {
+                            "trace_id": trace_id,
+                            "span_id": span_id,
+                            "parent_span_id": parent_span_id,
+                            "started_at": turn_started_at.isoformat(),
+                            "ended_at": datetime.now(timezone.utc).isoformat(),
+                            "duration_ms": int(
+                                (turn_end_mono - turn_start_mono) * 1000
+                            ),
+                        }
+                    )
 
         output: Any = final_text
         if structured_output is not None:
@@ -1205,6 +1299,13 @@ class GuardedAgent:
         }
 
         if self._trace_dir:
-            self._persist_trace(result, started_at, session, trace_filepath)
+            self._persist_trace(
+                result,
+                started_at,
+                session,
+                trace_filepath,
+                trace_id=trace_id,
+                run_start_mono=run_start_mono,
+            )
 
         return result

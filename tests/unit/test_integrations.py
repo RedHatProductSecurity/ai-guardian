@@ -6356,6 +6356,144 @@ class TestGuardedAgentTraceDir:
         assert len(doc["trace"]) > 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_file_otel_run_fields(self, mock_monitor, tmp_path):
+        """Trace doc includes trace_id, ended_at, duration_ms, max_tokens."""
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(
+            name="otel-agent", trace_dir=trace_dir, max_tokens=8000
+        )
+        client.messages.create.return_value = response
+        agent.run("test prompt")
+
+        files = os.listdir(trace_dir)
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+
+        assert "trace_id" in doc
+        assert len(doc["trace_id"]) == 32
+        assert "ended_at" in doc
+        assert doc["ended_at"] > doc["started_at"]
+        assert "duration_ms" in doc
+        assert isinstance(doc["duration_ms"], int)
+        assert doc["duration_ms"] >= 0
+        assert doc["max_tokens"] == 8000
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_turn_has_otel_fields(self, mock_monitor, tmp_path):
+        """Each turn has trace_id, span_id, parent_span_id, timing."""
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        trace_dir = str(tmp_path / "traces")
+        agent, client = self._make_agent(name="turn-agent", trace_dir=trace_dir)
+        client.messages.create.return_value = response
+        agent.run("test")
+
+        files = os.listdir(trace_dir)
+        with open(os.path.join(trace_dir, files[0])) as fh:
+            doc = json.load(fh)
+
+        turn1 = doc["trace"][1]
+        assert turn1["turn"] == 1
+        assert "trace_id" in turn1
+        assert len(turn1["trace_id"]) == 32
+        assert len(turn1["span_id"]) == 32
+        assert len(turn1["parent_span_id"]) == 32
+        assert turn1["trace_id"] == doc["trace_id"]
+        assert turn1["span_id"] != turn1["parent_span_id"]
+        assert "started_at" in turn1
+        assert "ended_at" in turn1
+        assert "duration_ms" in turn1
+        assert isinstance(turn1["duration_ms"], int)
+        assert turn1["duration_ms"] >= 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_response_has_latency(self, mock_monitor):
+        """Response step includes latency_ms from API call."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hi")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+        result = agent.run("Hello")
+
+        trace = result["trace"]
+        turn1 = trace[1]
+        response_steps = [s for s in turn1["steps"] if s["type"] == "response"]
+        assert len(response_steps) == 1
+        assert "latency_ms" in response_steps[0]
+        assert isinstance(response_steps[0]["latency_ms"], int)
+        assert response_steps[0]["latency_ms"] >= 0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_tool_result_has_latency_and_bytes(self, mock_monitor):
+        """Tool result step includes latency_ms and output_bytes."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    id="tool_1",
+                    name="bash",
+                    input={"command": "echo hello"},
+                )
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent()
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="hello\n",
+        ):
+            result = agent.run("Run echo hello")
+
+        trace = result["trace"]
+        turn1 = trace[1]
+        tool_result_steps = [s for s in turn1["steps"] if s["type"] == "tool_result"]
+        assert len(tool_result_steps) == 1
+        step = tool_result_steps[0]
+        assert "latency_ms" in step
+        assert isinstance(step["latency_ms"], int)
+        assert step["latency_ms"] >= 0
+        assert "output_bytes" in step
+        assert step["output_bytes"] == len("hello\n".encode("utf-8"))
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_dir_created_if_missing(self, mock_monitor, tmp_path):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
@@ -6786,9 +6924,13 @@ class TestIncrementalTracePersist:
         snapshots = []
         original_persist = agent._persist_trace.__func__
 
-        def spy_persist(self_agent, result, started_at, session, filepath=None):
+        def spy_persist(
+            self_agent, result, started_at, session, filepath=None, **kwargs
+        ):
             snapshots.append(result.get("stop_reason"))
-            original_persist(self_agent, result, started_at, session, filepath)
+            original_persist(
+                self_agent, result, started_at, session, filepath, **kwargs
+            )
 
         with patch.object(type(agent), "_persist_trace", spy_persist):
             agent.run("do something")
@@ -6822,9 +6964,13 @@ class TestIncrementalTracePersist:
         snapshots = []
         original_persist = agent._persist_trace.__func__
 
-        def spy_persist(self_agent, result, started_at, session, filepath=None):
+        def spy_persist(
+            self_agent, result, started_at, session, filepath=None, **kwargs
+        ):
             snapshots.append(result.get("stop_reason"))
-            original_persist(self_agent, result, started_at, session, filepath)
+            original_persist(
+                self_agent, result, started_at, session, filepath, **kwargs
+            )
 
         with patch.object(type(agent), "_persist_trace", spy_persist):
             agent.run("Hi")
