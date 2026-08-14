@@ -771,6 +771,7 @@ class GuardedAgent:
                         scanned="system_prompt",
                         violations=[
                             {
+                                "id": exc.result.violation_id,
                                 "type": exc.result.violation_type,
                                 "message": exc.result.message,
                             }
@@ -813,6 +814,7 @@ class GuardedAgent:
                         scanned="user_prompt",
                         violations=[
                             {
+                                "id": exc.result.violation_id,
                                 "type": exc.result.violation_type,
                                 "message": exc.result.message,
                             }
@@ -967,6 +969,7 @@ class GuardedAgent:
                                 scanned="agent_response",
                                 violations=[
                                     {
+                                        "id": exc.result.violation_id,
                                         "type": exc.result.violation_type,
                                         "message": exc.result.message,
                                     }
@@ -1055,6 +1058,7 @@ class GuardedAgent:
                                             scanned="between_turns_injection",
                                             violations=[
                                                 {
+                                                    "id": exc.result.violation_id,
                                                     "type": exc.result.violation_type,
                                                     "message": exc.result.message,
                                                 }
@@ -1188,6 +1192,7 @@ class GuardedAgent:
                                         scanned=f"tool_result:{tc.name}",
                                         violations=[
                                             {
+                                                "id": exc.result.violation_id,
                                                 "type": exc.result.violation_type,
                                                 "message": exc.result.message,
                                             }
@@ -1245,6 +1250,7 @@ class GuardedAgent:
                                             scanned="between_turns_injection",
                                             violations=[
                                                 {
+                                                    "id": exc.result.violation_id,
                                                     "type": exc.result.violation_type,
                                                     "message": exc.result.message,
                                                 }

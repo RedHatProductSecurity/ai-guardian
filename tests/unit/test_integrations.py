@@ -2480,7 +2480,7 @@ class TestGuardedAgent:
         ]
         assert len(scan_steps) == 1
         assert scan_steps[0]["violations"] == [
-            {"type": "secret", "message": "Secret detected in prompt"}
+            {"id": None, "type": "secret", "message": "Secret detected in prompt"}
         ]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -2552,7 +2552,7 @@ class TestGuardedAgent:
         ]
         assert len(scan_steps) == 1
         assert scan_steps[0]["violations"] == [
-            {"type": "prompt_injection", "message": "Injection detected"}
+            {"id": None, "type": "prompt_injection", "message": "Injection detected"}
         ]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")

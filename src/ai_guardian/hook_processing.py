@@ -1609,9 +1609,13 @@ def _log_directory_blocking_violation(
                 "warning": "This directory contains sensitive files",
             }
 
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
         violation_logger.log_violation(
             violation_type=ViolationType.DIRECTORY_BLOCKING,
             blocked={
+                "violation_id": vid,
                 "file_path": file_path,
                 "denied_directory": denied_directory,
                 "reason": reason,
@@ -1620,6 +1624,7 @@ def _log_directory_blocking_violation(
             context=context,
             suggestion=suggestion,
             severity="warning",
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log directory blocking violation: {e}")
@@ -2521,6 +2526,10 @@ def process_hook_data(hook_data, daemon_state=None):
                                         ann_ctx["tool_use_id"] = hook_tool_use_id
                                     if hook_session_id:
                                         ann_ctx["session_id"] = hook_session_id
+                                    from ai_guardian.scanners.scan_result import (
+                                        generate_violation_id,
+                                    )
+
                                     violation_logger.log_violation(
                                         violation_type="annotation_suppressed",
                                         blocked={
@@ -2533,6 +2542,7 @@ def process_hook_data(hook_data, daemon_state=None):
                                         },
                                         context=ann_ctx,
                                         severity="info",
+                                        violation_id=generate_violation_id(),
                                     )
                                 except Exception as e:
                                     logger.error(

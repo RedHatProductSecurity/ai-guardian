@@ -104,6 +104,7 @@ def _handle_bootstrap_scan(
                     violation_logger.log_violation(
                         violation_type=ViolationType.CONFIG_FILE_EXFIL,
                         blocked={
+                            "violation_id": _bs_result.id,
                             "file_path": _bs_file,
                             "line_number": _bs_details.get("line_number"),
                             "reason": _bs_error,
@@ -128,6 +129,7 @@ def _handle_bootstrap_scan(
                             ),
                         },
                         severity="critical",
+                        violation_id=_bs_result.id,
                     )
                 except Exception:
                     pass

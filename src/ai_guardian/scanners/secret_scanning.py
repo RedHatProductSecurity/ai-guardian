@@ -199,6 +199,10 @@ def _log_secret_detection_violation(
                 "Add '# gitleaks:allow' or '# ai-guardian:allow' at the end of the line"
             )
 
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_info["violation_id"] = vid
         violation_logger.log_violation(
             violation_type=ViolationType.SECRET_DETECTED,
             blocked=blocked_info,
@@ -209,6 +213,7 @@ def _log_secret_detection_violation(
                 "false_positive": false_positive_msg,
             },
             severity="critical",
+            violation_id=vid,
         )
     except Exception as e:
         logger.critical(f"Failed to log secret detection violation: {e}")
@@ -300,6 +305,10 @@ def _log_finding_violation(
         else:
             false_positive_msg = "Add '# ai-guardian:allow' at the end of the line"
 
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_info["violation_id"] = vid
         violation_logger.log_violation(
             violation_type=vtype,
             blocked=blocked_info,
@@ -309,6 +318,7 @@ def _log_finding_violation(
                 "false_positive": false_positive_msg,
             },
             severity=severity,
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log finding violation: {e}")

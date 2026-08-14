@@ -11,7 +11,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
-from ai_guardian.scanners.scan_result import ScanResult
+from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +103,8 @@ def build_violation_blocked(
 ) -> Dict[str, Any]:
     """Build a standard violation ``blocked`` dict from ScanResult fields."""
     blocked: Dict[str, Any] = {}
+    if result.id:
+        blocked["violation_id"] = result.id
     if result.file_path:
         blocked["file_path"] = result.file_path
     if result.line_number is not None:
@@ -179,6 +181,7 @@ def log_scan_violation(
             context=violation_ctx,
             suggestion=entry.violation_suggestion or {},
             severity=severity_override or entry.violation_severity,
+            violation_id=result.id,
         )
     except Exception as e:
         logger.error("Failed to log %s violation: %s", entry.name, e)
@@ -208,7 +211,8 @@ def log_scan_violations_per_finding(
             violation_ctx["session_id"] = ctx.hook_session_id
 
         for f in findings:
-            blocked: Dict[str, Any] = {}
+            finding_id = generate_violation_id()
+            blocked: Dict[str, Any] = {"violation_id": finding_id}
             if file_path:
                 blocked["file_path"] = file_path
             rule_id = getattr(f, "rule_id", None) or ""
@@ -231,6 +235,7 @@ def log_scan_violations_per_finding(
                 context=violation_ctx,
                 suggestion=entry.violation_suggestion or {},
                 severity=severity,
+                violation_id=finding_id,
             )
     except Exception as e:
         logger.error("Failed to log per-finding %s violations: %s", entry.name, e)

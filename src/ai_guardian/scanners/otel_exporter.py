@@ -213,6 +213,7 @@ def _make_step_spans(
     elif step_type == "scan":
         violations = step.get("violations", [])
         violation_types = [v.get("type", "") for v in violations] if violations else []
+        violation_ids = [v.get("id") for v in violations if v.get("id")]
         spans.append(
             _make_span(
                 trace_id=trace_id,
@@ -225,6 +226,7 @@ def _make_step_spans(
                     ("gen_ai.security_scan.target", step.get("scanned")),
                     ("gen_ai.security_scan.violation_count", len(violations)),
                     ("gen_ai.security_scan.violation_types", violation_types or None),
+                    ("gen_ai.security_scan.violation_ids", violation_ids or None),
                 ),
             )
         )

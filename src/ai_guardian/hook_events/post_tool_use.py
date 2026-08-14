@@ -154,6 +154,10 @@ def _log_prompt_injection_violation(
             blocked_entry["end_column"] = end_column
         if matched_text:
             blocked_entry["matched_text"] = matched_text[:100]
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_entry["violation_id"] = vid
         violation_logger = violation_logger or ViolationLogger()
         violation_logger.log_violation(
             violation_type=vtype,
@@ -166,6 +170,7 @@ def _log_prompt_injection_violation(
                 "note": "If this is legitimate (e.g., documentation), add to allowlist in ai-guardian.json",
             },
             severity="high",
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log prompt injection violation: {e}")
@@ -204,6 +209,10 @@ def _log_context_poisoning_violation(
             blocked_entry["end_column"] = end_column
         if matched_text:
             blocked_entry["matched_text"] = matched_text[:100]
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_entry["violation_id"] = vid
         violation_logger = violation_logger or ViolationLogger()
         violation_logger.log_violation(
             violation_type=ViolationType.CONTEXT_POISONING,
@@ -216,6 +225,7 @@ def _log_context_poisoning_violation(
                 "note": "If this is a legitimate persistent instruction, add to context_poisoning.allowlist_patterns in ai-guardian.json",
             },
             severity="medium",
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log context poisoning violation: {e}")
@@ -259,6 +269,10 @@ def _log_offensive_language_violation(
             ctx["tool_use_id"] = hook_tool_use_id
         if hook_session_id:
             ctx["session_id"] = hook_session_id
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_entry["violation_id"] = vid
         vl = violation_logger or ViolationLogger()
         vl.log_violation(
             violation_type=ViolationType.OFFENSIVE_LANGUAGE,
@@ -272,6 +286,7 @@ def _log_offensive_language_violation(
                     "to suppress known-safe uses."
                 ),
             },
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log offensive language violation: {e}")
@@ -336,6 +351,10 @@ def _log_pii_violation(
         pii_ctx["pretool_context"] = pretool_ctx
 
     if violation_logger:
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        pii_blocked["violation_id"] = vid
         violation_logger.log_violation(
             violation_type=ViolationType.PII_DETECTED,
             blocked=pii_blocked,
@@ -348,6 +367,7 @@ def _log_pii_violation(
                     "or add '# ai-guardian:allow' inline"
                 ),
             },
+            violation_id=vid,
         )
 
     return pii_action, pii_types
@@ -685,10 +705,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 if pretool_ctx:
                     ctx["pretool_context"] = pretool_ctx
                 if violation_logger:
+                    from ai_guardian.scanners.scan_result import generate_violation_id
+
+                    vid = generate_violation_id()
+                    blocked_info["violation_id"] = vid
                     violation_logger.log_violation(
                         violation_type=ViolationType.SECRET_REDACTION,
                         blocked=blocked_info,
                         context=ctx,
+                        violation_id=vid,
                     )
 
                 # Return redacted output (allow, with modifications)

@@ -7,6 +7,12 @@ across all scanner types without changing scanner internals.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
+from uuid import uuid4
+
+
+def generate_violation_id() -> str:
+    """Generate a unique violation ID: ``viol_`` + 8-char hex."""
+    return "viol_" + uuid4().hex[:8]
 
 
 @dataclass
@@ -19,6 +25,7 @@ class ScanResult:
 
     detected: bool
     violation_type: str
+    id: Optional[str] = None
     severity: str = "high"
     should_block: bool = True
     error_message: str = ""
@@ -40,6 +47,10 @@ class ScanResult:
     redactions: Optional[List[Dict[str, Any]]] = None
     scan_time_ms: float = 0.0
     extra: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.detected and self.id is None:
+            self.id = generate_violation_id()
 
     @classmethod
     def clean(cls, violation_type: str, **kwargs) -> "ScanResult":

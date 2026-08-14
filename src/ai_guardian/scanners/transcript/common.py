@@ -636,6 +636,10 @@ def _log_transcript_violation(
         if hctx.get("session_id"):
             violation_ctx["session_id"] = hctx["session_id"]
 
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
+        vid = generate_violation_id()
+        blocked_info["violation_id"] = vid
         violation_logger = ViolationLogger()
         violation_logger.log_violation(
             violation_type=violation_type,
@@ -649,6 +653,7 @@ def _log_transcript_violation(
                 "Rotate any exposed credentials and start a new session.",
             },
             severity="high",
+            violation_id=vid,
         )
     except Exception as e:
         logger.error(f"Failed to log transcript violation: {e}")

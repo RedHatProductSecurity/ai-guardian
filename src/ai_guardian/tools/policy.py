@@ -1515,10 +1515,14 @@ class ToolPolicyChecker:
                 ctx["tool_use_id"] = tool_use_id
             if session_id:
                 ctx["session_id"] = session_id
+            from ai_guardian.scanners.scan_result import generate_violation_id
+
+            vid = generate_violation_id()
             all_paths = get_all_config_paths()
             violation_logger.log_violation(
                 violation_type=violation_type,
                 blocked={
+                    "violation_id": vid,
                     "tool_name": tool_name,
                     "tool_value": check_value,
                     "file_path": file_path,
@@ -1537,6 +1541,7 @@ class ToolPolicyChecker:
                     },
                 },
                 severity="warning",
+                violation_id=vid,
             )
 
         except Exception as e:
