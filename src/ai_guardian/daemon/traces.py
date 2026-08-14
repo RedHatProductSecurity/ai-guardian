@@ -170,7 +170,7 @@ def list_traces(
                 if not entry.endswith(".json"):
                     continue
                 filepath = os.path.join(dirpath, entry)
-                rel_path = os.path.relpath(filepath, trace_dir)
+                rel_path = os.path.relpath(filepath, trace_dir).replace("\\", "/")
                 if rel_path in seen_paths:
                     continue
 

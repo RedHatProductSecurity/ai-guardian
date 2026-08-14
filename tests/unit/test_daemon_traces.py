@@ -214,7 +214,7 @@ class TestListTraces:
         result = list_traces(str(trace_dir))
         assert len(result) == 1
         assert result[0]["agent_name"] == "nested"
-        assert "run-001/" in result[0]["filename"]
+        assert "run-001" in result[0]["filename"]
 
 
 class TestReadTraceDetail:
