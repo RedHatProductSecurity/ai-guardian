@@ -472,6 +472,12 @@ class DaemonState:
         with self._pushed_traces_lock:
             return self._pushed_traces.get(filename)
 
+    def remove_pushed_traces(self, filenames):
+        """Remove pushed traces by filename."""
+        with self._pushed_traces_lock:
+            for fn in filenames:
+                self._pushed_traces.pop(fn, None)
+
     # --- Security injection tracking (#584) ---
 
     def should_inject_security(self, session_key):

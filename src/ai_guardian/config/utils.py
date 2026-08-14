@@ -494,6 +494,14 @@ def get_state_dir() -> Path:
     return Path("~/.local/state/ai-guardian").expanduser()
 
 
+def get_sdk_trace_dir() -> Path:
+    """Return the fixed directory for SDK agent trace files.
+
+    ``get_state_dir() / "sdk" / "traces"``
+    """
+    return get_state_dir() / "sdk" / "traces"
+
+
 def get_cache_dir() -> Path:
     """
     Get ai-guardian cache directory.

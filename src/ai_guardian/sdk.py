@@ -295,7 +295,7 @@ class _DirectSession(GuardSession):
             self._config = merge_target_allowlists(self._config, self._target_dir)
 
     def _register_project_with_daemon(self):
-        """Register project CWD with daemon so trace viewer can discover trace_dir."""
+        """Register project CWD with daemon for project-scoped scanning."""
         import os as _os
 
         cwd = self._cwd or _os.getcwd()

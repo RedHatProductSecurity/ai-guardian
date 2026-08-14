@@ -8,6 +8,7 @@ Uses only stdlib http.server — no additional dependencies.
 
 import json
 import logging
+import os
 import socketserver
 import threading
 import urllib.parse
@@ -1022,14 +1023,24 @@ class _RestHandler(BaseHTTPRequestHandler):
             seen_basenames = {t["filename"].split("/")[-1] for t in file_traces}
 
             pushed = self.server.daemon_state.get_pushed_traces()
+            stale = []
             for fn, doc in pushed.items():
-                if agent_name and doc.get("agent_name") != agent_name:
-                    continue
                 basename = fn.split("/")[-1]
                 if basename in seen_basenames:
                     continue
+                if doc.get("stop_reason") != "in_progress":
+                    on_disk = any(
+                        os.path.isfile(os.path.join(td, basename)) for td in trace_dirs
+                    )
+                    if not on_disk:
+                        stale.append(fn)
+                        continue
+                if agent_name and doc.get("agent_name") != agent_name:
+                    continue
                 seen_basenames.add(basename)
                 file_traces.append(pushed_trace_to_summary(fn, doc))
+            if stale:
+                self.server.daemon_state.remove_pushed_traces(stale)
 
             file_traces.sort(key=lambda t: t.get("started_at", ""), reverse=True)
             return {"traces": file_traces}

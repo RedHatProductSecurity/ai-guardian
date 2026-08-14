@@ -1,9 +1,9 @@
 """
 Trace file reading and listing for the trace viewer feature.
 
-Reads GuardedAgent trace files (single JSON per run) from a configured
-directory.  Both the REST API and local MultiDaemonClient call into
-this module.
+Reads GuardedAgent trace files (single JSON per run) from the fixed
+XDG state directory.  Both the REST API and local MultiDaemonClient
+call into this module.
 """
 
 import json
@@ -31,98 +31,14 @@ _MODEL_PRICING = {
 
 
 def resolve_trace_dirs() -> List[str]:
-    """Discover all unique trace directories from SDK agent profiles.
+    """Return the fixed XDG state trace directory.
 
-    Reads agent profiles from:
-    1. The merged global/project config (``_load_config_file()``)
-    2. All project configs known to the daemon (``active_project_dirs``)
-
-    Resolves relative ``trace_dir`` paths against the config file's directory.
-    Returns a list of unique absolute directory paths that exist on disk.
+    Returns a single-element list containing the SDK trace directory
+    (``~/.local/state/ai-guardian/sdk/traces/``).
     """
-    seen: set = set()
-    dirs: List[str] = []
+    from ai_guardian.config.utils import get_sdk_trace_dir
 
-    _collect_trace_dirs_from_config(None, None, seen, dirs)
-    _collect_from_daemon_projects(seen, dirs)
-
-    if not dirs:
-        fallback = os.path.join(os.getcwd(), "agents-trace")
-        if os.path.isdir(fallback):
-            dirs.append(fallback)
-
-    return dirs
-
-
-def _collect_trace_dirs_from_config(
-    config: "Optional[Dict[str, Any]]",
-    config_dir: "Optional[str]",
-    seen: set,
-    dirs: List[str],
-) -> None:
-    """Extract trace_dir values from a config dict and resolve paths."""
-    if config is None:
-        from ai_guardian.config.loaders import _load_config_file
-
-        config, _ = _load_config_file()
-        if not config:
-            return
-
-    sdk = config.get("sdk")
-    if not isinstance(sdk, dict):
-        return
-
-    agents = sdk.get("agents")
-    if not isinstance(agents, dict):
-        return
-
-    for profile_name, profile in agents.items():
-        if not isinstance(profile, dict):
-            continue
-        trace_dir = profile.get("trace_dir")
-        if not trace_dir or not isinstance(trace_dir, str):
-            continue
-
-        if os.path.isabs(trace_dir):
-            abs_dir = trace_dir
-        else:
-            base = config_dir
-            if base is None:
-                from ai_guardian.config.loaders import _sdk_profile_key_base_dir
-
-                base = _sdk_profile_key_base_dir("agents", profile_name, "trace_dir")
-            if base is None:
-                base = os.getcwd()
-            abs_dir = os.path.join(base, trace_dir)
-
-        abs_dir = os.path.normpath(abs_dir)
-        if abs_dir not in seen and os.path.isdir(abs_dir):
-            seen.add(abs_dir)
-            dirs.append(abs_dir)
-
-
-def _collect_from_daemon_projects(seen: set, dirs: List[str]) -> None:
-    """Scan project configs known to the running daemon for trace_dir values."""
-    try:
-        from ai_guardian.daemon import get_daemon_state
-
-        state = get_daemon_state()
-        if state is None:
-            return
-
-        project_configs = getattr(state, "_project_config_paths", {})
-        for project_dir, config_path in project_configs.items():
-            if not config_path:
-                continue
-            try:
-                with open(config_path, "r", encoding="utf-8") as fh:
-                    project_config = json.load(fh)
-            except (OSError, json.JSONDecodeError):
-                continue
-            config_dir = os.path.dirname(config_path)
-            _collect_trace_dirs_from_config(project_config, config_dir, seen, dirs)
-    except Exception:
-        pass
+    return [str(get_sdk_trace_dir())]
 
 
 def validate_filename(filename: str) -> bool:

@@ -92,7 +92,7 @@ The pip/uv install:
 The daemon provides faster hook processing. The tray is a separate process that discovers and manages daemons across local, Podman/Docker containers, and Kubernetes pods:
 
 ```bash
-ai-guardian daemon start          # Start headless daemon (background: -b)
+ai-guardian daemon start -b       # Start headless daemon (background: -b)
 ai-guardian tray start -b         # Start system tray in background
 ai-guardian tray stop             # Stop the tray
 ai-guardian tray --install --autostart  # Add desktop shortcut + launch on login

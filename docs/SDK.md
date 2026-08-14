@@ -669,7 +669,7 @@ print(result["output"])  # validated structured object
 | `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
-| `trace_dir` | str | `None` | Directory for auto-persisted trace logs. Each `run()` writes a sanitized JSON trace file. Relative paths resolve against `cwd`. Also configurable via `sdk.agents.<name>.trace_dir` in `ai-guardian.json` |
+| `trace_dir` | str | XDG state dir | Directory for auto-persisted trace logs. Defaults to `~/.local/state/ai-guardian/sdk/traces/`. Pass an explicit path to override (constructor only, not configurable via config file). Relative paths resolve against `cwd` |
 | `trace_path_fn` | callable | `None` | Callback `(agent_name: str, context: dict) -> str` that returns a path segment injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. `context` contains `model`, `stop_reason`, `usage`, `turn_count` |
 | `allowed_paths` | list[str] | `None` | Additional directories that built-in tools may access. By default, tools reject any path that resolves outside `cwd` (e.g. symlinks pointing to external directories). List absolute paths here to whitelist them |
 | `follow_symlinks` | bool | `False` | When `True`, built-in tools allow access through symlinks inside `cwd` even when the real target is outside `cwd`. The logical (unresolved) path must still be within `cwd`. Simpler than `allowed_paths` when all symlinks in the working tree are trusted |
@@ -891,19 +891,28 @@ class TurnEvent:
 
 #### Auto-Persist Traces to Disk
 
-Set `trace_dir` to auto-write sanitized trace logs after each `run()`:
+Traces are auto-persisted to `~/.local/state/ai-guardian/sdk/traces/` by default:
 
 ```python
 agent = GuardedAgent(
     name="triage-verifier",
-    trace_dir="logs/agents",   # relative to cwd
     ...
 )
 result = agent.run(prompt)
-# Trace written to: logs/agents/triage-verifier_20260810-153042.json
+# Trace written to: ~/.local/state/ai-guardian/sdk/traces/triage-verifier_20260810-153042_a1b2c3d4.json
 ```
 
-File naming: `<agent-name>_<YYYYMMDD-HHMMSS>.json`
+To override the default location (constructor only, not configurable via config file):
+
+```python
+agent = GuardedAgent(
+    name="triage-verifier",
+    trace_dir="./agents-trace",   # relative to cwd
+    ...
+)
+```
+
+File naming: `<agent-name>_<YYYYMMDD-HHMMSS>_<uuid>.json`
 
 Trace file content:
 
@@ -923,44 +932,26 @@ Use `trace_path_fn` to organize traces dynamically (e.g., by case ID):
 ```python
 agent = GuardedAgent(
     name="triage-verifier",
-    trace_dir="agents-trace",
     trace_path_fn=lambda name, ctx: f"{case_id}/",
 )
-# Trace written to: agents-trace/nexus-focus-lost/triage-verifier_20260811-100338_a1b2c3d4.json
+# Trace written to: ~/.local/state/ai-guardian/sdk/traces/nexus-focus-lost/triage-verifier_20260811-100338_a1b2c3d4.json
 ```
 
 | `trace_path_fn` return | Result |
 |------------------------|--------|
-| `"case-123/"` | Subdirectory: `agents-trace/case-123/triage-verifier_20260811.json` |
-| `"case-123_"` | Prefix: `agents-trace/case-123_triage-verifier_20260811.json` |
-| `"case-123/obs-456_"` | Both: `agents-trace/case-123/obs-456_triage-verifier_20260811.json` |
-| `None` or not set | Default: `agents-trace/triage-verifier_20260811.json` |
+| `"case-123/"` | Subdirectory: `traces/case-123/triage-verifier_20260811.json` |
+| `"case-123_"` | Prefix: `traces/case-123_triage-verifier_20260811.json` |
+| `"case-123/obs-456_"` | Both: `traces/case-123/obs-456_triage-verifier_20260811.json` |
+| `None` or not set | Default: `traces/triage-verifier_20260811.json` |
 
 The `context` dict passed to `trace_path_fn` contains: `model`, `stop_reason`, `usage`, `turn_count`.
 
 Behavior:
-- `trace_dir=None` (default): no persistence, same as before
+- Traces are always persisted (default: XDG state directory)
 - Directory created if it doesn't exist
 - Text fields are sanitized (secrets/PII redacted) before writing
 - Errors writing the trace are logged but don't fail the agent
-- Relative paths resolve against `cwd`
-
-Also configurable via `ai-guardian.json`:
-
-```json
-{
-  "sdk": {
-    "agents": {
-      "*": {
-        "trace_dir": "logs/agents"
-      },
-      "triage-verifier": {
-        "trace_dir": "cases/verify"
-      }
-    }
-  }
-}
-```
+- Explicit relative paths resolve against `cwd`
 
 ### `agent.run(prompt)` Return Value
 
