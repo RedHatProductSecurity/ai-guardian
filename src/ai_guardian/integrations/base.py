@@ -51,6 +51,8 @@ class TurnEvent:
     method: Optional[str] = None
     messages_count: Optional[int] = None
     compacted: Optional[bool] = None
+    latency_ms: Optional[int] = None
+    output_bytes: Optional[int] = None
 
     def __str__(self) -> str:
         if self.type == "system":
@@ -106,6 +108,8 @@ class TurnEvent:
             "method",
             "messages_count",
             "compacted",
+            "latency_ms",
+            "output_bytes",
         ):
             val = getattr(self, attr)
             if val is not None:
