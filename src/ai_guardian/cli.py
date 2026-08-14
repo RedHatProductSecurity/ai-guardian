@@ -1255,6 +1255,11 @@ def main():
             help="Overwrite existing .ai-guardian/ai-guardian.json (creates backup)",
         )
         init_project_parser.add_argument(
+            "--merge",
+            action="store_true",
+            help="Deep-merge into existing config instead of skipping (creates backup)",
+        )
+        init_project_parser.add_argument(
             "--json", action="store_true", help="Output results as JSON"
         )
         init_project_parser.add_argument(
@@ -1274,6 +1279,11 @@ def main():
             default=10,
             metavar="N",
             help="Minimum file count to flag a pattern as false positive (default: 10)",
+        )
+        init_project_parser.add_argument(
+            "--exact",
+            action="store_true",
+            help="Disable progressive suppression for exact finding counts (slower)",
         )
 
         args = parser.parse_args()

@@ -85,8 +85,19 @@ class TestFingerprintFinding:
         assert fingerprint_finding(f) == ("B101", "")
 
     def test_ssrf_finding(self):
-        f = _make_finding("SSRF-001", "a.py", url="http://169.254.169.254")
-        assert fingerprint_finding(f) == ("SSRF-001", "")
+        f = _make_finding(
+            "SSRF-001", "a.py", url="http://169.254.169.254", reason="metadata endpoint"
+        )
+        assert fingerprint_finding(f) == ("SSRF-001", "metadata endpoint")
+
+    def test_ssrf_localhost_finding(self):
+        f = _make_finding(
+            "SSRF-001",
+            "a.py",
+            url="https://localhost:5173",
+            reason="blocked domain 'localhost'",
+        )
+        assert fingerprint_finding(f) == ("SSRF-001", "blocked domain 'localhost'")
 
     def test_missing_details(self):
         f = {"rule_id": "SECRET-001", "file_path": "x.py", "details": {}}
@@ -192,13 +203,19 @@ class TestBuildRecommendations:
         assert len(result.high_frequency_clusters) == 0
         assert result.suppressed_count == 0
 
-    def test_never_suppress_rules(self):
+    def test_ssrf_suppressed_with_config(self):
         findings = [
-            _make_finding("SSRF-001", f"f{i}.py", url="http://169.254.169.254")
+            _make_finding(
+                "SSRF-001",
+                f"f{i}.py",
+                url="http://localhost:8080",
+                reason="blocked domain 'localhost'",
+            )
             for i in range(20)
         ]
         result = build_recommendations(findings, threshold=5)
-        assert len(result.high_frequency_clusters) == 0
+        assert len(result.high_frequency_clusters) == 1
+        assert result.recommended_config["ssrf_protection"]["allow_localhost"] is True
 
     def test_never_suppress_canary(self):
         findings = [_make_finding("canary_detected", f"f{i}.py") for i in range(20)]

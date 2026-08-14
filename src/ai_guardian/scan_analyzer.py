@@ -8,6 +8,7 @@ config recommendations for ai-guardian.json and .aiguardignore.toml.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import shutil
@@ -33,6 +34,84 @@ class ScanPipelineResult:
     project_dir: str
 
 
+class ProgressiveSuppressor:
+    """Tracks finding fingerprints and suppresses once threshold is hit.
+
+    Also computes ``skip_rules`` — rule_ids where every observed sub_type
+    has been suppressed, so the scanner can skip those checks entirely.
+    """
+
+    def __init__(self, threshold: int):
+        self._threshold = threshold
+        self._counts: Dict[Tuple[str, str], int] = defaultdict(int)
+        self._suppressed: Set[Tuple[str, str]] = set()
+        self._seen_by_rule: Dict[str, Set[str]] = defaultdict(set)
+        self.suppressed_count = 0
+        self.skip_rules: frozenset = frozenset()
+
+    def __call__(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        kept = []
+        for f in findings:
+            fp = fingerprint_finding(f)
+            rule_id, sub_type = fp
+            if rule_id in NEVER_SUPPRESS:
+                kept.append(f)
+                continue
+            self._seen_by_rule[rule_id].add(sub_type)
+            if fp in self._suppressed:
+                self.suppressed_count += 1
+                continue
+            self._counts[fp] += 1
+            if self._counts[fp] >= self._threshold:
+                self._suppressed.add(fp)
+                self.suppressed_count += 1
+                continue
+            kept.append(f)
+        self._update_skip_rules()
+        return kept
+
+    def _update_skip_rules(self) -> None:
+        """Recompute which rule_ids can be skipped entirely."""
+        skippable = set()
+        for rule_id, sub_types in self._seen_by_rule.items():
+            if all((rule_id, st) in self._suppressed for st in sub_types):
+                skippable.add(rule_id)
+        self.skip_rules = frozenset(skippable)
+
+
+_SUPPRESSION_KEYS = frozenset(
+    {
+        "allowlist_patterns",
+        "allowlist_paths",
+        "allowlist",
+        "ignore_files",
+        "ignore_tools",
+        "ignore_paths",
+    }
+)
+
+
+def _build_discovery_config(project_dir: str) -> Dict[str, Any]:
+    """Build a config that enables all scanners and strips suppressions.
+
+    Used by run_scan_pipeline so the analyzer sees every possible violation
+    regardless of existing user config.  Returns a deep copy so the
+    original loaded config is never mutated.
+    """
+    from ai_guardian.config.loaders import _SCANNER_MERGE_SECTIONS, load_scanner_config
+
+    config = copy.deepcopy(load_scanner_config(project_root=project_dir))
+    for section_key in _SCANNER_MERGE_SECTIONS:
+        section = config.get(section_key)
+        if section is None:
+            config[section_key] = {"enabled": True}
+            continue
+        section["enabled"] = True
+        for key in _SUPPRESSION_KEYS:
+            section.pop(key, None)
+    return config
+
+
 def run_scan_pipeline(
     project_dir: str,
     threshold: int,
@@ -40,8 +119,15 @@ def run_scan_pipeline(
     on_phase: Optional[Callable[[str], None]] = None,
     on_file_progress: Optional[Callable[[str, int, int], None]] = None,
     skip_hidden: bool = True,
+    progressive: bool = True,
 ) -> Optional[ScanPipelineResult]:
     """Run the full scan-and-analyze pipeline.
+
+    Args:
+        progressive: When True (default), suppress findings on-the-fly
+            once a pattern fingerprint reaches *threshold*.  Faster for
+            large projects but counts are approximate.  Set False for
+            exact counts.
 
     Returns *None* when *cancel_event* is set, otherwise a
     :class:`ScanPipelineResult`.
@@ -66,21 +152,25 @@ def run_scan_pipeline(
     language_config = initializer.generate_config(allowlist_entries, ignore_files)
 
     _phase("Scanning files...")
-    from ai_guardian.config.loaders import load_scanner_config
-
-    scan_config = load_scanner_config(project_root=str(initializer.project_dir))
+    scan_config = _build_discovery_config(str(initializer.project_dir))
     scanner = FileScanner(config=scan_config, verbose=False)
+    suppressor = ProgressiveSuppressor(threshold) if progressive else None
     findings = scanner.scan_directory(
         str(initializer.project_dir),
         progress_callback=on_file_progress,
         cancel_event=cancel_event,
         skip_hidden=skip_hidden,
+        finding_filter=suppressor,
     )
     if cancel_event.is_set():
         return None
 
     _phase(f"Analyzing {len(findings)} findings...")
-    analysis = initializer.analyze_scan(findings, threshold=threshold)
+    analysis = initializer.analyze_scan(
+        findings, threshold=threshold, suppressor=suppressor
+    )
+    if suppressor:
+        analysis.suppressed_count += suppressor.suppressed_count
     merged_config = initializer.merge_configs(
         language_config, analysis.recommended_config
     )
@@ -161,7 +251,7 @@ _SCANNER_TO_CONFIG_SECTION = {
     "offensive_language": "scan_offensive",
 }
 
-NEVER_SUPPRESS = frozenset({"SSRF-001", "UNICODE-001", "canary_detected"})
+NEVER_SUPPRESS = frozenset({"UNICODE-001", "canary_detected"})
 
 MAX_SAMPLE_FILES = 5
 
@@ -172,6 +262,7 @@ _FINGERPRINT_DETAIL_KEY = {
     "PII-001": "pii_type",
     "SUPPLY-CHAIN-001": "category",
     "EXFIL-DETECTION-001": "category",
+    "SSRF-001": "reason",
 }
 
 
@@ -226,6 +317,9 @@ def fingerprint_finding(finding: Dict[str, Any]) -> Tuple[str, str]:
         return (rule_id, details.get(detail_key, "unknown"))
 
     if rule_id == "PROMPT-INJECTION-001":
+        matched = details.get("matched_text") or details.get("matched_pattern")
+        if matched:
+            return (rule_id, matched)
         return (rule_id, _normalize_pi_description(details.get("description", "")))
     if rule_id == "CONFIG-001":
         return (rule_id, details.get("pattern", details.get("category", "unknown")))
@@ -391,6 +485,20 @@ def _build_rule_allowlist(
             rules.append({"test_id": c.rule_id})
 
 
+def _build_ssrf_config(
+    section: Dict[str, Any],
+    key: str,
+    clusters: List[FindingCluster],
+) -> None:
+    """Enable allow_localhost when SSRF clusters contain localhost findings."""
+    _LOCALHOST_MARKERS = {"localhost", "127.0.0.1", "::1"}
+    for c in clusters:
+        reason = c.sub_type.lower()
+        if any(m in reason for m in _LOCALHOST_MARKERS):
+            section["allow_localhost"] = True
+            return
+
+
 _BuilderFn = Callable[[Dict[str, Any], str, List[FindingCluster]], None]
 
 _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
@@ -400,6 +508,7 @@ _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
     "supply_chain": ("allowlist_paths", _build_dir_globs),
     "config_file_scanning": ("ignore_files", _build_dir_globs),
     "code_scanning": ("allowlist", _build_rule_allowlist),
+    "ssrf_protection": ("allow_localhost", _build_ssrf_config),
 }
 
 
@@ -409,8 +518,15 @@ _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
 def build_recommendations(
     findings: List[Dict[str, Any]],
     threshold: int = 10,
+    suppressor: Optional["ProgressiveSuppressor"] = None,
 ) -> ScanAnalysisResult:
-    """Analyze findings and build suppression recommendations."""
+    """Analyze findings and build suppression recommendations.
+
+    When *suppressor* is provided, its already-suppressed fingerprints
+    are injected as synthetic high-frequency clusters so the analyzer
+    generates config recommendations for patterns that were filtered
+    during progressive scanning.
+    """
     clusters = cluster_findings(findings)
 
     high_freq = [
@@ -418,6 +534,21 @@ def build_recommendations(
         for c in clusters
         if c.file_count >= threshold and _can_generate_config(c.rule_id)
     ]
+
+    if suppressor:
+        existing_fps = {(c.rule_id, c.sub_type) for c in clusters}
+        for fp, count in suppressor._counts.items():
+            if count >= threshold and fp not in existing_fps:
+                rule_id, sub_type = fp
+                if _can_generate_config(rule_id):
+                    cluster = FindingCluster(
+                        rule_id=rule_id,
+                        sub_type=sub_type,
+                        file_count=count,
+                        total_count=count + suppressor.suppressed_count,
+                    )
+                    clusters.append(cluster)
+                    high_freq.append(cluster)
 
     high_freq_fps: Set[Tuple[str, str]] = {(c.rule_id, c.sub_type) for c in high_freq}
 
@@ -434,6 +565,12 @@ def build_recommendations(
                 dir_scanner_map[parts[0]].add(scanner)
 
     config = _build_config(high_freq)
+
+    ssrf_clusters = [c for c in clusters if c.rule_id == "SSRF-001"]
+    if ssrf_clusters:
+        ssrf_section = config.setdefault("ssrf_protection", {})
+        _build_ssrf_config(ssrf_section, "allow_localhost", ssrf_clusters)
+
     ignore_paths = _build_ignore_paths(dirs_to_ignore, dir_scanner_map)
 
     suppressed = sum(c.total_count for c in high_freq)

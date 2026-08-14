@@ -79,7 +79,14 @@ def _deserialize_result(data):
     )
 
 
-def _run_scan(project_dir, threshold, cancel_event, progress_state, skip_hidden=True):
+def _run_scan(
+    project_dir,
+    threshold,
+    cancel_event,
+    progress_state,
+    skip_hidden=True,
+    progressive=True,
+):
     """Run project scan and analysis in a background thread."""
     from ai_guardian.scan_analyzer import run_scan_pipeline
 
@@ -98,6 +105,7 @@ def _run_scan(project_dir, threshold, cancel_event, progress_state, skip_hidden=
         on_phase=on_phase,
         on_file_progress=on_file_progress,
         skip_hidden=skip_hidden,
+        progressive=progressive,
     )
 
 
@@ -262,7 +270,7 @@ def create_scan_configure_page(service, daemon_name: str):
                     ui.number(
                         label="FP Threshold (min files)",
                         value=10,
-                        min=2,
+                        min=1,
                         step=1,
                     )
                     .props("dense outlined")
@@ -277,6 +285,10 @@ def create_scan_configure_page(service, daemon_name: str):
                 skip_hidden_check = ui.checkbox(
                     "Skip hidden directories (starting with .)",
                     value=True,
+                )
+                exact_check = ui.checkbox(
+                    "Exact counts (slower — disables progressive suppression)",
+                    value=False,
                 )
 
         results_container = ui.column().classes("w-full gap-4")
@@ -347,14 +359,17 @@ def create_scan_configure_page(service, daemon_name: str):
                     save_dir_input.on_value_change(lambda _: _update_target())
 
                     with ui.row().classes("items-center gap-2"):
-                        apply_btn = ui.button(
-                            "Apply Config", icon="check_circle"
-                        ).props("color=positive")
+                        merge_btn = ui.button("Merge", icon="merge_type").props(
+                            "color=positive"
+                        )
+                        overwrite_btn = ui.button("Overwrite", icon="sync").props(
+                            "color=warning"
+                        )
                         discard_btn = ui.button("Discard", icon="cancel").props(
                             "flat color=negative"
                         )
 
-                    async def do_apply():
+                    async def do_apply(overwrite=False):
                         scope = scope_toggle.value
                         target_dir = save_dir_input.value.strip() or scanned_dir
                         try:
@@ -364,9 +379,11 @@ def create_scan_configure_page(service, daemon_name: str):
                                 scan_result[0].merged_config,
                                 scan_result[0].analysis.recommended_ignore_paths,
                                 scope,
+                                overwrite,
                             )
                             _clear_session()
-                            ui.notify(f"Config applied ({scope})", type="positive")
+                            mode = "overwritten" if overwrite else "merged"
+                            ui.notify(f"Config {mode} ({scope})", type="positive")
                         except Exception as exc:
                             ui.notify(f"Error applying config: {exc}", type="negative")
 
@@ -376,7 +393,8 @@ def create_scan_configure_page(service, daemon_name: str):
                         _clear_session()
                         ui.notify("Changes discarded", type="info")
 
-                    apply_btn.on_click(do_apply)
+                    merge_btn.on_click(lambda: do_apply(overwrite=False))
+                    overwrite_btn.on_click(lambda: do_apply(overwrite=True))
                     discard_btn.on_click(do_discard)
 
         def _store_session(result):
@@ -425,8 +443,8 @@ def create_scan_configure_page(service, daemon_name: str):
                 return
 
             threshold = int(threshold_input.value or 10)
-            if threshold < 2:
-                threshold = 2
+            if threshold < 1:
+                threshold = 1
 
             cancel_event.clear()
             progress_state.update(phase="Starting...", file="", index=0, total=0)
@@ -476,6 +494,7 @@ def create_scan_configure_page(service, daemon_name: str):
                     cancel_event,
                     progress_state,
                     skip_hidden_check.value,
+                    not exact_check.value,
                 )
                 progress_timer.deactivate()
 
@@ -504,8 +523,12 @@ def create_scan_configure_page(service, daemon_name: str):
         stop_btn.on_click(do_stop)
 
 
-def _apply_config(project_dir, merged_config, ignore_paths, scope="project"):
+def _apply_config(
+    project_dir, merged_config, ignore_paths, scope="project", overwrite=False
+):
     """Write config and aiguardignore files at the chosen scope."""
+    import shutil
+
     from ai_guardian.scan_analyzer import merge_and_write_config
 
     if merged_config:
@@ -515,7 +538,18 @@ def _apply_config(project_dir, merged_config, ignore_paths, scope="project"):
             config_path = get_config_dir() / "ai-guardian.json"
         else:
             config_path = Path(project_dir) / ".ai-guardian" / "ai-guardian.json"
-        merge_and_write_config(config_path, merged_config)
+
+        if overwrite:
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            if config_path.exists():
+                shutil.copy2(config_path, config_path.with_suffix(".json.backup"))
+            import json
+
+            config_path.write_text(
+                json.dumps(merged_config, indent=2) + "\n", encoding="utf-8"
+            )
+        else:
+            merge_and_write_config(config_path, merged_config)
 
     if ignore_paths:
         from ai_guardian.project_init import ProjectInitializer

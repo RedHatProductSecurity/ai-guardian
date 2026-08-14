@@ -245,6 +245,7 @@ RULE_ID_TO_SCANNER = {
     "SECRET-001": "secret_scanning",
     "PII-001": "scan_pii",
     "PROMPT-INJECTION-001": "prompt_injection",
+    "SSRF-001": "ssrf_protection",
     "CONFIG-001": "config_file_scanning",
     "SUPPLY-CHAIN-001": "supply_chain",
     "EXFIL-DETECTION-001": "exfil_detection",

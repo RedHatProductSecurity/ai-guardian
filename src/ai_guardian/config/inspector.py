@@ -280,9 +280,11 @@ class ConfigInspector:
 
         # Load effective patterns
         try:
-            from ai_guardian.scanners.prompt_injection import UnicodeAttackDetector
+            from ai_guardian.scanners.prompt_injection import (
+                get_cached_unicode_detector,
+            )
 
-            detector = UnicodeAttackDetector(unicode_config)
+            detector = get_cached_unicode_detector(unicode_config)
 
             output.append(
                 f"Zero-Width Characters: {len(detector._zero_width_set)} chars (IMMUTABLE)"
@@ -471,12 +473,14 @@ class ConfigInspector:
 
         # Unicode Detection
         try:
-            from ai_guardian.scanners.prompt_injection import UnicodeAttackDetector
+            from ai_guardian.scanners.prompt_injection import (
+                get_cached_unicode_detector,
+            )
 
             unicode_config = self.config.get("prompt_injection", {}).get(
                 "unicode_detection", {}
             )
-            detector = UnicodeAttackDetector(unicode_config)
+            detector = get_cached_unicode_detector(unicode_config)
 
             effective_config["unicode_detection"] = {
                 "enabled": unicode_config.get("enabled", True),

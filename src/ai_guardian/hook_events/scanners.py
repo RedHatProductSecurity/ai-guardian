@@ -25,6 +25,7 @@ try:
     from ai_guardian.scanners.prompt_injection import (
         check_prompt_injection,
         PromptInjectionDetector,
+        get_cached_detector,
     )
 
     HAS_PROMPT_INJECTION = True
@@ -174,7 +175,7 @@ def run_prompt_injection_scan(
     if not config or not is_feature_enabled(config.get("enabled"), now, default=True):
         return None
 
-    detector = PromptInjectionDetector(config)
+    detector = get_cached_detector(config)
     with (latency_timer or _NULL_TIMER).check("prompt_injection"):
         should_block, error_msg, detected = detector.detect(
             content,

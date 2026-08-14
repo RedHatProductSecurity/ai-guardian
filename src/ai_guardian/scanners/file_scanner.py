@@ -31,6 +31,7 @@ try:
     from ai_guardian.scanners.prompt_injection import (
         UnicodeAttackDetector,
         _offset_to_line_number,
+        get_cached_unicode_detector,
     )
 
     HAS_UNICODE = True
@@ -83,6 +84,7 @@ try:
     from ai_guardian.scanners.prompt_injection import (
         check_prompt_injection,
         PromptInjectionDetector,
+        get_cached_detector,
     )
 
     HAS_PROMPT_INJECTION = True
@@ -220,7 +222,7 @@ class FileScanner:
         ssrf_cfg["action"] = "block"
         self.ssrf_protector = SSRFProtector(ssrf_cfg) if HAS_SSRF else None
         self.unicode_detector = (
-            UnicodeAttackDetector(config.get("prompt_injection", {}))
+            get_cached_unicode_detector(config.get("prompt_injection", {}))
             if HAS_UNICODE
             else None
         )
@@ -235,6 +237,7 @@ class FileScanner:
         self._code_scanner = BanditScanner(code_cfg) if code_enabled else None
         self._code_scanner_unavailable: Optional[str] = None
         self._code_scan_skipped_count: int = 0
+        self._skip_rules: frozenset = frozenset()
 
     _IMAGE_DEFAULTS: Dict[str, Any] = {
         "enabled": True,
@@ -279,6 +282,7 @@ class FileScanner:
         progress_callback=None,
         cancel_event=None,
         skip_hidden: bool = True,
+        finding_filter=None,
     ) -> List[Dict[str, Any]]:
         """
         Scan directory for security issues.
@@ -291,6 +295,9 @@ class FileScanner:
             progress_callback: Optional callable(file_path, index, total)
             cancel_event: Optional threading.Event — set to stop scan early
             skip_hidden: Skip directories starting with '.' (default True)
+            finding_filter: Optional callable(findings_list) -> filtered_list,
+                called after each file's scan with the cumulative findings.
+                Can remove findings in-place for progressive suppression.
 
         Returns:
             List of findings (partial if cancelled)
@@ -331,6 +338,11 @@ class FileScanner:
                     self._scan_image_file(file_path, scan_path)
                 else:
                     self._scan_file(file_path, scan_path)
+                if finding_filter:
+                    self.findings = finding_filter(self.findings)
+                    skip = getattr(finding_filter, "skip_rules", None)
+                    if skip is not None:
+                        self._skip_rules = skip
 
         return self.findings
 
@@ -678,47 +690,39 @@ class FileScanner:
                         pii_content = content_all_sup
                         secret_content = content_secret_sup
 
-            # Check for config file threats (Phase 3)
-            if self._is_config_file(file_path) and HAS_CONFIG_SCANNER:
-                self._check_config_threats(relative_path, content)
+            _skip = self._skip_rules
 
-            # Check for SSRF patterns (Phase 1)
-            if self.ssrf_protector:
+            if self._is_config_file(file_path) and HAS_CONFIG_SCANNER:
+                if "CONFIG-001" not in _skip:
+                    self._check_config_threats(relative_path, content)
+
+            if self.ssrf_protector and "SSRF-001" not in _skip:
                 self._check_ssrf(relative_path, content)
 
-            # Check for Unicode attacks (Phase 2)
-            if self.unicode_detector:
+            if self.unicode_detector and "UNICODE-001" not in _skip:
                 self._check_unicode_attacks(relative_path, content)
 
-            # Check for secrets (Phase 4) — uses annotation-suppressed content
-            if HAS_SECRET_SCANNER:
+            if HAS_SECRET_SCANNER and "SECRET-001" not in _skip:
                 self._check_secrets(relative_path, secret_content, str(file_path))
 
-            # Check for PII — uses annotation-suppressed content
-            if HAS_PII_SCANNER:
+            if HAS_PII_SCANNER and "PII-001" not in _skip:
                 self._check_pii(relative_path, pii_content)
 
-            # Check for prompt injection
-            if HAS_PROMPT_INJECTION:
+            if HAS_PROMPT_INJECTION and "PROMPT-INJECTION-001" not in _skip:
                 self._check_prompt_injection(relative_path, content)
 
-            # Check for supply chain threats
-            if HAS_SUPPLY_CHAIN:
+            if HAS_SUPPLY_CHAIN and "SUPPLY-CHAIN-001" not in _skip:
                 self._check_supply_chain(str(file_path), content)
 
-            # Check for offensive language
             if HAS_OFFENSIVE_LANGUAGE:
                 self._check_offensive_language(relative_path, content)
 
-            # Check for canary tokens
-            if HAS_CANARY_DETECTION:
+            if HAS_CANARY_DETECTION and "CANARY-001" not in _skip:
                 self._check_canary_detection(relative_path, content)
 
-            # Check for Python code security issues (Bandit)
             if self._code_scanner and file_path.suffix == ".py":
                 self._check_code_security(relative_path, content)
 
-            # Check for exfil behavior in shell scripts
             if HAS_EXFIL_DETECTION and file_path.suffix in {
                 ".sh",
                 ".bash",
@@ -726,7 +730,8 @@ class FileScanner:
                 ".ksh",
                 ".fish",
             }:
-                self._check_exfil_detection(relative_path, content)
+                if "EXFIL-DETECTION-001" not in _skip:
+                    self._check_exfil_detection(relative_path, content)
 
         except Exception as e:
             if self.verbose:
@@ -1014,7 +1019,7 @@ class FileScanner:
             if not injection_config.get("enabled", True):
                 return
 
-            detector = PromptInjectionDetector(injection_config)
+            detector = get_cached_detector(injection_config)
             _should_block, error_message, detected = detector.detect(
                 content,
                 file_path=file_path,
@@ -1039,6 +1044,8 @@ class FileScanner:
                     snippet=snippet,
                     start_column=detector.last_start_column,
                     end_column=detector.last_end_column,
+                    matched_pattern=detector.last_matched_pattern,
+                    matched_text=detector.last_matched_text,
                 )
                 self.findings.append(finding)
                 if self.verbose:

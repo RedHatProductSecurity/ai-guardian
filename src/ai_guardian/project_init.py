@@ -69,6 +69,7 @@ class InitResult:
     config_existed: bool = False
     dry_run: bool = False
     scan_analysis: Optional[Any] = None
+    merged_config: Optional[Dict] = None
     aiguardignore_path: Optional[Path] = None
     aiguardignore_created: bool = False
 
@@ -78,6 +79,7 @@ class ProjectInitializer:
 
     def __init__(self, project_dir: Optional[Path] = None):
         self.project_dir = Path(project_dir) if project_dir else Path.cwd()
+        self._last_suppressor = None
 
     def detect_languages(self) -> List[DetectedLanguage]:
         ext_to_langs: Dict[str, List[LanguageDefinition]] = {}
@@ -198,6 +200,7 @@ class ProjectInitializer:
         self,
         config: Dict,
         force: bool = False,
+        merge: bool = False,
         dry_run: bool = False,
     ) -> Tuple[Path, bool, bool]:
         config_dir = self.project_dir / ".ai-guardian"
@@ -207,13 +210,19 @@ class ProjectInitializer:
         if dry_run:
             return config_path, False, existed
 
-        if existed and not force:
+        if existed and not force and not merge:
             return config_path, False, existed
 
-        if existed and force:
+        if existed and (force or merge):
             backup_path = config_path.with_suffix(".json.backup")
             shutil.copy2(config_path, backup_path)
             logger.info("Backed up existing config to %s", backup_path)
+
+        if existed and merge:
+            from ai_guardian.scan_analyzer import merge_and_write_config
+
+            merge_and_write_config(config_path, config)
+            return config_path, True, existed
 
         config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -222,19 +231,29 @@ class ProjectInitializer:
 
         return config_path, True, existed
 
-    def scan_project(self) -> List[Dict]:
-        """Run FileScanner with merged config against the project."""
+    def scan_project(self, threshold: int = 10, progressive: bool = True) -> List[Dict]:
+        """Run FileScanner with all scanners enabled and suppressions stripped."""
         from ai_guardian.scanners.file_scanner import FileScanner
-        from ai_guardian.config.loaders import load_scanner_config
+        from ai_guardian.scan_analyzer import (
+            ProgressiveSuppressor,
+            _build_discovery_config,
+        )
 
-        config = load_scanner_config(project_root=str(self.project_dir))
+        config = _build_discovery_config(str(self.project_dir))
         scanner = FileScanner(config=config, verbose=False)
-        return scanner.scan_directory(str(self.project_dir))
+        suppressor = ProgressiveSuppressor(threshold) if progressive else None
+        findings = scanner.scan_directory(
+            str(self.project_dir), finding_filter=suppressor
+        )
+        self._last_suppressor = suppressor
+        return findings
 
-    def analyze_scan(self, findings: List[Dict], threshold: int = 10):
+    def analyze_scan(self, findings: List[Dict], threshold: int = 10, suppressor=None):
         from ai_guardian.scan_analyzer import build_recommendations
 
-        return build_recommendations(findings, threshold=threshold)
+        return build_recommendations(
+            findings, threshold=threshold, suppressor=suppressor
+        )
 
     def merge_configs(self, language_config: Dict, scan_config: Dict) -> Dict:
         """Deep-merge language-detection config with scan-derived config."""
@@ -344,9 +363,11 @@ class ProjectInitializer:
     def run(
         self,
         force: bool = False,
+        merge: bool = False,
         dry_run: bool = False,
         scan: bool = False,
         threshold: int = 10,
+        progressive: bool = True,
         confirm_callback=None,
     ) -> InitResult:
         result = InitResult(project_dir=self.project_dir, dry_run=dry_run)
@@ -361,13 +382,19 @@ class ProjectInitializer:
         language_config = self.generate_config(entries, ignore_files)
 
         if scan:
-            findings = self.scan_project()
-            analysis = self.analyze_scan(findings, threshold=threshold)
+            findings = self.scan_project(threshold=threshold, progressive=progressive)
+            analysis = self.analyze_scan(
+                findings, threshold=threshold, suppressor=self._last_suppressor
+            )
+            if self._last_suppressor:
+                analysis.suppressed_count += self._last_suppressor.suppressed_count
             result.scan_analysis = analysis
             scan_config = analysis.recommended_config
             merged = self.merge_configs(language_config, scan_config)
         else:
             merged = language_config
+
+        result.merged_config = merged
 
         if not merged:
             return result
@@ -376,7 +403,7 @@ class ProjectInitializer:
             return result
 
         config_path, created, existed = self.write_config(
-            merged, force=force, dry_run=dry_run
+            merged, force=force, merge=merge, dry_run=dry_run
         )
         result.config_path = config_path
         result.config_created = created
@@ -516,8 +543,6 @@ def _print_result(result: InitResult) -> None:
         return
 
     if result.config_existed and not result.config_created:
-        print(f"Config already exists: {result.config_path}")
-        print("Use --force to overwrite (creates .backup).")
         return
 
     if result.config_created:
@@ -601,6 +626,23 @@ def _print_json(result: InitResult) -> None:
     print(json.dumps(output, indent=2))
 
 
+def _ask_existing_config(config_path) -> str:
+    """Ask user how to handle existing config."""
+    if not sys.stdin.isatty():
+        return "skip"
+    print(f"\nConfig already exists: {config_path}")
+    try:
+        response = input("[M]erge / [O]verwrite / [S]kip? ").strip().lower()
+        if response in ("m", "merge"):
+            return "merge"
+        if response in ("o", "overwrite"):
+            return "overwrite"
+        return "skip"
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "skip"
+
+
 def _confirm_write() -> bool:
     """Ask user to confirm writing config files."""
     if not sys.stdin.isatty():
@@ -617,17 +659,19 @@ def init_project_command(args) -> int:
     """CLI entry point for init-project command."""
     project_dir = Path(getattr(args, "dir", ".")).resolve()
     force = getattr(args, "force", False)
+    merge = getattr(args, "merge", False)
     dry_run = getattr(args, "dry_run", False)
     json_output = getattr(args, "json", False)
     scan = getattr(args, "scan", False)
     threshold = getattr(args, "threshold", 10)
+    progressive = not getattr(args, "exact", False)
 
     if not project_dir.is_dir():
         print(f"Error: Not a directory: {project_dir}", file=sys.stderr)
         return 1
 
-    if threshold < 2:
-        print("Error: --threshold must be >= 2", file=sys.stderr)
+    if threshold < 1:
+        print("Error: --threshold must be >= 1", file=sys.stderr)
         return 1
 
     def _interactive_confirm(result_so_far):
@@ -665,9 +709,11 @@ def init_project_command(args) -> int:
     )
     result = initializer.run(
         force=force,
+        merge=merge,
         dry_run=dry_run,
         scan=scan,
         threshold=threshold,
+        progressive=progressive,
         confirm_callback=confirm_cb,
     )
 
@@ -677,7 +723,18 @@ def init_project_command(args) -> int:
         _print_result(result)
 
     if result.config_existed and not result.config_created and not dry_run:
-        return 1
+        if json_output:
+            return 1
+        choice = _ask_existing_config(result.config_path)
+        if choice in ("m", "merge"):
+            initializer.write_config(result.merged_config or {}, merge=True)
+            print(f"Config merged into {result.config_path}")
+        elif choice in ("o", "overwrite"):
+            initializer.write_config(result.merged_config or {}, force=True)
+            print(f"Config overwritten at {result.config_path}")
+        else:
+            print("Skipped.")
+            return 1
 
     return 0
 

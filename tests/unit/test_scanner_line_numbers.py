@@ -215,8 +215,8 @@ class TestSecretLineNumbers(unittest.TestCase):
 
 class TestPromptInjectionLineNumbers(unittest.TestCase):
 
-    @patch("ai_guardian.scanners.file_scanner.PromptInjectionDetector")
-    def test_prompt_injection_has_line_number(self, mock_detector_cls):
+    @patch("ai_guardian.scanners.file_scanner.get_cached_detector")
+    def test_prompt_injection_has_line_number(self, mock_get_detector):
         mock_detector = MagicMock()
         mock_detector.detect.return_value = (
             True,
@@ -225,7 +225,7 @@ class TestPromptInjectionLineNumbers(unittest.TestCase):
         )
         mock_detector.last_line_number = 99
         mock_detector.last_matched_text = "ignore previous instructions"
-        mock_detector_cls.return_value = mock_detector
+        mock_get_detector.return_value = mock_detector
 
         scanner = FileScanner.__new__(FileScanner)
         scanner.config = {"prompt_injection": {"enabled": True}}
@@ -241,14 +241,14 @@ class TestPromptInjectionLineNumbers(unittest.TestCase):
         assert finding["snippet"] is not None
         assert "ignore" in finding["snippet"]
 
-    @patch("ai_guardian.scanners.file_scanner.PromptInjectionDetector")
-    def test_prompt_injection_falls_back_to_detector_line(self, mock_detector_cls):
+    @patch("ai_guardian.scanners.file_scanner.get_cached_detector")
+    def test_prompt_injection_falls_back_to_detector_line(self, mock_get_detector):
         """When matched text not found in original, use detector's line number."""
         mock_detector = MagicMock()
         mock_detector.detect.return_value = (True, "Detected", True)
         mock_detector.last_line_number = 5
         mock_detector.last_matched_text = "text not in content"
-        mock_detector_cls.return_value = mock_detector
+        mock_get_detector.return_value = mock_detector
 
         scanner = FileScanner.__new__(FileScanner)
         scanner.config = {"prompt_injection": {"enabled": True}}
@@ -258,13 +258,13 @@ class TestPromptInjectionLineNumbers(unittest.TestCase):
         scanner._check_prompt_injection("test.py", "other content here")
         assert scanner.findings[0]["line_number"] == 5
 
-    @patch("ai_guardian.scanners.file_scanner.PromptInjectionDetector")
-    def test_prompt_injection_no_line_number(self, mock_detector_cls):
+    @patch("ai_guardian.scanners.file_scanner.get_cached_detector")
+    def test_prompt_injection_no_line_number(self, mock_get_detector):
         mock_detector = MagicMock()
         mock_detector.detect.return_value = (True, "Prompt injection detected", True)
         mock_detector.last_line_number = None
         mock_detector.last_matched_text = None
-        mock_detector_cls.return_value = mock_detector
+        mock_get_detector.return_value = mock_detector
 
         scanner = FileScanner.__new__(FileScanner)
         scanner.config = {"prompt_injection": {"enabled": True}}
