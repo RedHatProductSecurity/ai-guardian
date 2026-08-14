@@ -72,6 +72,7 @@ class InitResult:
     merged_config: Optional[Dict] = None
     aiguardignore_path: Optional[Path] = None
     aiguardignore_created: bool = False
+    exclude_patterns: List[str] = field(default_factory=list)
 
 
 class ProjectInitializer:
@@ -231,7 +232,12 @@ class ProjectInitializer:
 
         return config_path, True, existed
 
-    def scan_project(self, threshold: int = 10, progressive: bool = True) -> List[Dict]:
+    def scan_project(
+        self,
+        threshold: int = 10,
+        progressive: bool = True,
+        exclude_patterns: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """Run FileScanner with all scanners enabled and suppressions stripped."""
         from ai_guardian.scanners.file_scanner import FileScanner
         from ai_guardian.scan_analyzer import (
@@ -243,10 +249,29 @@ class ProjectInitializer:
         scanner = FileScanner(config=config, verbose=False)
         suppressor = ProgressiveSuppressor(threshold) if progressive else None
         findings = scanner.scan_directory(
-            str(self.project_dir), finding_filter=suppressor
+            str(self.project_dir),
+            exclude_patterns=exclude_patterns,
+            finding_filter=suppressor,
         )
         self._last_suppressor = suppressor
         return findings
+
+    def _load_aiguardignore_excludes(self) -> List[str]:
+        """Load exclude paths from existing .aiguardignore.toml."""
+        try:
+            from ai_guardian.aiguardignore import load_aiguardignore
+
+            config = load_aiguardignore(project_root=self.project_dir)
+            if config is None:
+                return []
+            paths = list(config.global_paths)
+            for scanner_paths in config.scanner_paths.values():
+                for p in scanner_paths:
+                    if p not in paths:
+                        paths.append(p)
+            return paths
+        except Exception:
+            return []
 
     def analyze_scan(self, findings: List[Dict], threshold: int = 10, suppressor=None):
         from ai_guardian.scan_analyzer import build_recommendations
@@ -369,6 +394,7 @@ class ProjectInitializer:
         threshold: int = 10,
         progressive: bool = True,
         confirm_callback=None,
+        exclude_patterns: Optional[List[str]] = None,
     ) -> InitResult:
         result = InitResult(project_dir=self.project_dir, dry_run=dry_run)
 
@@ -382,7 +408,14 @@ class ProjectInitializer:
         language_config = self.generate_config(entries, ignore_files)
 
         if scan:
-            findings = self.scan_project(threshold=threshold, progressive=progressive)
+            effective_excludes = list(exclude_patterns or [])
+            effective_excludes.extend(self._load_aiguardignore_excludes())
+            result.exclude_patterns = effective_excludes
+            findings = self.scan_project(
+                threshold=threshold,
+                progressive=progressive,
+                exclude_patterns=effective_excludes or None,
+            )
             analysis = self.analyze_scan(
                 findings, threshold=threshold, suppressor=self._last_suppressor
             )
@@ -487,12 +520,24 @@ def _print_scan_analysis(analysis) -> None:
         print(f"Remaining findings to review: {remaining}")
 
 
+def _print_exclude_patterns(exclude_patterns: List[str]) -> None:
+    """Print effective exclude patterns."""
+    if not exclude_patterns:
+        return
+    print("Excluded paths:")
+    for pattern in exclude_patterns:
+        print(f"  - {pattern}")
+    print()
+
+
 def _print_result(result: InitResult) -> None:
     print("AI Guardian Project Initializer")
     print("=" * 40)
     print()
     print(f"Scanning: {result.project_dir}")
     print()
+
+    _print_exclude_patterns(result.exclude_patterns)
 
     if result.detected_languages:
         print("Detected languages:")
@@ -587,6 +632,7 @@ def _print_json(result: InitResult) -> None:
         "config_created": result.config_created,
         "config_existed": result.config_existed,
         "dry_run": result.dry_run,
+        "exclude_patterns": result.exclude_patterns,
     }
 
     if result.scan_analysis:
@@ -665,6 +711,7 @@ def init_project_command(args) -> int:
     scan = getattr(args, "scan", False)
     threshold = getattr(args, "threshold", 10)
     progressive = not getattr(args, "exact", False)
+    exclude_patterns = getattr(args, "exclude", []) or []
 
     if not project_dir.is_dir():
         print(f"Error: Not a directory: {project_dir}", file=sys.stderr)
@@ -695,15 +742,18 @@ def init_project_command(args) -> int:
                 return False
         return _confirm_write()
 
+    initializer = ProjectInitializer(project_dir)
+
     if scan and not dry_run and not json_output:
         print("AI Guardian Project Initializer")
         print("=" * 40)
         print()
         print(f"Scanning: {project_dir}")
+        effective = list(exclude_patterns)
+        effective.extend(initializer._load_aiguardignore_excludes())
+        _print_exclude_patterns(effective)
         print("Running full scan (this may take a moment)...")
         print()
-
-    initializer = ProjectInitializer(project_dir)
     confirm_cb = (
         _interactive_confirm if (scan and not dry_run and not json_output) else None
     )
@@ -715,6 +765,7 @@ def init_project_command(args) -> int:
         threshold=threshold,
         progressive=progressive,
         confirm_callback=confirm_cb,
+        exclude_patterns=exclude_patterns or None,
     )
 
     if json_output:

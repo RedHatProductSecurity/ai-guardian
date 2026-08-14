@@ -1343,6 +1343,13 @@ def main():
             action="store_true",
             help="Disable progressive suppression for exact finding counts (slower)",
         )
+        init_project_parser.add_argument(
+            "--exclude",
+            action="append",
+            default=[],
+            metavar="PATTERN",
+            help="Exclude glob pattern from scan (repeatable, e.g. --exclude 'data/*')",
+        )
 
         args = parser.parse_args()
 
