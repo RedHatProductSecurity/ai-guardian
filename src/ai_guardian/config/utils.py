@@ -22,6 +22,33 @@ logger = logging.getLogger(__name__)
 ACTION_SEVERITY = {"allow": 0, "log-only": 1, "warn": 2, "redact": 3, "block": 4}
 SENSITIVITY_SEVERITY = {"low": 0, "medium": 1, "high": 2}
 
+_BROAD_PATH_PATTERNS = frozenset({"*", "**", "**/*"})
+
+
+def is_safe_path_pattern(pattern: str, *, block_broad: bool = False) -> bool:
+    """Return False for traversal or (optionally) overly broad path patterns."""
+    if ".." in pattern.split("/"):
+        logger.warning("Blocked path pattern with '..': '%s'", pattern)
+        return False
+    if block_broad and pattern in _BROAD_PATH_PATTERNS:
+        logger.warning("Blocked overly broad path pattern: '%s'", pattern)
+        return False
+    return True
+
+
+def validate_path_list(
+    raw: List[str], *, block_broad: bool = False, source: str = ""
+) -> List[str]:
+    """Filter a list of path patterns, dropping unsafe ones."""
+    safe = []
+    for p in raw:
+        if not is_safe_path_pattern(p, block_broad=block_broad):
+            if source:
+                logger.warning("Unsafe path in %s: '%s'", source, p)
+            continue
+        safe.append(p)
+    return safe
+
 
 def _ordinal_comparator(severity_map):
     def compare(base, override):
