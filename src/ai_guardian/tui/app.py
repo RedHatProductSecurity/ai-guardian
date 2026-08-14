@@ -807,8 +807,8 @@ HELP_DOCS = {
         "  - List all trace files with agent name, model, status\n"
         "  - Active conversations marked with green indicator\n"
         "  - Per-turn token breakdown and violation highlights\n\n"
-        "[bold]Configuration:[/bold]\n"
-        "  sdk.agents.*.trace_dir — trace file location\n\n"
+        "[bold]Trace location:[/bold]\n"
+        "  ~/.local/state/ai-guardian/sdk/traces/\n\n"
         "[bold]Keyboard shortcuts:[/bold]\n"
         "  [bold]r[/bold]  Refresh trace list"
     ),

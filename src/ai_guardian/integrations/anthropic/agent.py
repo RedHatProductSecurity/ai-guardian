@@ -304,7 +304,6 @@ class GuardedAgent:
             "target_dir",
             "allowed_paths",
             "follow_symlinks",
-            "trace_dir",
             "compact_threshold",
             "compact_keep_turns",
             "compact_keep_first",
@@ -345,7 +344,12 @@ class GuardedAgent:
     ):
         self._name = name
         self._target_dir = target_dir
-        self._trace_dir = trace_dir
+        if trace_dir is not None:
+            self._trace_dir = trace_dir
+        else:
+            from ai_guardian.config.utils import get_sdk_trace_dir
+
+            self._trace_dir = str(get_sdk_trace_dir())
         self._trace_path_fn = trace_path_fn
         self._last_trace: List[Dict[str, Any]] = []
         self._model = model
@@ -383,20 +387,10 @@ class GuardedAgent:
             self._strategy = AnthropicLoopStrategy()
             self._client = self._strategy.create_default_client()
 
-        code_trace_dir = self._trace_dir
         tools = self._apply_config_profile(tools)
 
         if self._trace_dir and not os.path.isabs(self._trace_dir):
-            base = self._cwd
-            if code_trace_dir is None:
-                from ai_guardian.config.loaders import _sdk_profile_key_base_dir
-
-                config_base = _sdk_profile_key_base_dir(
-                    "agents", self._name, "trace_dir"
-                )
-                if config_base is not None:
-                    base = config_base
-            self._trace_dir = os.path.join(base, self._trace_dir)
+            self._trace_dir = os.path.join(self._cwd, self._trace_dir)
 
         if cache_ttl is not None:
             self._strategy.validate_cache_ttl(cache_ttl)

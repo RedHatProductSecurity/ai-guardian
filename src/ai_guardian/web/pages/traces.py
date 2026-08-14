@@ -1,5 +1,6 @@
 """Trace Viewer page — conversation traces from GuardedAgent runs."""
 
+import fnmatch
 import urllib.parse
 
 from nicegui import run, ui
@@ -20,17 +21,10 @@ def create_traces_page(service, daemon_name: str):
         state = {"load_fn": None}
 
         with ui.row().classes("items-end gap-4 w-full"):
-            dir_input = ui.input(
-                label="Trace directory (optional)",
-                placeholder="Auto-discovered from config",
+            filter_input = ui.input(
+                label="Filter filenames",
+                placeholder="Wildcard: *, ?  e.g. triage-*",
             ).classes("flex-grow")
-
-            from ai_guardian.web.pages.directory_scan import _open_browse_dialog
-
-            ui.button(
-                icon="folder_open",
-                on_click=lambda: _open_browse_dialog(dir_input),
-            ).props("dense outline")
 
             agent_select = ui.select(
                 options={"": "All Agents"},
@@ -63,14 +57,16 @@ def create_traces_page(service, daemon_name: str):
                     return
 
                 agent_filter = agent_select.value or None
-                custom_dir = dir_input.value.strip() if dir_input.value else None
                 result = await run.io_bound(
-                    service.get_daemon_traces, target, agent_filter, custom_dir
+                    service.get_daemon_traces, target, agent_filter, None
                 )
 
                 traces = (result or {}).get("traces", [])
+                pattern = filter_input.value.strip() if filter_input.value else None
+                if pattern:
+                    traces = _filter_traces(traces, pattern)
                 _populate_agent_filter(traces, agent_select)
-                _render_trace_list(traces, cards_container, daemon_name, custom_dir)
+                _render_trace_list(traces, cards_container, daemon_name)
 
                 if auto_timer["ref"] is None:
                     interval = _get_auto_refresh_interval(service, target)
@@ -91,13 +87,12 @@ def create_trace_detail_page(service, daemon_name: str):
 
     params = dict(ui.context.client.request.query_params)
     filename = params.get("file", "")
-    directory = params.get("directory")
 
     with ui.column().classes("flex-grow p-6 gap-4"):
         with ui.row().classes("items-center gap-2"):
             ui.button(
                 icon="arrow_back",
-                on_click=lambda: _go_back(daemon_name, directory),
+                on_click=lambda: ui.navigate.to(f"/{daemon_name}/traces"),
             ).props("dense flat")
             header_label = ui.label("Loading...").classes("text-2xl font-bold")
 
@@ -120,7 +115,7 @@ def create_trace_detail_page(service, daemon_name: str):
                 return
 
             result = await run.io_bound(
-                service.get_daemon_trace_detail, target, filename, directory
+                service.get_daemon_trace_detail, target, filename, None
             )
             if not result or result.get("error"):
                 header_label.text = "Trace not found"
@@ -159,7 +154,9 @@ def create_trace_detail_page(service, daemon_name: str):
             with turns_container:
                 ui.label("Turns").classes("text-lg font-bold")
                 for turn_obj in trace:
-                    _render_turn_row(turn_obj, per_turn, violations_map, expanded_turns)
+                    _render_turn_row(
+                        turn_obj, per_turn, violations_map, expanded_turns, daemon_name
+                    )
 
             await ui.run_javascript(
                 "(() => {"
@@ -179,11 +176,6 @@ def create_trace_detail_page(service, daemon_name: str):
         ui.timer(0.1, load_detail, once=True)
 
 
-def _go_back(daemon_name, directory):
-    params = f"?directory={urllib.parse.quote(directory, safe='')}" if directory else ""
-    ui.navigate.to(f"/{daemon_name}/traces{params}")
-
-
 def _get_auto_refresh_interval(service, target):
     try:
         cfg = service.get_daemon_config(target) or {}
@@ -194,6 +186,13 @@ def _get_auto_refresh_interval(service, target):
         )
     except Exception:
         return 5
+
+
+def _filter_traces(traces, pattern):
+    """Filter traces by filename using fnmatch wildcard pattern."""
+    if not pattern.startswith("*"):
+        pattern = f"*{pattern}*"
+    return [t for t in traces if fnmatch.fnmatch(t.get("filename", ""), pattern)]
 
 
 def _populate_agent_filter(traces, agent_select):
@@ -208,7 +207,7 @@ def _populate_agent_filter(traces, agent_select):
     agent_select.update()
 
 
-def _render_trace_list(traces, container, daemon_name, directory=None):
+def _render_trace_list(traces, container, daemon_name):
     container.clear()
     if not traces:
         with container:
@@ -217,10 +216,10 @@ def _render_trace_list(traces, container, daemon_name, directory=None):
 
     with container:
         for t in traces:
-            _render_trace_card(t, daemon_name, directory)
+            _render_trace_card(t, daemon_name)
 
 
-def _render_trace_card(trace, daemon_name, directory=None):
+def _render_trace_card(trace, daemon_name):
     agent_name = trace.get("agent_name", "unknown")
     model = trace.get("model", "")
     is_active = trace.get("is_active", False)
@@ -269,10 +268,8 @@ def _render_trace_card(trace, daemon_name, directory=None):
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
 
-        def _navigate(fn=filename, d=directory):
+        def _navigate(fn=filename):
             params = f"?file={urllib.parse.quote(fn, safe='/')}"
-            if d:
-                params += f"&directory={urllib.parse.quote(d, safe='/')}"
             ui.navigate.to(f"/{daemon_name}/trace-detail{params}")
 
         ui.button(
@@ -308,7 +305,9 @@ def _render_token_summary(computed):
             ui.label(f"{cache_ratio:.1%}").classes("text-xs")
 
 
-def _render_turn_row(turn_obj, per_turn, violations_map, expanded_turns=None):
+def _render_turn_row(
+    turn_obj, per_turn, violations_map, expanded_turns=None, daemon_name=""
+):
     """Render a single turn as a row with summary and expandable details."""
     turn_num = turn_obj.get("turn", 0)
     steps = turn_obj.get("steps", [])
@@ -365,7 +364,7 @@ def _render_turn_row(turn_obj, per_turn, violations_map, expanded_turns=None):
 
         with exp:
             for step in steps:
-                _render_step(step)
+                _render_step(step, daemon_name)
 
 
 def _get_turn_type(steps):
@@ -407,7 +406,7 @@ def _get_turn_prompt_preview(steps):
     return ""
 
 
-def _render_step(step):
+def _render_step(step, daemon_name=""):
     step_type = step.get("type", "")
     step_num = step.get("step", 0)
     icon_map = {
@@ -423,17 +422,15 @@ def _render_step(step):
 
     with ui.row().classes("items-start gap-2 py-1"):
         ui.icon(icon_name).classes(f"{icon_color} text-xs mt-1")
-        with ui.column().classes("gap-0"):
+        with ui.column().classes("gap-0 w-full"):
             if step_type == "system":
                 ui.label(f"Step {step_num}: system prompt").classes("text-xs font-bold")
                 prompt = step.get("user_prompt", "")
                 if prompt:
-                    ui.label(_truncate(prompt, 300)).classes("text-xs text-grey-6")
+                    _render_text_block(prompt)
                 sys_prompt = step.get("system_prompt", "")
                 if sys_prompt:
-                    ui.label(f"System: {_truncate(sys_prompt, 200)}").classes(
-                        "text-xs text-grey-6"
-                    )
+                    _render_text_block(f"System: {sys_prompt}")
             elif step_type == "response":
                 text = step.get("text", "")
                 signal = step.get("model_signal", "")
@@ -447,14 +444,14 @@ def _render_step(step):
                     "text-xs font-bold"
                 )
                 if text:
-                    ui.label(_truncate(text, 300)).classes("text-xs text-grey-6")
+                    _render_text_block(text)
             elif step_type == "tool_call":
                 name = step.get("name", "")
                 ui.label(f"Step {step_num}: tool_call {name}").classes(
                     "text-xs font-bold"
                 )
                 inp = step.get("input", {})
-                ui.label(_truncate(str(inp), 200)).classes("text-xs text-grey-6")
+                _render_text_block(str(inp))
             elif step_type == "tool_result":
                 name = step.get("name", "")
                 output = step.get("output", "")
@@ -462,7 +459,7 @@ def _render_step(step):
                     "text-xs font-bold"
                 )
                 if output:
-                    ui.label(_truncate(str(output), 300)).classes("text-xs text-grey-6")
+                    _render_text_block(str(output))
             elif step_type == "scan":
                 scanned = step.get("scanned", "")
                 violations = step.get("violations", [])
@@ -473,9 +470,16 @@ def _render_step(step):
                     for v in violations:
                         vtype = v.get("type", "unknown")
                         msg = v.get("message", "")
-                        ui.label(f"  {vtype}: {_truncate(msg, 150)}").classes(
-                            "text-xs text-red"
-                        )
+                        with ui.row().classes("items-center gap-1"):
+                            ui.icon("warning").classes("text-red text-xs")
+                            ui.label(f"{vtype}:").classes("text-xs font-bold text-red")
+                            if daemon_name:
+                                vtype_param = urllib.parse.quote(vtype, safe="")
+                                ui.link(
+                                    "View in Violations",
+                                    f"/{daemon_name}/violations?type={vtype_param}",
+                                ).classes("text-xs")
+                        _render_text_block(msg, color="text-red")
                 else:
                     ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
                         "text-xs"
@@ -490,10 +494,29 @@ def _render_step(step):
                 ui.label(f"Step {step_num}: {step_type}").classes("text-xs")
 
 
-def _truncate(text, max_len=200):
+def _truncate(text, max_len=120):
     if len(text) <= max_len:
         return text
     return text[:max_len] + "..."
+
+
+def _render_text_block(text, color="text-grey-6"):
+    """Render full text in a scrollable pre-formatted block."""
+    ui.html(
+        f'<pre style="white-space: pre-wrap; word-break: break-word; '
+        f"margin: 2px 0; font-size: 0.75rem; max-height: 300px; "
+        f'overflow-y: auto;">{_escape_html(text)}</pre>'
+    ).classes(color)
+
+
+def _escape_html(text):
+    """Escape HTML special characters."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def _format_duration(seconds):

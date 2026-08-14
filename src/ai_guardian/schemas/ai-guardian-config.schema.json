@@ -2640,10 +2640,6 @@
       "description": "Per-agent configuration profile for GuardedAgent. Named profiles override * (wildcard) values. Operational params only — scanning behavior is controlled at sdk level.",
       "additionalProperties": true,
       "properties": {
-        "trace_dir": {
-          "type": "string",
-          "description": "Directory for auto-persisted trace logs. Each run() writes a sanitized JSON trace file named <agent-name>_<YYYYMMDD-HHMMSS>.json. Relative paths resolve against the agent's cwd."
-        },
         "mode": {
           "type": "string",
           "enum": ["direct", "rest"],
@@ -2747,7 +2743,7 @@
         },
         "trace_viewer": {
           "type": "object",
-          "description": "Console trace viewer settings. The trace directory is read from sdk.agents.*.trace_dir.",
+          "description": "Console trace viewer settings. Traces are stored in the XDG state directory (~/.local/state/ai-guardian/sdk/traces/).",
           "additionalProperties": false,
           "properties": {
             "auto_refresh_interval_seconds": {
