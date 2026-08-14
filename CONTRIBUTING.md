@@ -53,9 +53,19 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 - [ ] One feature/fix per PR
 - [ ] No unrelated changes
 
-## Developer Guide
+## Developer Setup
 
-For detailed setup, testing, architecture, and development workflows, see **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)**.
+```bash
+git clone https://github.com/RedHatProductSecurity/ai-guardian.git
+cd ai-guardian
+uv venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+uv pip install -e .[dev]
+```
+
+See [Developer Install](README.md#developer-install) in the README for testing and linter commands.
+
+For detailed architecture and development workflows, see **[docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md)**.
 
 ## Release Process
 

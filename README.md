@@ -33,7 +33,58 @@ See [Security Design](https://github.com/RedHatProductSecurity/ai-guardian/blob/
 
 ## Quick Start
 
-**One-line install** (creates config, installs scanner, sets up hooks):
+### 1. Install
+
+```bash
+uv tool install ai-guardian        # recommended
+# or: pip install ai-guardian
+```
+
+### 2. Configure
+
+```bash
+ai-guardian setup --ide claude --create-config --install-scanner
+```
+
+### 3. Start
+
+```bash
+ai-guardian daemon start -b        # background daemon (faster hook processing)
+ai-guardian tray start -b          # system tray (optional — manage daemons visually)
+```
+
+Done. Open your IDE and start coding — ai-guardian protects automatically.
+
+> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
+
+## Developer Install
+
+For contributors cloning the repo:
+
+```bash
+git clone https://github.com/RedHatProductSecurity/ai-guardian.git
+cd ai-guardian
+uv venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+uv pip install -e .[dev]
+
+# Run tests
+uv run --extra dev python -m pytest tests/test_<module>.py -v
+
+# Run linters
+black --target-version py39 src/ai_guardian/ tests/
+ruff check src/ai_guardian/ tests/ --fix
+```
+
+See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) and [AGENTS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/AGENTS.md) for full development guidelines.
+
+> **Warning:** The `main` branch contains unreleased development code. Always install stable releases from PyPI (`uv tool install ai-guardian` or `pip install ai-guardian`). Do not `git clone` + `pip install -e .` for production use.
+
+## Installation Options
+
+### One-Line Install
+
+Creates config, installs scanner, and sets up hooks automatically:
 
 ```bash
 # Linux / macOS (auto-detects uv → venv → pip)
@@ -48,15 +99,9 @@ curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/m
 irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
 ```
 
-Or install manually:
+### Container
 
-```bash
-uv tool install ai-guardian                # recommended
-pip install ai-guardian                    # alternative
-ai-guardian setup --ide claude --create-config --install-scanner
-```
-
-Or use the container image (no Python setup required):
+A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, and ToS consent
@@ -77,19 +122,29 @@ podman run -it -p 63152:63152 \
 
 `ACCEPT_PROPRIETARY_TOS=true` accepts the [Claude Code Terms of Service](https://www.anthropic.com/legal/consumer-terms) and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.
 
+```bash
+# Pinned release
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.15.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.15.0
+
+# Or build from source
+podman build -t ai-guardian container/
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude ai-guardian
+```
+
 See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, Vertex AI auth, and multi-arch details.
 
-The pip/uv install:
+### What Setup Does
+
+The `setup` command:
 - Installs a scanner engine (gitleaks)
 - Creates `ai-guardian.json` config with secure defaults
 - Installs IDE hooks (PreToolUse, PostToolUse, UserPromptSubmit)
 - Sets up the MCP security advisor for AI-aware protection
 
-> **MCP servers and Skills are blocked by default.** Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See [Tool Policy](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture) for why and how to allow them.
-
 ### Daemon & Tray
 
-The daemon provides faster hook processing. The tray is a separate process that discovers and manages daemons across local, Podman/Docker containers, and Kubernetes pods:
+The daemon provides faster hook processing. The tray discovers and manages daemons across local, Podman/Docker containers, and Kubernetes pods:
 
 ```bash
 ai-guardian daemon start          # Start headless daemon (background: -b)
@@ -109,26 +164,6 @@ The tray auto-discovers running daemons and shows per-daemon submenus with Stati
 > macOS with Podman Desktop sets `DOCKER_HOST` automatically. See [Multi-Daemon Tray](docs/MULTI_DAEMON_TRAY.md#linux-podman) for details.
 
 > **Breaking change in v1.8.0**: `daemon start` no longer launches the tray automatically. Run `ai-guardian tray start -b` separately, or use `ai-guardian tray --install --autostart` for a permanent desktop shortcut with login startup.
-
-### Container
-
-A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
-
-```bash
-# Latest (tracks main branch)
-podman pull quay.io/redhatproductsecurity/ai-guardian:latest
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:latest
-
-# Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.15.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.15.0
-
-# Or build from source
-podman build -t ai-guardian container/
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude ai-guardian
-```
-
-See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, auth, and multi-arch builds.
 
 ### Security Profiles
 
@@ -355,91 +390,12 @@ ai-guardian works out of the box with built-in Python-native scanners, NiceGUI/T
 | macOS (pyenv/Homebrew) | `brew install tcl-tk`, then rebuild Python |
 | uv | Not available — NiceGUI browser form used automatically |
 
-## Installation
-
-**Linux / macOS:**
-
-```bash
-# Recommended: uv tool install (isolated, binary in PATH, no activation needed)
-uv tool install ai-guardian
-
-# Alternative: pip install
-pip install ai-guardian
-
-# Alternative: venv + pip
-python -m venv ~/.ai-guardian-venv
-~/.ai-guardian-venv/bin/pip install ai-guardian
-
-# Optional: tkinter for native tray plugin popup dialogs (see docs/MULTI_DAEMON_TRAY.md)
-# RHEL/Fedora: dnf install python3-tkinter | Debian: apt install python3-tk
-# macOS: included with system Python; pyenv users need tcl-tk (brew install tcl-tk)
-# uv: tkinter unavailable — NiceGUI browser form used automatically as fallback
-```
-
-**Windows (PowerShell):**
-
-```powershell
-# Recommended: uv tool install
-uv tool install ai-guardian
-
-# Alternative: pip install
-pip install ai-guardian
-
-# Alternative: venv + pip
-python -m venv $env:USERPROFILE\.ai-guardian-venv
-& "$env:USERPROFILE\.ai-guardian-venv\Scripts\pip" install ai-guardian
-
-# Or use the one-line installer:
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
-```
-
-> **Warning:** The `main` branch contains unreleased development code. Always install stable releases from PyPI (`uv tool install ai-guardian` or `pip install ai-guardian`). Do not `git clone` + `pip install -e .` for production use — development builds may contain breaking changes, incomplete features, or experimental code that has not been release-tested.
-
-For development and contributing:
-
-```bash
-git clone https://github.com/RedHatProductSecurity/ai-guardian.git
-cd ai-guardian && uv pip install -e .      # recommended
-# or: pip install -e .
-```
-
-> **Dev builds:** CI builds a wheel on every PR and merge. Download from the [Actions tab](https://github.com/RedHatProductSecurity/ai-guardian/actions/workflows/build-wheel.yml) for testing only; use PyPI for stable releases.
-
-## Testing
-
-Using [uv](https://docs.astral.sh/uv/) (recommended):
-
-```bash
-uv run --extra dev python -m pytest             # Run all tests
-uv run --extra dev python -m pytest --cov=ai_guardian --cov-report=term  # With coverage
-```
-
-Or using pip:
-
-```bash
-pip install ai-guardian[dev]                     # Install test dependencies
-pytest                                          # Run all tests
-pytest --cov=ai_guardian --cov-report=term      # With coverage
-```
-
-See [AGENTS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/AGENTS.md) for testing guidelines and CI/CD details.
-
 ## Contributing
 
-We welcome contributions! This repo uses interaction limits, so:
+We welcome contributions! See [Developer Install](#developer-install) for setup and [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) for complete guidelines.
 
 - **Bug reports & feature requests** -- use [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guardian/discussions)
 - **Code contributions** -- fork + PR (not affected by interaction limits)
-
-```bash
-gh repo fork RedHatProductSecurity/ai-guardian --clone
-cd ai-guardian
-git checkout -b feature-name
-# Make changes, commit, push
-gh pr create --web
-```
-
-See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md) for complete guidelines.
 
 ## Documentation
 
