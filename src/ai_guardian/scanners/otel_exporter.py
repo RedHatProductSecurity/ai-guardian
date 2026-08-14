@@ -62,6 +62,32 @@ def _iso_to_unix_nano(iso_str: str) -> str:
         return "0"
 
 
+def _derive_end_nano(
+    iso_str: str,
+    start_nano: str,
+    *,
+    duration_ms: Optional[int] = None,
+    output_tokens: Optional[int] = None,
+) -> str:
+    """Compute end time nanoseconds, synthesizing when the source is missing.
+
+    Falls back to *start_nano* + *duration_ms*, token-based estimate,
+    or a 1 ms synthetic minimum — in that priority order.
+    """
+    end = _iso_to_unix_nano(iso_str)
+    if end != "0":
+        return end
+    if start_nano == "0":
+        return "0"
+    start_int = int(start_nano)
+    if duration_ms is not None and duration_ms > 0:
+        return str(start_int + int(duration_ms * 1_000_000))
+    if output_tokens is not None and output_tokens > 0:
+        estimated_ms = max(1, (output_tokens / 30) * 1000)
+        return str(start_int + int(estimated_ms * 1_000_000))
+    return str(start_int + 1_000_000)
+
+
 def _make_attribute(key: str, value: Any) -> Optional[Dict[str, Any]]:
     """Create a single OTLP attribute dict with a typed value.
 
@@ -106,6 +132,8 @@ def _make_span(
     kind: int = _SPAN_KIND_INTERNAL,
 ) -> Dict[str, Any]:
     """Build a single OTLP Span dict."""
+    if end_nano == "0" and start_nano != "0":
+        end_nano = str(int(start_nano) + 1_000_000)
     span: Dict[str, Any] = {
         "traceId": trace_id,
         "spanId": span_id,
@@ -125,15 +153,20 @@ def _step_timing(step: Dict[str, Any], turn_start: str, turn_end: str):
     """Derive start/end nanoseconds for a step.
 
     Steps with ``latency_ms`` get that duration anchored at *turn_start*.
-    Steps without timing data become zero-duration markers at *turn_start*.
+    Steps without timing synthesize from output tokens (~30 tok/sec) or 1 ms.
     """
     start = _iso_to_unix_nano(turn_start)
+    if start == "0":
+        return "0", "0"
     latency = step.get("latency_ms")
     if latency is not None:
-        end = str(int(start) + latency * 1_000_000)
-    else:
-        end = start
-    return start, end
+        return start, str(int(start) + int(latency * 1_000_000))
+    usage = step.get("usage", {})
+    output_tokens = usage.get("output_tokens")
+    if output_tokens and output_tokens > 0:
+        estimated_ms = max(1, (output_tokens / 30) * 1000)
+        return start, str(int(start) + int(estimated_ms * 1_000_000))
+    return start, str(int(start) + 1_000_000)
 
 
 def _make_step_spans(
@@ -267,13 +300,20 @@ def _make_turn_span(
             input_step = s
             break
 
+    start_nano = _iso_to_unix_nano(turn_start)
+    end_nano = _derive_end_nano(
+        turn_end,
+        start_nano,
+        duration_ms=turn.get("duration_ms"),
+    )
+
     turn_span = _make_span(
         trace_id=trace_id,
         span_id=turn_span_id,
         parent_span_id=root_span_id,
         name="gen_ai.turn",
-        start_nano=_iso_to_unix_nano(turn_start),
-        end_nano=_iso_to_unix_nano(turn_end),
+        start_nano=start_nano,
+        end_nano=end_nano,
         attributes=_attrs(
             ("gen_ai.turn.number", turn.get("turn")),
             (
@@ -317,13 +357,21 @@ def _make_root_span(
     stop_reason = trace_doc.get("stop_reason", "")
     status_code = _STATUS_CODE_ERROR if stop_reason == "error" else _STATUS_CODE_OK
 
+    start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))
+    end_nano = _derive_end_nano(
+        trace_doc.get("ended_at", ""),
+        start_nano,
+        duration_ms=trace_doc.get("duration_ms"),
+        output_tokens=usage.get("output_tokens"),
+    )
+
     return _make_span(
         trace_id=trace_id,
         span_id=root_span_id,
         parent_span_id="",
         name="gen_ai.agent",
-        start_nano=_iso_to_unix_nano(trace_doc.get("started_at", "")),
-        end_nano=_iso_to_unix_nano(trace_doc.get("ended_at", "")),
+        start_nano=start_nano,
+        end_nano=end_nano,
         attributes=_attrs(
             ("gen_ai.system", "anthropic"),
             ("gen_ai.agent.name", trace_doc.get("agent_name")),
