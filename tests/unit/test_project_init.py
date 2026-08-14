@@ -18,6 +18,7 @@ from ai_guardian.project_init import (
     InitResult,
     ProjectInitializer,
     _format_evidence,
+    _print_exclude_patterns,
     _print_result,
     _print_json,
     _language_fp_cache,
@@ -983,6 +984,42 @@ class TestPrintWithScanAnalysis:
         output = json.loads(capsys.readouterr().out)
         assert "scan_analysis" not in output
 
+    def test_print_result_shows_excludes(self, capsys, tmp_path):
+        result = InitResult(project_dir=tmp_path)
+        result.exclude_patterns = ["data/*", "vendor/**"]
+
+        _print_result(result)
+
+        output = capsys.readouterr().out
+        assert "Excluded paths:" in output
+        assert "data/*" in output
+        assert "vendor/**" in output
+
+    def test_print_result_no_excludes_no_section(self, capsys, tmp_path):
+        result = InitResult(project_dir=tmp_path)
+
+        _print_result(result)
+
+        output = capsys.readouterr().out
+        assert "Excluded paths:" not in output
+
+    def test_print_json_includes_excludes(self, capsys, tmp_path):
+        result = InitResult(project_dir=tmp_path)
+        result.exclude_patterns = ["data/*"]
+
+        _print_json(result)
+
+        output = json.loads(capsys.readouterr().out)
+        assert output["exclude_patterns"] == ["data/*"]
+
+    def test_print_json_empty_excludes(self, capsys, tmp_path):
+        result = InitResult(project_dir=tmp_path)
+
+        _print_json(result)
+
+        output = json.loads(capsys.readouterr().out)
+        assert output["exclude_patterns"] == []
+
 
 class TestDefaultExcludesCleanup:
     """Verify default_excludes only contains file-pattern entries."""
@@ -1148,22 +1185,20 @@ class TestAiguardignoreOnScan:
         assert paths.count("vendor/**") == 1
         assert paths.count("data/**") == 1
 
-    def test_scan_project_merges_aiguardignore(self, tmp_path):
+    def test_run_merges_aiguardignore_into_excludes(self, tmp_path):
         (tmp_path / "app.py").write_text("x = 1")
         init = ProjectInitializer(tmp_path)
 
         with patch.object(
             init, "_load_aiguardignore_excludes", return_value=["vendor/**"]
         ):
-            with patch("ai_guardian.scanners.file_scanner.FileScanner") as MockScanner:
-                mock_instance = MockScanner.return_value
-                mock_instance.scan_directory.return_value = []
-                init.scan_project(exclude_patterns=["data/*"])
-
-                call_kwargs = mock_instance.scan_directory.call_args
+            with patch.object(init, "scan_project", return_value=[]) as mock_scan:
+                result = init.run(scan=True, exclude_patterns=["data/*"], threshold=10)
+                call_kwargs = mock_scan.call_args
                 excludes = call_kwargs.kwargs.get(
                     "exclude_patterns",
                     call_kwargs[1].get("exclude_patterns", []),
                 )
                 assert "data/*" in excludes
                 assert "vendor/**" in excludes
+                assert result.exclude_patterns == ["data/*", "vendor/**"]
