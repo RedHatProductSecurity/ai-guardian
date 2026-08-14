@@ -504,6 +504,18 @@ class WebConsole:
 
             create_daemon_detail_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/sdk-agents")
+        def sdk_agents_page(daemon_name: str):
+            from ai_guardian.web.pages.sdk_agents import create_sdk_agents_page
+
+            create_sdk_agents_page(service, daemon_name)
+
+        @ui.page("/{daemon_name}/sdk-settings")
+        def sdk_settings_page(daemon_name: str):
+            from ai_guardian.web.pages.sdk_settings import create_sdk_settings_page
+
+            create_sdk_settings_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/traces")
         def traces_page(daemon_name: str):
             from ai_guardian.web.pages.traces import create_traces_page

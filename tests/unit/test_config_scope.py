@@ -211,6 +211,10 @@ class TestComputeProvenance:
                 "ai_guardian.config.writer.get_project_config_path",
                 return_value=None,
             ),
+            mock.patch(
+                "ai_guardian.config.writer._find_git_root",
+                return_value=None,
+            ),
         ):
             from ai_guardian.config.writer import compute_provenance
 

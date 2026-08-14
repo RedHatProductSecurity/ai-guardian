@@ -8,10 +8,10 @@ pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 class TestNavGroups:
     """Verify NAV_GROUPS structure and content."""
 
-    def test_nav_groups_has_eight_categories(self):
+    def test_nav_groups_has_nine_categories(self):
         from ai_guardian.web.components.header import NAV_GROUPS
 
-        assert len(NAV_GROUPS) == 8
+        assert len(NAV_GROUPS) == 9
 
     def test_nav_groups_categories(self):
         from ai_guardian.web.components.header import NAV_GROUPS
@@ -20,6 +20,7 @@ class TestNavGroups:
         assert names == [
             "Security Overview",
             "Monitoring",
+            "SDK",
             "Permissions",
             "Secrets",
             "Prompt Injection",
@@ -97,7 +98,7 @@ class TestSearchIndex:
         from ai_guardian.web.components.header import _build_search_index
 
         index = _build_search_index("/test")
-        assert len(index) >= 39, f"Expected >=39 entries, got {len(index)}"
+        assert len(index) >= 41, f"Expected >=41 entries, got {len(index)}"
 
     def test_feature_group_name_format(self):
         from ai_guardian.web.components.header import (
@@ -200,7 +201,7 @@ class TestNavGroupsConsistency:
         from ai_guardian.web.components.header import NAV_GROUPS
 
         total = sum(len(items) for _, items in NAV_GROUPS)
-        assert total == 48
+        assert total == 50
 
     def test_first_item_is_dashboard(self):
         from ai_guardian.web.components.header import NAV_GROUPS
