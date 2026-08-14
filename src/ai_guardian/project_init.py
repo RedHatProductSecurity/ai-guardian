@@ -78,6 +78,7 @@ class ProjectInitializer:
 
     def __init__(self, project_dir: Optional[Path] = None):
         self.project_dir = Path(project_dir) if project_dir else Path.cwd()
+        self._last_suppressor = None
 
     def detect_languages(self) -> List[DetectedLanguage]:
         ext_to_langs: Dict[str, List[LanguageDefinition]] = {}
@@ -229,14 +230,22 @@ class ProjectInitializer:
 
         return config_path, True, existed
 
-    def scan_project(self) -> List[Dict]:
+    def scan_project(self, threshold: int = 10, progressive: bool = True) -> List[Dict]:
         """Run FileScanner with all scanners enabled and suppressions stripped."""
         from ai_guardian.scanners.file_scanner import FileScanner
-        from ai_guardian.scan_analyzer import _build_discovery_config
+        from ai_guardian.scan_analyzer import (
+            ProgressiveSuppressor,
+            _build_discovery_config,
+        )
 
         config = _build_discovery_config(str(self.project_dir))
         scanner = FileScanner(config=config, verbose=False)
-        return scanner.scan_directory(str(self.project_dir))
+        suppressor = ProgressiveSuppressor(threshold) if progressive else None
+        findings = scanner.scan_directory(
+            str(self.project_dir), finding_filter=suppressor
+        )
+        self._last_suppressor = suppressor
+        return findings
 
     def analyze_scan(self, findings: List[Dict], threshold: int = 10):
         from ai_guardian.scan_analyzer import build_recommendations
@@ -355,6 +364,7 @@ class ProjectInitializer:
         dry_run: bool = False,
         scan: bool = False,
         threshold: int = 10,
+        progressive: bool = True,
         confirm_callback=None,
     ) -> InitResult:
         result = InitResult(project_dir=self.project_dir, dry_run=dry_run)
@@ -369,8 +379,10 @@ class ProjectInitializer:
         language_config = self.generate_config(entries, ignore_files)
 
         if scan:
-            findings = self.scan_project()
+            findings = self.scan_project(threshold=threshold, progressive=progressive)
             analysis = self.analyze_scan(findings, threshold=threshold)
+            if self._last_suppressor:
+                analysis.suppressed_count += self._last_suppressor.suppressed_count
             result.scan_analysis = analysis
             scan_config = analysis.recommended_config
             merged = self.merge_configs(language_config, scan_config)
@@ -630,13 +642,14 @@ def init_project_command(args) -> int:
     json_output = getattr(args, "json", False)
     scan = getattr(args, "scan", False)
     threshold = getattr(args, "threshold", 10)
+    progressive = not getattr(args, "exact", False)
 
     if not project_dir.is_dir():
         print(f"Error: Not a directory: {project_dir}", file=sys.stderr)
         return 1
 
-    if threshold < 2:
-        print("Error: --threshold must be >= 2", file=sys.stderr)
+    if threshold < 1:
+        print("Error: --threshold must be >= 1", file=sys.stderr)
         return 1
 
     def _interactive_confirm(result_so_far):
@@ -678,6 +691,7 @@ def init_project_command(args) -> int:
         dry_run=dry_run,
         scan=scan,
         threshold=threshold,
+        progressive=progressive,
         confirm_callback=confirm_cb,
     )
 

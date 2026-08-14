@@ -17,7 +17,7 @@ from textual.containers import (
     ScrollableContainer,
     VerticalScroll,
 )
-from textual.widgets import Static, Button, Input
+from textual.widgets import Static, Button, Checkbox, Input
 
 from ai_guardian.constants import RULE_ID_LABELS
 from ai_guardian.tui.utils import quiet_logging
@@ -115,13 +115,18 @@ class ScanConfigureContent(ScrollableContainer):
 
             yield Static(
                 "[dim]FP threshold — patterns in this many files are "
-                "treated as false positives (min: 2)[/dim]",
+                "treated as false positives[/dim]",
                 classes="sc-row",
             )
             yield Input(
                 value="10",
                 placeholder="10",
                 id="sc-threshold-input",
+            )
+            yield Checkbox(
+                "Exact counts (slower — disables progressive suppression)",
+                value=False,
+                id="sc-exact-check",
             )
 
             with Horizontal(classes="sc-row"):
@@ -190,9 +195,10 @@ class ScanConfigureContent(ScrollableContainer):
 
         threshold_str = self.query_one("#sc-threshold-input", Input).value.strip()
         try:
-            threshold = max(2, int(threshold_str))
+            threshold = max(1, int(threshold_str))
         except (ValueError, TypeError):
             threshold = 10
+        progressive = not self.query_one("#sc-exact-check", Checkbox).value
 
         self._cancel_event.clear()
         self.query_one("#sc-scan-btn").disabled = True
@@ -234,6 +240,7 @@ class ScanConfigureContent(ScrollableContainer):
                         self._cancel_event,
                         on_phase=on_phase,
                         on_file_progress=on_file_progress,
+                        progressive=progressive,
                     )
 
                     if pipeline_result is None:

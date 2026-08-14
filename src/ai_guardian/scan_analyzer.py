@@ -34,6 +34,51 @@ class ScanPipelineResult:
     project_dir: str
 
 
+class ProgressiveSuppressor:
+    """Tracks finding fingerprints and suppresses once threshold is hit.
+
+    Also computes ``skip_rules`` — rule_ids where every observed sub_type
+    has been suppressed, so the scanner can skip those checks entirely.
+    """
+
+    def __init__(self, threshold: int):
+        self._threshold = threshold
+        self._counts: Dict[Tuple[str, str], int] = defaultdict(int)
+        self._suppressed: Set[Tuple[str, str]] = set()
+        self._seen_by_rule: Dict[str, Set[str]] = defaultdict(set)
+        self.suppressed_count = 0
+        self.skip_rules: frozenset = frozenset()
+
+    def __call__(self, findings: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        kept = []
+        for f in findings:
+            fp = fingerprint_finding(f)
+            rule_id, sub_type = fp
+            if rule_id in NEVER_SUPPRESS:
+                kept.append(f)
+                continue
+            self._seen_by_rule[rule_id].add(sub_type)
+            if fp in self._suppressed:
+                self.suppressed_count += 1
+                continue
+            self._counts[fp] += 1
+            if self._counts[fp] >= self._threshold:
+                self._suppressed.add(fp)
+                self.suppressed_count += 1
+                continue
+            kept.append(f)
+        self._update_skip_rules()
+        return kept
+
+    def _update_skip_rules(self) -> None:
+        """Recompute which rule_ids can be skipped entirely."""
+        skippable = set()
+        for rule_id, sub_types in self._seen_by_rule.items():
+            if all((rule_id, st) in self._suppressed for st in sub_types):
+                skippable.add(rule_id)
+        self.skip_rules = frozenset(skippable)
+
+
 _SUPPRESSION_KEYS = frozenset(
     {
         "allowlist_patterns",
@@ -74,8 +119,15 @@ def run_scan_pipeline(
     on_phase: Optional[Callable[[str], None]] = None,
     on_file_progress: Optional[Callable[[str, int, int], None]] = None,
     skip_hidden: bool = True,
+    progressive: bool = True,
 ) -> Optional[ScanPipelineResult]:
     """Run the full scan-and-analyze pipeline.
+
+    Args:
+        progressive: When True (default), suppress findings on-the-fly
+            once a pattern fingerprint reaches *threshold*.  Faster for
+            large projects but counts are approximate.  Set False for
+            exact counts.
 
     Returns *None* when *cancel_event* is set, otherwise a
     :class:`ScanPipelineResult`.
@@ -102,17 +154,21 @@ def run_scan_pipeline(
     _phase("Scanning files...")
     scan_config = _build_discovery_config(str(initializer.project_dir))
     scanner = FileScanner(config=scan_config, verbose=False)
+    suppressor = ProgressiveSuppressor(threshold) if progressive else None
     findings = scanner.scan_directory(
         str(initializer.project_dir),
         progress_callback=on_file_progress,
         cancel_event=cancel_event,
         skip_hidden=skip_hidden,
+        finding_filter=suppressor,
     )
     if cancel_event.is_set():
         return None
 
     _phase(f"Analyzing {len(findings)} findings...")
     analysis = initializer.analyze_scan(findings, threshold=threshold)
+    if suppressor:
+        analysis.suppressed_count += suppressor.suppressed_count
     merged_config = initializer.merge_configs(
         language_config, analysis.recommended_config
     )

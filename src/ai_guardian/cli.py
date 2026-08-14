@@ -1280,6 +1280,11 @@ def main():
             metavar="N",
             help="Minimum file count to flag a pattern as false positive (default: 10)",
         )
+        init_project_parser.add_argument(
+            "--exact",
+            action="store_true",
+            help="Disable progressive suppression for exact finding counts (slower)",
+        )
 
         args = parser.parse_args()
 
