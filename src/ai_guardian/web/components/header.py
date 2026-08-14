@@ -45,6 +45,7 @@ NAV_GROUPS = [
             ("Agent Profiles", "/sdk-agents"),
             ("SDK Settings", "/sdk-settings"),
             ("Trace Viewer", "/traces"),
+            ("OTEL Export", "/otel-settings"),
         ],
     ),
     (

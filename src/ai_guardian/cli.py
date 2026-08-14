@@ -1202,6 +1202,64 @@ def main():
             "--json", action="store_true", help="Output as JSON"
         )
 
+        # Trace export subcommand (Issue #1958)
+        trace_parser = subparsers.add_parser(
+            "trace", help="Trace export and management"
+        )
+        trace_sub = trace_parser.add_subparsers(
+            dest="trace_command", help="Trace commands"
+        )
+
+        trace_export_parser = trace_sub.add_parser(
+            "export", help="Export a trace file to OTLP format"
+        )
+        trace_export_parser.add_argument("file", help="Path to trace JSON file")
+        trace_export_parser.add_argument(
+            "--format",
+            choices=["otlp-json", "otlp-proto"],
+            default="otlp-json",
+            help="Output format (default: otlp-json)",
+        )
+        trace_export_parser.add_argument(
+            "--output", "-o", help="Output file path (default: stdout)"
+        )
+        trace_export_parser.add_argument(
+            "--endpoint", help="OTLP collector endpoint URL (sends via HTTP POST)"
+        )
+        trace_export_parser.add_argument(
+            "--service-name",
+            default="ai-guardian-sdk",
+            help="service.name resource attribute (default: ai-guardian-sdk)",
+        )
+        trace_export_parser.add_argument(
+            "--header",
+            action="append",
+            dest="headers",
+            metavar="KEY=VALUE",
+            help="HTTP header for collector auth (repeatable, e.g., --header 'Authorization=Bearer tok')",
+        )
+
+        trace_export_dir_parser = trace_sub.add_parser(
+            "export-dir", help="Export all traces in a directory to OTLP format"
+        )
+        trace_export_dir_parser.add_argument(
+            "dir",
+            nargs="?",
+            help="Trace directory (default: SDK trace dir)",
+        )
+        trace_export_dir_parser.add_argument(
+            "--format",
+            choices=["otlp-json", "otlp-proto"],
+            default="otlp-json",
+            help="Output format (default: otlp-json)",
+        )
+        trace_export_dir_parser.add_argument("--output", "-o", help="Output directory")
+        trace_export_dir_parser.add_argument(
+            "--service-name",
+            default="ai-guardian-sdk",
+            help="service.name resource attribute (default: ai-guardian-sdk)",
+        )
+
         # Engine test subcommand (Issue #542)
         engine_test_parser = subparsers.add_parser(
             "engine-test", help="Test strings against scanner engines"
@@ -1931,6 +1989,25 @@ def main():
                 return 1
             except Exception as e:
                 print(f"Error running init-project: {e}", file=sys.stderr)
+                import traceback
+
+                traceback.print_exc()
+                return 1
+
+        # Handle trace command (Issue #1958)
+        if args.command == "trace":
+            try:
+                from ai_guardian.scanners.otel_exporter import handle_trace_command
+
+                return handle_trace_command(args, trace_parser)
+            except ImportError as e:
+                print(
+                    f"Error: OTEL exporter module not available: {e}",
+                    file=sys.stderr,
+                )
+                return 1
+            except Exception as e:
+                print(f"Error running trace command: {e}", file=sys.stderr)
                 import traceback
 
                 traceback.print_exc()

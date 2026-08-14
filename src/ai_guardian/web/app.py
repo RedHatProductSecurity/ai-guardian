@@ -528,6 +528,12 @@ class WebConsole:
 
             create_trace_detail_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/otel-settings")
+        def otel_settings_page(daemon_name: str):
+            from ai_guardian.web.pages.otel_settings import create_otel_settings_page
+
+            create_otel_settings_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/about")
         def about_page(daemon_name: str):
             from ai_guardian.web.pages.about import create_about_page
