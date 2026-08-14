@@ -32,18 +32,11 @@ SCANNER_ALLOWLIST_KEYS: Dict[str, List[str]] = {
     "image_scanning": ["ignore_files", "ignore_tools"],
 }
 
-_BROAD_PATH_PATTERNS = frozenset({"*", "**", "**/*"})
+from ai_guardian.config.utils import is_safe_path_pattern
 
 
 def _validate_path_pattern(pattern: str) -> bool:
-    """Return False for overly broad or traversal path patterns."""
-    if ".." in pattern.split("/"):
-        logger.warning("Blocked target config path with '..': '%s'", pattern)
-        return False
-    if pattern in _BROAD_PATH_PATTERNS:
-        logger.warning("Blocked overly broad target config path: '%s'", pattern)
-        return False
-    return True
+    return is_safe_path_pattern(pattern, block_broad=True)
 
 
 def _extract_allowlists_from_config(

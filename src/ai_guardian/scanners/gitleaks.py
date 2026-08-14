@@ -129,13 +129,9 @@ def _clean_stopwords(raw: List[str]) -> List[str]:
 
 
 def _validate_paths(raw: List[str]) -> List[str]:
-    safe = []
-    for p in raw:
-        if ".." in p.split("/"):
-            logger.warning(f"Blocked .gitleaks.toml path with '..': '{p}'")
-            continue
-        safe.append(p)
-    return safe
+    from ai_guardian.config.utils import validate_path_list
+
+    return validate_path_list(raw, source=".gitleaks.toml")
 
 
 def _parse_rule_allowlist(rule_data: dict) -> Optional[RuleAllowlist]:
