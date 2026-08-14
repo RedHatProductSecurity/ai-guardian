@@ -18,6 +18,7 @@ from ai_guardian.tui.app import (
     _is_feature_enabled,
     HELP_DOCS,
     HelpModal,
+    ProjectDirModal,
     copy_to_system_clipboard,
     copy_osc52,
     _try_clipboard_command,
@@ -1397,6 +1398,31 @@ class TestMCPServersNoDuplicateIds:
 
         assert ".empty-state" in MCPServersContent.CSS
         assert "#no-permissions" not in MCPServersContent.CSS
+
+
+class TestProjectDirModal:
+    """Tests for ProjectDirModal (Issue #1969 TUI equivalent)."""
+
+    def test_modal_is_importable(self):
+        assert ProjectDirModal is not None
+
+    def test_modal_has_bindings(self):
+        modal = ProjectDirModal(current_dir="/tmp")
+        binding_keys = [b.key for b in modal.BINDINGS]
+        assert "escape" in binding_keys
+
+    def test_modal_stores_current_dir(self):
+        modal = ProjectDirModal(current_dir="/usr/local")
+        assert modal._current_dir == "/usr/local"
+
+    def test_modal_default_empty_dir(self):
+        modal = ProjectDirModal()
+        assert modal._current_dir == ""
+
+    def test_scope_project_binding_exists(self):
+        app = AIGuardianTUI()
+        binding_keys = [b.key for b in app.BINDINGS]
+        assert "p" in binding_keys
 
 
 if __name__ == "__main__":
