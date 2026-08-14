@@ -33,6 +33,38 @@ class ScanPipelineResult:
     project_dir: str
 
 
+_SUPPRESSION_KEYS = frozenset(
+    {
+        "allowlist_patterns",
+        "allowlist_paths",
+        "allowlist",
+        "ignore_files",
+        "ignore_tools",
+        "ignore_paths",
+    }
+)
+
+
+def _build_discovery_config(project_dir: str) -> Dict[str, Any]:
+    """Build a config that enables all scanners and strips suppressions.
+
+    Used by run_scan_pipeline so the analyzer sees every possible violation
+    regardless of existing user config.
+    """
+    from ai_guardian.config.loaders import _SCANNER_MERGE_SECTIONS, load_scanner_config
+
+    config = load_scanner_config(project_root=project_dir)
+    for section_key in _SCANNER_MERGE_SECTIONS:
+        section = config.get(section_key)
+        if section is None:
+            config[section_key] = {"enabled": True}
+            continue
+        section["enabled"] = True
+        for key in _SUPPRESSION_KEYS:
+            section.pop(key, None)
+    return config
+
+
 def run_scan_pipeline(
     project_dir: str,
     threshold: int,
@@ -66,9 +98,7 @@ def run_scan_pipeline(
     language_config = initializer.generate_config(allowlist_entries, ignore_files)
 
     _phase("Scanning files...")
-    from ai_guardian.config.loaders import load_scanner_config
-
-    scan_config = load_scanner_config(project_root=str(initializer.project_dir))
+    scan_config = _build_discovery_config(str(initializer.project_dir))
     scanner = FileScanner(config=scan_config, verbose=False)
     findings = scanner.scan_directory(
         str(initializer.project_dir),
