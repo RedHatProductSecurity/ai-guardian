@@ -37,6 +37,13 @@ NAV_GROUPS = [
             ("Metrics & Audit", "/metrics"),
             ("Performance", "/performance"),
             ("Logs", "/logs"),
+        ],
+    ),
+    (
+        "SDK",
+        [
+            ("Agent Profiles", "/sdk-agents"),
+            ("SDK Settings", "/sdk-settings"),
             ("Trace Viewer", "/traces"),
         ],
     ),

@@ -1,17 +1,64 @@
 {
-  "permissions": {
-    "rules": [
+  "$schema": "file:///Users/dvernier/development/ai/ai-guardian/src/ai_guardian/schemas/ai-guardian-config.schema.json",
+  "_comment_project_overlay": "Project-level .ai-guardian/ai-guardian.json at repo root merges on top of this global config. Use immutable arrays to lock fields from project override.",
+  "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
+  "secret_scanning": {
+    "enabled": true,
+    "_comment_action": "Action on detection: block (default), warn, log-only, ask (interactive prompt), ask:warn (ask with warn fallback), ask:log-only",
+    "ignore_files": [],
+    "ignore_tools": [],
+    "allowlist_patterns": [
+      "xoxb\\-123456789012\\-1234567890123\\-\\d{12}",
+      "DAF_SESSION_NAME\\s*=",
+      "AKIAIOSFODNN7CANARY1",
+      "Environment\\ Variable"
+    ],
+    "_comment_engines": "Engines tried in order. Built-in: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian. Python-based custom scanners: {type: python, module/path: ..., class: ...}. Cloud engines (gitguardian) require consent: ai-guardian engine consent gitguardian",
+    "engines": [
       {
-        "mode": "allow",
-        "matcher": "Skill",
-        "patterns": [
-          "release",
-          "daf-*"
-        ]
+        "type": "toml-patterns"
+      },
+      "leaktk",
+      {
+        "type": "gitleaks",
+        "binary": "gitleaks",
+        "pattern_server": {
+          "url": "https://raw.githubusercontent.com/leaktk/patterns/main/target",
+          "patterns_endpoint": "/patterns/gitleaks/8.27.0",
+          "warn_on_failure": true,
+          "cache": {
+            "refresh_interval_hours": 12,
+            "expire_after_hours": 168
+          }
+        }
       }
-    ]
+    ],
+    "_comment_strategy": "Strategies: first-match (default), any-match (block if ANY finds secrets), consensus (block only if N agree)",
+    "execution_strategy": "first-match",
+    "consensus_threshold": 2,
+    "_comment_cache": "Result caching: skip re-scanning unchanged content (v1.7.0+)",
+    "cache_results": false,
+    "cache_ttl_hours": 24,
+    "_comment_incremental": "Incremental scanning: only scan files whose content changed (v1.7.0+, requires cache_results)",
+    "incremental": false,
+    "_comment_audit": "Audit logging: log all scan operations for compliance (v1.7.0+)",
+    "audit_logging": false,
+    "_comment_validate_secrets": "Secret liveness validation: check if detected secrets are still active (v1.11.0+). PRIVACY: sends secrets to provider APIs. Requires explicit opt-in.",
+    "validate_secrets": false,
+    "validation_timeout_ms": 3000,
+    "on_inactive": "warn",
+    "_comment_entropy": "Minimum Shannon entropy for secret matches. Range: 0.0 (identical chars) to ~6.0 (fully random). 3.0 filters placeholders while keeping real secrets (4.0+). Set to null to disable.",
+    "min_entropy": 3.0,
+    "_comment_stopwords": "Additional stopwords MERGED with bundled list (example, test, sample, placeholder, etc.). Never replaces bundled words. Case-insensitive substring match. Min word length: 3.",
+    "stopwords": []
   },
+  "_comment_prompt_injection": "Detect and block prompt injection attacks that try to manipulate AI behavior",
   "prompt_injection": {
+    "enabled": true,
+    "action": "block",
+    "detector": "hybrid",
+    "sensitivity": "medium",
+    "max_score_threshold": 0.75,
     "allowlist_patterns": [
       "__init__",
       "__main__",
@@ -31,21 +78,301 @@
       "__subclasses__",
       "",
       "\ud83d\udee1\ufe0f\\ Prompt\\ Injection\\ Detected"
+    ],
+    "custom_patterns": [],
+    "jailbreak_patterns": [],
+    "ignore_tools": [],
+    "ignore_files": [],
+    "unicode_detection": {
+      "enabled": true,
+      "detect_zero_width": true,
+      "detect_bidi_override": true,
+      "detect_tag_chars": true,
+      "detect_homoglyphs": true,
+      "allow_rtl_languages": true,
+      "allow_emoji": true
+    },
+    "ml_engines": [
+      {
+        "type": "llm-guard",
+        "model": "protectai/deberta-v3-base-prompt-injection-v2",
+        "threshold": 0.85
+      }
+    ],
+    "ml_strategy": "any-match",
+    "fallback_on_error": "heuristic"
+  },
+  "_comment_secret_redaction": "Redact secrets from tool outputs instead of blocking (NEW in v1.5.0, Phase 4)",
+  "secret_redaction": {
+    "enabled": true,
+    "action": "warn",
+    "preserve_format": true,
+    "log_redactions": true,
+    "additional_patterns": []
+  },
+  "_comment_scan_pii": "PII detection for GDPR/CCPA compliance (v1.6.0+). Phase 1: SSN, credit card, phone, US passport, IBAN, international phone. Phase 2 defaults (v1.10.0): medical_id, passport, uk_nin. Opt-in: canada_sin, india_aadhaar, address, email.",
+  "scan_pii": {
+    "enabled": true,
+    "pii_types": [
+      "ssn",
+      "credit_card",
+      "phone",
+      "us_passport",
+      "iban",
+      "intl_phone",
+      "medical_id",
+      "passport",
+      "uk_nin"
+    ],
+    "action": "block",
+    "ignore_files": [],
+    "ignore_tools": [],
+    "allowlist_patterns": [],
+    "pattern_server": null
+  },
+  "_comment_image_scanning": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Scans image files for embedded secrets before they reach the AI model.",
+  "image_scanning": {
+    "enabled": true,
+    "action": "block",
+    "scan_types": [
+      "secrets",
+      "pii"
+    ],
+    "max_processing_ms": 1500,
+    "min_confidence": 0.5,
+    "redaction_method": "blur",
+    "qr_scanning": false,
+    "face_detection": false,
+    "ignore_files": [],
+    "ignore_tools": [],
+    "max_image_size_mb": 10
+  },
+  "_comment_ssrf_protection": "Prevent SSRF attacks by blocking access to private networks, metadata endpoints, and dangerous URL schemes (NEW in v1.5.0)",
+  "ssrf_protection": {
+    "enabled": true,
+    "action": "block",
+    "additional_blocked_ips": [],
+    "additional_blocked_domains": [],
+    "allow_localhost": false,
+    "allowed_domains": [],
+    "_comment_allowed_domains": "Domain allow-list. Supports exact strings, subdomain matching, and regex patterns (e.g., '.*\\.example\\.com', 'localhost:19200')",
+    "_comment_path_based_rules": "Path-based filtering for granular access control (NEW in v1.6.0) - Allow/block specific URL paths on domains",
+    "path_based_rules": [],
+    "ignore_files": [],
+    "ignore_tools": []
+  },
+  "_comment_config_file_scanning": "Detect credential exfiltration commands in AI config files (CLAUDE.md, AGENTS.md, etc.) - Phase 3 of Hermes integration (NEW in v1.5.0)",
+  "config_file_scanning": {
+    "enabled": true,
+    "action": "block",
+    "additional_files": [],
+    "ignore_files": [],
+    "ignore_tools": [],
+    "additional_patterns": []
+  },
+  "_comment_supply_chain": "Detect malicious patterns in agent config files \u2014 hooks, MCP servers, and plugin files (NEW in v1.11.0, Issue #1055)",
+  "supply_chain": {
+    "enabled": true,
+    "action": "block",
+    "scan_hooks": true,
+    "scan_mcp_configs": true,
+    "scan_plugins": true,
+    "allowlist_paths": []
+  },
+  "_comment_permissions": "Control which tools (Skills, MCP servers, Bash, etc.) are allowed to run. Rules evaluated in order, last match wins.",
+  "permissions": {
+    "enabled": true,
+    "auto_directory_rules": {
+      "enabled": false,
+      "allow_symlinks": true
+    },
+    "rules": [
+      {
+        "_comment": "Allow all tools by default (built-in tools like Bash, Read, Write, Edit)",
+        "matcher": "*",
+        "mode": "allow",
+        "patterns": [
+          "*"
+        ]
+      },
+      {
+        "_comment": "Warn on unknown MCP servers (new servers allowed with warning)",
+        "matcher": "mcp__*",
+        "mode": "deny",
+        "patterns": [
+          "*"
+        ],
+        "action": "warn"
+      },
+      {
+        "_comment": "Allow ai-guardian MCP server (no warning needed)",
+        "matcher": "mcp__ai-guardian__*",
+        "mode": "allow",
+        "patterns": [
+          "*"
+        ]
+      },
+      {
+        "_comment": "Warn on unknown Skills",
+        "matcher": "Skill",
+        "mode": "allow",
+        "patterns": [
+          "*",
+          "daf-workflow"
+        ]
+      },
+      {
+        "mode": "allow",
+        "matcher": "Skill",
+        "patterns": [
+          "release",
+          "daf-*"
+        ]
+      }
     ]
   },
-  "secret_scanning": {
-    "allowlist_patterns": [
-      "xoxb\\-123456789012\\-1234567890123\\-\\d{12}",
-      "DAF_SESSION_NAME\\s*=",
-      "AKIAIOSFODNN7CANARY1",
-      "Environment\\ Variable"
+  "_comment_permissions_directories": "OPTIONAL/ADVANCED: Auto-discover tool permissions from directories/GitHub repos. Scans for permission files and merges discovered rules into permissions.rules. Most users should use remote_configs instead.",
+  "_permissions_directories_example": [
+    {
+      "_comment": "Example: scan local skills directory to auto-allow discovered skills",
+      "matcher": "Skill",
+      "mode": "allow",
+      "url": "~/.claude/skills"
+    },
+    {
+      "_comment": "Example: scan GitHub repository for skills",
+      "matcher": "Skill",
+      "mode": "allow",
+      "url": "https://github.com/your-org/skills/tree/main/skills",
+      "token_env": "GITHUB_TOKEN"
+    }
+  ],
+  "_comment_directory_rules": "OPTIONAL: Control AI access to specific directories (e.g., block ~/.ssh). Last-match-wins evaluation order. See ai-guardian-example.json for examples.",
+  "directory_rules": {
+    "action": "block",
+    "rules": []
+  },
+  "_comment_remote_configs": "Load additional policies from remote URLs (for enterprise/team policies)",
+  "remote_configs": {
+    "urls": []
+  },
+  "_comment_console": "Console settings (editor theme, web console)",
+  "console": {
+    "editor_theme": "monokai",
+    "preferred_theme": "default",
+    "web": {
+      "port": 0,
+      "host": "127.0.0.1"
+    },
+    "preferred_ui": "auto"
+  },
+  "_comment_transcript_scanning": "Scan conversation transcript for secrets, PII, and prompt injection from ! shell commands (NEW in v1.7.0, Issue #430)",
+  "transcript_scanning": {
+    "enabled": true
+  },
+  "_comment_annotations": "Inline annotation suppression for secrets and PII (NEW in v1.8.0, Issue #481). Hardcoded: ai-guardian:allow (inline), ai-guardian:begin-allow/end-allow (block). Configurable aliases: inline_allow (secrets+PII), inline_allow_secrets (secrets only). Prompt injection, jailbreak, config exfil always scanned. Set enabled to false for strict compliance environments.",
+  "annotations": {
+    "enabled": true,
+    "inline_allow": [],
+    "inline_allow_secrets": [
+      "gitleaks:allow"
+    ],
+    "block_begin": [],
+    "block_end": []
+  },
+  "_comment_latency_tracking": "Hook latency tracking \u2014 records per-hook timing to latency.jsonl for performance analysis. Disabled by default. (NEW in v1.11.0, Issue #1057)",
+  "latency_tracking": {
+    "enabled": true,
+    "max_entries": 5000,
+    "retention_days": 30
+  },
+  "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
+  "violation_logging": {
+    "enabled": true,
+    "max_entries": 1000,
+    "retention_days": 30,
+    "log_types": [
+      "tool_permission",
+      "directory_blocking",
+      "secret_detected",
+      "secret_redaction",
+      "prompt_injection",
+      "jailbreak_detected",
+      "ssrf_blocked",
+      "config_file_exfil",
+      "pii_detected",
+      "secret_in_transcript",
+      "pii_in_transcript",
+      "prompt_injection_in_transcript",
+      "annotation_suppressed",
+      "image_secret_detected",
+      "image_pii_detected",
+      "supply_chain"
     ]
+  },
+  "_comment_daemon": "Background daemon for faster hook processing. Auto-starts on any command, falls back to direct if unavailable.",
+  "daemon": {
+    "idle_timeout_minutes": 0,
+    "client_timeout_seconds": 2.0,
+    "tray": {
+      "enabled": true,
+      "auto_install": true
+    }
+  },
+  "_comment_on_scan_error": "Global behavior when a scanner encounters an error. 'allow' (default, fail-open): log warning, allow operation. 'block' (fail-closed): block operation if any scanner fails. For strict compliance environments. (NEW in v1.7.0, Issue #461)",
+  "on_scan_error": "allow",
+  "_comment_security_instructions": "Security rule injection into AI context via systemMessage. Injected on first UserPromptSubmit per session and re-injected after blocks. Disable only for ai-guardian development. (v1.7.0 #580, v1.8.0 #584)",
+  "security_instructions": {
+    "inject_on_prompt": true
+  },
+  "_comment_mcp_server": "MCP security advisor server. Exposes read-only security tools for AI agents. Installed by default during setup. Use --no-mcp to skip. (NEW in v1.7.0, Issue #477)",
+  "mcp_server": {
+    "proactive_level": "low"
+  },
+  "_comment_support": "Support bundle export. Two-step process: prepare (sanitize + review) then send (with user approval). Destination: local path, S3 URI, GCS URI (gs://bucket-name/), or email (mailto:support@company.com). (NEW in v1.7.0, Issue #477; email: Issue #932)",
+  "support": {
+    "export_destination": "",
+    "auth": {
+      "method": "none",
+      "token_env": ""
+    },
+    "_comment_email": "SMTP email settings for mailto: destinations. Zero new dependencies (Python stdlib only).",
+    "email": {
+      "smtp_host": "",
+      "smtp_port": 587,
+      "smtp_tls": true,
+      "from": "",
+      "subject_prefix": "[AI Guardian Support]",
+      "auth": {
+        "method": "none",
+        "username_env": "",
+        "password_env": ""
+      }
+    },
+    "bundle_ttl_minutes": 30
+  },
+  "context_poisoning": {
+    "action": "warn",
+    "sensitivity": "medium"
   },
   "code_scanning": {
+    "action": "warn",
     "allowlist": [
       {
         "test_id": "B108"
       }
     ]
+  },
+  "scan_offensive": {
+    "action": "log"
+  },
+  "canary_detection": {
+    "action": "block"
+  },
+  "exfil_detection": {
+    "action": "block"
+  },
+  "sdk": {
+    "scanning": true
   }
 }
