@@ -1255,6 +1255,11 @@ def main():
             help="Overwrite existing .ai-guardian/ai-guardian.json (creates backup)",
         )
         init_project_parser.add_argument(
+            "--merge",
+            action="store_true",
+            help="Deep-merge into existing config instead of skipping (creates backup)",
+        )
+        init_project_parser.add_argument(
             "--json", action="store_true", help="Output results as JSON"
         )
         init_project_parser.add_argument(

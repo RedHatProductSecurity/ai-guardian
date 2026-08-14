@@ -198,6 +198,7 @@ class ProjectInitializer:
         self,
         config: Dict,
         force: bool = False,
+        merge: bool = False,
         dry_run: bool = False,
     ) -> Tuple[Path, bool, bool]:
         config_dir = self.project_dir / ".ai-guardian"
@@ -207,13 +208,19 @@ class ProjectInitializer:
         if dry_run:
             return config_path, False, existed
 
-        if existed and not force:
+        if existed and not force and not merge:
             return config_path, False, existed
 
-        if existed and force:
+        if existed and (force or merge):
             backup_path = config_path.with_suffix(".json.backup")
             shutil.copy2(config_path, backup_path)
             logger.info("Backed up existing config to %s", backup_path)
+
+        if existed and merge:
+            from ai_guardian.scan_analyzer import merge_and_write_config
+
+            merge_and_write_config(config_path, config)
+            return config_path, True, existed
 
         config_dir.mkdir(parents=True, exist_ok=True)
 
@@ -223,11 +230,11 @@ class ProjectInitializer:
         return config_path, True, existed
 
     def scan_project(self) -> List[Dict]:
-        """Run FileScanner with merged config against the project."""
+        """Run FileScanner with all scanners enabled and suppressions stripped."""
         from ai_guardian.scanners.file_scanner import FileScanner
-        from ai_guardian.config.loaders import load_scanner_config
+        from ai_guardian.scan_analyzer import _build_discovery_config
 
-        config = load_scanner_config(project_root=str(self.project_dir))
+        config = _build_discovery_config(str(self.project_dir))
         scanner = FileScanner(config=config, verbose=False)
         return scanner.scan_directory(str(self.project_dir))
 
@@ -344,6 +351,7 @@ class ProjectInitializer:
     def run(
         self,
         force: bool = False,
+        merge: bool = False,
         dry_run: bool = False,
         scan: bool = False,
         threshold: int = 10,
@@ -376,7 +384,7 @@ class ProjectInitializer:
             return result
 
         config_path, created, existed = self.write_config(
-            merged, force=force, dry_run=dry_run
+            merged, force=force, merge=merge, dry_run=dry_run
         )
         result.config_path = config_path
         result.config_created = created
@@ -617,6 +625,7 @@ def init_project_command(args) -> int:
     """CLI entry point for init-project command."""
     project_dir = Path(getattr(args, "dir", ".")).resolve()
     force = getattr(args, "force", False)
+    merge = getattr(args, "merge", False)
     dry_run = getattr(args, "dry_run", False)
     json_output = getattr(args, "json", False)
     scan = getattr(args, "scan", False)
@@ -665,6 +674,7 @@ def init_project_command(args) -> int:
     )
     result = initializer.run(
         force=force,
+        merge=merge,
         dry_run=dry_run,
         scan=scan,
         threshold=threshold,

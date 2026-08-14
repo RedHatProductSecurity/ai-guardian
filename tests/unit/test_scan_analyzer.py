@@ -85,8 +85,19 @@ class TestFingerprintFinding:
         assert fingerprint_finding(f) == ("B101", "")
 
     def test_ssrf_finding(self):
-        f = _make_finding("SSRF-001", "a.py", url="http://169.254.169.254")
-        assert fingerprint_finding(f) == ("SSRF-001", "")
+        f = _make_finding(
+            "SSRF-001", "a.py", url="http://169.254.169.254", reason="metadata endpoint"
+        )
+        assert fingerprint_finding(f) == ("SSRF-001", "metadata endpoint")
+
+    def test_ssrf_localhost_finding(self):
+        f = _make_finding(
+            "SSRF-001",
+            "a.py",
+            url="https://localhost:5173",
+            reason="blocked domain 'localhost'",
+        )
+        assert fingerprint_finding(f) == ("SSRF-001", "blocked domain 'localhost'")
 
     def test_missing_details(self):
         f = {"rule_id": "SECRET-001", "file_path": "x.py", "details": {}}

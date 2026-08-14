@@ -8,6 +8,7 @@ config recommendations for ai-guardian.json and .aiguardignore.toml.
 
 from __future__ import annotations
 
+import copy
 import json
 import re
 import shutil
@@ -49,11 +50,12 @@ def _build_discovery_config(project_dir: str) -> Dict[str, Any]:
     """Build a config that enables all scanners and strips suppressions.
 
     Used by run_scan_pipeline so the analyzer sees every possible violation
-    regardless of existing user config.
+    regardless of existing user config.  Returns a deep copy so the
+    original loaded config is never mutated.
     """
     from ai_guardian.config.loaders import _SCANNER_MERGE_SECTIONS, load_scanner_config
 
-    config = load_scanner_config(project_root=project_dir)
+    config = copy.deepcopy(load_scanner_config(project_root=project_dir))
     for section_key in _SCANNER_MERGE_SECTIONS:
         section = config.get(section_key)
         if section is None:
@@ -202,6 +204,7 @@ _FINGERPRINT_DETAIL_KEY = {
     "PII-001": "pii_type",
     "SUPPLY-CHAIN-001": "category",
     "EXFIL-DETECTION-001": "category",
+    "SSRF-001": "reason",
 }
 
 
@@ -424,6 +427,20 @@ def _build_rule_allowlist(
             rules.append({"test_id": c.rule_id})
 
 
+def _build_ssrf_config(
+    section: Dict[str, Any],
+    key: str,
+    clusters: List[FindingCluster],
+) -> None:
+    """Enable allow_localhost when SSRF clusters contain localhost findings."""
+    _LOCALHOST_MARKERS = {"localhost", "127.0.0.1", "::1"}
+    for c in clusters:
+        reason = c.sub_type.lower()
+        if any(m in reason for m in _LOCALHOST_MARKERS):
+            section["allow_localhost"] = True
+            return
+
+
 _BuilderFn = Callable[[Dict[str, Any], str, List[FindingCluster]], None]
 
 _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
@@ -433,6 +450,7 @@ _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
     "supply_chain": ("allowlist_paths", _build_dir_globs),
     "config_file_scanning": ("ignore_files", _build_dir_globs),
     "code_scanning": ("allowlist", _build_rule_allowlist),
+    "ssrf_protection": ("allow_localhost", _build_ssrf_config),
 }
 
 
@@ -467,6 +485,12 @@ def build_recommendations(
                 dir_scanner_map[parts[0]].add(scanner)
 
     config = _build_config(high_freq)
+
+    ssrf_clusters = [c for c in clusters if c.rule_id == "SSRF-001"]
+    if ssrf_clusters:
+        ssrf_section = config.setdefault("ssrf_protection", {})
+        _build_ssrf_config(ssrf_section, "allow_localhost", ssrf_clusters)
+
     ignore_paths = _build_ignore_paths(dirs_to_ignore, dir_scanner_map)
 
     suppressed = sum(c.total_count for c in high_freq)

@@ -135,9 +135,14 @@ class ScanConfigureContent(ScrollableContainer):
                 yield Static("", id="sc-details")
             with Horizontal(classes="sc-action-row"):
                 yield Button(
-                    "Apply Config",
+                    "Merge",
                     variant="success",
-                    id="sc-apply-btn",
+                    id="sc-merge-btn",
+                )
+                yield Button(
+                    "Overwrite",
+                    variant="warning",
+                    id="sc-overwrite-btn",
                 )
                 yield Button(
                     "Discard",
@@ -156,8 +161,10 @@ class ScanConfigureContent(ScrollableContainer):
             self._run_scan()
         elif event.button.id == "sc-stop-btn":
             self._cancel_event.set()
-        elif event.button.id == "sc-apply-btn":
-            self._apply_config()
+        elif event.button.id == "sc-merge-btn":
+            self._apply_config(overwrite=False)
+        elif event.button.id == "sc-overwrite-btn":
+            self._apply_config(overwrite=True)
         elif event.button.id == "sc-discard-btn":
             self._discard()
 
@@ -191,7 +198,8 @@ class ScanConfigureContent(ScrollableContainer):
         self.query_one("#sc-scan-btn").disabled = True
         self.query_one("#sc-stop-btn").display = True
         self.query_one("#sc-results-section").display = True
-        self.query_one("#sc-apply-btn").display = False
+        self.query_one("#sc-merge-btn").display = False
+        self.query_one("#sc-overwrite-btn").display = False
         self.query_one("#sc-discard-btn").display = False
 
         summary = self.query_one("#sc-summary", Static)
@@ -328,10 +336,11 @@ class ScanConfigureContent(ScrollableContainer):
 
         self.query_one("#sc-details", Static).update("\n".join(lines))
 
-        self.query_one("#sc-apply-btn").display = True
+        self.query_one("#sc-merge-btn").display = True
+        self.query_one("#sc-overwrite-btn").display = True
         self.query_one("#sc-discard-btn").display = True
 
-    def _apply_config(self) -> None:
+    def _apply_config(self, overwrite: bool = False) -> None:
         if not self._scan_result:
             return
 
@@ -352,13 +361,28 @@ class ScanConfigureContent(ScrollableContainer):
                         config_path = (
                             Path(project_dir) / ".ai-guardian" / "ai-guardian.json"
                         )
-                        merge_and_write_config(config_path, merged_config)
+                        if overwrite:
+                            config_path.parent.mkdir(parents=True, exist_ok=True)
+                            if config_path.exists():
+                                import shutil
+
+                                shutil.copy2(
+                                    config_path,
+                                    config_path.with_suffix(".json.backup"),
+                                )
+                            config_path.write_text(
+                                json.dumps(merged_config, indent=2) + "\n",
+                                encoding="utf-8",
+                            )
+                        else:
+                            merge_and_write_config(config_path, merged_config)
                     if ignore_paths:
                         initializer.write_aiguardignore(ignore_paths)
 
+                    mode = "overwritten" if overwrite else "merged"
                     self.app.call_from_thread(
                         self.app.notify,
-                        "Config applied successfully",
+                        f"Config {mode} successfully",
                         severity="information",
                     )
             except Exception as exc:
