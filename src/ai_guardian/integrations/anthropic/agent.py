@@ -342,8 +342,12 @@ class GuardedAgent:
         target_dir: Optional[str] = None,
         allowed_paths: Optional[List[str]] = None,
         follow_symlinks: bool = False,
+        otel_metadata_fn: Optional[
+            Callable[[str, Dict[str, Any]], Dict[str, Any]]
+        ] = None,
     ):
         self._name = name
+        self._otel_metadata_fn = otel_metadata_fn
         self._target_dir = target_dir
         if trace_dir is not None:
             self._trace_dir = trace_dir
@@ -697,7 +701,11 @@ class GuardedAgent:
             otel_config = _load_otel_config()
             if otel_config.get("enabled"):
                 otel_emitter = OtelSpanEmitter(
-                    otel_config, trace_id, self._name or "agent", self._model
+                    otel_config,
+                    trace_id,
+                    self._name or "agent",
+                    self._model,
+                    metadata_fn=self._otel_metadata_fn,
                 )
         except Exception:
             pass
@@ -1307,7 +1315,9 @@ class GuardedAgent:
                     )
                     if otel_emitter is not None:
                         try:
-                            otel_emitter.on_turn_complete(trace[-1])
+                            otel_emitter.on_turn_complete(
+                                trace[-1], usage_totals=dict(usage_totals)
+                            )
                         except Exception:
                             logger.debug("OTEL turn emit failed", exc_info=True)
 

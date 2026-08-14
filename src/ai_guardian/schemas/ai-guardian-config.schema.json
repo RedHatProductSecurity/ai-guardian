@@ -2787,6 +2787,13 @@
               "additionalProperties": {
                 "type": "string"
               }
+            },
+            "resource_attributes": {
+              "type": "object",
+              "description": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>. Example: {\"team.name\": \"AT\", \"deployment.environment\": \"dev\"}.",
+              "additionalProperties": {
+                "type": ["string", "number", "boolean"]
+              }
             }
           }
         }

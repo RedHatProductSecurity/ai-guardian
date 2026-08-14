@@ -24,7 +24,7 @@ import os
 import sys
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
@@ -398,6 +398,7 @@ def trace_to_otlp_json(
     trace_doc: Dict[str, Any],
     *,
     service_name: str = "ai-guardian-sdk",
+    resource_attributes: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Convert an ai-guardian trace document to OTLP JSON format.
 
@@ -407,6 +408,8 @@ def trace_to_otlp_json(
         A parsed ai-guardian trace JSON document (the full dict).
     service_name:
         The ``service.name`` resource attribute.
+    resource_attributes:
+        Static key-value pairs added as OTEL resource attributes.
 
     Returns
     -------
@@ -430,14 +433,21 @@ def trace_to_otlp_json(
     except Exception:
         version = "unknown"
 
+    res_attrs = _attrs(
+        ("service.name", service_name),
+        ("service.version", version),
+    )
+    if resource_attributes:
+        for key, value in resource_attributes.items():
+            attr = _make_attribute(key, value)
+            if attr is not None:
+                res_attrs.append(attr)
+
     return {
         "resourceSpans": [
             {
                 "resource": {
-                    "attributes": _attrs(
-                        ("service.name", service_name),
-                        ("service.version", version),
-                    )
+                    "attributes": res_attrs,
                 },
                 "scopeSpans": [
                     {
@@ -474,7 +484,18 @@ def _export_single(args) -> int:
         return 1
 
     service_name = getattr(args, "service_name", "ai-guardian-sdk")
-    otlp = trace_to_otlp_json(trace_doc, service_name=service_name)
+
+    resource_attributes = None
+    try:
+        from ai_guardian.config.loaders import _load_otel_config
+
+        resource_attributes = _load_otel_config().get("resource_attributes")
+    except Exception:
+        pass
+
+    otlp = trace_to_otlp_json(
+        trace_doc, service_name=service_name, resource_attributes=resource_attributes
+    )
 
     fmt = getattr(args, "format", "otlp-json")
     endpoint = getattr(args, "endpoint", None)
@@ -548,6 +569,15 @@ def _export_dir(args) -> int:
 
     fmt = getattr(args, "format", "otlp-json")
     service_name = getattr(args, "service_name", "ai-guardian-sdk")
+
+    resource_attributes = None
+    try:
+        from ai_guardian.config.loaders import _load_otel_config
+
+        resource_attributes = _load_otel_config().get("resource_attributes")
+    except Exception:
+        pass
+
     count = 0
 
     for entry in sorted(os.listdir(trace_dir)):
@@ -557,7 +587,11 @@ def _export_dir(args) -> int:
         try:
             with open(src, "r", encoding="utf-8") as fh:
                 trace_doc = json.load(fh)
-            otlp = trace_to_otlp_json(trace_doc, service_name=service_name)
+            otlp = trace_to_otlp_json(
+                trace_doc,
+                service_name=service_name,
+                resource_attributes=resource_attributes,
+            )
         except Exception as exc:
             print(f"Warning: skipping {entry}: {exc}", file=sys.stderr)
             continue
@@ -657,8 +691,10 @@ class OtelSpanEmitter:
         trace_id: str,
         agent_name: str,
         model: str,
+        metadata_fn: Optional[Callable[[str, Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
         self._enabled = config.get("enabled", False)
+        self._metadata_fn = metadata_fn
         if not self._enabled:
             return
         self._endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or config.get(
@@ -669,11 +705,42 @@ class OtelSpanEmitter:
         )
         self._format = config.get("export_format", "otlp-json")
         self._headers = _resolve_headers(config.get("headers"))
+        self._resource_attributes = config.get("resource_attributes") or {}
         self._trace_id = trace_id
         self._agent_name = agent_name
         self._model = model
 
-    def on_turn_complete(self, turn_data: Dict[str, Any]) -> None:
+    def _call_metadata_fn(
+        self,
+        turn: int,
+        usage: Optional[Dict[str, Any]] = None,
+        stop_reason: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Call the metadata callback and return OTLP attributes."""
+        if not self._metadata_fn:
+            return []
+        try:
+            ctx: Dict[str, Any] = {
+                "model": self._model,
+                "turn": turn,
+                "usage": usage or {},
+            }
+            if stop_reason is not None:
+                ctx["stop_reason"] = stop_reason
+            result = self._metadata_fn(self._agent_name, ctx)
+            if not isinstance(result, dict):
+                return []
+            return _attrs(*result.items())
+        except Exception:
+            logger.debug("OTEL metadata_fn failed", exc_info=True)
+            return []
+
+    def on_turn_complete(
+        self,
+        turn_data: Dict[str, Any],
+        *,
+        usage_totals: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Called after a turn finishes.  Converts to spans and flushes."""
         if not self._enabled:
             return
@@ -682,6 +749,12 @@ class OtelSpanEmitter:
                 turn_data.get("parent_span_id", _new_span_id())
             )
             spans = _make_turn_span(turn_data, self._trace_id, root_span_id)
+            dynamic_attrs = self._call_metadata_fn(
+                turn=turn_data.get("turn", 0),
+                usage=usage_totals,
+            )
+            if dynamic_attrs and spans:
+                spans[0]["attributes"].extend(dynamic_attrs)
             self._flush(spans)
         except Exception:
             logger.debug("OTEL turn export failed", exc_info=True)
@@ -692,6 +765,13 @@ class OtelSpanEmitter:
             return
         try:
             root = _make_root_span(trace_doc, self._trace_id)
+            dynamic_attrs = self._call_metadata_fn(
+                turn=0,
+                usage=trace_doc.get("usage"),
+                stop_reason=trace_doc.get("stop_reason"),
+            )
+            if dynamic_attrs:
+                root["attributes"].extend(dynamic_attrs)
             self._flush([root])
         except Exception:
             logger.debug("OTEL run export failed", exc_info=True)
@@ -706,14 +786,20 @@ class OtelSpanEmitter:
         except Exception:
             version = "unknown"
 
+        res_attrs = _attrs(
+            ("service.name", self._service_name),
+            ("service.version", version),
+        )
+        for key, value in self._resource_attributes.items():
+            attr = _make_attribute(key, value)
+            if attr is not None:
+                res_attrs.append(attr)
+
         payload = {
             "resourceSpans": [
                 {
                     "resource": {
-                        "attributes": _attrs(
-                            ("service.name", self._service_name),
-                            ("service.version", version),
-                        )
+                        "attributes": res_attrs,
                     },
                     "scopeSpans": [
                         {
