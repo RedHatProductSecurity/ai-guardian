@@ -16,6 +16,7 @@ Usage:
 Issue #468
 """
 
+import fnmatch
 import json
 import logging
 import os
@@ -37,6 +38,17 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class MCPServerIDEConfig:
+    """Per-IDE configuration for an MCP server."""
+
+    ide: str
+    config_path: str
+    command: str
+    args: List[str]
+    env_var_names: List[str]
+
+
+@dataclass
 class MCPServerInfo:
     """Information about a discovered MCP server."""
 
@@ -46,6 +58,7 @@ class MCPServerInfo:
     env_var_names: List[str]
     is_trusted: bool
     config_sources: List[str] = field(default_factory=list)
+    ide_configs: List[MCPServerIDEConfig] = field(default_factory=list)
 
 
 @dataclass
@@ -218,37 +231,51 @@ class MCPAuditor:
                 if not isinstance(server_def, dict):
                     continue
 
-                if name in servers:
-                    servers[name].config_sources.append(str(path))
-                    continue
-
                 command = server_def.get("command", "")
                 args = server_def.get("args", [])
                 env = server_def.get("env", {})
-
                 env_var_names = list(env.keys()) if isinstance(env, dict) else []
+                parsed_args = [str(a) for a in args] if isinstance(args, list) else []
+
+                ide_cfg = MCPServerIDEConfig(
+                    ide=self.ide_label(str(path)),
+                    config_path=str(path),
+                    command=str(command),
+                    args=parsed_args,
+                    env_var_names=env_var_names,
+                )
+
+                if name in servers:
+                    servers[name].config_sources.append(str(path))
+                    servers[name].ide_configs.append(ide_cfg)
+                    continue
+
                 is_trusted = self._check_trust(name)
 
                 servers[name] = MCPServerInfo(
                     name=name,
                     command=str(command),
-                    args=[str(a) for a in args] if isinstance(args, list) else [],
+                    args=parsed_args,
                     env_var_names=env_var_names,
                     is_trusted=is_trusted,
                     config_sources=[str(path)],
+                    ide_configs=[ide_cfg],
                 )
 
         return list(servers.values())
 
     def _get_config_paths(self) -> List[str]:
-        """Return list of IDE config file paths to check for MCP servers."""
+        """Return list of IDE config file paths to check for MCP servers.
+
+        Derives paths from setup/mcp.py _MCP_IDE_CONFIGS so every
+        supported IDE is covered automatically.
+        """
         paths = []
 
-        # Claude Code configs
+        # Claude Code: extra paths not in _MCP_IDE_CONFIGS
         claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")
         if claude_config_dir:
             paths.append(os.path.join(claude_config_dir, "settings.json"))
-        paths.append("~/.claude.json")
         paths.append("~/.claude/settings.json")
 
         # Project-local Claude config
@@ -256,21 +283,43 @@ class MCPAuditor:
         if project_local.exists():
             paths.append(str(project_local))
 
-        # Cursor
-        paths.append("~/.cursor/mcp.json")
+        # All IDE configs from the canonical registry
+        try:
+            from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
 
-        # Windsurf
-        paths.append("~/.windsurf/mcp.json")
+            seen = set()
+            for ide_cfg in _MCP_IDE_CONFIGS.values():
+                cfg_file = ide_cfg.get("config_file")
+                if cfg_file and cfg_file not in seen:
+                    seen.add(cfg_file)
+                    expanded = os.path.expanduser(cfg_file)
+                    if os.path.isabs(expanded):
+                        paths.append(cfg_file)
+                    else:
+                        local = Path.cwd() / cfg_file
+                        if local.exists():
+                            paths.append(str(local))
+        except ImportError:
+            # Fallback: hardcoded paths if setup module unavailable
+            paths.append("~/.claude.json")
+            paths.append("~/.cursor/mcp.json")
+            paths.append("~/.windsurf/mcp.json")
 
-        # Codex (project-local)
-        codex_local = Path.cwd() / "codex.json"
-        if codex_local.exists():
-            paths.append(str(codex_local))
+        # VS Code / Copilot — project-local MCP config (not in _MCP_IDE_CONFIGS)
+        vscode_mcp = Path.cwd() / ".vscode" / "mcp.json"
+        if vscode_mcp.exists():
+            paths.append(str(vscode_mcp))
 
         return paths
 
     def _check_trust(self, server_name: str) -> bool:
-        """Check if an MCP server is trusted via permissions.rules."""
+        """Check if an MCP server is trusted via permissions.rules.
+
+        Uses _find_permission_rules() to inspect rules without triggering
+        violation logging.  The old approach called check_tool_allowed()
+        which logged tool_permission violations for every untrusted server,
+        polluting the violation log with phantom audit probes (#1977).
+        """
         try:
             if not hasattr(self, "_policy_checker"):
                 from ai_guardian.tools.policy import ToolPolicyChecker
@@ -280,18 +329,31 @@ class MCPAuditor:
                 )
 
             checker = self._policy_checker
-            hook_data = {
-                "tool_name": f"mcp__{server_name}__test",
-                "parameters": {},
-            }
-            tp_logger = logging.getLogger("ai_guardian.tools.policy")
-            original_level = tp_logger.level
-            tp_logger.setLevel(logging.CRITICAL)
-            try:
-                allowed, _, _ = checker.check_tool_allowed(hook_data)
-            finally:
-                tp_logger.setLevel(original_level)
-            return bool(allowed)
+            test_tool = f"mcp__{server_name}__test"
+            rules = checker._find_permission_rules(test_tool)
+
+            if not rules:
+                return False
+
+            for rule in rules:
+                mode = rule.get("mode")
+                patterns = rule.get("patterns", [])
+
+                if mode is None:
+                    allow_patterns = rule.get("allow", [])
+                    if allow_patterns:
+                        mode = "allow"
+                        patterns = allow_patterns
+
+                if mode != "allow":
+                    continue
+
+                for p in patterns:
+                    pattern_str = checker._extract_pattern_string(p)
+                    if fnmatch.fnmatch(test_tool, pattern_str):
+                        return True
+
+            return False
         except Exception:
             logger.debug("Could not check trust for %s", server_name)
             return False
@@ -314,28 +376,97 @@ class MCPAuditor:
             findings.extend(self._audit_unpinned(server))
             findings.extend(self._audit_urls(server))
 
+        self._log_audit_violations(servers, findings)
+
         elapsed_ms = int((time.monotonic() - start) * 1000)
         return AuditReport(servers=servers, findings=findings, scan_time_ms=elapsed_ms)
+
+    def _log_audit_violations(
+        self,
+        servers: List[MCPServerInfo],
+        findings: List[AuditFinding],
+    ) -> None:
+        """Log violations for untrusted servers and audit findings."""
+        try:
+            from ai_guardian.violations.logger import ViolationLogger
+            from ai_guardian.scanners.scan_result import generate_violation_id
+        except ImportError:
+            return
+
+        vl = ViolationLogger()
+        servers_with_findings = {f.server_name for f in findings}
+
+        for server in servers:
+            if server.is_trusted:
+                continue
+
+            ide_names = sorted({ic.ide for ic in server.ide_configs}) or ["Unknown"]
+
+            if server.name not in servers_with_findings:
+                vl.log_violation(
+                    violation_type="tool_permission",
+                    blocked={
+                        "violation_id": generate_violation_id(),
+                        "tool_name": f"mcp__{server.name}",
+                        "reason": "untrusted MCP server (no allow rule)",
+                    },
+                    context={
+                        "source": "mcp_audit",
+                        "ide_sources": ide_names,
+                    },
+                    severity="info",
+                )
+
+        for finding in findings:
+            vl.log_violation(
+                violation_type="tool_permission",
+                blocked={
+                    "violation_id": generate_violation_id(),
+                    "tool_name": f"mcp__{finding.server_name}",
+                    "reason": finding.message,
+                    "category": finding.category,
+                },
+                context={
+                    "source": "mcp_audit",
+                    "category": finding.category,
+                },
+                severity=finding.severity,
+            )
 
     def _audit_credentials(self, server: MCPServerInfo) -> List[AuditFinding]:
         if server.is_trusted:
             return []
         findings = []
-        for var_name in server.env_var_names:
-            if _CREDENTIAL_ENV_PATTERN.search(var_name):
-                findings.append(
-                    AuditFinding(
-                        server_name=server.name,
-                        severity="critical",
-                        category="credential_exposure",
-                        message=f"Credential env var '{var_name}' passed to untrusted server",
-                        detail=(
-                            f"Server '{server.name}' is not allowed in permissions.rules "
-                            f"but receives credential-like env var '{var_name}'. "
-                            f"Add an allow rule or remove the credential."
-                        ),
+        seen_vars: set = set()
+        configs = server.ide_configs or [
+            MCPServerIDEConfig(
+                ide="Unknown",
+                config_path="",
+                command=server.command,
+                args=server.args,
+                env_var_names=server.env_var_names,
+            )
+        ]
+        for ic in configs:
+            for var_name in ic.env_var_names:
+                key = (var_name, ic.ide)
+                if key in seen_vars:
+                    continue
+                seen_vars.add(key)
+                if _CREDENTIAL_ENV_PATTERN.search(var_name):
+                    findings.append(
+                        AuditFinding(
+                            server_name=server.name,
+                            severity="critical",
+                            category="credential_exposure",
+                            message=f"Credential env var '{var_name}' passed to untrusted server ({ic.ide})",
+                            detail=(
+                                f"Server '{server.name}' in {ic.ide} is not allowed in "
+                                f"permissions.rules but receives credential-like env var "
+                                f"'{var_name}'. Add an allow rule or remove the credential."
+                            ),
+                        )
                     )
-                )
         return findings
 
     def _audit_npx(self, server: MCPServerInfo) -> List[AuditFinding]:
@@ -560,10 +691,32 @@ class MCPAuditor:
             return "Claude"
         if ".cursor/" in p:
             return "Cursor"
-        if ".windsurf/" in p:
+        if ".windsurf/" in p or ".codeium/windsurf" in p:
             return "Windsurf"
         if p.endswith("codex.json"):
             return "Codex"
+        if ".cline/" in p or "claude-dev/" in p or "roo-cline/" in p:
+            return "Cline"
+        if ".vscode/" in p:
+            return "VS Code"
+        if ".gemini/" in p:
+            return "Gemini CLI"
+        if ".augment/" in p:
+            return "Augment"
+        if ".kiro/" in p:
+            return "Kiro"
+        if ".junie/" in p:
+            return "Junie"
+        if ".aider-desk/" in p or ".aider/" in p:
+            return "AiderDesk"
+        if ".openclaw/" in p:
+            return "OpenClaw"
+        if "opencode/" in p:
+            return "OpenCode"
+        if ".crush" in p:
+            return "Crush"
+        if "zoocode" in p:
+            return "ZooCode"
         return "Unknown"
 
     # -- Output methods ----------------------------------------------------
@@ -577,29 +730,44 @@ class MCPAuditor:
             return
 
         print(f"\nMCP Servers ({len(servers)} found)\n")
-        print(f"{'Server':<25} {'Command':<12} {'Trust':<12} {'Env Vars':<10}")
-        print("-" * 59)
+        print(
+            f"{'Server':<25} {'IDE':<15} {'Command':<15} {'Trust':<12} {'Env Vars':<10}"
+        )
+        print("-" * 77)
 
         for s in sorted(servers, key=lambda x: x.name):
             trust = "Trusted" if s.is_trusted else "Untrusted"
-            cred_count = sum(
-                1 for v in s.env_var_names if _CREDENTIAL_ENV_PATTERN.search(v)
-            )
-            env_info = str(len(s.env_var_names))
-            if cred_count and not s.is_trusted:
-                env_info += f" ({cred_count} credential)"
 
-            print(f"{s.name:<25} {s.command:<12} {trust:<12} {env_info:<10}")
+            if s.ide_configs:
+                for i, ic in enumerate(s.ide_configs):
+                    cred_count = sum(
+                        1 for v in ic.env_var_names if _CREDENTIAL_ENV_PATTERN.search(v)
+                    )
+                    env_info = str(len(ic.env_var_names))
+                    if cred_count and not s.is_trusted:
+                        env_info += f" ({cred_count} cred)"
 
-            if verbose:
-                if s.args:
-                    print(f"  args: {' '.join(s.args)}")
-                if s.env_var_names:
-                    print(f"  env:  {', '.join(s.env_var_names)}")
-                sources_str = ", ".join(
-                    f"{self.ide_label(p)}: {p}" for p in s.config_sources
-                )
-                print(f"  from: {sources_str}")
+                    cmd_display = ic.command
+                    if len(cmd_display) > 15:
+                        cmd_display = cmd_display.rsplit("/", 1)[-1][:15]
+
+                    if i == 0:
+                        print(
+                            f"{s.name:<25} {ic.ide:<15} {cmd_display:<15} {trust:<12} {env_info:<10}"
+                        )
+                    else:
+                        print(
+                            f"{'':<25} {ic.ide:<15} {cmd_display:<15} {'':<12} {env_info:<10}"
+                        )
+
+                    if verbose:
+                        if ic.args:
+                            print(f"  args: {' '.join(ic.args)}")
+                        if ic.env_var_names:
+                            print(f"  env:  {', '.join(ic.env_var_names)}")
+                        print(f"  from: {ic.config_path}")
+            else:
+                print(f"{s.name:<25} {'—':<15} {'—':<15} {trust:<12} {'0':<10}")
 
         print()
 
@@ -613,6 +781,16 @@ class MCPAuditor:
                 "env_var_names": s.env_var_names,
                 "is_trusted": s.is_trusted,
                 "config_sources": s.config_sources,
+                "ide_sources": sorted({self.ide_label(p) for p in s.config_sources}),
+                "ide_configs": [
+                    {
+                        "ide": ic.ide,
+                        "command": ic.command,
+                        "args": ic.args,
+                        "env_var_names": ic.env_var_names,
+                    }
+                    for ic in s.ide_configs
+                ],
             }
             for s in servers
         ]

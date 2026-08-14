@@ -558,22 +558,31 @@ class TestSecretEnginesValidation:
 
 
 class TestMCPSecurityAudit:
-    @mock.patch("ai_guardian.web.pages.mcp_security._run_audit")
-    def test_run_audit_returns_tuple(self, mock_audit):
-        mock_audit.return_value = ([], None)
-        from ai_guardian.web.pages.mcp_security import _run_audit
+    def test_run_audit_via_service_returns_dict(self):
+        from ai_guardian.web.pages.mcp_security import _run_audit_via_service
 
-        servers, report = _run_audit()
-        assert servers == []
-        assert report is None
+        mock_service = mock.MagicMock()
+        mock_target = mock.MagicMock()
+        mock_service.get_target_by_name.return_value = mock_target
+        mock_service.get_mcp_audit.return_value = {
+            "servers": [],
+            "findings": [],
+            "trusted": 0,
+            "untrusted": 0,
+        }
 
-    def test_run_audit_handles_import_error(self):
-        with mock.patch.dict("sys.modules", {"ai_guardian.mcp.audit": None}):
-            from ai_guardian.web.pages.mcp_security import _run_audit
+        result = _run_audit_via_service(mock_service, "test-daemon")
+        assert result is not None
+        assert result["servers"] == []
 
-            servers, report = _run_audit()
-            assert servers == []
-            assert report is None
+    def test_run_audit_via_service_handles_error(self):
+        from ai_guardian.web.pages.mcp_security import _run_audit_via_service
+
+        mock_service = mock.MagicMock()
+        mock_service.get_target_by_name.side_effect = Exception("boom")
+
+        result = _run_audit_via_service(mock_service, "test-daemon")
+        assert result is None
 
 
 # ---------------------------------------------------------------------------

@@ -1016,6 +1016,55 @@ class MultiDaemonClient:
             "version": report.version,
         }
 
+    def get_mcp_audit(self, target: DaemonTarget) -> Optional[dict]:
+        """Run MCP security audit on a daemon."""
+        if target.runtime == "local":
+            return self._local_mcp_audit()
+        return self._rest_request(target, "GET", "/api/mcp/audit")
+
+    @staticmethod
+    def _local_mcp_audit() -> dict:
+        from ai_guardian.mcp.audit import MCPAuditor
+
+        auditor = MCPAuditor()
+        servers = auditor.discover_servers()
+        report = auditor.audit_config(servers)
+        return {
+            "servers": [
+                {
+                    "name": s.name,
+                    "command": s.command,
+                    "is_trusted": s.is_trusted,
+                    "config_sources": s.config_sources,
+                    "ide_sources": sorted(
+                        {MCPAuditor.ide_label(p) for p in s.config_sources}
+                    ),
+                    "ide_configs": [
+                        {
+                            "ide": ic.ide,
+                            "command": ic.command,
+                            "args": ic.args,
+                            "env_var_names": ic.env_var_names,
+                        }
+                        for ic in s.ide_configs
+                    ],
+                }
+                for s in servers
+            ],
+            "findings": [
+                {
+                    "server_name": f.server_name,
+                    "severity": f.severity,
+                    "category": f.category,
+                    "message": f.message,
+                }
+                for f in report.findings
+            ],
+            "scan_time_ms": report.scan_time_ms,
+            "trusted": sum(1 for s in servers if s.is_trusted),
+            "untrusted": sum(1 for s in servers if not s.is_trusted),
+        }
+
     def get_smoke_test(self, target: DaemonTarget) -> Optional[dict]:
         """Run smoke tests on a daemon."""
         if target.runtime == "local":

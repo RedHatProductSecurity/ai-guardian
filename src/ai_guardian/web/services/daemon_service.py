@@ -153,6 +153,12 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_mcp_audit(self, target: DaemonTarget) -> Optional[dict]:
+        try:
+            return self._client.get_mcp_audit(target)
+        except Exception:
+            return None
+
     def get_daemon_performance(
         self,
         target: DaemonTarget,

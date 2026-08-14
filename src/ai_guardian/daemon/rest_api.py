@@ -117,6 +117,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             self._send_json(self._get_health_check(fix))
         elif path == "/api/smoke-test":
             self._send_json(self._get_smoke_test())
+        elif path == "/api/mcp/audit":
+            self._send_json(self._get_mcp_audit())
         elif path == "/api/pending-prompts":
             prompts = self.server.daemon_state.get_pending_prompts()
             self._send_json({"prompts": prompts})
@@ -564,6 +566,53 @@ class _RestHandler(BaseHTTPRequestHandler):
                 "phase1_passed": False,
                 "version": "unknown",
             }
+
+    @staticmethod
+    def _get_mcp_audit():
+        try:
+            from ai_guardian.mcp.audit import MCPAuditor
+
+            auditor = MCPAuditor()
+            servers = auditor.discover_servers()
+            report = auditor.audit_config(servers)
+            return {
+                "servers": [
+                    {
+                        "name": s.name,
+                        "command": s.command,
+                        "is_trusted": s.is_trusted,
+                        "config_sources": s.config_sources,
+                        "ide_sources": sorted(
+                            {MCPAuditor.ide_label(p) for p in s.config_sources}
+                        ),
+                        "ide_configs": [
+                            {
+                                "ide": ic.ide,
+                                "command": ic.command,
+                                "args": ic.args,
+                                "env_var_names": ic.env_var_names,
+                            }
+                            for ic in s.ide_configs
+                        ],
+                    }
+                    for s in servers
+                ],
+                "findings": [
+                    {
+                        "server_name": f.server_name,
+                        "severity": f.severity,
+                        "category": f.category,
+                        "message": f.message,
+                    }
+                    for f in report.findings
+                ],
+                "scan_time_ms": report.scan_time_ms,
+                "trusted": sum(1 for s in servers if s.is_trusted),
+                "untrusted": sum(1 for s in servers if not s.is_trusted),
+            }
+        except Exception as e:
+            logger.debug("MCP audit failed: %s", e)
+            return {"servers": [], "findings": [], "error": str(e)}
 
     @staticmethod
     def _refresh_pattern_cache():
