@@ -504,6 +504,18 @@ class WebConsole:
 
             create_daemon_detail_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/traces")
+        def traces_page(daemon_name: str):
+            from ai_guardian.web.pages.traces import create_traces_page
+
+            create_traces_page(service, daemon_name)
+
+        @ui.page("/{daemon_name}/trace-detail")
+        def trace_detail_page(daemon_name: str):
+            from ai_guardian.web.pages.traces import create_trace_detail_page
+
+            create_trace_detail_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/about")
         def about_page(daemon_name: str):
             from ai_guardian.web.pages.about import create_about_page

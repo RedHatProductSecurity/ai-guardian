@@ -252,6 +252,7 @@ class _DirectSession(GuardSession):
         super().__init__(config, target_dir=target_dir)
         self._cwd = cwd
         self._ensure_config()
+        self._register_project_with_daemon()
 
     def _ensure_config(self):
         if self._config is None:
@@ -292,6 +293,40 @@ class _DirectSession(GuardSession):
             from ai_guardian.config.target_config import merge_target_allowlists
 
             self._config = merge_target_allowlists(self._config, self._target_dir)
+
+    def _register_project_with_daemon(self):
+        """Register project CWD with daemon so trace viewer can discover trace_dir."""
+        import os as _os
+
+        cwd = self._cwd or _os.getcwd()
+        try:
+            import json as _json
+
+            from ai_guardian.daemon import get_pid_path
+
+            pid_path = get_pid_path()
+            if not pid_path.exists():
+                return
+            pid_info = _json.loads(pid_path.read_text())
+            rest_port = pid_info.get("rest_port")
+            if not rest_port:
+                return
+
+            from urllib.request import Request, urlopen
+
+            payload = _json.dumps({"project_dir": cwd}).encode("utf-8")
+            req = Request(
+                f"http://127.0.0.1:{rest_port}/api/register-project",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            auth_token = pid_info.get("auth_token")
+            if auth_token:
+                req.add_header("Authorization", f"Bearer {auth_token}")
+            urlopen(req, timeout=2)
+        except Exception:
+            pass
 
     def check_content(
         self,

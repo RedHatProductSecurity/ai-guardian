@@ -163,6 +163,30 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_daemon_traces(
+        self,
+        target: DaemonTarget,
+        agent_name: Optional[str] = None,
+        directory: Optional[str] = None,
+    ) -> Optional[dict]:
+        try:
+            return self._client.get_traces(
+                target, agent_name=agent_name, directory=directory
+            )
+        except Exception:
+            return None
+
+    def get_daemon_trace_detail(
+        self,
+        target: DaemonTarget,
+        filename: str,
+        directory: Optional[str] = None,
+    ) -> Optional[dict]:
+        try:
+            return self._client.get_trace_detail(target, filename, directory=directory)
+        except Exception:
+            return None
+
     def pause_daemon(self, target: DaemonTarget, minutes: int) -> bool:
         try:
             return self._client.send_pause(target, minutes)
