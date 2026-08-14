@@ -982,3 +982,188 @@ class TestPrintWithScanAnalysis:
 
         output = json.loads(capsys.readouterr().out)
         assert "scan_analysis" not in output
+
+
+class TestDefaultExcludesCleanup:
+    """Verify default_excludes only contains file-pattern entries."""
+
+    def test_default_excludes_no_directory_patterns(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+        scanner = __import__(
+            "ai_guardian.scanners.file_scanner", fromlist=["FileScanner"]
+        ).FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        assert len(files) >= 1
+
+    def test_pruned_dirs_skip_git(self, tmp_path):
+        git_dir = tmp_path / ".git"
+        git_dir.mkdir()
+        (git_dir / "config").write_text("x")
+        (tmp_path / "app.py").write_text("x = 1")
+
+        from ai_guardian.scanners.file_scanner import FileScanner
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        assert not any(".git" in str(f) for f in files)
+
+    def test_pruned_dirs_skip_node_modules(self, tmp_path):
+        nm = tmp_path / "node_modules"
+        nm.mkdir()
+        (nm / "lodash.js").write_text("x")
+        (tmp_path / "app.js").write_text("x")
+
+        from ai_guardian.scanners.file_scanner import FileScanner
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        assert not any("node_modules" in str(f) for f in files)
+
+    def test_pyc_still_excluded(self, tmp_path):
+        (tmp_path / "mod.pyc").write_bytes(b"\x00")
+        (tmp_path / "app.py").write_text("x = 1")
+
+        from ai_guardian.scanners.file_scanner import FileScanner
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(tmp_path, None, None, False)
+        assert not any(str(f).endswith(".pyc") for f in files)
+
+
+class TestExcludeFlag:
+    """Tests for --exclude flag on init-project."""
+
+    def test_exclude_patterns_passed_to_scan(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+        init = ProjectInitializer(tmp_path)
+
+        with patch.object(init, "scan_project", return_value=[]) as mock_scan:
+            init.run(scan=True, exclude_patterns=["data/*", "vendor/*"])
+            mock_scan.assert_called_once()
+            call_kwargs = mock_scan.call_args
+            assert "data/*" in call_kwargs.kwargs.get(
+                "exclude_patterns", call_kwargs[1].get("exclude_patterns", [])
+            )
+
+    def test_exclude_patterns_reach_scan_directory(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        (data_dir / "big.csv").write_text("a,b,c")
+
+        from ai_guardian.scanners.file_scanner import FileScanner
+
+        scanner = FileScanner(config={})
+        files = scanner._discover_files(
+            tmp_path, None, ["data/*"], False, skip_hidden=True
+        )
+        assert not any("data" in str(f) for f in files)
+
+    def test_cli_args_exclude(self):
+        class Args:
+            dir = "/nonexistent"
+            force = False
+            merge = False
+            dry_run = False
+            json = False
+            scan = False
+            threshold = 10
+            exact = False
+            exclude = ["data/*"]
+
+        result = init_project_command(Args())
+        assert result == 1
+
+    def test_init_project_command_passes_exclude(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+
+        class Args:
+            dir = str(tmp_path)
+            force = False
+            merge = False
+            dry_run = True
+            json = False
+            scan = True
+            threshold = 10
+            exact = False
+            exclude = ["data/*"]
+
+        with patch.object(
+            ProjectInitializer, "scan_project", return_value=[]
+        ) as mock_scan:
+            init_project_command(Args())
+            call_kwargs = mock_scan.call_args
+            excludes = call_kwargs.kwargs.get(
+                "exclude_patterns", call_kwargs[1].get("exclude_patterns", [])
+            )
+            assert "data/*" in excludes
+
+
+class TestAiguardignoreOnScan:
+    """Tests for loading .aiguardignore.toml during init-project --scan."""
+
+    def test_load_aiguardignore_excludes_returns_paths(self, tmp_path):
+        init = ProjectInitializer(tmp_path)
+
+        aig_config = MagicMock()
+        aig_config.global_paths = ["vendor/**"]
+        aig_config.scanner_paths = {"secret_scanning": ["data/**"]}
+
+        with patch(
+            "ai_guardian.aiguardignore.load_aiguardignore",
+            return_value=aig_config,
+        ):
+            paths = init._load_aiguardignore_excludes()
+
+        assert "vendor/**" in paths
+        assert "data/**" in paths
+
+    def test_load_aiguardignore_excludes_no_file(self, tmp_path):
+        init = ProjectInitializer(tmp_path)
+
+        with patch(
+            "ai_guardian.aiguardignore.load_aiguardignore",
+            return_value=None,
+        ):
+            paths = init._load_aiguardignore_excludes()
+
+        assert paths == []
+
+    def test_load_aiguardignore_excludes_deduplicates(self, tmp_path):
+        init = ProjectInitializer(tmp_path)
+
+        aig_config = MagicMock()
+        aig_config.global_paths = ["vendor/**"]
+        aig_config.scanner_paths = {
+            "secret_scanning": ["vendor/**", "data/**"],
+            "prompt_injection": ["data/**"],
+        }
+
+        with patch(
+            "ai_guardian.aiguardignore.load_aiguardignore",
+            return_value=aig_config,
+        ):
+            paths = init._load_aiguardignore_excludes()
+
+        assert paths.count("vendor/**") == 1
+        assert paths.count("data/**") == 1
+
+    def test_scan_project_merges_aiguardignore(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+        init = ProjectInitializer(tmp_path)
+
+        with patch.object(
+            init, "_load_aiguardignore_excludes", return_value=["vendor/**"]
+        ):
+            with patch("ai_guardian.scanners.file_scanner.FileScanner") as MockScanner:
+                mock_instance = MockScanner.return_value
+                mock_instance.scan_directory.return_value = []
+                init.scan_project(exclude_patterns=["data/*"])
+
+                call_kwargs = mock_instance.scan_directory.call_args
+                excludes = call_kwargs.kwargs.get(
+                    "exclude_patterns",
+                    call_kwargs[1].get("exclude_patterns", []),
+                )
+                assert "data/*" in excludes
+                assert "vendor/**" in excludes

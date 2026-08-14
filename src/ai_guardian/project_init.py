@@ -231,7 +231,12 @@ class ProjectInitializer:
 
         return config_path, True, existed
 
-    def scan_project(self, threshold: int = 10, progressive: bool = True) -> List[Dict]:
+    def scan_project(
+        self,
+        threshold: int = 10,
+        progressive: bool = True,
+        exclude_patterns: Optional[List[str]] = None,
+    ) -> List[Dict]:
         """Run FileScanner with all scanners enabled and suppressions stripped."""
         from ai_guardian.scanners.file_scanner import FileScanner
         from ai_guardian.scan_analyzer import (
@@ -239,14 +244,36 @@ class ProjectInitializer:
             _build_discovery_config,
         )
 
+        merged_excludes = list(exclude_patterns or [])
+        merged_excludes.extend(self._load_aiguardignore_excludes())
+
         config = _build_discovery_config(str(self.project_dir))
         scanner = FileScanner(config=config, verbose=False)
         suppressor = ProgressiveSuppressor(threshold) if progressive else None
         findings = scanner.scan_directory(
-            str(self.project_dir), finding_filter=suppressor
+            str(self.project_dir),
+            exclude_patterns=merged_excludes or None,
+            finding_filter=suppressor,
         )
         self._last_suppressor = suppressor
         return findings
+
+    def _load_aiguardignore_excludes(self) -> List[str]:
+        """Load exclude paths from existing .aiguardignore.toml."""
+        try:
+            from ai_guardian.aiguardignore import load_aiguardignore
+
+            config = load_aiguardignore(project_root=self.project_dir)
+            if config is None:
+                return []
+            paths = list(config.global_paths)
+            for scanner_paths in config.scanner_paths.values():
+                for p in scanner_paths:
+                    if p not in paths:
+                        paths.append(p)
+            return paths
+        except Exception:
+            return []
 
     def analyze_scan(self, findings: List[Dict], threshold: int = 10, suppressor=None):
         from ai_guardian.scan_analyzer import build_recommendations
@@ -369,6 +396,7 @@ class ProjectInitializer:
         threshold: int = 10,
         progressive: bool = True,
         confirm_callback=None,
+        exclude_patterns: Optional[List[str]] = None,
     ) -> InitResult:
         result = InitResult(project_dir=self.project_dir, dry_run=dry_run)
 
@@ -382,7 +410,11 @@ class ProjectInitializer:
         language_config = self.generate_config(entries, ignore_files)
 
         if scan:
-            findings = self.scan_project(threshold=threshold, progressive=progressive)
+            findings = self.scan_project(
+                threshold=threshold,
+                progressive=progressive,
+                exclude_patterns=exclude_patterns,
+            )
             analysis = self.analyze_scan(
                 findings, threshold=threshold, suppressor=self._last_suppressor
             )
@@ -665,6 +697,7 @@ def init_project_command(args) -> int:
     scan = getattr(args, "scan", False)
     threshold = getattr(args, "threshold", 10)
     progressive = not getattr(args, "exact", False)
+    exclude_patterns = getattr(args, "exclude", []) or []
 
     if not project_dir.is_dir():
         print(f"Error: Not a directory: {project_dir}", file=sys.stderr)
@@ -715,6 +748,7 @@ def init_project_command(args) -> int:
         threshold=threshold,
         progressive=progressive,
         confirm_callback=confirm_cb,
+        exclude_patterns=exclude_patterns or None,
     )
 
     if json_output:

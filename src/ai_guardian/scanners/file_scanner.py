@@ -454,17 +454,7 @@ class FileScanner:
         files: Set[Path] = set()
 
         default_excludes = [
-            ".git/*",
-            ".git/**/*",
-            "__pycache__/*",
-            "__pycache__/**/*",
             "*.pyc",
-            "node_modules/*",
-            "node_modules/**/*",
-            ".venv/*",
-            ".venv/**/*",
-            "venv/*",
-            "venv/**/*",
             "*.min.js",
             "*.map",
         ]
