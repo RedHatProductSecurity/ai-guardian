@@ -1,8 +1,13 @@
 """Tests for universal ScanResult dataclass (Issue #1251)."""
 
+import re
+
 import pytest
 
-from ai_guardian.scanners.scan_result import ScanResult as UniversalScanResult
+from ai_guardian.scanners.scan_result import (
+    ScanResult as UniversalScanResult,
+    generate_violation_id,
+)
 
 
 class TestScanResultConstruction:
@@ -326,6 +331,68 @@ class TestFromDirectoryRules:
         assert r.should_block is False
         assert r.matched_pattern == ""
         assert r.error_message == ""
+
+
+class TestViolationId:
+    """Tests for unique violation ID generation (Issue #1964)."""
+
+    def test_generate_violation_id_format(self):
+        vid = generate_violation_id()
+        assert re.match(r"^viol_[0-9a-f]{8}$", vid)
+
+    def test_generate_violation_id_unique(self):
+        ids = {generate_violation_id() for _ in range(100)}
+        assert len(ids) == 100
+
+    def test_auto_generated_on_detected_true(self):
+        r = UniversalScanResult(detected=True, violation_type="secret_detected")
+        assert r.id is not None
+        assert r.id.startswith("viol_")
+        assert len(r.id) == 13  # "viol_" + 8 hex chars
+
+    def test_no_id_on_detected_false(self):
+        r = UniversalScanResult(detected=False, violation_type="secret_detected")
+        assert r.id is None
+
+    def test_explicit_id_preserved(self):
+        r = UniversalScanResult(
+            detected=True, violation_type="test", id="viol_custom01"
+        )
+        assert r.id == "viol_custom01"
+
+    def test_clean_factory_no_id(self):
+        r = UniversalScanResult.clean("secret_detected")
+        assert r.id is None
+
+    def test_from_secret_scan_detected_has_id(self):
+        r = UniversalScanResult.from_secret_scan(
+            has_secrets=True, error_message="found", engine="gitleaks"
+        )
+        assert r.id is not None
+        assert r.id.startswith("viol_")
+
+    def test_from_secret_scan_clean_no_id(self):
+        r = UniversalScanResult.from_secret_scan(has_secrets=False, error_message=None)
+        assert r.id is None
+
+    def test_from_prompt_injection_detected_has_id(self):
+        r = UniversalScanResult.from_prompt_injection(
+            should_block=True,
+            error_message="injection",
+            detected=True,
+        )
+        assert r.id is not None
+
+    def test_from_ssrf_detected_has_id(self):
+        r = UniversalScanResult.from_ssrf_check(
+            is_ssrf=True, reason="blocked", is_immutable=True
+        )
+        assert r.id is not None
+
+    def test_each_instance_gets_unique_id(self):
+        r1 = UniversalScanResult(detected=True, violation_type="test")
+        r2 = UniversalScanResult(detected=True, violation_type="test")
+        assert r1.id != r2.id
 
 
 class TestExtraField:

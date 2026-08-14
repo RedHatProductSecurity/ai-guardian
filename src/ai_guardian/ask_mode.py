@@ -470,11 +470,14 @@ def _log_ask_decision(
         ctx = {"ask_decision": decision_str, "action_taken": action_taken}
         if dialog_wait_ms > 0:
             ctx["dialog_wait_ms"] = round(dialog_wait_ms, 1)
+        from ai_guardian.scanners.scan_result import generate_violation_id
+
         vlogger.log_violation(
             violation_type=violation_type,
             blocked=blocked_info,
             context=ctx,
             severity="info",
+            violation_id=generate_violation_id(),
         )
 
         # Record allowed findings for transcript scanner dedup within this invocation (#1364, #1439).

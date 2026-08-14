@@ -52,6 +52,7 @@ class ViolationLogger:
         context: Dict,
         suggestion: Optional[Dict] = None,
         severity: str = "warning",
+        violation_id: Optional[str] = None,
     ):
         """
         Log a violation to JSONL file.
@@ -77,6 +78,7 @@ class ViolationLogger:
 
         try:
             entry = {
+                "id": violation_id,
                 "timestamp": datetime.now(timezone.utc)
                 .isoformat()
                 .replace("+00:00", "Z"),

@@ -47,6 +47,7 @@ class CheckResult:
     blocked: bool = False
     detected: bool = False
     violation_type: Optional[str] = None
+    violation_id: Optional[str] = None
     message: Optional[str] = None
     details: Optional[Dict[str, Any]] = None
 
@@ -219,24 +220,31 @@ class GuardSession:
         detected = any(r.detected for r in results)
         messages = [r.message for r in results if r.message]
         types = [r.violation_type for r in results if r.violation_type]
+        ids = [r.violation_id for r in results if r.violation_id]
+        merged_details = (
+            {
+                "individual_results": [
+                    {
+                        "violation_type": r.violation_type,
+                        "violation_id": r.violation_id,
+                        "message": r.message,
+                    }
+                    for r in results
+                    if r.detected
+                ]
+            }
+            if len(results) > 1 and detected
+            else (results[0].details if results else None)
+        )
         return CheckResult(
             blocked=blocked,
             detected=detected,
             violation_type=(
                 types[0] if len(types) == 1 else (",".join(types) if types else None)
             ),
+            violation_id=ids[0] if len(ids) == 1 else None,
             message="; ".join(messages) if messages else None,
-            details=(
-                {
-                    "individual_results": [
-                        {"violation_type": r.violation_type, "message": r.message}
-                        for r in results
-                        if r.detected
-                    ]
-                }
-                if len(results) > 1 and detected
-                else (results[0].details if results else None)
-            ),
+            details=merged_details,
         )
 
 
@@ -351,6 +359,7 @@ class _DirectSession(GuardSession):
                 blocked=r.should_block,
                 detected=r.detected,
                 violation_type=r.violation_type,
+                violation_id=r.id,
                 message=r.error_message,
             )
             for r in scan_results
@@ -374,6 +383,7 @@ class _DirectSession(GuardSession):
                 blocked=r.should_block,
                 detected=r.detected,
                 violation_type=r.violation_type,
+                violation_id=r.id,
                 message=r.error_message,
             )
             for r in scan_results
@@ -392,6 +402,7 @@ class _DirectSession(GuardSession):
                 blocked=r.should_block,
                 detected=r.detected,
                 violation_type=r.violation_type,
+                violation_id=r.id,
                 message=r.error_message,
             )
             for r in scan_results
