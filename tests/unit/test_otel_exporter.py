@@ -257,9 +257,7 @@ class TestDeriveEndNano:
 
     def test_duration_ms_takes_priority_over_tokens(self):
         start = "1000000000000000000"
-        result = _derive_end_nano(
-            "", start, duration_ms=5000, output_tokens=300
-        )
+        result = _derive_end_nano("", start, duration_ms=5000, output_tokens=300)
         expected = str(int(start) + 5000 * 1_000_000)
         assert result == expected
 
@@ -661,9 +659,9 @@ class TestEndTimeNanoSynthesis:
         result = trace_to_otlp_json(doc)
         spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
         for span in spans:
-            assert span["endTimeUnixNano"] != "0", (
-                f"Span '{span['name']}' has endTimeUnixNano=0"
-            )
+            assert (
+                span["endTimeUnixNano"] != "0"
+            ), f"Span '{span['name']}' has endTimeUnixNano=0"
 
     def test_make_span_guard_fixes_zero_end(self):
         """_make_span itself prevents endTimeUnixNano=0 when start is valid."""
