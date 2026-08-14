@@ -166,7 +166,9 @@ def run_scan_pipeline(
         return None
 
     _phase(f"Analyzing {len(findings)} findings...")
-    analysis = initializer.analyze_scan(findings, threshold=threshold)
+    analysis = initializer.analyze_scan(
+        findings, threshold=threshold, suppressor=suppressor
+    )
     if suppressor:
         analysis.suppressed_count += suppressor.suppressed_count
     merged_config = initializer.merge_configs(
@@ -249,7 +251,7 @@ _SCANNER_TO_CONFIG_SECTION = {
     "offensive_language": "scan_offensive",
 }
 
-NEVER_SUPPRESS = frozenset({"SSRF-001", "UNICODE-001", "canary_detected"})
+NEVER_SUPPRESS = frozenset({"UNICODE-001", "canary_detected"})
 
 MAX_SAMPLE_FILES = 5
 
@@ -516,8 +518,15 @@ _SCANNER_CONFIG_SPEC: Dict[str, Tuple[str, _BuilderFn]] = {
 def build_recommendations(
     findings: List[Dict[str, Any]],
     threshold: int = 10,
+    suppressor: Optional["ProgressiveSuppressor"] = None,
 ) -> ScanAnalysisResult:
-    """Analyze findings and build suppression recommendations."""
+    """Analyze findings and build suppression recommendations.
+
+    When *suppressor* is provided, its already-suppressed fingerprints
+    are injected as synthetic high-frequency clusters so the analyzer
+    generates config recommendations for patterns that were filtered
+    during progressive scanning.
+    """
     clusters = cluster_findings(findings)
 
     high_freq = [
@@ -525,6 +534,21 @@ def build_recommendations(
         for c in clusters
         if c.file_count >= threshold and _can_generate_config(c.rule_id)
     ]
+
+    if suppressor:
+        existing_fps = {(c.rule_id, c.sub_type) for c in clusters}
+        for fp, count in suppressor._counts.items():
+            if count >= threshold and fp not in existing_fps:
+                rule_id, sub_type = fp
+                if _can_generate_config(rule_id):
+                    cluster = FindingCluster(
+                        rule_id=rule_id,
+                        sub_type=sub_type,
+                        file_count=count,
+                        total_count=count + suppressor.suppressed_count,
+                    )
+                    clusters.append(cluster)
+                    high_freq.append(cluster)
 
     high_freq_fps: Set[Tuple[str, str]] = {(c.rule_id, c.sub_type) for c in high_freq}
 

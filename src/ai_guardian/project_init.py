@@ -69,6 +69,7 @@ class InitResult:
     config_existed: bool = False
     dry_run: bool = False
     scan_analysis: Optional[Any] = None
+    merged_config: Optional[Dict] = None
     aiguardignore_path: Optional[Path] = None
     aiguardignore_created: bool = False
 
@@ -247,10 +248,12 @@ class ProjectInitializer:
         self._last_suppressor = suppressor
         return findings
 
-    def analyze_scan(self, findings: List[Dict], threshold: int = 10):
+    def analyze_scan(self, findings: List[Dict], threshold: int = 10, suppressor=None):
         from ai_guardian.scan_analyzer import build_recommendations
 
-        return build_recommendations(findings, threshold=threshold)
+        return build_recommendations(
+            findings, threshold=threshold, suppressor=suppressor
+        )
 
     def merge_configs(self, language_config: Dict, scan_config: Dict) -> Dict:
         """Deep-merge language-detection config with scan-derived config."""
@@ -380,7 +383,9 @@ class ProjectInitializer:
 
         if scan:
             findings = self.scan_project(threshold=threshold, progressive=progressive)
-            analysis = self.analyze_scan(findings, threshold=threshold)
+            analysis = self.analyze_scan(
+                findings, threshold=threshold, suppressor=self._last_suppressor
+            )
             if self._last_suppressor:
                 analysis.suppressed_count += self._last_suppressor.suppressed_count
             result.scan_analysis = analysis
@@ -388,6 +393,8 @@ class ProjectInitializer:
             merged = self.merge_configs(language_config, scan_config)
         else:
             merged = language_config
+
+        result.merged_config = merged
 
         if not merged:
             return result
@@ -536,8 +543,6 @@ def _print_result(result: InitResult) -> None:
         return
 
     if result.config_existed and not result.config_created:
-        print(f"Config already exists: {result.config_path}")
-        print("Use --force to overwrite (creates .backup).")
         return
 
     if result.config_created:
@@ -621,6 +626,23 @@ def _print_json(result: InitResult) -> None:
     print(json.dumps(output, indent=2))
 
 
+def _ask_existing_config(config_path) -> str:
+    """Ask user how to handle existing config."""
+    if not sys.stdin.isatty():
+        return "skip"
+    print(f"\nConfig already exists: {config_path}")
+    try:
+        response = input("[M]erge / [O]verwrite / [S]kip? ").strip().lower()
+        if response in ("m", "merge"):
+            return "merge"
+        if response in ("o", "overwrite"):
+            return "overwrite"
+        return "skip"
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return "skip"
+
+
 def _confirm_write() -> bool:
     """Ask user to confirm writing config files."""
     if not sys.stdin.isatty():
@@ -701,7 +723,18 @@ def init_project_command(args) -> int:
         _print_result(result)
 
     if result.config_existed and not result.config_created and not dry_run:
-        return 1
+        if json_output:
+            return 1
+        choice = _ask_existing_config(result.config_path)
+        if choice in ("m", "merge"):
+            initializer.write_config(result.merged_config or {}, merge=True)
+            print(f"Config merged into {result.config_path}")
+        elif choice in ("o", "overwrite"):
+            initializer.write_config(result.merged_config or {}, force=True)
+            print(f"Config overwritten at {result.config_path}")
+        else:
+            print("Skipped.")
+            return 1
 
     return 0
 
