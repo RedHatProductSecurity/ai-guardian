@@ -93,13 +93,9 @@ class AiguardignoreConfig:
 
 
 def _validate_paths(raw: List[str]) -> List[str]:
-    safe = []
-    for p in raw:
-        if ".." in p.split("/"):
-            logger.warning(f"Blocked .aiguardignore.toml path with '..': '{p}'")
-            continue
-        safe.append(p)
-    return safe
+    from ai_guardian.config.utils import validate_path_list
+
+    return validate_path_list(raw, source=".aiguardignore.toml")
 
 
 def load_aiguardignore(
