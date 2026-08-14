@@ -160,16 +160,33 @@ class MCPSecurityContent(ScrollableContainer):
         lines = []
         for s in sorted(servers, key=lambda x: x.name):
             trust = "[green]Trusted[/green]" if s.is_trusted else "[red]Untrusted[/red]"
-            env_count = len(s.env_var_names)
-            env_text = f"{env_count} env" if env_count else "no env"
-            lines.append(f"  {s.name:<24s}  {s.command:<10s}  {trust:<22s}  {env_text}")
-            if s.config_sources:
+            ide_configs = getattr(s, "ide_configs", []) or []
+            if ide_configs:
+                for i, ic in enumerate(ide_configs):
+                    env_count = len(ic.env_var_names)
+                    env_text = f"{env_count} env" if env_count else "no env"
+                    cmd = ic.command
+                    if len(cmd) > 12:
+                        cmd = cmd.rsplit("/", 1)[-1][:12]
+                    if i == 0:
+                        lines.append(
+                            f"  {s.name:<24s}  {ic.ide:<12s}  {cmd:<12s}  {trust:<22s}  {env_text}"
+                        )
+                    else:
+                        lines.append(
+                            f"  {'':<24s}  {ic.ide:<12s}  {cmd:<12s}  {'':<22s}  {env_text}"
+                        )
+            else:
                 from ai_guardian.mcp.audit import MCPAuditor
 
-                sources_str = ", ".join(
-                    f"{MCPAuditor.ide_label(p)}: {p}" for p in s.config_sources
+                ide_names = ", ".join(
+                    sorted({MCPAuditor.ide_label(p) for p in s.config_sources})
                 )
-                lines.append(f"    [dim]{sources_str}[/dim]")
+                env_count = len(s.env_var_names)
+                env_text = f"{env_count} env" if env_count else "no env"
+                lines.append(
+                    f"  {s.name:<24s}  {ide_names:<12s}  {s.command:<12s}  {trust:<22s}  {env_text}"
+                )
 
         if lines:
             servers_container.mount(Static("\n".join(lines)))

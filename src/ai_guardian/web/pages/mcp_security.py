@@ -9,18 +9,15 @@ from ai_guardian.web.components.header import create_header, create_sidebar
 logger = logging.getLogger(__name__)
 
 
-def _run_audit():
-    """Run MCP security audit, returning (servers, report) or ([], None)."""
+def _run_audit_via_service(service, daemon_name: str):
+    """Run MCP audit through DaemonService (handles local and remote)."""
     try:
-        from ai_guardian.mcp.audit import MCPAuditor
-
-        auditor = MCPAuditor()
-        servers = auditor.discover_servers()
-        report = auditor.audit_config(servers)
-        return servers, report
+        target = service.get_target_by_name(daemon_name)
+        if target:
+            return service.get_mcp_audit(target)
     except Exception as e:
-        logger.debug("MCP audit failed: %s", e)
-        return [], None
+        logger.debug("MCP audit via daemon failed: %s", e)
+    return None
 
 
 def create_mcp_security_page(service, daemon_name: str):
@@ -41,25 +38,29 @@ def create_mcp_security_page(service, daemon_name: str):
             with content:
                 ui.label("Running audit...").classes("text-grey-6")
 
-            servers, report = await run.io_bound(_run_audit)
+            data = await run.io_bound(_run_audit_via_service, service, daemon_name)
 
             content.clear()
             with content:
-                if report is None:
+                if data is None or "error" in (data or {}):
                     with ui.card().classes("w-full"):
                         ui.label("Audit Unavailable").classes("text-lg font-bold")
-                        ui.label(
-                            "MCP audit module could not be loaded. "
-                            "Ensure ai-guardian is installed with MCP support."
-                        ).classes("text-sm text-grey-6")
+                        err = (data or {}).get("error", "Unknown error")
+                        ui.label(f"MCP audit could not be loaded: {err}").classes(
+                            "text-sm text-grey-6"
+                        )
                     return
+
+                servers = data.get("servers", [])
+                findings = data.get("findings", [])
+                trusted = data.get("trusted", 0)
+                untrusted = data.get("untrusted", 0)
+                scan_ms = data.get("scan_time_ms")
 
                 # Summary
                 with ui.card().classes("w-full"):
                     ui.label("Scan Summary").classes("text-lg font-bold")
 
-                    trusted = sum(1 for s in servers if getattr(s, "is_trusted", False))
-                    untrusted = len(servers) - trusted
                     with ui.row().classes("items-center gap-4"):
                         ui.label(f"Servers: {len(servers)} total").classes("text-sm")
                         if trusted:
@@ -71,11 +72,10 @@ def create_mcp_security_page(service, daemon_name: str):
                                 "text-xs"
                             )
 
-                    findings = getattr(report, "findings", []) or []
                     if findings:
                         sev_counts = {}
                         for f in findings:
-                            s = getattr(f, "severity", "info").lower()
+                            s = f.get("severity", "info").lower()
                             sev_counts[s] = sev_counts.get(s, 0) + 1
                         parts = []
                         for s in ["critical", "high", "medium", "low", "info"]:
@@ -85,7 +85,6 @@ def create_mcp_security_page(service, daemon_name: str):
                     else:
                         ui.label("No issues found.").classes("text-sm text-green")
 
-                    scan_ms = getattr(report, "scan_time_ms", None)
                     if scan_ms is not None:
                         ui.label(f"Scan time: {scan_ms}ms").classes(
                             "text-xs text-grey-6"
@@ -95,34 +94,68 @@ def create_mcp_security_page(service, daemon_name: str):
                 with ui.card().classes("w-full"):
                     ui.label("Discovered Servers").classes("text-lg font-bold")
                     if servers:
-                        with ui.grid(columns="200px 1fr 100px 100px").classes(
+                        with ui.grid(columns="180px 120px 120px 100px 80px").classes(
                             "w-full gap-y-2 gap-x-4 items-center"
                         ):
-                            ui.label("Server").classes("text-xs text-grey-6 font-bold")
-                            ui.label("Command").classes("text-xs text-grey-6 font-bold")
-                            ui.label("Trust").classes("text-xs text-grey-6 font-bold")
-                            ui.label("Env Vars").classes(
-                                "text-xs text-grey-6 font-bold"
-                            )
+                            for h in (
+                                "Server",
+                                "IDE",
+                                "Command",
+                                "Trust",
+                                "Env Vars",
+                            ):
+                                ui.label(h).classes("text-xs text-grey-6 font-bold")
 
                             for srv in servers:
-                                name = getattr(srv, "name", str(srv))
-                                cmd = getattr(srv, "command", "")
-                                is_trusted = getattr(srv, "is_trusted", False)
-                                env_count = len(getattr(srv, "env_var_names", []) or [])
+                                name = srv.get("name", "")
+                                is_trusted = srv.get("is_trusted", False)
+                                ide_configs = srv.get("ide_configs", [])
 
-                                ui.label(name).classes("font-bold text-sm")
-                                ui.label(
-                                    cmd if len(cmd) <= 40 else cmd[:37] + "..."
-                                ).classes("text-xs text-grey-6")
-                                trust_color = "green" if is_trusted else "red"
-                                trust_label = "trusted" if is_trusted else "untrusted"
-                                ui.badge(trust_label, color=trust_color).classes(
-                                    "text-xs"
-                                )
-                                ui.label(str(env_count) if env_count else "—").classes(
-                                    "text-xs text-grey-6"
-                                )
+                                if ide_configs:
+                                    for i, ic in enumerate(ide_configs):
+                                        if i == 0:
+                                            ui.label(name).classes("font-bold text-sm")
+                                        else:
+                                            ui.label("").classes("text-sm")
+                                        ui.label(ic.get("ide", "")).classes("text-xs")
+                                        cmd = ic.get("command", "")
+                                        if len(cmd) > 15:
+                                            cmd = cmd.rsplit("/", 1)[-1][:15]
+                                        ui.label(cmd).classes("text-xs text-grey-6")
+                                        if i == 0:
+                                            trust_color = (
+                                                "green" if is_trusted else "red"
+                                            )
+                                            trust_label = (
+                                                "trusted" if is_trusted else "untrusted"
+                                            )
+                                            ui.badge(
+                                                trust_label, color=trust_color
+                                            ).classes("text-xs")
+                                        else:
+                                            ui.label("").classes("text-xs")
+                                        env_count = len(ic.get("env_var_names", []))
+                                        ui.label(
+                                            str(env_count) if env_count else "—"
+                                        ).classes("text-xs text-grey-6")
+                                else:
+                                    ui.label(name).classes("font-bold text-sm")
+                                    ide_names = srv.get("ide_sources", [])
+                                    ui.label(", ".join(ide_names) or "—").classes(
+                                        "text-xs"
+                                    )
+                                    cmd = srv.get("command", "")
+                                    ui.label(
+                                        cmd if len(cmd) <= 15 else cmd[:12] + "..."
+                                    ).classes("text-xs text-grey-6")
+                                    trust_color = "green" if is_trusted else "red"
+                                    trust_label = (
+                                        "trusted" if is_trusted else "untrusted"
+                                    )
+                                    ui.badge(trust_label, color=trust_color).classes(
+                                        "text-xs"
+                                    )
+                                    ui.label("—").classes("text-xs text-grey-6")
                     else:
                         ui.label(
                             "No MCP servers found in IDE configuration files."
@@ -147,9 +180,9 @@ def create_mcp_security_page(service, daemon_name: str):
                             "info": "help_outline",
                         }
                         for finding in findings:
-                            sev = getattr(finding, "severity", "info").lower()
-                            msg = getattr(finding, "message", str(finding))
-                            srv_name = getattr(finding, "server_name", "")
+                            sev = finding.get("severity", "info").lower()
+                            msg = finding.get("message", "")
+                            srv_name = finding.get("server_name", "")
                             with ui.row().classes("items-center gap-2 w-full"):
                                 ui.icon(sev_icons.get(sev, "help")).classes(
                                     f"text-{sev_colors.get(sev, 'grey')}"

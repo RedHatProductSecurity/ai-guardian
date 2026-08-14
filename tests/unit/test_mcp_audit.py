@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 from ai_guardian.mcp.audit import (
     MCPAuditor,
+    MCPServerIDEConfig,
     MCPServerInfo,
     AuditFinding,
     AuditReport,
@@ -33,13 +34,24 @@ def _make_server(
     is_trusted=False,
     config_sources=None,
 ):
+    sources = config_sources or ["~/.claude.json"]
     return MCPServerInfo(
         name=name,
         command=command,
         args=args or [],
         env_var_names=env_var_names or [],
         is_trusted=is_trusted,
-        config_sources=config_sources or ["~/.claude.json"],
+        config_sources=sources,
+        ide_configs=[
+            MCPServerIDEConfig(
+                ide=MCPAuditor.ide_label(s),
+                config_path=s,
+                command=command,
+                args=args or [],
+                env_var_names=env_var_names or [],
+            )
+            for s in sources
+        ],
     )
 
 
@@ -410,6 +422,67 @@ class TestAuditConfig:
 
         assert report.scan_time_ms >= 0
 
+    @patch("ai_guardian.violations.logger.ViolationLogger", autospec=True)
+    @patch(
+        "ai_guardian.scanners.scan_result.generate_violation_id",
+        return_value="test-vid",
+    )
+    def test_audit_logs_violation_for_untrusted_no_findings(
+        self, _mock_vid, mock_vl_cls
+    ):
+        """Untrusted server with no findings logs info violation."""
+        mock_vl = MagicMock()
+        mock_vl_cls.return_value = mock_vl
+
+        servers = [_make_server(name="plain-untrusted", is_trusted=False)]
+        auditor = MCPAuditor()
+        auditor.audit_config(servers)
+
+        calls = mock_vl.log_violation.call_args_list
+        assert len(calls) == 1
+        assert calls[0].kwargs["severity"] == "info"
+        assert calls[0].kwargs["context"]["source"] == "mcp_audit"
+
+    @patch("ai_guardian.violations.logger.ViolationLogger", autospec=True)
+    @patch(
+        "ai_guardian.scanners.scan_result.generate_violation_id",
+        return_value="test-vid",
+    )
+    def test_audit_logs_violation_for_credential_finding(self, _mock_vid, mock_vl_cls):
+        """Credential exposure finding logs critical violation."""
+        mock_vl = MagicMock()
+        mock_vl_cls.return_value = mock_vl
+
+        servers = [
+            _make_server(
+                name="cred-server",
+                env_var_names=["API_KEY"],
+                is_trusted=False,
+            )
+        ]
+        auditor = MCPAuditor()
+        auditor.audit_config(servers)
+
+        calls = mock_vl.log_violation.call_args_list
+        severities = [c.kwargs["severity"] for c in calls]
+        assert "critical" in severities
+
+    @patch("ai_guardian.violations.logger.ViolationLogger", autospec=True)
+    @patch(
+        "ai_guardian.scanners.scan_result.generate_violation_id",
+        return_value="test-vid",
+    )
+    def test_audit_no_violation_for_trusted(self, _mock_vid, mock_vl_cls):
+        """Trusted server does not log any violation."""
+        mock_vl = MagicMock()
+        mock_vl_cls.return_value = mock_vl
+
+        servers = [_make_server(name="trusted-srv", is_trusted=True)]
+        auditor = MCPAuditor()
+        auditor.audit_config(servers)
+
+        mock_vl.log_violation.assert_not_called()
+
 
 # ---------------------------------------------------------------------------
 # Deep Source Scan Tests
@@ -589,27 +662,71 @@ class TestScanSource:
 
 
 class TestTrustChecking:
-    """Tests for MCPAuditor._check_trust()."""
+    """Tests for MCPAuditor._check_trust().
+
+    _check_trust uses _find_permission_rules() + pattern matching
+    instead of check_tool_allowed() to avoid logging phantom violations (#1977).
+    """
 
     @patch("ai_guardian.tools.policy.ToolPolicyChecker", autospec=True)
-    def test_trusted_server(self, mock_checker_cls):
-        """Server with allow rule is trusted."""
+    def test_trusted_server_new_format(self, mock_checker_cls):
+        """Server with mode=allow rule is trusted (new format)."""
         mock_instance = MagicMock()
-        mock_instance.check_tool_allowed.return_value = (True, None, "mcp__test__test")
+        mock_instance._find_permission_rules.return_value = [
+            {"matcher": "mcp__*", "mode": "allow", "patterns": ["*"]}
+        ]
+        mock_instance._extract_pattern_string.return_value = "*"
         mock_checker_cls.return_value = mock_instance
 
         auditor = MCPAuditor()
         assert auditor._check_trust("allowed-server") is True
 
     @patch("ai_guardian.tools.policy.ToolPolicyChecker", autospec=True)
-    def test_untrusted_server(self, mock_checker_cls):
-        """Server without allow rule is untrusted."""
+    def test_trusted_server_legacy_format(self, mock_checker_cls):
+        """Server with legacy allow list is trusted."""
         mock_instance = MagicMock()
-        mock_instance.check_tool_allowed.return_value = (False, "not allowed", None)
+        mock_instance._find_permission_rules.return_value = [
+            {"matcher": "mcp__*", "allow": ["*"]}
+        ]
+        mock_instance._extract_pattern_string.return_value = "*"
+        mock_checker_cls.return_value = mock_instance
+
+        auditor = MCPAuditor()
+        assert auditor._check_trust("allowed-server") is True
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker", autospec=True)
+    def test_untrusted_server_no_rules(self, mock_checker_cls):
+        """Server with no permission rules is untrusted."""
+        mock_instance = MagicMock()
+        mock_instance._find_permission_rules.return_value = []
         mock_checker_cls.return_value = mock_instance
 
         auditor = MCPAuditor()
         assert auditor._check_trust("unknown-server") is False
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker", autospec=True)
+    def test_untrusted_server_deny_only(self, mock_checker_cls):
+        """Server with only deny rules is untrusted."""
+        mock_instance = MagicMock()
+        mock_instance._find_permission_rules.return_value = [
+            {"matcher": "mcp__*", "mode": "deny", "patterns": ["*"]}
+        ]
+        mock_checker_cls.return_value = mock_instance
+
+        auditor = MCPAuditor()
+        assert auditor._check_trust("denied-server") is False
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker", autospec=True)
+    def test_trust_no_violation_logged(self, mock_checker_cls):
+        """Trust check does NOT call check_tool_allowed (no violation logging)."""
+        mock_instance = MagicMock()
+        mock_instance._find_permission_rules.return_value = []
+        mock_checker_cls.return_value = mock_instance
+
+        auditor = MCPAuditor()
+        auditor._check_trust("any-server")
+
+        mock_instance.check_tool_allowed.assert_not_called()
 
     def test_trust_check_handles_errors(self):
         """Trust check returns False on errors."""
@@ -629,7 +746,7 @@ class TestOutputFormatting:
     """Tests for output methods."""
 
     def test_server_list_json_structure(self):
-        """JSON output has correct structure with config_sources list."""
+        """JSON output has correct structure with config_sources, ide_sources, and ide_configs."""
         servers = [
             _make_server(name="s1", is_trusted=True, config_sources=["~/.claude.json"]),
             _make_server(
@@ -644,9 +761,14 @@ class TestOutputFormatting:
         assert result[0]["name"] == "s1"
         assert result[0]["is_trusted"] is True
         assert result[0]["config_sources"] == ["~/.claude.json"]
+        assert result[0]["ide_sources"] == ["Claude"]
+        assert len(result[0]["ide_configs"]) == 1
+        assert result[0]["ide_configs"][0]["ide"] == "Claude"
         assert result[1]["name"] == "s2"
         assert result[1]["is_trusted"] is False
         assert result[1]["config_sources"] == ["~/.cursor/mcp.json"]
+        assert result[1]["ide_sources"] == ["Cursor"]
+        assert result[1]["ide_configs"][0]["ide"] == "Cursor"
 
     def test_audit_report_json_structure(self):
         """Audit report JSON has correct structure."""
@@ -709,10 +831,18 @@ class TestOutputFormatting:
         assert "No MCP servers found" in output
 
     def test_print_server_list_shows_servers(self, capsys):
-        """Print server list with trust status."""
+        """Print server list with trust status and IDE sources."""
         servers = [
-            _make_server(name="trusted-srv", is_trusted=True),
-            _make_server(name="untrusted-srv", is_trusted=False),
+            _make_server(
+                name="trusted-srv",
+                is_trusted=True,
+                config_sources=["~/.claude.json"],
+            ),
+            _make_server(
+                name="untrusted-srv",
+                is_trusted=False,
+                config_sources=["~/.cursor/mcp.json"],
+            ),
         ]
         auditor = MCPAuditor()
         auditor.print_server_list(servers)
@@ -721,6 +851,9 @@ class TestOutputFormatting:
         assert "untrusted-srv" in output
         assert "Trusted" in output
         assert "Untrusted" in output
+        assert "Claude" in output
+        assert "Cursor" in output
+        assert "IDE" in output
 
     def test_print_audit_report_clean(self, capsys):
         """Print message for clean audit."""
@@ -741,8 +874,10 @@ class TestOutputFormatting:
         auditor = MCPAuditor()
         auditor.print_server_list(servers, verbose=True)
         output = capsys.readouterr().out
-        assert "Claude: ~/.claude.json" in output
-        assert "Cursor: ~/.cursor/mcp.json" in output
+        assert "~/.claude.json" in output
+        assert "~/.cursor/mcp.json" in output
+        assert "Claude" in output
+        assert "Cursor" in output
 
 
 # ---------------------------------------------------------------------------
@@ -776,3 +911,33 @@ class TestIDELabel:
 
     def test_project_local_claude(self):
         assert MCPAuditor.ide_label("/project/.claude/settings.json") == "Claude"
+
+    def test_cline(self):
+        assert MCPAuditor.ide_label("~/.cline/mcp_settings.json") == "Cline"
+
+    def test_gemini(self):
+        assert MCPAuditor.ide_label("~/.gemini/settings.json") == "Gemini CLI"
+
+    def test_augment(self):
+        assert MCPAuditor.ide_label("~/.augment/settings.json") == "Augment"
+
+    def test_kiro(self):
+        assert MCPAuditor.ide_label("~/.kiro/settings.json") == "Kiro"
+
+    def test_junie(self):
+        assert MCPAuditor.ide_label("~/.junie/mcp.json") == "Junie"
+
+    def test_aiderdesk(self):
+        assert MCPAuditor.ide_label("~/.aider-desk/settings.json") == "AiderDesk"
+
+    def test_openclaw(self):
+        assert MCPAuditor.ide_label("~/.openclaw/settings.json") == "OpenClaw"
+
+    def test_opencode(self):
+        assert MCPAuditor.ide_label("~/.config/opencode/opencode.jsonc") == "OpenCode"
+
+    def test_crush(self):
+        assert MCPAuditor.ide_label(".crush.json") == "Crush"
+
+    def test_vscode(self):
+        assert MCPAuditor.ide_label(".vscode/mcp.json") == "VS Code"
