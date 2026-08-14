@@ -226,6 +226,9 @@ def fingerprint_finding(finding: Dict[str, Any]) -> Tuple[str, str]:
         return (rule_id, details.get(detail_key, "unknown"))
 
     if rule_id == "PROMPT-INJECTION-001":
+        matched = details.get("matched_text") or details.get("matched_pattern")
+        if matched:
+            return (rule_id, matched)
         return (rule_id, _normalize_pi_description(details.get("description", "")))
     if rule_id == "CONFIG-001":
         return (rule_id, details.get("pattern", details.get("category", "unknown")))

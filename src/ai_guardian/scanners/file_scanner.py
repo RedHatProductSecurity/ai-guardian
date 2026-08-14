@@ -1041,6 +1041,8 @@ class FileScanner:
                     snippet=snippet,
                     start_column=detector.last_start_column,
                     end_column=detector.last_end_column,
+                    matched_pattern=detector.last_matched_pattern,
+                    matched_text=detector.last_matched_text,
                 )
                 self.findings.append(finding)
                 if self.verbose:

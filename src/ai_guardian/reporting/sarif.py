@@ -472,7 +472,14 @@ def create_prompt_injection_finding(
     snippet: Optional[str] = None,
     start_column: Optional[int] = None,
     end_column: Optional[int] = None,
+    matched_pattern: Optional[str] = None,
+    matched_text: Optional[str] = None,
 ) -> Dict[str, Any]:
+    details: Dict[str, Any] = {"description": description}
+    if matched_pattern:
+        details["matched_pattern"] = matched_pattern
+    if matched_text:
+        details["matched_text"] = matched_text
     finding = {
         "rule_id": "PROMPT-INJECTION-001",
         "level": "warning",
@@ -480,7 +487,7 @@ def create_prompt_injection_finding(
         "file_path": file_path,
         "line_number": line_number,
         "snippet": snippet,
-        "details": {"description": description},
+        "details": details,
     }
     if start_column is not None:
         finding["start_column"] = start_column
