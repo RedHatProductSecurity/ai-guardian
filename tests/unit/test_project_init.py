@@ -1096,12 +1096,14 @@ class TestExcludeFlag:
         )
         assert not any("data" in str(f) for f in files)
 
-    def test_cli_args_exclude(self):
+    def test_cli_args_exclude(self, tmp_path):
+        (tmp_path / "app.py").write_text("x = 1")
+
         class Args:
-            dir = "/nonexistent"
+            dir = str(tmp_path)
             force = False
             merge = False
-            dry_run = False
+            dry_run = True
             json = False
             scan = False
             threshold = 10
@@ -1109,7 +1111,7 @@ class TestExcludeFlag:
             exclude = ["data/*"]
 
         result = init_project_command(Args())
-        assert result == 1
+        assert result == 0
 
     def test_init_project_command_passes_exclude(self, tmp_path):
         (tmp_path / "app.py").write_text("x = 1")
