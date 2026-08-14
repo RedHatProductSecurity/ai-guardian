@@ -76,7 +76,7 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
             )
 
     def on_mount(self) -> None:
-        self._load_config()
+        pass
 
     def refresh_content(self) -> None:
         self._load_config()

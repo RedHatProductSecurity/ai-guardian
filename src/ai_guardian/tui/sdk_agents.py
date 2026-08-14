@@ -107,7 +107,6 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
     def on_mount(self) -> None:
         tree = self.query_one("#sdk-agents-tree", Tree)
         tree.show_root = False
-        self._load_profiles()
 
     def refresh_content(self) -> None:
         self._load_profiles()
