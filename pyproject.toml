@@ -68,6 +68,11 @@ anthropic = [
 openai = [
   "openai>=1.0.0",
 ]
+otel = [
+  "opentelemetry-api>=1.20.0",
+  "opentelemetry-sdk>=1.20.0",
+  "opentelemetry-exporter-otlp-proto-http>=1.20.0",
+]
 dev = [
   "pytest>=8.4.2",
   "pytest-asyncio>=1.0.0",

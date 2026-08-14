@@ -1,6 +1,8 @@
 """Trace Viewer panel for the TUI console."""
 
 import fnmatch
+import json
+import tempfile
 import threading
 
 from textual.app import ComposeResult
@@ -27,7 +29,16 @@ class TracesContent(Container):
     #traces-filter-input {
         width: 1fr;
     }
+    #traces-export-status {
+        margin: 0 1;
+        height: auto;
+    }
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._last_export_path = None
+        self._selected_filename = None
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -41,6 +52,14 @@ class TracesContent(Container):
                 id="traces-filter-input",
             )
             yield Button("Refresh", id="traces-refresh", variant="success")
+            yield Button("Export OTLP", id="traces-export-otlp", variant="default")
+            yield Button(
+                "Open Folder",
+                id="traces-open-folder",
+                variant="default",
+                disabled=True,
+            )
+        yield Static("", id="traces-export-status")
         with VerticalScroll():
             yield Tree("Traces", id="traces-tree")
 
@@ -59,6 +78,16 @@ class TracesContent(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "traces-refresh":
             self.refresh_content()
+        elif event.button.id == "traces-export-otlp":
+            self._export_otlp()
+        elif event.button.id == "traces-open-folder":
+            if self._last_export_path:
+                import os
+
+                from ai_guardian.desktop_utils import open_url
+
+                folder = os.path.dirname(self._last_export_path)
+                open_url(f"file://{folder}")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id == "traces-filter-input":
@@ -67,6 +96,11 @@ class TracesContent(Container):
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "traces-filter-input":
             self._load_traces()
+
+    def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+        node = event.node
+        if node.data and isinstance(node.data, dict):
+            self._selected_filename = node.data.get("filename")
 
     def _load_traces(self) -> None:
         """Load traces in a background thread."""
@@ -121,9 +155,74 @@ class TracesContent(Container):
 
             for t in dirs[subdir]:
                 label = _format_trace_label(t)
-                parent.add_leaf(label)
+                node = parent.add_leaf(label)
+                node.data = t
 
         tree.root.expand_all()
+
+        if traces:
+            self._selected_filename = traces[0].get("filename")
+
+    def _export_otlp(self) -> None:
+        """Export the most recent (or selected) trace as OTLP JSON."""
+        status = self.query_one("#traces-export-status", Static)
+        status.update("[dim]Exporting...[/dim]")
+
+        def _worker():
+            try:
+                from ai_guardian.daemon.traces import (
+                    read_trace_detail,
+                    resolve_trace_dirs,
+                )
+                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+
+                trace_dirs = resolve_trace_dirs()
+                if not trace_dirs:
+                    self.app.call_from_thread(
+                        status.update, "[red]No trace directory found[/red]"
+                    )
+                    return
+
+                filename = self._selected_filename
+                if not filename:
+                    self.app.call_from_thread(
+                        status.update, "[red]No trace selected[/red]"
+                    )
+                    return
+
+                detail = read_trace_detail(trace_dirs, filename)
+                if not detail:
+                    self.app.call_from_thread(
+                        status.update,
+                        f"[red]Could not read trace: {filename}[/red]",
+                    )
+                    return
+
+                otlp = trace_to_otlp_json(detail)
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w",
+                    suffix=".otlp.json",
+                    prefix="ai-guardian-trace-",
+                    delete=False,
+                )
+                json.dump(otlp, tmp, indent=2)
+                tmp.close()
+                self._last_export_path = tmp.name
+
+                self.app.call_from_thread(self._on_export_complete, tmp.name)
+            except Exception as exc:
+                self.app.call_from_thread(
+                    status.update, f"[red]Export failed: {exc}[/red]"
+                )
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_export_complete(self, path: str) -> None:
+        status = self.query_one("#traces-export-status", Static)
+        status.update(f"[green]Exported to {path}[/green]")
+        open_btn = self.query_one("#traces-open-folder", Button)
+        open_btn.disabled = False
+        self.app.notify(f"OTLP JSON exported to {path}")
 
 
 def _filter_traces(traces, pattern):

@@ -689,6 +689,19 @@ class GuardedAgent:
         if self._trace_dir:
             trace_filepath = self._resolve_trace_filepath(started_at)
 
+        otel_emitter = None
+        try:
+            from ai_guardian.config.loaders import _load_otel_config
+            from ai_guardian.scanners.otel_exporter import OtelSpanEmitter
+
+            otel_config = _load_otel_config()
+            if otel_config.get("enabled"):
+                otel_emitter = OtelSpanEmitter(
+                    otel_config, trace_id, self._name or "agent", self._model
+                )
+        except Exception:
+            pass
+
         with monitor(
             mode=self._mode,
             config=self._config,
@@ -706,6 +719,7 @@ class GuardedAgent:
                     trace_filepath,
                     trace_id=trace_id,
                     run_start_mono=run_start_mono,
+                    otel_emitter=otel_emitter,
                 )
             except BaseException as exc:
                 exc.trace = trace
@@ -732,6 +746,7 @@ class GuardedAgent:
         trace_filepath: Optional[str] = None,
         trace_id: Optional[str] = None,
         run_start_mono: Optional[float] = None,
+        otel_emitter: Optional[Any] = None,
     ) -> Dict[str, Any]:
         parent_span_id = uuid.uuid4().hex
         _emit(
@@ -1284,6 +1299,11 @@ class GuardedAgent:
                             ),
                         }
                     )
+                    if otel_emitter is not None:
+                        try:
+                            otel_emitter.on_turn_complete(trace[-1])
+                        except Exception:
+                            logger.debug("OTEL turn emit failed", exc_info=True)
 
         output: Any = final_text
         if structured_output is not None:
@@ -1307,5 +1327,11 @@ class GuardedAgent:
                 trace_id=trace_id,
                 run_start_mono=run_start_mono,
             )
+
+        if otel_emitter is not None:
+            try:
+                otel_emitter.on_run_complete(result)
+            except Exception:
+                logger.debug("OTEL run emit failed", exc_info=True)
 
         return result

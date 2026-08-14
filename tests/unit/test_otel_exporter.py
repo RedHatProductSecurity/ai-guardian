@@ -1,0 +1,767 @@
+"""Tests for the OTEL GenAI trace exporter."""
+
+import json
+import os
+import tempfile
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from ai_guardian.scanners.otel_exporter import (
+    OtelSpanEmitter,
+    _iso_to_unix_nano,
+    _make_attribute,
+    _make_root_span,
+    _make_step_spans,
+    _make_turn_span,
+    _resolve_headers,
+    _truncate_span_id,
+    handle_trace_command,
+    trace_to_otlp_json,
+)
+
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+MINIMAL_TRACE_DOC = {
+    "agent_name": "test-agent",
+    "model": "claude-sonnet-4-20250514",
+    "started_at": "2026-08-14T10:00:00+00:00",
+    "ended_at": "2026-08-14T10:01:00+00:00",
+    "stop_reason": "end_turn",
+    "usage": {
+        "input_tokens": 1000,
+        "output_tokens": 500,
+        "cache_creation_input_tokens": 200,
+        "cache_read_input_tokens": 800,
+    },
+    "max_tokens": 16000,
+    "trace_id": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6",
+    "duration_ms": 60000,
+    "trace": [],
+}
+
+
+def _make_full_trace():
+    """Build a multi-turn trace doc with all step types."""
+    return {
+        "agent_name": "triage-agent",
+        "model": "claude-sonnet-4-20250514",
+        "started_at": "2026-08-14T10:00:00+00:00",
+        "ended_at": "2026-08-14T10:02:00+00:00",
+        "stop_reason": "end_turn",
+        "usage": {
+            "input_tokens": 5000,
+            "output_tokens": 2000,
+            "cache_creation_input_tokens": 500,
+            "cache_read_input_tokens": 3000,
+        },
+        "max_tokens": 16000,
+        "trace_id": "aaaa1111bbbb2222cccc3333dddd4444",
+        "duration_ms": 120000,
+        "trace": [
+            {
+                "turn": 0,
+                "steps": [
+                    {
+                        "type": "system",
+                        "step": 0,
+                        "system_prompt": "You are a triage agent.",
+                        "user_prompt": "Analyze this CVE.",
+                    },
+                    {
+                        "type": "scan",
+                        "step": 1,
+                        "scanned": "system_prompt",
+                        "violations": [],
+                    },
+                ],
+                "trace_id": "aaaa1111bbbb2222cccc3333dddd4444",
+                "span_id": "1111111111111111aaaaaaaaaaaaaaaa",
+                "parent_span_id": "ffffffffffffffff0000000000000000",
+                "started_at": "2026-08-14T10:00:00+00:00",
+                "ended_at": "2026-08-14T10:00:01+00:00",
+                "duration_ms": 1000,
+            },
+            {
+                "turn": 1,
+                "steps": [
+                    {
+                        "type": "input",
+                        "step": 0,
+                        "messages_count": 3,
+                        "compacted": False,
+                    },
+                    {
+                        "type": "response",
+                        "step": 1,
+                        "text": "I'll search for information.",
+                        "model_signal": "tool_use",
+                        "usage": {
+                            "input_tokens": 2000,
+                            "output_tokens": 100,
+                            "cache_creation_input_tokens": 0,
+                            "cache_read_input_tokens": 1500,
+                        },
+                        "latency_ms": 3200,
+                    },
+                    {
+                        "type": "tool_call",
+                        "step": 2,
+                        "name": "bash",
+                        "input": {"command": "grep -r CVE src/"},
+                    },
+                    {
+                        "type": "tool_result",
+                        "step": 3,
+                        "name": "bash",
+                        "output": "src/scanner.py:CVE-2024-1234",
+                        "latency_ms": 150,
+                        "output_bytes": 32,
+                    },
+                    {
+                        "type": "scan",
+                        "step": 4,
+                        "scanned": "tool_result:bash",
+                        "violations": [
+                            {"type": "secret_detected", "message": "API key found"}
+                        ],
+                    },
+                ],
+                "trace_id": "aaaa1111bbbb2222cccc3333dddd4444",
+                "span_id": "2222222222222222bbbbbbbbbbbbbbbb",
+                "parent_span_id": "ffffffffffffffff0000000000000000",
+                "started_at": "2026-08-14T10:00:01+00:00",
+                "ended_at": "2026-08-14T10:00:05+00:00",
+                "duration_ms": 4000,
+            },
+            {
+                "turn": 2,
+                "steps": [
+                    {
+                        "type": "input",
+                        "step": 0,
+                        "messages_count": 5,
+                        "compacted": True,
+                    },
+                    {
+                        "type": "compaction",
+                        "step": 1,
+                        "tokens_before": 50000,
+                        "tokens_after": 25000,
+                        "method": "summary",
+                    },
+                    {
+                        "type": "response",
+                        "step": 2,
+                        "text": "Here is my analysis.",
+                        "model_signal": "end_turn",
+                        "usage": {
+                            "input_tokens": 3000,
+                            "output_tokens": 1900,
+                            "cache_creation_input_tokens": 500,
+                            "cache_read_input_tokens": 1500,
+                        },
+                        "latency_ms": 5000,
+                    },
+                ],
+                "trace_id": "aaaa1111bbbb2222cccc3333dddd4444",
+                "span_id": "3333333333333333cccccccccccccccc",
+                "parent_span_id": "ffffffffffffffff0000000000000000",
+                "started_at": "2026-08-14T10:00:05+00:00",
+                "ended_at": "2026-08-14T10:02:00+00:00",
+                "duration_ms": 115000,
+            },
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — helpers
+# ---------------------------------------------------------------------------
+
+
+class TestTruncateSpanId:
+    def test_truncates_32_to_16(self):
+        assert (
+            _truncate_span_id("a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6") == "a1b2c3d4e5f6a7b8"
+        )
+
+    def test_short_id_unchanged(self):
+        assert _truncate_span_id("abcd1234") == "abcd1234"
+
+
+class TestIsoToUnixNano:
+    def test_valid_utc(self):
+        result = _iso_to_unix_nano("2026-08-14T10:00:00+00:00")
+        assert result != "0"
+        nano = int(result)
+        assert nano > 0
+        # Round-trip: convert back and verify date
+        from datetime import datetime, timezone
+
+        dt = datetime.fromtimestamp(nano / 1_000_000_000, tz=timezone.utc)
+        assert dt.year == 2026
+        assert dt.month == 8
+        assert dt.day == 14
+
+    def test_none_returns_zero(self):
+        assert _iso_to_unix_nano(None) == "0"
+
+    def test_empty_returns_zero(self):
+        assert _iso_to_unix_nano("") == "0"
+
+    def test_invalid_returns_zero(self):
+        assert _iso_to_unix_nano("not-a-date") == "0"
+
+    def test_naive_datetime_treated_as_utc(self):
+        result = _iso_to_unix_nano("2026-08-14T10:00:00")
+        assert result != "0"
+
+
+class TestMakeAttribute:
+    def test_string(self):
+        attr = _make_attribute("key", "value")
+        assert attr == {"key": "key", "value": {"stringValue": "value"}}
+
+    def test_int(self):
+        attr = _make_attribute("key", 42)
+        assert attr == {"key": "key", "value": {"intValue": "42"}}
+
+    def test_bool(self):
+        attr = _make_attribute("key", True)
+        assert attr == {"key": "key", "value": {"boolValue": True}}
+
+    def test_list(self):
+        attr = _make_attribute("key", ["a", "b"])
+        assert attr["value"]["arrayValue"]["values"] == [
+            {"stringValue": "a"},
+            {"stringValue": "b"},
+        ]
+
+    def test_none_returns_none(self):
+        assert _make_attribute("key", None) is None
+
+    def test_float_to_int(self):
+        attr = _make_attribute("key", 3.14)
+        assert attr == {"key": "key", "value": {"intValue": "3"}}
+
+
+# ---------------------------------------------------------------------------
+# Unit tests — span builders
+# ---------------------------------------------------------------------------
+
+
+class TestMakeRootSpan:
+    def test_basic_root_span(self):
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        assert span["name"] == "gen_ai.agent"
+        assert span["traceId"] == "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6"
+        assert "parentSpanId" not in span
+        assert span["status"]["code"] == 1  # OK
+
+    def test_root_span_attributes(self):
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.system"]["stringValue"] == "anthropic"
+        assert attr_map["gen_ai.agent.name"]["stringValue"] == "test-agent"
+        assert (
+            attr_map["gen_ai.request.model"]["stringValue"]
+            == "claude-sonnet-4-20250514"
+        )
+        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "1000"
+        assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "500"
+
+    def test_error_status(self):
+        doc = {**MINIMAL_TRACE_DOC, "stop_reason": "error"}
+        span = _make_root_span(doc, doc["trace_id"])
+        assert span["status"]["code"] == 2  # ERROR
+
+    def test_root_span_id_from_parent_span_id(self):
+        doc = {
+            **MINIMAL_TRACE_DOC,
+            "trace": [
+                {
+                    "turn": 0,
+                    "steps": [],
+                    "parent_span_id": "ffffffffffffffff0000000000000000",
+                }
+            ],
+        }
+        span = _make_root_span(doc, doc["trace_id"])
+        assert span["spanId"] == "ffffffffffffffff"
+
+
+class TestMakeTurnSpan:
+    def test_turn_span_with_steps(self):
+        trace = _make_full_trace()
+        turn = trace["trace"][1]  # turn 1 — response + tool_call + tool_result + scan
+        spans = _make_turn_span(turn, trace["trace_id"], "rootrootrootrootx")
+
+        # 1 turn span + 1 response + 1 tool_call + 1 tool_result + 1 scan = 5
+        assert len(spans) == 5
+        assert spans[0]["name"] == "gen_ai.turn"
+        assert spans[0]["parentSpanId"] == "rootrootrootrootx"
+
+        names = [s["name"] for s in spans]
+        assert "gen_ai.chat" in names
+        assert "tool:bash" in names
+        assert "tool_result:bash" in names
+        assert "gen_ai.security_scan" in names
+
+    def test_turn_span_attributes(self):
+        trace = _make_full_trace()
+        turn = trace["trace"][1]
+        spans = _make_turn_span(turn, trace["trace_id"], "rootrootrootrootx")
+        turn_span = spans[0]
+        attr_map = {a["key"]: a["value"] for a in turn_span["attributes"]}
+        assert attr_map["gen_ai.turn.number"]["intValue"] == "1"
+        assert attr_map["gen_ai.turn.messages_count"]["intValue"] == "3"
+        assert attr_map["gen_ai.turn.compacted"]["boolValue"] is False
+
+    def test_system_and_input_steps_skipped_as_child_spans(self):
+        trace = _make_full_trace()
+        turn = trace["trace"][0]  # turn 0 — system + scan
+        spans = _make_turn_span(turn, trace["trace_id"], "rootrootrootrootx")
+        names = [s["name"] for s in spans]
+        assert "gen_ai.turn" in names
+        assert "gen_ai.security_scan" in names
+        # system step should NOT produce a child span
+        assert all("system" not in n for n in names[1:])
+
+
+class TestMakeStepSpans:
+    def test_response_step(self):
+        step = {
+            "type": "response",
+            "text": "Hello",
+            "model_signal": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+            "latency_ms": 1000,
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert len(spans) == 1
+        assert spans[0]["name"] == "gen_ai.chat"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "100"
+        assert attr_map["gen_ai.response.finish_reasons"]["arrayValue"]["values"] == [
+            {"stringValue": "end_turn"}
+        ]
+
+    def test_tool_call_step(self):
+        step = {
+            "type": "tool_call",
+            "name": "read_file",
+            "input": {"path": "/etc/passwd"},
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert len(spans) == 1
+        assert spans[0]["name"] == "tool:read_file"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["tool.name"]["stringValue"] == "read_file"
+        assert "path" in attr_map["tool.input"]["stringValue"]
+
+    def test_tool_result_step(self):
+        step = {
+            "type": "tool_result",
+            "name": "bash",
+            "output": "ok",
+            "latency_ms": 50,
+            "output_bytes": 2,
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert len(spans) == 1
+        assert spans[0]["name"] == "tool_result:bash"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["tool.output_bytes"]["intValue"] == "2"
+
+    def test_scan_step_with_violations(self):
+        step = {
+            "type": "scan",
+            "scanned": "agent_response",
+            "violations": [
+                {"type": "prompt_injection", "message": "Injection detected"}
+            ],
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert len(spans) == 1
+        assert spans[0]["name"] == "gen_ai.security_scan"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.security_scan.violation_count"]["intValue"] == "1"
+
+    def test_compaction_step(self):
+        step = {
+            "type": "compaction",
+            "tokens_before": 50000,
+            "tokens_after": 25000,
+            "method": "summary",
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert len(spans) == 1
+        assert spans[0]["name"] == "gen_ai.compaction"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.compaction.tokens_before"]["intValue"] == "50000"
+        assert attr_map["gen_ai.compaction.tokens_after"]["intValue"] == "25000"
+        assert attr_map["gen_ai.compaction.method"]["stringValue"] == "summary"
+
+    def test_unknown_step_type_produces_no_spans(self):
+        step = {"type": "unknown_type"}
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        assert spans == []
+
+
+# ---------------------------------------------------------------------------
+# Integration test — full trace conversion
+# ---------------------------------------------------------------------------
+
+
+class TestTraceToOtlpJson:
+    def test_minimal_trace(self):
+        result = trace_to_otlp_json(MINIMAL_TRACE_DOC)
+        assert "resourceSpans" in result
+        rs = result["resourceSpans"]
+        assert len(rs) == 1
+        assert "scopeSpans" in rs[0]
+        spans = rs[0]["scopeSpans"][0]["spans"]
+        # Only root span for empty trace
+        assert len(spans) == 1
+        assert spans[0]["name"] == "gen_ai.agent"
+
+    def test_full_trace_span_count(self):
+        doc = _make_full_trace()
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        # 1 root + 3 turns + steps:
+        #   turn0: 1 scan = 1 step span
+        #   turn1: 1 response + 1 tool_call + 1 tool_result + 1 scan = 4 step spans
+        #   turn2: 1 compaction + 1 response = 2 step spans
+        # Total: 1 + 3 + 1 + 4 + 2 = 11
+        assert len(spans) == 11
+
+    def test_trace_id_consistent(self):
+        doc = _make_full_trace()
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        expected = "aaaa1111bbbb2222cccc3333dddd4444"
+        for span in spans:
+            assert span["traceId"] == expected
+
+    def test_span_hierarchy(self):
+        doc = _make_full_trace()
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+
+        root = spans[0]
+        assert root["name"] == "gen_ai.agent"
+        root_id = root["spanId"]
+        assert "parentSpanId" not in root
+
+        turn_spans = [s for s in spans if s["name"] == "gen_ai.turn"]
+        for ts in turn_spans:
+            assert ts["parentSpanId"] == root_id
+
+        step_spans = [
+            s for s in spans if s["name"] not in ("gen_ai.agent", "gen_ai.turn")
+        ]
+        for ss in step_spans:
+            assert ss["parentSpanId"] in [ts["spanId"] for ts in turn_spans]
+
+    def test_resource_attributes(self):
+        result = trace_to_otlp_json(MINIMAL_TRACE_DOC, service_name="my-service")
+        res_attrs = result["resourceSpans"][0]["resource"]["attributes"]
+        attr_map = {a["key"]: a["value"] for a in res_attrs}
+        assert attr_map["service.name"]["stringValue"] == "my-service"
+
+    def test_scope_name(self):
+        result = trace_to_otlp_json(MINIMAL_TRACE_DOC)
+        scope = result["resourceSpans"][0]["scopeSpans"][0]["scope"]
+        assert scope["name"] == "ai-guardian-sdk"
+
+    def test_missing_trace_id_generates_one(self):
+        doc = {k: v for k, v in MINIMAL_TRACE_DOC.items() if k != "trace_id"}
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans[0]["traceId"]) == 32
+
+    def test_output_is_json_serializable(self):
+        doc = _make_full_trace()
+        result = trace_to_otlp_json(doc)
+        serialized = json.dumps(result)
+        assert isinstance(serialized, str)
+        roundtrip = json.loads(serialized)
+        assert roundtrip == result
+
+
+# ---------------------------------------------------------------------------
+# CLI handler tests
+# ---------------------------------------------------------------------------
+
+
+class TestHandleTraceCommand:
+    def test_export_json_to_file(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as src:
+            json.dump(MINIMAL_TRACE_DOC, src)
+            src_path = src.name
+
+        with tempfile.NamedTemporaryFile(suffix=".otlp.json", delete=False) as dst:
+            dst_path = dst.name
+
+        try:
+            args = MagicMock()
+            args.file = src_path
+            args.format = "otlp-json"
+            args.output = dst_path
+            args.endpoint = None
+            args.service_name = "ai-guardian-sdk"
+            args.trace_command = "export"
+
+            result = handle_trace_command(args, MagicMock())
+            assert result == 0
+
+            with open(dst_path, "r") as fh:
+                otlp = json.load(fh)
+            assert "resourceSpans" in otlp
+        finally:
+            os.unlink(src_path)
+            os.unlink(dst_path)
+
+    def test_export_json_to_stdout(self, capsys):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as src:
+            json.dump(MINIMAL_TRACE_DOC, src)
+            src_path = src.name
+
+        try:
+            args = MagicMock()
+            args.file = src_path
+            args.format = "otlp-json"
+            args.output = None
+            args.endpoint = None
+            args.service_name = "ai-guardian-sdk"
+            args.trace_command = "export"
+
+            result = handle_trace_command(args, MagicMock())
+            assert result == 0
+
+            captured = capsys.readouterr()
+            otlp = json.loads(captured.out)
+            assert "resourceSpans" in otlp
+        finally:
+            os.unlink(src_path)
+
+    def test_export_file_not_found(self):
+        args = MagicMock()
+        args.file = "/nonexistent/trace.json"
+        args.format = "otlp-json"
+        args.output = None
+        args.endpoint = None
+        args.service_name = "ai-guardian-sdk"
+        args.trace_command = "export"
+
+        result = handle_trace_command(args, MagicMock())
+        assert result == 1
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_export_to_endpoint(self, mock_requests):
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_requests.post.return_value = mock_resp
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as src:
+            json.dump(MINIMAL_TRACE_DOC, src)
+            src_path = src.name
+
+        try:
+            args = MagicMock()
+            args.file = src_path
+            args.format = "otlp-json"
+            args.output = None
+            args.endpoint = "http://localhost:4318"
+            args.service_name = "ai-guardian-sdk"
+            args.trace_command = "export"
+
+            result = handle_trace_command(args, MagicMock())
+            assert result == 0
+            mock_requests.post.assert_called_once()
+            call_kwargs = mock_requests.post.call_args
+            assert "/v1/traces" in call_kwargs[0][0]
+        finally:
+            os.unlink(src_path)
+
+    def test_export_dir_json(self):
+        with tempfile.TemporaryDirectory() as src_dir:
+            for i in range(3):
+                path = os.path.join(src_dir, f"trace_{i}.json")
+                with open(path, "w") as fh:
+                    doc = {**MINIMAL_TRACE_DOC, "agent_name": f"agent-{i}"}
+                    json.dump(doc, fh)
+
+            with tempfile.TemporaryDirectory() as out_dir:
+                args = MagicMock()
+                args.dir = src_dir
+                args.format = "otlp-json"
+                args.output = out_dir
+                args.service_name = "ai-guardian-sdk"
+                args.trace_command = "export-dir"
+
+                result = handle_trace_command(args, MagicMock())
+                assert result == 0
+
+                out_files = os.listdir(out_dir)
+                assert len(out_files) == 3
+                for f in out_files:
+                    assert f.endswith(".otlp.json")
+
+    def test_no_subcommand_prints_help(self):
+        args = MagicMock()
+        args.trace_command = None
+        parser = MagicMock()
+
+        result = handle_trace_command(args, parser)
+        assert result == 0
+        parser.print_help.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# OtelSpanEmitter tests
+# ---------------------------------------------------------------------------
+
+
+class TestResolveHeaders:
+    def test_no_env_no_config(self):
+        assert _resolve_headers(None) == {}
+
+    def test_config_headers_only(self):
+        result = _resolve_headers({"Authorization": "Bearer tok123"})
+        assert result == {"Authorization": "Bearer tok123"}
+
+    def test_env_var_only(self, monkeypatch):
+        monkeypatch.setenv(
+            "OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer envtok,X-Custom=val"
+        )
+        result = _resolve_headers(None)
+        assert result["Authorization"] == "Bearer envtok"
+        assert result["X-Custom"] == "val"
+
+    def test_config_overrides_env(self, monkeypatch):
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_HEADERS", "Authorization=Bearer envtok")
+        result = _resolve_headers({"Authorization": "Bearer cfgtok"})
+        assert result["Authorization"] == "Bearer cfgtok"
+
+    def test_env_endpoint_override(self, monkeypatch):
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://custom:4318")
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://default:4318"},
+            "trace123",
+            "agent",
+            "model",
+        )
+        assert emitter._endpoint == "http://custom:4318"
+
+    def test_env_service_name_override(self, monkeypatch):
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "my-custom-svc")
+        emitter = OtelSpanEmitter(
+            {"enabled": True},
+            "trace123",
+            "agent",
+            "model",
+        )
+        assert emitter._service_name == "my-custom-svc"
+
+
+class TestOtelSpanEmitter:
+    def test_disabled_is_noop(self):
+        emitter = OtelSpanEmitter({"enabled": False}, "trace123", "agent", "model")
+        emitter.on_turn_complete({"turn": 1, "steps": []})
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_on_turn_complete_posts(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {
+                "enabled": True,
+                "endpoint": "http://localhost:4318",
+                "service_name": "test-svc",
+            },
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "test-agent",
+            "test-model",
+        )
+
+        turn_data = _make_full_trace()["trace"][1]
+        emitter.on_turn_complete(turn_data)
+
+        mock_requests.post.assert_called_once()
+        call_kwargs = mock_requests.post.call_args
+        assert "/v1/traces" in call_kwargs[0][0]
+        payload = call_kwargs[1]["json"]
+        assert "resourceSpans" in payload
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_on_run_complete_posts_root(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {
+                "enabled": True,
+                "endpoint": "http://collector:4318",
+            },
+            MINIMAL_TRACE_DOC["trace_id"],
+            "test-agent",
+            "test-model",
+        )
+
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 1
+        assert spans[0]["name"] == "gen_ai.agent"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_failure_does_not_raise(self, mock_requests):
+        mock_requests.post.side_effect = Exception("connection refused")
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "trace123",
+            "agent",
+            "model",
+        )
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)

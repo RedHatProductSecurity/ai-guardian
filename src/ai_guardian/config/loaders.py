@@ -862,6 +862,22 @@ def _sdk_use_global_config() -> bool:
     return sdk.get("use_global_config", True)
 
 
+def _load_otel_config() -> Dict[str, Any]:
+    """Load OpenTelemetry export config from ``sdk.otel`` section.
+
+    Returns a dict with at least ``{"enabled": False}`` when unconfigured.
+    """
+    config, error_msg = _load_config_file()
+    if error_msg or config is None:
+        return {"enabled": False}
+
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return {"enabled": False}
+
+    return sdk.get("otel", {"enabled": False})
+
+
 def _sdk_secret_redaction_enabled(config: Optional[Dict[str, Any]] = None) -> bool:
     """Check whether secret redaction is enabled for SDK context.
 

@@ -1,6 +1,8 @@
 """Trace Viewer page — conversation traces from GuardedAgent runs."""
 
 import fnmatch
+import json
+import tempfile
 import urllib.parse
 
 from nicegui import run, ui
@@ -101,9 +103,81 @@ def create_trace_detail_page(service, daemon_name: str):
         )
 
         summary_container = ui.column().classes("w-full")
+        export_container = ui.row().classes("w-full gap-2 items-center")
         turns_container = ui.column().classes("w-full gap-1")
         scroll_anchor = ui.element("div")
         expanded_turns: set = set()
+        detail_state = {"result": None}
+
+        async def _export_otlp_json():
+            result = detail_state["result"]
+            if not result:
+                ui.notify("No trace loaded", type="warning")
+                return
+            try:
+                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+
+                otlp = trace_to_otlp_json(result)
+                tmp = tempfile.NamedTemporaryFile(
+                    mode="w",
+                    suffix=".otlp.json",
+                    prefix="ai-guardian-trace-",
+                    delete=False,
+                )
+                json.dump(otlp, tmp, indent=2)
+                tmp.close()
+                ui.download(tmp.name)
+                ui.notify(f"Exported to {tmp.name}")
+            except Exception as exc:
+                ui.notify(f"Export failed: {exc}", type="negative")
+
+        async def _send_to_collector():
+            result = detail_state["result"]
+            if not result:
+                ui.notify("No trace loaded", type="warning")
+                return
+            try:
+                import requests as req
+
+                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+
+                otlp = trace_to_otlp_json(result)
+                endpoint = endpoint_input.value.strip()
+                if not endpoint:
+                    ui.notify("Enter collector endpoint", type="warning")
+                    return
+                url = endpoint.rstrip("/") + "/v1/traces"
+                resp = await run.io_bound(
+                    lambda: req.post(
+                        url,
+                        json=otlp,
+                        headers={"Content-Type": "application/json"},
+                        timeout=30,
+                    )
+                )
+                resp.raise_for_status()
+                ui.notify(f"Sent to {url} (HTTP {resp.status_code})")
+            except Exception as exc:
+                ui.notify(f"Send failed: {exc}", type="negative")
+
+        with export_container:
+            ui.button(
+                "Export OTLP JSON",
+                icon="download",
+                on_click=_export_otlp_json,
+            ).props("dense outline")
+            endpoint_input = (
+                ui.input(
+                    placeholder="http://collector:4318",
+                )
+                .classes("w-64")
+                .props("dense")
+            )
+            ui.button(
+                "Send to Collector",
+                icon="send",
+                on_click=_send_to_collector,
+            ).props("dense outline")
 
         async def load_detail():
             if ui.context.client.is_deleted:
@@ -125,6 +199,7 @@ def create_trace_detail_page(service, daemon_name: str):
                     ui.label(err).classes("text-red")
                 return
 
+            detail_state["result"] = result
             agent_name = result.get("agent_name", "")
             model = result.get("model", "")
             stop_reason = result.get("stop_reason", "")

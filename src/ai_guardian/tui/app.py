@@ -168,6 +168,7 @@ NAV_GROUPS = [
             ("Agent Profiles", "panel-sdk-agents"),
             ("SDK Settings", "panel-sdk-settings"),
             ("Trace Viewer", "panel-traces"),
+            ("OTEL Export", "panel-otel-settings"),
         ],
     ),
     (
@@ -859,6 +860,18 @@ HELP_DOCS = {
         "[bold]Note:[/bold]\n"
         "  Traces are always sanitized independently of the secret "
         "redaction toggle."
+    ),
+    "panel-otel-settings": (
+        "[bold]OTEL Export Settings[/bold]\n\n"
+        "Configure OpenTelemetry live span export during agent runs.\n\n"
+        "[bold]Features:[/bold]\n"
+        "  - Enable/disable live OTEL export\n"
+        "  - Set collector endpoint and auth headers\n"
+        "  - Test connection to collector\n\n"
+        "[bold]Environment variables:[/bold]\n"
+        "  OTEL_EXPORTER_OTLP_ENDPOINT — override endpoint\n"
+        "  OTEL_SERVICE_NAME — override service name\n"
+        "  OTEL_EXPORTER_OTLP_HEADERS — auth headers (key=val,key=val)"
     ),
     "panel-directory-rules": (
         "[bold]Directory Rules[/bold]\n\n"
@@ -1588,6 +1601,11 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.traces import TracesContent
 
                     yield TracesContent()
+
+                with Container(id="panel-otel-settings"):
+                    from ai_guardian.tui.otel_settings import OtelSettingsContent
+
+                    yield OtelSettingsContent()
 
                 with Container(id="panel-directory-rules"):
                     from ai_guardian.tui.directory_rules import DirectoryRulesContent
