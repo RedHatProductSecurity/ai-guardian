@@ -9,9 +9,11 @@ import pytest
 
 from ai_guardian.scanners.otel_exporter import (
     OtelSpanEmitter,
+    _derive_end_nano,
     _iso_to_unix_nano,
     _make_attribute,
     _make_root_span,
+    _make_span,
     _make_step_spans,
     _make_turn_span,
     _resolve_headers,
@@ -218,6 +220,46 @@ class TestIsoToUnixNano:
     def test_naive_datetime_treated_as_utc(self):
         result = _iso_to_unix_nano("2026-08-14T10:00:00")
         assert result != "0"
+
+
+class TestDeriveEndNano:
+    def test_valid_iso_used_directly(self):
+        result = _derive_end_nano(
+            "2026-08-14T10:01:00+00:00",
+            "1000000000000000000",
+            duration_ms=60000,
+        )
+        assert result != "0"
+        assert result != "1000000000000000000"
+
+    def test_missing_iso_falls_back_to_duration_ms(self):
+        start = "1000000000000000000"
+        result = _derive_end_nano("", start, duration_ms=5000)
+        expected = str(int(start) + 5000 * 1_000_000)
+        assert result == expected
+
+    def test_missing_iso_falls_back_to_output_tokens(self):
+        start = "1000000000000000000"
+        result = _derive_end_nano("", start, output_tokens=300)
+        start_int = int(start)
+        estimated_ms = (300 / 30) * 1000
+        expected = str(start_int + int(estimated_ms * 1_000_000))
+        assert result == expected
+
+    def test_missing_iso_no_fallback_uses_1ms(self):
+        start = "1000000000000000000"
+        result = _derive_end_nano("", start)
+        expected = str(int(start) + 1_000_000)
+        assert result == expected
+
+    def test_zero_start_returns_zero(self):
+        assert _derive_end_nano("", "0") == "0"
+
+    def test_duration_ms_takes_priority_over_tokens(self):
+        start = "1000000000000000000"
+        result = _derive_end_nano("", start, duration_ms=5000, output_tokens=300)
+        expected = str(int(start) + 5000 * 1_000_000)
+        assert result == expected
 
 
 class TestMakeAttribute:
@@ -527,6 +569,125 @@ class TestTraceToOtlpJson:
         assert isinstance(serialized, str)
         roundtrip = json.loads(serialized)
         assert roundtrip == result
+
+
+class TestEndTimeNanoSynthesis:
+    """Verify endTimeUnixNano is never '0' when startTimeUnixNano is valid (#1980)."""
+
+    def test_root_span_missing_ended_at_uses_duration_ms(self):
+        doc = {
+            **MINIMAL_TRACE_DOC,
+            "ended_at": None,
+            "duration_ms": 60000,
+        }
+        span = _make_root_span(doc, doc["trace_id"])
+        assert span["endTimeUnixNano"] != "0"
+        start = int(span["startTimeUnixNano"])
+        end = int(span["endTimeUnixNano"])
+        assert end == start + 60000 * 1_000_000
+
+    def test_root_span_missing_ended_at_falls_back_to_tokens(self):
+        doc = {
+            **MINIMAL_TRACE_DOC,
+            "ended_at": None,
+            "duration_ms": None,
+        }
+        span = _make_root_span(doc, doc["trace_id"])
+        assert span["endTimeUnixNano"] != "0"
+        assert int(span["endTimeUnixNano"]) > int(span["startTimeUnixNano"])
+
+    def test_turn_span_missing_ended_at_uses_duration_ms(self):
+        turn = {
+            "turn": 1,
+            "steps": [],
+            "span_id": "aaaa111122223333aaaa111122223333",
+            "started_at": "2026-08-14T10:00:00+00:00",
+            "ended_at": None,
+            "duration_ms": 5000,
+        }
+        spans = _make_turn_span(turn, "trace" * 8, "root12345678root")
+        turn_span = spans[0]
+        assert turn_span["endTimeUnixNano"] != "0"
+        start = int(turn_span["startTimeUnixNano"])
+        end = int(turn_span["endTimeUnixNano"])
+        assert end == start + 5000 * 1_000_000
+
+    def test_step_without_latency_gets_synthetic_end(self):
+        step = {
+            "type": "tool_call",
+            "name": "bash",
+            "input": {"command": "ls"},
+        }
+        spans = _make_step_spans(
+            step,
+            "trace" * 8,
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "",
+        )
+        assert len(spans) == 1
+        start = int(spans[0]["startTimeUnixNano"])
+        end = int(spans[0]["endTimeUnixNano"])
+        assert end == start + 1_000_000  # 1ms synthetic
+
+    def test_response_step_without_latency_estimates_from_tokens(self):
+        step = {
+            "type": "response",
+            "text": "Hello world",
+            "model_signal": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 300},
+        }
+        spans = _make_step_spans(
+            step,
+            "trace" * 8,
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "",
+        )
+        assert len(spans) == 1
+        start = int(spans[0]["startTimeUnixNano"])
+        end = int(spans[0]["endTimeUnixNano"])
+        estimated_ms = (300 / 30) * 1000
+        assert end == start + int(estimated_ms * 1_000_000)
+
+    def test_full_trace_no_ended_at_all_spans_have_valid_end(self):
+        """End-to-end: trace with no ended_at produces zero '0' endTimeUnixNano."""
+        doc = _make_full_trace()
+        doc["ended_at"] = None
+        for turn in doc["trace"]:
+            turn["ended_at"] = None
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        for span in spans:
+            assert (
+                span["endTimeUnixNano"] != "0"
+            ), f"Span '{span['name']}' has endTimeUnixNano=0"
+
+    def test_make_span_guard_fixes_zero_end(self):
+        """_make_span itself prevents endTimeUnixNano=0 when start is valid."""
+        span = _make_span(
+            trace_id="a" * 32,
+            span_id="b" * 16,
+            parent_span_id="",
+            name="test",
+            start_nano="1000000000000000000",
+            end_nano="0",
+            attributes=[],
+        )
+        assert span["endTimeUnixNano"] != "0"
+        assert int(span["endTimeUnixNano"]) == 1000000000000000000 + 1_000_000
+
+    def test_make_span_guard_skips_when_start_also_zero(self):
+        span = _make_span(
+            trace_id="a" * 32,
+            span_id="b" * 16,
+            parent_span_id="",
+            name="test",
+            start_nano="0",
+            end_nano="0",
+            attributes=[],
+        )
+        assert span["endTimeUnixNano"] == "0"
 
 
 # ---------------------------------------------------------------------------
