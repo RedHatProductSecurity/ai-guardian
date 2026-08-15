@@ -12,7 +12,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 101,
+    "secrets.toml": 107,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,

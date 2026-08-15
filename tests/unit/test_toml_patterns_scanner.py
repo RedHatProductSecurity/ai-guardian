@@ -363,6 +363,68 @@ class TestTomlPatternsGapFillingRules:
     def test_azure_ad_short_not_matched(self):
         assert not self._find("shortQ~val", "azure-ad-client-secret")
 
+    # --- Issue #1986: Cloudflare, Figma, GitLab, Salesforce ---
+
+    def test_cloudflare_user_api_token_detected(self):
+        token = "cfut_" + "a1B2c3D4e5F6g7H8" * 3
+        assert self._find(f"TOKEN={token}", "cloudflare-user-api-token")
+
+    def test_cloudflare_user_api_token_placeholder_rejected(self):
+        token = "cfut_" + "X" * 40
+        assert not self._find(f"TOKEN={token}", "cloudflare-user-api-token")
+
+    def test_cloudflare_user_api_token_short_not_matched(self):
+        assert not self._find("cfut_short", "cloudflare-user-api-token")
+
+    def test_cloudflare_account_api_token_detected(self):
+        token = "cfat_" + "a1B2c3D4e5F6g7H8" * 3
+        assert self._find(f"TOKEN={token}", "cloudflare-account-api-token")
+
+    def test_cloudflare_account_api_token_placeholder_rejected(self):
+        token = "cfat_" + "X" * 40
+        assert not self._find(f"TOKEN={token}", "cloudflare-account-api-token")
+
+    def test_cloudflare_user_api_key_detected(self):
+        token = "cfk_" + "a1B2c3D4e5F6g7H8" * 2
+        assert self._find(f"KEY={token}", "cloudflare-user-api-key")
+
+    def test_cloudflare_user_api_key_placeholder_rejected(self):
+        token = "cfk_" + "X" * 20
+        assert not self._find(f"KEY={token}", "cloudflare-user-api-key")
+
+    def test_figma_personal_access_token_detected(self):
+        token = "figp_" + "a1B2c3D4e5F6g7H8" * 3
+        assert self._find(f"TOKEN={token}", "figma-personal-access-token")
+
+    def test_figma_personal_access_token_placeholder_rejected(self):
+        token = "figp_" + "X" * 40
+        assert not self._find(f"TOKEN={token}", "figma-personal-access-token")
+
+    def test_figma_short_not_matched(self):
+        assert not self._find("figp_short", "figma-personal-access-token")
+
+    def test_gitlab_incoming_mail_token_detected(self):
+        token = "glimt-" + "a1B2c3D4e5F6g7H8i9J0k1L2m"
+        assert self._find(f"TOKEN={token}", "gitlab-incoming-mail-token")
+
+    def test_gitlab_incoming_mail_token_placeholder_rejected(self):
+        token = "glimt-" + "X" * 25
+        assert not self._find(f"TOKEN={token}", "gitlab-incoming-mail-token")
+
+    def test_gitlab_incoming_mail_token_short_not_matched(self):
+        assert not self._find("glimt-short", "gitlab-incoming-mail-token")
+
+    def test_salesforce_marketing_cloud_secret_detected(self):
+        token = "SFMC_" + "a1B2c3D4" * 8
+        assert self._find(f"SECRET={token}", "salesforce-marketing-cloud-secret")
+
+    def test_salesforce_marketing_cloud_placeholder_rejected(self):
+        token = "SFMC_" + "X" * 64
+        assert not self._find(f"SECRET={token}", "salesforce-marketing-cloud-secret")
+
+    def test_salesforce_marketing_cloud_short_not_matched(self):
+        assert not self._find("SFMC_short", "salesforce-marketing-cloud-secret")
+
 
 class TestTomlPatternsMultiLineColumns:
     """Tests for column calculation when match spans multiple lines (#1902)."""
