@@ -673,6 +673,7 @@ print(result["output"])  # validated structured object
 | `trace_path_fn` | callable | `None` | Callback `(agent_name: str, context: dict) -> str` that returns a path segment injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. `context` contains `model`, `stop_reason`, `usage`, `turn_count` |
 | `allowed_paths` | list[str] | `None` | Additional directories that built-in tools may access. By default, tools reject any path that resolves outside `cwd` (e.g. symlinks pointing to external directories). List absolute paths here to whitelist them |
 | `follow_symlinks` | bool | `False` | When `True`, built-in tools allow access through symlinks inside `cwd` even when the real target is outside `cwd`. The logical (unresolved) path must still be within `cwd`. Simpler than `allowed_paths` when all symlinks in the working tree are trusted |
+| `otel_metadata_fn` | callable | `None` | `(agent_name: str, context: dict) -> dict` — returns key-value pairs added as OTEL span attributes. Called once for the root span (turn=0, includes stop_reason) and per turn for turn spans. `context` contains `model`, `turn`, `usage` (cumulative), and `stop_reason` (final call only). Requires `sdk.otel.enabled: true` |
 
 ### Hooks
 
@@ -952,6 +953,49 @@ Behavior:
 - Text fields are sanitized (secrets/PII redacted) before writing
 - Errors writing the trace are logged but don't fail the agent
 - Explicit relative paths resolve against `cwd`
+
+#### OTEL Custom Metadata
+
+When `sdk.otel.enabled` is `true`, you can attach custom metadata to OTEL spans for filtering in Grafana.
+
+**Static attributes** — fixed values from config, applied as OTEL resource attributes:
+
+```json
+{
+    "sdk": {
+        "otel": {
+            "enabled": true,
+            "endpoint": "http://localhost:4318",
+            "resource_attributes": {
+                "team.name": "AT",
+                "pipeline.name": "ao-exterminator",
+                "deployment.environment": "dev"
+            }
+        }
+    }
+}
+```
+
+Grafana query: `{ resource.team.name = "AT" }`
+
+**Dynamic attributes** — runtime values via callback, applied as span attributes:
+
+```python
+agent = GuardedAgent(
+    name="remediation-planner",
+    otel_metadata_fn=lambda agent_name, ctx: {
+        "case.id": case_id,
+        "case.severity": severity,
+        "attempt": ctx["turn"],
+    },
+)
+```
+
+Grafana query: `{ span.case.id = "AAP-85065" }`
+
+The callback receives `(agent_name: str, context: dict)` where context contains `model`, `turn` (0 for root span), `usage` (cumulative), and `stop_reason` (final call only). It is called once for the root span and once per turn for turn spans.
+
+Static config attributes are base. Dynamic callback attributes merge on top — callback values override config values of the same key for a specific run.
 
 ### `agent.run(prompt)` Return Value
 

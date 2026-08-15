@@ -562,6 +562,23 @@ class TestTraceToOtlpJson:
         spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
         assert len(spans[0]["traceId"]) == 32
 
+    def test_resource_attributes_param(self):
+        result = trace_to_otlp_json(
+            MINIMAL_TRACE_DOC,
+            resource_attributes={
+                "team.name": "AT",
+                "pipeline.name": "ao-exterminator",
+                "deployment.environment": "dev",
+            },
+        )
+        res_attrs = result["resourceSpans"][0]["resource"]["attributes"]
+        attr_map = {a["key"]: a["value"] for a in res_attrs}
+        assert attr_map["team.name"]["stringValue"] == "AT"
+        assert attr_map["pipeline.name"]["stringValue"] == "ao-exterminator"
+        assert attr_map["deployment.environment"]["stringValue"] == "dev"
+        assert "service.name" in attr_map
+        assert "service.version" in attr_map
+
     def test_output_is_json_serializable(self):
         doc = _make_full_trace()
         result = trace_to_otlp_json(doc)
@@ -926,3 +943,149 @@ class TestOtelSpanEmitter:
             "model",
         )
         emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_resource_attributes_in_flush(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {
+                "enabled": True,
+                "endpoint": "http://localhost:4318",
+                "resource_attributes": {
+                    "team.name": "AT",
+                    "deployment.environment": "dev",
+                },
+            },
+            "trace123",
+            "test-agent",
+            "test-model",
+        )
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+        payload = mock_requests.post.call_args[1]["json"]
+        res_attrs = payload["resourceSpans"][0]["resource"]["attributes"]
+        attr_map = {a["key"]: a["value"] for a in res_attrs}
+        assert attr_map["team.name"]["stringValue"] == "AT"
+        assert attr_map["deployment.environment"]["stringValue"] == "dev"
+        assert "service.name" in attr_map
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_metadata_fn_on_turn_complete(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+
+        def metadata_fn(agent_name, ctx):
+            return {"case.id": "AAP-85065", "attempt": ctx["turn"]}
+
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "test-agent",
+            "test-model",
+            metadata_fn=metadata_fn,
+        )
+
+        turn_data = _make_full_trace()["trace"][1]
+        emitter.on_turn_complete(
+            turn_data, usage_totals={"input_tokens": 100, "output_tokens": 50}
+        )
+
+        payload = mock_requests.post.call_args[1]["json"]
+        turn_span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        attr_map = {a["key"]: a["value"] for a in turn_span["attributes"]}
+        assert attr_map["case.id"]["stringValue"] == "AAP-85065"
+        assert attr_map["attempt"]["intValue"] == "1"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_metadata_fn_on_run_complete(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+
+        def metadata_fn(agent_name, ctx):
+            return {"case.id": "AAP-99999", "final": True}
+
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            MINIMAL_TRACE_DOC["trace_id"],
+            "test-agent",
+            "test-model",
+            metadata_fn=metadata_fn,
+        )
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+        payload = mock_requests.post.call_args[1]["json"]
+        root_span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        attr_map = {a["key"]: a["value"] for a in root_span["attributes"]}
+        assert attr_map["case.id"]["stringValue"] == "AAP-99999"
+        assert attr_map["final"]["boolValue"] is True
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_metadata_fn_receives_correct_context(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        captured_contexts = []
+
+        def metadata_fn(agent_name, ctx):
+            captured_contexts.append((agent_name, dict(ctx)))
+            return {}
+
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "trace123",
+            "my-agent",
+            "claude-sonnet-5",
+            metadata_fn=metadata_fn,
+        )
+
+        turn_data = _make_full_trace()["trace"][1]
+        emitter.on_turn_complete(
+            turn_data, usage_totals={"input_tokens": 500, "output_tokens": 200}
+        )
+
+        assert len(captured_contexts) == 1
+        name, ctx = captured_contexts[0]
+        assert name == "my-agent"
+        assert ctx["model"] == "claude-sonnet-5"
+        assert ctx["turn"] == 1
+        assert ctx["usage"] == {"input_tokens": 500, "output_tokens": 200}
+        assert "stop_reason" not in ctx
+
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+        assert len(captured_contexts) == 2
+        name, ctx = captured_contexts[1]
+        assert name == "my-agent"
+        assert ctx["turn"] == 0
+        assert ctx["stop_reason"] == "end_turn"
+        assert ctx["usage"]["input_tokens"] == 1000
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_metadata_fn_error_does_not_raise(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+
+        def bad_fn(agent_name, ctx):
+            raise ValueError("boom")
+
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "trace123",
+            "agent",
+            "model",
+            metadata_fn=bad_fn,
+        )
+        emitter.on_turn_complete(_make_full_trace()["trace"][1])
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_metadata_fn_none_is_noop(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            MINIMAL_TRACE_DOC["trace_id"],
+            "test-agent",
+            "test-model",
+            metadata_fn=None,
+        )
+        emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+        payload = mock_requests.post.call_args[1]["json"]
+        root_span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        attr_keys = {a["key"] for a in root_span["attributes"]}
+        assert "case.id" not in attr_keys
