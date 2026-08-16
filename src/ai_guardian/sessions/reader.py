@@ -17,6 +17,16 @@ def read_session_summary(session: Dict) -> Dict:
     ide = session.get("ide", "")
     if ide == "claude":
         return _read_claude_session(session)
+    if ide in ("cursor", "copilot"):
+        result = dict(session)
+        steps = read_session_detail(session)
+        user_count = sum(1 for s in steps if s.get("type") == "user")
+        asst_count = sum(1 for s in steps if s.get("type") == "assistant")
+        result["user_messages"] = user_count
+        result["assistant_messages"] = asst_count
+        result["first_timestamp"] = ""
+        result["last_timestamp"] = ""
+        return result
     return session
 
 
@@ -158,6 +168,10 @@ def read_session_detail(session: Dict) -> List[Dict]:
     ide = session.get("ide", "")
     if ide == "claude":
         return _read_claude_detail(session)
+    if ide == "cursor":
+        return _read_cursor_detail(session)
+    if ide == "copilot":
+        return _read_copilot_detail(session)
     return []
 
 
@@ -270,6 +284,148 @@ def _read_claude_detail(session: Dict) -> List[Dict]:
                             "timestamp": d.get("timestamp", ""),
                         }
                     )
+
+    except OSError:
+        pass
+
+    return steps
+
+
+def _read_cursor_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Cursor state.vscdb bubbles."""
+    file_path = session.get("file_path", "")
+    session_id = session.get("session_id", "")
+    if not file_path or not session_id:
+        return []
+
+    steps = []
+    try:
+        import sqlite3
+
+        conn = sqlite3.connect(f"file:{file_path}?mode=ro", uri=True)
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT value FROM cursorDiskKV WHERE key LIKE ?",
+            (f"bubbleId:{session_id}:%",),
+        )
+        bubbles = []
+        for (val,) in cur.fetchall():
+            try:
+                d = (
+                    json.loads(val)
+                    if isinstance(val, str)
+                    else json.loads(val.decode("utf-8"))
+                )
+                bubbles.append(d)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        conn.close()
+
+        bubbles.sort(key=lambda b: b.get("createdAt", ""))
+
+        for d in bubbles:
+            btype = d.get("type", 0)
+            text = d.get("text", "") or ""
+            ts = d.get("createdAt", "")
+
+            if btype == 1:
+                if text:
+                    steps.append({"type": "user", "content": text, "timestamp": ts})
+            elif btype == 2:
+                thinking = d.get("thinking", {})
+                if isinstance(thinking, dict) and thinking.get("content"):
+                    steps.append({"type": "thinking", "content": thinking["content"]})
+                if text:
+                    steps.append(
+                        {"type": "assistant", "content": text, "timestamp": ts}
+                    )
+
+    except Exception as exc:
+        logger.debug("Failed to read Cursor session detail: %s", exc)
+
+    return steps
+
+
+def _read_copilot_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Copilot Chat delta journal JSONL."""
+    file_path = session.get("file_path", "")
+    if not file_path:
+        return []
+
+    steps = []
+    requests_state = []
+
+    try:
+        with open(file_path, "r", encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                kind = d.get("kind", -1)
+                if kind == 0:
+                    v = d.get("v", {})
+                    for req in v.get("requests", []):
+                        msg = req.get("message", {})
+                        text = msg.get("text", "")
+                        if text:
+                            steps.append({"type": "user", "content": text})
+                        result = req.get("result", {})
+                        if isinstance(result, dict):
+                            metadata = result.get("metadata", {})
+                            if isinstance(metadata, dict):
+                                for cb in metadata.get("codeBlocks", []):
+                                    code = cb.get("code", "")
+                                    if code:
+                                        steps.append(
+                                            {
+                                                "type": "assistant",
+                                                "content": code,
+                                            }
+                                        )
+                        requests_state.append(req)
+
+                elif kind == 1:
+                    key_path = d.get("k", [])
+                    val = d.get("v")
+                    if (
+                        len(key_path) >= 3
+                        and key_path[0] == "requests"
+                        and key_path[2] == "result"
+                        and isinstance(val, dict)
+                    ):
+                        metadata = val.get("metadata", {})
+                        if isinstance(metadata, dict):
+                            for cb in metadata.get("codeBlocks", []):
+                                code = cb.get("code", "")
+                                if code:
+                                    steps.append(
+                                        {
+                                            "type": "assistant",
+                                            "content": code,
+                                        }
+                                    )
+                            message = val.get("message", "")
+                            if message:
+                                steps.append(
+                                    {
+                                        "type": "assistant",
+                                        "content": message,
+                                    }
+                                )
+
+                elif kind == 2:
+                    key_path = d.get("k", [])
+                    val = d.get("v")
+                    if key_path == ["requests"] and isinstance(val, dict):
+                        msg = val.get("message", {})
+                        text = msg.get("text", "") if isinstance(msg, dict) else ""
+                        if text:
+                            steps.append({"type": "user", "content": text})
 
     except OSError:
         pass
