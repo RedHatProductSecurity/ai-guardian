@@ -43,14 +43,14 @@ class TestTUIApp:
 class TestNavGroups:
     """Tests for navigation structure."""
 
-    def test_nav_groups_has_nine_categories(self):
-        """Test that NAV_GROUPS defines exactly 9 category groups."""
-        assert len(NAV_GROUPS) == 9
+    def test_nav_groups_has_ten_categories(self):
+        """Test that NAV_GROUPS defines exactly 10 category groups."""
+        assert len(NAV_GROUPS) == 10
 
-    def test_nav_groups_has_fifty_one_panels(self):
-        """Test that NAV_GROUPS defines exactly 51 leaf panels."""
+    def test_nav_groups_has_fifty_two_panels(self):
+        """Test that NAV_GROUPS defines exactly 52 leaf panels."""
         total_leaves = sum(len(items) for _, items in NAV_GROUPS)
-        assert total_leaves == 51
+        assert total_leaves == 52
 
     def test_panel_ids_are_unique(self):
         """Test that all panel IDs are unique."""
@@ -104,6 +104,7 @@ class TestNavGroups:
         assert "Prompt Injection" in category_names
         assert "Secrets" in category_names
         assert "Monitoring" in category_names
+        assert "AI Sessions" in category_names
         assert "SDK" in category_names
         assert "Configuration" in category_names
         assert "Tools" in category_names
@@ -122,9 +123,11 @@ class TestNavGroups:
         assert "panel-secrets" in nav_dict["Secrets"]
         assert "panel-violations" in nav_dict["Monitoring"]
         assert "panel-violation-logging" in nav_dict["Monitoring"]
+        assert "panel-ide-sessions" in nav_dict["AI Sessions"]
+        assert "panel-traces" in nav_dict["AI Sessions"]
+        assert "panel-otel-settings" in nav_dict["AI Sessions"]
         assert "panel-sdk-agents" in nav_dict["SDK"]
         assert "panel-sdk-settings" in nav_dict["SDK"]
-        assert "panel-traces" in nav_dict["SDK"]
         assert "panel-config-file" in nav_dict["Configuration"]
         assert "panel-config-editor" in nav_dict["Configuration"]
         assert "panel-config-effective" in nav_dict["Configuration"]
