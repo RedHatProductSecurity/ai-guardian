@@ -47,8 +47,7 @@ class IDESessionsContent(Container):
         with Horizontal():
             yield Select(
                 _get_ide_options(),
-                value=Select.BLANK,
-                prompt="Select IDE",
+                value="claude",
                 id="ide-sessions-ide-select",
             )
             yield Input(
@@ -103,14 +102,17 @@ class IDESessionsContent(Container):
         threading.Thread(target=_worker, daemon=True).start()
 
     def _set_ide_and_load(self, ide: str) -> None:
-        select = self.query_one("#ide-sessions-ide-select", Select)
-        select.value = ide
-        self._load_sessions()
+        try:
+            select = self.query_one("#ide-sessions-ide-select", Select)
+            select.value = ide
+            self._load_sessions()
+        except Exception:
+            pass
 
     def _load_sessions(self) -> None:
         select = self.query_one("#ide-sessions-ide-select", Select)
         ide = select.value
-        if ide is Select.BLANK or not ide:
+        if not ide:
             return
 
         tree = self.query_one("#ide-sessions-tree", Tree)
@@ -191,7 +193,7 @@ class IDESessionsContent(Container):
 def _get_ide_options():
     from ai_guardian.sessions.discovery import get_supported_ides
 
-    return [(ide, ide.title()) for ide in get_supported_ides()]
+    return [(ide.title(), ide) for ide in get_supported_ides()]
 
 
 def _format_session_label(session):
