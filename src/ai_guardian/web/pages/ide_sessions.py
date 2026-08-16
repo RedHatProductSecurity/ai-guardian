@@ -33,9 +33,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                 label="IDE",
             ).classes("w-48")
 
-            project_input = ui.input(
-                label="Project Path",
-                placeholder="Filter by project path...",
+            project_select = ui.select(
+                options={"": "All Projects"},
+                value="",
+                label="Project",
             ).classes("w-64")
 
             search_input = ui.input(
@@ -64,9 +65,15 @@ def create_ide_sessions_page(service, daemon_name: str):
 
             from ai_guardian.sessions.discovery import discover_sessions
 
-            project_filter = (project_input.value or "").strip() or None
-            sessions = await run.io_bound(discover_sessions, ide, project_filter)
-            state["sessions"] = sessions
+            all_sessions = await run.io_bound(discover_sessions, ide)
+            state["sessions"] = all_sessions
+
+            _populate_project_dropdown(all_sessions, project_select)
+
+            sessions = all_sessions
+            proj_filter = project_select.value or ""
+            if proj_filter:
+                sessions = [s for s in sessions if s.get("project_path") == proj_filter]
 
             search = (search_input.value or "").strip().lower()
             if search:
@@ -86,25 +93,43 @@ def create_ide_sessions_page(service, daemon_name: str):
 
         async def _on_ide_change(e):
             if e.value:
+                try:
+                    from nicegui import app as _app
+
+                    _app.storage.user["ide_sessions_ide"] = e.value
+                except Exception:
+                    pass
                 await load_sessions()
 
         ide_select.on_value_change(_on_ide_change)
+        project_select.on_value_change(lambda _: load_sessions())
         search_input.on_value_change(lambda _: load_sessions())
 
         async def _detect_and_load():
-            from ai_guardian.sessions.discovery import get_default_ide
-
+            saved_ide = None
             try:
-                target = service.get_target_by_name(daemon_name)
-                if target:
-                    config = await run.io_bound(service.get_daemon_config, target)
-                else:
-                    config = {}
-            except Exception:
-                config = {}
+                from nicegui import app as _app
 
-            ide = await run.io_bound(get_default_ide, config or {})
-            ide_select.value = ide
+                saved_ide = _app.storage.user.get("ide_sessions_ide")
+            except Exception:
+                pass
+
+            if saved_ide and saved_ide in _get_ide_options():
+                ide_select.value = saved_ide
+            else:
+                from ai_guardian.sessions.discovery import get_default_ide
+
+                try:
+                    target = service.get_target_by_name(daemon_name)
+                    if target:
+                        config = await run.io_bound(service.get_daemon_config, target)
+                    else:
+                        config = {}
+                except Exception:
+                    config = {}
+
+                ide = await run.io_bound(get_default_ide, config or {})
+                ide_select.value = ide
             await load_sessions()
 
         ui.timer(0.1, _detect_and_load, once=True)
@@ -120,6 +145,29 @@ def _get_ide_options():
         return options
     except Exception:
         return {"claude": "Claude"}
+
+
+def _populate_project_dropdown(sessions, project_select):
+    """Populate project dropdown from discovered sessions."""
+    paths = sorted(
+        {s.get("project_path", "") for s in sessions if s.get("project_path")}
+    )
+    options = {"": "All Projects"}
+    for p in paths:
+        options[p] = _shorten_path(p)
+    current = project_select.value
+    project_select.options = options
+    if current not in options:
+        project_select.value = ""
+    project_select.update()
+
+
+def _shorten_path(path):
+    """Shorten a path for dropdown display."""
+    parts = path.rstrip("/").split("/")
+    if len(parts) <= 3:
+        return path
+    return f".../{'/'.join(parts[-2:])}"
 
 
 def _render_stats(sessions, container, ide):

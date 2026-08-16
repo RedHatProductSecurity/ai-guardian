@@ -294,7 +294,7 @@ def _discover_cursor_sessions(
     project_path: Optional[str] = None,
     limit: int = 100,
 ) -> List[Dict]:
-    """Discover Cursor IDE sessions from state.vscdb."""
+    """Discover Cursor IDE sessions from state.vscdb composerHeaders table."""
     session_dir = _resolve_session_dir("cursor")
     if not session_dir:
         return []
@@ -307,36 +307,65 @@ def _discover_cursor_sessions(
     try:
         import sqlite3
 
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT key, value FROM cursorDiskKV "
-            "WHERE key LIKE 'composerData:%' "
-            "ORDER BY key DESC LIMIT ?",
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        cur = conn.cursor()
+
+        cur.execute(
+            "SELECT composerId, workspaceId, createdAt, lastUpdatedAt, value "
+            "FROM composerHeaders "
+            "WHERE composerId != 'empty-state-draft' "
+            "ORDER BY lastUpdatedAt DESC LIMIT ?",
             (limit,),
         )
-        for key, value in cursor.fetchall():
+        for (
+            composer_id,
+            workspace_id,
+            created_at,
+            updated_at,
+            value_str,
+        ) in cur.fetchall():
             try:
-                data = json.loads(value) if isinstance(value, str) else value
-                if isinstance(data, bytes):
-                    data = json.loads(data.decode("utf-8"))
-                session_id = key.split(":", 1)[-1] if ":" in key else key
-                sessions.append(
-                    {
-                        "ide": "cursor",
-                        "session_id": session_id,
-                        "project_path": data.get("workspacePath", ""),
-                        "file_path": str(db_path),
-                        "size_bytes": 0,
-                        "modified": 0,
-                        "title": data.get("name", ""),
-                        "model": data.get("model", ""),
-                        "message_count": len(data.get("messages", [])),
-                        "token_usage": {},
-                    }
-                )
+                header = json.loads(value_str) if isinstance(value_str, str) else {}
             except (json.JSONDecodeError, ValueError):
+                header = {}
+
+            name = header.get("name", "")
+            workspace_info = header.get("workspaceIdentifier", {})
+            ws_uri = workspace_info.get("uri", {})
+            ws_path = ws_uri.get("fsPath", "") if isinstance(ws_uri, dict) else ""
+
+            if project_path and ws_path and project_path not in ws_path:
                 continue
+
+            bubble_count = 0
+            try:
+                cur.execute(
+                    "SELECT COUNT(*) FROM cursorDiskKV " "WHERE key LIKE ?",
+                    (f"bubbleId:{composer_id}:%",),
+                )
+                row = cur.fetchone()
+                if row:
+                    bubble_count = row[0]
+            except Exception:
+                pass
+
+            modified_ts = (updated_at or 0) / 1000.0
+
+            sessions.append(
+                {
+                    "ide": "cursor",
+                    "session_id": composer_id,
+                    "project_path": ws_path,
+                    "file_path": str(db_path),
+                    "size_bytes": 0,
+                    "modified": modified_ts,
+                    "title": name or header.get("subtitle", ""),
+                    "model": "",
+                    "message_count": bubble_count,
+                    "token_usage": {},
+                }
+            )
+
         conn.close()
     except Exception as exc:
         logger.debug("Failed to read Cursor sessions: %s", exc)
@@ -348,7 +377,7 @@ def _discover_copilot_sessions(
     project_path: Optional[str] = None,
     limit: int = 100,
 ) -> List[Dict]:
-    """Discover Copilot Chat sessions from VS Code storage."""
+    """Discover Copilot Chat sessions from VS Code delta journal files."""
     base = _resolve_session_dir("copilot")
     if not base or not base.is_dir():
         return []
@@ -367,6 +396,7 @@ def _discover_copilot_sessions(
             try:
                 stat = fp.stat()
                 session_id = fp.stem
+                meta = _read_copilot_session_meta(fp)
                 sessions.append(
                     {
                         "ide": "copilot",
@@ -375,10 +405,10 @@ def _discover_copilot_sessions(
                         "file_path": str(fp),
                         "size_bytes": stat.st_size,
                         "modified": stat.st_mtime,
-                        "title": "",
-                        "model": "",
-                        "message_count": 0,
-                        "token_usage": {},
+                        "title": meta.get("title", ""),
+                        "model": meta.get("model", ""),
+                        "message_count": meta.get("message_count", 0),
+                        "token_usage": meta.get("token_usage", {}),
                     }
                 )
             except OSError:
@@ -386,6 +416,65 @@ def _discover_copilot_sessions(
 
     sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
     return sessions[:limit]
+
+
+def _read_copilot_session_meta(path: Path) -> Dict:
+    """Read metadata from a Copilot Chat delta journal JSONL."""
+    meta: Dict = {"title": "", "model": "", "message_count": 0, "token_usage": {}}
+    total_prompt = 0
+    total_completion = 0
+    request_count = 0
+
+    try:
+        with open(path, "r", encoding="utf-8-sig") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                kind = d.get("kind", -1)
+                if kind == 0:
+                    v = d.get("v", {})
+                    reqs = v.get("requests", [])
+                    request_count += len(reqs)
+                    for req in reqs:
+                        msg = req.get("message", {})
+                        if not meta["title"] and msg.get("text"):
+                            meta["title"] = msg["text"][:80]
+                        if not meta["model"] and req.get("modelId"):
+                            meta["model"] = req["modelId"]
+                elif kind == 1:
+                    key_path = d.get("k", [])
+                    val = d.get("v")
+                    if (
+                        len(key_path) == 3
+                        and key_path[0] == "requests"
+                        and key_path[2] == "promptTokens"
+                    ):
+                        total_prompt += val or 0
+                    elif (
+                        len(key_path) == 3
+                        and key_path[0] == "requests"
+                        and key_path[2] == "completionTokens"
+                    ):
+                        total_completion += val or 0
+                elif kind == 2:
+                    key_path = d.get("k", [])
+                    if key_path == ["requests"]:
+                        request_count += 1
+    except OSError:
+        pass
+
+    meta["message_count"] = request_count
+    meta["token_usage"] = {
+        "input_tokens": total_prompt,
+        "output_tokens": total_completion,
+    }
+    return meta
 
 
 def _discover_generic_jsonl_sessions(
