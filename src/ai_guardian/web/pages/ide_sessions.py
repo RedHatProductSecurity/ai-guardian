@@ -1,12 +1,19 @@
 """IDE Sessions page — multi-IDE conversation browser."""
 
-import json
 import urllib.parse
 from datetime import datetime
 
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import (
+    STEP_ICON_MAP,
+    create_sort_toggle,
+    escape_html,
+    render_content_block,
+    render_text_block,
+    render_violation_summary,
+)
 
 
 def create_ide_sessions_page(service, daemon_name: str):
@@ -19,10 +26,18 @@ def create_ide_sessions_page(service, daemon_name: str):
             "text-xs text-grey-6"
         )
 
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("ide_sessions_sort_newest", True)
+        except Exception:
+            saved_sort = True
+
         state = {
             "sessions": [],
             "ide": "",
             "load_fn": None,
+            "newest_first": saved_sort,
         }
 
         with ui.row().classes("items-end gap-4 w-full"):
@@ -52,6 +67,13 @@ def create_ide_sessions_page(service, daemon_name: str):
             ui.button("Refresh", icon="refresh", on_click=_on_refresh).props(
                 "dense outline"
             )
+
+            async def _reload_sessions():
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            create_sort_toggle(state, "ide_sessions_sort_newest", _reload_sessions)
 
         stats_row = ui.row().classes("w-full gap-4")
         cards_container = ui.column().classes("w-full gap-2")
@@ -86,6 +108,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                     or search in (s.get("project_path", "") or "").lower()
                 ]
 
+            sessions.sort(
+                key=lambda s: s.get("modified", 0),
+                reverse=state["newest_first"],
+            )
             _render_stats(sessions, stats_row, ide)
             _render_session_list(sessions, cards_container, daemon_name, ide)
 
@@ -339,6 +365,31 @@ def _format_size(size_bytes):
     return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+async def _load_session_violations(service, daemon_name, session_id):
+    """Load violations correlated with a session by session_id.
+
+    NOTE: Fetches the 1000 most recent violations and filters client-side.
+    Older sessions on high-activity daemons may show fewer violations than
+    actually occurred if total violation count exceeds this limit.
+    """
+    if not session_id:
+        return []
+    try:
+        await run.io_bound(service.refresh_targets)
+        target = service.get_target_by_name(daemon_name)
+        if not target:
+            return []
+        result = await run.io_bound(service.get_daemon_violations, target, 1000)
+        all_violations = (result or {}).get("violations", [])
+        return [
+            v
+            for v in all_violations
+            if v.get("context", {}).get("session_id") == session_id
+        ]
+    except Exception:
+        return []
+
+
 def create_ide_session_detail_page(service, daemon_name: str):
     """Detail page for a single IDE session — step-by-step conversation view."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/ide-sessions")
@@ -369,7 +420,30 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 ),
             ).props("dense flat size=xs color=grey-7").tooltip("Copy session ID")
 
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("ide_session_detail_sort_newest", False)
+        except Exception:
+            saved_sort = False
+
+        detail_state = {"newest_first": saved_sort, "load_fn": None}
+
         summary_container = ui.column().classes("w-full")
+        violations_container = ui.column().classes("w-full")
+
+        with ui.row().classes("items-center gap-2 w-full"):
+            ui.label("Conversation").classes("text-lg font-bold")
+
+            async def _reload_detail():
+                fn = detail_state["load_fn"]
+                if fn:
+                    await fn()
+
+            create_sort_toggle(
+                detail_state, "ide_session_detail_sort_newest", _reload_detail
+            )
+
         steps_container = ui.column().classes("w-full gap-1")
 
         async def load_detail():
@@ -399,15 +473,26 @@ def create_ide_session_detail_page(service, daemon_name: str):
             with summary_container:
                 _render_session_summary(summary)
 
+            violations_container.clear()
+            session_violations = await _load_session_violations(
+                service, daemon_name, session_id
+            )
+            if session_violations:
+                with violations_container:
+                    render_violation_summary(session_violations, daemon_name)
+
+            if detail_state["newest_first"]:
+                detail_steps = list(reversed(detail_steps))
+
             steps_container.clear()
             with steps_container:
-                ui.label("Conversation").classes("text-lg font-bold")
                 if not detail_steps:
                     ui.label("No conversation data found.").classes("text-grey-6")
                 else:
                     for i, step in enumerate(detail_steps):
                         _render_step(step, i)
 
+        detail_state["load_fn"] = load_detail
         ui.timer(0.1, load_detail, once=True)
 
 
@@ -449,16 +534,7 @@ def _render_session_summary(summary):
 def _render_step(step, index):
     """Render a single conversation step."""
     step_type = step.get("type", "")
-    icon_map = {
-        "user": ("person", "text-blue"),
-        "assistant": ("smart_toy", "text-green"),
-        "tool_use": ("build", "text-orange"),
-        "tool_result": ("output", "text-orange"),
-        "thinking": ("psychology", "text-purple"),
-        "system": ("settings", "text-grey-6"),
-        "title": ("title", "text-grey-6"),
-    }
-    icon_name, icon_color = icon_map.get(step_type, ("help", "text-grey-6"))
+    icon_name, icon_color = STEP_ICON_MAP.get(step_type, ("help", "text-grey-6"))
 
     with ui.card().classes("w-full py-1 px-2"):
         with ui.row().classes("items-center gap-2 w-full"):
@@ -504,32 +580,8 @@ def _render_step(step, index):
                     "text-xs font-bold"
                 )
 
-        content = step.get("content", "")
-        tool_input = step.get("tool_input", None)
-
-        if step_type == "tool_use" and tool_input:
-            content = json.dumps(tool_input, indent=2, default=str)
-
-        if content:
-            preview = content[:200] + ("..." if len(content) > 200 else "")
-            exp = ui.expansion(preview, value=False).classes("w-full").props("dense")
-            with exp:
-                _render_text_block(content)
-
-
-def _render_text_block(text, color="text-grey-6"):
-    """Render full text in a scrollable pre-formatted block."""
-    ui.html(
-        f'<pre style="white-space: pre-wrap; word-break: break-word; '
-        f"margin: 2px 0; font-size: 0.75rem; max-height: 400px; "
-        f'overflow-y: auto;">{_escape_html(text)}</pre>'
-    ).classes(color)
-
-
-def _escape_html(text):
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
+        render_content_block(
+            step.get("content", ""),
+            tool_input=step.get("tool_input"),
+            step_type=step_type,
+        )

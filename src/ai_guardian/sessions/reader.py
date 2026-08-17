@@ -51,42 +51,20 @@ def _read_claude_session(session: Dict) -> Dict:
     if not file_path:
         return session
 
+    from ai_guardian.sessions.discovery import _read_claude_session_meta
+
+    meta = _read_claude_session_meta(Path(file_path))
     result = dict(session)
-    first_ts = ""
-    last_ts = ""
-    user_count = 0
-    assistant_count = 0
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except (json.JSONDecodeError, ValueError):
-                    continue
-
-                msg_type = d.get("type", "")
-                ts = d.get("timestamp", "")
-
-                if ts:
-                    if not first_ts:
-                        first_ts = ts
-                    last_ts = ts
-
-                if msg_type == "user":
-                    user_count += 1
-                elif msg_type == "assistant":
-                    assistant_count += 1
-    except OSError:
-        pass
-
-    result["first_timestamp"] = first_ts
-    result["last_timestamp"] = last_ts
-    result["user_messages"] = user_count
-    result["assistant_messages"] = assistant_count
+    result["first_timestamp"] = meta["first_timestamp"]
+    result["last_timestamp"] = meta["last_timestamp"]
+    result["user_messages"] = meta["user_messages"]
+    result["assistant_messages"] = meta["assistant_messages"]
+    if not result.get("title"):
+        result["title"] = meta["title"]
+    if not result.get("model"):
+        result["model"] = meta["model"]
+    if not result.get("token_usage"):
+        result["token_usage"] = meta["token_usage"]
     return result
 
 
@@ -113,16 +91,34 @@ def _read_claude_messages(session: Dict, limit: int = 200) -> List[Dict]:
                 if msg_type == "user":
                     content = d.get("message", {}).get("content", "")
                     if isinstance(content, list):
-                        content = " ".join(
-                            c.get("text", "") for c in content if isinstance(c, dict)
+                        text_parts = []
+                        for c in content:
+                            if not isinstance(c, dict):
+                                continue
+                            ctype = c.get("type", "")
+                            if ctype == "tool_result":
+                                rc_text, tool_id = _extract_tool_result_content(c)
+                                messages.append(
+                                    {
+                                        "role": "tool_result",
+                                        "content": _truncate(rc_text, 500),
+                                        "timestamp": d.get("timestamp", ""),
+                                        "tool_id": tool_id,
+                                    }
+                                )
+                            else:
+                                text = c.get("text", "")
+                                if text:
+                                    text_parts.append(text)
+                        content = " ".join(text_parts)
+                    if content:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": _truncate(str(content), 500),
+                                "timestamp": d.get("timestamp", ""),
+                            }
                         )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": _truncate(str(content), 500),
-                            "timestamp": d.get("timestamp", ""),
-                        }
-                    )
 
                 elif msg_type == "assistant":
                     msg = d.get("message", {})
@@ -216,17 +212,44 @@ def _read_claude_detail(session: Dict) -> List[Dict]:
 
                 elif msg_type == "user":
                     content = d.get("message", {}).get("content", "")
+                    ts = d.get("timestamp", "")
+
                     if isinstance(content, list):
-                        content = " ".join(
-                            c.get("text", "") for c in content if isinstance(c, dict)
+                        text_parts = []
+                        for c in content:
+                            if not isinstance(c, dict):
+                                continue
+                            ctype = c.get("type", "")
+                            if ctype == "tool_result":
+                                rc_text, tool_id = _extract_tool_result_content(c)
+                                steps.append(
+                                    {
+                                        "type": "tool_result",
+                                        "tool_name": "",
+                                        "content": rc_text,
+                                        "tool_id": tool_id,
+                                    }
+                                )
+                            else:
+                                text = c.get("text", "")
+                                if text:
+                                    text_parts.append(text)
+                        if text_parts:
+                            steps.append(
+                                {
+                                    "type": "user",
+                                    "content": " ".join(text_parts),
+                                    "timestamp": ts,
+                                }
+                            )
+                    elif content:
+                        steps.append(
+                            {
+                                "type": "user",
+                                "content": str(content),
+                                "timestamp": ts,
+                            }
                         )
-                    steps.append(
-                        {
-                            "type": "user",
-                            "content": str(content),
-                            "timestamp": d.get("timestamp", ""),
-                        }
-                    )
 
                 elif msg_type == "assistant":
                     msg = d.get("message", {})
@@ -803,6 +826,16 @@ def _read_kiro_detail(session: Dict) -> List[Dict]:
         pass
 
     return steps
+
+
+def _extract_tool_result_content(block: dict) -> tuple:
+    """Extract (text, tool_use_id) from a tool_result content block."""
+    rc = block.get("content", "")
+    if isinstance(rc, list):
+        rc = "\n".join(
+            p.get("text", "") for p in rc if isinstance(p, dict) and p.get("text")
+        )
+    return str(rc), block.get("tool_use_id", "")
 
 
 def _truncate(text: str, max_len: int = 500) -> str:

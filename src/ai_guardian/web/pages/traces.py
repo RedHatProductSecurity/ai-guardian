@@ -8,6 +8,12 @@ import urllib.parse
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import (
+    create_sort_toggle,
+    format_duration,
+    render_text_block,
+    render_violation_badge,
+)
 
 
 def create_traces_page(service, daemon_name: str):
@@ -20,7 +26,14 @@ def create_traces_page(service, daemon_name: str):
             "text-xs text-grey-6"
         )
 
-        state = {"load_fn": None}
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("traces_sort_newest", True)
+        except Exception:
+            saved_sort = True
+
+        state = {"load_fn": None, "newest_first": saved_sort}
 
         with ui.row().classes("items-end gap-4 w-full"):
             filter_input = ui.input(
@@ -42,6 +55,13 @@ def create_traces_page(service, daemon_name: str):
             ui.button("Refresh", icon="refresh", on_click=_on_refresh).props(
                 "dense outline"
             )
+
+            async def _reload_traces():
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            create_sort_toggle(state, "traces_sort_newest", _reload_traces)
 
         cards_container = ui.column().classes("w-full gap-2")
         auto_timer = {"ref": None}
@@ -67,6 +87,10 @@ def create_traces_page(service, daemon_name: str):
                 pattern = filter_input.value.strip() if filter_input.value else None
                 if pattern:
                     traces = _filter_traces(traces, pattern)
+                traces.sort(
+                    key=lambda t: t.get("started_at", ""),
+                    reverse=state["newest_first"],
+                )
                 _populate_agent_filter(traces, agent_select)
                 _render_trace_list(traces, cards_container, daemon_name)
 
@@ -110,12 +134,17 @@ def create_trace_detail_page(service, daemon_name: str):
                 ),
             ).props("dense flat size=xs color=grey-7").tooltip("Copy filename")
 
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("trace_detail_sort_newest", False)
+        except Exception:
+            saved_sort = False
+
         summary_container = ui.column().classes("w-full")
         export_container = ui.row().classes("w-full gap-2 items-center")
-        turns_container = ui.column().classes("w-full gap-1")
-        scroll_anchor = ui.element("div")
         expanded_turns: set = set()
-        detail_state = {"result": None}
+        detail_state = {"result": None, "newest_first": saved_sort, "load_fn": None}
 
         async def _export_otlp_json():
             result = detail_state["result"]
@@ -187,6 +216,21 @@ def create_trace_detail_page(service, daemon_name: str):
                 on_click=_send_to_collector,
             ).props("dense outline")
 
+        with ui.row().classes("items-center gap-2"):
+            ui.label("Turns").classes("text-lg font-bold")
+
+            async def _reload_trace_detail():
+                fn = detail_state["load_fn"]
+                if fn:
+                    await fn()
+
+            create_sort_toggle(
+                detail_state, "trace_detail_sort_newest", _reload_trace_detail
+            )
+
+        turns_container = ui.column().classes("w-full gap-1")
+        scroll_anchor = ui.element("div")
+
         async def load_detail():
             if ui.context.client.is_deleted:
                 return
@@ -226,16 +270,19 @@ def create_trace_detail_page(service, daemon_name: str):
                     ui.label(f"Started: {started}").classes("text-xs text-grey-6")
 
                 computed = result.get("computed", {})
-                _render_token_summary(computed)
+                total_turns = len(result.get("trace", []))
+                _render_token_summary(computed, total_turns)
 
             trace = result.get("trace", [])
             computed = result.get("computed", {})
             per_turn = computed.get("per_turn_tokens", [])
             violations_map = {v["turn"]: v for v in computed.get("violations", [])}
 
+            if detail_state["newest_first"]:
+                trace = list(reversed(trace))
+
             turns_container.clear()
             with turns_container:
-                ui.label("Turns").classes("text-lg font-bold")
                 for turn_obj in trace:
                     _render_turn_row(
                         turn_obj, per_turn, violations_map, expanded_turns, daemon_name
@@ -255,6 +302,7 @@ def create_trace_detail_page(service, daemon_name: str):
                 interval = _get_auto_refresh_interval(service, target)
                 auto_timer["ref"] = ui.timer(interval, load_detail)
 
+        detail_state["load_fn"] = load_detail
         auto_timer = {"ref": None}
         ui.timer(0.1, load_detail, once=True)
 
@@ -355,30 +403,40 @@ def _render_trace_card(trace, daemon_name):
             ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
+            ui.label("File:").classes("text-xs text-grey-6")
+            ui.label(filename).classes("text-xs").style(
+                "font-family: monospace; word-break: break-all"
+            )
 
 
-def _render_token_summary(computed):
+def _render_token_summary(computed, total_turns=0):
     total = computed.get("total_tokens", {})
-    cost = computed.get("cost_estimate_usd", 0)
     cache_ratio = computed.get("cache_hit_ratio", 0)
+    duration = computed.get("duration_seconds", 0)
+    duration_str = _format_duration(duration) if duration else "—"
+    total_tok = total.get("input_tokens", 0) + total.get("output_tokens", 0)
 
     with ui.card().classes("w-full bg-grey-9 mt-2"):
-        ui.label("Token Summary").classes("text-sm font-bold")
+        ui.label("Summary").classes("text-sm font-bold")
         with ui.grid(columns=6).classes("gap-1"):
+            ui.label("Turns:").classes("text-xs text-grey-6")
+            ui.label(str(total_turns)).classes("text-xs")
+            ui.label("Duration:").classes("text-xs text-grey-6")
+            ui.label(duration_str).classes("text-xs")
+            ui.label("Total:").classes("text-xs text-grey-6")
+            ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Input:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('input_tokens', 0):,}").classes("text-xs")
             ui.label("Output:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('output_tokens', 0):,}").classes("text-xs")
-            ui.label("Cost:").classes("text-xs text-grey-6")
-            ui.label(f"${cost:.4f}").classes("text-xs")
+            ui.label("Cache Hit:").classes("text-xs text-grey-6")
+            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
             ui.label("Cache Read:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('cache_read_input_tokens', 0):,}").classes("text-xs")
             ui.label("Cache Create:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('cache_creation_input_tokens', 0):,}").classes(
                 "text-xs"
             )
-            ui.label("Cache Hit:").classes("text-xs text-grey-6")
-            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
 
 
 def _render_turn_row(
@@ -579,18 +637,7 @@ def _render_step(step, daemon_name=""):
                         "text-xs font-bold text-red"
                     )
                     for v in violations:
-                        vtype = v.get("type", "unknown")
-                        msg = v.get("message", "")
-                        with ui.row().classes("items-center gap-1"):
-                            ui.icon("warning").classes("text-red text-xs")
-                            ui.label(f"{vtype}:").classes("text-xs font-bold text-red")
-                            if daemon_name:
-                                vtype_param = urllib.parse.quote(vtype, safe="")
-                                ui.link(
-                                    "View in Violations",
-                                    f"/{daemon_name}/violations?type={vtype_param}",
-                                ).classes("text-xs")
-                        _render_text_block(msg, color="text-red")
+                        render_violation_badge(v, daemon_name)
                 else:
                     ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
                         "text-xs"
@@ -611,32 +658,5 @@ def _truncate(text, max_len=120):
     return text[:max_len] + "..."
 
 
-def _render_text_block(text, color="text-grey-6"):
-    """Render full text in a scrollable pre-formatted block."""
-    ui.html(
-        f'<pre style="white-space: pre-wrap; word-break: break-word; '
-        f"margin: 2px 0; font-size: 0.75rem; max-height: 300px; "
-        f'overflow-y: auto;">{_escape_html(text)}</pre>'
-    ).classes(color)
-
-
-def _escape_html(text):
-    """Escape HTML special characters."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-def _format_duration(seconds):
-    if seconds < 60:
-        return f"{seconds:.0f}s"
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    if minutes < 60:
-        return f"{minutes}m {secs}s"
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours}h {mins}m"
+_render_text_block = render_text_block
+_format_duration = format_duration
