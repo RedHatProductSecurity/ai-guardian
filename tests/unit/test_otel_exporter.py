@@ -1306,7 +1306,9 @@ class TestHookOtelEmitter:
         span = emitter._child_spans[0]
         assert span["name"] == "ai_guardian.violation"
         attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
+        assert (
+            attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
+        )
         assert attr_map["ai_guardian.severity"]["stringValue"] == "critical"
         assert attr_map["ai_guardian.tool_name"]["stringValue"] == "Bash"
         assert emitter._violation_count == 1
@@ -1315,7 +1317,9 @@ class TestHookOtelEmitter:
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.record_block("Bash", reason="secret in command", scanner="secret_scanning")
+        emitter.record_block(
+            "Bash", reason="secret in command", scanner="secret_scanning"
+        )
         assert len(emitter._child_spans) == 1
         span = emitter._child_spans[0]
         assert span["name"] == "ai_guardian.block"

@@ -805,9 +805,7 @@ class OtelSpanEmitter:
             return
         try:
             root = _make_root_span(trace_doc, self._trace_id)
-            root["attributes"].extend(
-                _attrs(("ai_guardian.span_type", "agent_run"))
-            )
+            root["attributes"].extend(_attrs(("ai_guardian.span_type", "agent_run")))
             dynamic_attrs = self._call_metadata_fn(
                 turn=0,
                 usage=trace_doc.get("usage"),
