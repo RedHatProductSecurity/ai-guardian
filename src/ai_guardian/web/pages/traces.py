@@ -52,7 +52,11 @@ def create_traces_page(service, daemon_name: str):
 
             async def _toggle_sort():
                 state["newest_first"] = not state["newest_first"]
-                sort_btn.text = "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑"
+                sort_btn.text = (
+                    "Showing: Newest ↓"
+                    if state["newest_first"]
+                    else "Showing: Oldest ↑"
+                )
                 try:
                     from nicegui import app as _app2
 
@@ -280,7 +284,9 @@ def create_trace_detail_page(service, daemon_name: str):
                     async def _toggle_trace_detail_sort():
                         detail_state["newest_first"] = not detail_state["newest_first"]
                         trace_detail_sort_btn.text = (
-                            "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑"
+                            "Showing: Newest ↓"
+                            if detail_state["newest_first"]
+                            else "Showing: Oldest ↑"
                         )
                         try:
                             from nicegui import app as _app2
@@ -293,7 +299,11 @@ def create_trace_detail_page(service, daemon_name: str):
                         await load_detail()
 
                     trace_detail_sort_btn = ui.button(
-                        "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑",
+                        (
+                            "Showing: Newest ↓"
+                            if detail_state["newest_first"]
+                            else "Showing: Oldest ↑"
+                        ),
                         on_click=_toggle_trace_detail_sort,
                     ).props("dense outline")
 
@@ -672,12 +682,15 @@ def _truncate(text, max_len=120):
     return text[:max_len] + "..."
 
 
-def _render_text_block(text, color="text-grey-6"):
-    """Render full text in a scrollable pre-formatted block."""
+def _render_text_block(text, color="text-grey-6", max_height=300):
+    """Render full text in a pre-formatted block, optionally scrollable."""
+    height_style = (
+        f"max-height: {max_height}px; overflow-y: auto; " if max_height else ""
+    )
     ui.html(
         f'<pre style="white-space: pre-wrap; word-break: break-word; '
-        f"margin: 2px 0; font-size: 0.75rem; max-height: 300px; "
-        f'overflow-y: auto;">{_escape_html(text)}</pre>'
+        f"margin: 2px 0; font-size: 0.75rem; {height_style}"
+        f'">{_escape_html(text)}</pre>'
     ).classes(color)
 
 

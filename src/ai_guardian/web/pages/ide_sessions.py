@@ -63,7 +63,11 @@ def create_ide_sessions_page(service, daemon_name: str):
 
             async def _toggle_sort():
                 state["newest_first"] = not state["newest_first"]
-                sort_btn.text = "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑"
+                sort_btn.text = (
+                    "Showing: Newest ↓"
+                    if state["newest_first"]
+                    else "Showing: Oldest ↑"
+                )
                 try:
                     from nicegui import app as _app2
 
@@ -418,7 +422,9 @@ def create_ide_session_detail_page(service, daemon_name: str):
             async def _toggle_detail_sort():
                 detail_state["newest_first"] = not detail_state["newest_first"]
                 detail_sort_btn.text = (
-                    "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑"
+                    "Showing: Newest ↓"
+                    if detail_state["newest_first"]
+                    else "Showing: Oldest ↑"
                 )
                 try:
                     from nicegui import app as _app2
@@ -433,7 +439,11 @@ def create_ide_session_detail_page(service, daemon_name: str):
                     await fn()
 
             detail_sort_btn = ui.button(
-                "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑",
+                (
+                    "Showing: Newest ↓"
+                    if detail_state["newest_first"]
+                    else "Showing: Oldest ↑"
+                ),
                 on_click=_toggle_detail_sort,
             ).props("dense outline")
 
@@ -581,23 +591,27 @@ def _render_step(step, index):
             content = json.dumps(tool_input, indent=2, default=str)
 
         if content:
-            if len(content) <= 200:
-                _render_text_block(content)
+            line_count = content.count("\n") + 1
+            if line_count <= 10:
+                _render_text_block(content, max_height=None)
+            elif line_count <= 100:
+                _render_text_block(content, max_height=400)
             else:
-                preview = content[:200] + "..."
-                exp = (
-                    ui.expansion(preview, value=False).classes("w-full").props("dense")
-                )
+                label = f"{line_count} lines — click to expand"
+                exp = ui.expansion(label, value=False).classes("w-full").props("dense")
                 with exp:
-                    _render_text_block(content)
+                    _render_text_block(content, max_height=None)
 
 
-def _render_text_block(text, color="text-grey-6"):
-    """Render full text in a scrollable pre-formatted block."""
+def _render_text_block(text, color="text-grey-6", max_height=None):
+    """Render full text in a pre-formatted block, optionally scrollable."""
+    height_style = (
+        f"max-height: {max_height}px; overflow-y: auto; " if max_height else ""
+    )
     ui.html(
         f'<pre style="white-space: pre-wrap; word-break: break-word; '
-        f"margin: 2px 0; font-size: 0.75rem; max-height: 400px; "
-        f'overflow-y: auto;">{_escape_html(text)}</pre>'
+        f"margin: 2px 0; font-size: 0.75rem; {height_style}"
+        f'">{_escape_html(text)}</pre>'
     ).classes(color)
 
 
