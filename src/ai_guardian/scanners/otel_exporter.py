@@ -10,17 +10,18 @@ ID mapping:
     per OTEL spec.  UUID4 has sufficient entropy in all positions.
 
 Span hierarchy:
-  Root (gen_ai.agent)  — one per agent run
+  Root (gen_ai.agent)  — one per agent run (includes violation_count/types/ids)
     └─ Turn (gen_ai.turn)  — one per conversation turn
          ├─ gen_ai.chat  — LLM response
          ├─ tool  — tool_call / tool_result
-         ├─ gen_ai.security_scan  — security scan
+         ├─ gen_ai.security_scan  — security scan (target only)
          └─ gen_ai.compaction  — context compaction
 """
 
 import json
 import logging
 import os
+import platform
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -251,9 +252,6 @@ def _make_step_spans(
         )
 
     elif step_type == "scan":
-        violations = step.get("violations", [])
-        violation_types = [v.get("type", "") for v in violations] if violations else []
-        violation_ids = [v.get("id") for v in violations if v.get("id")]
         spans.append(
             _make_span(
                 trace_id=trace_id,
@@ -264,9 +262,6 @@ def _make_step_spans(
                 end_nano=end,
                 attributes=_attrs(
                     ("gen_ai.security_scan.target", step.get("scanned")),
-                    ("gen_ai.security_scan.violation_count", len(violations)),
-                    ("gen_ai.security_scan.violation_types", violation_types or None),
-                    ("gen_ai.security_scan.violation_ids", violation_ids or None),
                 ),
             )
         )
@@ -373,6 +368,17 @@ def _make_root_span(
         1 for t in turns for s in t.get("steps", []) if s.get("type") == "compaction"
     )
 
+    all_violations = [
+        v
+        for t in turns
+        for s in t.get("steps", [])
+        if s.get("type") == "scan"
+        for v in s.get("violations", [])
+    ]
+    violation_count = len(all_violations)
+    violation_types = ",".join(sorted({v.get("type", "") for v in all_violations})) or None
+    violation_ids = [v.get("id") for v in all_violations if v.get("id")] or None
+
     start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))
     end_nano = _derive_end_nano(
         trace_doc.get("ended_at", ""),
@@ -407,6 +413,10 @@ def _make_root_span(
             ("gen_ai.agent.duration_ms", trace_doc.get("duration_ms")),
             ("gen_ai.agent.turn_count", len(turns)),
             ("gen_ai.agent.compaction_count", compaction_count),
+            ("gen_ai.agent.violation_count", violation_count),
+            ("gen_ai.agent.violation_types", violation_types),
+            ("gen_ai.agent.violation_ids", violation_ids),
+            ("gen_ai.agent.hostname", platform.node() or None),
         ),
         status_code=status_code,
     )
