@@ -459,7 +459,7 @@ class TrayMenuBuilder:
                         self._tray._multi_client.send_pause(t, minutes)
                     else:
                         self._tray._pause(minutes)
-                    self.update_status("paused")
+                    self._tray.update_status("paused")
 
             return action
 
@@ -471,7 +471,7 @@ class TrayMenuBuilder:
                     self._tray._multi_client.send_resume(t)
                 else:
                     self._tray._pause(0)
-                self.update_status("running")
+                self._tray.update_status("running")
 
         def _stop_action(_, __):
             if self._tray._targets and self._tray._multi_client:

@@ -217,6 +217,50 @@ class TestTrayPauseRoutesLocalThroughMultiClient:
         pause_cb.assert_called_once_with(5)
 
 
+class TestSingleDaemonPauseResumeUpdatesStatus:
+    """Verify pause/resume closures call DaemonTray.update_status (issue #1999)."""
+
+    def _build_closures(self, tray):
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray,
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_single_daemon_menu_items()
+            tray._menu._build_single_daemon_daemon_items()
+        return tray._menu._single_daemon_closures
+
+    def test_pause_action_calls_tray_update_status(self):
+        local_target = DaemonTarget(name="local", runtime="local", status="running")
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=mock.MagicMock(),
+        )
+        tray._targets = [local_target]
+        closures = self._build_closures(tray)
+
+        with mock.patch.object(tray, "update_status") as mock_update:
+            closures["pause_action"](5)(None, None)
+            mock_update.assert_called_once_with("paused")
+
+    def test_resume_action_calls_tray_update_status(self):
+        local_target = DaemonTarget(name="local", runtime="local", status="paused")
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=mock.MagicMock(),
+        )
+        tray._targets = [local_target]
+        closures = self._build_closures(tray)
+
+        with mock.patch.object(tray, "update_status") as mock_update:
+            closures["resume_action"](None, None)
+            mock_update.assert_called_once_with("running")
+
+
 class TestFlashReload:
     @pytest.mark.parametrize("status", ["running", "paused"], ids=["running", "paused"])
     def test_flash_reload_preserves_status(self, status):
