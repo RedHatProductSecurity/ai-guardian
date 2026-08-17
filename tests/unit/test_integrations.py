@@ -2157,6 +2157,7 @@ class TestGuardedAgent:
                         blocked=True,
                         detected=True,
                         violation_type="secret",
+                        violation_id="viol_tool123",
                         message="Secret detected in tool output",
                     )
                 )
@@ -2197,6 +2198,7 @@ class TestGuardedAgent:
         tool_result_content = tool_result_msg[0]["content"]
         assert "[ai-guardian] Content blocked" in tool_result_content
         assert "secret" in tool_result_content
+        assert "Violation ID: viol_tool123" in tool_result_content
         assert "AKIA1234SECRET" not in tool_result_content
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -3249,6 +3251,7 @@ class TestGuardedAgent:
                     blocked=True,
                     detected=True,
                     violation_type="secret",
+                    violation_id="viol_bt_end1",
                     message="Secret in injected content",
                 )
             ),  # between_turns_injection
@@ -3280,6 +3283,11 @@ class TestGuardedAgent:
             for m in result["messages"]
         )
         assert warning_found
+        violation_id_found = any(
+            "Violation ID: viol_bt_end1" in str(m.get("content", ""))
+            for m in result["messages"]
+        )
+        assert violation_id_found
         violations = [
             step
             for turn in result["trace"]
@@ -3306,6 +3314,7 @@ class TestGuardedAgent:
                     blocked=True,
                     detected=True,
                     violation_type="prompt_injection",
+                    violation_id="viol_bt_tool1",
                     message="Injection in injected content",
                 )
             ),  # between_turns_injection
@@ -3349,6 +3358,11 @@ class TestGuardedAgent:
             for m in result["messages"]
         )
         assert warning_found
+        violation_id_found = any(
+            "Violation ID: viol_bt_tool1" in str(m.get("content", ""))
+            for m in result["messages"]
+        )
+        assert violation_id_found
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_between_turns_false_stops_tool_use(self, mock_monitor):
@@ -5826,7 +5840,7 @@ class TestGuardedAgentTrace:
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_agent_response_block_injects_warning(self, mock_monitor):
-        """Block mode injects warning and continues (#1939)."""
+        """Block mode injects warning with violation ID and continues (#1939, #1991)."""
         from ai_guardian.sdk import CheckResult, SecurityViolation
 
         mock_session = MagicMock()
@@ -5837,7 +5851,12 @@ class TestGuardedAgentTrace:
                 call_count["agent_response"] += 1
                 if call_count["agent_response"] == 1:
                     raise SecurityViolation(
-                        CheckResult(blocked=True, detected=True, message="blocked")
+                        CheckResult(
+                            blocked=True,
+                            detected=True,
+                            violation_id="viol_resp1",
+                            message="blocked",
+                        )
                     )
             return CheckResult(blocked=False, detected=False)
 
@@ -5863,6 +5882,11 @@ class TestGuardedAgentTrace:
         assert result["stop_reason"] == "end_turn"
         assert result["output"] == "safe"
         assert client.messages.create.call_count == 2
+        warning_found = any(
+            "Violation ID: viol_resp1" in str(m.get("content", ""))
+            for m in result["messages"]
+        )
+        assert warning_found
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_agent_response_trace_records_raw_text(self, mock_monitor):

@@ -986,8 +986,9 @@ class GuardedAgent:
                         )
                         warning = (
                             f"[ai-guardian] Your response was blocked: "
-                            f"{exc.result.violation_type}.\n"
-                            f"Rephrase without the flagged content."
+                            f"{exc.result.violation_type}. "
+                            f"Rephrase without the flagged content. "
+                            f"Violation ID: {exc.result.violation_id}"
                         )
                         strategy.append_assistant_message(messages, parsed.raw_content)
                         if parsed.tool_calls:
@@ -1052,6 +1053,7 @@ class GuardedAgent:
                         if isinstance(hook_result, str):
                             _injection_blocked = False
                             _violation_type = ""
+                            _violation_id = ""
                             if self._scanning:
                                 try:
                                     session.check_content(
@@ -1080,6 +1082,7 @@ class GuardedAgent:
                                     )
                                     _injection_blocked = True
                                     _violation_type = exc.result.violation_type
+                                    _violation_id = exc.result.violation_id
                             if _injection_blocked:
                                 strategy.append_assistant_message(
                                     messages, parsed.raw_content
@@ -1092,7 +1095,8 @@ class GuardedAgent:
                                             f"blocked: {_violation_type}. "
                                             "The content contained flagged "
                                             "patterns and was not added to "
-                                            "context."
+                                            "context. "
+                                            f"Violation ID: {_violation_id}"
                                         ),
                                     }
                                 )
@@ -1189,9 +1193,9 @@ class GuardedAgent:
                             except SecurityViolation as exc:
                                 result_text = (
                                     f"[ai-guardian] Content blocked: "
-                                    f"{exc.result.violation_type}.\n"
-                                    f"{exc.result.message}\n"
-                                    f"Try a different approach."
+                                    f"{exc.result.violation_type}. "
+                                    f"Try a different approach. "
+                                    f"Violation ID: {exc.result.violation_id}"
                                 )
                                 _emit(
                                     turn_num,
@@ -1244,6 +1248,7 @@ class GuardedAgent:
                         if isinstance(hook_result, str):
                             _injection_blocked = False
                             _violation_type = ""
+                            _violation_id = ""
                             if self._scanning:
                                 try:
                                     session.check_content(
@@ -1272,13 +1277,15 @@ class GuardedAgent:
                                     )
                                     _injection_blocked = True
                                     _violation_type = exc.result.violation_type
+                                    _violation_id = exc.result.violation_id
                             if _injection_blocked:
                                 strategy.inject_user_text_after_results(
                                     messages,
                                     "[ai-guardian] Injected content was "
                                     f"blocked: {_violation_type}. "
                                     "The content contained flagged patterns "
-                                    "and was not added to context.",
+                                    "and was not added to context. "
+                                    f"Violation ID: {_violation_id}",
                                 )
                                 structured_output = None
                                 continue
