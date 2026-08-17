@@ -266,7 +266,8 @@ def create_trace_detail_page(service, daemon_name: str):
                     ui.label(f"Started: {started}").classes("text-xs text-grey-6")
 
                 computed = result.get("computed", {})
-                _render_token_summary(computed)
+                total_turns = len(result.get("trace", []))
+                _render_token_summary(computed, total_turns)
 
             trace = result.get("trace", [])
             computed = result.get("computed", {})
@@ -428,28 +429,34 @@ def _render_trace_card(trace, daemon_name):
             ui.label(duration_str).classes("text-xs")
 
 
-def _render_token_summary(computed):
+def _render_token_summary(computed, total_turns=0):
     total = computed.get("total_tokens", {})
-    cost = computed.get("cost_estimate_usd", 0)
     cache_ratio = computed.get("cache_hit_ratio", 0)
+    duration = computed.get("duration_seconds", 0)
+    duration_str = _format_duration(duration) if duration else "—"
+    total_tok = total.get("input_tokens", 0) + total.get("output_tokens", 0)
 
     with ui.card().classes("w-full bg-grey-9 mt-2"):
-        ui.label("Token Summary").classes("text-sm font-bold")
+        ui.label("Summary").classes("text-sm font-bold")
         with ui.grid(columns=6).classes("gap-1"):
+            ui.label("Turns:").classes("text-xs text-grey-6")
+            ui.label(str(total_turns)).classes("text-xs")
+            ui.label("Duration:").classes("text-xs text-grey-6")
+            ui.label(duration_str).classes("text-xs")
+            ui.label("Total:").classes("text-xs text-grey-6")
+            ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Input:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('input_tokens', 0):,}").classes("text-xs")
             ui.label("Output:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('output_tokens', 0):,}").classes("text-xs")
-            ui.label("Cost:").classes("text-xs text-grey-6")
-            ui.label(f"${cost:.4f}").classes("text-xs")
+            ui.label("Cache Hit:").classes("text-xs text-grey-6")
+            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
             ui.label("Cache Read:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('cache_read_input_tokens', 0):,}").classes("text-xs")
             ui.label("Cache Create:").classes("text-xs text-grey-6")
             ui.label(f"{total.get('cache_creation_input_tokens', 0):,}").classes(
                 "text-xs"
             )
-            ui.label("Cache Hit:").classes("text-xs text-grey-6")
-            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
 
 
 def _render_turn_row(
