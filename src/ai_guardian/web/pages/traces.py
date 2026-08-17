@@ -8,6 +8,12 @@ import urllib.parse
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import (
+    escape_html,
+    format_duration,
+    render_text_block,
+    render_violation_badge,
+)
 
 
 def create_traces_page(service, daemon_name: str):
@@ -657,18 +663,7 @@ def _render_step(step, daemon_name=""):
                         "text-xs font-bold text-red"
                     )
                     for v in violations:
-                        vtype = v.get("type", "unknown")
-                        msg = v.get("message", "")
-                        with ui.row().classes("items-center gap-1"):
-                            ui.icon("warning").classes("text-red text-xs")
-                            ui.label(f"{vtype}:").classes("text-xs font-bold text-red")
-                            if daemon_name:
-                                vtype_param = urllib.parse.quote(vtype, safe="")
-                                ui.link(
-                                    "View in Violations",
-                                    f"/{daemon_name}/violations?type={vtype_param}",
-                                ).classes("text-xs")
-                        _render_text_block(msg, color="text-red")
+                        render_violation_badge(v, daemon_name)
                 else:
                     ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
                         "text-xs"
@@ -689,35 +684,6 @@ def _truncate(text, max_len=120):
     return text[:max_len] + "..."
 
 
-def _render_text_block(text, color="text-grey-6", max_height=300):
-    """Render full text in a pre-formatted block, optionally scrollable."""
-    height_style = (
-        f"max-height: {max_height}px; overflow-y: auto; " if max_height else ""
-    )
-    ui.html(
-        f'<pre style="white-space: pre-wrap; word-break: break-word; '
-        f"margin: 2px 0; font-size: 0.75rem; {height_style}"
-        f'">{_escape_html(text)}</pre>'
-    ).classes(color)
-
-
-def _escape_html(text):
-    """Escape HTML special characters."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-def _format_duration(seconds):
-    if seconds < 60:
-        return f"{seconds:.0f}s"
-    minutes = int(seconds // 60)
-    secs = int(seconds % 60)
-    if minutes < 60:
-        return f"{minutes}m {secs}s"
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours}h {mins}m"
+_render_text_block = render_text_block
+_escape_html = escape_html
+_format_duration = format_duration
