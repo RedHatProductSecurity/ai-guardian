@@ -64,15 +64,15 @@ _IDE_SESSION_DIRS = {
     },
     "codex": {
         "env": "CODEX_HOME",
-        "default_mac": "~/.codex",
-        "default_linux": "~/.codex",
-        "default_win": "~/.codex",
+        "default_mac": "~/.codex/sessions",
+        "default_linux": "~/.codex/sessions",
+        "default_win": "~/.codex/sessions",
     },
     "gemini": {
         "env": "GEMINI_CLI_HOME",
-        "default_mac": "~/.gemini",
-        "default_linux": "~/.gemini",
-        "default_win": "~/.gemini",
+        "default_mac": "~/.gemini/tmp",
+        "default_linux": "~/.gemini/tmp",
+        "default_win": "~/.gemini/tmp",
     },
 }
 
@@ -125,6 +125,12 @@ def discover_sessions(
         return _discover_cursor_sessions(project_path, limit)
     if ide == "copilot":
         return _discover_copilot_sessions(project_path, limit)
+    if ide == "codex":
+        return _discover_codex_sessions(project_path, limit)
+    if ide == "gemini":
+        return _discover_gemini_sessions(project_path, limit)
+    if ide == "cline":
+        return _discover_cline_sessions(project_path, limit)
     if ide == "windsurf":
         return _discover_generic_jsonl_sessions(ide, project_path, limit)
     if ide == "kiro":
@@ -351,6 +357,9 @@ def _discover_cursor_sessions(
 
             modified_ts = (updated_at or 0) / 1000.0
 
+            mode = header.get("unifiedMode", "")
+            ctx_pct = header.get("contextUsagePercent", 0)
+
             sessions.append(
                 {
                     "ide": "cursor",
@@ -363,6 +372,8 @@ def _discover_cursor_sessions(
                     "model": "",
                     "message_count": bubble_count,
                     "token_usage": {},
+                    "context_usage_percent": ctx_pct,
+                    "mode": mode or "",
                 }
             )
 
@@ -474,6 +485,256 @@ def _read_copilot_session_meta(path: Path) -> Dict:
         "input_tokens": total_prompt,
         "output_tokens": total_completion,
     }
+    return meta
+
+
+def _discover_codex_sessions(
+    project_path: Optional[str] = None,
+    limit: int = 100,
+) -> List[Dict]:
+    """Discover Codex CLI sessions from ~/.codex/sessions/."""
+    base = _resolve_session_dir("codex")
+    if not base or not base.is_dir():
+        return []
+
+    sessions = []
+    try:
+        jsonl_files = sorted(
+            base.rglob("*.jsonl"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+        zst_files = sorted(
+            base.rglob("*.jsonl.zst"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return []
+
+    for jf in list(jsonl_files) + list(zst_files):
+        if len(sessions) >= limit:
+            break
+        try:
+            stat = jf.stat()
+            meta = _read_codex_session_meta(jf)
+            sessions.append(
+                {
+                    "ide": "codex",
+                    "session_id": jf.stem.replace(".jsonl", ""),
+                    "project_path": meta.get("cwd", ""),
+                    "file_path": str(jf),
+                    "size_bytes": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "title": meta.get("title", ""),
+                    "model": meta.get("model", ""),
+                    "message_count": meta.get("message_count", 0),
+                    "token_usage": meta.get("token_usage", {}),
+                }
+            )
+        except OSError:
+            continue
+
+    sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
+    return sessions[:limit]
+
+
+def _read_codex_session_meta(path: Path) -> Dict:
+    """Read metadata from a Codex session JSONL file."""
+    meta: Dict = {
+        "title": "",
+        "model": "",
+        "cwd": "",
+        "message_count": 0,
+        "token_usage": {},
+    }
+    if str(path).endswith(".zst"):
+        return meta
+
+    msg_count = 0
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                rtype = d.get("type", "")
+                if rtype == "session_meta":
+                    payload = d.get("payload", {})
+                    meta["cwd"] = payload.get("cwd", "")
+                    meta["model"] = payload.get("model", "")
+                elif rtype == "response_item":
+                    payload = d.get("payload", {})
+                    if payload.get("role") in ("user", "assistant"):
+                        msg_count += 1
+                        if not meta["title"] and payload.get("role") == "user":
+                            content = payload.get("content", [])
+                            if isinstance(content, list):
+                                for c in content:
+                                    if isinstance(c, dict) and c.get("text"):
+                                        meta["title"] = c["text"][:80]
+                                        break
+                            elif isinstance(content, str):
+                                meta["title"] = content[:80]
+    except OSError:
+        pass
+
+    meta["message_count"] = msg_count
+    return meta
+
+
+def _discover_gemini_sessions(
+    project_path: Optional[str] = None,
+    limit: int = 100,
+) -> List[Dict]:
+    """Discover Gemini CLI sessions from ~/.gemini/tmp/<hash>/chats/."""
+    base = _resolve_session_dir("gemini")
+    if not base or not base.is_dir():
+        return []
+
+    sessions = []
+    try:
+        session_files = sorted(
+            list(base.rglob("session-*.json")) + list(base.rglob("session-*.jsonl")),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+    except OSError:
+        return []
+
+    for sf in session_files[:limit]:
+        try:
+            stat = sf.stat()
+            project_hash_dir = sf.parent.parent.name
+            sessions.append(
+                {
+                    "ide": "gemini",
+                    "session_id": sf.stem,
+                    "project_path": project_hash_dir,
+                    "file_path": str(sf),
+                    "size_bytes": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "title": "",
+                    "model": "",
+                    "message_count": 0,
+                    "token_usage": {},
+                }
+            )
+        except OSError:
+            continue
+
+    return sessions[:limit]
+
+
+def _discover_cline_sessions(
+    project_path: Optional[str] = None,
+    limit: int = 100,
+) -> List[Dict]:
+    """Discover Cline sessions from ~/.cline/data/tasks/ or globalStorage."""
+    sessions = []
+
+    search_dirs = []
+    cline_home = Path("~/.cline/data/tasks").expanduser()
+    if cline_home.is_dir():
+        search_dirs.append(cline_home)
+
+    legacy = _resolve_session_dir("cline")
+    if legacy:
+        legacy_tasks = legacy / "tasks"
+        if legacy_tasks.is_dir() and legacy_tasks != cline_home:
+            search_dirs.append(legacy_tasks)
+
+    for tasks_dir in search_dirs:
+        try:
+            task_dirs = sorted(
+                [d for d in tasks_dir.iterdir() if d.is_dir()],
+                key=lambda d: d.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            continue
+
+        for td in task_dirs[:limit]:
+            api_hist = td / "api_conversation_history.json"
+            if not api_hist.exists():
+                continue
+            try:
+                stat = api_hist.stat()
+                meta = _read_cline_task_meta(td)
+                sessions.append(
+                    {
+                        "ide": "cline",
+                        "session_id": td.name,
+                        "project_path": meta.get("workspace", ""),
+                        "file_path": str(td),
+                        "size_bytes": stat.st_size,
+                        "modified": stat.st_mtime,
+                        "title": meta.get("title", ""),
+                        "model": meta.get("model", ""),
+                        "message_count": meta.get("message_count", 0),
+                        "token_usage": meta.get("token_usage", {}),
+                    }
+                )
+            except OSError:
+                continue
+
+    sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
+    return sessions[:limit]
+
+
+def _read_cline_task_meta(task_dir: Path) -> Dict:
+    """Read metadata from a Cline task directory."""
+    meta: Dict = {
+        "title": "",
+        "model": "",
+        "workspace": "",
+        "message_count": 0,
+        "token_usage": {},
+    }
+
+    metadata_file = task_dir / "task_metadata.json"
+    if metadata_file.exists():
+        try:
+            with open(metadata_file, "r", encoding="utf-8") as f:
+                md = json.load(f)
+            meta["title"] = md.get("task", "")[:80]
+            meta["model"] = md.get("model", "")
+            meta["workspace"] = md.get("workspace", "")
+            total_in = md.get("tokensIn", 0) or 0
+            total_out = md.get("tokensOut", 0) or 0
+            meta["token_usage"] = {
+                "input_tokens": total_in,
+                "output_tokens": total_out,
+            }
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    api_hist = task_dir / "api_conversation_history.json"
+    if api_hist.exists():
+        try:
+            with open(api_hist, "r", encoding="utf-8") as f:
+                messages = json.load(f)
+            if isinstance(messages, list):
+                meta["message_count"] = len(messages)
+                if not meta["title"] and messages:
+                    first = messages[0]
+                    if isinstance(first, dict) and first.get("role") == "user":
+                        content = first.get("content", "")
+                        if isinstance(content, list):
+                            for c in content:
+                                if isinstance(c, dict) and c.get("text"):
+                                    meta["title"] = c["text"][:80]
+                                    break
+                        elif isinstance(content, str):
+                            meta["title"] = content[:80]
+        except (json.JSONDecodeError, OSError):
+            pass
+
     return meta
 
 

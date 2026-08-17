@@ -212,6 +212,8 @@ _TOOLTIPS = {
     "Total:": "Input + output tokens combined",
     "Started:": "Timestamp of the first message in the session",
     "Last:": "Timestamp of the most recent message in the session",
+    "Context:": "Percentage of the model's context window used by this session",
+    "Mode:": "Cursor composer mode (agent, edit, etc.)",
 }
 
 
@@ -256,6 +258,8 @@ def _render_session_card(session, daemon_name, ide):
     total_output = tokens.get("output_tokens", 0)
     total_tok = total_input + total_output
     cache_read = tokens.get("cache_read_input_tokens", 0)
+    ctx_pct = session.get("context_usage_percent", 0)
+    mode = session.get("mode", "")
 
     modified = session.get("modified", 0)
     date_str = ""
@@ -269,10 +273,18 @@ def _render_session_card(session, daemon_name, ide):
     size_bytes = session.get("size_bytes", 0)
     size_str = _format_size(size_bytes) if size_bytes else ""
 
+    file_path = session.get("file_path", "")
+    detail_params = urllib.parse.urlencode(
+        {"file": file_path, "session": session_id, "ide": ide}
+    )
+    detail_url = f"/{daemon_name}/ide-session-detail?{detail_params}"
+
     with ui.card().classes("w-full"):
         with ui.row().classes("items-center gap-2 w-full"):
             ui.icon("terminal").classes("text-blue text-sm")
-            ui.label(title).classes("font-bold text-sm")
+            ui.link(title, detail_url).classes(
+                "font-bold text-sm text-blue-4 hover:text-blue-3"
+            ).style("text-decoration: underline dotted; text-underline-offset: 3px")
             if model:
                 ui.label(f"({model})").classes("text-xs text-grey-6")
             ui.label(ide.title()).classes("text-xs").style(
@@ -290,31 +302,33 @@ def _render_session_card(session, daemon_name, ide):
                 ui.label(date_str).classes("text-xs")
             _tlabel("Messages:")
             ui.label(str(msg_count)).classes("text-xs")
-            _tlabel("Tokens:")
-            ui.label(f"{total_tok:,}").classes("text-xs")
+            if total_tok:
+                _tlabel("Tokens:")
+                ui.label(f"{total_tok:,}").classes("text-xs")
             if cache_read:
                 _tlabel("Cache Read:")
                 ui.label(f"{cache_read:,}").classes("text-xs")
+            if ctx_pct:
+                _tlabel("Context:")
+                ui.label(f"{ctx_pct:.1f}%").classes("text-xs")
+            if mode:
+                _tlabel("Mode:")
+                ui.label(mode).classes("text-xs")
             if size_str:
                 _tlabel("Size:")
                 ui.label(size_str).classes("text-xs")
 
-        with ui.row().classes("items-center gap-2 mt-1"):
+        with ui.row().classes("items-center gap-1 mt-1"):
             ui.label(session_id).classes("text-xs text-grey-7").style(
                 "font-family: monospace"
             )
-
-            file_path = session.get("file_path", "")
-
-            def _navigate(fp=file_path, sid=session_id, i=ide):
-                params = urllib.parse.urlencode({"file": fp, "session": sid, "ide": i})
-                ui.navigate.to(f"/{daemon_name}/ide-session-detail?{params}")
-
             ui.button(
-                "View Details",
-                icon="visibility",
-                on_click=_navigate,
-            ).props("dense flat size=sm")
+                icon="content_copy",
+                on_click=lambda sid=session_id: (
+                    ui.run_javascript(f"navigator.clipboard.writeText({sid!r})"),
+                    ui.notify("Copied", position="bottom", type="positive"),
+                ),
+            ).props("dense flat size=xs color=grey-7").tooltip("Copy session ID")
 
 
 def _format_size(size_bytes):
@@ -343,9 +357,17 @@ def create_ide_session_detail_page(service, daemon_name: str):
             ).props("dense flat")
             header_label = ui.label("Loading...").classes("text-2xl font-bold")
 
-        ui.label(session_id).classes("text-xs text-grey-6").style(
-            "font-family: monospace; word-break: break-all"
-        )
+        with ui.row().classes("items-center gap-1"):
+            ui.label(session_id).classes("text-xs text-grey-6").style(
+                "font-family: monospace; word-break: break-all"
+            )
+            ui.button(
+                icon="content_copy",
+                on_click=lambda sid=session_id: (
+                    ui.run_javascript(f"navigator.clipboard.writeText({sid!r})"),
+                    ui.notify("Copied", position="bottom", type="positive"),
+                ),
+            ).props("dense flat size=xs color=grey-7").tooltip("Copy session ID")
 
         summary_container = ui.column().classes("w-full")
         steps_container = ui.column().classes("w-full gap-1")

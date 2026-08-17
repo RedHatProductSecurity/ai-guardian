@@ -17,17 +17,18 @@ def read_session_summary(session: Dict) -> Dict:
     ide = session.get("ide", "")
     if ide == "claude":
         return _read_claude_session(session)
-    if ide in ("cursor", "copilot"):
-        result = dict(session)
-        steps = read_session_detail(session)
-        user_count = sum(1 for s in steps if s.get("type") == "user")
-        asst_count = sum(1 for s in steps if s.get("type") == "assistant")
-        result["user_messages"] = user_count
-        result["assistant_messages"] = asst_count
-        result["first_timestamp"] = ""
-        result["last_timestamp"] = ""
+    result = dict(session)
+    steps = read_session_detail(session)
+    if not steps:
         return result
-    return session
+    user_count = sum(1 for s in steps if s.get("type") == "user")
+    asst_count = sum(1 for s in steps if s.get("type") == "assistant")
+    result["user_messages"] = user_count
+    result["assistant_messages"] = asst_count
+    timestamps = [s.get("timestamp", "") for s in steps if s.get("timestamp")]
+    result["first_timestamp"] = timestamps[0] if timestamps else ""
+    result["last_timestamp"] = timestamps[-1] if timestamps else ""
+    return result
 
 
 def read_session_messages(
@@ -172,6 +173,16 @@ def read_session_detail(session: Dict) -> List[Dict]:
         return _read_cursor_detail(session)
     if ide == "copilot":
         return _read_copilot_detail(session)
+    if ide == "codex":
+        return _read_codex_detail(session)
+    if ide == "gemini":
+        return _read_gemini_detail(session)
+    if ide == "cline":
+        return _read_cline_detail(session)
+    if ide == "windsurf":
+        return _read_windsurf_detail(session)
+    if ide == "kiro":
+        return _read_kiro_detail(session)
     return []
 
 
@@ -347,13 +358,18 @@ def _read_cursor_detail(session: Dict) -> List[Dict]:
 
 
 def _read_copilot_detail(session: Dict) -> List[Dict]:
-    """Read conversation from Copilot Chat delta journal JSONL."""
+    """Read conversation from Copilot Chat delta journal JSONL.
+
+    Copilot uses a delta journal format:
+    - kind=0: base snapshot with initial requests
+    - kind=1: set mutation at path (e.g. ['requests', 0, 'result'])
+    - kind=2: array append at path (e.g. ['requests', 0, 'response'])
+    """
     file_path = session.get("file_path", "")
     if not file_path:
         return []
 
     steps = []
-    requests_state = []
 
     try:
         with open(file_path, "r", encoding="utf-8-sig") as f:
@@ -370,24 +386,7 @@ def _read_copilot_detail(session: Dict) -> List[Dict]:
                 if kind == 0:
                     v = d.get("v", {})
                     for req in v.get("requests", []):
-                        msg = req.get("message", {})
-                        text = msg.get("text", "")
-                        if text:
-                            steps.append({"type": "user", "content": text})
-                        result = req.get("result", {})
-                        if isinstance(result, dict):
-                            metadata = result.get("metadata", {})
-                            if isinstance(metadata, dict):
-                                for cb in metadata.get("codeBlocks", []):
-                                    code = cb.get("code", "")
-                                    if code:
-                                        steps.append(
-                                            {
-                                                "type": "assistant",
-                                                "content": code,
-                                            }
-                                        )
-                        requests_state.append(req)
+                        _extract_copilot_request(req, steps)
 
                 elif kind == 1:
                     key_path = d.get("k", [])
@@ -398,35 +397,408 @@ def _read_copilot_detail(session: Dict) -> List[Dict]:
                         and key_path[2] == "result"
                         and isinstance(val, dict)
                     ):
-                        metadata = val.get("metadata", {})
-                        if isinstance(metadata, dict):
-                            for cb in metadata.get("codeBlocks", []):
-                                code = cb.get("code", "")
-                                if code:
-                                    steps.append(
-                                        {
-                                            "type": "assistant",
-                                            "content": code,
-                                        }
-                                    )
-                            message = val.get("message", "")
-                            if message:
-                                steps.append(
-                                    {
-                                        "type": "assistant",
-                                        "content": message,
-                                    }
-                                )
+                        _extract_copilot_result(val, steps)
 
                 elif kind == 2:
                     key_path = d.get("k", [])
                     val = d.get("v")
-                    if key_path == ["requests"] and isinstance(val, dict):
-                        msg = val.get("message", {})
-                        text = msg.get("text", "") if isinstance(msg, dict) else ""
-                        if text:
-                            steps.append({"type": "user", "content": text})
+                    if (
+                        len(key_path) == 3
+                        and key_path[0] == "requests"
+                        and key_path[2] == "response"
+                    ):
+                        _extract_copilot_response_parts(val, steps)
+                    elif key_path == ["requests"] and isinstance(val, dict):
+                        _extract_copilot_request(val, steps)
 
+    except OSError:
+        pass
+
+    return steps
+
+
+def _extract_copilot_request(req, steps):
+    """Extract user message from a Copilot request object."""
+    msg = req.get("message", {})
+    text = msg.get("text", "") if isinstance(msg, dict) else ""
+    if text:
+        steps.append({"type": "user", "content": text})
+    result = req.get("result")
+    if isinstance(result, dict):
+        _extract_copilot_result(result, steps)
+    for resp_part in req.get("response", []):
+        if isinstance(resp_part, dict):
+            _extract_copilot_response_part(resp_part, steps)
+
+
+def _extract_copilot_result(result, steps):
+    """Extract assistant content from a Copilot result delta."""
+    metadata = result.get("metadata", {})
+    if not isinstance(metadata, dict):
+        return
+    for cb in metadata.get("codeBlocks", []):
+        code = cb.get("code", "")
+        if code:
+            steps.append({"type": "assistant", "content": code})
+
+
+def _extract_copilot_response_parts(val, steps):
+    """Extract response parts from a kind=2 append."""
+    if isinstance(val, list):
+        for part in val:
+            if isinstance(part, dict):
+                _extract_copilot_response_part(part, steps)
+    elif isinstance(val, dict):
+        _extract_copilot_response_part(val, steps)
+
+
+def _extract_copilot_response_part(part, steps):
+    """Extract a single Copilot response part."""
+    part_kind = part.get("kind", "")
+    value = part.get("value", "")
+
+    if part_kind == "thinking":
+        if isinstance(value, str) and value.strip():
+            steps.append({"type": "thinking", "content": value})
+    elif part_kind == "markdownContent" or (not part_kind and isinstance(value, str)):
+        if value.strip():
+            steps.append({"type": "assistant", "content": value})
+    elif part_kind == "inlineReference":
+        pass
+    elif part_kind == "mcpServersStarting":
+        pass
+    elif isinstance(value, str) and value.strip():
+        steps.append({"type": "assistant", "content": value})
+
+
+def _read_codex_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Codex CLI JSONL session."""
+    file_path = session.get("file_path", "")
+    if not file_path or file_path.endswith(".zst"):
+        return []
+
+    steps = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                rtype = d.get("type", "")
+                payload = d.get("payload", {})
+
+                if rtype == "session_meta":
+                    cwd = payload.get("cwd", "")
+                    if cwd:
+                        steps.append({"type": "system", "content": f"cwd: {cwd}"})
+
+                elif rtype == "response_item":
+                    role = payload.get("role", "")
+                    content = payload.get("content", [])
+                    if isinstance(content, str):
+                        content = [{"type": "text", "text": content}]
+
+                    for part in content if isinstance(content, list) else []:
+                        if not isinstance(part, dict):
+                            continue
+                        ptype = part.get("type", "")
+
+                        if ptype in ("input_text", "text"):
+                            text = part.get("text", "")
+                            if text:
+                                steps.append(
+                                    {
+                                        "type": (
+                                            "user" if role == "user" else "assistant"
+                                        ),
+                                        "content": text,
+                                    }
+                                )
+                        elif ptype == "function_call":
+                            steps.append(
+                                {
+                                    "type": "tool_use",
+                                    "tool_name": part.get("name", ""),
+                                    "tool_input": part.get("arguments", {}),
+                                }
+                            )
+                        elif ptype == "function_call_output":
+                            output = part.get("output", "")
+                            steps.append(
+                                {
+                                    "type": "tool_result",
+                                    "content": str(output),
+                                }
+                            )
+                        elif ptype == "reasoning":
+                            text = part.get("text", "")
+                            if text:
+                                steps.append({"type": "thinking", "content": text})
+    except OSError:
+        pass
+
+    return steps
+
+
+def _read_gemini_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Gemini CLI session JSON/JSONL."""
+    file_path = session.get("file_path", "")
+    if not file_path:
+        return []
+
+    steps = []
+    try:
+        if file_path.endswith(".jsonl"):
+            with open(file_path, "r", encoding="utf-8") as f:
+                records = [json.loads(line) for line in f if line.strip()]
+        else:
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                records = data
+            elif isinstance(data, dict):
+                records = data.get("messages", data.get("turns", [data]))
+            else:
+                records = []
+
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            role = record.get("role", "")
+            parts = record.get("parts", record.get("content", []))
+            if isinstance(parts, str):
+                parts = [{"text": parts}]
+            if not isinstance(parts, list):
+                continue
+
+            for part in parts:
+                if not isinstance(part, dict):
+                    continue
+
+                text = part.get("text", "")
+                if text:
+                    if role == "user":
+                        steps.append({"type": "user", "content": text})
+                    elif role in ("model", "assistant"):
+                        steps.append({"type": "assistant", "content": text})
+                    elif role == "system":
+                        steps.append({"type": "system", "content": text})
+
+                fn_call = part.get("functionCall", {})
+                if fn_call:
+                    steps.append(
+                        {
+                            "type": "tool_use",
+                            "tool_name": fn_call.get("name", ""),
+                            "tool_input": fn_call.get("args", {}),
+                        }
+                    )
+
+                fn_resp = part.get("functionResponse", {})
+                if fn_resp:
+                    steps.append(
+                        {
+                            "type": "tool_result",
+                            "tool_name": fn_resp.get("name", ""),
+                            "content": json.dumps(
+                                fn_resp.get("response", {}), default=str
+                            ),
+                        }
+                    )
+
+                thought = part.get("thought", "")
+                if thought:
+                    steps.append({"type": "thinking", "content": thought})
+
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return steps
+
+
+def _read_cline_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Cline task directory."""
+    task_dir = session.get("file_path", "")
+    if not task_dir:
+        return []
+
+    api_hist = Path(task_dir) / "api_conversation_history.json"
+    if not api_hist.exists():
+        return []
+
+    steps = []
+    try:
+        with open(api_hist, "r", encoding="utf-8") as f:
+            messages = json.load(f)
+
+        if not isinstance(messages, list):
+            return []
+
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if isinstance(content, str):
+                if content:
+                    step_type = "user" if role == "user" else "assistant"
+                    steps.append({"type": step_type, "content": content})
+                continue
+
+            if not isinstance(content, list):
+                continue
+
+            for part in content:
+                if not isinstance(part, dict):
+                    continue
+                ptype = part.get("type", "")
+
+                if ptype == "text":
+                    text = part.get("text", "")
+                    if text:
+                        step_type = "user" if role == "user" else "assistant"
+                        steps.append({"type": step_type, "content": text})
+                elif ptype == "tool_use":
+                    steps.append(
+                        {
+                            "type": "tool_use",
+                            "tool_name": part.get("name", ""),
+                            "tool_input": part.get("input", {}),
+                        }
+                    )
+                elif ptype == "tool_result":
+                    result_content = part.get("content", "")
+                    if isinstance(result_content, list):
+                        result_content = "\n".join(
+                            c.get("text", "")
+                            for c in result_content
+                            if isinstance(c, dict) and c.get("text")
+                        )
+                    steps.append(
+                        {
+                            "type": "tool_result",
+                            "tool_name": part.get("name", ""),
+                            "content": str(result_content),
+                        }
+                    )
+                elif ptype == "thinking":
+                    steps.append(
+                        {"type": "thinking", "content": part.get("thinking", "")}
+                    )
+    except (OSError, json.JSONDecodeError):
+        pass
+
+    return steps
+
+
+def _read_windsurf_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Windsurf Cascade JSONL transcript."""
+    file_path = session.get("file_path", "")
+    if not file_path:
+        return []
+
+    steps = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                msg_type = d.get("type", "")
+
+                if msg_type == "user_input":
+                    text = d.get("user_response", "")
+                    if text:
+                        steps.append({"type": "user", "content": text})
+                elif msg_type == "planner_response":
+                    text = d.get("response", "")
+                    if text:
+                        steps.append({"type": "assistant", "content": text})
+                elif msg_type == "code_action":
+                    content = d.get("new_content", "")
+                    if content:
+                        steps.append(
+                            {
+                                "type": "tool_use",
+                                "tool_name": "code_action",
+                                "content": content,
+                            }
+                        )
+                else:
+                    sub = d.get(msg_type, {})
+                    if isinstance(sub, dict):
+                        for v in sub.values():
+                            if isinstance(v, str) and v.strip():
+                                steps.append({"type": "assistant", "content": v})
+                                break
+    except OSError:
+        pass
+
+    return steps
+
+
+def _read_kiro_detail(session: Dict) -> List[Dict]:
+    """Read conversation from Kiro CLI JSONL session."""
+    file_path = session.get("file_path", "")
+    if not file_path:
+        return []
+
+    steps = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+
+                msg_type = d.get("type", "")
+
+                if msg_type == "user_message":
+                    text = d.get("content", "")
+                    if text:
+                        steps.append({"type": "user", "content": text})
+                elif msg_type == "agent_message_chunk":
+                    text = d.get("content", "")
+                    if text:
+                        steps.append({"type": "assistant", "content": text})
+                elif msg_type == "tool_call":
+                    args = d.get("arguments", {})
+                    if isinstance(args, str):
+                        try:
+                            args = json.loads(args)
+                        except (json.JSONDecodeError, ValueError):
+                            pass
+                    steps.append(
+                        {
+                            "type": "tool_use",
+                            "tool_name": d.get("name", ""),
+                            "tool_input": args,
+                        }
+                    )
+                elif msg_type == "tool_result":
+                    content = d.get("content", d.get("output", ""))
+                    steps.append(
+                        {
+                            "type": "tool_result",
+                            "tool_name": d.get("name", ""),
+                            "content": str(content),
+                        }
+                    )
     except OSError:
         pass
 
