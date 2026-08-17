@@ -53,7 +53,9 @@ class TracesContent(Container):
                 id="traces-filter-input",
             )
             yield Button("Refresh", id="traces-refresh", variant="success")
-            yield Button("Showing: Newest ↓", id="traces-sort-toggle", variant="default")
+            yield Button(
+                "Showing: Newest ↓", id="traces-sort-toggle", variant="default"
+            )
             yield Button("Export OTLP", id="traces-export-otlp", variant="default")
             yield Button(
                 "Open Folder",
@@ -82,7 +84,9 @@ class TracesContent(Container):
             self.refresh_content()
         elif event.button.id == "traces-sort-toggle":
             self._newest_first = not self._newest_first
-            event.button.label = "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            event.button.label = (
+                "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            )
             self._load_traces()
         elif event.button.id == "traces-export-otlp":
             self._export_otlp()

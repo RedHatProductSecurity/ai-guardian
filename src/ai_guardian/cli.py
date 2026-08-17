@@ -422,7 +422,8 @@ def main():
 
         # Console subcommand (primary)
         console_parser = subparsers.add_parser(
-            "console", help="Launch interactive console for configuration management, use --web for web console in browser (Python >= 3.10 required)"
+            "console",
+            help="Launch interactive console for configuration management, use --web for web console in browser (Python >= 3.10 required)",
         )
         console_parser.add_argument(
             "--panel",

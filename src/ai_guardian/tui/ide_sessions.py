@@ -56,7 +56,9 @@ class IDESessionsContent(Container):
                 id="ide-sessions-filter",
             )
             yield Button("Refresh", id="ide-sessions-refresh", variant="success")
-            yield Button("Showing: Newest ↓", id="ide-sessions-sort-toggle", variant="default")
+            yield Button(
+                "Showing: Newest ↓", id="ide-sessions-sort-toggle", variant="default"
+            )
         yield Static("", id="ide-sessions-detail")
         with VerticalScroll():
             yield Tree("Sessions", id="ide-sessions-tree")
@@ -74,7 +76,9 @@ class IDESessionsContent(Container):
             self.refresh_content()
         elif event.button.id == "ide-sessions-sort-toggle":
             self._newest_first = not self._newest_first
-            event.button.label = "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            event.button.label = (
+                "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            )
             self._apply_filter()
 
     def on_select_changed(self, event: Select.Changed) -> None:
