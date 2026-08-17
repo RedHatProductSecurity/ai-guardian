@@ -433,6 +433,10 @@ def _render_trace_card(trace, daemon_name):
             ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
+            ui.label("File:").classes("text-xs text-grey-6")
+            ui.label(filename).classes("text-xs").style(
+                "font-family: monospace; word-break: break-all"
+            )
 
 
 def _render_token_summary(computed, total_turns=0):
