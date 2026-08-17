@@ -304,6 +304,8 @@ class DaemonState:
 
     # --- OTEL hook emitters (#1998) ---
 
+    _OTEL_DISABLED = object()
+
     def get_otel_emitter(self, session_id):
         """Get or create an OTEL emitter for a session.
 
@@ -312,8 +314,11 @@ class DaemonState:
         if not session_id:
             return None
         with self._lock:
-            if session_id in self._otel_emitters:
-                return self._otel_emitters[session_id]
+            cached = self._otel_emitters.get(session_id)
+            if cached is self._OTEL_DISABLED:
+                return None
+            if cached is not None:
+                return cached
         try:
             from ai_guardian.config.loaders import _load_otel_config
             from ai_guardian.scanners.otel_exporter import HookOtelEmitter
@@ -321,6 +326,8 @@ class DaemonState:
             config = _load_otel_config()
             emitter = HookOtelEmitter(config)
             if not emitter.enabled:
+                with self._lock:
+                    self._otel_emitters.setdefault(session_id, self._OTEL_DISABLED)
                 return None
             with self._lock:
                 if session_id not in self._otel_emitters:
@@ -336,7 +343,7 @@ class DaemonState:
             return
         with self._lock:
             emitter = self._otel_emitters.pop(session_id, None)
-        if emitter is not None:
+        if emitter is not None and emitter is not self._OTEL_DISABLED:
             try:
                 emitter.flush(session_id=session_id, adapter_name=adapter_name)
             except Exception:

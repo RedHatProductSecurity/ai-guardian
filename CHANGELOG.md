@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OTEL session telemetry** — `HookOtelEmitter` now records adapter name at session start and counts hook events, so even clean sessions (no violations) produce an OTEL trace with a root span containing `ai_guardian.adapter` and `ai_guardian.hook_event_count` attributes (#2010)
+
 - **GuardedAgent symlink support** — two new parameters for accessing files through symlinks that resolve outside `cwd`: `follow_symlinks=True` trusts all symlinks inside `cwd`; `allowed_paths=[...]` whitelists specific external directories. Both configurable via `sdk.agents.<name>` in `ai-guardian.json` (#1907)
 
 - **GuardedAgent `trace_path_fn` callback** — optional callback `(agent_name, context) -> str` injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. Enables organizing traces by case ID, observation ID, or run context (#1892)

@@ -1455,6 +1455,102 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.detail.file_path"]["stringValue"] == "/tmp/bad.py"
         assert attr_map["ai_guardian.detail.line_number"]["intValue"] == "42"
 
+    def test_record_session_start_stores_adapter(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(adapter_name="Claude Code")
+        assert emitter._adapter_name == "Claude Code"
+
+    def test_record_session_start_disabled_is_noop(self):
+        emitter = HookOtelEmitter({"enabled": False})
+        emitter.record_session_start(adapter_name="Claude Code")
+        assert not hasattr(emitter, "_adapter_name") or emitter._adapter_name is None
+
+    def test_record_hook_event_increments_count(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        assert emitter._hook_event_count == 0
+        emitter.record_hook_event()
+        emitter.record_hook_event()
+        assert emitter._hook_event_count == 2
+
+    def test_record_hook_event_disabled_is_noop(self):
+        emitter = HookOtelEmitter({"enabled": False})
+        emitter.record_hook_event()
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_uses_stored_adapter_name(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(adapter_name="Gemini CLI")
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.adapter"]["stringValue"] == "Gemini CLI"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_explicit_adapter_overrides_stored(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(adapter_name="stored")
+        emitter.flush(session_id="s1", adapter_name="explicit")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.adapter"]["stringValue"] == "explicit"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_includes_hook_event_count(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_hook_event()
+        emitter.record_hook_event()
+        emitter.record_hook_event()
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.hook_event_count"]["intValue"] == "3"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_clean_session_produces_root_span(self, mock_requests):
+        """Clean session (no violations) should still flush a root span."""
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(adapter_name="Claude Code")
+        emitter.record_hook_event()
+        emitter.flush(session_id="clean-session")
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 1
+        root = spans[0]
+        assert root["name"] == "ai_guardian.session"
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.session_id"]["stringValue"] == "clean-session"
+        assert attr_map["ai_guardian.adapter"]["stringValue"] == "Claude Code"
+        assert attr_map["ai_guardian.violation_count"]["intValue"] == "0"
+        assert attr_map["ai_guardian.block_count"]["intValue"] == "0"
+        assert attr_map["ai_guardian.hook_event_count"]["intValue"] == "1"
+
 
 # ---------------------------------------------------------------------------
 # Config loader reads from top-level otel (#1998)

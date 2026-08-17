@@ -97,6 +97,12 @@ def _handle_bootstrap_scan(
         if not daemon_state.is_new_session(hook_session_id, _bs_cwd):
             return None
         logger.info(f"Bootstrap scan: new session detected (cwd={_bs_cwd})")
+
+        _otel_emitter = daemon_state.get_otel_emitter(hook_session_id)
+        if _otel_emitter:
+            _otel_emitter.record_session_start(
+                adapter_name=adapter.name if adapter else None,
+            )
         _bs_config, _ = _loaders._load_config_scanner_config()
         _bs_results = _run_bootstrap_scan(_bs_cwd, config=_bs_config)
         for _bs_result in _bs_results:
