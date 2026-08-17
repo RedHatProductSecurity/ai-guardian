@@ -18,7 +18,7 @@ def _load_otel_config() -> dict:
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-            return config.get("sdk", {}).get("otel", {})
+            return config.get("otel", {})
         except Exception as e:
             logger.warning("Failed to read otel config: %s", e)
     return {}
@@ -34,8 +34,7 @@ def _save_otel_config(otel_cfg: dict) -> None:
                 config = json.load(f)
         except Exception:
             pass
-    sdk = config.setdefault("sdk", {})
-    sdk["otel"] = otel_cfg
+    config["otel"] = otel_cfg
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
@@ -71,8 +70,8 @@ def create_otel_settings_page(service, daemon_name: str):
 
             service_name = ui.input(
                 label="Service Name",
-                value=cfg.get("service_name", "ai-guardian-sdk"),
-                placeholder="ai-guardian-sdk",
+                value=cfg.get("service_name", "ai-guardian"),
+                placeholder="ai-guardian",
             ).classes("w-full")
             ui.label("Override: OTEL_SERVICE_NAME").classes("text-xs text-grey-6 -mt-2")
 
@@ -113,7 +112,7 @@ def create_otel_settings_page(service, daemon_name: str):
                     new_cfg = {
                         "enabled": enabled.value,
                         "endpoint": endpoint.value.strip() or "http://localhost:4318",
-                        "service_name": service_name.value.strip() or "ai-guardian-sdk",
+                        "service_name": service_name.value.strip() or "ai-guardian",
                         "export_format": export_format.value,
                     }
                     if hdrs:

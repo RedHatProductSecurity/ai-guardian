@@ -156,6 +156,9 @@ class DaemonState:
         # Bootstrap session tracking (#1394) — in-memory only, flushed on restart
         self._seen_sessions: set = set()
 
+        # OTEL hook emitters (#1998) — per-session, flushed on SessionEnd
+        self._otel_emitters = {}  # session_id -> HookOtelEmitter
+
         # State change observers (#650) — push notifications to subscribers
         self._state_observers = []
         self._state_observers_lock = threading.Lock()
@@ -298,6 +301,46 @@ class DaemonState:
             self._session_last_activity.pop(session_key, None)
             self._allowed_findings.pop(session_key, None)
         self._schedule_persist()
+
+    # --- OTEL hook emitters (#1998) ---
+
+    def get_otel_emitter(self, session_id):
+        """Get or create an OTEL emitter for a session.
+
+        Returns None if OTEL is not enabled.
+        """
+        if not session_id:
+            return None
+        with self._lock:
+            if session_id in self._otel_emitters:
+                return self._otel_emitters[session_id]
+        try:
+            from ai_guardian.config.loaders import _load_otel_config
+            from ai_guardian.scanners.otel_exporter import HookOtelEmitter
+
+            config = _load_otel_config()
+            emitter = HookOtelEmitter(config)
+            if not emitter.enabled:
+                return None
+            with self._lock:
+                if session_id not in self._otel_emitters:
+                    self._otel_emitters[session_id] = emitter
+                return self._otel_emitters[session_id]
+        except Exception:
+            logger.debug("Failed to create OTEL emitter", exc_info=True)
+            return None
+
+    def flush_otel_emitter(self, session_id, *, adapter_name=None):
+        """Flush and remove the OTEL emitter for a session."""
+        if not session_id:
+            return
+        with self._lock:
+            emitter = self._otel_emitters.pop(session_id, None)
+        if emitter is not None:
+            try:
+                emitter.flush(session_id=session_id, adapter_name=adapter_name)
+            except Exception:
+                logger.debug("OTEL session flush failed", exc_info=True)
 
     # --- Allowed transcript findings (#1364) ---
 

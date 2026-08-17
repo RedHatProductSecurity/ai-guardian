@@ -1229,8 +1229,8 @@ def main():
         )
         trace_export_parser.add_argument(
             "--service-name",
-            default="ai-guardian-sdk",
-            help="service.name resource attribute (default: ai-guardian-sdk)",
+            default="ai-guardian",
+            help="service.name resource attribute (default: ai-guardian)",
         )
         trace_export_parser.add_argument(
             "--header",
@@ -1257,8 +1257,8 @@ def main():
         trace_export_dir_parser.add_argument("--output", "-o", help="Output directory")
         trace_export_dir_parser.add_argument(
             "--service-name",
-            default="ai-guardian-sdk",
-            help="service.name resource attribute (default: ai-guardian-sdk)",
+            default="ai-guardian",
+            help="service.name resource attribute (default: ai-guardian)",
         )
 
         # Engine test subcommand (Issue #542)

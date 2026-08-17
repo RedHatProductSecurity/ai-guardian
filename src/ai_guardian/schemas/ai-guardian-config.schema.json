@@ -2754,47 +2754,47 @@
               "default": 5
             }
           }
+        }
+      }
+    },
+    "otel": {
+      "type": "object",
+      "description": "OpenTelemetry export configuration. Used by both SDK (agent run spans) and hooks (session activity spans). Requires 'pip install ai-guardian[otel]' for protobuf format.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable OTEL span export.",
+          "default": false
         },
-        "otel": {
+        "endpoint": {
+          "type": "string",
+          "description": "OTLP HTTP collector endpoint URL. Override with OTEL_EXPORTER_OTLP_ENDPOINT env var.",
+          "default": "http://localhost:4318"
+        },
+        "service_name": {
+          "type": "string",
+          "description": "The service.name resource attribute for exported spans. Override with OTEL_SERVICE_NAME env var.",
+          "default": "ai-guardian"
+        },
+        "export_format": {
+          "type": "string",
+          "enum": ["otlp-json", "otlp-proto"],
+          "description": "Export format. 'otlp-json' requires no extra dependencies. 'otlp-proto' requires 'pip install ai-guardian[otel]'.",
+          "default": "otlp-json"
+        },
+        "headers": {
           "type": "object",
-          "description": "OpenTelemetry live export configuration. When enabled, agent runs emit OTEL spans alongside JSON traces. Requires 'pip install ai-guardian[otel]' for protobuf format.",
-          "additionalProperties": false,
-          "properties": {
-            "enabled": {
-              "type": "boolean",
-              "description": "Enable live OTEL span export during agent runs.",
-              "default": false
-            },
-            "endpoint": {
-              "type": "string",
-              "description": "OTLP HTTP collector endpoint URL. Override with OTEL_EXPORTER_OTLP_ENDPOINT env var.",
-              "default": "http://localhost:4318"
-            },
-            "service_name": {
-              "type": "string",
-              "description": "The service.name resource attribute for exported spans. Override with OTEL_SERVICE_NAME env var.",
-              "default": "ai-guardian-sdk"
-            },
-            "export_format": {
-              "type": "string",
-              "enum": ["otlp-json", "otlp-proto"],
-              "description": "Export format. 'otlp-json' requires no extra dependencies. 'otlp-proto' requires 'pip install ai-guardian[otel]'.",
-              "default": "otlp-json"
-            },
-            "headers": {
-              "type": "object",
-              "description": "HTTP headers sent with each OTLP export request. Use for authentication (e.g., {\"Authorization\": \"Bearer <token>\"}). Also reads OTEL_EXPORTER_OTLP_HEADERS env var (format: key1=val1,key2=val2). Config headers take precedence over env var.",
-              "additionalProperties": {
-                "type": "string"
-              }
-            },
-            "resource_attributes": {
-              "type": "object",
-              "description": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>. Example: {\"team.name\": \"AT\", \"deployment.environment\": \"dev\"}.",
-              "additionalProperties": {
-                "type": ["string", "number", "boolean"]
-              }
-            }
+          "description": "HTTP headers sent with each OTLP export request. Use for authentication (e.g., {\"Authorization\": \"Bearer <token>\"}). Also reads OTEL_EXPORTER_OTLP_HEADERS env var (format: key1=val1,key2=val2). Config headers take precedence over env var.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "resource_attributes": {
+          "type": "object",
+          "description": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>. Example: {\"team.name\": \"AT\", \"deployment.environment\": \"dev\"}.",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
           }
         }
       }

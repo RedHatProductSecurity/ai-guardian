@@ -673,7 +673,7 @@ print(result["output"])  # validated structured object
 | `trace_path_fn` | callable | `None` | Callback `(agent_name: str, context: dict) -> str` that returns a path segment injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. `context` contains `model`, `stop_reason`, `usage`, `turn_count` |
 | `allowed_paths` | list[str] | `None` | Additional directories that built-in tools may access. By default, tools reject any path that resolves outside `cwd` (e.g. symlinks pointing to external directories). List absolute paths here to whitelist them |
 | `follow_symlinks` | bool | `False` | When `True`, built-in tools allow access through symlinks inside `cwd` even when the real target is outside `cwd`. The logical (unresolved) path must still be within `cwd`. Simpler than `allowed_paths` when all symlinks in the working tree are trusted |
-| `otel_metadata_fn` | callable | `None` | `(agent_name: str, context: dict) -> dict` — returns key-value pairs added as OTEL span attributes. Called once for the root span (turn=0, includes stop_reason) and per turn for turn spans. `context` contains `model`, `turn`, `usage` (cumulative), and `stop_reason` (final call only). Requires `sdk.otel.enabled: true` |
+| `otel_metadata_fn` | callable | `None` | `(agent_name: str, context: dict) -> dict` — returns key-value pairs added as OTEL span attributes. Called once for the root span (turn=0, includes stop_reason) and per turn for turn spans. `context` contains `model`, `turn`, `usage` (cumulative), and `stop_reason` (final call only). Requires `otel.enabled: true` |
 
 ### Hooks
 
@@ -956,7 +956,7 @@ Behavior:
 
 #### OTEL Custom Metadata
 
-When `sdk.otel.enabled` is `true`, you can attach custom metadata to OTEL spans for filtering in Grafana.
+When `otel.enabled` is `true`, you can attach custom metadata to OTEL spans for filtering in Grafana.
 
 **Static attributes** — fixed values from config, applied as OTEL resource attributes:
 

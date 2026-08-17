@@ -8,6 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_guardian.scanners.otel_exporter import (
+    HookOtelEmitter,
     OtelSpanEmitter,
     _derive_end_nano,
     _iso_to_unix_nano,
@@ -21,6 +22,8 @@ from ai_guardian.scanners.otel_exporter import (
     handle_trace_command,
     trace_to_otlp_json,
 )
+
+from ai_guardian.config.loaders import _load_otel_config
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -685,7 +688,7 @@ class TestTraceToOtlpJson:
     def test_scope_name(self):
         result = trace_to_otlp_json(MINIMAL_TRACE_DOC)
         scope = result["resourceSpans"][0]["scopeSpans"][0]["scope"]
-        assert scope["name"] == "ai-guardian-sdk"
+        assert scope["name"] == "ai-guardian"
 
     def test_missing_trace_id_generates_one(self):
         doc = {k: v for k, v in MINIMAL_TRACE_DOC.items() if k != "trace_id"}
@@ -876,7 +879,7 @@ class TestHandleTraceCommand:
             args.format = "otlp-json"
             args.output = dst_path
             args.endpoint = None
-            args.service_name = "ai-guardian-sdk"
+            args.service_name = "ai-guardian"
             args.trace_command = "export"
 
             result = handle_trace_command(args, MagicMock())
@@ -900,7 +903,7 @@ class TestHandleTraceCommand:
             args.format = "otlp-json"
             args.output = None
             args.endpoint = None
-            args.service_name = "ai-guardian-sdk"
+            args.service_name = "ai-guardian"
             args.trace_command = "export"
 
             result = handle_trace_command(args, MagicMock())
@@ -918,7 +921,7 @@ class TestHandleTraceCommand:
         args.format = "otlp-json"
         args.output = None
         args.endpoint = None
-        args.service_name = "ai-guardian-sdk"
+        args.service_name = "ai-guardian"
         args.trace_command = "export"
 
         result = handle_trace_command(args, MagicMock())
@@ -940,7 +943,7 @@ class TestHandleTraceCommand:
             args.format = "otlp-json"
             args.output = None
             args.endpoint = "http://localhost:4318"
-            args.service_name = "ai-guardian-sdk"
+            args.service_name = "ai-guardian"
             args.trace_command = "export"
 
             result = handle_trace_command(args, MagicMock())
@@ -964,7 +967,7 @@ class TestHandleTraceCommand:
                 args.dir = src_dir
                 args.format = "otlp-json"
                 args.output = out_dir
-                args.service_name = "ai-guardian-sdk"
+                args.service_name = "ai-guardian"
                 args.trace_command = "export-dir"
 
                 result = handle_trace_command(args, MagicMock())
@@ -1081,6 +1084,8 @@ class TestOtelSpanEmitter:
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
         assert len(spans) == 1
         assert spans[0]["name"] == "gen_ai.agent"
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["ai_guardian.span_type"]["stringValue"] == "agent_run"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     def test_flush_failure_does_not_raise(self, mock_requests):
@@ -1263,3 +1268,244 @@ class TestOtelSpanEmitter:
         root_span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
         attr_keys = {a["key"] for a in root_span["attributes"]}
         assert "case.id" not in attr_keys
+
+
+# ---------------------------------------------------------------------------
+# HookOtelEmitter tests
+# ---------------------------------------------------------------------------
+
+
+class TestHookOtelEmitter:
+    def test_disabled_is_noop(self):
+        emitter = HookOtelEmitter({"enabled": False})
+        assert not emitter.enabled
+        emitter.record_violation("secret_detected")
+        emitter.record_block("Bash", reason="secret in command")
+        emitter.flush(session_id="s1")
+
+    def test_enabled_creates_trace(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        assert emitter.enabled
+        assert len(emitter._trace_id) == 32
+        assert len(emitter._root_span_id) == 16
+
+    def test_record_violation_adds_child_span(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_violation(
+            "secret_detected",
+            severity="critical",
+            tool_name="Bash",
+            violation_id="vid-123",
+            scanner="secret_scanning",
+        )
+        assert len(emitter._child_spans) == 1
+        span = emitter._child_spans[0]
+        assert span["name"] == "ai_guardian.violation"
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert (
+            attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
+        )
+        assert attr_map["ai_guardian.severity"]["stringValue"] == "critical"
+        assert attr_map["ai_guardian.tool_name"]["stringValue"] == "Bash"
+        assert emitter._violation_count == 1
+
+    def test_record_block_adds_child_span(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_block(
+            "Bash", reason="secret in command", scanner="secret_scanning"
+        )
+        assert len(emitter._child_spans) == 1
+        span = emitter._child_spans[0]
+        assert span["name"] == "ai_guardian.block"
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["ai_guardian.tool_name"]["stringValue"] == "Bash"
+        assert attr_map["ai_guardian.reason"]["stringValue"] == "secret in command"
+        assert emitter._block_count == 1
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_posts_all_spans(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_violation("prompt_injection", tool_name="Read")
+        emitter.record_block("Bash", reason="exfil detected")
+        emitter.flush(session_id="session-abc", adapter_name="Claude Code")
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 3  # root + violation + block
+
+        root = spans[0]
+        assert root["name"] == "ai_guardian.session"
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.session_id"]["stringValue"] == "session-abc"
+        assert attr_map["ai_guardian.adapter"]["stringValue"] == "Claude Code"
+        assert attr_map["ai_guardian.violation_count"]["intValue"] == "1"
+        assert attr_map["ai_guardian.block_count"]["intValue"] == "1"
+
+        assert spans[1]["name"] == "ai_guardian.violation"
+        assert spans[2]["name"] == "ai_guardian.block"
+        assert emitter._child_spans == []
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_empty_session(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.flush(session_id="empty-session")
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 1
+        assert spans[0]["name"] == "ai_guardian.session"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_failure_is_silent(self, mock_requests):
+        mock_requests.post.side_effect = ConnectionError("refused")
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_violation("secret_detected")
+        emitter.flush(session_id="s1")
+
+    def test_env_var_overrides(self, monkeypatch):
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://custom:9999")
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "custom-svc")
+        emitter = HookOtelEmitter({"enabled": True})
+        assert emitter._endpoint == "http://custom:9999"
+        assert emitter._service_name == "custom-svc"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_resource_attributes_included(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {
+                "enabled": True,
+                "endpoint": "http://localhost:4318",
+                "resource_attributes": {"team.name": "security"},
+            }
+        )
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        res_attrs = payload["resourceSpans"][0]["resource"]["attributes"]
+        attr_map = {a["key"]: a["value"] for a in res_attrs}
+        assert attr_map["team.name"]["stringValue"] == "security"
+
+    def test_record_violation_with_details(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_violation(
+            "code_security",
+            details={"file_path": "/tmp/bad.py", "line_number": 42},
+        )
+        span = emitter._child_spans[0]
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["ai_guardian.detail.file_path"]["stringValue"] == "/tmp/bad.py"
+        assert attr_map["ai_guardian.detail.line_number"]["intValue"] == "42"
+
+
+# ---------------------------------------------------------------------------
+# Config loader reads from top-level otel (#1998)
+# ---------------------------------------------------------------------------
+
+
+class TestLoadOtelConfigTopLevel:
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_reads_top_level_otel(self, mock_load):
+        mock_load.return_value = (
+            {"otel": {"enabled": True, "endpoint": "http://grafana:4318"}},
+            None,
+        )
+        result = _load_otel_config()
+        assert result["enabled"] is True
+        assert result["endpoint"] == "http://grafana:4318"
+
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_returns_default_when_no_otel(self, mock_load):
+        mock_load.return_value = ({"sdk": {}}, None)
+        result = _load_otel_config()
+        assert result == {"enabled": False}
+
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_returns_default_on_error(self, mock_load):
+        mock_load.return_value = (None, "file not found")
+        result = _load_otel_config()
+        assert result == {"enabled": False}
+
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_ignores_sdk_otel(self, mock_load):
+        """Old sdk.otel path should no longer be read."""
+        mock_load.return_value = (
+            {"sdk": {"otel": {"enabled": True}}},
+            None,
+        )
+        result = _load_otel_config()
+        assert result == {"enabled": False}
+
+
+# ---------------------------------------------------------------------------
+# DaemonState OTEL integration (#1998)
+# ---------------------------------------------------------------------------
+
+
+class TestDaemonStateOtel:
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_get_otel_emitter_creates_emitter(self, mock_load):
+        mock_load.return_value = (
+            {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
+            None,
+        )
+        from ai_guardian.daemon.state import DaemonState
+
+        state = DaemonState.__new__(DaemonState)
+        state._lock = __import__("threading").Lock()
+        state._otel_emitters = {}
+
+        emitter = state.get_otel_emitter("session-1")
+        assert emitter is not None
+        assert emitter.enabled
+        assert state.get_otel_emitter("session-1") is emitter
+
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_get_otel_emitter_returns_none_when_disabled(self, mock_load):
+        mock_load.return_value = ({"otel": {"enabled": False}}, None)
+        from ai_guardian.daemon.state import DaemonState
+
+        state = DaemonState.__new__(DaemonState)
+        state._lock = __import__("threading").Lock()
+        state._otel_emitters = {}
+
+        assert state.get_otel_emitter("session-1") is None
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_flush_otel_emitter(self, mock_load, mock_requests):
+        mock_load.return_value = (
+            {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
+            None,
+        )
+        mock_requests.post.return_value = MagicMock()
+        from ai_guardian.daemon.state import DaemonState
+
+        state = DaemonState.__new__(DaemonState)
+        state._lock = __import__("threading").Lock()
+        state._otel_emitters = {}
+
+        emitter = state.get_otel_emitter("session-1")
+        emitter.record_violation("secret_detected")
+        state.flush_otel_emitter("session-1", adapter_name="Claude Code")
+
+        mock_requests.post.assert_called_once()
+        assert "session-1" not in state._otel_emitters

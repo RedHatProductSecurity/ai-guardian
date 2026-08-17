@@ -54,6 +54,7 @@ class PostScanContext:
     violation_logger: Any = None
     latency_timer: Any = None
     invocation_allowed_findings: Any = None
+    daemon_state: Any = None
 
 
 @dataclass
@@ -330,6 +331,8 @@ def apply_post_scan_pipeline(
                 finding_fingerprints=finding_fingerprints,
             )
 
+            _record_otel_span(ctx, entry, result, should_block)
+
             return PostScanDecision(
                 should_block=should_block,
                 error_message=error_msg,
@@ -341,8 +344,43 @@ def apply_post_scan_pipeline(
         detailed = build_detailed_warn_message(entry, result, file_path)
         warnings.append(detailed)
 
+    _record_otel_span(ctx, entry, result, should_block)
+
     return PostScanDecision(
         should_block=should_block,
         error_message=error_msg,
         warnings=warnings,
     )
+
+
+def _record_otel_span(
+    ctx: PostScanContext,
+    entry: Any,
+    result: ScanResult,
+    should_block: bool,
+) -> None:
+    """Record a violation or block as an OTEL span via daemon state."""
+    if not ctx.daemon_state or not ctx.hook_session_id:
+        return
+    try:
+        emitter = ctx.daemon_state.get_otel_emitter(ctx.hook_session_id)
+        if emitter is None:
+            return
+        violation_type = getattr(entry, "violation_type", None) or ""
+        scanner = getattr(entry, "name", None) or ""
+        if should_block:
+            emitter.record_block(
+                ctx.tool_name or "",
+                reason=result.error_message or violation_type,
+                scanner=scanner,
+            )
+        else:
+            emitter.record_violation(
+                violation_type,
+                severity=getattr(entry, "violation_severity", "warning") or "warning",
+                tool_name=ctx.tool_name,
+                violation_id=result.id,
+                scanner=scanner,
+            )
+    except Exception:
+        logger.debug("OTEL span recording failed", exc_info=True)

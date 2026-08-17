@@ -25,7 +25,7 @@ def _load_otel_config() -> dict:
         try:
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
-            return config.get("sdk", {}).get("otel", {})
+            return config.get("otel", {})
         except Exception as e:
             logger.warning("Failed to read otel config: %s", e)
     return {}
@@ -41,8 +41,7 @@ def _save_otel_config(otel_cfg: dict) -> None:
                 config = json.load(f)
         except Exception:
             pass
-    sdk = config.setdefault("sdk", {})
-    sdk["otel"] = otel_cfg
+    config["otel"] = otel_cfg
     config_dir.mkdir(parents=True, exist_ok=True)
     with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
@@ -102,7 +101,7 @@ class OtelSettingsContent(Container):
             with Horizontal(classes="otel-field-row"):
                 yield Label("Service Name", classes="otel-field-label")
                 yield Input(
-                    placeholder="ai-guardian-sdk",
+                    placeholder="ai-guardian",
                     id="otel-service-name",
                     classes="otel-field-input",
                 )
@@ -142,7 +141,7 @@ class OtelSettingsContent(Container):
             "endpoint", "http://localhost:4318"
         )
         self.query_one("#otel-service-name", Input).value = cfg.get(
-            "service_name", "ai-guardian-sdk"
+            "service_name", "ai-guardian"
         )
         self.query_one("#otel-format", Select).value = cfg.get(
             "export_format", "otlp-json"
@@ -179,7 +178,7 @@ class OtelSettingsContent(Container):
                 "service_name": self.query_one(
                     "#otel-service-name", Input
                 ).value.strip()
-                or "ai-guardian-sdk",
+                or "ai-guardian",
                 "export_format": self.query_one("#otel-format", Select).value,
             }
             if headers:
