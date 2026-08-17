@@ -1548,6 +1548,49 @@ result=$(curl -s -X POST http://localhost:19200/api/check \
 clean=$(echo "$result" | jq -r '.clean')
 ```
 
+## Anthropic SDK vs Claude Code SDK
+
+GuardedAgent uses the Anthropic SDK (Messages API) directly rather than the Claude Code SDK. This section explains the design choice and when each approach is appropriate.
+
+### Why Anthropic SDK?
+
+| Capability | Anthropic SDK (GuardedAgent) | Claude Code SDK |
+|-----------|------------------------------|-----------------|
+| **Loop control** | Full — every API call, message, tool execution controlled | Opaque — Claude manages the loop internally |
+| **Security scanning** | Every point: input, output, tool results, between turns | Hook boundaries only — no mid-loop inspection |
+| **Custom tools** | Define tools, validate inputs, control sandboxing | Built-in tools (Bash, Read, Write) — limited customization |
+| **Compaction** | Control when, how, what's preserved | Claude decides |
+| **Prompt caching** | Place cache breakpoints optimally | Claude manages |
+| **Tracing** | Full per-step trace, OTEL export, Grafana integration | Session log (less structured) |
+| **Callbacks** | `before_call`, `after_call`, `between_turns`, `on_turn` | Limited |
+| **Structured output** | `output_schema` with `submit_result` tool | Not directly supported |
+| **Model choice** | Any Anthropic model, OpenAI-compatible, Vertex AI, Bedrock | Claude models only |
+| **Multi-provider** | Anthropic + OpenAI-compatible strategies | Claude only |
+| **Dependency** | `anthropic` Python package (lightweight) | Claude Code CLI installed (heavy) |
+| **Container / CI** | Runs anywhere with an API key | Requires Claude Code installed |
+
+### When to Use Which
+
+**Use GuardedAgent (Anthropic SDK) when:**
+
+- Building custom agent pipelines with multiple stages
+- Need full security scanning at every interaction point
+- Need structured output, custom tools, or callbacks
+- Running in containers or CI/CD (no CLI installation)
+- Need OTEL trace export and observability
+- Need multi-provider support (Vertex AI, Bedrock, OpenAI-compatible)
+
+**Use Claude Code with hooks when:**
+
+- Interactive development sessions
+- Standard coding tasks with built-in tools
+- Claude Code CLI is already installed
+- Hook-based security is sufficient (no mid-loop scanning needed)
+
+### Key Advantage
+
+Full control over the agentic loop enables full security coverage. With the Claude Code SDK, scanning happens only at hook boundaries — ai-guardian cannot inspect what the agent does between hooks. GuardedAgent scans every message, every tool result, and every intermediate response because it owns the loop.
+
 ## Security Model
 
 - **Additive only**: The SDK adds protection to programs that have none. It cannot disable or bypass hook-based enforcement.
