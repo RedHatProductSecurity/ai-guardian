@@ -340,6 +340,41 @@ class TestMakeRootSpan:
         attr_map = {a["key"]: a["value"] for a in span["attributes"]}
         assert attr_map["gen_ai.agent.compaction_count"]["intValue"] == "0"
 
+    def test_root_span_violation_count_zero(self):
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.violation_count"]["intValue"] == "0"
+        assert "gen_ai.agent.violation_types" not in attr_map
+        assert "gen_ai.agent.violation_ids" not in attr_map
+
+    def test_root_span_violation_attributes(self):
+        doc = _make_full_trace()
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.violation_count"]["intValue"] == "1"
+        assert (
+            attr_map["gen_ai.agent.violation_types"]["stringValue"] == "secret_detected"
+        )
+
+    def test_root_span_violation_ids(self):
+        doc = _make_full_trace()
+        doc["trace"][1]["steps"][4]["violations"] = [
+            {"type": "secret_detected", "id": "v-abc123", "message": "API key"},
+        ]
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        ids = attr_map["gen_ai.agent.violation_ids"]["arrayValue"]["values"]
+        assert ids == [{"stringValue": "v-abc123"}]
+
+    def test_root_span_hostname(self):
+        import platform
+
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        expected = platform.node()
+        if expected:
+            assert attr_map["gen_ai.agent.hostname"]["stringValue"] == expected
+
     def test_error_status(self):
         doc = {**MINIMAL_TRACE_DOC, "stop_reason": "error"}
         span = _make_root_span(doc, doc["trace_id"])
@@ -588,7 +623,12 @@ class TestMakeStepSpans:
         assert len(spans) == 1
         assert spans[0]["name"] == "gen_ai.security_scan"
         attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
-        assert attr_map["gen_ai.security_scan.violation_count"]["intValue"] == "1"
+        assert (
+            attr_map["gen_ai.security_scan.target"]["stringValue"] == "agent_response"
+        )
+        assert "gen_ai.security_scan.violation_count" not in attr_map
+        assert "gen_ai.security_scan.violation_types" not in attr_map
+        assert "gen_ai.security_scan.violation_ids" not in attr_map
 
     def test_compaction_step(self):
         step = {
