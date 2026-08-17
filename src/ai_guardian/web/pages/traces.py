@@ -98,9 +98,17 @@ def create_trace_detail_page(service, daemon_name: str):
             ).props("dense flat")
             header_label = ui.label("Loading...").classes("text-2xl font-bold")
 
-        ui.label(filename).classes("text-xs text-grey-6").style(
-            "font-family: monospace; word-break: break-all"
-        )
+        with ui.row().classes("items-center gap-1"):
+            ui.label(filename).classes("text-xs text-grey-6").style(
+                "font-family: monospace; word-break: break-all"
+            )
+            ui.button(
+                icon="content_copy",
+                on_click=lambda fn=filename: (
+                    ui.run_javascript(f"navigator.clipboard.writeText({fn!r})"),
+                    ui.notify("Copied", position="bottom", type="positive"),
+                ),
+            ).props("dense flat size=xs color=grey-7").tooltip("Copy filename")
 
         summary_container = ui.column().classes("w-full")
         export_container = ui.row().classes("w-full gap-2 items-center")
@@ -312,6 +320,9 @@ def _render_trace_card(trace, daemon_name):
     duration = trace.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
 
+    detail_params = f"?file={urllib.parse.quote(filename, safe='/')}"
+    detail_url = f"/{daemon_name}/trace-detail{detail_params}"
+
     with ui.card().classes("w-full"):
         with ui.row().classes("items-center gap-2 w-full"):
             if is_active:
@@ -319,7 +330,9 @@ def _render_trace_card(trace, daemon_name):
             else:
                 ui.icon("check_circle").classes("text-grey-6 text-xs")
 
-            ui.label(agent_name).classes("font-bold text-sm")
+            ui.link(agent_name, detail_url).classes(
+                "font-bold text-sm text-blue-4 hover:text-blue-3"
+            ).style("text-decoration: underline dotted; text-underline-offset: 3px")
             ui.label(f"({model})").classes("text-xs text-grey-6")
 
             if is_active:
@@ -342,18 +355,6 @@ def _render_trace_card(trace, daemon_name):
             ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
-
-        def _navigate(fn=filename):
-            params = f"?file={urllib.parse.quote(fn, safe='/')}"
-            ui.navigate.to(f"/{daemon_name}/trace-detail{params}")
-
-        ui.button(
-            "View Details",
-            icon="visibility",
-            on_click=_navigate,
-        ).props(
-            "dense flat size=sm"
-        ).classes("mt-1")
 
 
 def _render_token_summary(computed):
@@ -406,10 +407,21 @@ def _render_turn_row(
     }
     type_color = type_colors.get(turn_type, "grey")
 
+    icon_map = {
+        "system": ("settings", "text-blue"),
+        "user": ("person", "text-blue"),
+        "response": ("smart_toy", "text-green"),
+        "tool_use": ("build", "text-orange"),
+        "scan_only": ("security", "text-yellow"),
+    }
+    icon_name, icon_color = icon_map.get(turn_type, ("help", "text-grey-6"))
+    turn_label = _get_turn_label(steps, turn_type)
+
     with ui.card().classes("w-full py-1 px-2"):
         with ui.row().classes("items-center gap-2 w-full"):
+            ui.icon(icon_name).classes(f"{icon_color} text-sm")
             ui.label(f"Turn {turn_num}").classes("text-xs font-bold w-16")
-            ui.badge(turn_type, color=type_color).classes("text-xs")
+            ui.label(turn_label).classes(f"text-xs font-bold {icon_color}")
 
             if turn_tokens > 0:
                 ui.label(f"{turn_tokens:,} tok").classes("text-xs text-grey-6")
@@ -440,6 +452,30 @@ def _render_turn_row(
         with exp:
             for step in steps:
                 _render_step(step, daemon_name)
+
+
+def _get_turn_label(steps, turn_type):
+    """Build a descriptive label for the turn header."""
+    if turn_type == "system":
+        return "System"
+    if turn_type == "user":
+        return "User"
+    if turn_type == "tool_use":
+        tool_names = [s.get("name", "") for s in steps if s.get("type") == "tool_call"]
+        tool_names = [n for n in tool_names if n]
+        if tool_names:
+            unique = list(dict.fromkeys(tool_names))
+            return f"Tool Call: {', '.join(unique[:3])}"
+        return "Tool Use"
+    if turn_type == "response":
+        return "Assistant"
+    if turn_type == "scan_only":
+        scanned = [s.get("scanned", "") for s in steps if s.get("type") == "scan"]
+        scanned = [s for s in scanned if s]
+        if scanned:
+            return f"Scan: {', '.join(scanned[:2])}"
+        return "Scan"
+    return turn_type.title()
 
 
 def _get_turn_type(steps):

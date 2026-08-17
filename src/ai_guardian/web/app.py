@@ -516,6 +516,22 @@ class WebConsole:
 
             create_sdk_settings_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/ide-sessions")
+        def ide_sessions_page(daemon_name: str):
+            from ai_guardian.web.pages.ide_sessions import (
+                create_ide_sessions_page,
+            )
+
+            create_ide_sessions_page(service, daemon_name)
+
+        @ui.page("/{daemon_name}/ide-session-detail")
+        def ide_session_detail_page(daemon_name: str):
+            from ai_guardian.web.pages.ide_sessions import (
+                create_ide_session_detail_page,
+            )
+
+            create_ide_session_detail_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/traces")
         def traces_page(daemon_name: str):
             from ai_guardian.web.pages.traces import create_traces_page

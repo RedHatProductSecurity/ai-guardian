@@ -44,12 +44,18 @@ NAV_GROUPS = [
         ],
     ),
     (
+        "AI Sessions",
+        [
+            ("IDE Sessions", "/ide-sessions"),
+            ("SDK Traces", "/traces"),
+            ("OTEL Export", "/otel-settings"),
+        ],
+    ),
+    (
         "SDK",
         [
             ("Agent Profiles", "/sdk-agents"),
             ("SDK Settings", "/sdk-settings"),
-            ("Trace Viewer", "/traces"),
-            ("OTEL Export", "/otel-settings"),
         ],
     ),
     (

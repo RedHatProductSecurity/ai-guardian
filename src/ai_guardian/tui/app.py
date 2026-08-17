@@ -163,12 +163,18 @@ NAV_GROUPS = [
         ],
     ),
     (
+        "AI Sessions",
+        [
+            ("IDE Sessions", "panel-ide-sessions"),
+            ("SDK Traces", "panel-traces"),
+            ("OTEL Export", "panel-otel-settings"),
+        ],
+    ),
+    (
         "SDK",
         [
             ("Agent Profiles", "panel-sdk-agents"),
             ("SDK Settings", "panel-sdk-settings"),
-            ("Trace Viewer", "panel-traces"),
-            ("OTEL Export", "panel-otel-settings"),
         ],
     ),
     (
@@ -820,6 +826,28 @@ HELP_DOCS = {
         "[bold]Keyboard shortcuts:[/bold]\n"
         "  [bold]r[/bold]  Refresh trace list"
     ),
+    "AI Sessions": (
+        "[bold]AI Sessions[/bold]\n\n"
+        "Browse and inspect conversations from IDE coding agents.\n\n"
+        "[bold]Sections:[/bold]\n"
+        "  [bold]IDE Sessions[/bold] — Multi-IDE conversation browser "
+        "(Claude, Cursor, Copilot, etc.)\n"
+        "  [bold]SDK Traces[/bold] — Conversation traces from "
+        "GuardedAgent runs\n"
+        "  [bold]OTEL Export[/bold] — Send traces to Grafana/Jaeger"
+    ),
+    "panel-ide-sessions": (
+        "[bold]IDE Sessions[/bold]\n\n"
+        "Browse conversations from AI coding assistants.\n\n"
+        "Supports: Claude Code, Cursor, Copilot, Codex, Windsurf, "
+        "Gemini, Cline, Kiro.\n\n"
+        "[bold]Features:[/bold]\n"
+        "  - IDE selector dropdown\n"
+        "  - Session list with title, model, token usage\n"
+        "  - Filter by project path, text search\n\n"
+        "[bold]Keyboard shortcuts:[/bold]\n"
+        "  [bold]r[/bold]  Refresh session list"
+    ),
     "SDK": (
         "[bold]SDK[/bold]\n\n"
         "Configure the AI Guardian SDK for programmatic security "
@@ -828,9 +856,7 @@ HELP_DOCS = {
         "  [bold]Agent Profiles[/bold] — Per-agent configuration "
         "(model, max_turns, tools, mode)\n"
         "  [bold]SDK Settings[/bold] — Global scanning and secret "
-        "redaction toggles\n"
-        "  [bold]Trace Viewer[/bold] — Conversation traces from "
-        "GuardedAgent runs"
+        "redaction toggles"
     ),
     "panel-sdk-agents": (
         "[bold]Agent Profiles[/bold]\n\n"
@@ -1702,6 +1728,11 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.sdk_settings import SDKSettingsContent
 
                     yield SDKSettingsContent()
+
+                with Container(id="panel-ide-sessions"):
+                    from ai_guardian.tui.ide_sessions import IDESessionsContent
+
+                    yield IDESessionsContent()
 
                 with Container(id="panel-traces"):
                     from ai_guardian.tui.traces import TracesContent
