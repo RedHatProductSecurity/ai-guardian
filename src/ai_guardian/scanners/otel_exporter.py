@@ -915,11 +915,29 @@ class HookOtelEmitter:
         self._start_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
         self._violation_count = 0
         self._block_count = 0
-        self._scan_count = 0
+        self._adapter_name: Optional[str] = None
+        self._hook_event_count = 0
 
     @property
     def enabled(self) -> bool:
         return self._enabled
+
+    def record_session_start(self, *, adapter_name: Optional[str] = None) -> None:
+        """Record session start metadata.
+
+        Called at session creation so that even clean sessions (no
+        violations) produce an OTEL trace with a root span.
+        """
+        if not self._enabled:
+            return
+        if adapter_name is not None:
+            self._adapter_name = adapter_name
+
+    def record_hook_event(self) -> None:
+        """Increment the hook event counter for this session."""
+        if not self._enabled:
+            return
+        self._hook_event_count += 1
 
     def record_violation(
         self,
@@ -998,11 +1016,13 @@ class HookOtelEmitter:
         try:
             end_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
 
+            effective_adapter = adapter_name or self._adapter_name
             root_attrs = _attrs(
                 ("ai_guardian.session_id", session_id),
-                ("ai_guardian.adapter", adapter_name),
+                ("ai_guardian.adapter", effective_adapter),
                 ("ai_guardian.violation_count", self._violation_count),
                 ("ai_guardian.block_count", self._block_count),
+                ("ai_guardian.hook_event_count", self._hook_event_count),
                 ("ai_guardian.span_type", "session"),
             )
 
