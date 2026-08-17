@@ -9,7 +9,7 @@ from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.step_render import (
-    escape_html,
+    create_sort_toggle,
     format_duration,
     render_text_block,
     render_violation_badge,
@@ -56,27 +56,12 @@ def create_traces_page(service, daemon_name: str):
                 "dense outline"
             )
 
-            async def _toggle_sort():
-                state["newest_first"] = not state["newest_first"]
-                sort_btn.text = (
-                    "Showing: Newest ↓"
-                    if state["newest_first"]
-                    else "Showing: Oldest ↑"
-                )
-                try:
-                    from nicegui import app as _app2
-
-                    _app2.storage.user["traces_sort_newest"] = state["newest_first"]
-                except Exception:
-                    pass
+            async def _reload_traces():
                 fn = state["load_fn"]
                 if fn:
                     await fn()
 
-            sort_btn = ui.button(
-                "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑",
-                on_click=_toggle_sort,
-            ).props("dense outline")
+            create_sort_toggle(state, "traces_sort_newest", _reload_traces)
 
         cards_container = ui.column().classes("w-full gap-2")
         auto_timer = {"ref": None}
@@ -158,10 +143,8 @@ def create_trace_detail_page(service, daemon_name: str):
 
         summary_container = ui.column().classes("w-full")
         export_container = ui.row().classes("w-full gap-2 items-center")
-        turns_container = ui.column().classes("w-full gap-1")
-        scroll_anchor = ui.element("div")
         expanded_turns: set = set()
-        detail_state = {"result": None, "newest_first": saved_sort}
+        detail_state = {"result": None, "newest_first": saved_sort, "load_fn": None}
 
         async def _export_otlp_json():
             result = detail_state["result"]
@@ -233,6 +216,21 @@ def create_trace_detail_page(service, daemon_name: str):
                 on_click=_send_to_collector,
             ).props("dense outline")
 
+        with ui.row().classes("items-center gap-2"):
+            ui.label("Turns").classes("text-lg font-bold")
+
+            async def _reload_trace_detail():
+                fn = detail_state["load_fn"]
+                if fn:
+                    await fn()
+
+            create_sort_toggle(
+                detail_state, "trace_detail_sort_newest", _reload_trace_detail
+            )
+
+        turns_container = ui.column().classes("w-full gap-1")
+        scroll_anchor = ui.element("div")
+
         async def load_detail():
             if ui.context.client.is_deleted:
                 return
@@ -285,35 +283,6 @@ def create_trace_detail_page(service, daemon_name: str):
 
             turns_container.clear()
             with turns_container:
-                with ui.row().classes("items-center gap-2"):
-                    ui.label("Turns").classes("text-lg font-bold")
-
-                    async def _toggle_trace_detail_sort():
-                        detail_state["newest_first"] = not detail_state["newest_first"]
-                        trace_detail_sort_btn.text = (
-                            "Showing: Newest ↓"
-                            if detail_state["newest_first"]
-                            else "Showing: Oldest ↑"
-                        )
-                        try:
-                            from nicegui import app as _app2
-
-                            _app2.storage.user["trace_detail_sort_newest"] = (
-                                detail_state["newest_first"]
-                            )
-                        except Exception:
-                            pass
-                        await load_detail()
-
-                    trace_detail_sort_btn = ui.button(
-                        (
-                            "Showing: Newest ↓"
-                            if detail_state["newest_first"]
-                            else "Showing: Oldest ↑"
-                        ),
-                        on_click=_toggle_trace_detail_sort,
-                    ).props("dense outline")
-
                 for turn_obj in trace:
                     _render_turn_row(
                         turn_obj, per_turn, violations_map, expanded_turns, daemon_name
@@ -333,6 +302,7 @@ def create_trace_detail_page(service, daemon_name: str):
                 interval = _get_auto_refresh_interval(service, target)
                 auto_timer["ref"] = ui.timer(interval, load_detail)
 
+        detail_state["load_fn"] = load_detail
         auto_timer = {"ref": None}
         ui.timer(0.1, load_detail, once=True)
 
@@ -689,5 +659,4 @@ def _truncate(text, max_len=120):
 
 
 _render_text_block = render_text_block
-_escape_html = escape_html
 _format_duration = format_duration

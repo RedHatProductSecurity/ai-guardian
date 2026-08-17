@@ -128,14 +128,12 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
                 violation_count += len(step.get("violations") or [])
 
     started_at = doc.get("started_at", "")
-    is_active = stop_reason == "in_progress"
+    duration = _compute_duration(started_at, stop_reason, filepath)
 
     try:
         file_mtime = os.path.getmtime(filepath)
     except OSError:
         file_mtime = 0.0
-
-    duration = _compute_duration(trace, started_at, file_mtime, is_active)
 
     return {
         "filename": filename,
@@ -196,16 +194,8 @@ def read_trace_detail(
     stop_reason = doc.get("stop_reason")
     started_at = doc.get("started_at", "")
 
-    is_active = stop_reason == "in_progress"
-    try:
-        file_mtime = os.path.getmtime(filepath)
-    except OSError:
-        file_mtime = 0.0
-
     computed = compute_token_summary(trace, usage, model)
-    computed["duration_seconds"] = _compute_duration(
-        trace, started_at, file_mtime, is_active
-    )
+    computed["duration_seconds"] = _compute_duration(started_at, stop_reason, filepath)
 
     violations = []
     for turn_obj in trace:
@@ -319,12 +309,15 @@ def estimate_cost(model: str, usage: dict) -> float:
 
 
 def _compute_duration(
-    trace: list, started_at: str, file_mtime: float = 0.0, is_active: bool = False
+    started_at: str,
+    stop_reason: str = "",
+    filepath: str = "",
 ) -> float:
     """Compute duration from started_at to end time.
 
-    For active traces, end time is now. For completed traces, end time
-    is the file modification time (when the trace was last written).
+    For active traces (stop_reason == "in_progress"), end time is now.
+    For completed traces, end time is the file modification time.
+    Falls back to now if no filepath is available.
     """
     if not started_at:
         return 0.0
@@ -334,10 +327,15 @@ def _compute_duration(
 
         if start_dt.tzinfo is None:
             start_dt = start_dt.replace(tzinfo=timezone.utc)
-        if is_active:
+
+        if stop_reason == "in_progress":
             end_dt = datetime.now(timezone.utc)
-        elif file_mtime:
-            end_dt = datetime.fromtimestamp(file_mtime, tz=timezone.utc)
+        elif filepath:
+            try:
+                mtime = os.path.getmtime(filepath)
+                end_dt = datetime.fromtimestamp(mtime, tz=timezone.utc)
+            except OSError:
+                end_dt = datetime.now(timezone.utc)
         else:
             end_dt = datetime.now(timezone.utc)
         return max(0.0, (end_dt - start_dt).total_seconds())
@@ -371,9 +369,7 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         },
-        "duration_seconds": _compute_duration(
-            trace, doc.get("started_at", ""), 0.0, stop_reason == "in_progress"
-        ),
+        "duration_seconds": _compute_duration(doc.get("started_at", ""), stop_reason),
         "violation_count": violation_count,
         "file_mtime": 0.0,
     }

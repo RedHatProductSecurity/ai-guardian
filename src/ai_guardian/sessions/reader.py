@@ -51,69 +51,20 @@ def _read_claude_session(session: Dict) -> Dict:
     if not file_path:
         return session
 
+    from ai_guardian.sessions.discovery import _read_claude_session_meta
+
+    meta = _read_claude_session_meta(Path(file_path))
     result = dict(session)
-    first_ts = ""
-    last_ts = ""
-    user_count = 0
-    assistant_count = 0
-    title = result.get("title", "")
-    model = result.get("model", "")
-    total_input = 0
-    total_output = 0
-    total_cache_read = 0
-    total_cache_create = 0
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    d = json.loads(line)
-                except (json.JSONDecodeError, ValueError):
-                    continue
-
-                msg_type = d.get("type", "")
-                ts = d.get("timestamp", "")
-
-                if ts:
-                    if not first_ts:
-                        first_ts = ts
-                    last_ts = ts
-
-                if msg_type == "ai-title" and not title:
-                    title = d.get("aiTitle", "")
-                elif msg_type == "user":
-                    user_count += 1
-                elif msg_type == "assistant":
-                    assistant_count += 1
-                    msg = d.get("message", {})
-                    if not model and msg.get("model"):
-                        model = msg["model"]
-                    usage = msg.get("usage", {})
-                    total_input += usage.get("input_tokens", 0)
-                    total_output += usage.get("output_tokens", 0)
-                    total_cache_read += usage.get("cache_read_input_tokens", 0)
-                    total_cache_create += usage.get("cache_creation_input_tokens", 0)
-    except OSError:
-        pass
-
-    result["first_timestamp"] = first_ts
-    result["last_timestamp"] = last_ts
-    result["user_messages"] = user_count
-    result["assistant_messages"] = assistant_count
+    result["first_timestamp"] = meta["first_timestamp"]
+    result["last_timestamp"] = meta["last_timestamp"]
+    result["user_messages"] = meta["user_messages"]
+    result["assistant_messages"] = meta["assistant_messages"]
     if not result.get("title"):
-        result["title"] = title
+        result["title"] = meta["title"]
     if not result.get("model"):
-        result["model"] = model
+        result["model"] = meta["model"]
     if not result.get("token_usage"):
-        result["token_usage"] = {
-            "input_tokens": total_input,
-            "output_tokens": total_output,
-            "cache_read_input_tokens": total_cache_read,
-            "cache_creation_input_tokens": total_cache_create,
-        }
+        result["token_usage"] = meta["token_usage"]
     return result
 
 
@@ -146,19 +97,13 @@ def _read_claude_messages(session: Dict, limit: int = 200) -> List[Dict]:
                                 continue
                             ctype = c.get("type", "")
                             if ctype == "tool_result":
-                                rc = c.get("content", "")
-                                if isinstance(rc, list):
-                                    rc = "\n".join(
-                                        p.get("text", "")
-                                        for p in rc
-                                        if isinstance(p, dict) and p.get("text")
-                                    )
+                                rc_text, tool_id = _extract_tool_result_content(c)
                                 messages.append(
                                     {
                                         "role": "tool_result",
-                                        "content": _truncate(str(rc), 500),
+                                        "content": _truncate(rc_text, 500),
                                         "timestamp": d.get("timestamp", ""),
-                                        "tool_id": c.get("tool_use_id", ""),
+                                        "tool_id": tool_id,
                                     }
                                 )
                             else:
@@ -276,19 +221,13 @@ def _read_claude_detail(session: Dict) -> List[Dict]:
                                 continue
                             ctype = c.get("type", "")
                             if ctype == "tool_result":
-                                rc = c.get("content", "")
-                                if isinstance(rc, list):
-                                    rc = "\n".join(
-                                        p.get("text", "")
-                                        for p in rc
-                                        if isinstance(p, dict) and p.get("text")
-                                    )
+                                rc_text, tool_id = _extract_tool_result_content(c)
                                 steps.append(
                                     {
                                         "type": "tool_result",
                                         "tool_name": "",
-                                        "content": str(rc),
-                                        "tool_id": c.get("tool_use_id", ""),
+                                        "content": rc_text,
+                                        "tool_id": tool_id,
                                     }
                                 )
                             else:
@@ -887,6 +826,16 @@ def _read_kiro_detail(session: Dict) -> List[Dict]:
         pass
 
     return steps
+
+
+def _extract_tool_result_content(block: dict) -> tuple:
+    """Extract (text, tool_use_id) from a tool_result content block."""
+    rc = block.get("content", "")
+    if isinstance(rc, list):
+        rc = "\n".join(
+            p.get("text", "") for p in rc if isinstance(p, dict) and p.get("text")
+        )
+    return str(rc), block.get("tool_use_id", "")
 
 
 def _truncate(text: str, max_len: int = 500) -> str:

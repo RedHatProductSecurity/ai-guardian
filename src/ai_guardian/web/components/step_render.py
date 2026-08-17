@@ -22,6 +22,7 @@ def escape_html(text):
         .replace("<", "&lt;")
         .replace(">", "&gt;")
         .replace('"', "&quot;")
+        .replace("'", "&#x27;")
     )
 
 
@@ -68,9 +69,9 @@ def render_violation_badge(violation, daemon_name=""):
         if daemon_name:
             vtype_param = urllib.parse.quote(vtype, safe="")
             ui.link(
-                "View in Violations",
+                "View all",
                 f"/{daemon_name}/violations?type={vtype_param}",
-            ).classes("text-xs")
+            ).classes("text-xs").tooltip(f"Show all {vtype} violations")
     if msg:
         render_text_block(msg, color="text-red")
 
@@ -99,9 +100,40 @@ def render_violation_summary(violations, daemon_name=""):
                 if daemon_name:
                     vtype_param = urllib.parse.quote(vtype, safe="")
                     ui.link(
-                        "View",
+                        "View all",
                         f"/{daemon_name}/violations?type={vtype_param}",
-                    ).classes("text-xs")
+                    ).classes("text-xs").tooltip(f"Show all {vtype} violations")
+
+
+def create_sort_toggle(state, storage_key, reload_fn):
+    """Create a sort order toggle button with persistent preference.
+
+    Args:
+        state: dict with a "newest_first" key (mutated in place).
+        storage_key: NiceGUI app.storage.user key for persistence.
+        reload_fn: async callable to refresh the view after toggling.
+
+    Returns:
+        The NiceGUI button element.
+    """
+
+    async def _toggle():
+        state["newest_first"] = not state["newest_first"]
+        btn.text = "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑"
+        try:
+            from nicegui import app as _app
+
+            _app.storage.user[storage_key] = state["newest_first"]
+        except Exception:
+            pass
+        if reload_fn:
+            await reload_fn()
+
+    btn = ui.button(
+        "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑",
+        on_click=_toggle,
+    ).props("dense outline")
+    return btn
 
 
 def format_duration(seconds):

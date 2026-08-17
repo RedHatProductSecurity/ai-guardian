@@ -240,19 +240,28 @@ def _decode_claude_project_name(encoded: str) -> str:
 
 
 def _read_claude_session_meta(path: Path) -> Dict:
-    """Read minimal metadata from a Claude session JSONL file."""
+    """Read metadata from a Claude session JSONL file.
+
+    Returns title, model, message_count, token_usage, plus
+    first/last timestamps and user/assistant message counts.
+    """
     meta: Dict = {
         "title": "",
         "model": "",
         "message_count": 0,
         "token_usage": {},
+        "first_timestamp": "",
+        "last_timestamp": "",
+        "user_messages": 0,
+        "assistant_messages": 0,
     }
 
     total_input = 0
     total_output = 0
     total_cache_read = 0
     total_cache_create = 0
-    msg_count = 0
+    user_count = 0
+    assistant_count = 0
 
     try:
         with open(path, "r", encoding="utf-8") as f:
@@ -266,6 +275,12 @@ def _read_claude_session_meta(path: Path) -> Dict:
                     continue
 
                 msg_type = d.get("type", "")
+                ts = d.get("timestamp", "")
+
+                if ts:
+                    if not meta["first_timestamp"]:
+                        meta["first_timestamp"] = ts
+                    meta["last_timestamp"] = ts
 
                 if msg_type == "ai-title":
                     meta["title"] = d.get("aiTitle", "")
@@ -279,14 +294,16 @@ def _read_claude_session_meta(path: Path) -> Dict:
                     total_output += usage.get("output_tokens", 0)
                     total_cache_read += usage.get("cache_read_input_tokens", 0)
                     total_cache_create += usage.get("cache_creation_input_tokens", 0)
-                    msg_count += 1
+                    assistant_count += 1
 
                 elif msg_type == "user":
-                    msg_count += 1
+                    user_count += 1
     except OSError:
         pass
 
-    meta["message_count"] = msg_count
+    meta["message_count"] = user_count + assistant_count
+    meta["user_messages"] = user_count
+    meta["assistant_messages"] = assistant_count
     meta["token_usage"] = {
         "input_tokens": total_input,
         "output_tokens": total_output,
