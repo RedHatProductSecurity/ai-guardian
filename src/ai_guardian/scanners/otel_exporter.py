@@ -183,6 +183,10 @@ def _make_step_spans(
 
     if step_type == "response":
         usage = step.get("usage", {})
+        text = step.get("text")
+        text_length = step.get("text_length")
+        if text_length is None and text:
+            text_length = len(text)
         spans.append(
             _make_span(
                 trace_id=trace_id,
@@ -204,6 +208,8 @@ def _make_step_spans(
                         usage.get("cache_creation_input_tokens"),
                     ),
                     ("gen_ai.chat.latency_ms", step.get("latency_ms")),
+                    ("gen_ai.response.text_length", text_length),
+                    ("gen_ai.response.tool_call_count", step.get("tool_call_count")),
                 ),
             )
         )
@@ -238,6 +244,7 @@ def _make_step_spans(
                 attributes=_attrs(
                     ("tool.name", step.get("name")),
                     ("tool.output_bytes", step.get("output_bytes")),
+                    ("tool.output_truncated", step.get("output_truncated")),
                     ("tool.latency_ms", step.get("latency_ms")),
                 ),
             )
@@ -288,6 +295,8 @@ def _make_turn_span(
     turn: Dict[str, Any],
     trace_id: str,
     root_span_id: str,
+    *,
+    prev_messages_count: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """Convert a turn object into a turn span plus child step spans."""
     turn_span_id = _truncate_span_id(turn.get("span_id", _new_span_id()))
@@ -299,6 +308,11 @@ def _make_turn_span(
         if s.get("type") == "input":
             input_step = s
             break
+
+    messages_count = input_step.get("messages_count") if input_step else None
+    messages_count_growth = None
+    if messages_count is not None and prev_messages_count is not None:
+        messages_count_growth = messages_count - prev_messages_count
 
     start_nano = _iso_to_unix_nano(turn_start)
     end_nano = _derive_end_nano(
@@ -316,14 +330,12 @@ def _make_turn_span(
         end_nano=end_nano,
         attributes=_attrs(
             ("gen_ai.turn.number", turn.get("turn")),
-            (
-                "gen_ai.turn.messages_count",
-                input_step.get("messages_count") if input_step else None,
-            ),
+            ("gen_ai.turn.messages_count", messages_count),
             (
                 "gen_ai.turn.compacted",
                 input_step.get("compacted") if input_step else None,
             ),
+            ("gen_ai.turn.messages_count_growth", messages_count_growth),
             ("gen_ai.turn.duration_ms", turn.get("duration_ms")),
         ),
     )
@@ -357,6 +369,10 @@ def _make_root_span(
     stop_reason = trace_doc.get("stop_reason", "")
     status_code = _STATUS_CODE_ERROR if stop_reason == "error" else _STATUS_CODE_OK
 
+    compaction_count = sum(
+        1 for t in turns for s in t.get("steps", []) if s.get("type") == "compaction"
+    )
+
     start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))
     end_nano = _derive_end_nano(
         trace_doc.get("ended_at", ""),
@@ -389,6 +405,8 @@ def _make_root_span(
             ),
             ("gen_ai.agent.stop_reason", stop_reason),
             ("gen_ai.agent.duration_ms", trace_doc.get("duration_ms")),
+            ("gen_ai.agent.turn_count", len(turns)),
+            ("gen_ai.agent.compaction_count", compaction_count),
         ),
         status_code=status_code,
     )
@@ -423,8 +441,18 @@ def trace_to_otlp_json(
     root_span_id = root_span["spanId"]
 
     all_spans = [root_span]
+    prev_messages_count = None
     for turn in turns:
-        all_spans.extend(_make_turn_span(turn, trace_id, root_span_id))
+        all_spans.extend(
+            _make_turn_span(
+                turn, trace_id, root_span_id, prev_messages_count=prev_messages_count
+            )
+        )
+        input_step = next(
+            (s for s in turn.get("steps", []) if s.get("type") == "input"), None
+        )
+        if input_step and input_step.get("messages_count") is not None:
+            prev_messages_count = input_step["messages_count"]
 
     try:
         from ai_guardian import __version__
@@ -709,6 +737,7 @@ class OtelSpanEmitter:
         self._trace_id = trace_id
         self._agent_name = agent_name
         self._model = model
+        self._prev_messages_count: Optional[int] = None
 
     def _call_metadata_fn(
         self,
@@ -748,7 +777,18 @@ class OtelSpanEmitter:
             root_span_id = _truncate_span_id(
                 turn_data.get("parent_span_id", _new_span_id())
             )
-            spans = _make_turn_span(turn_data, self._trace_id, root_span_id)
+            spans = _make_turn_span(
+                turn_data,
+                self._trace_id,
+                root_span_id,
+                prev_messages_count=self._prev_messages_count,
+            )
+            input_step = next(
+                (s for s in turn_data.get("steps", []) if s.get("type") == "input"),
+                None,
+            )
+            if input_step and input_step.get("messages_count") is not None:
+                self._prev_messages_count = input_step["messages_count"]
             dynamic_attrs = self._call_metadata_fn(
                 turn=turn_data.get("turn", 0),
                 usage=usage_totals,

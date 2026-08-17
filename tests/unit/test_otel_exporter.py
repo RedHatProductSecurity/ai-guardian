@@ -315,6 +315,28 @@ class TestMakeRootSpan:
         assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "1000"
         assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "500"
 
+    def test_root_span_turn_count(self):
+        doc = _make_full_trace()
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.turn_count"]["intValue"] == "3"
+
+    def test_root_span_turn_count_empty(self):
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.turn_count"]["intValue"] == "0"
+
+    def test_root_span_compaction_count(self):
+        doc = _make_full_trace()
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.compaction_count"]["intValue"] == "1"
+
+    def test_root_span_compaction_count_zero(self):
+        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["gen_ai.agent.compaction_count"]["intValue"] == "0"
+
     def test_error_status(self):
         doc = {**MINIMAL_TRACE_DOC, "stop_reason": "error"}
         span = _make_root_span(doc, doc["trace_id"])
@@ -362,6 +384,24 @@ class TestMakeTurnSpan:
         assert attr_map["gen_ai.turn.messages_count"]["intValue"] == "3"
         assert attr_map["gen_ai.turn.compacted"]["boolValue"] is False
 
+    def test_turn_span_messages_count_growth(self):
+        trace = _make_full_trace()
+        turn = trace["trace"][2]  # turn 2: messages_count=5
+        spans = _make_turn_span(
+            turn, trace["trace_id"], "rootrootrootrootx", prev_messages_count=3
+        )
+        turn_span = spans[0]
+        attr_map = {a["key"]: a["value"] for a in turn_span["attributes"]}
+        assert attr_map["gen_ai.turn.messages_count_growth"]["intValue"] == "2"
+
+    def test_turn_span_no_growth_without_prev(self):
+        trace = _make_full_trace()
+        turn = trace["trace"][1]
+        spans = _make_turn_span(turn, trace["trace_id"], "rootrootrootrootx")
+        turn_span = spans[0]
+        attr_keys = {a["key"] for a in turn_span["attributes"]}
+        assert "gen_ai.turn.messages_count_growth" not in attr_keys
+
     def test_system_and_input_steps_skipped_as_child_spans(self):
         trace = _make_full_trace()
         turn = trace["trace"][0]  # turn 0 — system + scan
@@ -396,6 +436,59 @@ class TestMakeStepSpans:
         assert attr_map["gen_ai.response.finish_reasons"]["arrayValue"]["values"] == [
             {"stringValue": "end_turn"}
         ]
+
+    def test_response_step_text_length(self):
+        step = {
+            "type": "response",
+            "text": "Hello world",
+            "model_signal": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+            "latency_ms": 1000,
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.response.text_length"]["intValue"] == "11"
+
+    def test_response_step_text_length_explicit(self):
+        step = {
+            "type": "response",
+            "text_length": 42,
+            "model_signal": "end_turn",
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.response.text_length"]["intValue"] == "42"
+
+    def test_response_step_tool_call_count(self):
+        step = {
+            "type": "response",
+            "text": "Using tools",
+            "model_signal": "tool_use",
+            "tool_call_count": 3,
+            "usage": {"input_tokens": 100, "output_tokens": 50},
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["gen_ai.response.tool_call_count"]["intValue"] == "3"
 
     def test_tool_call_step(self):
         step = {
@@ -435,6 +528,44 @@ class TestMakeStepSpans:
         assert spans[0]["name"] == "tool_result:bash"
         attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
         assert attr_map["tool.output_bytes"]["intValue"] == "2"
+
+    def test_tool_result_output_truncated(self):
+        step = {
+            "type": "tool_result",
+            "name": "bash",
+            "output": "ok",
+            "latency_ms": 50,
+            "output_bytes": 2,
+            "output_truncated": True,
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["tool.output_truncated"]["boolValue"] is True
+
+    def test_tool_result_output_not_truncated(self):
+        step = {
+            "type": "tool_result",
+            "name": "bash",
+            "output": "ok",
+            "latency_ms": 50,
+            "output_bytes": 2,
+            "output_truncated": False,
+        }
+        spans = _make_step_spans(
+            step,
+            "trace123456789012345678901234",
+            "parent1234567890",
+            "2026-08-14T10:00:00+00:00",
+            "2026-08-14T10:00:01+00:00",
+        )
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["tool.output_truncated"]["boolValue"] is False
 
     def test_scan_step_with_violations(self):
         step = {
@@ -578,6 +709,24 @@ class TestTraceToOtlpJson:
         assert attr_map["deployment.environment"]["stringValue"] == "dev"
         assert "service.name" in attr_map
         assert "service.version" in attr_map
+
+    def test_messages_count_growth_across_turns(self):
+        doc = _make_full_trace()
+        result = trace_to_otlp_json(doc)
+        spans = result["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        turn_spans = [s for s in spans if s["name"] == "gen_ai.turn"]
+
+        # turn 0: no input step → no messages_count → no growth
+        t0_attrs = {a["key"] for a in turn_spans[0]["attributes"]}
+        assert "gen_ai.turn.messages_count_growth" not in t0_attrs
+
+        # turn 1: messages_count=3, prev=None → no growth
+        t1_attrs = {a["key"] for a in turn_spans[1]["attributes"]}
+        assert "gen_ai.turn.messages_count_growth" not in t1_attrs
+
+        # turn 2: messages_count=5, prev=3 → growth=2
+        t2_map = {a["key"]: a["value"] for a in turn_spans[2]["attributes"]}
+        assert t2_map["gen_ai.turn.messages_count_growth"]["intValue"] == "2"
 
     def test_output_is_json_serializable(self):
         doc = _make_full_trace()
@@ -1072,6 +1221,31 @@ class TestOtelSpanEmitter:
         )
         emitter.on_turn_complete(_make_full_trace()["trace"][1])
         emitter.on_run_complete(MINIMAL_TRACE_DOC)
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_emitter_tracks_messages_count_growth(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "test-agent",
+            "test-model",
+        )
+
+        trace = _make_full_trace()
+        # Send turn 1 (messages_count=3) — no prev → no growth
+        emitter.on_turn_complete(trace["trace"][1])
+        payload1 = mock_requests.post.call_args[1]["json"]
+        turn1_span = payload1["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        t1_keys = {a["key"] for a in turn1_span["attributes"]}
+        assert "gen_ai.turn.messages_count_growth" not in t1_keys
+
+        # Send turn 2 (messages_count=5) — prev=3 → growth=2
+        emitter.on_turn_complete(trace["trace"][2])
+        payload2 = mock_requests.post.call_args[1]["json"]
+        turn2_span = payload2["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        t2_map = {a["key"]: a["value"] for a in turn2_span["attributes"]}
+        assert t2_map["gen_ai.turn.messages_count_growth"]["intValue"] == "2"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     def test_metadata_fn_none_is_noop(self, mock_requests):
