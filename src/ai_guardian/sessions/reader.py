@@ -56,6 +56,12 @@ def _read_claude_session(session: Dict) -> Dict:
     last_ts = ""
     user_count = 0
     assistant_count = 0
+    title = result.get("title", "")
+    model = result.get("model", "")
+    total_input = 0
+    total_output = 0
+    total_cache_read = 0
+    total_cache_create = 0
 
     try:
         with open(file_path, "r", encoding="utf-8") as f:
@@ -76,10 +82,20 @@ def _read_claude_session(session: Dict) -> Dict:
                         first_ts = ts
                     last_ts = ts
 
-                if msg_type == "user":
+                if msg_type == "ai-title" and not title:
+                    title = d.get("aiTitle", "")
+                elif msg_type == "user":
                     user_count += 1
                 elif msg_type == "assistant":
                     assistant_count += 1
+                    msg = d.get("message", {})
+                    if not model and msg.get("model"):
+                        model = msg["model"]
+                    usage = msg.get("usage", {})
+                    total_input += usage.get("input_tokens", 0)
+                    total_output += usage.get("output_tokens", 0)
+                    total_cache_read += usage.get("cache_read_input_tokens", 0)
+                    total_cache_create += usage.get("cache_creation_input_tokens", 0)
     except OSError:
         pass
 
@@ -87,6 +103,17 @@ def _read_claude_session(session: Dict) -> Dict:
     result["last_timestamp"] = last_ts
     result["user_messages"] = user_count
     result["assistant_messages"] = assistant_count
+    if not result.get("title"):
+        result["title"] = title
+    if not result.get("model"):
+        result["model"] = model
+    if not result.get("token_usage"):
+        result["token_usage"] = {
+            "input_tokens": total_input,
+            "output_tokens": total_output,
+            "cache_read_input_tokens": total_cache_read,
+            "cache_creation_input_tokens": total_cache_create,
+        }
     return result
 
 
@@ -113,16 +140,40 @@ def _read_claude_messages(session: Dict, limit: int = 200) -> List[Dict]:
                 if msg_type == "user":
                     content = d.get("message", {}).get("content", "")
                     if isinstance(content, list):
-                        content = " ".join(
-                            c.get("text", "") for c in content if isinstance(c, dict)
+                        text_parts = []
+                        for c in content:
+                            if not isinstance(c, dict):
+                                continue
+                            ctype = c.get("type", "")
+                            if ctype == "tool_result":
+                                rc = c.get("content", "")
+                                if isinstance(rc, list):
+                                    rc = "\n".join(
+                                        p.get("text", "")
+                                        for p in rc
+                                        if isinstance(p, dict) and p.get("text")
+                                    )
+                                messages.append(
+                                    {
+                                        "role": "tool_result",
+                                        "content": _truncate(str(rc), 500),
+                                        "timestamp": d.get("timestamp", ""),
+                                        "tool_id": c.get("tool_use_id", ""),
+                                    }
+                                )
+                            else:
+                                text = c.get("text", "")
+                                if text:
+                                    text_parts.append(text)
+                        content = " ".join(text_parts)
+                    if content:
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": _truncate(str(content), 500),
+                                "timestamp": d.get("timestamp", ""),
+                            }
                         )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": _truncate(str(content), 500),
-                            "timestamp": d.get("timestamp", ""),
-                        }
-                    )
 
                 elif msg_type == "assistant":
                     msg = d.get("message", {})
@@ -216,17 +267,50 @@ def _read_claude_detail(session: Dict) -> List[Dict]:
 
                 elif msg_type == "user":
                     content = d.get("message", {}).get("content", "")
+                    ts = d.get("timestamp", "")
+
                     if isinstance(content, list):
-                        content = " ".join(
-                            c.get("text", "") for c in content if isinstance(c, dict)
+                        text_parts = []
+                        for c in content:
+                            if not isinstance(c, dict):
+                                continue
+                            ctype = c.get("type", "")
+                            if ctype == "tool_result":
+                                rc = c.get("content", "")
+                                if isinstance(rc, list):
+                                    rc = "\n".join(
+                                        p.get("text", "")
+                                        for p in rc
+                                        if isinstance(p, dict) and p.get("text")
+                                    )
+                                steps.append(
+                                    {
+                                        "type": "tool_result",
+                                        "tool_name": "",
+                                        "content": str(rc),
+                                        "tool_id": c.get("tool_use_id", ""),
+                                    }
+                                )
+                            else:
+                                text = c.get("text", "")
+                                if text:
+                                    text_parts.append(text)
+                        if text_parts:
+                            steps.append(
+                                {
+                                    "type": "user",
+                                    "content": " ".join(text_parts),
+                                    "timestamp": ts,
+                                }
+                            )
+                    elif content:
+                        steps.append(
+                            {
+                                "type": "user",
+                                "content": str(content),
+                                "timestamp": ts,
+                            }
                         )
-                    steps.append(
-                        {
-                            "type": "user",
-                            "content": str(content),
-                            "timestamp": d.get("timestamp", ""),
-                        }
-                    )
 
                 elif msg_type == "assistant":
                     msg = d.get("message", {})

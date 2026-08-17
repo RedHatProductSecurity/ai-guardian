@@ -19,10 +19,18 @@ def create_ide_sessions_page(service, daemon_name: str):
             "text-xs text-grey-6"
         )
 
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("ide_sessions_sort_newest", True)
+        except Exception:
+            saved_sort = True
+
         state = {
             "sessions": [],
             "ide": "",
             "load_fn": None,
+            "newest_first": saved_sort,
         }
 
         with ui.row().classes("items-end gap-4 w-full"):
@@ -52,6 +60,26 @@ def create_ide_sessions_page(service, daemon_name: str):
             ui.button("Refresh", icon="refresh", on_click=_on_refresh).props(
                 "dense outline"
             )
+
+            async def _toggle_sort():
+                state["newest_first"] = not state["newest_first"]
+                sort_btn.text = "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑"
+                try:
+                    from nicegui import app as _app2
+
+                    _app2.storage.user["ide_sessions_sort_newest"] = state[
+                        "newest_first"
+                    ]
+                except Exception:
+                    pass
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            sort_btn = ui.button(
+                "Showing: Newest ↓" if state["newest_first"] else "Showing: Oldest ↑",
+                on_click=_toggle_sort,
+            ).props("dense outline")
 
         stats_row = ui.row().classes("w-full gap-4")
         cards_container = ui.column().classes("w-full gap-2")
@@ -86,6 +114,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                     or search in (s.get("project_path", "") or "").lower()
                 ]
 
+            sessions.sort(
+                key=lambda s: s.get("modified", 0),
+                reverse=state["newest_first"],
+            )
             _render_stats(sessions, stats_row, ide)
             _render_session_list(sessions, cards_container, daemon_name, ide)
 
@@ -369,7 +401,42 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 ),
             ).props("dense flat size=xs color=grey-7").tooltip("Copy session ID")
 
+        try:
+            from nicegui import app as _app
+
+            saved_sort = _app.storage.user.get("ide_session_detail_sort_newest", False)
+        except Exception:
+            saved_sort = False
+
+        detail_state = {"newest_first": saved_sort, "load_fn": None}
+
         summary_container = ui.column().classes("w-full")
+
+        with ui.row().classes("items-center gap-2 w-full"):
+            ui.label("Conversation").classes("text-lg font-bold")
+
+            async def _toggle_detail_sort():
+                detail_state["newest_first"] = not detail_state["newest_first"]
+                detail_sort_btn.text = (
+                    "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑"
+                )
+                try:
+                    from nicegui import app as _app2
+
+                    _app2.storage.user["ide_session_detail_sort_newest"] = detail_state[
+                        "newest_first"
+                    ]
+                except Exception:
+                    pass
+                fn = detail_state["load_fn"]
+                if fn:
+                    await fn()
+
+            detail_sort_btn = ui.button(
+                "Showing: Newest ↓" if detail_state["newest_first"] else "Showing: Oldest ↑",
+                on_click=_toggle_detail_sort,
+            ).props("dense outline")
+
         steps_container = ui.column().classes("w-full gap-1")
 
         async def load_detail():
@@ -399,15 +466,18 @@ def create_ide_session_detail_page(service, daemon_name: str):
             with summary_container:
                 _render_session_summary(summary)
 
+            if detail_state["newest_first"]:
+                detail_steps = list(reversed(detail_steps))
+
             steps_container.clear()
             with steps_container:
-                ui.label("Conversation").classes("text-lg font-bold")
                 if not detail_steps:
                     ui.label("No conversation data found.").classes("text-grey-6")
                 else:
                     for i, step in enumerate(detail_steps):
                         _render_step(step, i)
 
+        detail_state["load_fn"] = load_detail
         ui.timer(0.1, load_detail, once=True)
 
 
@@ -511,10 +581,15 @@ def _render_step(step, index):
             content = json.dumps(tool_input, indent=2, default=str)
 
         if content:
-            preview = content[:200] + ("..." if len(content) > 200 else "")
-            exp = ui.expansion(preview, value=False).classes("w-full").props("dense")
-            with exp:
+            if len(content) <= 200:
                 _render_text_block(content)
+            else:
+                preview = content[:200] + "..."
+                exp = (
+                    ui.expansion(preview, value=False).classes("w-full").props("dense")
+                )
+                with exp:
+                    _render_text_block(content)
 
 
 def _render_text_block(text, color="text-grey-6"):

@@ -39,6 +39,7 @@ class TracesContent(Container):
         super().__init__(*args, **kwargs)
         self._last_export_path = None
         self._selected_filename = None
+        self._newest_first = True
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -52,6 +53,7 @@ class TracesContent(Container):
                 id="traces-filter-input",
             )
             yield Button("Refresh", id="traces-refresh", variant="success")
+            yield Button("Showing: Newest ↓", id="traces-sort-toggle", variant="default")
             yield Button("Export OTLP", id="traces-export-otlp", variant="default")
             yield Button(
                 "Open Folder",
@@ -78,6 +80,10 @@ class TracesContent(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "traces-refresh":
             self.refresh_content()
+        elif event.button.id == "traces-sort-toggle":
+            self._newest_first = not self._newest_first
+            event.button.label = "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            self._load_traces()
         elif event.button.id == "traces-export-otlp":
             self._export_otlp()
         elif event.button.id == "traces-open-folder":
@@ -123,11 +129,12 @@ class TracesContent(Container):
             if pattern:
                 traces = _filter_traces(traces, pattern)
 
-            self.app.call_from_thread(self._render_traces, traces)
+            newest = self._newest_first
+            self.app.call_from_thread(self._render_traces, traces, newest)
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _render_traces(self, traces) -> None:
+    def _render_traces(self, traces, newest_first=True) -> None:
         """Render trace list as a directory tree (called on main thread)."""
         tree = self.query_one("#traces-tree", Tree)
         tree.clear()
@@ -135,6 +142,8 @@ class TracesContent(Container):
         if not traces:
             tree.root.add_leaf("[dim]No trace files found.[/dim]")
             return
+
+        traces.sort(key=lambda t: t.get("started_at", ""), reverse=newest_first)
 
         dirs: dict = {}
         for t in traces:

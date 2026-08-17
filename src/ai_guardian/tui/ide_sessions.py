@@ -37,6 +37,7 @@ class IDESessionsContent(Container):
         super().__init__(*args, **kwargs)
         self._sessions = []
         self._selected_session = None
+        self._newest_first = True
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -55,6 +56,7 @@ class IDESessionsContent(Container):
                 id="ide-sessions-filter",
             )
             yield Button("Refresh", id="ide-sessions-refresh", variant="success")
+            yield Button("Showing: Newest ↓", id="ide-sessions-sort-toggle", variant="default")
         yield Static("", id="ide-sessions-detail")
         with VerticalScroll():
             yield Tree("Sessions", id="ide-sessions-tree")
@@ -70,6 +72,10 @@ class IDESessionsContent(Container):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ide-sessions-refresh":
             self.refresh_content()
+        elif event.button.id == "ide-sessions-sort-toggle":
+            self._newest_first = not self._newest_first
+            event.button.label = "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
+            self._apply_filter()
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "ide-sessions-ide-select":
@@ -152,6 +158,11 @@ class IDESessionsContent(Container):
                 or query in (s.get("session_id", "") or "").lower()
                 or query in (s.get("model", "") or "").lower()
             ]
+
+        filtered.sort(
+            key=lambda s: s.get("modified", 0),
+            reverse=self._newest_first,
+        )
 
         if not filtered:
             tree.root.add_leaf("[dim]No sessions found.[/dim]")

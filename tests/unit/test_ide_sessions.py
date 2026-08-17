@@ -16,7 +16,11 @@ from ai_guardian.sessions.discovery import (
     get_default_ide,
     get_supported_ides,
 )
-from ai_guardian.sessions.reader import read_session_messages, read_session_summary
+from ai_guardian.sessions.reader import (
+    read_session_detail,
+    read_session_messages,
+    read_session_summary,
+)
 
 
 class TestGetSupportedIdes:
@@ -292,3 +296,212 @@ class TestReadSessionMessages:
     def test_unsupported_ide_returns_empty(self):
         session = {"ide": "notepad", "file_path": "/nonexistent"}
         assert read_session_messages(session) == []
+
+    def test_tool_result_in_user_message_not_shown_as_user(self):
+        """Tool results sent as role:user should appear as tool_result, not user."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-08-17T10:00:00Z",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "tool_abc",
+                                    "content": "file contents here",
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            msgs = read_session_messages(session)
+            assert len(msgs) == 1
+            assert msgs[0]["role"] == "tool_result"
+            assert "file contents" in msgs[0]["content"]
+        finally:
+            Path(path).unlink()
+
+    def test_mixed_text_and_tool_result_in_user_message(self):
+        """User message with both text and tool_result blocks."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-08-17T10:00:00Z",
+                        "message": {
+                            "content": [
+                                {"type": "text", "text": "Here is context"},
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "tool_xyz",
+                                    "content": "result data",
+                                },
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            msgs = read_session_messages(session)
+            roles = [m["role"] for m in msgs]
+            assert "tool_result" in roles
+            assert "user" in roles
+            user_msgs = [m for m in msgs if m["role"] == "user"]
+            assert user_msgs[0]["content"] == "Here is context"
+        finally:
+            Path(path).unlink()
+
+
+class TestReadSessionDetailToolResults:
+    def test_tool_result_in_user_message_parsed_correctly(self):
+        """Tool results in role:user messages should emit tool_result steps."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-08-17T10:00:00Z",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "tool_123",
+                                    "content": "245 lines read",
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            assert len(steps) == 1
+            assert steps[0]["type"] == "tool_result"
+            assert steps[0]["content"] == "245 lines read"
+            assert steps[0]["tool_id"] == "tool_123"
+        finally:
+            Path(path).unlink()
+
+    def test_empty_user_message_not_emitted(self):
+        """User messages with only tool_results should not emit user steps."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "t1",
+                                    "content": "ok",
+                                },
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "t2",
+                                    "content": "done",
+                                },
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            user_steps = [s for s in steps if s["type"] == "user"]
+            assert len(user_steps) == 0
+            tool_steps = [s for s in steps if s["type"] == "tool_result"]
+            assert len(tool_steps) == 2
+        finally:
+            Path(path).unlink()
+
+    def test_mixed_content_emits_both(self):
+        """Mixed text + tool_result in user message emits both types."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": "2026-08-17T10:00:00Z",
+                        "message": {
+                            "content": [
+                                {"type": "text", "text": "user typed this"},
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "t1",
+                                    "content": "tool output",
+                                },
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            types = [s["type"] for s in steps]
+            assert "tool_result" in types
+            assert "user" in types
+            user_step = [s for s in steps if s["type"] == "user"][0]
+            assert user_step["content"] == "user typed this"
+        finally:
+            Path(path).unlink()
+
+    def test_tool_result_with_list_content(self):
+        """Tool result with list content (nested text blocks) is flattened."""
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "message": {
+                            "content": [
+                                {
+                                    "type": "tool_result",
+                                    "tool_use_id": "t1",
+                                    "content": [
+                                        {"type": "text", "text": "line 1"},
+                                        {"type": "text", "text": "line 2"},
+                                    ],
+                                }
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            assert len(steps) == 1
+            assert steps[0]["type"] == "tool_result"
+            assert "line 1" in steps[0]["content"]
+            assert "line 2" in steps[0]["content"]
+        finally:
+            Path(path).unlink()
