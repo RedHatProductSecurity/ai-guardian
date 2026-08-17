@@ -2188,6 +2188,7 @@ def process_hook_data(hook_data, daemon_state=None):
             violation_logger=violation_logger,
             latency_timer=_latency_timer,
             invocation_allowed_findings=_invocation_allowed,
+            daemon_state=daemon_state,
         )
 
         if hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE):

@@ -415,7 +415,7 @@ def _make_root_span(
 def trace_to_otlp_json(
     trace_doc: Dict[str, Any],
     *,
-    service_name: str = "ai-guardian-sdk",
+    service_name: str = "ai-guardian",
     resource_attributes: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Convert an ai-guardian trace document to OTLP JSON format.
@@ -480,7 +480,7 @@ def trace_to_otlp_json(
                 "scopeSpans": [
                     {
                         "scope": {
-                            "name": "ai-guardian-sdk",
+                            "name": "ai-guardian",
                             "version": version,
                         },
                         "spans": all_spans,
@@ -511,7 +511,7 @@ def _export_single(args) -> int:
         print(f"Error: failed to read trace file: {exc}", file=sys.stderr)
         return 1
 
-    service_name = getattr(args, "service_name", "ai-guardian-sdk")
+    service_name = getattr(args, "service_name", "ai-guardian")
 
     resource_attributes = None
     try:
@@ -596,7 +596,7 @@ def _export_dir(args) -> int:
         os.makedirs(output_dir, exist_ok=True)
 
     fmt = getattr(args, "format", "otlp-json")
-    service_name = getattr(args, "service_name", "ai-guardian-sdk")
+    service_name = getattr(args, "service_name", "ai-guardian")
 
     resource_attributes = None
     try:
@@ -729,7 +729,7 @@ class OtelSpanEmitter:
             "endpoint", "http://localhost:4318"
         )
         self._service_name = os.environ.get("OTEL_SERVICE_NAME") or config.get(
-            "service_name", "ai-guardian-sdk"
+            "service_name", "ai-guardian"
         )
         self._format = config.get("export_format", "otlp-json")
         self._headers = _resolve_headers(config.get("headers"))
@@ -805,6 +805,9 @@ class OtelSpanEmitter:
             return
         try:
             root = _make_root_span(trace_doc, self._trace_id)
+            root["attributes"].extend(
+                _attrs(("ai_guardian.span_type", "agent_run"))
+            )
             dynamic_attrs = self._call_metadata_fn(
                 turn=0,
                 usage=trace_doc.get("usage"),
@@ -844,7 +847,7 @@ class OtelSpanEmitter:
                     "scopeSpans": [
                         {
                             "scope": {
-                                "name": "ai-guardian-sdk",
+                                "name": "ai-guardian",
                                 "version": version,
                             },
                             "spans": spans,
@@ -866,3 +869,188 @@ class OtelSpanEmitter:
             )
         except Exception:
             logger.debug("OTEL flush to %s failed", url, exc_info=True)
+
+
+class HookOtelEmitter:
+    """Emit OTEL spans for hook session activity (violations, blocks, scans).
+
+    Unlike ``OtelSpanEmitter`` (which tracks a single agent run), this emitter
+    accumulates child spans over an IDE session lifetime and flushes them as a
+    batch on SessionEnd.
+
+    Span hierarchy::
+
+        ai_guardian.session (root)
+        ├── ai_guardian.violation (one per violation)
+        ├── ai_guardian.block (one per blocked event)
+        └── ai_guardian.scan (aggregated scan summary)
+    """
+
+    def __init__(self, config: Dict[str, Any]) -> None:
+        self._enabled = config.get("enabled", False)
+        if not self._enabled:
+            return
+        self._endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or config.get(
+            "endpoint", "http://localhost:4318"
+        )
+        self._service_name = os.environ.get("OTEL_SERVICE_NAME") or config.get(
+            "service_name", "ai-guardian"
+        )
+        self._format = config.get("export_format", "otlp-json")
+        self._headers = _resolve_headers(config.get("headers"))
+        self._resource_attributes = config.get("resource_attributes") or {}
+        self._trace_id = uuid.uuid4().hex
+        self._root_span_id = _new_span_id()
+        self._child_spans: List[Dict[str, Any]] = []
+        self._start_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
+        self._violation_count = 0
+        self._block_count = 0
+        self._scan_count = 0
+
+    @property
+    def enabled(self) -> bool:
+        return self._enabled
+
+    def record_violation(
+        self,
+        violation_type: str,
+        *,
+        severity: str = "warning",
+        tool_name: Optional[str] = None,
+        violation_id: Optional[str] = None,
+        scanner: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Record a violation as a child span."""
+        if not self._enabled:
+            return
+        self._violation_count += 1
+        now_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
+        attrs = _attrs(
+            ("ai_guardian.violation_type", violation_type),
+            ("ai_guardian.severity", severity),
+            ("ai_guardian.tool_name", tool_name),
+            ("ai_guardian.violation_id", violation_id),
+            ("ai_guardian.scanner", scanner),
+        )
+        if details:
+            for k, v in details.items():
+                attr = _make_attribute(f"ai_guardian.detail.{k}", v)
+                if attr is not None:
+                    attrs.append(attr)
+        span = _make_span(
+            trace_id=self._trace_id,
+            span_id=_new_span_id(),
+            parent_span_id=self._root_span_id,
+            name="ai_guardian.violation",
+            start_nano=now_nano,
+            end_nano=now_nano,
+            attributes=attrs,
+        )
+        self._child_spans.append(span)
+
+    def record_block(
+        self,
+        tool_name: str,
+        *,
+        reason: str,
+        scanner: Optional[str] = None,
+    ) -> None:
+        """Record a blocked event as a child span."""
+        if not self._enabled:
+            return
+        self._block_count += 1
+        now_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
+        span = _make_span(
+            trace_id=self._trace_id,
+            span_id=_new_span_id(),
+            parent_span_id=self._root_span_id,
+            name="ai_guardian.block",
+            start_nano=now_nano,
+            end_nano=now_nano,
+            attributes=_attrs(
+                ("ai_guardian.tool_name", tool_name),
+                ("ai_guardian.reason", reason),
+                ("ai_guardian.scanner", scanner),
+            ),
+        )
+        self._child_spans.append(span)
+
+    def flush(
+        self,
+        *,
+        session_id: Optional[str] = None,
+        adapter_name: Optional[str] = None,
+    ) -> None:
+        """Flush all accumulated spans to the collector on session end."""
+        if not self._enabled:
+            return
+        try:
+            end_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
+
+            root_attrs = _attrs(
+                ("ai_guardian.session_id", session_id),
+                ("ai_guardian.adapter", adapter_name),
+                ("ai_guardian.violation_count", self._violation_count),
+                ("ai_guardian.block_count", self._block_count),
+                ("ai_guardian.span_type", "session"),
+            )
+
+            root_span = _make_span(
+                trace_id=self._trace_id,
+                span_id=self._root_span_id,
+                parent_span_id="",
+                name="ai_guardian.session",
+                start_nano=self._start_nano,
+                end_nano=end_nano,
+                attributes=root_attrs,
+            )
+
+            all_spans = [root_span] + self._child_spans
+            self._post_spans(all_spans)
+            self._child_spans.clear()
+        except Exception:
+            logger.debug("OTEL session flush failed", exc_info=True)
+
+    def _post_spans(self, spans: List[Dict[str, Any]]) -> None:
+        """POST spans to the OTEL collector. Fire-and-forget."""
+        try:
+            from ai_guardian import __version__
+
+            version = __version__
+        except Exception:
+            version = "unknown"
+
+        res_attrs = _attrs(
+            ("service.name", self._service_name),
+            ("service.version", version),
+        )
+        for key, value in self._resource_attributes.items():
+            attr = _make_attribute(key, value)
+            if attr is not None:
+                res_attrs.append(attr)
+
+        payload = {
+            "resourceSpans": [
+                {
+                    "resource": {"attributes": res_attrs},
+                    "scopeSpans": [
+                        {
+                            "scope": {
+                                "name": "ai-guardian",
+                                "version": version,
+                            },
+                            "spans": spans,
+                        }
+                    ],
+                }
+            ]
+        }
+
+        url = self._endpoint.rstrip("/") + "/v1/traces"
+        try:
+            hdrs = {"Content-Type": "application/json"}
+            hdrs.update(self._headers)
+            requests.post(url, json=payload, headers=hdrs, timeout=5)
+        except Exception:
+            logger.debug("OTEL hook flush to %s failed", url, exc_info=True)

@@ -69,6 +69,14 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
     except Exception as e:
         logger.debug(f"Session end: session state cleanup failed (non-fatal): {e}")
 
+    try:
+        if daemon_state:
+            daemon_state.flush_otel_emitter(
+                session_id, adapter_name=(adapter.name if adapter else None)
+            )
+    except Exception as e:
+        logger.debug(f"Session end: OTEL flush failed (non-fatal): {e}")
+
     logger.info(f"Session cleanup complete: {contexts_cleaned} contexts removed")
 
     return {"output": None, "exit_code": 0}
