@@ -532,6 +532,14 @@ class WebConsole:
 
             create_ide_session_detail_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/violation-detail")
+        def violation_detail_page(daemon_name: str):
+            from ai_guardian.web.pages.violation_detail import (
+                create_violation_detail_page,
+            )
+
+            create_violation_detail_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/traces")
         def traces_page(daemon_name: str):
             from ai_guardian.web.pages.traces import create_traces_page
