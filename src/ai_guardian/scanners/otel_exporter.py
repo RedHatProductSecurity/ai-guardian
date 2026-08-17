@@ -376,7 +376,9 @@ def _make_root_span(
         for v in s.get("violations", [])
     ]
     violation_count = len(all_violations)
-    violation_types = ",".join(sorted({v.get("type", "") for v in all_violations})) or None
+    violation_types = (
+        ",".join(sorted({v.get("type", "") for v in all_violations})) or None
+    )
     violation_ids = [v.get("id") for v in all_violations if v.get("id")] or None
 
     start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))

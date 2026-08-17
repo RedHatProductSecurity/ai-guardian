@@ -349,7 +349,9 @@ class TestMakeRootSpan:
         span = _make_root_span(doc, doc["trace_id"])
         attr_map = {a["key"]: a["value"] for a in span["attributes"]}
         assert attr_map["gen_ai.agent.violation_count"]["intValue"] == "1"
-        assert attr_map["gen_ai.agent.violation_types"]["stringValue"] == "secret_detected"
+        assert (
+            attr_map["gen_ai.agent.violation_types"]["stringValue"] == "secret_detected"
+        )
 
     def test_root_span_violation_ids(self):
         doc = _make_full_trace()
@@ -618,7 +620,9 @@ class TestMakeStepSpans:
         assert len(spans) == 1
         assert spans[0]["name"] == "gen_ai.security_scan"
         attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
-        assert attr_map["gen_ai.security_scan.target"]["stringValue"] == "agent_response"
+        assert (
+            attr_map["gen_ai.security_scan.target"]["stringValue"] == "agent_response"
+        )
         assert "gen_ai.security_scan.violation_count" not in attr_map
         assert "gen_ai.security_scan.violation_types" not in attr_map
         assert "gen_ai.security_scan.violation_ids" not in attr_map
