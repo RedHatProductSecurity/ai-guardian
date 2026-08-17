@@ -524,6 +524,14 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             ),
                         ).props("flat dense size=sm")
 
+                    v_id = violation.get("id")
+                    if v_id:
+                        detail_url = f"/{daemon_name}/violation-detail?id={v_id}"
+                        ui.link(
+                            "Open as page ↗",
+                            detail_url,
+                        ).classes("text-xs text-blue-4 mt-1")
+
                     with ui.row().classes("w-full justify-between mt-2"):
                         if vtype in _ALLOWLIST_TYPES and service is not None:
 

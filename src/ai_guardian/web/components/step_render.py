@@ -59,19 +59,26 @@ def render_content_block(content, tool_input=None, step_type=""):
 
 
 def render_violation_badge(violation, daemon_name=""):
-    """Render a violation type badge with optional link to Violations page."""
+    """Render a violation type badge with link to detail page (by ID) or filtered list."""
     vtype = violation.get("type", violation.get("violation_type", "unknown"))
     msg = violation.get("message", "")
+    vid = violation.get("id", "")
 
     with ui.row().classes("items-center gap-1"):
         ui.icon("warning").classes("text-red text-xs")
         ui.label(f"{vtype}:").classes("text-xs font-bold text-red")
         if daemon_name:
-            vtype_param = urllib.parse.quote(vtype, safe="")
-            ui.link(
-                "View all",
-                f"/{daemon_name}/violations?type={vtype_param}",
-            ).classes("text-xs").tooltip(f"Show all {vtype} violations")
+            if vid:
+                ui.link(
+                    "View detail",
+                    f"/{daemon_name}/violation-detail?id={vid}",
+                ).classes("text-xs").tooltip("Open violation detail page")
+            else:
+                vtype_param = urllib.parse.quote(vtype, safe="")
+                ui.link(
+                    "View all",
+                    f"/{daemon_name}/violations?type={vtype_param}",
+                ).classes("text-xs").tooltip(f"Show all {vtype} violations")
     if msg:
         render_text_block(msg, color="text-red")
 
@@ -95,9 +102,21 @@ def render_violation_summary(violations, daemon_name=""):
             by_type.setdefault(vtype, []).append(v)
 
         for vtype, items in sorted(by_type.items()):
-            with ui.row().classes("items-center gap-1"):
+            with ui.row().classes("items-center gap-1 flex-wrap"):
                 ui.badge(f"{len(items)} {vtype}", color="red").classes("text-xs")
                 if daemon_name:
+                    for item in items:
+                        vid = item.get("id", "")
+                        if vid:
+                            short_id = vid[-8:] if len(vid) > 8 else vid
+                            ui.link(
+                                short_id,
+                                f"/{daemon_name}/violation-detail?id={vid}",
+                            ).classes("text-xs").style(
+                                "font-family: monospace"
+                            ).tooltip(
+                                f"View {vtype} violation {vid}"
+                            )
                     vtype_param = urllib.parse.quote(vtype, safe="")
                     ui.link(
                         "View all",
