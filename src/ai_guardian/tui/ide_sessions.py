@@ -197,12 +197,51 @@ class IDESessionsContent(Container):
         total = total_in + total_out
         sid = session.get("session_id", "")
 
-        detail.update(
-            f"[bold]{title}[/bold] ({model})\n"
-            f"Session: {sid}\n"
+        lines = [
+            f"[bold]{title}[/bold] ({model})",
+            f"Session: {sid}",
             f"Messages: {msgs} | Tokens: {total:,} "
-            f"(in: {total_in:,}, out: {total_out:,})"
-        )
+            f"(in: {total_in:,}, out: {total_out:,})",
+        ]
+
+        if sid:
+            self._load_session_violations(sid, detail, lines)
+        else:
+            detail.update("\n".join(lines))
+
+    def _load_session_violations(self, session_id, detail_widget, base_lines):
+        def _worker():
+            try:
+                from ai_guardian.violations.logger import ViolationLogger
+
+                violations = ViolationLogger().get_recent_violations(
+                    limit=1000, session_id=session_id
+                )
+            except Exception:
+                violations = []
+            self.app.call_from_thread(
+                self._render_detail_with_violations,
+                detail_widget,
+                base_lines,
+                violations,
+            )
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _render_detail_with_violations(self, detail_widget, base_lines, violations):
+        lines = list(base_lines)
+        if violations:
+            by_type = {}
+            for v in violations:
+                vtype = v.get("violation_type", "unknown")
+                by_type.setdefault(vtype, []).append(v)
+            parts = [
+                f"{len(items)} {vtype}" for vtype, items in sorted(by_type.items())
+            ]
+            lines.append(
+                f"[bold red]Violations: {len(violations)}[/bold red] ({', '.join(parts)})"
+            )
+        detail_widget.update("\n".join(lines))
 
 
 def _get_ide_options():
