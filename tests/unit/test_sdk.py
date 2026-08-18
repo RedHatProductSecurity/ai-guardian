@@ -78,6 +78,23 @@ class TestSecurityViolation:
         assert exc.sanitized_text == "redacted"
         assert exc.response is resp
 
+    def test_includes_violation_id_in_message(self):
+        r = CheckResult(
+            blocked=True,
+            detected=True,
+            violation_id="viol_abc12345",
+            message="AWS key found",
+        )
+        exc = SecurityViolation(r)
+        assert "viol_abc12345" in str(exc)
+        assert "AWS key found" in str(exc)
+
+    def test_no_violation_id_omits_suffix(self):
+        r = CheckResult(blocked=True, detected=True, message="threat")
+        exc = SecurityViolation(r)
+        assert str(exc) == "threat"
+        assert "Violation ID" not in str(exc)
+
     def test_defaults_none(self):
         r = CheckResult(blocked=True, detected=True)
         exc = SecurityViolation(r)

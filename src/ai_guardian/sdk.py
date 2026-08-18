@@ -66,7 +66,10 @@ class SecurityViolation(Exception):
         self.sanitized_text = sanitized_text
         self.response = response
         self.sanitized_parsed = sanitized_parsed
-        super().__init__(result.message or "Security violation detected")
+        msg = result.message or "Security violation detected"
+        if result.violation_id:
+            msg += f" (Violation ID: {result.violation_id})"
+        super().__init__(msg)
 
 
 class _SecurityWarning(UserWarning):
