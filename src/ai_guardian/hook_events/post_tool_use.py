@@ -429,8 +429,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                 if pretool_ctx:
                     ctx["pretool_context"] = pretool_ctx
                 if violation_logger:
-                    from ai_guardian.scanners.scan_result import generate_violation_id
-
                     vid = generate_violation_id()
                     blocked_info["violation_id"] = vid
                     violation_logger.log_violation(
