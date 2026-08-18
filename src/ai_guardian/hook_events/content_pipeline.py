@@ -190,6 +190,8 @@ def run_content_pipeline(
     _pretool_cp_detected = False
     _secret_detected = False
 
+    _blocking_violations = []
+
     # --- Post-processing loop over scan results ---
 
     for result in scan_results:
@@ -276,21 +278,7 @@ def run_content_pipeline(
                         logger.info(
                             "Blocking operation due to prompt injection detection"
                         )
-                combined_warning = (
-                    "\n\n".join(warning_messages) if warning_messages else None
-                )
-                return (
-                    _format_response(
-                        adapter,
-                        has_secrets=True,
-                        error_message=decision.error_message,
-                        hook_event=hook_event,
-                        warning_message=combined_warning,
-                        violation_type=vtype,
-                        security_message=security_message,
-                    ),
-                    log_only_count,
-                )
+                _blocking_violations.append((decision.error_message, vtype))
 
         elif scanner_name == ScannerName.CONTEXT_POISONING:
             _pretool_cp_detected = True
@@ -306,21 +294,7 @@ def run_content_pipeline(
                 warn_violation_types.append(vtype)
             if decision.should_block:
                 logger.info("Blocking operation due to context poisoning detection")
-                combined_warning = (
-                    "\n\n".join(warning_messages) if warning_messages else None
-                )
-                return (
-                    _format_response(
-                        adapter,
-                        has_secrets=True,
-                        error_message=decision.error_message,
-                        hook_event=hook_event,
-                        warning_message=combined_warning,
-                        violation_type=vtype,
-                        security_message=security_message,
-                    ),
-                    log_only_count,
-                )
+                _blocking_violations.append((decision.error_message, vtype))
 
         elif scanner_name == ScannerName.SECRET:
             _secret_detected = True
@@ -342,40 +316,22 @@ def run_content_pipeline(
                 has_secrets = secret_decision.should_block
 
             if has_secrets:
-                combined_warning = (
-                    "\n\n".join(warning_messages) if warning_messages else None
-                )
-                return (
-                    _format_response(
-                        adapter,
-                        has_secrets=True,
-                        error_message=error_message,
-                        hook_event=hook_event,
-                        warning_message=combined_warning,
-                        violation_type=vtype,
-                        security_message=security_message,
-                    ),
-                    log_only_count,
-                )
+                _blocking_violations.append((error_message, vtype))
 
         elif scanner_name == ScannerName.PII:
-            pii_block, pii_log_only = _handle_pii_result(
+            pii_block_msg, pii_log_only = _handle_pii_result(
                 result,
                 _registry=_registry,
                 _post_scan_ctx=_post_scan_ctx,
-                adapter=adapter,
-                ide_type=ide_type,
-                hook_event=hook_event,
                 file_path=file_path,
                 filename=filename,
                 warning_messages=warning_messages,
                 warn_violation_types=warn_violation_types,
                 log_only_count=log_only_count,
-                security_message=security_message,
                 pii_content=(content_overrides.get(ScannerName.PII, content_to_scan)),
             )
-            if pii_block is not None:
-                return (pii_block, pii_log_only)
+            if pii_block_msg is not None:
+                _blocking_violations.append((pii_block_msg, ViolationType.PII_DETECTED))
             log_only_count = pii_log_only
 
         elif scanner_name == ScannerName.CONFIG_FILE:
@@ -398,21 +354,7 @@ def run_content_pipeline(
                         f"Blocking operation for {file_path} "
                         "due to config file threat"
                     )
-                combined_warning = (
-                    "\n\n".join(warning_messages) if warning_messages else None
-                )
-                return (
-                    _format_response(
-                        adapter,
-                        has_secrets=True,
-                        error_message=result.error_message,
-                        hook_event=hook_event,
-                        warning_message=combined_warning,
-                        violation_type=vtype,
-                        security_message=security_message,
-                    ),
-                    log_only_count,
-                )
+                _blocking_violations.append((result.error_message, vtype))
             elif result.error_message:
                 warning_messages.append(result.error_message)
                 if warn_violation_types is not None:
@@ -432,25 +374,39 @@ def run_content_pipeline(
                 warn_violation_types.append(vtype)
             if decision.should_block:
                 logger.info(f"Blocking operation due to {scanner_name.value} detection")
-                combined_warning = (
-                    "\n\n".join(warning_messages) if warning_messages else None
-                )
-                return (
-                    _format_response(
-                        adapter,
-                        has_secrets=True,
-                        error_message=decision.error_message,
-                        hook_event=hook_event,
-                        warning_message=combined_warning,
-                        violation_type=vtype,
-                        security_message=security_message,
-                    ),
-                    log_only_count,
-                )
+                _blocking_violations.append((decision.error_message, vtype))
             elif result.error_message:
                 warning_messages.append(result.error_message)
                 if warn_violation_types is not None:
                     warn_violation_types.append(vtype)
+
+    # --- Return combined response if any scanners blocked (#2026) ---
+    if _blocking_violations:
+        all_errors = [err for err, _ in _blocking_violations]
+        all_vtypes = [vt for _, vt in _blocking_violations]
+        if len(all_errors) == 1:
+            combined_error = all_errors[0]
+            combined_vtype = all_vtypes[0]
+        else:
+            combined_error = "Multiple security violations detected:\n\n" + "\n\n".join(
+                f"• {err}" for err in all_errors
+            )
+            combined_vtype = ",".join(
+                t.value if hasattr(t, "value") else str(t) for t in all_vtypes
+            )
+        combined_warning = "\n\n".join(warning_messages) if warning_messages else None
+        return (
+            _format_response(
+                adapter,
+                has_secrets=True,
+                error_message=combined_error,
+                hook_event=hook_event,
+                warning_message=combined_warning,
+                violation_type=combined_vtype,
+                security_message=security_message,
+            ),
+            log_only_count,
+        )
 
     if (
         ScannerName.SECRET in _pipeline_names
@@ -610,22 +566,18 @@ def _handle_pii_result(
     *,
     _registry,
     _post_scan_ctx,
-    adapter,
-    ide_type,
-    hook_event,
     file_path,
     filename,
     warning_messages,
     warn_violation_types,
     log_only_count,
-    security_message,
     pii_content,
 ):
     """Handle PII scan result post-processing.
 
-    Always returns *(block_response, log_only_count)*.  *block_response*
-    is ``None`` when PII does not block (caller continues), or a response
-    dict when PII blocks the operation.
+    Returns *(block_error_message, log_only_count)*.  *block_error_message*
+    is ``None`` when PII does not block, or an error message string when
+    PII blocks.
     """
     if pii_result.extra.get("skipped"):
         return (None, log_only_count)
@@ -638,15 +590,7 @@ def _handle_pii_result(
     pii_action = pii_result.extra.get("action", "block")
 
     if not pii_redactions:
-        result = _format_response(
-            adapter,
-            has_secrets=True,
-            error_message=pii_warning,
-            hook_event=hook_event,
-            violation_type=ViolationType.PII_DETECTED,
-            security_message=security_message,
-        )
-        return (result, log_only_count)
+        return (pii_warning, log_only_count)
 
     pii_config_for_log, _ = _loaders._load_pii_config()
     pii_action = (pii_config_for_log or {}).get("action", pii_action)
@@ -691,19 +635,7 @@ def _handle_pii_result(
         pii_action = "warn"
 
     if pii_action in ("block", "redact"):
-        combined_warning = "\n\n".join(warning_messages) if warning_messages else None
-        final_error = pii_warning
-        if combined_warning:
-            final_error = f"{combined_warning}\n\n{final_error}"
-        result = _format_response(
-            adapter,
-            has_secrets=True,
-            error_message=final_error,
-            hook_event=hook_event,
-            violation_type=ViolationType.PII_DETECTED,
-            security_message=security_message,
-        )
-        return (result, log_only_count)
+        return (pii_warning, log_only_count)
     elif pii_action == "warn":
         warning_messages.append(pii_warning)
         if warn_violation_types is not None:
