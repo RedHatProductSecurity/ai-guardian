@@ -384,33 +384,46 @@ class TestTomlPatternsColumn(unittest.TestCase):
         self.assertEqual(findings[0].start_column, 3)
 
 
-class TestEnrichBlockedFromDetails(unittest.TestCase):
-    """_enrich_blocked_from_details propagates column fields."""
+class TestScanResultBlockedDictColumns(unittest.TestCase):
+    """ScanResult.to_blocked_dict() propagates column fields."""
 
     def test_column_propagated(self):
-        from ai_guardian.scanners.secret_scanning import _enrich_blocked_from_details
+        from ai_guardian.scanners.scan_result import ScanResult
 
-        blocked = {}
-        details = {"line_number": 10, "start_column": 5, "end_column": 20}
-        _enrich_blocked_from_details(blocked, details)
+        result = ScanResult(
+            detected=True,
+            violation_type="secret_detected",
+            line_number=10,
+            start_column=5,
+            end_column=20,
+        )
+        blocked = result.to_blocked_dict()
         self.assertEqual(blocked["start_column"], 5)
         self.assertEqual(blocked["end_column"], 20)
 
     def test_column_zero_propagated(self):
-        from ai_guardian.scanners.secret_scanning import _enrich_blocked_from_details
+        from ai_guardian.scanners.scan_result import ScanResult
 
-        blocked = {}
-        details = {"line_number": 1, "start_column": 0, "end_column": 0}
-        _enrich_blocked_from_details(blocked, details)
+        result = ScanResult(
+            detected=True,
+            violation_type="secret_detected",
+            line_number=1,
+            start_column=0,
+            end_column=0,
+        )
+        blocked = result.to_blocked_dict()
         self.assertEqual(blocked["start_column"], 0)
         self.assertEqual(blocked["end_column"], 0)
 
     def test_column_absent(self):
-        from ai_guardian.scanners.secret_scanning import _enrich_blocked_from_details
+        from ai_guardian.scanners.scan_result import ScanResult
 
-        blocked = {}
-        details = {"line_number": 10}
-        _enrich_blocked_from_details(blocked, details)
+        result = ScanResult(
+            detected=True,
+            violation_type="secret_detected",
+            line_number=10,
+        )
+        blocked = result.to_blocked_dict()
         self.assertNotIn("start_column", blocked)
         self.assertNotIn("end_column", blocked)
 
@@ -725,60 +738,45 @@ class TestSSRFColumn(unittest.TestCase):
 
 
 class TestPiiViolationColumn(unittest.TestCase):
-    """PII violation logging includes column from redaction data."""
+    """PII violation logging includes column via log_violation() + ScanResult."""
 
-    def test_column_extracted_from_redactions(self):
-        from ai_guardian.hook_events.post_tool_use import _log_pii_violation
+    def test_column_in_blocked_dict(self):
+        from unittest.mock import MagicMock
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        pii_redactions = [
-            {
-                "type": "email",
-                "line_number": 5,
-                "column": 11,
-                "position": 50,
-                "original_length": 20,
-                "redacted_length": 10,
-                "strategy": "mask",
-            }
-        ]
-        result = _log_pii_violation(
-            None,
-            {"action": "block"},
-            pii_redactions,
-            "Write",
-            "PreToolUse",
-            "test.py",
-            "content",
-            "PreToolUse",
+        mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="pii_detected",
+            id=generate_violation_id(),
+            file_path="test.py",
+            line_number=5,
+            start_column=10,
+            end_column=30,
         )
-        # _log_pii_violation returns (action, types) — column is in the blocked dict
-        # We can't easily inspect the dict from here, so just verify it doesn't crash
-        self.assertEqual(result[0], "block")
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        blocked = mock_logger.log_violation.call_args[1]["blocked"]
+        self.assertEqual(blocked["start_column"], 10)
+        self.assertEqual(blocked["end_column"], 30)
 
-    def test_column_absent_when_no_column_key(self):
-        from ai_guardian.hook_events.post_tool_use import _log_pii_violation
+    def test_column_absent_when_none(self):
+        from unittest.mock import MagicMock
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        pii_redactions = [
-            {
-                "type": "email",
-                "line_number": 5,
-                "position": 50,
-                "original_length": 20,
-                "redacted_length": 10,
-                "strategy": "mask",
-            }
-        ]
-        result = _log_pii_violation(
-            None,
-            {"action": "warn"},
-            pii_redactions,
-            "Write",
-            "PreToolUse",
-            "test.py",
-            "content",
-            "PreToolUse",
+        mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="pii_detected",
+            id=generate_violation_id(),
+            file_path="test.py",
+            line_number=5,
         )
-        self.assertEqual(result[0], "warn")
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        blocked = mock_logger.log_violation.call_args[1]["blocked"]
+        self.assertNotIn("start_column", blocked)
+        self.assertNotIn("end_column", blocked)
 
 
 if __name__ == "__main__":

@@ -3,11 +3,12 @@
 from unittest.mock import MagicMock
 
 
-from ai_guardian.hook_events.post_tool_use import _log_pii_violation
 from ai_guardian.hook_events.utils import strip_system_tags
 from ai_guardian.hook_processing import HookEvent
+from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
 from ai_guardian.scanners.secret_scanning import _build_secret_detected_message
 from ai_guardian.constants import ViolationType
+from ai_guardian.violations.log_violation import ScanContext, log_violation
 
 # ---------------------------------------------------------------------------
 # strip_system_tags
@@ -145,131 +146,101 @@ class TestBuildSecretDetectedMessage:
 
 
 # ---------------------------------------------------------------------------
-# _log_pii_violation
+# log_violation (unified — replaces _log_pii_violation et al.)
 # ---------------------------------------------------------------------------
 
 
-class TestLogPiiViolation:
-
-    SAMPLE_REDACTIONS = [
-        {"type": "EMAIL", "line_number": 5, "original": "test@example.com"},
-        {"type": "PHONE", "line_number": 10, "original": "555-1234"},
-        {"type": "EMAIL", "line_number": 15, "original": "other@example.com"},
-    ]
-
-    def test_returns_action_and_types(self):
-        pii_config = {"action": "warn"}
-        action, types = _log_pii_violation(
-            None,
-            pii_config,
-            self.SAMPLE_REDACTIONS,
-            "Write",
-            "PostToolUse",
-            "/tmp/test.py",
-            "some text",
-            HookEvent.POST_TOOL_USE,
-        )
-        assert action == "warn"
-        assert set(types) == {"EMAIL", "PHONE"}
-
-    def test_default_action_is_block(self):
-        action, _ = _log_pii_violation(
-            None,
-            {},
-            self.SAMPLE_REDACTIONS,
-            "Write",
-            "PostToolUse",
-            "/tmp/test.py",
-            "text",
-            HookEvent.POST_TOOL_USE,
-        )
-        assert action == "block"
+class TestLogViolationPii:
+    """Tests for unified log_violation() with PII-type inputs."""
 
     def test_calls_violation_logger(self):
         mock_logger = MagicMock()
-        _log_pii_violation(
-            mock_logger,
-            {"action": "block"},
-            self.SAMPLE_REDACTIONS,
-            "Write",
-            "PostToolUse",
-            "/tmp/test.py",
-            "line1\nline2\nline3",
-            HookEvent.POST_TOOL_USE,
-            hook_tool_use_id="tu-123",
-            hook_session_id="sess-456",
+        result = ScanResult(
+            detected=True,
+            violation_type=ViolationType.PII_DETECTED,
+            id=generate_violation_id(),
+            file_path="/tmp/test.py",
+            line_number=5,
+            error_message="PII detected",
+        )
+        ctx = ScanContext(
+            hook_event=HookEvent.POST_TOOL_USE,
+            session_id="sess-456",
+            tool_use_id="tu-123",
+        )
+        log_violation(
+            result,
+            ctx,
+            violation_logger=mock_logger,
+            blocked_overrides={"pii_count": 3, "pii_types": ["EMAIL", "PHONE"]},
+            context_overrides={"action": "block"},
         )
         mock_logger.log_violation.assert_called_once()
         call_kwargs = mock_logger.log_violation.call_args[1]
         assert call_kwargs["violation_type"] == ViolationType.PII_DETECTED
         blocked = call_kwargs["blocked"]
-        assert blocked["tool"] == "Write"
-        assert blocked["hook"] == "PostToolUse"
         assert blocked["file_path"] == "/tmp/test.py"
         assert blocked["pii_count"] == 3
         assert set(blocked["pii_types"]) == {"EMAIL", "PHONE"}
-        ctx = call_kwargs["context"]
-        assert ctx["action"] == "block"
-        assert ctx["tool_use_id"] == "tu-123"
-        assert ctx["session_id"] == "sess-456"
+        ctx_dict = call_kwargs["context"]
+        assert ctx_dict["tool_use_id"] == "tu-123"
+        assert ctx_dict["session_id"] == "sess-456"
 
-    def test_no_logger_does_not_raise(self):
-        action, types = _log_pii_violation(
-            None,
-            {"action": "redact"},
-            self.SAMPLE_REDACTIONS,
-            "Read",
-            "PreToolUse",
-            None,
-            None,
-            HookEvent.PRE_TOOL_USE,
+    def test_no_logger_creates_default(self, monkeypatch):
+        mock_vl_cls = MagicMock()
+        monkeypatch.setattr(
+            "ai_guardian.violations.logger.ViolationLogger", mock_vl_cls
         )
-        assert action == "redact"
+        result = ScanResult(
+            detected=True,
+            violation_type=ViolationType.PII_DETECTED,
+            id=generate_violation_id(),
+        )
+        log_violation(result, ScanContext())
+        mock_vl_cls.return_value.log_violation.assert_called_once()
 
-    def test_bash_command_included(self):
+    def test_blocked_overrides_merged(self):
         mock_logger = MagicMock()
-        _log_pii_violation(
-            mock_logger,
-            {"action": "block"},
-            self.SAMPLE_REDACTIONS,
-            "Bash",
-            "PostToolUse",
-            None,
-            "output",
-            HookEvent.POST_TOOL_USE,
-            bash_command="cat /etc/passwd",
+        result = ScanResult(
+            detected=True,
+            violation_type=ViolationType.PII_DETECTED,
+            id=generate_violation_id(),
+        )
+        log_violation(
+            result,
+            ScanContext(),
+            violation_logger=mock_logger,
+            blocked_overrides={"command": "cat /etc/passwd"},
         )
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["command"] == "cat /etc/passwd"
 
-    def test_pretool_context_included(self):
+    def test_context_overrides_merged(self):
         mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type=ViolationType.PII_DETECTED,
+            id=generate_violation_id(),
+        )
         pretool = {"file_path": "/some/file.py"}
-        _log_pii_violation(
-            mock_logger,
-            {"action": "block"},
-            self.SAMPLE_REDACTIONS,
-            "Write",
-            "PostToolUse",
-            None,
-            "text",
-            HookEvent.POST_TOOL_USE,
-            pretool_ctx=pretool,
+        log_violation(
+            result,
+            ScanContext(),
+            violation_logger=mock_logger,
+            context_overrides={"pretool_context": pretool},
         )
         ctx = mock_logger.log_violation.call_args[1]["context"]
         assert ctx["pretool_context"] == pretool
 
-    def test_line_number_from_first_redaction(self):
+    def test_line_number_in_blocked(self):
         mock_logger = MagicMock()
-        _log_pii_violation(
-            mock_logger,
-            {"action": "block"},
-            self.SAMPLE_REDACTIONS,
-            "Write",
-            "PostToolUse",
-            "/f.py",
-            "text",
-            HookEvent.POST_TOOL_USE,
+        result = ScanResult(
+            detected=True,
+            violation_type=ViolationType.PII_DETECTED,
+            id=generate_violation_id(),
+            line_number=5,
+            file_path="/f.py",
         )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["line_number"] == 5

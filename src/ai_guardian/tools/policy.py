@@ -1473,79 +1473,51 @@ class ToolPolicyChecker:
         hook_data: Dict,
         violation_type: str = ViolationType.TOOL_PERMISSION,
     ):
-        """
-        Log a tool permission violation.
-
-        Args:
-            tool_name: Name of the blocked tool
-            check_value: Value that was checked against patterns
-            reason: Reason for blocking
-            matcher: Matcher pattern from the permission rule
-            hook_data: Original hook data for context
-            violation_type: Type of violation to log
-        """
+        """Log a tool permission violation via unified ``log_violation``."""
         if not HAS_VIOLATION_LOGGER:
             return
 
-        try:
-            # Detect IDE type from hook data
-            ide_type = self._detect_ide_type(hook_data)
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-            # Generate suggested rule
-            suggested_matcher, suggested_patterns = self._suggest_permission_rule(
-                tool_name
-            )
+        file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
+        file_path = check_value if tool_name in file_path_tools else None
+        suggested_matcher, suggested_patterns = self._suggest_permission_rule(tool_name)
+        all_paths = get_all_config_paths()
 
-            # Create violation logger
-            violation_logger = ViolationLogger()
-
-            # For file-path tools, check_value is the file path
-            file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
-            file_path = check_value if tool_name in file_path_tools else None
-
-            # Log the violation
-            ctx = {
-                "ide_type": ide_type,
-                "hook_event": hook_data.get("hook_event_name"),
-                "project_path": os.getcwd(),
-            }
-            tool_use_id = hook_data.get("tool_use_id")
-            session_id = hook_data.get("session_id")
-            if tool_use_id:
-                ctx["tool_use_id"] = tool_use_id
-            if session_id:
-                ctx["session_id"] = session_id
-            from ai_guardian.scanners.scan_result import generate_violation_id
-
-            vid = generate_violation_id()
-            all_paths = get_all_config_paths()
-            violation_logger.log_violation(
-                violation_type=violation_type,
-                blocked={
-                    "violation_id": vid,
-                    "tool_name": tool_name,
-                    "tool_value": check_value,
-                    "file_path": file_path,
-                    "matcher": matcher,
-                    "reason": reason,
+        result = ScanResult(
+            detected=True,
+            violation_type=violation_type,
+            id=generate_violation_id(),
+            severity="warning",
+            file_path=file_path,
+            error_message=reason,
+        )
+        log_violation(
+            result,
+            ScanContext(
+                ide_type=self._detect_ide_type(hook_data),
+                hook_event=hook_data.get("hook_event_name", ""),
+                project_path=os.getcwd(),
+                session_id=hook_data.get("session_id"),
+                tool_use_id=hook_data.get("tool_use_id"),
+            ),
+            blocked_overrides={
+                "tool_name": tool_name,
+                "tool_value": check_value,
+                "matcher": matcher,
+            },
+            suggestion={
+                "action": "add_allow_pattern",
+                "config_path": str(all_paths["global"]),
+                "config_paths": {k: str(v) for k, v in all_paths.items()},
+                "rule": {
+                    "matcher": suggested_matcher,
+                    "mode": "allow",
+                    "patterns": [p["pattern"] for p in suggested_patterns],
                 },
-                context=ctx,
-                suggestion={
-                    "action": "add_allow_pattern",
-                    "config_path": str(all_paths["global"]),
-                    "config_paths": {k: str(v) for k, v in all_paths.items()},
-                    "rule": {
-                        "matcher": suggested_matcher,
-                        "mode": "allow",
-                        "patterns": [p["pattern"] for p in suggested_patterns],
-                    },
-                },
-                severity="warning",
-                violation_id=vid,
-            )
-
-        except Exception as e:
-            logger.error(f"Failed to log violation: {e}")
+            },
+        )
 
     def _detect_ide_type(self, hook_data: Dict) -> str:
         """

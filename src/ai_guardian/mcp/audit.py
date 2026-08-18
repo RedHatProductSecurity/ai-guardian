@@ -388,49 +388,52 @@ class MCPAuditor:
     ) -> None:
         """Log violations for untrusted servers and audit findings."""
         try:
-            from ai_guardian.violations.logger import ViolationLogger
-            from ai_guardian.scanners.scan_result import generate_violation_id
+            from ai_guardian.scanners.scan_result import (
+                ScanResult,
+                generate_violation_id,
+            )
+            from ai_guardian.violations.log_violation import ScanContext, log_violation
         except ImportError:
             return
 
-        vl = ViolationLogger()
+        ctx = ScanContext()
         servers_with_findings = {f.server_name for f in findings}
 
         for server in servers:
             if server.is_trusted:
                 continue
-
-            ide_names = sorted({ic.ide for ic in server.ide_configs}) or ["Unknown"]
-
             if server.name not in servers_with_findings:
-                vl.log_violation(
+                ide_names = sorted({ic.ide for ic in server.ide_configs}) or ["Unknown"]
+                result = ScanResult(
+                    detected=True,
                     violation_type="tool_permission",
-                    blocked={
-                        "violation_id": generate_violation_id(),
-                        "tool_name": f"mcp__{server.name}",
-                        "reason": "untrusted MCP server (no allow rule)",
-                    },
-                    context={
-                        "source": "mcp_audit",
-                        "ide_sources": ide_names,
-                    },
+                    id=generate_violation_id(),
                     severity="info",
+                    error_message="untrusted MCP server (no allow rule)",
+                )
+                log_violation(
+                    result,
+                    ctx,
+                    blocked_overrides={"tool_name": f"mcp__{server.name}"},
+                    context_overrides={"source": "mcp_audit", "ide_sources": ide_names},
                 )
 
         for finding in findings:
-            vl.log_violation(
+            result = ScanResult(
+                detected=True,
                 violation_type="tool_permission",
-                blocked={
-                    "violation_id": generate_violation_id(),
-                    "tool_name": f"mcp__{finding.server_name}",
-                    "reason": finding.message,
-                    "category": finding.category,
-                },
-                context={
-                    "source": "mcp_audit",
-                    "category": finding.category,
-                },
+                id=generate_violation_id(),
                 severity=finding.severity,
+                error_message=finding.message,
+            )
+            log_violation(
+                result,
+                ctx,
+                blocked_overrides={
+                    "tool_name": f"mcp__{finding.server_name}",
+                    "category": finding.category,
+                },
+                context_overrides={"source": "mcp_audit", "category": finding.category},
             )
 
     def _audit_credentials(self, server: MCPServerInfo) -> List[AuditFinding]:

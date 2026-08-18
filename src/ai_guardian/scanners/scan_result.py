@@ -130,9 +130,12 @@ class ScanResult:
         attack_type: str = "",
     ) -> "ScanResult":
         """Wrap prompt injection detector result."""
+        vtype = (
+            "jailbreak_detected" if attack_type == "jailbreak" else "prompt_injection"
+        )
         return cls(
             detected=detected,
-            violation_type="prompt_injection",
+            violation_type=vtype,
             should_block=should_block,
             error_message=error_message or "",
             matched_text=matched_text,
@@ -382,6 +385,53 @@ class ScanResult:
             attack_type=description,
             file_path=source,
         )
+
+    def to_blocked_dict(
+        self,
+        *,
+        source: str = "",
+        extra_fields: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Build a standard violation ``blocked`` dict from this result's fields."""
+        blocked: Dict[str, Any] = {}
+        if self.id:
+            blocked["violation_id"] = self.id
+        if self.file_path:
+            blocked["file_path"] = self.file_path
+        if self.line_number is not None:
+            blocked["line_number"] = self.line_number
+        if self.start_column is not None:
+            blocked["start_column"] = self.start_column
+        if self.end_column is not None:
+            blocked["end_column"] = self.end_column
+        if self.matched_text:
+            from ai_guardian.violations.redact import (
+                REDACT_VIOLATION_TYPES,
+                redact_secret_hint,
+            )
+
+            if self.violation_type in REDACT_VIOLATION_TYPES:
+                if not (self.file_path and self.line_number is not None):
+                    blocked["pattern_hint"] = redact_secret_hint(self.matched_text)
+            else:
+                blocked["matched_text"] = self.matched_text[:100]
+        if self.matched_pattern:
+            blocked["pattern"] = self.matched_pattern
+        if self.rule_id:
+            blocked["rule_id"] = self.rule_id
+        if self.attack_type:
+            blocked["category"] = self.attack_type
+        if self.confidence:
+            blocked["confidence"] = self.confidence
+        if self.total_findings and self.total_findings > 1:
+            blocked["total_findings"] = self.total_findings
+        if self.error_message:
+            blocked["reason"] = self.error_message
+        if source:
+            blocked["source"] = source
+        if extra_fields:
+            blocked.update(extra_fields)
+        return blocked
 
     @classmethod
     def from_directory_rules(

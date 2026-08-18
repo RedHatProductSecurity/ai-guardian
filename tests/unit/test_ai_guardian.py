@@ -1585,9 +1585,7 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
         mock_pi_config.return_value = ({"enabled": True, "action": "warn"}, None)
 
-        with patch(
-            "ai_guardian.hook_events.post_tool_use._log_prompt_injection_violation"
-        ) as mock_log:
+        with patch("ai_guardian.hook_events.post_tool_use.log_violation") as mock_log:
             hook_json = json.dumps(
                 {
                     "hook_event_name": "PostToolUse",
@@ -1602,12 +1600,9 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
                 ai_guardian.process_hook_input()
 
             if mock_log.called:
-                call_kwargs = mock_log.call_args
-                context = call_kwargs[1].get("context") or (
-                    call_kwargs[0][1] if len(call_kwargs[0]) > 1 else {}
-                )
+                scan_ctx = mock_log.call_args[0][1]
                 self.assertEqual(
-                    context.get("hook_event"),
+                    scan_ctx.hook_event,
                     HookEvent.POST_TOOL_USE,
                     "Violation should include hook_event=PostToolUse",
                 )

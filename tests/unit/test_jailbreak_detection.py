@@ -595,61 +595,43 @@ class TestJailbreakPatternCoverage(unittest.TestCase):
 
 
 class TestJailbreakViolationLogging(unittest.TestCase):
-    """Test that jailbreak violations use 'jailbreak_detected' type."""
+    """Test that jailbreak violations use 'jailbreak_detected' type via log_violation()."""
 
-    def test_violation_log_function_jailbreak(self):
-        """_log_prompt_injection_violation with attack_type='jailbreak' uses correct type."""
+    def test_violation_log_jailbreak_type(self):
+        """log_violation with violation_type='jailbreak_detected' uses correct type."""
         from unittest.mock import MagicMock
-        from ai_guardian import _log_prompt_injection_violation
-        import ai_guardian
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        original = ai_guardian.HAS_VIOLATION_LOGGER
-        ai_guardian.HAS_VIOLATION_LOGGER = True
-        try:
-            with patch(
-                "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-            ) as MockLogger:
-                mock_instance = MagicMock()
-                MockLogger.return_value = mock_instance
+        mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="jailbreak_detected",
+            id=generate_violation_id(),
+            severity="high",
+        )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        mock_logger.log_violation.assert_called_once()
+        call_kwargs = mock_logger.log_violation.call_args
+        self.assertEqual(call_kwargs[1]["violation_type"], "jailbreak_detected")
 
-                _log_prompt_injection_violation(
-                    "user_prompt",
-                    context={"ide_type": "claude", "hook_event": "prompt"},
-                    attack_type="jailbreak",
-                )
-
-                mock_instance.log_violation.assert_called_once()
-                call_kwargs = mock_instance.log_violation.call_args
-                self.assertEqual(call_kwargs[1]["violation_type"], "jailbreak_detected")
-        finally:
-            ai_guardian.HAS_VIOLATION_LOGGER = original
-
-    def test_violation_log_function_injection(self):
-        """_log_prompt_injection_violation with attack_type='injection' uses correct type."""
+    def test_violation_log_injection_type(self):
+        """log_violation with violation_type='prompt_injection' uses correct type."""
         from unittest.mock import MagicMock
-        from ai_guardian import _log_prompt_injection_violation
-        import ai_guardian
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        original = ai_guardian.HAS_VIOLATION_LOGGER
-        ai_guardian.HAS_VIOLATION_LOGGER = True
-        try:
-            with patch(
-                "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-            ) as MockLogger:
-                mock_instance = MagicMock()
-                MockLogger.return_value = mock_instance
-
-                _log_prompt_injection_violation(
-                    "user_prompt",
-                    context={"ide_type": "claude", "hook_event": "prompt"},
-                    attack_type="injection",
-                )
-
-                mock_instance.log_violation.assert_called_once()
-                call_kwargs = mock_instance.log_violation.call_args
-                self.assertEqual(call_kwargs[1]["violation_type"], "prompt_injection")
-        finally:
-            ai_guardian.HAS_VIOLATION_LOGGER = original
+        mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="prompt_injection",
+            id=generate_violation_id(),
+            severity="high",
+        )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        mock_logger.log_violation.assert_called_once()
+        call_kwargs = mock_logger.log_violation.call_args
+        self.assertEqual(call_kwargs[1]["violation_type"], "prompt_injection")
 
 
 if __name__ == "__main__":

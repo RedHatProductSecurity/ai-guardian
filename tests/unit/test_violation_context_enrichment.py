@@ -287,30 +287,33 @@ class TestViolationToolUseId(unittest.TestCase):
                 self.assertEqual(context.get("tool_use_id"), "toolu_test")
                 self.assertEqual(context.get("session_id"), "sess_test")
 
-    def test_prompt_injection_passes_ids_from_hook_context(self):
-        """_log_prompt_injection_violation should include IDs from hook_context."""
-        with patch(
-            "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-        ) as MockLogger:
-            mock_instance = MagicMock()
-            MockLogger.return_value = mock_instance
+    def test_prompt_injection_passes_ids_via_log_violation(self):
+        """log_violation should include IDs from ScanContext."""
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-            ai_guardian._log_prompt_injection_violation(
-                "test_file.py",
-                context={"ide_type": "claude_code", "hook_event": "pretooluse"},
-                attack_type="injection",
-                hook_context={"tool_use_id": "toolu_inj", "session_id": "sess_inj"},
-            )
-
-            if mock_instance.log_violation.called:
-                call_args = mock_instance.log_violation.call_args
-                context = (
-                    call_args.kwargs.get("context", call_args[1].get("context", {}))
-                    if call_args.kwargs
-                    else call_args[1].get("context", {})
-                )
-                self.assertEqual(context.get("tool_use_id"), "toolu_inj")
-                self.assertEqual(context.get("session_id"), "sess_inj")
+        mock_logger = MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="prompt_injection",
+            id=generate_violation_id(),
+            severity="high",
+        )
+        log_violation(
+            result,
+            ScanContext(
+                ide_type="claude_code",
+                hook_event="pretooluse",
+                tool_use_id="toolu_inj",
+                session_id="sess_inj",
+            ),
+            violation_logger=mock_logger,
+        )
+        mock_logger.log_violation.assert_called_once()
+        call_args = mock_logger.log_violation.call_args
+        context = call_args[1].get("context", {})
+        self.assertEqual(context.get("tool_use_id"), "toolu_inj")
+        self.assertEqual(context.get("session_id"), "sess_inj")
 
     def test_directory_blocking_passes_ids_from_hook_context(self):
         """_log_directory_blocking_violation should include IDs from hook_context."""

@@ -9,7 +9,7 @@ from unittest import mock
 class TestToolPermissionViolationFilePath:
     """Test that tool_permission violations include file_path for file-path tools."""
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_present_for_read_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -31,7 +31,7 @@ class TestToolPermissionViolationFilePath:
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["file_path"] == "/home/user/secret.txt"
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_present_for_write_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -52,7 +52,7 @@ class TestToolPermissionViolationFilePath:
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["file_path"] == "/home/user/config.json"
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_present_for_edit_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -73,7 +73,7 @@ class TestToolPermissionViolationFilePath:
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["file_path"] == "/home/user/main.py"
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_present_for_notebook_edit_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -94,7 +94,7 @@ class TestToolPermissionViolationFilePath:
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
         assert blocked["file_path"] == "/home/user/notebook.ipynb"
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_none_for_bash_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -113,9 +113,9 @@ class TestToolPermissionViolationFilePath:
             hook_data={},
         )
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["file_path"] is None
+        assert blocked.get("file_path") is None
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_file_path_none_for_skill_tool(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -134,108 +134,59 @@ class TestToolPermissionViolationFilePath:
             hook_data={},
         )
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
-        assert blocked["file_path"] is None
+        assert blocked.get("file_path") is None
 
 
-class TestPromptInjectionViolationFilePath:
-    """Test that prompt_injection violations include file_path from context."""
+class TestViolationFilePath:
+    """Test that violations include file_path via log_violation() + ScanResult."""
 
-    def test_file_path_from_context(self):
+    def test_file_path_in_blocked(self):
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        with tempfile.TemporaryDirectory() as tmp:
-            with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": tmp}):
-                with mock.patch(
-                    "ai_guardian.hook_events.post_tool_use.HAS_VIOLATION_LOGGER", True
-                ):
-                    from ai_guardian import _log_prompt_injection_violation
+        mock_logger = mock.MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="prompt_injection",
+            id=generate_violation_id(),
+            severity="high",
+            file_path="/full/path/malicious.md",
+        )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        blocked = mock_logger.log_violation.call_args[1]["blocked"]
+        assert blocked["file_path"] == "/full/path/malicious.md"
 
-                    with mock.patch(
-                        "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-                    ) as mock_vl_class:
-                        mock_logger = mock.MagicMock()
-                        mock_vl_class.return_value = mock_logger
+    def test_file_path_none_when_not_set(self):
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-                        _log_prompt_injection_violation(
-                            "malicious.md",
-                            context={
-                                "ide_type": "claude_code",
-                                "hook_event": "pretooluse",
-                                "file_path": "/full/path/malicious.md",
-                            },
-                            attack_type="injection",
-                        )
-                        mock_logger.log_violation.assert_called_once()
-                        blocked = mock_logger.log_violation.call_args[1]["blocked"]
-                        assert blocked["file_path"] == "/full/path/malicious.md"
+        mock_logger = mock.MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="prompt_injection",
+            id=generate_violation_id(),
+            severity="high",
+        )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        blocked = mock_logger.log_violation.call_args[1]["blocked"]
+        assert "file_path" not in blocked
 
-    def test_file_path_falls_back_to_filename(self):
-        with mock.patch(
-            "ai_guardian.hook_events.post_tool_use.HAS_VIOLATION_LOGGER", True
-        ):
-            from ai_guardian import _log_prompt_injection_violation
+    def test_jailbreak_violation_type_and_file_path(self):
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-            with mock.patch(
-                "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-            ) as mock_vl_class:
-                mock_logger = mock.MagicMock()
-                mock_vl_class.return_value = mock_logger
-
-                _log_prompt_injection_violation(
-                    "malicious.md",
-                    context={"ide_type": "claude_code", "hook_event": "pretooluse"},
-                    attack_type="injection",
-                )
-                blocked = mock_logger.log_violation.call_args[1]["blocked"]
-                assert blocked["file_path"] == "malicious.md"
-
-    def test_file_path_none_for_user_prompt(self):
-        with mock.patch(
-            "ai_guardian.hook_events.post_tool_use.HAS_VIOLATION_LOGGER", True
-        ):
-            from ai_guardian import _log_prompt_injection_violation
-
-            with mock.patch(
-                "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-            ) as mock_vl_class:
-                mock_logger = mock.MagicMock()
-                mock_vl_class.return_value = mock_logger
-
-                _log_prompt_injection_violation(
-                    "user_prompt",
-                    context={"ide_type": "claude_code", "hook_event": "prompt"},
-                    attack_type="injection",
-                )
-                blocked = mock_logger.log_violation.call_args[1]["blocked"]
-                assert blocked["file_path"] is None
-
-
-class TestJailbreakViolationFilePath:
-    """Test that jailbreak_detected violations include file_path from context."""
-
-    def test_file_path_from_context(self):
-        with mock.patch(
-            "ai_guardian.hook_events.post_tool_use.HAS_VIOLATION_LOGGER", True
-        ):
-            from ai_guardian import _log_prompt_injection_violation
-
-            with mock.patch(
-                "ai_guardian.hook_events.post_tool_use.ViolationLogger"
-            ) as mock_vl_class:
-                mock_logger = mock.MagicMock()
-                mock_vl_class.return_value = mock_logger
-
-                _log_prompt_injection_violation(
-                    "evil.py",
-                    context={
-                        "ide_type": "claude_code",
-                        "hook_event": "pretooluse",
-                        "file_path": "/repo/evil.py",
-                    },
-                    attack_type="jailbreak",
-                )
-                call_kwargs = mock_logger.log_violation.call_args[1]
-                assert call_kwargs["violation_type"] == "jailbreak_detected"
-                assert call_kwargs["blocked"]["file_path"] == "/repo/evil.py"
+        mock_logger = mock.MagicMock()
+        result = ScanResult(
+            detected=True,
+            violation_type="jailbreak_detected",
+            id=generate_violation_id(),
+            severity="high",
+            file_path="/repo/evil.py",
+        )
+        log_violation(result, ScanContext(), violation_logger=mock_logger)
+        call_kwargs = mock_logger.log_violation.call_args[1]
+        assert call_kwargs["violation_type"] == "jailbreak_detected"
+        assert call_kwargs["blocked"]["file_path"] == "/repo/evil.py"
 
 
 class TestSecretRedactionViolationFields:

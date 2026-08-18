@@ -293,8 +293,6 @@ except ImportError:
 
 import ai_guardian.scanners.secret_scanning as _secret_scanning_mod
 from ai_guardian.scanners.secret_scanning import (
-    _build_violation_context,
-    _enrich_blocked_from_details,
     _log_secret_detection_violation,
     _build_secret_detected_message,
     check_secrets,
@@ -1569,65 +1567,52 @@ def _log_directory_blocking_violation(
     hook_context: Optional[Dict] = None,
     violation_logger=None,
 ):
-    """
-    Log a directory blocking violation.
-
-    Args:
-        file_path: Path to the file that was blocked
-        denied_directory: Directory containing .ai-read-deny marker or matched by rules
-        is_excluded: Whether the path was in an excluded directory (but .ai-read-deny still blocked it)
-        reason: Why the path was blocked (defaults to ".ai-read-deny marker found")
-        suggestion: Remediation suggestion dict (defaults to marker removal suggestion)
-        hook_context: Optional dict with tool_use_id, session_id for correlation
-    """
+    """Log a directory blocking violation via unified ``log_violation``."""
     if not HAS_VIOLATION_LOGGER:
         return
 
-    try:
-        hctx = hook_context or {}
-        violation_logger = violation_logger or ViolationLogger()
+    from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+    from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        context = {"project_path": get_project_dir(), "path_in_exclusion": is_excluded}
+    if reason is None:
+        reason = ".ai-read-deny marker found"
+    if suggestion is None:
+        suggestion = {
+            "action": "remove_deny_marker",
+            "file_path": os.path.join(denied_directory, ".ai-read-deny"),
+            "warning": "This directory contains sensitive files",
+        }
+    hctx = hook_context or {}
 
-        if is_excluded:
-            context["note"] = (
-                "Directory exclusions can override .ai-read-deny markers (path was excluded but deny marker existed)"
-            )
-
-        if hctx.get("tool_use_id"):
-            context["tool_use_id"] = hctx["tool_use_id"]
-        if hctx.get("session_id"):
-            context["session_id"] = hctx["session_id"]
-
-        if reason is None:
-            reason = ".ai-read-deny marker found"
-
-        if suggestion is None:
-            suggestion = {
-                "action": "remove_deny_marker",
-                "file_path": os.path.join(denied_directory, ".ai-read-deny"),
-                "warning": "This directory contains sensitive files",
-            }
-
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        violation_logger.log_violation(
-            violation_type=ViolationType.DIRECTORY_BLOCKING,
-            blocked={
-                "violation_id": vid,
-                "file_path": file_path,
-                "denied_directory": denied_directory,
-                "reason": reason,
-                "exclusion_overridden": is_excluded,
-            },
-            context=context,
-            suggestion=suggestion,
-            severity="warning",
-            violation_id=vid,
+    result = ScanResult(
+        detected=True,
+        violation_type=ViolationType.DIRECTORY_BLOCKING,
+        id=generate_violation_id(),
+        severity="warning",
+        file_path=file_path,
+        error_message=reason,
+    )
+    ctx_overrides = {"path_in_exclusion": is_excluded}
+    if is_excluded:
+        ctx_overrides["note"] = (
+            "Directory exclusions can override .ai-read-deny markers "
+            "(path was excluded but deny marker existed)"
         )
-    except Exception as e:
-        logger.error(f"Failed to log directory blocking violation: {e}")
+    log_violation(
+        result,
+        ScanContext(
+            project_path=get_project_dir(),
+            session_id=hctx.get("session_id"),
+            tool_use_id=hctx.get("tool_use_id"),
+        ),
+        violation_logger=violation_logger,
+        blocked_overrides={
+            "denied_directory": denied_directory,
+            "exclusion_overridden": is_excluded,
+        },
+        context_overrides=ctx_overrides,
+        suggestion=suggestion,
+    )
 
 
 def _pii_redactions_to_findings(pii_redactions, content, error_msg=""):

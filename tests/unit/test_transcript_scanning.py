@@ -667,7 +667,7 @@ class TestPositionTrackingRegression(unittest.TestCase):
 class TestLogTranscriptViolation(unittest.TestCase):
     """Test violation logging for transcript findings."""
 
-    @mock.patch("ai_guardian.scanners.transcript.common.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     def test_logs_secret_violation(self, mock_logger_cls):
         mock_logger = mock.MagicMock()
         mock_logger_cls.return_value = mock_logger
@@ -687,7 +687,7 @@ class TestLogTranscriptViolation(unittest.TestCase):
         )
         self.assertEqual(call_kwargs["severity"], "high")
 
-    @mock.patch("ai_guardian.scanners.transcript.common.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     def test_logs_pii_violation(self, mock_logger_cls):
         mock_logger = mock.MagicMock()
         mock_logger_cls.return_value = mock_logger

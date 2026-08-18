@@ -8,10 +8,11 @@ process_hook_data() can delegate boilerplate to a single pipeline call.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional
 
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+from ai_guardian.violations.log_violation import ScanContext, log_violation
 
 logger = logging.getLogger(__name__)
 
@@ -103,45 +104,21 @@ def build_violation_blocked(
     extra_fields: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build a standard violation ``blocked`` dict from ScanResult fields."""
-    blocked: Dict[str, Any] = {}
-    if result.id:
-        blocked["violation_id"] = result.id
-    if result.file_path:
-        blocked["file_path"] = result.file_path
-    if result.line_number is not None:
-        blocked["line_number"] = result.line_number
-    if result.start_column is not None:
-        blocked["start_column"] = result.start_column
-    if result.end_column is not None:
-        blocked["end_column"] = result.end_column
-    if result.matched_text:
-        from ai_guardian.violations.redact import (
-            REDACT_VIOLATION_TYPES,
-            redact_secret_hint,
-        )
+    return result.to_blocked_dict(source=source, extra_fields=extra_fields)
 
-        if result.violation_type in REDACT_VIOLATION_TYPES:
-            if not (result.file_path and result.line_number is not None):
-                blocked["pattern_hint"] = redact_secret_hint(result.matched_text)
-        else:
-            blocked["matched_text"] = result.matched_text[:100]
-    if result.matched_pattern:
-        blocked["pattern"] = result.matched_pattern
-    if result.rule_id:
-        blocked["rule_id"] = result.rule_id
-    if result.attack_type:
-        blocked["category"] = result.attack_type
-    if result.confidence:
-        blocked["confidence"] = result.confidence
-    if result.total_findings and result.total_findings > 1:
-        blocked["total_findings"] = result.total_findings
-    if result.error_message:
-        blocked["reason"] = result.error_message
-    if source:
-        blocked["source"] = source
-    if extra_fields:
-        blocked.update(extra_fields)
-    return blocked
+
+def _scan_context_from_post_scan(ctx: PostScanContext) -> ScanContext:
+    """Build a lightweight ``ScanContext`` from ``PostScanContext``."""
+    from ai_guardian.config.utils import get_project_dir
+
+    return ScanContext(
+        ide_type=ctx.ide_type_value,
+        hook_event=ctx.hook_event,
+        project_path=get_project_dir(),
+        session_id=ctx.hook_session_id,
+        tool_use_id=ctx.hook_tool_use_id,
+        tool_name=ctx.tool_name,
+    )
 
 
 def log_scan_violation(
@@ -157,35 +134,25 @@ def log_scan_violation(
     """Log a violation using ScannerEntry metadata + ScanResult fields."""
     if ctx.violation_logger is None:
         return
-    try:
-        blocked = build_violation_blocked(result, source=source)
-        if blocked_overrides:
-            blocked.update(blocked_overrides)
 
-        from ai_guardian.config.utils import get_project_dir
+    if severity_override:
+        result = replace(result, severity=severity_override)
+    elif hasattr(entry, "violation_severity") and entry.violation_severity:
+        result = replace(result, severity=entry.violation_severity)
 
-        violation_ctx: Dict[str, Any] = {
-            "ide_type": ctx.ide_type_value,
-            "hook_event": ctx.hook_event,
-            "project_path": get_project_dir(),
-        }
-        if ctx.hook_tool_use_id:
-            violation_ctx["tool_use_id"] = ctx.hook_tool_use_id
-        if ctx.hook_session_id:
-            violation_ctx["session_id"] = ctx.hook_session_id
-        if context_overrides:
-            violation_ctx.update(context_overrides)
-
-        ctx.violation_logger.log_violation(
-            violation_type=entry.violation_type,
-            blocked=blocked,
-            context=violation_ctx,
-            suggestion=entry.violation_suggestion or {},
-            severity=severity_override or entry.violation_severity,
-            violation_id=result.id,
-        )
-    except Exception as e:
-        logger.error("Failed to log %s violation: %s", entry.name, e)
+    log_violation(
+        result,
+        _scan_context_from_post_scan(ctx),
+        violation_logger=ctx.violation_logger,
+        blocked_overrides=blocked_overrides,
+        context_overrides=context_overrides,
+        suggestion=(
+            entry.violation_suggestion
+            if hasattr(entry, "violation_suggestion")
+            else None
+        ),
+        source=source,
+    )
 
 
 def log_scan_violations_per_finding(
@@ -198,48 +165,39 @@ def log_scan_violations_per_finding(
     """Log one violation per finding (e.g. CODE_SECURITY multi-finding results)."""
     if ctx.violation_logger is None or not findings:
         return
-    try:
-        from ai_guardian.config.utils import get_project_dir
 
-        violation_ctx: Dict[str, Any] = {
-            "ide_type": ctx.ide_type_value,
-            "hook_event": ctx.hook_event,
-            "project_path": get_project_dir(),
-        }
-        if ctx.hook_tool_use_id:
-            violation_ctx["tool_use_id"] = ctx.hook_tool_use_id
-        if ctx.hook_session_id:
-            violation_ctx["session_id"] = ctx.hook_session_id
+    scan_ctx = _scan_context_from_post_scan(ctx)
 
-        for f in findings:
-            finding_id = generate_violation_id()
-            blocked: Dict[str, Any] = {"violation_id": finding_id}
-            if file_path:
-                blocked["file_path"] = file_path
-            rule_id = getattr(f, "rule_id", None) or ""
-            description = getattr(f, "description", None) or ""
-            severity = getattr(f, "severity", None) or entry.violation_severity
-            line_number = getattr(f, "line_number", None)
-            start_column = getattr(f, "start_column", None)
-            if rule_id:
-                blocked["rule_id"] = rule_id
-            if description:
-                blocked["reason"] = description
-            if line_number is not None:
-                blocked["line_number"] = line_number
-            if start_column is not None:
-                blocked["start_column"] = start_column
+    for f in findings:
+        finding_id = generate_violation_id()
+        rule_id = getattr(f, "rule_id", None) or ""
+        description = getattr(f, "description", None) or ""
+        severity = getattr(f, "severity", None) or entry.violation_severity
+        line_number = getattr(f, "line_number", None)
+        start_column = getattr(f, "start_column", None)
 
-            ctx.violation_logger.log_violation(
-                violation_type=entry.violation_type,
-                blocked=blocked,
-                context=violation_ctx,
-                suggestion=entry.violation_suggestion or {},
-                severity=severity,
-                violation_id=finding_id,
-            )
-    except Exception as e:
-        logger.error("Failed to log per-finding %s violations: %s", entry.name, e)
+        result = ScanResult(
+            detected=True,
+            violation_type=entry.violation_type,
+            id=finding_id,
+            severity=severity,
+            rule_id=rule_id,
+            error_message=description,
+            line_number=line_number,
+            start_column=start_column,
+            file_path=file_path,
+        )
+
+        log_violation(
+            result,
+            scan_ctx,
+            violation_logger=ctx.violation_logger,
+            suggestion=(
+                entry.violation_suggestion
+                if hasattr(entry, "violation_suggestion")
+                else None
+            ),
+        )
 
 
 def apply_post_scan_pipeline(

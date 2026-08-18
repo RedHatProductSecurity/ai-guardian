@@ -4,52 +4,34 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_guardian.scanners.secret_scanning import _inject_source_command
+from ai_guardian.scanners.secret_scanning import _build_secret_extras
 
 
-class TestInjectSourceCommand:
-    """Test _inject_source_command helper in secret_scanning.py."""
+class TestBuildSecretExtrasSourceCommand:
+    """Test _build_secret_extras source_command injection."""
 
     def test_adds_source_command_for_tool_result_file_path(self):
-        blocked = {"file_path": "tool_result:grep"}
+        details = {"rule_id": "test"}
         context = {"source_command": "grep -rn 'pattern' src/"}
-        _inject_source_command(blocked, context)
-        assert blocked["source_command"] == "grep -rn 'pattern' src/"
+        extras = _build_secret_extras(details, context, file_path="tool_result:grep")
+        assert extras["source_command"] == "grep -rn 'pattern' src/"
 
-    def test_skips_when_file_path_is_regular_path(self):
-        blocked = {"file_path": "/home/user/code.py"}
+    def test_skips_source_command_for_regular_file_path(self):
+        details = {"rule_id": "test"}
         context = {"source_command": "grep -rn 'pattern' src/"}
-        _inject_source_command(blocked, context)
-        assert "source_command" not in blocked
+        extras = _build_secret_extras(details, context, file_path="/home/user/code.py")
+        assert "source_command" not in extras
 
     def test_skips_when_no_context(self):
-        blocked = {"file_path": "tool_result:grep"}
-        _inject_source_command(blocked, None)
-        assert "source_command" not in blocked
+        details = {"rule_id": "test"}
+        extras = _build_secret_extras(details, None)
+        assert "source_command" not in extras
 
     def test_skips_when_no_source_command_in_context(self):
-        blocked = {"file_path": "tool_result:grep"}
+        details = {"rule_id": "test"}
         context = {"ide_type": "claude_code"}
-        _inject_source_command(blocked, context)
-        assert "source_command" not in blocked
-
-    def test_skips_when_no_file_path(self):
-        blocked = {}
-        context = {"source_command": "grep -rn 'pattern' src/"}
-        _inject_source_command(blocked, context)
-        assert "source_command" not in blocked
-
-    def test_skips_when_file_path_is_none(self):
-        blocked = {"file_path": None}
-        context = {"source_command": "grep -rn 'pattern' src/"}
-        _inject_source_command(blocked, context)
-        assert "source_command" not in blocked
-
-    def test_works_with_tool_result_cat(self):
-        blocked = {"file_path": "tool_result:cat"}
-        context = {"source_command": "cat /etc/hostname"}
-        _inject_source_command(blocked, context)
-        assert blocked["source_command"] == "cat /etc/hostname"
+        extras = _build_secret_extras(details, context)
+        assert "source_command" not in extras
 
 
 class TestSanitizeSourceCommand:
@@ -104,22 +86,25 @@ class TestSourceCommandInViolationDicts:
     """Test that source_command appears in violation dicts for tool_result violations."""
 
     def test_pii_violation_includes_source_command(self):
-        from ai_guardian.hook_events.post_tool_use import _log_pii_violation
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
         mock_logger = MagicMock()
-        _log_pii_violation(
-            violation_logger=mock_logger,
-            pii_config={"action": "block"},
-            pii_redactions=[
-                {"type": "email", "line_number": 1, "column": 5, "original_length": 20}
-            ],
-            tool_identifier="Bash",
-            hook_name="PostToolUse",
+        result = ScanResult(
+            detected=True,
+            violation_type="pii_detected",
+            id=generate_violation_id(),
             file_path="tool_result:grep",
-            snippet_text="user@example.com found",
-            hook_event="PostToolUse",
-            bash_command="grep -rn 'pattern' src/",
-            source_command="grep -rn 'pattern' src/",
+            line_number=1,
+        )
+        log_violation(
+            result,
+            ScanContext(),
+            violation_logger=mock_logger,
+            blocked_overrides={
+                "source_command": "grep -rn 'pattern' src/",
+                "command": "grep -rn 'pattern' src/",
+            },
         )
         mock_logger.log_violation.assert_called_once()
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
@@ -127,21 +112,21 @@ class TestSourceCommandInViolationDicts:
         assert blocked["command"] == "grep -rn 'pattern' src/"
 
     def test_pii_violation_omits_source_command_for_regular_files(self):
-        from ai_guardian.hook_events.post_tool_use import _log_pii_violation
+        from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+        from ai_guardian.violations.log_violation import ScanContext, log_violation
 
         mock_logger = MagicMock()
-        _log_pii_violation(
-            violation_logger=mock_logger,
-            pii_config={"action": "block"},
-            pii_redactions=[
-                {"type": "email", "line_number": 1, "column": 5, "original_length": 20}
-            ],
-            tool_identifier="Read",
-            hook_name="PostToolUse",
+        result = ScanResult(
+            detected=True,
+            violation_type="pii_detected",
+            id=generate_violation_id(),
             file_path="/home/user/data.txt",
-            snippet_text="user@example.com found",
-            hook_event="PostToolUse",
-            source_command="grep -rn 'pattern' src/",
+            line_number=1,
+        )
+        log_violation(
+            result,
+            ScanContext(),
+            violation_logger=mock_logger,
         )
         mock_logger.log_violation.assert_called_once()
         blocked = mock_logger.log_violation.call_args[1]["blocked"]
