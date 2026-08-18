@@ -387,6 +387,70 @@ class TestMakeRootSpan:
         span = _make_root_span(doc, doc["trace_id"])
         assert span["spanId"] == "ffffffffffffffff"
 
+    def test_root_span_derives_start_from_turns(self):
+        """When trace_doc has no started_at, derive from first turn."""
+        doc = {
+            "stop_reason": "end_turn",
+            "usage": {"output_tokens": 500},
+            "trace": [
+                {
+                    "turn": 0,
+                    "steps": [],
+                    "started_at": "2026-08-18T11:53:15+00:00",
+                    "ended_at": "2026-08-18T11:53:42+00:00",
+                },
+            ],
+        }
+        span = _make_root_span(doc, "aabb" * 8)
+        expected_start = _iso_to_unix_nano("2026-08-18T11:53:15+00:00")
+        assert span["startTimeUnixNano"] == expected_start
+        assert expected_start != "0"
+
+    def test_root_span_derives_end_from_last_turn(self):
+        """When trace_doc has no ended_at/duration_ms, derive from last turn."""
+        doc = {
+            "stop_reason": "end_turn",
+            "usage": {"output_tokens": 99999},
+            "trace": [
+                {
+                    "turn": 0,
+                    "steps": [],
+                    "started_at": "2026-08-18T11:53:15+00:00",
+                    "ended_at": "2026-08-18T11:53:42+00:00",
+                },
+                {
+                    "turn": 1,
+                    "steps": [],
+                    "started_at": "2026-08-18T11:53:42+00:00",
+                    "ended_at": "2026-08-18T11:54:08+00:00",
+                },
+            ],
+        }
+        span = _make_root_span(doc, "aabb" * 8)
+        expected_end = _iso_to_unix_nano("2026-08-18T11:54:08+00:00")
+        assert span["endTimeUnixNano"] == expected_end
+        start_int = int(span["startTimeUnixNano"])
+        end_int = int(span["endTimeUnixNano"])
+        duration_s = (end_int - start_int) / 1e9
+        assert 50 < duration_s < 60
+
+    def test_root_span_prefers_doc_ended_at_over_turns(self):
+        """When trace_doc has ended_at, use it even if turns differ."""
+        doc = {
+            **MINIMAL_TRACE_DOC,
+            "trace": [
+                {
+                    "turn": 0,
+                    "steps": [],
+                    "started_at": "2026-08-14T10:00:00+00:00",
+                    "ended_at": "2026-08-14T10:00:30+00:00",
+                },
+            ],
+        }
+        span = _make_root_span(doc, doc["trace_id"])
+        expected_end = _iso_to_unix_nano(MINIMAL_TRACE_DOC["ended_at"])
+        assert span["endTimeUnixNano"] == expected_end
+
 
 class TestMakeTurnSpan:
     def test_turn_span_with_steps(self):
