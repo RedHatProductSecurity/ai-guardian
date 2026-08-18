@@ -828,6 +828,47 @@ def _read_kiro_detail(session: Dict) -> List[Dict]:
     return steps
 
 
+def match_violations_to_steps(
+    steps: List[Dict], violations: List[Dict]
+) -> Dict[int, List[Dict]]:
+    """Match violations to conversation steps by timestamp proximity.
+
+    For each violation, finds the step with the latest timestamp that is
+    at or before the violation timestamp. Multiple violations can map to
+    the same step.
+
+    Returns dict mapping step_index -> list of matching violations.
+    """
+    if not steps or not violations:
+        return {}
+
+    step_timestamps = []
+    for i, step in enumerate(steps):
+        ts = step.get("timestamp", "")
+        if ts:
+            step_timestamps.append((i, ts))
+
+    if not step_timestamps:
+        return {}
+
+    result: Dict[int, List[Dict]] = {}
+    for v in violations:
+        v_ts = v.get("timestamp", "")
+        if not v_ts:
+            continue
+
+        best_idx = step_timestamps[0][0]
+        for step_idx, step_ts in step_timestamps:
+            if step_ts <= v_ts:
+                best_idx = step_idx
+            else:
+                break
+
+        result.setdefault(best_idx, []).append(v)
+
+    return result
+
+
 def _extract_tool_result_content(block: dict) -> tuple:
     """Extract (text, tool_use_id) from a tool_result content block."""
     rc = block.get("content", "")

@@ -17,6 +17,7 @@ from ai_guardian.sessions.discovery import (
     get_supported_ides,
 )
 from ai_guardian.sessions.reader import (
+    match_violations_to_steps,
     read_session_detail,
     read_session_messages,
     read_session_summary,
@@ -505,3 +506,145 @@ class TestReadSessionDetailToolResults:
             assert "line 2" in steps[0]["content"]
         finally:
             Path(path).unlink()
+
+
+class TestMatchViolationsToSteps:
+    def test_empty_steps(self):
+        assert (
+            match_violations_to_steps([], [{"timestamp": "2026-08-15T10:00:00Z"}]) == {}
+        )
+
+    def test_empty_violations(self):
+        steps = [{"type": "user", "timestamp": "2026-08-15T10:00:00Z"}]
+        assert match_violations_to_steps(steps, []) == {}
+
+    def test_both_empty(self):
+        assert match_violations_to_steps([], []) == {}
+
+    def test_single_match(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z", "content": "hello"},
+            {"type": "assistant", "content": "hi"},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:00:05Z",
+                "violation_type": "secret_detected",
+                "id": "viol_001",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert 0 in result
+        assert len(result[0]) == 1
+        assert result[0][0]["id"] == "viol_001"
+
+    def test_violation_matches_latest_prior_step(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z"},
+            {"type": "assistant", "content": "..."},
+            {"type": "user", "timestamp": "2026-08-15T10:05:00Z"},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:03:00Z",
+                "violation_type": "prompt_injection",
+                "id": "viol_002",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert 0 in result
+        assert result[0][0]["id"] == "viol_002"
+
+    def test_multiple_violations_same_step(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z"},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:00:01Z",
+                "violation_type": "secret_detected",
+                "id": "viol_a",
+            },
+            {
+                "timestamp": "2026-08-15T10:00:02Z",
+                "violation_type": "prompt_injection",
+                "id": "viol_b",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert len(result[0]) == 2
+
+    def test_violations_across_multiple_steps(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z"},
+            {"type": "assistant", "content": "..."},
+            {"type": "user", "timestamp": "2026-08-15T10:05:00Z"},
+            {"type": "assistant", "content": "..."},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:01:00Z",
+                "violation_type": "secret_detected",
+                "id": "viol_1",
+            },
+            {
+                "timestamp": "2026-08-15T10:06:00Z",
+                "violation_type": "prompt_injection",
+                "id": "viol_2",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert 0 in result
+        assert result[0][0]["id"] == "viol_1"
+        assert 2 in result
+        assert result[2][0]["id"] == "viol_2"
+
+    def test_no_timestamped_steps(self):
+        steps = [
+            {"type": "assistant", "content": "hi"},
+            {"type": "tool_use", "tool_name": "Bash"},
+        ]
+        violations = [
+            {"timestamp": "2026-08-15T10:00:00Z", "violation_type": "secret_detected"},
+        ]
+        assert match_violations_to_steps(steps, violations) == {}
+
+    def test_violation_without_timestamp_skipped(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z"},
+        ]
+        violations = [
+            {"violation_type": "secret_detected", "id": "viol_no_ts"},
+        ]
+        assert match_violations_to_steps(steps, violations) == {}
+
+    def test_violation_before_first_step_maps_to_first(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:05:00Z"},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:00:00Z",
+                "violation_type": "secret_detected",
+                "id": "viol_early",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert 0 in result
+        assert result[0][0]["id"] == "viol_early"
+
+    def test_violation_at_exact_step_timestamp(self):
+        steps = [
+            {"type": "user", "timestamp": "2026-08-15T10:00:00Z"},
+            {"type": "user", "timestamp": "2026-08-15T10:05:00Z"},
+        ]
+        violations = [
+            {
+                "timestamp": "2026-08-15T10:05:00Z",
+                "violation_type": "secret_detected",
+                "id": "viol_exact",
+            },
+        ]
+        result = match_violations_to_steps(steps, violations)
+        assert 1 in result
+        assert result[1][0]["id"] == "viol_exact"

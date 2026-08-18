@@ -12,6 +12,7 @@ from ai_guardian.web.components.step_render import (
     escape_html,
     render_content_block,
     render_text_block,
+    render_violation_badge,
     render_violation_summary,
 )
 
@@ -452,6 +453,7 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 return
 
             from ai_guardian.sessions.reader import (
+                match_violations_to_steps,
                 read_session_detail,
                 read_session_summary,
             )
@@ -481,8 +483,17 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 with violations_container:
                     render_violation_summary(session_violations, daemon_name)
 
+            violations_by_step = match_violations_to_steps(
+                detail_steps, session_violations
+            )
+
             if detail_state["newest_first"]:
+                n = len(detail_steps)
                 detail_steps = list(reversed(detail_steps))
+                reversed_map = {}
+                for orig_idx, viols in violations_by_step.items():
+                    reversed_map[n - 1 - orig_idx] = viols
+                violations_by_step = reversed_map
 
             steps_container.clear()
             with steps_container:
@@ -490,7 +501,9 @@ def create_ide_session_detail_page(service, daemon_name: str):
                     ui.label("No conversation data found.").classes("text-grey-6")
                 else:
                     for i, step in enumerate(detail_steps):
-                        _render_step(step, i)
+                        _render_step(
+                            step, i, violations_by_step.get(i, []), daemon_name
+                        )
 
         detail_state["load_fn"] = load_detail
         ui.timer(0.1, load_detail, once=True)
@@ -531,8 +544,8 @@ def _render_session_summary(summary):
                 ui.label(last_ts).classes("text-xs")
 
 
-def _render_step(step, index):
-    """Render a single conversation step."""
+def _render_step(step, index, violations=None, daemon_name=""):
+    """Render a single conversation step with optional violation badges."""
     step_type = step.get("type", "")
     icon_name, icon_color = STEP_ICON_MAP.get(step_type, ("help", "text-grey-6"))
 
@@ -579,6 +592,17 @@ def _render_step(step, index):
                 ui.label(f"Title: {step.get('content', '')}").classes(
                     "text-xs font-bold"
                 )
+
+            if violations:
+                vc = len(violations)
+                ui.badge(
+                    f"{vc} violation{'s' if vc != 1 else ''}",
+                    color="red",
+                ).classes("text-xs")
+
+        if violations:
+            for v in violations:
+                render_violation_badge(v, daemon_name)
 
         render_content_block(
             step.get("content", ""),
