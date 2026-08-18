@@ -78,8 +78,15 @@ def create_ide_sessions_page(service, daemon_name: str):
 
         stats_row = ui.row().classes("w-full gap-4")
         cards_container = ui.column().classes("w-full gap-2")
+        auto_timer = {"ref": None}
 
         async def load_sessions():
+            try:
+                if ui.context.client.is_deleted:
+                    return
+            except Exception:
+                pass
+
             ide = ide_select.value
             if not ide:
                 return
@@ -115,6 +122,10 @@ def create_ide_sessions_page(service, daemon_name: str):
             )
             _render_stats(sessions, stats_row, ide)
             _render_session_list(sessions, cards_container, daemon_name, ide)
+
+            if auto_timer["ref"] is None:
+                interval = _get_auto_refresh_interval(service, daemon_name)
+                auto_timer["ref"] = ui.timer(interval, load_sessions)
 
         state["load_fn"] = load_sessions
 
@@ -366,6 +377,21 @@ def _format_size(size_bytes):
     return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
+def _get_auto_refresh_interval(service, daemon_name):
+    try:
+        target = service.get_target_by_name(daemon_name)
+        if not target:
+            return 5
+        cfg = service.get_daemon_config(target) or {}
+        return (
+            cfg.get("sdk", {})
+            .get("trace_viewer", {})
+            .get("auto_refresh_interval_seconds", 5)
+        )
+    except Exception:
+        return 5
+
+
 async def _load_session_violations(service, daemon_name, session_id):
     """Load violations correlated with a session by session_id.
 
@@ -446,8 +472,15 @@ def create_ide_session_detail_page(service, daemon_name: str):
             )
 
         steps_container = ui.column().classes("w-full gap-1")
+        auto_timer = {"ref": None}
 
         async def load_detail():
+            try:
+                if ui.context.client.is_deleted:
+                    return
+            except Exception:
+                pass
+
             if not file_path:
                 header_label.text = "No session file specified"
                 return
@@ -504,6 +537,10 @@ def create_ide_session_detail_page(service, daemon_name: str):
                         _render_step(
                             step, i, violations_by_step.get(i, []), daemon_name
                         )
+
+            if auto_timer["ref"] is None:
+                interval = _get_auto_refresh_interval(service, daemon_name)
+                auto_timer["ref"] = ui.timer(interval, load_detail)
 
         detail_state["load_fn"] = load_detail
         ui.timer(0.1, load_detail, once=True)
