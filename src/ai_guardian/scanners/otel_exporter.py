@@ -367,8 +367,15 @@ def _make_root_span(
     status_code = _STATUS_CODE_ERROR if stop_reason == "error" else _STATUS_CODE_OK
 
     start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))
+    if start_nano == "0" and turns:
+        start_nano = _iso_to_unix_nano(turns[0].get("started_at", ""))
+
+    end_iso = trace_doc.get("ended_at", "")
+    if not end_iso and turns:
+        end_iso = turns[-1].get("ended_at", "")
+
     end_nano = _derive_end_nano(
-        trace_doc.get("ended_at", ""),
+        end_iso,
         start_nano,
         duration_ms=trace_doc.get("duration_ms"),
         output_tokens=usage.get("output_tokens"),
