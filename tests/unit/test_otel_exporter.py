@@ -226,6 +226,12 @@ class TestIsoToUnixNano:
         result = _iso_to_unix_nano("2026-08-14T10:00:00")
         assert result != "0"
 
+    def test_z_suffix_parsed(self):
+        result = _iso_to_unix_nano("2026-08-14T10:00:00Z")
+        assert result != "0"
+        offset_result = _iso_to_unix_nano("2026-08-14T10:00:00+00:00")
+        assert result == offset_result
+
 
 class TestDeriveEndNano:
     def test_valid_iso_used_directly(self):
@@ -1320,7 +1326,7 @@ def _make_violation_entry(
 ):
     return {
         "id": violation_id,
-        "timestamp": "2026-08-18T10:00:00Z",
+        "timestamp": "2026-08-18T10:00:00+00:00",
         "violation_type": violation_type,
         "severity": severity,
         "blocked": {

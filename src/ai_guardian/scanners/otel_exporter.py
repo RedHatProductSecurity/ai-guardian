@@ -54,6 +54,8 @@ def _iso_to_unix_nano(iso_str: str) -> str:
     if not iso_str:
         return "0"
     try:
+        if iso_str.endswith("Z"):
+            iso_str = iso_str[:-1] + "+00:00"
         dt = datetime.fromisoformat(iso_str)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
