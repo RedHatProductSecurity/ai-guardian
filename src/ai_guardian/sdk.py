@@ -336,6 +336,27 @@ class _DirectSession(GuardSession):
         except Exception:
             pass
 
+    def _log_scan_results(self, scan_results):
+        """Log detected violations via unified log_violation (fixes #2019)."""
+        detected = [r for r in scan_results if r.detected]
+        if not detected:
+            return
+        try:
+            import os
+
+            from ai_guardian.violations.log_violation import (
+                ScanContext,
+                log_violations,
+            )
+
+            ctx = ScanContext(
+                ide_type="sdk",
+                project_path=self._cwd or os.getcwd(),
+            )
+            log_violations(detected, ctx)
+        except Exception as e:
+            logger.debug("SDK violation logging failed: %s", e)
+
     def check_content(
         self,
         text: str,
@@ -353,6 +374,8 @@ class _DirectSession(GuardSession):
             source_type="file_content",
             source_command=source_command,
         )
+
+        self._log_scan_results(scan_results)
 
         results = [
             CheckResult(
@@ -378,6 +401,8 @@ class _DirectSession(GuardSession):
             cwd=self._cwd,
         )
 
+        self._log_scan_results(scan_results)
+
         results = [
             CheckResult(
                 blocked=r.should_block,
@@ -396,6 +421,8 @@ class _DirectSession(GuardSession):
         from ai_guardian.scanners.pipeline import scan_command
 
         scan_results = scan_command(command, config=self._config)
+
+        self._log_scan_results(scan_results)
 
         results = [
             CheckResult(

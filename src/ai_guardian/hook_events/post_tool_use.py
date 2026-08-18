@@ -4,7 +4,6 @@ import logging
 from typing import Dict, Optional
 
 import ai_guardian.config.loaders as _loaders
-import ai_guardian.scanners.secret_scanning as _secret_scanning_mod
 from ai_guardian.config.utils import get_project_dir, is_feature_enabled
 from ai_guardian.constants import ActionMode, ViolationType, HookEvent
 from ai_guardian.hook_events.utils import (
@@ -13,7 +12,8 @@ from ai_guardian.hook_events.utils import (
     _pii_redactions_to_findings,
     _extract_file_path_from_pii_warning,
 )
-from ai_guardian.scanners.scan_result import ScanResult
+from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+from ai_guardian.violations.log_violation import ScanContext, log_violation
 from ai_guardian.scanners.transcript import _advance_transcript_position
 
 from ai_guardian.ask_mode import (
@@ -86,291 +86,6 @@ try:
     HAS_ANNOTATIONS = True
 except ImportError:
     HAS_ANNOTATIONS = False
-
-
-# ---------------------------------------------------------------------------
-# Violation logger functions
-# ---------------------------------------------------------------------------
-
-
-def _log_prompt_injection_violation(
-    filename: str,
-    context: Optional[Dict] = None,
-    attack_type: str = "injection",
-    hook_context: Optional[Dict] = None,
-    matched_pattern: Optional[str] = None,
-    matched_text: Optional[str] = None,
-    confidence: Optional[float] = None,
-    line_number: Optional[int] = None,
-    start_column: Optional[int] = None,
-    end_column: Optional[int] = None,
-    violation_logger=None,
-):
-    """
-    Log a prompt injection or jailbreak violation.
-
-    Args:
-        filename: Name of the file/prompt where injection was detected
-        context: Optional context dict with ide_type, hook_event, etc.
-        attack_type: Type of attack - "injection" or "jailbreak"
-        hook_context: Optional dict with tool_use_id, session_id for correlation
-        matched_pattern: The regex or pattern name that matched
-        matched_text: The text that triggered detection
-        line_number: 1-based line number where the match was found
-        start_column: 0-based start column within the line
-        end_column: 0-based end column within the line
-        confidence: Actual confidence score from the detector
-    """
-    if not HAS_VIOLATION_LOGGER:
-        return
-
-    try:
-        ctx = context or {}
-        vtype = (
-            ViolationType.JAILBREAK_DETECTED
-            if attack_type == "jailbreak"
-            else ViolationType.PROMPT_INJECTION
-        )
-        reason = (
-            "Jailbreak attempt detected"
-            if attack_type == "jailbreak"
-            else "Prompt injection pattern detected"
-        )
-        full_path = ctx.get("file_path")
-        if not full_path and filename != "user_prompt":
-            full_path = filename
-        blocked_entry = {
-            "file_path": full_path,
-            "line_number": line_number,
-            "source": "prompt" if filename == "user_prompt" else "file",
-            "pattern": matched_pattern or "Unknown",
-            "confidence": confidence if confidence is not None else 0.0,
-            "method": "heuristic",
-            "reason": reason,
-        }
-        if start_column is not None:
-            blocked_entry["start_column"] = start_column
-        if end_column is not None:
-            blocked_entry["end_column"] = end_column
-        if matched_text:
-            blocked_entry["matched_text"] = matched_text[:100]
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        blocked_entry["violation_id"] = vid
-        violation_logger = violation_logger or ViolationLogger()
-        violation_logger.log_violation(
-            violation_type=vtype,
-            blocked=blocked_entry,
-            context=_secret_scanning_mod._build_violation_context(
-                context, hook_context
-            ),
-            suggestion={
-                "action": "add_allowlist_pattern",
-                "note": "If this is legitimate (e.g., documentation), add to allowlist in ai-guardian.json",
-            },
-            severity="high",
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.error(f"Failed to log prompt injection violation: {e}")
-
-
-def _log_context_poisoning_violation(
-    filename: str,
-    context: Optional[Dict] = None,
-    hook_context: Optional[Dict] = None,
-    matched_pattern: Optional[str] = None,
-    matched_text: Optional[str] = None,
-    confidence: Optional[float] = None,
-    line_number: Optional[int] = None,
-    start_column: Optional[int] = None,
-    end_column: Optional[int] = None,
-    violation_logger=None,
-):
-    """Log a context poisoning violation."""
-    if not HAS_VIOLATION_LOGGER:
-        return
-
-    try:
-        ctx = context or {}
-        blocked_entry = {
-            "file_path": ctx.get("file_path"),
-            "line_number": line_number,
-            "source": "prompt",
-            "pattern": matched_pattern or "Unknown",
-            "confidence": confidence if confidence is not None else 0.0,
-            "method": "heuristic",
-            "reason": "Context poisoning attempt detected",
-        }
-        if start_column is not None:
-            blocked_entry["start_column"] = start_column
-        if end_column is not None:
-            blocked_entry["end_column"] = end_column
-        if matched_text:
-            blocked_entry["matched_text"] = matched_text[:100]
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        blocked_entry["violation_id"] = vid
-        violation_logger = violation_logger or ViolationLogger()
-        violation_logger.log_violation(
-            violation_type=ViolationType.CONTEXT_POISONING,
-            blocked=blocked_entry,
-            context=_secret_scanning_mod._build_violation_context(
-                context, hook_context
-            ),
-            suggestion={
-                "action": "add_allowlist_pattern",
-                "note": "If this is a legitimate persistent instruction, add to context_poisoning.allowlist_patterns in ai-guardian.json",
-            },
-            severity="medium",
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.error(f"Failed to log context poisoning violation: {e}")
-
-
-def _log_offensive_language_violation(
-    result,
-    hook_name: str,
-    hook_event: str,
-    tool_identifier: Optional[str] = None,
-    hook_tool_use_id: Optional[str] = None,
-    hook_session_id: Optional[str] = None,
-    violation_logger=None,
-):
-    """Log an offensive language violation."""
-    if not HAS_VIOLATION_LOGGER:
-        return
-    try:
-        findings = result.findings or []
-        first = findings[0] if findings else {}
-        blocked_entry = {
-            "file_path": result.file_path,
-            "line_number": result.line_number,
-            "rule_id": result.rule_id,
-            "category": result.attack_type,
-            "matched_text": result.matched_text[:100] if result.matched_text else "",
-            "suggestion": first.get("suggestion", ""),
-            "total_findings": result.total_findings,
-        }
-        if result.start_column is not None:
-            blocked_entry["start_column"] = result.start_column
-        if result.end_column is not None:
-            blocked_entry["end_column"] = result.end_column
-        ctx = {
-            "action": result.extra.get("action", "log"),
-            "hook_event": hook_event,
-            "hook": hook_name,
-            "tool": tool_identifier,
-        }
-        if hook_tool_use_id:
-            ctx["tool_use_id"] = hook_tool_use_id
-        if hook_session_id:
-            ctx["session_id"] = hook_session_id
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        blocked_entry["violation_id"] = vid
-        vl = violation_logger or ViolationLogger()
-        vl.log_violation(
-            violation_type=ViolationType.OFFENSIVE_LANGUAGE,
-            blocked=blocked_entry,
-            context=ctx,
-            suggestion={
-                "action": "review_offensive_language",
-                "note": (
-                    "Replace the term with a neutral alternative. "
-                    "Add '# ai-guardian:allow' inline or use scan_offensive.allowlist_patterns "
-                    "to suppress known-safe uses."
-                ),
-            },
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.error(f"Failed to log offensive language violation: {e}")
-
-
-def _log_pii_violation(
-    violation_logger,
-    pii_config,
-    pii_redactions,
-    tool_identifier,
-    hook_name,
-    file_path,
-    snippet_text,
-    hook_event,
-    hook_tool_use_id=None,
-    hook_session_id=None,
-    bash_command=None,
-    pretool_ctx=None,
-    source_command=None,
-):
-    """Log a PII violation and return (pii_action, pii_types)."""
-    pii_action = pii_config.get("action", "block")
-    pii_types = list(set(r["type"] for r in pii_redactions))
-    pii_first_line = pii_redactions[0].get("line_number") if pii_redactions else None
-
-    first_redaction = pii_redactions[0] if pii_redactions else {}
-    pii_start_column = first_redaction.get("column")
-    if pii_start_column is not None:
-        pii_start_column = pii_start_column - 1
-    pii_end_column = None
-    if pii_start_column is not None:
-        orig_len = first_redaction.get("original_length", 0)
-        if orig_len:
-            pii_end_column = pii_start_column + orig_len
-
-    pii_blocked = {
-        "tool": tool_identifier,
-        "hook": hook_name,
-        "file_path": file_path,
-        "line_number": pii_first_line,
-        "pii_count": len(pii_redactions),
-        "pii_types": pii_types,
-    }
-    if pii_start_column is not None:
-        pii_blocked["start_column"] = pii_start_column
-    if pii_end_column is not None:
-        pii_blocked["end_column"] = pii_end_column
-    if bash_command:
-        pii_blocked["command"] = bash_command
-    if source_command and file_path and str(file_path).startswith("tool_result:"):
-        pii_blocked["source_command"] = source_command
-    snippet = _extract_context_snippet(snippet_text, pii_first_line)
-    if snippet:
-        pii_blocked["context_snippet"] = snippet
-
-    pii_ctx = {"action": pii_action, "hook_event": hook_event}
-    if hook_tool_use_id:
-        pii_ctx["tool_use_id"] = hook_tool_use_id
-    if hook_session_id:
-        pii_ctx["session_id"] = hook_session_id
-    if pretool_ctx:
-        pii_ctx["pretool_context"] = pretool_ctx
-
-    if violation_logger:
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        pii_blocked["violation_id"] = vid
-        violation_logger.log_violation(
-            violation_type=ViolationType.PII_DETECTED,
-            blocked=pii_blocked,
-            context=pii_ctx,
-            suggestion={
-                "action": "review_pii_detection",
-                "false_positive": (
-                    "Allowlist the value in scan_pii.allowlist_patterns, "
-                    "disable specific PII types in scan_pii.pii_types, "
-                    "or add '# ai-guardian:allow' inline"
-                ),
-            },
-            violation_id=vid,
-        )
-
-    return pii_action, pii_types
 
 
 # ---------------------------------------------------------------------------
@@ -454,6 +169,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
         if raw_cmd:
             bash_command = raw_cmd[:_MAX_SOURCE_COMMAND_LEN]
             source_command = _sanitize_source_command(raw_cmd)
+
+    _scan_ctx = ScanContext(
+        ide_type=ide_type.value if hasattr(ide_type, "value") else str(ide_type),
+        hook_event=hook_event,
+        project_path=get_project_dir(),
+        session_id=hook_session_id,
+        tool_use_id=hook_tool_use_id,
+        tool_name=tool_name,
+    )
 
     # Load PreToolUse context for cross-hook correlation (#366)
     pretool_ctx = None
@@ -833,21 +557,66 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     pii_file_path = _extract_file_path_from_pii_warning(pii_warning)
                 pii_snippet_text = redacted_text if redacted_text else tool_output
                 post_pii_config, _ = _loaders._load_pii_config()
-                pii_action, pii_types = _log_pii_violation(
-                    violation_logger,
-                    post_pii_config
-                    or {"action": post_pii_result.extra.get("action", "block")},
-                    pii_redactions,
-                    tool_identifier,
-                    HookEvent.POST_TOOL_USE.display_name,
-                    pii_file_path,
-                    pii_snippet_text,
-                    HookEvent.POST_TOOL_USE,
-                    hook_tool_use_id=hook_tool_use_id,
-                    hook_session_id=hook_session_id,
-                    bash_command=bash_command,
-                    pretool_ctx=pretool_ctx,
-                    source_command=source_command,
+                _pii_cfg = post_pii_config or {
+                    "action": post_pii_result.extra.get("action", "block")
+                }
+                pii_action = _pii_cfg.get("action", "block")
+                pii_types = list(set(r["type"] for r in pii_redactions))
+                _pii_first = pii_redactions[0] if pii_redactions else {}
+                _pii_sc = _pii_first.get("column")
+                if _pii_sc is not None:
+                    _pii_sc = _pii_sc - 1
+                _pii_ec = None
+                if _pii_sc is not None:
+                    _orig_len = _pii_first.get("original_length", 0)
+                    if _orig_len:
+                        _pii_ec = _pii_sc + _orig_len
+                _pii_overrides = {
+                    "tool": tool_identifier,
+                    "hook": HookEvent.POST_TOOL_USE.display_name,
+                    "pii_count": len(pii_redactions),
+                    "pii_types": pii_types,
+                }
+                if bash_command:
+                    _pii_overrides["command"] = bash_command
+                if (
+                    source_command
+                    and pii_file_path
+                    and str(pii_file_path).startswith("tool_result:")
+                ):
+                    _pii_overrides["source_command"] = source_command
+                _pii_snippet = _extract_context_snippet(
+                    pii_snippet_text, _pii_first.get("line_number")
+                )
+                if _pii_snippet:
+                    _pii_overrides["context_snippet"] = _pii_snippet
+                _pii_ctx_overrides = {"action": pii_action}
+                if pretool_ctx:
+                    _pii_ctx_overrides["pretool_context"] = pretool_ctx
+                _pii_log_result = ScanResult(
+                    detected=True,
+                    violation_type=ViolationType.PII_DETECTED,
+                    id=generate_violation_id(),
+                    file_path=pii_file_path,
+                    line_number=_pii_first.get("line_number"),
+                    start_column=_pii_sc,
+                    end_column=_pii_ec,
+                    error_message=pii_warning or "",
+                )
+                log_violation(
+                    _pii_log_result,
+                    _scan_ctx,
+                    violation_logger=violation_logger,
+                    blocked_overrides=_pii_overrides,
+                    context_overrides=_pii_ctx_overrides,
+                    suggestion={
+                        "action": "review_pii_detection",
+                        "false_positive": (
+                            "Allowlist the value in scan_pii.allowlist_patterns, "
+                            "disable specific PII types in scan_pii.pii_types, "
+                            "or add '# ai-guardian:allow' inline"
+                        ),
+                    },
                 )
                 logger.warning(f"PII detected in {tool_identifier} output: {pii_types}")
 
@@ -1027,31 +796,19 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     post_pi_error_msg = post_pi_result.error_message
 
                     if post_pi_detected:
-                        post_pi_hook_ctx = {
-                            "hook_event": hook_event,
-                            "tool_name": tool_name,
-                        }
-                        if hook_tool_use_id:
-                            post_pi_hook_ctx["tool_use_id"] = hook_tool_use_id
-                        if hook_session_id:
-                            post_pi_hook_ctx["session_id"] = hook_session_id
-                        _log_prompt_injection_violation(
-                            post_pi_cp_filename,
-                            context={
-                                "ide_type": ide_type.value,
-                                "hook_event": hook_event,
-                                "file_path": post_pi_file,
-                            },
-                            attack_type=post_pi_result.attack_type,
-                            hook_context=(
-                                post_pi_hook_ctx if post_pi_hook_ctx else None
+                        log_violation(
+                            post_pi_result,
+                            _scan_ctx,
+                            violation_logger=violation_logger,
+                            source=(
+                                "prompt"
+                                if post_pi_cp_filename == "user_prompt"
+                                else "file"
                             ),
-                            matched_pattern=post_pi_result.matched_pattern,
-                            matched_text=post_pi_result.matched_text,
-                            confidence=post_pi_result.confidence,
-                            line_number=post_pi_result.line_number,
-                            start_column=post_pi_result.start_column,
-                            end_column=post_pi_result.end_column,
+                            suggestion={
+                                "action": "add_allowlist_pattern",
+                                "note": "If this is legitimate (e.g., documentation), add to allowlist in ai-guardian.json",
+                            },
                         )
 
                     if post_pi_block:
@@ -1164,30 +921,15 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     post_cp_error_msg = post_cp_result.error_message
 
                     if post_cp_detected:
-                        post_cp_hook_ctx = {
-                            "hook_event": hook_event,
-                            "tool_name": tool_name,
-                        }
-                        if hook_tool_use_id:
-                            post_cp_hook_ctx["tool_use_id"] = hook_tool_use_id
-                        if hook_session_id:
-                            post_cp_hook_ctx["session_id"] = hook_session_id
-                        _log_context_poisoning_violation(
-                            post_pi_cp_filename,
-                            context={
-                                "ide_type": ide_type.value,
-                                "hook_event": hook_event,
-                                "file_path": post_cp_file,
+                        log_violation(
+                            post_cp_result,
+                            _scan_ctx,
+                            violation_logger=violation_logger,
+                            source="prompt",
+                            suggestion={
+                                "action": "add_allowlist_pattern",
+                                "note": "If this is a legitimate persistent instruction, add to context_poisoning.allowlist_patterns in ai-guardian.json",
                             },
-                            hook_context=(
-                                post_cp_hook_ctx if post_cp_hook_ctx else None
-                            ),
-                            matched_pattern=post_cp_result.matched_pattern,
-                            matched_text=post_cp_result.matched_text,
-                            confidence=post_cp_result.confidence,
-                            line_number=post_cp_result.line_number,
-                            start_column=post_cp_result.start_column,
-                            end_column=post_cp_result.end_column,
                         )
 
                     if post_cp_block:
@@ -1261,12 +1003,21 @@ def handle_post_tool_use(ctx=None, **kwargs):
             latency_timer=_latency_timer,
         )
         if post_ol_result is not None and post_ol_result.detected:
-            _log_offensive_language_violation(
+            log_violation(
                 post_ol_result,
-                hook_name=HookEvent.POST_TOOL_USE.display_name,
-                hook_event=hook_event,
-                hook_tool_use_id=hook_tool_use_id,
-                hook_session_id=hook_session_id,
+                _scan_ctx,
+                violation_logger=violation_logger,
+                context_overrides={
+                    "action": post_ol_result.extra.get("action", "log"),
+                },
+                suggestion={
+                    "action": "review_offensive_language",
+                    "note": (
+                        "Replace the term with a neutral alternative. "
+                        "Add '# ai-guardian:allow' inline or use scan_offensive.allowlist_patterns "
+                        "to suppress known-safe uses."
+                    ),
+                },
             )
             post_ol_action = post_ol_result.extra.get("action", "log")
             post_ol_should_block = post_ol_result.should_block

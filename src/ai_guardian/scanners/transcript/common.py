@@ -669,41 +669,34 @@ def _log_transcript_violation(
     """Log a violation detected in the conversation transcript."""
     if not HAS_VIOLATION_LOGGER:
         return
-    try:
-        hctx = hook_context or {}
-        blocked_info = {
-            "transcript_path": transcript_path,
-            "source": "transcript",
-        }
-        if details:
-            blocked_info.update(details)
 
-        violation_ctx = {
-            "ide_type": "unknown",
-            "hook_event": HookEvent.PROMPT,
-            "project_path": get_project_dir(),
-        }
-        if hctx.get("session_id"):
-            violation_ctx["session_id"] = hctx["session_id"]
+    from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+    from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        blocked_info["violation_id"] = vid
-        violation_logger = ViolationLogger()
-        violation_logger.log_violation(
-            violation_type=violation_type,
-            blocked=blocked_info,
-            context=violation_ctx,
-            suggestion={
-                "action": "review_and_remediate",
-                "warning": "Sensitive content was detected in the conversation transcript. "
-                "It may have been entered via a ! shell command. "
-                "The content has already been sent to the AI model. "
-                "Rotate any exposed credentials and start a new session.",
-            },
-            severity="high",
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.error(f"Failed to log transcript violation: {e}")
+    hctx = hook_context or {}
+    result = ScanResult(
+        detected=True,
+        violation_type=violation_type,
+        id=generate_violation_id(),
+        severity="high",
+    )
+    blocked_overrides = {"transcript_path": transcript_path}
+    if details:
+        blocked_overrides.update(details)
+    log_violation(
+        result,
+        ScanContext(
+            hook_event=HookEvent.PROMPT,
+            project_path=get_project_dir(),
+            session_id=hctx.get("session_id"),
+        ),
+        source="transcript",
+        blocked_overrides=blocked_overrides,
+        suggestion={
+            "action": "review_and_remediate",
+            "warning": "Sensitive content was detected in the conversation transcript. "
+            "It may have been entered via a ! shell command. "
+            "The content has already been sent to the AI model. "
+            "Rotate any exposed credentials and start a new session.",
+        },
+    )

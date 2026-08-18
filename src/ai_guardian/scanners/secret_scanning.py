@@ -102,50 +102,39 @@ _NETWORK_ERROR_KEYWORDS = frozenset(
 )
 
 
-def _build_violation_context(context, hook_context):
-    """Build standard violation context dict from context and hook_context."""
-    ctx = context or {}
-    hctx = hook_context or {}
-    violation_ctx = {
-        "ide_type": ctx.get("ide_type", "unknown"),
-        "hook_event": ctx.get("hook_event", "unknown"),
-        "project_path": get_project_dir(),
-    }
-    _FORWARD_KEYS = ("tool_use_id", "session_id", "tool_name", "file_path", "source")
-    for key in _FORWARD_KEYS:
-        if key in hctx:
-            violation_ctx[key] = hctx[key]
-    return violation_ctx
-
-
-def _inject_source_command(blocked_info, context):
-    """Copy source_command from context into blocked_info for tool_result violations."""
-    if not context:
-        return
-    src_cmd = context.get("source_command")
-    if not src_cmd:
-        return
-    fp = blocked_info.get("file_path") or ""
-    if str(fp).startswith("tool_result:"):
-        blocked_info["source_command"] = src_cmd
-
-
-def _enrich_blocked_from_details(blocked_info, details):
-    """Add line_number, end_line, column, total_findings, validation from scan details."""
-    if details.get("line_number"):
-        blocked_info["line_number"] = details["line_number"]
-        if details.get("end_line") and details["end_line"] != details["line_number"]:
-            blocked_info["end_line"] = details["end_line"]
-    if details.get("start_column") is not None:
-        blocked_info["start_column"] = details["start_column"]
-    if details.get("end_column") is not None:
-        blocked_info["end_column"] = details["end_column"]
+def _build_secret_extras(details, context, *, file_path=None):
+    """Build blocked overrides for secret/finding violations."""
+    extras = {}
+    if details.get("end_line") and details["end_line"] != details.get("line_number"):
+        extras["end_line"] = details["end_line"]
     if details.get("total_findings"):
-        blocked_info["total_findings"] = details["total_findings"]
+        extras["total_findings"] = details["total_findings"]
     if details.get("findings"):
-        blocked_info["findings"] = details["findings"]
+        extras["findings"] = details["findings"]
     if details.get("validation"):
-        blocked_info["validation"] = details["validation"]
+        extras["validation"] = details["validation"]
+    extras["secret_type"] = details.get("rule_id", "Unknown")
+    if context:
+        src_cmd = context.get("source_command")
+        fp = file_path or ""
+        if src_cmd and str(fp).startswith("tool_result:"):
+            extras["source_command"] = src_cmd
+    return extras
+
+
+def _build_false_positive_msg(details, *, for_secret=False):
+    """Build false-positive suggestion text from scan details."""
+    if details.get("end_line") and details["end_line"] != details.get("line_number"):
+        line_num = details.get("line_number")
+        end_line = details["end_line"]
+        return (
+            f"Add '# ai-guardian:allow' at the end of line {line_num}, "
+            f"or wrap lines {line_num}-{end_line} with "
+            f"ai-guardian:begin-allow / ai-guardian:end-allow"
+        )
+    if for_secret:
+        return "Add '# gitleaks:allow' or '# ai-guardian:allow' at the end of the line"
+    return "Add '# ai-guardian:allow' at the end of the line"
 
 
 def _log_secret_detection_violation(
@@ -155,68 +144,55 @@ def _log_secret_detection_violation(
     hook_context: Optional[Dict] = None,
     violation_logger=None,
 ):
-    """
-    Log a secret detection violation.
-
-    Args:
-        filename: Name of the file/prompt where secret was detected
-        context: Optional context dict with ide_type, hook_event, etc.
-        secret_details: Optional dict with Gitleaks finding details (rule_id, line_number, etc.)
-        hook_context: Optional dict with tool_use_id, session_id for correlation
-    """
+    """Log a secret detection violation via unified ``log_violation``."""
     if not HAS_VIOLATION_LOGGER:
         return
 
-    try:
-        details = secret_details or {}
-        engine_name = details.get("engine", "Gitleaks")
-        blocked_info = {
-            "file_path": filename if filename != "user_prompt" else None,
-            "source": "prompt" if filename == "user_prompt" else "file",
-            "secret_type": details.get("rule_id", "Unknown"),
-            "reason": f"{engine_name} detected sensitive information",
-        }
-        _enrich_blocked_from_details(blocked_info, details)
-        _inject_source_command(blocked_info, context)
+    from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+    from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        from ai_guardian.violations.redact import sanitize_blocked_for_secret
+    details = secret_details or {}
+    ctx = context or {}
+    hctx = hook_context or {}
+    engine_name = details.get("engine", "Gitleaks")
+    file_path = filename if filename != "user_prompt" else None
 
-        sanitize_blocked_for_secret(blocked_info)
+    result = ScanResult(
+        detected=True,
+        violation_type=ViolationType.SECRET_DETECTED,
+        id=generate_violation_id(),
+        severity="critical",
+        file_path=file_path,
+        line_number=details.get("line_number"),
+        start_column=details.get("start_column"),
+        end_column=details.get("end_column"),
+        error_message=f"{engine_name} detected sensitive information",
+    )
 
-        violation_logger = violation_logger or ViolationLogger()
-        if details.get("end_line") and details["end_line"] != details.get(
-            "line_number"
-        ):
-            line_num = details.get("line_number")
-            end_line = details["end_line"]
-            false_positive_msg = (
-                f"Add '# ai-guardian:allow' at the end of line {line_num}, "
-                f"or wrap lines {line_num}-{end_line} with "
-                f"ai-guardian:begin-allow / ai-guardian:end-allow"
-            )
-        else:
-            false_positive_msg = (
-                "Add '# gitleaks:allow' or '# ai-guardian:allow' at the end of the line"
-            )
+    extras = _build_secret_extras(details, context, file_path=file_path)
+    from ai_guardian.violations.redact import sanitize_blocked_for_secret
 
-        from ai_guardian.scanners.scan_result import generate_violation_id
+    sanitize_blocked_for_secret(extras)
 
-        vid = generate_violation_id()
-        blocked_info["violation_id"] = vid
-        violation_logger.log_violation(
-            violation_type=ViolationType.SECRET_DETECTED,
-            blocked=blocked_info,
-            context=_build_violation_context(context, hook_context),
-            suggestion={
-                "action": "review_and_remove_secret",
-                "warning": "Secrets should never be committed to code or shared with AI",
-                "false_positive": false_positive_msg,
-            },
-            severity="critical",
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.critical(f"Failed to log secret detection violation: {e}")
+    log_violation(
+        result,
+        ScanContext(
+            ide_type=ctx.get("ide_type", "unknown"),
+            hook_event=ctx.get("hook_event", "unknown"),
+            project_path=get_project_dir(),
+            session_id=hctx.get("session_id"),
+            tool_use_id=hctx.get("tool_use_id"),
+            tool_name=hctx.get("tool_name"),
+        ),
+        violation_logger=violation_logger,
+        source="prompt" if filename == "user_prompt" else "file",
+        blocked_overrides=extras,
+        suggestion={
+            "action": "review_and_remove_secret",
+            "warning": "Secrets should never be committed to code or shared with AI",
+            "false_positive": _build_false_positive_msg(details, for_secret=True),
+        },
+    )
 
 
 # Category → (ViolationType, reason template, severity)
@@ -244,12 +220,7 @@ def _log_finding_violation(
     hook_context: Optional[Dict] = None,
     violation_logger=None,
 ):
-    """Route a scanner finding to the correct violation type based on category.
-
-    Checks the 'category' field in secret_details to determine the violation
-    type. Falls back to _log_secret_detection_violation for secrets or unknown
-    categories.
-    """
+    """Route a scanner finding to the correct violation type based on category."""
     details = secret_details or {}
     category = details.get("category")
 
@@ -269,59 +240,55 @@ def _log_finding_violation(
     if not HAS_VIOLATION_LOGGER:
         return
 
-    try:
-        vtype, reason_label, severity = mapping
-        engine_name = details.get("engine", "toml-patterns")
-        rule_id = details.get("rule_id", "Unknown")
+    from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+    from ai_guardian.violations.log_violation import ScanContext, log_violation
 
-        blocked_info = {
-            "file_path": filename if filename != "user_prompt" else None,
-            "source": "prompt" if filename == "user_prompt" else "file",
-            "secret_type": rule_id,
-            "reason": f"{engine_name}: {reason_label} ({rule_id})",
-        }
-        _enrich_blocked_from_details(blocked_info, details)
-        _inject_source_command(blocked_info, context)
+    vtype, reason_label, severity = mapping
+    engine_name = details.get("engine", "toml-patterns")
+    rule_id = details.get("rule_id", "Unknown")
+    ctx = context or {}
+    hctx = hook_context or {}
+    file_path = filename if filename != "user_prompt" else None
 
-        from ai_guardian.violations.redact import (
-            REDACT_VIOLATION_TYPES,
-            sanitize_blocked_for_secret,
-        )
+    result = ScanResult(
+        detected=True,
+        violation_type=vtype,
+        id=generate_violation_id(),
+        severity=severity,
+        file_path=file_path,
+        line_number=details.get("line_number"),
+        start_column=details.get("start_column"),
+        end_column=details.get("end_column"),
+        error_message=f"{engine_name}: {reason_label} ({rule_id})",
+    )
 
-        if vtype.value in REDACT_VIOLATION_TYPES:
-            sanitize_blocked_for_secret(blocked_info)
+    extras = _build_secret_extras(details, context, file_path=file_path)
+    from ai_guardian.violations.redact import (
+        REDACT_VIOLATION_TYPES,
+        sanitize_blocked_for_secret,
+    )
 
-        violation_logger = violation_logger or ViolationLogger()
-        if details.get("end_line") and details["end_line"] != details.get(
-            "line_number"
-        ):
-            line_num = details.get("line_number")
-            end_line = details["end_line"]
-            false_positive_msg = (
-                f"Add '# ai-guardian:allow' at the end of line {line_num}, "
-                f"or wrap lines {line_num}-{end_line} with "
-                f"ai-guardian:begin-allow / ai-guardian:end-allow"
-            )
-        else:
-            false_positive_msg = "Add '# ai-guardian:allow' at the end of the line"
+    if vtype.value in REDACT_VIOLATION_TYPES:
+        sanitize_blocked_for_secret(extras)
 
-        from ai_guardian.scanners.scan_result import generate_violation_id
-
-        vid = generate_violation_id()
-        blocked_info["violation_id"] = vid
-        violation_logger.log_violation(
-            violation_type=vtype,
-            blocked=blocked_info,
-            context=_build_violation_context(context, hook_context),
-            suggestion={
-                "action": "review_finding",
-                "false_positive": false_positive_msg,
-            },
-            severity=severity,
-            violation_id=vid,
-        )
-    except Exception as e:
-        logger.error(f"Failed to log finding violation: {e}")
+    log_violation(
+        result,
+        ScanContext(
+            ide_type=ctx.get("ide_type", "unknown"),
+            hook_event=ctx.get("hook_event", "unknown"),
+            project_path=get_project_dir(),
+            session_id=hctx.get("session_id"),
+            tool_use_id=hctx.get("tool_use_id"),
+            tool_name=hctx.get("tool_name"),
+        ),
+        violation_logger=violation_logger,
+        source="prompt" if filename == "user_prompt" else "file",
+        blocked_overrides=extras,
+        suggestion={
+            "action": "review_finding",
+            "false_positive": _build_false_positive_msg(details),
+        },
+    )
 
 
 def _count_gitleaks_patterns(config_path):

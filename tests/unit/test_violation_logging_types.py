@@ -218,7 +218,7 @@ class TestSchemaValidation:
 class TestToolPolicySSRFViolationType:
     """Test that tool_policy._log_violation passes violation_type correctly."""
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_log_violation_default_type_is_tool_permission(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker
@@ -245,7 +245,7 @@ class TestToolPolicySSRFViolationType:
             == "tool_permission"
         )
 
-    @mock.patch("ai_guardian.tools.policy.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.tools.policy.HAS_VIOLATION_LOGGER", True)
     def test_log_violation_ssrf_type(self, mock_vl_class):
         from ai_guardian.tools.policy import ToolPolicyChecker

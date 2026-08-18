@@ -195,11 +195,6 @@ from ai_guardian.scanners.transcript import (  # noqa: F401
     _log_transcript_violation,
 )
 
-# --- hook_events ---
-from ai_guardian.hook_events.post_tool_use import (  # noqa: F401
-    _log_prompt_injection_violation,
-)
-
 # --- cli_handlers.py ---
 from ai_guardian.cli_handlers import (  # noqa: F401
     _handle_violations_command,

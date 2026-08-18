@@ -16,7 +16,7 @@ from ai_guardian import _log_directory_blocking_violation
 class TestLogDirectoryBlockingViolationReason:
     """Test that _log_directory_blocking_violation uses correct reason/suggestion."""
 
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_default_reason_is_marker_found(self, mock_vl_class):
         mock_logger = mock.MagicMock()
@@ -29,7 +29,7 @@ class TestLogDirectoryBlockingViolationReason:
         blocked = call_kwargs.kwargs.get("blocked", call_kwargs[1].get("blocked"))
         assert blocked["reason"] == ".ai-read-deny marker found"
 
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_default_suggestion_is_remove_marker(self, mock_vl_class):
         mock_logger = mock.MagicMock()
@@ -44,7 +44,7 @@ class TestLogDirectoryBlockingViolationReason:
         assert suggestion["action"] == "remove_deny_marker"
         assert ".ai-read-deny" in suggestion["file_path"]
 
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_custom_reason_for_directory_rule(self, mock_vl_class):
         mock_logger = mock.MagicMock()
@@ -58,7 +58,7 @@ class TestLogDirectoryBlockingViolationReason:
         blocked = call_kwargs.kwargs.get("blocked", call_kwargs[1].get("blocked"))
         assert blocked["reason"] == "denied by directory rule: ~/.secret/**"
 
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_custom_suggestion_for_directory_rule(self, mock_vl_class):
         mock_logger = mock.MagicMock()
@@ -83,7 +83,7 @@ class TestLogDirectoryBlockingViolationReason:
         assert suggestion["action"] == "update_directory_rules"
         assert "ai-guardian.json" in suggestion["config_file"]
 
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_explicit_marker_reason_overrides_default(self, mock_vl_class):
         mock_logger = mock.MagicMock()
@@ -108,7 +108,7 @@ class TestCheckDirectoryDeniedViolationReason:
             pytest.param("warn", id="warn-mode"),
         ],
     )
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_marker_violation_logs_marker_reason(self, mock_vl_class, action_mode):
         """Violation triggered by .ai-read-deny marker should log marker reason."""
@@ -147,7 +147,7 @@ class TestCheckDirectoryDeniedViolationReason:
             pytest.param("log-only", id="log-only-mode"),
         ],
     )
-    @mock.patch("ai_guardian.hook_processing.ViolationLogger")
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_directory_rule_violation_logs_rule_reason(
         self, mock_vl_class, action_mode
