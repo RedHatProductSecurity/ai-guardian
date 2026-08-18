@@ -81,6 +81,7 @@ class WindsurfAdapter(BaseAgentAdapter):
         violation_type: Optional[str] = None,
         security_message: Optional[str] = None,
         redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict:
         if has_secrets and error_message:
             return self._stderr_block_response(

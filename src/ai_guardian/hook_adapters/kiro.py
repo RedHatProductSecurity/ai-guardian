@@ -75,6 +75,7 @@ class KiroAdapter(HookAdapter):
         violation_type: Optional[str] = None,
         security_message: Optional[str] = None,
         redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict:
         if has_secrets and error_message:
             exit_code = 2 if hook_event == HookEvent.PRE_TOOL_USE else 1

@@ -73,6 +73,17 @@ class BaseAgentAdapter(HookAdapter):
     # -- Shared response builders --
 
     @staticmethod
+    def _wrap_tool_output(tool_name: Optional[str], text: str):
+        """Wrap modified output in the tool-specific shape for updatedToolOutput.
+
+        Bash requires object form {stdout, stderr, interrupted}.
+        Other tools use bare string.
+        """
+        if tool_name == "Bash":
+            return {"stdout": text, "stderr": "", "interrupted": False}
+        return text
+
+    @staticmethod
     def _event_name(hook_event: HookEvent) -> str:
         if isinstance(hook_event, HookEvent):
             return hook_event.display_name
@@ -154,6 +165,7 @@ class BaseAgentAdapter(HookAdapter):
         violation_type: Optional[str] = None,
         security_message: Optional[str] = None,
         redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict:
         if has_secrets and error_message:
             final_error = self._combine_error_messages(error_message, warning_message)
@@ -186,9 +198,8 @@ class BaseAgentAdapter(HookAdapter):
                         response["hookSpecificOutput"] = {
                             "hookEventName": self._event_name(hook_event)
                         }
-                    response["hookSpecificOutput"][
-                        "updatedToolOutput"
-                    ] = modified_output
+                    wrapped = self._wrap_tool_output(tool_name, modified_output)
+                    response["hookSpecificOutput"]["updatedToolOutput"] = wrapped
                     response["hookSpecificOutput"][
                         "updatedMCPToolOutput"
                     ] = modified_output

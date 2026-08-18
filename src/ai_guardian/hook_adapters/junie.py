@@ -46,6 +46,7 @@ class JunieAdapter(HookAdapter):
         violation_type: Optional[str] = None,
         security_message: Optional[str] = None,
         redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict:
         return self._add_metadata(
             {"output": None, "exit_code": 0},
