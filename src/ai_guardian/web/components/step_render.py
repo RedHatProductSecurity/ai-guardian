@@ -38,7 +38,7 @@ def render_text_block(text, color="text-grey-6", max_height=None):
     ).classes(color)
 
 
-def render_content_block(content, tool_input=None, step_type=""):
+def render_content_block(content, tool_input=None, step_type="", step_label=""):
     """Render content with adaptive height based on line count."""
     if step_type == "tool_use" and tool_input:
         content = json.dumps(tool_input, indent=2, default=str)
@@ -47,6 +47,12 @@ def render_content_block(content, tool_input=None, step_type=""):
         return
 
     line_count = content.count("\n") + 1
+
+    if line_count > 5 or len(content) > 200:
+        from ai_guardian.web.components.content_viewer import render_view_button
+
+        render_view_button(step_label or step_type or "Content", content)
+
     if line_count <= 10:
         render_text_block(content, max_height=None)
     elif line_count <= 100:
