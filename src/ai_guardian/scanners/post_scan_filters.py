@@ -304,5 +304,3 @@ def apply_post_scan_pipeline(
         error_message=error_msg,
         warnings=warnings,
     )
-
-

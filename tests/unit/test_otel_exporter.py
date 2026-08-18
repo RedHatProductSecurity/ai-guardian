@@ -1486,9 +1486,7 @@ class TestHookOtelEmitter:
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.flush(
-            session_id="empty-session", violations_log_path=str(log)
-        )
+        emitter.flush(session_id="empty-session", violations_log_path=str(log))
 
         mock_requests.post.assert_called_once()
         payload = mock_requests.post.call_args[1]["json"]
@@ -1895,7 +1893,9 @@ class TestHookOtelEmitterTokenUsage:
         assert attr_map["gen_ai.usage.cache_creation_input_tokens"]["intValue"] == "200"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_without_token_usage_has_no_gen_ai_attrs(self, mock_requests, tmp_path):
+    def test_flush_without_token_usage_has_no_gen_ai_attrs(
+        self, mock_requests, tmp_path
+    ):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
         log.write_text("")
