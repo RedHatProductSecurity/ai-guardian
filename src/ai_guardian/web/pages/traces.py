@@ -439,6 +439,20 @@ def _render_token_summary(computed, total_turns=0):
             )
 
 
+def _collect_turn_violations(steps):
+    """Collect all violations from scan steps in a turn.
+
+    Returns list of (violation_dict, step_num) tuples.
+    """
+    result = []
+    for step in steps:
+        if step.get("type") == "scan":
+            step_num = step.get("step", 0)
+            for v in step.get("violations", []):
+                result.append((v, step_num))
+    return result
+
+
 def _render_turn_row(
     turn_obj, per_turn, violations_map, expanded_turns=None, daemon_name=""
 ):
@@ -475,6 +489,8 @@ def _render_turn_row(
     icon_name, icon_color = icon_map.get(turn_type, ("help", "text-grey-6"))
     turn_label = _get_turn_label(steps, turn_type)
 
+    turn_violations = _collect_turn_violations(steps)
+
     with ui.card().classes("w-full py-1 px-2"):
         with ui.row().classes("items-center gap-2 w-full"):
             ui.icon(icon_name).classes(f"{icon_color} text-sm")
@@ -496,7 +512,15 @@ def _render_turn_row(
             )
 
         is_open = expanded_turns is not None and turn_num in expanded_turns
-        exp = ui.expansion("Steps", value=is_open).classes("w-full").props("dense")
+        exp = ui.expansion(value=is_open).classes("w-full").props("dense")
+
+        with exp.add_slot("header"):
+            with ui.row().classes("items-center gap-1"):
+                ui.label(f"Steps ({len(steps)})").classes("text-sm")
+                for v, step_num in turn_violations:
+                    _render_step_violation_badge(
+                        v, step_num, turn_num, exp, daemon_name
+                    )
 
         def _on_toggle(e, tn=turn_num):
             if expanded_turns is not None:
@@ -509,7 +533,7 @@ def _render_turn_row(
 
         with exp:
             for step in steps:
-                _render_step(step, daemon_name)
+                _render_step(step, daemon_name, turn_num)
 
 
 def _get_turn_label(steps, turn_type):
@@ -575,7 +599,33 @@ def _get_turn_prompt_preview(steps):
     return ""
 
 
-def _render_step(step, daemon_name=""):
+def _render_step_violation_badge(
+    violation, step_num, turn_num, expansion, daemon_name=""
+):
+    """Render a clickable violation badge in the Steps header."""
+    vtype = violation.get("type", violation.get("violation_type", "unknown"))
+    vid = violation.get("id", "")
+    action = violation.get("action", "block")
+    color = "red" if action == "block" else "orange"
+
+    step_el_id = f"step-{turn_num}-{step_num}"
+    badge = ui.badge(vtype, color=color).classes("text-xs cursor-pointer")
+    if vid:
+        badge.tooltip(vid)
+
+    async def _scroll_to_step(exp=expansion, sid=step_el_id):
+        if not exp.value:
+            exp.set_value(True)
+            await ui.run_javascript("await new Promise(r => setTimeout(r, 100))")
+        await ui.run_javascript(
+            f"document.getElementById('{sid}')"
+            f"?.scrollIntoView({{behavior: 'smooth', block: 'center'}})"
+        )
+
+    badge.on("click.stop", _scroll_to_step)
+
+
+def _render_step(step, daemon_name="", turn_num=0):
     step_type = step.get("type", "")
     step_num = step.get("step", 0)
     icon_map = {
@@ -589,67 +639,71 @@ def _render_step(step, daemon_name=""):
     }
     icon_name, icon_color = icon_map.get(step_type, ("help", "text-grey-6"))
 
-    with ui.row().classes("items-start gap-2 py-1"):
-        ui.icon(icon_name).classes(f"{icon_color} text-xs mt-1")
-        with ui.column().classes("gap-0 w-full"):
-            if step_type == "system":
-                ui.label(f"Step {step_num}: system prompt").classes("text-xs font-bold")
-                prompt = step.get("user_prompt", "")
-                if prompt:
-                    _render_text_block(prompt)
-                sys_prompt = step.get("system_prompt", "")
-                if sys_prompt:
-                    _render_text_block(f"System: {sys_prompt}")
-            elif step_type == "response":
-                text = step.get("text", "")
-                signal = step.get("model_signal", "")
-                usage = step.get("usage", {})
-                tok_info = ""
-                if usage:
-                    ti = usage.get("input_tokens", 0)
-                    to = usage.get("output_tokens", 0)
-                    tok_info = f" ({ti + to:,} tok)"
-                ui.label(f"Step {step_num}: response [{signal}]{tok_info}").classes(
-                    "text-xs font-bold"
-                )
-                if text:
-                    _render_text_block(text)
-            elif step_type == "tool_call":
-                name = step.get("name", "")
-                ui.label(f"Step {step_num}: tool_call {name}").classes(
-                    "text-xs font-bold"
-                )
-                inp = step.get("input", {})
-                _render_text_block(str(inp))
-            elif step_type == "tool_result":
-                name = step.get("name", "")
-                output = step.get("output", "")
-                ui.label(f"Step {step_num}: tool_result {name}").classes(
-                    "text-xs font-bold"
-                )
-                if output:
-                    _render_text_block(str(output))
-            elif step_type == "scan":
-                scanned = step.get("scanned", "")
-                violations = step.get("violations", [])
-                if violations:
-                    ui.label(f"Step {step_num}: scan {scanned}").classes(
-                        "text-xs font-bold text-red"
+    step_el_id = f"step-{turn_num}-{step_num}"
+    with ui.element("div").props(f'id="{step_el_id}"'):
+        with ui.row().classes("items-start gap-2 py-1"):
+            ui.icon(icon_name).classes(f"{icon_color} text-xs mt-1")
+            with ui.column().classes("gap-0 w-full"):
+                if step_type == "system":
+                    ui.label(f"Step {step_num}: system prompt").classes(
+                        "text-xs font-bold"
                     )
-                    for v in violations:
-                        render_violation_badge(v, daemon_name)
+                    prompt = step.get("user_prompt", "")
+                    if prompt:
+                        _render_text_block(prompt)
+                    sys_prompt = step.get("system_prompt", "")
+                    if sys_prompt:
+                        _render_text_block(f"System: {sys_prompt}")
+                elif step_type == "response":
+                    text = step.get("text", "")
+                    signal = step.get("model_signal", "")
+                    usage = step.get("usage", {})
+                    tok_info = ""
+                    if usage:
+                        ti = usage.get("input_tokens", 0)
+                        to = usage.get("output_tokens", 0)
+                        tok_info = f" ({ti + to:,} tok)"
+                    ui.label(f"Step {step_num}: response [{signal}]{tok_info}").classes(
+                        "text-xs font-bold"
+                    )
+                    if text:
+                        _render_text_block(text)
+                elif step_type == "tool_call":
+                    name = step.get("name", "")
+                    ui.label(f"Step {step_num}: tool_call {name}").classes(
+                        "text-xs font-bold"
+                    )
+                    inp = step.get("input", {})
+                    _render_text_block(str(inp))
+                elif step_type == "tool_result":
+                    name = step.get("name", "")
+                    output = step.get("output", "")
+                    ui.label(f"Step {step_num}: tool_result {name}").classes(
+                        "text-xs font-bold"
+                    )
+                    if output:
+                        _render_text_block(str(output))
+                elif step_type == "scan":
+                    scanned = step.get("scanned", "")
+                    violations = step.get("violations", [])
+                    if violations:
+                        ui.label(f"Step {step_num}: scan {scanned}").classes(
+                            "text-xs font-bold text-red"
+                        )
+                        for v in violations:
+                            render_violation_badge(v, daemon_name)
+                    else:
+                        ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
+                            "text-xs"
+                        )
+                elif step_type == "compaction":
+                    before = step.get("tokens_before", 0)
+                    after = step.get("tokens_after", 0)
+                    ui.label(
+                        f"Step {step_num}: compaction {before:,} -> {after:,}"
+                    ).classes("text-xs font-bold text-purple")
                 else:
-                    ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
-                        "text-xs"
-                    )
-            elif step_type == "compaction":
-                before = step.get("tokens_before", 0)
-                after = step.get("tokens_after", 0)
-                ui.label(
-                    f"Step {step_num}: compaction {before:,} -> {after:,}"
-                ).classes("text-xs font-bold text-purple")
-            else:
-                ui.label(f"Step {step_num}: {step_type}").classes("text-xs")
+                    ui.label(f"Step {step_num}: {step_type}").classes("text-xs")
 
 
 def _truncate(text, max_len=120):
