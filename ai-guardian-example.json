@@ -1146,6 +1146,25 @@
   "_comment_support_email": "Email: set export_destination to mailto:support@company.com. Configure SMTP in the email section below.",
   "_comment_support_email_auth": "Email auth: 'none' for corporate SMTP relays (no credentials), 'env' for env vars (recommended), 'inline' for hardcoded creds (doctor warns).",
   "_comment_support_email_fallback": "If no smtp_host is set, opens system mailto: with the bundle zipped for manual attachment.",
+  "otel": {
+    "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions",
+    "enabled": false,
+    "endpoint": "http://localhost:4318",
+    "service_name": "ai-guardian",
+    "metadata": {}
+  },
+
+  "sdk": {
+    "_comment_sdk": "SDK scanning settings for GuardedAgent",
+    "enabled": true,
+    "secret_redaction": false,
+    "agents": {
+      "*": {
+        "enabled": true
+      }
+    }
+  },
+
   "support": {
     "export_destination": "",
     "_comment_export_destination_examples": "Local: ~/support-bundles | S3: s3://bucket/prefix/ | GCS+Vertex: gs://company-bucket/ai-guardian/support/config-bundle/ | Email: mailto:support@company.com",

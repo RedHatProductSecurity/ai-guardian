@@ -26,6 +26,8 @@ For full configuration reference, see [CONFIGURATION.md](CONFIGURATION.md). For 
 - [Project Setup (v1.15.0)](#project-setup-v1150)
 - [Profiles](#profiles)
 - [MCP Server](#mcp-server)
+- [OTEL & Observability (v1.16.0)](#otel--observability-v1160)
+- [SDK & GuardedAgent (v1.16.0)](#sdk--guardedagent-v1160)
 
 ---
 
@@ -2061,3 +2063,98 @@ AI_GUARDIAN_NO_TKINTER=1 ai-guardian tray start
 # Force Textual terminal prompt (skip both tkinter and NiceGUI)
 AI_GUARDIAN_NO_TKINTER=1 AI_GUARDIAN_NO_NICEGUI=1 ai-guardian tray start
 ```
+
+---
+
+## OTEL & Observability (v1.16.0)
+
+### How do I export traces to Grafana?
+
+```json
+{
+  "otel": {
+    "enabled": true,
+    "endpoint": "http://localhost:4318"
+  }
+}
+```
+
+Start Grafana LGTM stack: `docker run -d -p 3000:3000 -p 4318:4318 grafana/otel-lgtm`. Both SDK agent traces and interactive IDE sessions export automatically. View at `http://localhost:3000` → Explore → Tempo.
+
+See [OBSERVABILITY.md](OBSERVABILITY.md) for full setup.
+
+### How do I add custom metadata to OTEL spans?
+
+```json
+{
+  "otel": {
+    "enabled": true,
+    "endpoint": "http://localhost:4318",
+    "metadata": {
+      "environment": "production",
+      "team": "security"
+    }
+  }
+}
+```
+
+Static metadata is added to every span. For dynamic metadata, use the `otel_metadata_fn` callback in `GuardedAgent`.
+
+### How do I export an existing IDE session to OTEL?
+
+```bash
+ai-guardian otel export --session
+```
+
+Works standalone without a running daemon. Exports the current Claude Code session trace.
+
+---
+
+## SDK & GuardedAgent (v1.16.0)
+
+### How do I enable SDK scanning for GuardedAgent?
+
+```json
+{
+  "sdk": {
+    "enabled": true,
+    "secret_redaction": false
+  }
+}
+```
+
+SDK scanning is enabled by default. `secret_redaction` defaults to `false` for SDK (hooks default to `true`).
+
+### How do I configure per-agent scanning profiles?
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": { "enabled": true },
+      "research-agent": { "enabled": false },
+      "security-agent": { "enabled": true, "secret_redaction": true }
+    }
+  }
+}
+```
+
+The `*` profile is the default. Named profiles override it for specific agent names.
+
+### How do I set a token budget for GuardedAgent?
+
+```python
+result = agent.run("task", max_budget_tokens=100000)
+```
+
+The agent loop stops when cumulative token usage exceeds the threshold.
+
+### How do I get traces from GuardedAgent runs?
+
+```python
+agent = GuardedAgent(client, model="...", trace_dir="./traces")
+result = agent.run("task")
+# Traces auto-saved to ./traces/<agent>-<timestamp>.json
+```
+
+Default trace directory: `~/.local/state/ai-guardian/traces/`. Use `trace_path_fn` for custom organization.

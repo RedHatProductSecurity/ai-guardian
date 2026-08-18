@@ -7,24 +7,241 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [1.16.0] - 2026-08-18
 
-- **SDK: `between_turns` blocked injection now informs LLM** — when a `between_turns` callback returns content that is blocked by a security scan, the agent now receives a warning message (`[ai-guardian] Injected content was blocked: <type>`) instead of the content being silently dropped. This applies to both `end_turn` and `tool_use` code paths. Previously the agent loop would either end or continue without the LLM knowing content was blocked (#1946)
+- Verified Cursor hook compatibility with Cursor v3.15.19
 
 ### Added
 
-- **OTEL session telemetry** — `HookOtelEmitter` now records adapter name at session start and counts hook events, so even clean sessions (no violations) produce an OTEL trace with a root span containing `ai_guardian.adapter` and `ai_guardian.hook_event_count` attributes (#2010)
+#### SDK & Agent Framework
 
-- **GuardedAgent symlink support** — two new parameters for accessing files through symlinks that resolve outside `cwd`: `follow_symlinks=True` trusts all symlinks inside `cwd`; `allowed_paths=[...]` whitelists specific external directories. Both configurable via `sdk.agents.<name>` in `ai-guardian.json` (#1907)
+- **GuardedAgent — tool-use agent loop with security scanning** — new `GuardedAgent` class provides a complete tool-use agent loop with built-in security scanning for file reads, shell commands, and tool outputs. Supports Anthropic and OpenAI-compatible providers with auto-detected response extractors. Includes `read_file`, `write_file`, `bash`, and `list_directory` built-in tools with path validation and directory blocking (#1788, #1794)
 
-- **GuardedAgent `trace_path_fn` callback** — optional callback `(agent_name, context) -> str` injected between `trace_dir` and the generated filename. Trailing `/` creates a subdirectory; otherwise the return becomes a filename prefix. Enables organizing traces by case ID, observation ID, or run context (#1892)
+- **OpenAI provider support** — `GuardedAgent` now supports OpenAI-compatible APIs alongside Anthropic, with automatic provider detection from the client type. Includes auto-compaction for long conversations (#1848)
 
-- **New AI tool config paths for prompt injection scanning** — `.windsurf/rules`, `.windsurf/cascade.json`, `.openclaw/config.json` added to `DEFAULT_CONFIG_FILES` for context file poisoning detection (#1779)
+- **Prompt caching for multi-turn loops** — `GuardedAgent` uses sliding message cache breakpoints to keep recent context in Anthropic's prompt cache, reducing latency and cost for long conversations (#1846)
 
-- **New credential paths for exfiltration detection** — `~/.config/gh/hosts.yml`, `~/.copilot/`, `~/.codeium/` added to `file_exfil` pattern; exfil detection now also catches `nc`, `wget`, `socat` as exfiltration targets (#1779)
-- **16 new AI/ML provider API key detection patterns** — Groq (`gsk_`), xAI (`xai-`), NVIDIA NIM (`nvapi-`), New Relic (`NRAK-`), LangFuse (`sk-lf-`), LangSmith PAT/Service (`lsv2_pt_`/`lsv2_sk_`), Weights & Biases (`wandb_v1_`), Cerebras (`csk-`), Together.ai (`tgp_v1_`), Devin (`apk_user_`/`apk_`), Pinecone (`pcsk_`), RunPod (`rpa_`), MiniMax (`sk-api-`), Azure AD Client Secret (`Q~` marker) (#1777)
+- **Auto-compaction for long conversations** — when token usage exceeds a configurable `compact_threshold`, `GuardedAgent` automatically summarizes older messages to stay within context limits. Compaction events are recorded in the trace with token metrics (#1848, #1849)
 
-- **SSRF: IP encoding bypass protection** — `_check_url()` now normalizes hex (`0x7f000001`), octal (`0177.0.0.1`), decimal (`2130706433`), and mixed-octet IP encodings to dotted-decimal before CIDR matching, blocking SSRF bypasses that exploit Python's `ipaddress` module not handling alternative formats that curl/wget/browsers resolve (#1778)
+- **`between_turns` hook** — optional callback executed between LLM calls, enabling external code injection (tool results, user input, context updates) into the agent loop. Supports both `end_turn` and `tool_use` code paths (#1829)
+
+- **Lifecycle hooks** — `on_start`, `on_end`, and `on_violation` callbacks for `guarded()` and `GuardedAgent`, enabling custom logging, metrics, and error handling (#1808)
+
+- **`on_turn` callback and trace logging** — per-turn observability callback with structured `TurnEvent` data including model usage, tool calls, and security scan results (#1850)
+
+- **`max_budget_tokens`** — configurable token budget limit for `GuardedAgent` that stops the agent loop when cumulative token usage exceeds the threshold (#1807)
+
+- **Symlink support** — `follow_symlinks=True` trusts all symlinks inside `cwd`; `allowed_paths=[...]` whitelists specific external directories. Both configurable via `sdk.agents.<name>` in `ai-guardian.json` (#1907)
+
+- **`trace_path_fn` callback** — optional callback `(agent_name, context) -> str` for organizing traces by case ID, observation ID, or run context (#1892)
+
+- **`target_dir` for cross-repo allowlist merging** — `GuardedAgent` can load and merge allowlists from a target project directory, enabling shared scanning policies across repositories (#1934)
+
+- **`secret_redaction_enabled` flag** — `GuardSession` now exposes `secret_redaction_enabled` so callers can check whether secret redaction is active. SDK defaults `secret_redaction` to off (hooks default to on) (#1931)
+
+- **SDK config profile overlay** — `sdk.agents.<name>` config sections in `ai-guardian.json` override global settings per agent profile. Global and per-profile `enabled` flag controls whether SDK scanning is active (#1805, #1806)
+
+- **Enriched `SecurityViolation`** — violation objects now include `response` (raw scan result), `sanitized_text` (redacted content), and the violation ID in the error message for cross-referencing with violation logs (#1800, #1964)
+
+- **Violations query API** — `GuardSession.get_violations()` with `tool_use_id` and `session_id` filters for programmatic violation retrieval (#1771, #1785)
+
+- **Trace auto-persistence** — `trace_dir` parameter enables automatic JSON trace logging to disk. Traces default to XDG state directory (`~/.local/state/ai-guardian/traces/`). Filename collision prevention for concurrent runs (#1892, #1961)
+
+- **Nested trace format** — traces restructured into turn objects with step arrays, including `api_call` and `seq` numbering, timing data, span IDs, and enriched metadata for OTEL compatibility (#1928, #1959)
+
+- **Compaction events in traces** — auto-compaction records token-before/token-after metrics in the trace log (#1848)
+
+- **Blocked scans continue loop** — when a security violation is detected during an agent scan, the loop now recovers with a context-injected warning message instead of raising an exception, allowing the LLM to self-correct (#1939)
+
+#### OTEL & Observability
+
+- **OpenTelemetry trace export** — `ai-guardian otel export` CLI command converts agent traces to OTLP JSON format (OpenTelemetry GenAI semantic conventions). Supports Grafana Tempo and other OTLP-compatible backends (#1958)
+
+- **Hook session OTEL export** — interactive IDE sessions now export OTEL traces via `ai-guardian otel export --session`. Works standalone without a running daemon. Session sequence numbering tracks hook invocations (#1998, #2034)
+
+- **OTEL session telemetry** — `HookOtelEmitter` records adapter name, hook event counts, and token usage (parsed from transcripts) on root spans, so even clean sessions produce observable traces (#2010, #2011)
+
+- **OTEL config promoted to top-level** — `otel` config section moved from `sdk.otel` to top-level `otel` for shared use by both SDK and hook exporters (#1998)
+
+- **Custom OTEL metadata** — static metadata from config (`otel.metadata`) and dynamic metadata from callbacks attached to exported spans (#1982)
+
+- **Rich span attributes** — project name/path, session sequence, violation details, and adapter info included in OTEL spans for full observability (#2001, #2015, #2016)
+
+- **OBSERVABILITY.md** — new documentation covering OTEL configuration, Grafana/Tempo integration, and tracing for both SDK and interactive sessions (#2014)
+
+#### Console (TUI & Web)
+
+- **IDE Session viewer** — multi-IDE conversation browser in both TUI and web console. Supports Claude Code, Cursor, GitHub Copilot, Codex, Gemini CLI, and Cline sessions with step-by-step drill-down (#1983)
+
+- **SDK Trace viewer** — live conversation monitor for GuardedAgent runs with auto-refresh, showing turns, tool calls, and security scan results (#1951)
+
+- **Violation badges and links** — violation count badges on turn step headers link directly to the corresponding violation log entries via session_id correlation (#2021, #2022)
+
+- **Violation detail page** — dedicated page with deep-link support (`/violations/<id>`) for cross-referencing from traces and external tools (#2002)
+
+- **Formatted content viewer modal** — JSON and code content in session detail views displayed in a syntax-highlighted modal instead of inline truncation (#2025)
+
+- **Sort order toggle** — ascending/descending sort for SDK Traces and IDE Sessions lists (#1993)
+
+- **Context size display** — input tokens, cache read, and cache creation token breakdown shown in session and trace viewers (#2023)
+
+- **Auto-refresh** — IDE Session list and detail pages auto-refresh to show new sessions and live updates (#2024)
+
+- **SDK nav group** — new sidebar section grouping Agent Profiles and SDK Settings panels (#1957)
+
+- **Project directory picker** — modal directory browser for selecting project scope in undiscovered projects (#1969)
+
+- **MCP audit endpoint** — daemon REST API and console UI for viewing MCP security audit results (#1977)
+
+#### Hooks & Scanning
+
+- **Multi-violation reporting** — content pipeline now reports all detected violations instead of stopping at the first blocker, giving users complete visibility into all security issues in a single scan (#2026)
+
+- **Object-form `updatedToolOutput` for Bash** — secret redaction for Bash tool results now uses the `{"stdout": text, "stderr": "", "interrupted": false}` format required by Claude Code, replacing the `additionalContext` workaround that some IDEs ignored (#2042)
+
+- **Unified scanning pipeline (`scan_content`)** — registry-driven content scanning with 8 scanners (prompt injection, context poisoning, supply chain, output logging, canary detection, config file, secret, PII) replacing hardcoded scanner dispatch. Shared by SDK and hooks (#1927, #1932, #1933)
+
+- **`scan_file` and `scan_command` pipeline functions** — high-level functions for scanning file content and shell commands through the unified pipeline (#1933)
+
+- **Unified violation logging** — single `log_violation()` function replaces 10 per-scanner violation logging functions, ensuring consistent violation records across all scanners (#2020)
+
+- **Unique violation IDs** — every violation record includes a deterministic `violation_id` for cross-referencing between traces, violation logs, and OTEL spans (#1964)
+
+- **Detector caching** — prompt injection and unicode attack detectors are cached by config hash, avoiding re-instantiation per file/event. Reduces scan latency for repeated calls (#1952)
+
+- **`init-project --exclude` flag** — specify additional directory exclusion patterns during project initialization (#1967)
+
+- **`init-project --merge` flag** — deep-merge generated config into existing `ai-guardian.json` instead of overwriting (#1967)
+
+- **Per-secret findings with column positions** — secret scanner reports individual findings with column numbers instead of just line numbers (#1813)
+
+- **End-line tracking** — multi-line pattern matches now report both start and end line numbers (#1813)
+
+- **`source_command` in violation records** — violation log entries include the originating shell command for better traceability (#1903)
+
+#### Daemon
+
+- **Kubernetes REST host env var** — `AI_GUARDIAN_REST_HOST` environment variable controls the REST API bind address, with automatic detection of Kubernetes environments to bind to `0.0.0.0` instead of `127.0.0.1` (#2045)
+
+- **OTEL lifecycle events while paused** — daemon tracks hook events for OTEL export even when scanning is paused, preserving session telemetry continuity (#2034)
+
+#### Security Patterns
+
+- **Cloud & SaaS secret detection rules** — Cloudflare API tokens/keys, Figma personal access tokens, GitLab pipeline/runner/personal tokens, and Salesforce security tokens/connected app secrets (#1986)
+
+- **16 new AI/ML provider API key patterns** — Groq (`gsk_`), xAI (`xai-`), NVIDIA NIM (`nvapi-`), New Relic (`NRAK-`), LangFuse (`sk-lf-`), LangSmith (`lsv2_pt_`/`lsv2_sk_`), Weights & Biases (`wandb_v1_`), Cerebras (`csk-`), Together.ai (`tgp_v1_`), Devin (`apk_user_`/`apk_`), Pinecone (`pcsk_`), RunPod (`rpa_`), MiniMax (`sk-api-`), Azure AD Client Secret (`Q~` marker) (#1777)
+
+- **New AI tool config paths** — `.windsurf/rules`, `.windsurf/cascade.json`, `.openclaw/config.json` added for context file poisoning detection (#1779)
+
+- **New credential paths for exfiltration detection** — `~/.config/gh/hosts.yml`, `~/.copilot/`, `~/.codeium/` added; detection now also catches `nc`, `wget`, `socat` as exfiltration targets (#1779)
+
+- **SSRF IP encoding bypass protection** — normalizes hex, octal, decimal, and mixed-octet IP encodings to dotted-decimal before CIDR matching, blocking bypass attempts (#1778)
+
+#### MCP & Integrations
+
+- **MCP v2 `MCPServer` API** — upgraded to mcp v2 server API for compatibility with latest MCP specification (#1784)
+
+- **Hook-check middleware for MCP clients** — MCP clients can validate that IDE hooks are properly configured before use (#1826)
+
+- **Tray notification for missing hooks** — system tray sends a notification when IDE hooks are not configured (#1844)
+
+#### Configuration & CLI
+
+- **`AI_GUARDIAN_LOG_LEVEL` env var** — control log verbosity without editing config files (#1823)
+
+- **`ai-guardian doctor` smoke-test mode** — validates config and tests all configured scanners in one command (#1818)
+
+- **`get_config()` helper** — simplified config access function in `utils` module (#1840)
+
+- **Matched pattern/text in prompt injection findings** — scan results now include the specific pattern and text that triggered detection (#1813)
+
+#### Documentation
+
+- **Quick Start simplified** — restructured to a clear 3-step flow (install, setup, verify) with console access step (#1963, #1971)
+
+- **Developer Install section** — dedicated instructions for contributors using `uv` and editable installs (#1962)
+
+- **OBSERVABILITY.md** — comprehensive guide for OTEL configuration, Grafana/Tempo integration, and tracing (#2014)
+
+- **SDK comparison table** — Anthropic SDK vs Claude Code SDK feature comparison for GuardedAgent (#1997)
+
+- **SDK docs updates** — OpenAI-compatible provider examples, tool schemas, and `guarded()` name parameter (#1788)
+
+### Changed
+
+- **Secrets always block** — removed configurable `action` mode from secret scanning; secrets now always block regardless of configuration (#1772)
+
+- **SDK API simplified** — removed `action` and `scan` parameters from public SDK API; scanning is now controlled via config profiles (#1805)
+
+- **SDK `_default` profile renamed to `*` wildcard** — config key change for the default agent profile (#1805)
+
+- **Container image: multi-stage Dockerfile** — build optimized with multi-stage Docker build (#1790)
+
+- **Container registry migrated** — images now published to `redhatproductsecurity` org on Quay.io (#1776)
+
+- **Quay.io image cleanup** — replaced manual image cleanup with expiry labels (#1789)
+
+- **Pipeline refactoring** — content scanning delegated to shared `scan_content()` function; blocking violations deferred to end of scan loop for multi-violation support (#1932, #2026)
+
+- **Logging refactored** — module-level loggers replace root logger; routine info messages downgraded to debug level (#1802, #1823)
+
+- **Scanner config loading centralized** — `load_scanner_config()` provides unified scanner configuration loading (#1806)
+
+- **Path validation consolidated** — shared validation utilities extracted to `config/utils.py` (#1953)
+
+- **OTEL architecture simplified** — violation child spans replaced by root span attributes; SDK and hook attribute naming unified (#2008, #2016)
+
+- **OTEL emitter refactored** — file-backed `HookOtelEmitter` with flush from `violations.jsonl` instead of in-memory spans (#2038)
+
+### Fixed
+
+- **SDK: `between_turns` blocked injection now informs LLM** — blocked content now sends a warning message to the agent instead of being silently dropped (#1946)
+
+- **SDK: violation ID included in `SecurityViolation` message** — violation IDs now appear in error messages for cross-referencing (#1991, #2019)
+
+- **SDK: prompt injection violations persisted in direct mode** — violations from direct SDK usage now correctly written to violation log (#2019)
+
+- **Hooks: `updatedToolOutput` for Bash requires object form** — bare string was silently ignored by Claude Code; now uses `{"stdout": ..., "stderr": ..., "interrupted": ...}` format (#2042)
+
+- **OTEL: root span timestamps derived from turns** — when raw timestamps are missing, span start/end times are computed from the first and last turn timestamps instead of showing zero or multi-day durations (#2040)
+
+- **OTEL: session reopen links traces by session_id** — reopened sessions produce linked traces instead of fragmented disconnected spans (#2037)
+
+- **OTEL: export works when daemon is paused** — OTEL trace export no longer requires an active (unpaused) daemon (#2034)
+
+- **OTEL: ISO 8601 Z suffix handled** — timestamp parsing no longer fails on UTC timestamps ending with `Z` (#2040)
+
+- **Console: full content shown in session detail** — long text no longer truncated in IDE session viewer (#1996)
+
+- **Console: empty user entries for tool results** — tool result messages no longer show as blank user entries (#1994)
+
+- **Console: duplicate text in drill-down** — IDE session detail no longer shows the same text twice (#1995)
+
+- **Tray: menu refreshes immediately after resume** — pause/resume menu items update without requiring a manual refresh (#1999)
+
+- **Daemon: REST host env var respected** — `AI_GUARDIAN_REST_HOST` is now properly read for Kubernetes deployments (#2045)
+
+- **Daemon: auto-restart watch lists updated** — file watcher covers current module layout after refactoring (#1940)
+
+- **Daemon: process exit wait** — daemon shutdown waits for process exit instead of using a fixed sleep (#1839)
+
+- **Daemon: pause no longer skips security instruction injection** — paused daemons still inject security instructions into sessions (#1831)
+
+- **Agent: `between_turns` inspects structured output** — structured tool output is now scanned before injection (#1946)
+
+- **Agent: in-loop recovery on violation** — scan violations no longer raise exceptions; agent loop continues with injected warning (#1939)
+
+- **Scanner: directory scan performance** — `os.walk` replaces `rglob` for efficient directory pruning during scans (#1813)
+
+- **Installer: download retry logic** — scanner download retries moved from CI shell scripts into Python installer for reliability (#1942)
+
+### Security
+
+- **SSRF IP encoding bypass protection** — blocks hex, octal, decimal, and mixed-octet IP encoding attacks (#1778)
+
+- **36+ new secret detection patterns** — covers Cloud/SaaS providers (Cloudflare, Figma, GitLab, Salesforce) and AI/ML platforms (Groq, xAI, NVIDIA, Cerebras, etc.) (#1777, #1986)
+
+- **New exfiltration detection targets** — `nc`, `wget`, `socat` now detected as exfil channels; new credential paths covered (#1779)
 
 ## [1.15.5] - 2026-08-03
 
@@ -3063,7 +3280,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.5...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...HEAD
+[1.16.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.16.0
 [1.15.5]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...v1.15.5
 [1.15.4]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...v1.15.4
 [1.15.3]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.2...v1.15.3
