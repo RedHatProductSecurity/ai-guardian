@@ -1874,12 +1874,6 @@ def process_hook_data(hook_data, daemon_state=None):
         _latency_timer = _CheckTimer(enabled=_is_latency_enabled())
         _latency_event = hook_event
 
-        # Count hook events for OTEL session telemetry (#2010)
-        if daemon_state and hook_session_id:
-            _otel_em = daemon_state.get_otel_emitter(hook_session_id)
-            if _otel_em:
-                _otel_em.record_hook_event()
-
         # Bootstrap scan: scan agent config files on first hook of a new session (#1394).
         # Agents with SESSION_START (e.g. Gemini CLI) already ran bootstrap above and
         # marked the session seen — is_new_session() returns False here for them.
@@ -2179,7 +2173,6 @@ def process_hook_data(hook_data, daemon_state=None):
             violation_logger=violation_logger,
             latency_timer=_latency_timer,
             invocation_allowed_findings=_invocation_allowed,
-            daemon_state=daemon_state,
         )
 
         if hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE):

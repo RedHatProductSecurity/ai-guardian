@@ -89,6 +89,18 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
                 adapter_name=(adapter.name if adapter else None),
                 token_usage=token_usage,
             )
+        else:
+            from ai_guardian.config.loaders import _load_otel_config
+            from ai_guardian.scanners.otel_exporter import HookOtelEmitter
+
+            _otel_cfg = _load_otel_config()
+            if _otel_cfg.get("enabled"):
+                _direct_emitter = HookOtelEmitter(_otel_cfg)
+                _direct_emitter.flush(
+                    session_id=session_id,
+                    adapter_name=(adapter.name if adapter else None),
+                    token_usage=token_usage,
+                )
     except Exception as e:
         logger.debug(f"Session end: OTEL flush failed (non-fatal): {e}")
 

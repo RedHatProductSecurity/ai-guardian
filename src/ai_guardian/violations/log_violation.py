@@ -76,6 +76,7 @@ def log_violation(
 
     try:
         blocked = result.to_blocked_dict(source=source)
+        blocked["action"] = "block" if result.should_block else "warn"
         if blocked_overrides:
             blocked.update(blocked_overrides)
 

@@ -153,15 +153,14 @@ Token usage totals are **not** on the root span. Per-turn usage lives on `gen_ai
 
 ### Interactive Sessions (Hooks)
 
-Session-level activity summary exported on `SessionEnd`. Requires the daemon to be running.
+Session-level activity summary exported on `SessionEnd`. Works in both daemon and direct mode — violations are read from `violations.jsonl` at flush time, so no in-memory state is required between hook calls.
 
 #### Span Hierarchy
 
 ```
 ai_guardian.session (root)
-├── ai_guardian.violation  — one per violation detected
-├── ai_guardian.block      — one per blocked tool call
-└── ai_guardian.scan       — aggregated scan summary
+├── ai_guardian.violation  — one per non-blocking violation (warn mode)
+└── ai_guardian.block      — one per blocked tool call
 ```
 
 #### Session Root Attributes (`ai_guardian.session`)
@@ -169,11 +168,11 @@ ai_guardian.session (root)
 | Attribute | Type | Description |
 |-----------|------|-------------|
 | `ai_guardian.session_id` | string | IDE session identifier |
+| `ai_guardian.session_sequence` | int | Session open count (increments on reopen) |
 | `ai_guardian.project.name` | string | `org/repo` from git remote, or directory basename |
 | `ai_guardian.adapter` | string | IDE adapter name (e.g., `Claude Code`, `Gemini CLI`) |
-| `ai_guardian.violation_count` | int | Total violations in session |
+| `ai_guardian.violation_count` | int | Total non-blocking violations in session |
 | `ai_guardian.block_count` | int | Total blocked tool calls |
-| `ai_guardian.hook_event_count` | int | Total hook events processed |
 | `ai_guardian.span_type` | string | Always `"session"` |
 | `gen_ai.usage.input_tokens` | int | Total input tokens (from transcript, if available) |
 | `gen_ai.usage.output_tokens` | int | Total output tokens |
@@ -361,11 +360,12 @@ OTEL export is **fail-open**: if the collector is unreachable, the agent continu
 AI_GUARDIAN_LOG_LEVEL=DEBUG ai-guardian trace export trace.json --endpoint http://localhost:4318
 ```
 
-### Daemon not exporting hook sessions
+### Hook sessions not exporting
 
 1. Verify OTEL is enabled in config: `ai-guardian config show | grep -A5 otel`
-2. Restart the daemon after config changes: `ai-guardian daemon restart`
-3. Hook session traces are only flushed on `SessionEnd` — end the IDE session to trigger export.
+2. If using the daemon, restart after config changes: `ai-guardian daemon restart`
+3. Hook session traces are flushed on `SessionEnd` — end the IDE session to trigger export.
+4. Direct mode (no daemon) also exports — violations are read from `violations.jsonl` at session end.
 
 ### Protobuf format errors
 

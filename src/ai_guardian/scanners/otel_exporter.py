@@ -851,19 +851,100 @@ class OtelSpanEmitter:
             logger.debug("OTEL flush to %s failed", url, exc_info=True)
 
 
+def _read_session_violations(
+    session_id: str,
+    *,
+    violations_log_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """Read violations from ``violations.jsonl`` filtered by *session_id*.
+
+    Returns a list of violation entry dicts.  Silently returns ``[]`` on
+    missing file, I/O errors, or malformed lines.
+    """
+    if not session_id:
+        return []
+    if violations_log_path is None:
+        try:
+            from ai_guardian.config.utils import get_state_dir
+
+            violations_log_path = str(get_state_dir() / "violations.jsonl")
+        except Exception:
+            return []
+    if not os.path.isfile(violations_log_path):
+        return []
+    entries: List[Dict[str, Any]] = []
+    try:
+        with open(violations_log_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ctx = entry.get("context") or {}
+                if ctx.get("session_id") == session_id:
+                    entries.append(entry)
+    except OSError:
+        pass
+    return entries
+
+
+def _violation_entry_to_span(
+    entry: Dict[str, Any],
+    trace_id: str,
+    parent_span_id: str,
+) -> Dict[str, Any]:
+    """Convert a single violations.jsonl entry to an OTEL span."""
+    blocked = entry.get("blocked") or {}
+    ctx = entry.get("context") or {}
+    timestamp_nano = _iso_to_unix_nano(entry.get("timestamp", ""))
+
+    action = blocked.get("action", "block")
+    if action == "block":
+        return _make_span(
+            trace_id=trace_id,
+            span_id=_new_span_id(),
+            parent_span_id=parent_span_id,
+            name="ai_guardian.block",
+            start_nano=timestamp_nano,
+            end_nano=timestamp_nano,
+            attributes=_attrs(
+                ("tool.name", ctx.get("tool_name")),
+                ("ai_guardian.reason", blocked.get("reason")),
+                ("ai_guardian.scanner", entry.get("violation_type")),
+            ),
+        )
+    return _make_span(
+        trace_id=trace_id,
+        span_id=_new_span_id(),
+        parent_span_id=parent_span_id,
+        name="ai_guardian.violation",
+        start_nano=timestamp_nano,
+        end_nano=timestamp_nano,
+        attributes=_attrs(
+            ("ai_guardian.violation_type", entry.get("violation_type")),
+            ("ai_guardian.severity", entry.get("severity")),
+            ("tool.name", ctx.get("tool_name")),
+            ("ai_guardian.violation_id", entry.get("id")),
+            ("ai_guardian.scanner", entry.get("violation_type")),
+        ),
+    )
+
+
 class HookOtelEmitter:
     """Emit OTEL spans for hook session activity (violations, blocks, scans).
 
-    Unlike ``OtelSpanEmitter`` (which tracks a single agent run), this emitter
-    accumulates child spans over an IDE session lifetime and flushes them as a
-    batch on SessionEnd.
+    At ``SessionEnd``, reads violations from ``violations.jsonl`` (filtered
+    by ``session_id``) and converts them to OTEL spans.  No in-memory span
+    accumulation — works in both daemon and direct mode.
 
     Span hierarchy::
 
         ai_guardian.session (root)
-        ├── ai_guardian.violation (one per violation)
-        ├── ai_guardian.block (one per blocked event)
-        └── ai_guardian.scan (aggregated scan summary)
+        ├── ai_guardian.violation (one per non-blocking violation)
+        └── ai_guardian.block (one per blocked event)
     """
 
     def __init__(
@@ -886,13 +967,9 @@ class HookOtelEmitter:
         self._resource_attributes = config.get("resource_attributes") or {}
         self._trace_id = uuid.uuid4().hex
         self._root_span_id = _new_span_id()
-        self._child_spans: List[Dict[str, Any]] = []
         self._start_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
-        self._violation_count = 0
-        self._block_count = 0
         self._adapter_name: Optional[str] = None
         self._project_name: Optional[str] = None
-        self._hook_event_count = 0
         self._session_sequence = session_sequence
 
     @property
@@ -918,10 +995,8 @@ class HookOtelEmitter:
             self._project_name = project_name
 
     def record_hook_event(self) -> None:
-        """Increment the hook event counter for this session."""
-        if not self._enabled:
-            return
-        self._hook_event_count += 1
+        """No-op — kept for API compatibility."""
+        return
 
     def record_violation(
         self,
@@ -933,33 +1008,8 @@ class HookOtelEmitter:
         scanner: Optional[str] = None,
         details: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Record a violation as a child span."""
-        if not self._enabled:
-            return
-        self._violation_count += 1
-        now_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
-        attrs = _attrs(
-            ("ai_guardian.violation_type", violation_type),
-            ("ai_guardian.severity", severity),
-            ("tool.name", tool_name),
-            ("ai_guardian.violation_id", violation_id),
-            ("ai_guardian.scanner", scanner),
-        )
-        if details:
-            for k, v in details.items():
-                attr = _make_attribute(f"ai_guardian.detail.{k}", v)
-                if attr is not None:
-                    attrs.append(attr)
-        span = _make_span(
-            trace_id=self._trace_id,
-            span_id=_new_span_id(),
-            parent_span_id=self._root_span_id,
-            name="ai_guardian.violation",
-            start_nano=now_nano,
-            end_nano=now_nano,
-            attributes=attrs,
-        )
-        self._child_spans.append(span)
+        """No-op — violations are read from ``violations.jsonl`` at flush time."""
+        return
 
     def record_block(
         self,
@@ -968,25 +1018,8 @@ class HookOtelEmitter:
         reason: str,
         scanner: Optional[str] = None,
     ) -> None:
-        """Record a blocked event as a child span."""
-        if not self._enabled:
-            return
-        self._block_count += 1
-        now_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
-        span = _make_span(
-            trace_id=self._trace_id,
-            span_id=_new_span_id(),
-            parent_span_id=self._root_span_id,
-            name="ai_guardian.block",
-            start_nano=now_nano,
-            end_nano=now_nano,
-            attributes=_attrs(
-                ("tool.name", tool_name),
-                ("ai_guardian.reason", reason),
-                ("ai_guardian.scanner", scanner),
-            ),
-        )
-        self._child_spans.append(span)
+        """No-op — blocks are read from ``violations.jsonl`` at flush time."""
+        return
 
     def flush(
         self,
@@ -994,12 +1027,28 @@ class HookOtelEmitter:
         session_id: Optional[str] = None,
         adapter_name: Optional[str] = None,
         token_usage: Optional[Dict[str, Any]] = None,
+        violations_log_path: Optional[str] = None,
     ) -> None:
-        """Flush all accumulated spans to the collector on session end."""
+        """Read violations from disk and flush as OTEL spans to the collector."""
         if not self._enabled:
             return
         try:
             end_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
+
+            entries = _read_session_violations(
+                session_id or "", violations_log_path=violations_log_path
+            )
+            child_spans = [
+                _violation_entry_to_span(e, self._trace_id, self._root_span_id)
+                for e in entries
+            ]
+
+            block_count = sum(
+                1
+                for e in entries
+                if (e.get("blocked") or {}).get("action", "block") == "block"
+            )
+            violation_count = len(entries) - block_count
 
             effective_adapter = adapter_name or self._adapter_name
             root_attrs = _attrs(
@@ -1007,9 +1056,8 @@ class HookOtelEmitter:
                 ("ai_guardian.session_sequence", self._session_sequence),
                 ("ai_guardian.project.name", self._project_name),
                 ("ai_guardian.adapter", effective_adapter),
-                ("ai_guardian.violation_count", self._violation_count),
-                ("ai_guardian.block_count", self._block_count),
-                ("ai_guardian.hook_event_count", self._hook_event_count),
+                ("ai_guardian.violation_count", violation_count),
+                ("ai_guardian.block_count", block_count),
                 ("ai_guardian.span_type", "session"),
             )
             if token_usage and isinstance(token_usage, dict):
@@ -1044,9 +1092,8 @@ class HookOtelEmitter:
                 attributes=root_attrs,
             )
 
-            all_spans = [root_span] + self._child_spans
+            all_spans = [root_span] + child_spans
             self._post_spans(all_spans)
-            self._child_spans.clear()
         except Exception:
             logger.debug("OTEL session flush failed", exc_info=True)
 
