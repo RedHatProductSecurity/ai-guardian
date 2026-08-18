@@ -866,7 +866,12 @@ class HookOtelEmitter:
         └── ai_guardian.scan (aggregated scan summary)
     """
 
-    def __init__(self, config: Dict[str, Any]) -> None:
+    def __init__(
+        self,
+        config: Dict[str, Any],
+        *,
+        session_sequence: int = 1,
+    ) -> None:
         self._enabled = config.get("enabled", False)
         if not self._enabled:
             return
@@ -888,6 +893,7 @@ class HookOtelEmitter:
         self._adapter_name: Optional[str] = None
         self._project_name: Optional[str] = None
         self._hook_event_count = 0
+        self._session_sequence = session_sequence
 
     @property
     def enabled(self) -> bool:
@@ -998,6 +1004,7 @@ class HookOtelEmitter:
             effective_adapter = adapter_name or self._adapter_name
             root_attrs = _attrs(
                 ("ai_guardian.session_id", session_id),
+                ("ai_guardian.session_sequence", self._session_sequence),
                 ("ai_guardian.project.name", self._project_name),
                 ("ai_guardian.adapter", effective_adapter),
                 ("ai_guardian.violation_count", self._violation_count),

@@ -158,6 +158,7 @@ class DaemonState:
 
         # OTEL hook emitters (#1998) — per-session, flushed on SessionEnd
         self._otel_emitters = {}  # session_id -> HookOtelEmitter
+        self._session_open_counts = {}  # session_id -> int (#2037)
 
         # State change observers (#650) — push notifications to subscribers
         self._state_observers = []
@@ -324,7 +325,10 @@ class DaemonState:
             from ai_guardian.scanners.otel_exporter import HookOtelEmitter
 
             config = _load_otel_config()
-            emitter = HookOtelEmitter(config)
+            with self._lock:
+                count = self._session_open_counts.get(session_id, 0) + 1
+                self._session_open_counts[session_id] = count
+            emitter = HookOtelEmitter(config, session_sequence=count)
             if not emitter.enabled:
                 with self._lock:
                     self._otel_emitters.setdefault(session_id, self._OTEL_DISABLED)
