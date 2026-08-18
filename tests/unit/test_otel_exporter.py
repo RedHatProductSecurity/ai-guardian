@@ -1645,3 +1645,207 @@ class TestDaemonStateOtel:
 
         mock_requests.post.assert_called_once()
         assert "session-1" not in state._otel_emitters
+
+
+# ---------------------------------------------------------------------------
+# HookOtelEmitter token usage from transcript (#2011)
+# ---------------------------------------------------------------------------
+
+
+class TestHookOtelEmitterTokenUsage:
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_includes_token_usage(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        token_usage = {
+            "input_tokens": 1000,
+            "output_tokens": 500,
+            "cache_read_input_tokens": 800,
+            "cache_creation_input_tokens": 200,
+        }
+        emitter.flush(session_id="s1", token_usage=token_usage)
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "1000"
+        assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "500"
+        assert attr_map["gen_ai.usage.cache_read_input_tokens"]["intValue"] == "800"
+        assert attr_map["gen_ai.usage.cache_creation_input_tokens"]["intValue"] == "200"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_without_token_usage_has_no_gen_ai_attrs(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_keys = {a["key"] for a in root["attributes"]}
+        assert "gen_ai.usage.input_tokens" not in attr_keys
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_with_partial_token_usage(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        token_usage = {"input_tokens": 100, "output_tokens": 50}
+        emitter.flush(session_id="s1", token_usage=token_usage)
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "100"
+        assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "50"
+        assert "gen_ai.usage.cache_read_input_tokens" not in attr_map
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_daemon_state_passes_token_usage(self, mock_load, mock_requests):
+        mock_load.return_value = (
+            {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
+            None,
+        )
+        mock_requests.post.return_value = MagicMock()
+        from ai_guardian.daemon.state import DaemonState
+
+        state = DaemonState.__new__(DaemonState)
+        state._lock = __import__("threading").Lock()
+        state._otel_emitters = {}
+
+        emitter = state.get_otel_emitter("session-1")
+        token_usage = {"input_tokens": 2000, "output_tokens": 300}
+        state.flush_otel_emitter(
+            "session-1", adapter_name="Claude Code", token_usage=token_usage
+        )
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "2000"
+        assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "300"
+
+
+class TestParseTranscriptTokenUsage:
+    def test_sums_usage_from_jsonl(self, tmp_path):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        transcript = tmp_path / "transcript.jsonl"
+        lines = [
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "usage": {
+                            "input_tokens": 100,
+                            "output_tokens": 50,
+                            "cache_read_input_tokens": 80,
+                            "cache_creation_input_tokens": 20,
+                        }
+                    },
+                }
+            ),
+            json.dumps({"type": "human", "message": {"content": "hello"}}),
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "usage": {
+                            "input_tokens": 200,
+                            "output_tokens": 100,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 50,
+                        }
+                    },
+                }
+            ),
+        ]
+        transcript.write_text("\n".join(lines))
+
+        result = parse_transcript_token_usage(str(transcript))
+        assert result == {
+            "input_tokens": 300,
+            "output_tokens": 150,
+            "cache_read_input_tokens": 80,
+            "cache_creation_input_tokens": 70,
+        }
+
+    def test_returns_none_for_missing_file(self):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        assert parse_transcript_token_usage("/nonexistent/path.jsonl") is None
+
+    def test_returns_none_for_no_usage_data(self, tmp_path):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            json.dumps({"type": "human", "message": {"content": "hi"}})
+        )
+        assert parse_transcript_token_usage(str(transcript)) is None
+
+    def test_handles_top_level_usage(self, tmp_path):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            json.dumps({"usage": {"input_tokens": 42, "output_tokens": 10}})
+        )
+        result = parse_transcript_token_usage(str(transcript))
+        assert result["input_tokens"] == 42
+        assert result["output_tokens"] == 10
+
+    def test_skips_zero_values(self, tmp_path):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        transcript = tmp_path / "transcript.jsonl"
+        transcript.write_text(
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {
+                        "usage": {
+                            "input_tokens": 0,
+                            "output_tokens": 0,
+                            "cache_read_input_tokens": 0,
+                            "cache_creation_input_tokens": 0,
+                        }
+                    },
+                }
+            )
+        )
+        assert parse_transcript_token_usage(str(transcript)) is None
+
+    def test_handles_malformed_lines(self, tmp_path):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        transcript = tmp_path / "transcript.jsonl"
+        lines = [
+            "not json",
+            json.dumps(
+                {
+                    "type": "assistant",
+                    "message": {"usage": {"input_tokens": 50, "output_tokens": 25}},
+                }
+            ),
+            "",
+        ]
+        transcript.write_text("\n".join(lines))
+        result = parse_transcript_token_usage(str(transcript))
+        assert result["input_tokens"] == 50
+        assert result["output_tokens"] == 25
+
+    def test_returns_none_for_empty_path(self):
+        from ai_guardian.scanners.transcript.common import parse_transcript_token_usage
+
+        assert parse_transcript_token_usage("") is None
+        assert parse_transcript_token_usage(None) is None

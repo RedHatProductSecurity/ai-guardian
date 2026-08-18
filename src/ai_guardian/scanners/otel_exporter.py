@@ -1009,6 +1009,7 @@ class HookOtelEmitter:
         *,
         session_id: Optional[str] = None,
         adapter_name: Optional[str] = None,
+        token_usage: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Flush all accumulated spans to the collector on session end."""
         if not self._enabled:
@@ -1025,6 +1026,27 @@ class HookOtelEmitter:
                 ("ai_guardian.hook_event_count", self._hook_event_count),
                 ("ai_guardian.span_type", "session"),
             )
+            if token_usage and isinstance(token_usage, dict):
+                root_attrs.extend(
+                    _attrs(
+                        (
+                            "gen_ai.usage.input_tokens",
+                            token_usage.get("input_tokens"),
+                        ),
+                        (
+                            "gen_ai.usage.output_tokens",
+                            token_usage.get("output_tokens"),
+                        ),
+                        (
+                            "gen_ai.usage.cache_read_input_tokens",
+                            token_usage.get("cache_read_input_tokens"),
+                        ),
+                        (
+                            "gen_ai.usage.cache_creation_input_tokens",
+                            token_usage.get("cache_creation_input_tokens"),
+                        ),
+                    )
+                )
 
             root_span = _make_span(
                 trace_id=self._trace_id,
