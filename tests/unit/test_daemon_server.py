@@ -1054,6 +1054,101 @@ class TestStartRestApiPortFallback:
         assert any("REST API failed to bind" in r.message for r in caplog.records)
 
 
+class TestRestApiHostResolution:
+    """REST API host resolution: config > env var > container detection > 127.0.0.1."""
+
+    def _run_start_rest_api(self, server):
+        """Call _start_rest_api and return the host passed to DaemonRestAPI."""
+        captured = {}
+
+        class FakeAPI:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def start(self):
+                return captured["port"]
+
+        with mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI):
+            server._start_rest_api()
+        return captured.get("host")
+
+    def test_default_host_is_localhost(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", return_value=False):
+                host = self._run_start_rest_api(server)
+        assert host == "127.0.0.1"
+
+    def test_env_var_overrides_default(self, short_state_dir, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "0.0.0.0")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", return_value=False):
+                host = self._run_start_rest_api(server)
+        assert host == "0.0.0.0"
+
+    def test_config_overrides_env_var(self, short_state_dir, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "0.0.0.0")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        cfg = {"daemon": {"rest_host": "10.0.0.1"}}
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(cfg, None),
+        ):
+            with mock.patch("os.path.exists", return_value=False):
+                host = self._run_start_rest_api(server)
+        assert host == "10.0.0.1"
+
+    def test_docker_container_detection(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+
+        def fake_exists(p):
+            return p == "/.dockerenv"
+
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", fake_exists):
+                host = self._run_start_rest_api(server)
+        assert host == "0.0.0.0"
+
+    def test_kubernetes_detection(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+
+        def fake_exists(p):
+            return p == "/var/run/secrets/kubernetes.io/serviceaccount"
+
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", fake_exists):
+                host = self._run_start_rest_api(server)
+        assert host == "0.0.0.0"
+
+    def test_env_var_with_container_detection(self, short_state_dir, monkeypatch):
+        """Env var takes precedence over container auto-detection."""
+        monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "192.168.1.100")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", return_value=True):
+                host = self._run_start_rest_api(server)
+        assert host == "192.168.1.100"
+
+
 class TestDaemonServerIdleTimeout:
     def test_idle_timeout_stops_server(self, short_state_dir, monkeypatch):
         server = DaemonServer(idle_timeout=0.5, enable_rest_api=False)

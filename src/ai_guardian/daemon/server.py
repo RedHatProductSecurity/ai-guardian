@@ -698,9 +698,14 @@ class DaemonServer:
             cfg_port = daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
 
             default_host = "127.0.0.1"
-            if os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv"):
+            if (
+                os.path.exists("/.dockerenv")
+                or os.path.exists("/run/.containerenv")
+                or os.path.exists("/var/run/secrets/kubernetes.io/serviceaccount")
+            ):
                 default_host = "0.0.0.0"
-            host = daemon_cfg.get("rest_host", default_host)
+            env_host = os.environ.get("AI_GUARDIAN_REST_HOST")
+            host = daemon_cfg.get("rest_host", env_host or default_host)
             auth_token = daemon_cfg.get("auth_token")
 
             for port in range(cfg_port, cfg_port + 10):
