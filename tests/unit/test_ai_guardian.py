@@ -1436,11 +1436,9 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
     def test_posttooluse_bash_with_secret(
         self, mock_pattern_config, mock_redaction_config
     ):
-        """Test PostToolUse blocks Bash output containing secrets.
+        """Test PostToolUse redacts Bash output containing secrets via updatedToolOutput.
 
-        Workaround for upstream Claude Code bug (anthropics/claude-code
-        #68951): updatedToolOutput is ignored, so we block instead of
-        redact-and-pass. When upstream is fixed, revert to allow-with-redaction.
+        Secret redaction uses object-form updatedToolOutput (#2042).
         """
         # Disable pattern server to use default gitleaks rules
         mock_pattern_config.return_value = None
@@ -1462,11 +1460,13 @@ Yyv2dJ5Y2LtZ7YywIDAQABAoIBADCNMXk8y5K6lVZMsEHHWpdGIyDyUPsryXctAJAc
 
         self.assertEqual(result["exit_code"], 0)
         response = json.loads(result["output"])
-        # Block output containing secrets (updatedToolOutput workaround)
-        self.assertEqual(
-            response.get("decision"),
-            "block",
-            "PostToolUse must block secrets (updatedToolOutput workaround)",
+        uto = response.get("hookSpecificOutput", {}).get("updatedToolOutput", {})
+        self.assertIsInstance(uto, dict, "Bash updatedToolOutput must be object form")
+        self.assertIn("stdout", uto, "Bash updatedToolOutput must have stdout")
+        self.assertNotIn(
+            "BEGIN RSA PRIVATE KEY",
+            uto.get("stdout", ""),
+            "Secret must be redacted in updatedToolOutput",
         )
 
     def test_posttooluse_no_output_field(self):

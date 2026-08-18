@@ -109,6 +109,7 @@ class CopilotAdapter(HookAdapter):
         violation_type: Optional[str] = None,
         security_message: Optional[str] = None,
         redacted_output: Optional[str] = None,
+        tool_name: Optional[str] = None,
     ) -> Dict:
         if hook_event == HookEvent.PRE_TOOL_USE:
             response = {}

@@ -449,12 +449,6 @@ def handle_post_tool_use(ctx=None, **kwargs):
                     )
                     logger.warning(f"WARN mode: {warning_msg}")
 
-                # Block output containing detected secrets.
-                # Redaction produces correct modified_output, but upstream
-                # Claude Code ignores updatedToolOutput (anthropics/claude-code
-                # #68951). Block to prevent unredacted output reaching agent.
-                # Send redacted output via additionalContext so the agent
-                # can continue working with sanitized content (#1630).
                 if len(redacted_text) > _MAX_REDACTED_CONTEXT_BYTES:
                     orig_len = len(redacted_text)
                     redacted_text = (
@@ -462,17 +456,17 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         + f"\n\n[Truncated: original output was {orig_len} bytes]"
                     )
                 logger.info(
-                    "Secrets redacted — blocking output, "
-                    "sending redacted content via additionalContext"
+                    "Secrets redacted — sending redacted content "
+                    "via updatedToolOutput"
                 )
                 result = _format_response(
                     adapter,
-                    has_secrets=True,
-                    error_message=error_message,
+                    has_secrets=False,
                     hook_event=hook_event,
                     warning_message=warning_msg,
+                    modified_output=redacted_text,
                     violation_type=ViolationType.SECRET_REDACTION,
-                    redacted_output=redacted_text,
+                    tool_name=tool_name,
                 )
                 result["_warning"] = True
                 _advance_transcript_position(hook_data)
@@ -712,6 +706,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         warning_message=pii_warning,
                         modified_output=redacted_text,
                         violation_type=ViolationType.PII_DETECTED,
+                        tool_name=tool_name,
                     )
                     result["_warning"] = True
                     result["_violation_type"] = ViolationType.PII_DETECTED

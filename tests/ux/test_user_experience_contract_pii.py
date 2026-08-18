@@ -200,10 +200,13 @@ class PIIPostToolUseTests(TestCase):
             "hookSpecificOutput" in output
         ), "Should have hookSpecificOutput with redacted content"
         updated = output["hookSpecificOutput"].get("updatedToolOutput", "")
+        updated_text = (
+            updated.get("stdout", "") if isinstance(updated, dict) else updated
+        )
         assert (
-            "4532015112830366" not in updated
+            "4532015112830366" not in updated_text
         ), "Credit card should be redacted in updatedToolOutput"
-        assert "HIDDEN CREDIT CARD" in updated, "Should contain masked placeholder"
+        assert "HIDDEN CREDIT CARD" in updated_text, "Should contain masked placeholder"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
@@ -312,10 +315,13 @@ class PIIPostToolUseTests(TestCase):
             "hookSpecificOutput" in output
         ), "Should have hookSpecificOutput with redacted content"
         updated = output["hookSpecificOutput"].get("updatedToolOutput", "")
+        updated_text = (
+            updated.get("stdout", "") if isinstance(updated, dict) else updated
+        )
         assert (
-            "123-45-6789" not in updated
+            "123-45-6789" not in updated_text
         ), "SSN should be redacted in updatedToolOutput"
-        assert "HIDDEN SSN" in updated, "Should contain masked placeholder"
+        assert "HIDDEN SSN" in updated_text, "Should contain masked placeholder"
 
     @patch("ai_guardian.hook_processing._scan_for_pii")
     @patch("ai_guardian.config.loaders._load_pii_config")

@@ -78,7 +78,8 @@ class PostToolUseSecretBlockingTests(TestCase):
         self, mock_pattern, mock_scan, mock_gitleaks, mock_redact, mock_pii
     ):
         """
-        USER EXPERIENCE: Bash output with secret + redaction enabled -> BLOCKED
+        USER EXPERIENCE: Bash output with secret + redaction enabled -> ALLOWED
+        with redacted output via updatedToolOutput (#2042).
 
         Scenario:
         1. User runs: cat credentials.txt
@@ -87,9 +88,9 @@ class PostToolUseSecretBlockingTests(TestCase):
         4. Secret detected, redaction enabled
 
         Expected User Experience:
-        Tool output is BLOCKED (workaround for upstream Claude Code bug
-        anthropics/claude-code#68951 — updatedToolOutput is ignored).
-        When upstream is fixed, this can revert to allow-with-redaction.
+        Tool output is replaced with redacted content via updatedToolOutput
+        in object form (Bash: {stdout, stderr, interrupted}).
+        Agent sees redacted text as the normal tool result.
         """
         mock_pattern.return_value = (None, None)
         mock_scan.return_value = ({"enabled": True, "engines": ["gitleaks"]}, None)
@@ -119,9 +120,17 @@ class PostToolUseSecretBlockingTests(TestCase):
                 result = ai_guardian.process_hook_input()
 
         output = json.loads(result["output"])
-        assert (
-            output.get("decision") == "block"
-        ), f"PostToolUse must BLOCK secrets (updatedToolOutput workaround), got: {output}"
+        assert output.get("decision") != "block", (
+            "PostToolUse must NOT block when redaction succeeds — "
+            "use updatedToolOutput instead"
+        )
+        uto = output.get("hookSpecificOutput", {}).get("updatedToolOutput", {})
+        assert isinstance(
+            uto, dict
+        ), f"Bash updatedToolOutput must be object form, got: {type(uto)}"
+        assert "***REDACTED***" in uto.get(
+            "stdout", ""
+        ), f"updatedToolOutput.stdout must contain redacted text, got: {uto}"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
@@ -132,11 +141,11 @@ class PostToolUseSecretBlockingTests(TestCase):
         self, mock_pattern, mock_scan, mock_gitleaks, mock_redact, mock_pii
     ):
         """
-        USER EXPERIENCE: Secret detected + no redaction config -> BLOCKED
+        USER EXPERIENCE: Secret detected + no redaction config -> ALLOWED
+        with redacted output via updatedToolOutput (#2042).
 
         When secret_redaction config is None (not configured), enabled defaults
-        to True. Redaction runs but the response blocks (workaround for
-        upstream Claude Code bug anthropics/claude-code#68951).
+        to True. Redaction runs and output is replaced via updatedToolOutput.
         """
         mock_pattern.return_value = (None, None)
         mock_scan.return_value = ({"enabled": True, "engines": ["gitleaks"]}, None)
@@ -166,9 +175,13 @@ class PostToolUseSecretBlockingTests(TestCase):
                 result = ai_guardian.process_hook_input()
 
         output = json.loads(result["output"])
-        assert (
-            output.get("decision") == "block"
-        ), "Secret detected must BLOCK (updatedToolOutput workaround)"
+        uto = output.get("hookSpecificOutput", {}).get("updatedToolOutput", {})
+        assert isinstance(
+            uto, dict
+        ), f"Bash updatedToolOutput must be object form, got: {type(uto)}"
+        assert "***REDACTED***" in uto.get(
+            "stdout", ""
+        ), "updatedToolOutput.stdout must contain redacted text"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
@@ -256,8 +269,12 @@ class PostToolUseSecretBlockingTests(TestCase):
 
 class PostToolUseRedactedOutputInContextTests(TestCase):
     """
-    Tests verifying that redacted output is sent via additionalContext
-    when PostToolUse blocks secrets after successful redaction (#1630).
+    Tests verifying that redacted output is sent via updatedToolOutput
+    when PostToolUse detects secrets after successful redaction (#2042).
+
+    Previously used additionalContext workaround (#1630) because
+    updatedToolOutput bare string was silently ignored. Now uses
+    object-form updatedToolOutput (confirmed in claude-code #68951).
     """
 
     @patch("ai_guardian.config.loaders._load_pii_config")
@@ -265,15 +282,16 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
-    def test_posttooluse_sends_redacted_output_in_additional_context(
+    def test_posttooluse_sends_redacted_output_in_updated_tool_output(
         self, mock_pattern, mock_scan, mock_gitleaks, mock_redact, mock_pii
     ):
         """
-        USER EXPERIENCE: Redacted output appears in additionalContext
+        USER EXPERIENCE: Redacted output appears in updatedToolOutput
 
         When secrets are detected and redaction succeeds, the agent
-        receives the redacted output via additionalContext so it can
-        continue working with sanitized content.
+        receives the redacted output via updatedToolOutput so it can
+        continue working with sanitized content. For Bash tool, the
+        output is wrapped in object form {stdout, stderr, interrupted}.
         """
         mock_pattern.return_value = (None, None)
         mock_scan.return_value = ({"enabled": True, "engines": ["gitleaks"]}, None)
@@ -303,14 +321,19 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
                 result = ai_guardian.process_hook_input()
 
         output = json.loads(result["output"])
-        assert output.get("decision") == "block"
-        ctx = output.get("hookSpecificOutput", {}).get("additionalContext", "")
         assert (
-            "***REDACTED***" in ctx
-        ), f"additionalContext must contain the redacted text, got: {ctx}"
-        assert (
-            "FAKE_TEST_SECRET_VALUE_1234" not in ctx
-        ), "additionalContext must NOT contain the raw secret"
+            output.get("decision") != "block"
+        ), "PostToolUse must NOT block when redaction succeeds"
+        uto = output.get("hookSpecificOutput", {}).get("updatedToolOutput", {})
+        assert isinstance(
+            uto, dict
+        ), f"Bash updatedToolOutput must be object form, got: {type(uto)}"
+        assert "***REDACTED***" in uto.get(
+            "stdout", ""
+        ), f"updatedToolOutput.stdout must contain the redacted text, got: {uto}"
+        assert "FAKE_TEST_SECRET_VALUE_1234" not in uto.get(
+            "stdout", ""
+        ), "updatedToolOutput.stdout must NOT contain the raw secret"
 
     @patch("ai_guardian.config.loaders._load_pii_config")
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
@@ -401,14 +424,14 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
     @patch("ai_guardian.scanners.secret_scanning.check_secrets")
     @patch("ai_guardian.config.loaders._load_secret_scanning_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
-    def test_posttooluse_system_message_indicates_redacted_context(
+    def test_posttooluse_system_message_indicates_redaction(
         self, mock_pattern, mock_scan, mock_gitleaks, mock_redact, mock_pii
     ):
         """
-        USER EXPERIENCE: systemMessage tells agent redacted content is in context
+        USER EXPERIENCE: systemMessage tells agent secrets were redacted
 
-        When redacted output is sent via additionalContext, the systemMessage
-        must indicate that redacted content is available.
+        When redacted output is sent via updatedToolOutput, the
+        systemMessage warns the agent about redacted secrets.
         """
         mock_pattern.return_value = (None, None)
         mock_scan.return_value = ({"enabled": True, "engines": ["gitleaks"]}, None)
@@ -441,10 +464,7 @@ class PostToolUseRedactedOutputInContextTests(TestCase):
         sys_msg = output.get("systemMessage", "")
         assert (
             "redacted" in sys_msg.lower()
-        ), f"systemMessage must mention redacted content, got: {sys_msg}"
-        assert (
-            "context" in sys_msg.lower()
-        ), f"systemMessage must mention content is in context, got: {sys_msg}"
+        ), f"systemMessage must mention redaction, got: {sys_msg}"
 
 
 class PostToolUseSecretBlockingUXContractTests(TestCase):
@@ -532,7 +552,8 @@ class PostToolUseSecretBlockingUXContractTests(TestCase):
         self, mock_pattern, mock_scan, mock_gitleaks, mock_redact, mock_pii
     ):
         """
-        USER EXPERIENCE: Bash output with secret + redaction enabled -> BLOCKED
+        USER EXPERIENCE: Bash output with secret + redaction enabled -> ALLOWED
+        with redacted output via updatedToolOutput (#2042).
 
         Scenario:
         1. User asks Claude: "Show me what's in credentials.txt"
@@ -543,15 +564,14 @@ class PostToolUseSecretBlockingUXContractTests(TestCase):
         6. secret_redaction.enabled = true
 
         Expected User Experience:
-        Tool output is BLOCKED (workaround for upstream Claude Code bug
-        anthropics/claude-code#68951 — updatedToolOutput is ignored).
-        Redacted output is sent via additionalContext so the agent can
-        continue working with sanitized content (#1630).
+        Tool output is replaced with redacted content via updatedToolOutput
+        in object form (Bash: {stdout, stderr, interrupted}).
+        Agent sees redacted text as the normal tool result.
 
         MANUAL VERIFICATION:
         1. Configure ai-guardian.json with secret_redaction.enabled = true
         2. Ask Claude to "cat" a file with an AWS key
-        3. Verify output is blocked but redacted content appears in context
+        3. Verify output is replaced with redacted content (not blocked)
         """
         mock_pattern.return_value = (None, None)
         mock_scan.return_value = ({"enabled": True, "engines": ["gitleaks"]}, None)
@@ -584,16 +604,20 @@ class PostToolUseSecretBlockingUXContractTests(TestCase):
 
         response = json.loads(result["output"])
 
-        # CONTRACT: Response MUST block (updatedToolOutput workaround)
-        assert (
-            response.get("decision") == "block"
-        ), f"PostToolUse must BLOCK secrets (updatedToolOutput workaround), got: {response}"
+        # CONTRACT: Response must NOT block — use updatedToolOutput (#2042)
+        assert response.get("decision") != "block", (
+            "PostToolUse must NOT block when redaction succeeds — "
+            f"use updatedToolOutput instead, got: {response}"
+        )
 
-        # CONTRACT: Redacted output MUST appear in additionalContext (#1630)
-        ctx = response.get("hookSpecificOutput", {}).get("additionalContext", "")
-        assert (
-            "***REDACTED***" in ctx
-        ), f"additionalContext must contain redacted output, got: {ctx}"
+        # CONTRACT: Redacted output MUST appear in updatedToolOutput (#2042)
+        uto = response.get("hookSpecificOutput", {}).get("updatedToolOutput", {})
+        assert isinstance(
+            uto, dict
+        ), f"Bash updatedToolOutput must be object form, got: {type(uto)}"
+        assert "***REDACTED***" in uto.get(
+            "stdout", ""
+        ), f"updatedToolOutput.stdout must contain redacted output, got: {uto}"
 
 
 class PostToolUseEnvVarDetectionTests(TestCase):
