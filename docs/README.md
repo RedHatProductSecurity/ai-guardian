@@ -29,6 +29,12 @@ This directory contains detailed documentation for AI Guardian. The main [README
 | [Image Scanning (OCR)](security/IMAGE_SCANNING.md) | OCR-based secret/PII detection in images, IDE limitations |
 | [Inline Annotations](ANNOTATIONS.md) | Suppress false positives with per-line or block annotations |
 
+## Observability
+
+| Document | Description |
+|----------|-------------|
+| [Observability Guide](OBSERVABILITY.md) | OTEL export, Grafana integration, span hierarchy, CLI trace export |
+
 ## Architecture & Policy
 
 | Document | Description |

@@ -315,56 +315,41 @@ class TestMakeRootSpan:
             attr_map["gen_ai.request.model"]["stringValue"]
             == "claude-sonnet-4-20250514"
         )
-        assert attr_map["gen_ai.usage.input_tokens"]["intValue"] == "1000"
-        assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "500"
 
-    def test_root_span_turn_count(self):
+    def test_root_span_no_derivable_totals(self):
         doc = _make_full_trace()
         span = _make_root_span(doc, doc["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.turn_count"]["intValue"] == "3"
+        attr_keys = {a["key"] for a in span["attributes"]}
+        for key in [
+            "gen_ai.usage.input_tokens",
+            "gen_ai.usage.output_tokens",
+            "gen_ai.usage.cache_read_input_tokens",
+            "gen_ai.usage.cache_creation_input_tokens",
+            "gen_ai.agent.turn_count",
+            "gen_ai.agent.compaction_count",
+            "gen_ai.agent.violation_count",
+            "gen_ai.agent.violation_types",
+            "gen_ai.agent.violation_ids",
+        ]:
+            assert key not in attr_keys, f"{key} should not be on root span"
 
-    def test_root_span_turn_count_empty(self):
+    def test_root_span_session_id(self):
+        doc = {**MINIMAL_TRACE_DOC, "session_id": "sess-abc"}
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["ai_guardian.session_id"]["stringValue"] == "sess-abc"
+
+    def test_root_span_project_name(self):
+        doc = {**MINIMAL_TRACE_DOC, "project_name": "my-project"}
+        span = _make_root_span(doc, doc["trace_id"])
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["ai_guardian.project.name"]["stringValue"] == "my-project"
+
+    def test_root_span_no_session_id_when_absent(self):
         span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.turn_count"]["intValue"] == "0"
-
-    def test_root_span_compaction_count(self):
-        doc = _make_full_trace()
-        span = _make_root_span(doc, doc["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.compaction_count"]["intValue"] == "1"
-
-    def test_root_span_compaction_count_zero(self):
-        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.compaction_count"]["intValue"] == "0"
-
-    def test_root_span_violation_count_zero(self):
-        span = _make_root_span(MINIMAL_TRACE_DOC, MINIMAL_TRACE_DOC["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.violation_count"]["intValue"] == "0"
-        assert "gen_ai.agent.violation_types" not in attr_map
-        assert "gen_ai.agent.violation_ids" not in attr_map
-
-    def test_root_span_violation_attributes(self):
-        doc = _make_full_trace()
-        span = _make_root_span(doc, doc["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["gen_ai.agent.violation_count"]["intValue"] == "1"
-        assert (
-            attr_map["gen_ai.agent.violation_types"]["stringValue"] == "secret_detected"
-        )
-
-    def test_root_span_violation_ids(self):
-        doc = _make_full_trace()
-        doc["trace"][1]["steps"][4]["violations"] = [
-            {"type": "secret_detected", "id": "v-abc123", "message": "API key"},
-        ]
-        span = _make_root_span(doc, doc["trace_id"])
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        ids = attr_map["gen_ai.agent.violation_ids"]["arrayValue"]["values"]
-        assert ids == [{"stringValue": "v-abc123"}]
+        attr_keys = {a["key"] for a in span["attributes"]}
+        assert "ai_guardian.session_id" not in attr_keys
+        assert "ai_guardian.project.name" not in attr_keys
 
     def test_root_span_hostname(self):
         import platform
@@ -1350,7 +1335,7 @@ class TestHookOtelEmitter:
             attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
         )
         assert attr_map["ai_guardian.severity"]["stringValue"] == "critical"
-        assert attr_map["ai_guardian.tool_name"]["stringValue"] == "Bash"
+        assert attr_map["tool.name"]["stringValue"] == "Bash"
         assert emitter._violation_count == 1
 
     def test_record_block_adds_child_span(self):
@@ -1364,7 +1349,7 @@ class TestHookOtelEmitter:
         span = emitter._child_spans[0]
         assert span["name"] == "ai_guardian.block"
         attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["ai_guardian.tool_name"]["stringValue"] == "Bash"
+        assert attr_map["tool.name"]["stringValue"] == "Bash"
         assert attr_map["ai_guardian.reason"]["stringValue"] == "secret in command"
         assert emitter._block_count == 1
 
@@ -1462,6 +1447,13 @@ class TestHookOtelEmitter:
         emitter.record_session_start(adapter_name="Claude Code")
         assert emitter._adapter_name == "Claude Code"
 
+    def test_record_session_start_stores_project_name(self):
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(project_name="my-project")
+        assert emitter._project_name == "my-project"
+
     def test_record_session_start_disabled_is_noop(self):
         emitter = HookOtelEmitter({"enabled": False})
         emitter.record_session_start(adapter_name="Claude Code")
@@ -1550,6 +1542,37 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.violation_count"]["intValue"] == "0"
         assert attr_map["ai_guardian.block_count"]["intValue"] == "0"
         assert attr_map["ai_guardian.hook_event_count"]["intValue"] == "1"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_includes_project_name(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.record_session_start(
+            adapter_name="Claude Code", project_name="ai-guardian"
+        )
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.project.name"]["stringValue"] == "ai-guardian"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_no_project_name_when_not_set(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_keys = {a["key"] for a in root["attributes"]}
+        assert "ai_guardian.project.name" not in attr_keys
 
 
 # ---------------------------------------------------------------------------

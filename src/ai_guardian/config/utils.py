@@ -116,6 +116,54 @@ def get_project_dir() -> str:
     return getattr(_thread_local, "project_dir", None) or os.getcwd()
 
 
+def _parse_org_repo(remote_url: str) -> Optional[str]:
+    """Extract ``org/repo`` from a git remote URL.
+
+    Handles SSH (``git@host:org/repo.git``), HTTPS
+    (``https://host/org/repo.git``), and bare ``host:org/repo`` forms.
+    Returns ``None`` if the URL doesn't match.
+    """
+    m = re.search(r"[:/]([^/]+/[^/]+?)(?:\.git)?$", remote_url)
+    return m.group(1) if m else None
+
+
+_project_name_cache: Dict[str, Optional[str]] = {}
+
+
+def get_project_name(path: Optional[str] = None) -> Optional[str]:
+    """Derive a short project name for OTEL attributes.
+
+    Resolution order:
+    1. ``git remote get-url origin`` → ``org/repo``
+    2. Fallback: ``os.path.basename(path)``
+
+    Returns ``None`` when *path* is ``None`` or empty.
+    Results are cached by *path* for the lifetime of the process.
+    """
+    if not path:
+        return None
+    cached = _project_name_cache.get(path)
+    if cached is not None:
+        return cached
+    name: Optional[str] = None
+    try:
+        out = subprocess.run(
+            ["git", "remote", "get-url", "origin"],
+            capture_output=True,
+            text=True,
+            cwd=path,
+            timeout=5,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            name = _parse_org_repo(out.stdout.strip())
+    except Exception:
+        pass
+    if not name:
+        name = os.path.basename(path) or None
+    _project_name_cache[path] = name
+    return name
+
+
 def _clear_project_config_cache():
     """Clear the project config path cache."""
     global _project_config_path_cache, _project_config_path_cached
