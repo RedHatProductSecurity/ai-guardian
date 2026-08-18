@@ -962,7 +962,6 @@ class HookOtelEmitter:
         self._service_name = os.environ.get("OTEL_SERVICE_NAME") or config.get(
             "service_name", "ai-guardian"
         )
-        self._format = config.get("export_format", "otlp-json")
         self._headers = _resolve_headers(config.get("headers"))
         self._resource_attributes = config.get("resource_attributes") or {}
         self._trace_id = uuid.uuid4().hex
@@ -993,33 +992,6 @@ class HookOtelEmitter:
             self._adapter_name = adapter_name
         if project_name is not None:
             self._project_name = project_name
-
-    def record_hook_event(self) -> None:
-        """No-op — kept for API compatibility."""
-        return
-
-    def record_violation(
-        self,
-        violation_type: str,
-        *,
-        severity: str = "warning",
-        tool_name: Optional[str] = None,
-        violation_id: Optional[str] = None,
-        scanner: Optional[str] = None,
-        details: Optional[Dict[str, Any]] = None,
-    ) -> None:
-        """No-op — violations are read from ``violations.jsonl`` at flush time."""
-        return
-
-    def record_block(
-        self,
-        tool_name: str,
-        *,
-        reason: str,
-        scanner: Optional[str] = None,
-    ) -> None:
-        """No-op — blocks are read from ``violations.jsonl`` at flush time."""
-        return
 
     def flush(
         self,

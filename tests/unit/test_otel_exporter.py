@@ -1416,9 +1416,6 @@ class TestHookOtelEmitter:
     def test_disabled_is_noop(self):
         emitter = HookOtelEmitter({"enabled": False})
         assert not emitter.enabled
-        emitter.record_violation("secret_detected")
-        emitter.record_block("Bash", reason="secret in command")
-        emitter.record_hook_event()
         emitter.flush(session_id="s1")
 
     def test_enabled_creates_trace(self):
@@ -1428,15 +1425,6 @@ class TestHookOtelEmitter:
         assert emitter.enabled
         assert len(emitter._trace_id) == 32
         assert len(emitter._root_span_id) == 16
-
-    def test_record_methods_are_noops(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_violation("secret_detected", tool_name="Bash")
-        emitter.record_block("Bash", reason="exfil")
-        emitter.record_hook_event()
-        assert not hasattr(emitter, "_child_spans")
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     def test_flush_reads_violations_jsonl(self, mock_requests, tmp_path):
@@ -1573,13 +1561,6 @@ class TestHookOtelEmitter:
         emitter = HookOtelEmitter({"enabled": False})
         emitter.record_session_start(adapter_name="Claude Code")
         assert not hasattr(emitter, "_adapter_name") or emitter._adapter_name is None
-
-    def test_record_hook_event_is_noop(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_hook_event()
-        emitter.record_hook_event()
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     def test_flush_uses_stored_adapter_name(self, mock_requests, tmp_path):
