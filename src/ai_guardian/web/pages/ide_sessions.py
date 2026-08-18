@@ -656,8 +656,19 @@ def _render_step(step, index, violations=None, daemon_name=""):
             for v in violations:
                 render_violation_badge(v, daemon_name)
 
+        step_label = ""
+        if step_type == "tool_use":
+            step_label = f"Tool Call: {step.get('tool_name', '')}"
+        elif step_type == "tool_result":
+            step_label = f"Tool Result: {step.get('tool_name', '')}"
+        elif step_type == "assistant":
+            step_label = f"Assistant ({step.get('model', '')})"
+        elif step_type == "user":
+            step_label = "User"
+
         render_content_block(
             step.get("content", ""),
             tool_input=step.get("tool_input"),
             step_type=step_type,
+            step_label=step_label,
         )

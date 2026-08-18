@@ -8,6 +8,7 @@ import urllib.parse
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.content_viewer import render_view_button
 from ai_guardian.web.components.step_render import (
     compute_context_tokens,
     create_sort_toggle,
@@ -695,6 +696,8 @@ def _render_step(step, daemon_name="", turn_num=0):
                         "text-xs font-bold"
                     )
                     if text:
+                        if len(text) > 200 or text.count("\n") > 5:
+                            render_view_button(f"Response [{signal}]", text)
                         _render_text_block(text)
                 elif step_type == "tool_call":
                     name = step.get("name", "")
@@ -702,7 +705,14 @@ def _render_step(step, daemon_name="", turn_num=0):
                         "text-xs font-bold"
                     )
                     inp = step.get("input", {})
-                    _render_text_block(str(inp))
+                    inp_text = (
+                        json.dumps(inp, indent=2, default=str)
+                        if isinstance(inp, dict)
+                        else str(inp)
+                    )
+                    if len(inp_text) > 200 or inp_text.count("\n") > 5:
+                        render_view_button(f"Tool Call: {name}", inp_text)
+                    _render_text_block(inp_text)
                 elif step_type == "tool_result":
                     name = step.get("name", "")
                     output = step.get("output", "")
@@ -710,7 +720,10 @@ def _render_step(step, daemon_name="", turn_num=0):
                         "text-xs font-bold"
                     )
                     if output:
-                        _render_text_block(str(output))
+                        output_text = str(output)
+                        if len(output_text) > 200 or output_text.count("\n") > 5:
+                            render_view_button(f"Tool Result: {name}", output_text)
+                        _render_text_block(output_text)
                 elif step_type == "scan":
                     scanned = step.get("scanned", "")
                     violations = step.get("violations", [])
