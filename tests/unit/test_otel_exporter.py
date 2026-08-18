@@ -17,8 +17,10 @@ from ai_guardian.scanners.otel_exporter import (
     _make_span,
     _make_step_spans,
     _make_turn_span,
+    _read_session_violations,
     _resolve_headers,
     _truncate_span_id,
+    _violation_entry_to_span,
     handle_trace_command,
     trace_to_otlp_json,
 )
@@ -223,6 +225,12 @@ class TestIsoToUnixNano:
     def test_naive_datetime_treated_as_utc(self):
         result = _iso_to_unix_nano("2026-08-14T10:00:00")
         assert result != "0"
+
+    def test_z_suffix_parsed(self):
+        result = _iso_to_unix_nano("2026-08-14T10:00:00Z")
+        assert result != "0"
+        offset_result = _iso_to_unix_nano("2026-08-14T10:00:00+00:00")
+        assert result == offset_result
 
 
 class TestDeriveEndNano:
@@ -1296,6 +1304,116 @@ class TestOtelSpanEmitter:
 
 
 # ---------------------------------------------------------------------------
+# _read_session_violations / _violation_entry_to_span tests
+# ---------------------------------------------------------------------------
+
+
+def _write_violations(path, entries):
+    """Write violation entries to a JSONL file."""
+    with open(path, "w", encoding="utf-8") as fh:
+        for e in entries:
+            fh.write(json.dumps(e) + "\n")
+
+
+def _make_violation_entry(
+    session_id="session-abc",
+    violation_type="secret_detected",
+    severity="warning",
+    action="warn",
+    tool_name="Bash",
+    reason="Secret found",
+    violation_id="vid-001",
+):
+    return {
+        "id": violation_id,
+        "timestamp": "2026-08-18T10:00:00+00:00",
+        "violation_type": violation_type,
+        "severity": severity,
+        "blocked": {
+            "action": action,
+            "reason": reason,
+            "violation_id": violation_id,
+        },
+        "context": {
+            "session_id": session_id,
+            "tool_name": tool_name,
+            "hook_event": "PreToolUse",
+        },
+        "suggestion": {},
+        "resolved": False,
+    }
+
+
+class TestReadSessionViolations:
+    def test_reads_matching_session(self, tmp_path):
+        log = tmp_path / "violations.jsonl"
+        entries = [
+            _make_violation_entry(session_id="s1", violation_id="v1"),
+            _make_violation_entry(session_id="s2", violation_id="v2"),
+            _make_violation_entry(session_id="s1", violation_id="v3"),
+        ]
+        _write_violations(log, entries)
+        result = _read_session_violations("s1", violations_log_path=str(log))
+        assert len(result) == 2
+        assert {e["id"] for e in result} == {"v1", "v3"}
+
+    def test_returns_empty_for_no_match(self, tmp_path):
+        log = tmp_path / "violations.jsonl"
+        _write_violations(log, [_make_violation_entry(session_id="other")])
+        assert _read_session_violations("s1", violations_log_path=str(log)) == []
+
+    def test_returns_empty_for_missing_file(self):
+        assert _read_session_violations("s1", violations_log_path="/nonexistent") == []
+
+    def test_returns_empty_for_empty_session_id(self, tmp_path):
+        log = tmp_path / "violations.jsonl"
+        _write_violations(log, [_make_violation_entry()])
+        assert _read_session_violations("", violations_log_path=str(log)) == []
+
+    def test_skips_malformed_lines(self, tmp_path):
+        log = tmp_path / "violations.jsonl"
+        with open(log, "w") as fh:
+            fh.write("not json\n")
+            fh.write(json.dumps(_make_violation_entry(session_id="s1")) + "\n")
+            fh.write("\n")
+        result = _read_session_violations("s1", violations_log_path=str(log))
+        assert len(result) == 1
+
+
+class TestViolationEntryToSpan:
+    def test_block_entry_produces_block_span(self):
+        entry = _make_violation_entry(action="block", reason="exfil detected")
+        span = _violation_entry_to_span(entry, "trace" * 8, "root1234567890ab")
+        assert span["name"] == "ai_guardian.block"
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert attr_map["tool.name"]["stringValue"] == "Bash"
+        assert attr_map["ai_guardian.reason"]["stringValue"] == "exfil detected"
+        assert attr_map["ai_guardian.scanner"]["stringValue"] == "secret_detected"
+
+    def test_warn_entry_produces_violation_span(self):
+        entry = _make_violation_entry(action="warn")
+        span = _violation_entry_to_span(entry, "trace" * 8, "root1234567890ab")
+        assert span["name"] == "ai_guardian.violation"
+        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
+        assert (
+            attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
+        )
+        assert attr_map["ai_guardian.severity"]["stringValue"] == "warning"
+        assert attr_map["ai_guardian.violation_id"]["stringValue"] == "vid-001"
+
+    def test_missing_action_defaults_to_block(self):
+        entry = _make_violation_entry()
+        del entry["blocked"]["action"]
+        span = _violation_entry_to_span(entry, "trace" * 8, "root1234567890ab")
+        assert span["name"] == "ai_guardian.block"
+
+    def test_timestamp_converted_to_nano(self):
+        entry = _make_violation_entry()
+        span = _violation_entry_to_span(entry, "trace" * 8, "root1234567890ab")
+        assert span["startTimeUnixNano"] != "0"
+
+
+# ---------------------------------------------------------------------------
 # HookOtelEmitter tests
 # ---------------------------------------------------------------------------
 
@@ -1304,8 +1422,6 @@ class TestHookOtelEmitter:
     def test_disabled_is_noop(self):
         emitter = HookOtelEmitter({"enabled": False})
         assert not emitter.enabled
-        emitter.record_violation("secret_detected")
-        emitter.record_block("Bash", reason="secret in command")
         emitter.flush(session_id="s1")
 
     def test_enabled_creates_trace(self):
@@ -1316,52 +1432,28 @@ class TestHookOtelEmitter:
         assert len(emitter._trace_id) == 32
         assert len(emitter._root_span_id) == 16
 
-    def test_record_violation_adds_child_span(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_violation(
-            "secret_detected",
-            severity="critical",
-            tool_name="Bash",
-            violation_id="vid-123",
-            scanner="secret_scanning",
-        )
-        assert len(emitter._child_spans) == 1
-        span = emitter._child_spans[0]
-        assert span["name"] == "ai_guardian.violation"
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert (
-            attr_map["ai_guardian.violation_type"]["stringValue"] == "secret_detected"
-        )
-        assert attr_map["ai_guardian.severity"]["stringValue"] == "critical"
-        assert attr_map["tool.name"]["stringValue"] == "Bash"
-        assert emitter._violation_count == 1
-
-    def test_record_block_adds_child_span(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_block(
-            "Bash", reason="secret in command", scanner="secret_scanning"
-        )
-        assert len(emitter._child_spans) == 1
-        span = emitter._child_spans[0]
-        assert span["name"] == "ai_guardian.block"
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["tool.name"]["stringValue"] == "Bash"
-        assert attr_map["ai_guardian.reason"]["stringValue"] == "secret in command"
-        assert emitter._block_count == 1
-
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_posts_all_spans(self, mock_requests):
+    def test_flush_reads_violations_jsonl(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        entries = [
+            _make_violation_entry(
+                session_id="session-abc", action="warn", violation_id="v1"
+            ),
+            _make_violation_entry(
+                session_id="session-abc", action="block", violation_id="v2"
+            ),
+        ]
+        _write_violations(log, entries)
+
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.record_violation("prompt_injection", tool_name="Read")
-        emitter.record_block("Bash", reason="exfil detected")
-        emitter.flush(session_id="session-abc", adapter_name="Claude Code")
+        emitter.flush(
+            session_id="session-abc",
+            adapter_name="Claude Code",
+            violations_log_path=str(log),
+        )
 
         mock_requests.post.assert_called_once()
         payload = mock_requests.post.call_args[1]["json"]
@@ -1378,15 +1470,17 @@ class TestHookOtelEmitter:
 
         assert spans[1]["name"] == "ai_guardian.violation"
         assert spans[2]["name"] == "ai_guardian.block"
-        assert emitter._child_spans == []
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_empty_session(self, mock_requests):
+    def test_flush_empty_session(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
+
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.flush(session_id="empty-session")
+        emitter.flush(session_id="empty-session", violations_log_path=str(log))
 
         mock_requests.post.assert_called_once()
         payload = mock_requests.post.call_args[1]["json"]
@@ -1395,13 +1489,39 @@ class TestHookOtelEmitter:
         assert spans[0]["name"] == "ai_guardian.session"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_failure_is_silent(self, mock_requests):
-        mock_requests.post.side_effect = ConnectionError("refused")
+    def test_flush_filters_by_session_id(self, mock_requests, tmp_path):
+        mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        entries = [
+            _make_violation_entry(session_id="s1", action="block", violation_id="v1"),
+            _make_violation_entry(session_id="s2", action="warn", violation_id="v2"),
+            _make_violation_entry(session_id="s1", action="warn", violation_id="v3"),
+        ]
+        _write_violations(log, entries)
+
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.record_violation("secret_detected")
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        # root + 1 block (v1) + 1 violation (v3) = 3
+        assert len(spans) == 3
+        attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
+        assert attr_map["ai_guardian.block_count"]["intValue"] == "1"
+        assert attr_map["ai_guardian.violation_count"]["intValue"] == "1"
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_failure_is_silent(self, mock_requests, tmp_path):
+        mock_requests.post.side_effect = ConnectionError("refused")
+        log = tmp_path / "violations.jsonl"
+        _write_violations(log, [_make_violation_entry(session_id="s1")])
+
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
     def test_env_var_overrides(self, monkeypatch):
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://custom:9999")
@@ -1411,8 +1531,10 @@ class TestHookOtelEmitter:
         assert emitter._service_name == "custom-svc"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_resource_attributes_included(self, mock_requests):
+    def test_resource_attributes_included(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {
                 "enabled": True,
@@ -1420,25 +1542,12 @@ class TestHookOtelEmitter:
                 "resource_attributes": {"team.name": "security"},
             }
         )
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         res_attrs = payload["resourceSpans"][0]["resource"]["attributes"]
         attr_map = {a["key"]: a["value"] for a in res_attrs}
         assert attr_map["team.name"]["stringValue"] == "security"
-
-    def test_record_violation_with_details(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_violation(
-            "code_security",
-            details={"file_path": "/tmp/bad.py", "line_number": 42},
-        )
-        span = emitter._child_spans[0]
-        attr_map = {a["key"]: a["value"] for a in span["attributes"]}
-        assert attr_map["ai_guardian.detail.file_path"]["stringValue"] == "/tmp/bad.py"
-        assert attr_map["ai_guardian.detail.line_number"]["intValue"] == "42"
 
     def test_record_session_start_stores_adapter(self):
         emitter = HookOtelEmitter(
@@ -1459,27 +1568,16 @@ class TestHookOtelEmitter:
         emitter.record_session_start(adapter_name="Claude Code")
         assert not hasattr(emitter, "_adapter_name") or emitter._adapter_name is None
 
-    def test_record_hook_event_increments_count(self):
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        assert emitter._hook_event_count == 0
-        emitter.record_hook_event()
-        emitter.record_hook_event()
-        assert emitter._hook_event_count == 2
-
-    def test_record_hook_event_disabled_is_noop(self):
-        emitter = HookOtelEmitter({"enabled": False})
-        emitter.record_hook_event()
-
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_uses_stored_adapter_name(self, mock_requests):
+    def test_flush_uses_stored_adapter_name(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
         emitter.record_session_start(adapter_name="Gemini CLI")
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1488,13 +1586,17 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.adapter"]["stringValue"] == "Gemini CLI"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_explicit_adapter_overrides_stored(self, mock_requests):
+    def test_flush_explicit_adapter_overrides_stored(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
         emitter.record_session_start(adapter_name="stored")
-        emitter.flush(session_id="s1", adapter_name="explicit")
+        emitter.flush(
+            session_id="s1", adapter_name="explicit", violations_log_path=str(log)
+        )
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1503,32 +1605,16 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.adapter"]["stringValue"] == "explicit"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_includes_hook_event_count(self, mock_requests):
-        mock_requests.post.return_value = MagicMock()
-        emitter = HookOtelEmitter(
-            {"enabled": True, "endpoint": "http://localhost:4318"}
-        )
-        emitter.record_hook_event()
-        emitter.record_hook_event()
-        emitter.record_hook_event()
-        emitter.flush(session_id="s1")
-
-        payload = mock_requests.post.call_args[1]["json"]
-        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
-        root = spans[0]
-        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
-        assert attr_map["ai_guardian.hook_event_count"]["intValue"] == "3"
-
-    @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_clean_session_produces_root_span(self, mock_requests):
+    def test_clean_session_produces_root_span(self, mock_requests, tmp_path):
         """Clean session (no violations) should still flush a root span."""
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
         emitter.record_session_start(adapter_name="Claude Code")
-        emitter.record_hook_event()
-        emitter.flush(session_id="clean-session")
+        emitter.flush(session_id="clean-session", violations_log_path=str(log))
 
         mock_requests.post.assert_called_once()
         payload = mock_requests.post.call_args[1]["json"]
@@ -1541,18 +1627,19 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.adapter"]["stringValue"] == "Claude Code"
         assert attr_map["ai_guardian.violation_count"]["intValue"] == "0"
         assert attr_map["ai_guardian.block_count"]["intValue"] == "0"
-        assert attr_map["ai_guardian.hook_event_count"]["intValue"] == "1"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_includes_project_name(self, mock_requests):
+    def test_flush_includes_project_name(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
         emitter.record_session_start(
             adapter_name="Claude Code", project_name="ai-guardian"
         )
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1561,18 +1648,55 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.project.name"]["stringValue"] == "ai-guardian"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_no_project_name_when_not_set(self, mock_requests):
+    def test_flush_no_project_name_when_not_set(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
         root = spans[0]
         attr_keys = {a["key"] for a in root["attributes"]}
         assert "ai_guardian.project.name" not in attr_keys
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_direct_mode(self, mock_requests, tmp_path):
+        """Direct mode: no daemon, emitter reads violations from disk."""
+        mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        entries = [
+            _make_violation_entry(
+                session_id="direct-s1",
+                action="block",
+                violation_type="prompt_injection",
+                violation_id="v1",
+            ),
+            _make_violation_entry(
+                session_id="direct-s1",
+                action="warn",
+                violation_type="secret_detected",
+                violation_id="v2",
+            ),
+        ]
+        _write_violations(log, entries)
+
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"}
+        )
+        emitter.flush(session_id="direct-s1", violations_log_path=str(log))
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 3
+        names = [s["name"] for s in spans]
+        assert names[0] == "ai_guardian.session"
+        assert "ai_guardian.block" in names
+        assert "ai_guardian.violation" in names
 
 
 # ---------------------------------------------------------------------------
@@ -1653,7 +1777,7 @@ class TestDaemonStateOtel:
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     @patch("ai_guardian.config.loaders._load_config_file")
-    def test_flush_otel_emitter(self, mock_load, mock_requests):
+    def test_flush_otel_emitter(self, mock_load, mock_requests, tmp_path):
         mock_load.return_value = (
             {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
             None,
@@ -1661,14 +1785,22 @@ class TestDaemonStateOtel:
         mock_requests.post.return_value = MagicMock()
         from ai_guardian.daemon.state import DaemonState
 
+        log = tmp_path / "violations.jsonl"
+        _write_violations(
+            log, [_make_violation_entry(session_id="session-1", action="block")]
+        )
+
         state = DaemonState.__new__(DaemonState)
         state._lock = __import__("threading").Lock()
         state._otel_emitters = {}
         state._session_open_counts = {}
 
-        emitter = state.get_otel_emitter("session-1")
-        emitter.record_violation("secret_detected")
-        state.flush_otel_emitter("session-1", adapter_name="Claude Code")
+        state.get_otel_emitter("session-1")
+        state.flush_otel_emitter(
+            "session-1",
+            adapter_name="Claude Code",
+            violations_log_path=str(log),
+        )
 
         mock_requests.post.assert_called_once()
         assert "session-1" not in state._otel_emitters
@@ -1697,13 +1829,15 @@ class TestDaemonStateOtel:
         assert em2 is not em1
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_includes_session_sequence(self, mock_requests):
+    def test_flush_includes_session_sequence(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"},
             session_sequence=3,
         )
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1719,8 +1853,10 @@ class TestDaemonStateOtel:
 
 class TestHookOtelEmitterTokenUsage:
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_includes_token_usage(self, mock_requests):
+    def test_flush_includes_token_usage(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
@@ -1730,7 +1866,9 @@ class TestHookOtelEmitterTokenUsage:
             "cache_read_input_tokens": 800,
             "cache_creation_input_tokens": 200,
         }
-        emitter.flush(session_id="s1", token_usage=token_usage)
+        emitter.flush(
+            session_id="s1", token_usage=token_usage, violations_log_path=str(log)
+        )
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1742,12 +1880,16 @@ class TestHookOtelEmitterTokenUsage:
         assert attr_map["gen_ai.usage.cache_creation_input_tokens"]["intValue"] == "200"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_without_token_usage_has_no_gen_ai_attrs(self, mock_requests):
+    def test_flush_without_token_usage_has_no_gen_ai_attrs(
+        self, mock_requests, tmp_path
+    ):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
-        emitter.flush(session_id="s1")
+        emitter.flush(session_id="s1", violations_log_path=str(log))
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1756,13 +1898,17 @@ class TestHookOtelEmitterTokenUsage:
         assert "gen_ai.usage.input_tokens" not in attr_keys
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
-    def test_flush_with_partial_token_usage(self, mock_requests):
+    def test_flush_with_partial_token_usage(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
         emitter = HookOtelEmitter(
             {"enabled": True, "endpoint": "http://localhost:4318"}
         )
         token_usage = {"input_tokens": 100, "output_tokens": 50}
-        emitter.flush(session_id="s1", token_usage=token_usage)
+        emitter.flush(
+            session_id="s1", token_usage=token_usage, violations_log_path=str(log)
+        )
 
         payload = mock_requests.post.call_args[1]["json"]
         spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
@@ -1774,7 +1920,7 @@ class TestHookOtelEmitterTokenUsage:
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     @patch("ai_guardian.config.loaders._load_config_file")
-    def test_daemon_state_passes_token_usage(self, mock_load, mock_requests):
+    def test_daemon_state_passes_token_usage(self, mock_load, mock_requests, tmp_path):
         mock_load.return_value = (
             {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
             None,
@@ -1787,10 +1933,15 @@ class TestHookOtelEmitterTokenUsage:
         state._otel_emitters = {}
         state._session_open_counts = {}
 
-        emitter = state.get_otel_emitter("session-1")
+        log = tmp_path / "violations.jsonl"
+        log.write_text("")
+        state.get_otel_emitter("session-1")
         token_usage = {"input_tokens": 2000, "output_tokens": 300}
         state.flush_otel_emitter(
-            "session-1", adapter_name="Claude Code", token_usage=token_usage
+            "session-1",
+            adapter_name="Claude Code",
+            token_usage=token_usage,
+            violations_log_path=str(log),
         )
 
         payload = mock_requests.post.call_args[1]["json"]

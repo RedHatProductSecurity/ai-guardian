@@ -427,6 +427,7 @@ class ScanResult:
             blocked["total_findings"] = self.total_findings
         if self.error_message:
             blocked["reason"] = self.error_message
+        blocked["action"] = "block" if self.should_block else "warn"
         if source:
             blocked["source"] = source
         if extra_fields:

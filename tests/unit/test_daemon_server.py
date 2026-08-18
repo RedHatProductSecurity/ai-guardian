@@ -622,7 +622,6 @@ class TestPausedOtelTracking:
             patched_get.assert_called_once_with("test-session-001")
 
         mock_emitter.record_session_start.assert_called_once()
-        mock_emitter.record_hook_event.assert_called_once()
 
     def test_paused_session_end_flushes_otel_emitter(self, short_state_dir):
         """SessionEnd while paused should flush the OTEL emitter."""
@@ -640,25 +639,6 @@ class TestPausedOtelTracking:
         mock_flush.assert_called_once()
         call_kwargs = mock_flush.call_args
         assert call_kwargs[0][0] == "test-session-002"
-
-    def test_paused_hook_increments_event_count(self, short_state_dir):
-        """Each hook while paused should increment the OTEL event counter."""
-        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
-        server.state.pause()
-
-        mock_emitter = mock.MagicMock()
-        with mock.patch.object(
-            server.state, "get_otel_emitter", return_value=mock_emitter
-        ):
-            for event in ["UserPromptSubmit", "PreToolUse", "PostToolUse"]:
-                server._handle_hook_request(
-                    {
-                        "hook_event_name": event,
-                        "session_id": "test-session-003",
-                    }
-                )
-
-        assert mock_emitter.record_hook_event.call_count == 3
 
     def test_paused_no_session_id_skips_otel(self, short_state_dir):
         """Hooks without session_id should skip OTEL tracking."""
@@ -710,7 +690,6 @@ class TestPausedOtelTracking:
             )
 
         mock_emitter.record_session_start.assert_called_once()
-        mock_emitter.record_hook_event.assert_called_once()
 
     def test_paused_otel_error_is_nonfatal(self, short_state_dir):
         """OTEL errors while paused should not affect the paused response."""

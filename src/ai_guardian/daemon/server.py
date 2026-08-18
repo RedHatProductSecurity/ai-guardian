@@ -536,7 +536,6 @@ class DaemonServer:
                 adapter_name=adapter_name,
                 project_name=project_name,
             )
-            emitter.record_hook_event()
         except Exception:
             logger.debug("Paused OTEL handling failed (non-fatal)", exc_info=True)
 
