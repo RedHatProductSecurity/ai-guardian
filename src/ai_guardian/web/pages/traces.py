@@ -9,8 +9,10 @@ from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.step_render import (
+    compute_context_tokens,
     create_sort_toggle,
     format_duration,
+    format_token_count,
     render_text_block,
     render_violation_badge,
 )
@@ -364,6 +366,7 @@ def _render_trace_card(trace, daemon_name):
     total_input = tokens.get("input_tokens", 0)
     total_output = tokens.get("output_tokens", 0)
     total_tok = total_input + total_output
+    context_tok = compute_context_tokens(tokens)
 
     duration = trace.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
@@ -399,6 +402,9 @@ def _render_trace_card(trace, daemon_name):
             ui.label(started_at).classes("text-xs")
             ui.label("Turns:").classes("text-xs text-grey-6")
             ui.label(str(total_turns)).classes("text-xs")
+            if context_tok:
+                ui.label("Context:").classes("text-xs text-grey-6")
+                ui.label(format_token_count(context_tok)).classes("text-xs")
             ui.label("Tokens:").classes("text-xs text-grey-6")
             ui.label(f"{total_tok:,}").classes("text-xs")
             ui.label("Duration:").classes("text-xs text-grey-6")
@@ -414,7 +420,7 @@ def _render_token_summary(computed, total_turns=0):
     cache_ratio = computed.get("cache_hit_ratio", 0)
     duration = computed.get("duration_seconds", 0)
     duration_str = _format_duration(duration) if duration else "—"
-    total_tok = total.get("input_tokens", 0) + total.get("output_tokens", 0)
+    context_tok = compute_context_tokens(total)
 
     with ui.card().classes("w-full bg-grey-9 mt-2"):
         ui.label("Summary").classes("text-sm font-bold")
@@ -423,20 +429,26 @@ def _render_token_summary(computed, total_turns=0):
             ui.label(str(total_turns)).classes("text-xs")
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
-            ui.label("Total:").classes("text-xs text-grey-6")
-            ui.label(f"{total_tok:,}").classes("text-xs")
+            ui.label("Context:").classes("text-xs text-grey-6")
+            ui.label(format_token_count(context_tok)).classes("text-xs")
             ui.label("Input:").classes("text-xs text-grey-6")
-            ui.label(f"{total.get('input_tokens', 0):,}").classes("text-xs")
-            ui.label("Output:").classes("text-xs text-grey-6")
-            ui.label(f"{total.get('output_tokens', 0):,}").classes("text-xs")
-            ui.label("Cache Hit:").classes("text-xs text-grey-6")
-            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
-            ui.label("Cache Read:").classes("text-xs text-grey-6")
-            ui.label(f"{total.get('cache_read_input_tokens', 0):,}").classes("text-xs")
-            ui.label("Cache Create:").classes("text-xs text-grey-6")
-            ui.label(f"{total.get('cache_creation_input_tokens', 0):,}").classes(
+            ui.label(format_token_count(total.get("input_tokens", 0))).classes(
                 "text-xs"
             )
+            ui.label("Cache Read:").classes("text-xs text-grey-6")
+            ui.label(
+                format_token_count(total.get("cache_read_input_tokens", 0))
+            ).classes("text-xs")
+            ui.label("Cache Create:").classes("text-xs text-grey-6")
+            ui.label(
+                format_token_count(total.get("cache_creation_input_tokens", 0))
+            ).classes("text-xs")
+            ui.label("Output:").classes("text-xs text-grey-6")
+            ui.label(format_token_count(total.get("output_tokens", 0))).classes(
+                "text-xs"
+            )
+            ui.label("Cache Hit:").classes("text-xs text-grey-6")
+            ui.label(f"{cache_ratio:.1%}").classes("text-xs")
 
 
 def _collect_turn_violations(steps):
@@ -461,9 +473,13 @@ def _render_turn_row(
     steps = turn_obj.get("steps", [])
 
     turn_tokens = 0
+    turn_context = 0
+    turn_output = 0
     for pt in per_turn:
         if pt.get("turn") == turn_num:
-            turn_tokens = pt.get("input_tokens", 0) + pt.get("output_tokens", 0)
+            turn_output = pt.get("output_tokens", 0)
+            turn_tokens = pt.get("input_tokens", 0) + turn_output
+            turn_context = compute_context_tokens(pt)
             break
 
     has_violations = turn_num in violations_map
@@ -497,7 +513,12 @@ def _render_turn_row(
             ui.label(f"Turn {turn_num}").classes("text-xs font-bold w-16")
             ui.label(turn_label).classes(f"text-xs font-bold {icon_color}")
 
-            if turn_tokens > 0:
+            if turn_context > 0:
+                ui.label(
+                    f"Context: {format_token_count(turn_context)} | "
+                    f"Output: {format_token_count(turn_output)}"
+                ).classes("text-xs text-grey-6")
+            elif turn_tokens > 0:
                 ui.label(f"{turn_tokens:,} tok").classes("text-xs text-grey-6")
 
             if has_violations:
@@ -660,9 +681,16 @@ def _render_step(step, daemon_name="", turn_num=0):
                     usage = step.get("usage", {})
                     tok_info = ""
                     if usage:
-                        ti = usage.get("input_tokens", 0)
+                        ctx = compute_context_tokens(usage)
                         to = usage.get("output_tokens", 0)
-                        tok_info = f" ({ti + to:,} tok)"
+                        if ctx:
+                            tok_info = (
+                                f" (Context: {format_token_count(ctx)}"
+                                f" | Output: {format_token_count(to)})"
+                            )
+                        else:
+                            ti = usage.get("input_tokens", 0)
+                            tok_info = f" ({ti + to:,} tok)"
                     ui.label(f"Step {step_num}: response [{signal}]{tok_info}").classes(
                         "text-xs font-bold"
                     )

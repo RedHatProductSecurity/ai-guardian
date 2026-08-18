@@ -165,3 +165,27 @@ def format_duration(seconds):
     hours = minutes // 60
     mins = minutes % 60
     return f"{hours}h {mins}m"
+
+
+def format_token_count(n):
+    """Format token count with k/M suffix for readability."""
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        s = f"{n / 1000:.1f}"
+        if s.endswith(".0"):
+            s = s[:-2]
+        return f"{s}k"
+    s = f"{n / 1_000_000:.1f}"
+    if s.endswith(".0"):
+        s = s[:-2]
+    return f"{s}M"
+
+
+def compute_context_tokens(tokens_dict):
+    """Compute context size: input + cache_read + cache_create."""
+    return (
+        tokens_dict.get("input_tokens", 0)
+        + tokens_dict.get("cache_read_input_tokens", 0)
+        + tokens_dict.get("cache_creation_input_tokens", 0)
+    )
