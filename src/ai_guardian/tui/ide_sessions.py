@@ -67,6 +67,7 @@ class IDESessionsContent(Container):
         tree = self.query_one("#ide-sessions-tree", Tree)
         tree.show_root = False
         self._detect_default_ide()
+        self.set_interval(self._get_refresh_interval(), self._load_sessions)
 
     def refresh_content(self) -> None:
         self._load_sessions()
@@ -110,6 +111,19 @@ class IDESessionsContent(Container):
             self.app.call_from_thread(self._set_ide_and_load, ide)
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _get_refresh_interval(self) -> float:
+        try:
+            from ai_guardian.config.loaders import get_config
+
+            cfg = get_config()
+            return (
+                cfg.get("sdk", {})
+                .get("trace_viewer", {})
+                .get("auto_refresh_interval_seconds", 5)
+            )
+        except Exception:
+            return 5
 
     def _set_ide_and_load(self, ide: str) -> None:
         try:
