@@ -529,6 +529,9 @@ class GuardedAgent:
 
             ended_at = datetime.now(timezone.utc)
             agent_name = self._name or "agent"
+            from ai_guardian.config.utils import get_project_name
+
+            project_name = get_project_name(self._cwd)
             trace_doc = {
                 "agent_name": agent_name,
                 "model": self._model,
@@ -537,6 +540,7 @@ class GuardedAgent:
                 "stop_reason": result.get("stop_reason"),
                 "usage": result.get("usage"),
                 "max_tokens": self._max_tokens,
+                "project_name": project_name,
                 "trace": sanitized_trace,
             }
             if trace_id:
