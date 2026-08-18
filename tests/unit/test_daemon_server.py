@@ -680,9 +680,7 @@ class TestPausedOtelTracking:
         server = DaemonServer(idle_timeout=30, enable_rest_api=False)
         server.state.pause()
 
-        with mock.patch.object(
-            server.state, "get_otel_emitter", return_value=None
-        ):
+        with mock.patch.object(server.state, "get_otel_emitter", return_value=None):
             result = server._handle_hook_request(
                 {
                     "hook_event_name": "UserPromptSubmit",
