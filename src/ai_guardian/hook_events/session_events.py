@@ -69,10 +69,25 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
     except Exception as e:
         logger.debug(f"Session end: session state cleanup failed (non-fatal): {e}")
 
+    token_usage = None
+    try:
+        from ai_guardian.scanners.transcript.common import (
+            _get_transcript_path,
+            parse_transcript_token_usage,
+        )
+
+        _transcript_path = _get_transcript_path(hook_data)
+        if _transcript_path:
+            token_usage = parse_transcript_token_usage(_transcript_path)
+    except Exception as e:
+        logger.debug(f"Session end: token usage parsing failed (non-fatal): {e}")
+
     try:
         if daemon_state:
             daemon_state.flush_otel_emitter(
-                session_id, adapter_name=(adapter.name if adapter else None)
+                session_id,
+                adapter_name=(adapter.name if adapter else None),
+                token_usage=token_usage,
             )
     except Exception as e:
         logger.debug(f"Session end: OTEL flush failed (non-fatal): {e}")

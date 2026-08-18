@@ -337,7 +337,7 @@ class DaemonState:
             logger.debug("Failed to create OTEL emitter", exc_info=True)
             return None
 
-    def flush_otel_emitter(self, session_id, *, adapter_name=None):
+    def flush_otel_emitter(self, session_id, *, adapter_name=None, token_usage=None):
         """Flush and remove the OTEL emitter for a session."""
         if not session_id:
             return
@@ -345,7 +345,11 @@ class DaemonState:
             emitter = self._otel_emitters.pop(session_id, None)
         if emitter is not None and emitter is not self._OTEL_DISABLED:
             try:
-                emitter.flush(session_id=session_id, adapter_name=adapter_name)
+                emitter.flush(
+                    session_id=session_id,
+                    adapter_name=adapter_name,
+                    token_usage=token_usage,
+                )
             except Exception:
                 logger.debug("OTEL session flush failed", exc_info=True)
 

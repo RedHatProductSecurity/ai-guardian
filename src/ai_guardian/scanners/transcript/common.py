@@ -47,6 +47,56 @@ def _get_transcript_path(hook_data: dict):
     return None
 
 
+def parse_transcript_token_usage(transcript_path: str) -> Optional[Dict[str, int]]:
+    """Sum token usage from a JSONL transcript file.
+
+    Reads every line, extracts ``message.usage`` (or top-level ``usage``),
+    and sums the four standard token counters.  Best-effort / fail-open:
+    returns ``None`` on any error or if no usage data is found.
+    """
+    if not transcript_path or not os.path.isfile(transcript_path):
+        return None
+
+    totals: Dict[str, int] = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
+    found_any = False
+
+    try:
+        with open(transcript_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(entry, dict):
+                    continue
+                usage = None
+                msg = entry.get("message")
+                if isinstance(msg, dict):
+                    usage = msg.get("usage")
+                if usage is None:
+                    usage = entry.get("usage")
+                if not isinstance(usage, dict):
+                    continue
+                for key in totals:
+                    val = usage.get(key)
+                    if isinstance(val, (int, float)) and val > 0:
+                        totals[key] += int(val)
+                        found_any = True
+    except Exception as e:
+        logger.debug(f"Failed to parse transcript token usage: {e}")
+        return None
+
+    return totals if found_any else None
+
+
 # ---------------------------------------------------------------------------
 # Position tracking
 # ---------------------------------------------------------------------------
