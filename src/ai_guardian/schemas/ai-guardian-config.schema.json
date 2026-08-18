@@ -2257,7 +2257,7 @@
         "rest_host": {
           "type": "string",
           "default": "127.0.0.1",
-          "description": "REST API bind address. Default 127.0.0.1 (localhost only). Set to 0.0.0.0 for container daemons that need external access."
+          "description": "REST API bind address. Default 127.0.0.1 (localhost only). Auto-detects Docker/Podman/Kubernetes containers and defaults to 0.0.0.0. Can also be set via AI_GUARDIAN_REST_HOST env var. Resolution order: config > env var > container detection > 127.0.0.1."
         },
         "tray": {
           "type": "object",
