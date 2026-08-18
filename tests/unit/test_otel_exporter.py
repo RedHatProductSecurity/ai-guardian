@@ -1631,10 +1631,12 @@ class TestDaemonStateOtel:
         state = DaemonState.__new__(DaemonState)
         state._lock = __import__("threading").Lock()
         state._otel_emitters = {}
+        state._session_open_counts = {}
 
         emitter = state.get_otel_emitter("session-1")
         assert emitter is not None
         assert emitter.enabled
+        assert emitter._session_sequence == 1
         assert state.get_otel_emitter("session-1") is emitter
 
     @patch("ai_guardian.config.loaders._load_config_file")
@@ -1645,6 +1647,7 @@ class TestDaemonStateOtel:
         state = DaemonState.__new__(DaemonState)
         state._lock = __import__("threading").Lock()
         state._otel_emitters = {}
+        state._session_open_counts = {}
 
         assert state.get_otel_emitter("session-1") is None
 
@@ -1661,6 +1664,7 @@ class TestDaemonStateOtel:
         state = DaemonState.__new__(DaemonState)
         state._lock = __import__("threading").Lock()
         state._otel_emitters = {}
+        state._session_open_counts = {}
 
         emitter = state.get_otel_emitter("session-1")
         emitter.record_violation("secret_detected")
@@ -1668,6 +1672,44 @@ class TestDaemonStateOtel:
 
         mock_requests.post.assert_called_once()
         assert "session-1" not in state._otel_emitters
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.config.loaders._load_config_file")
+    def test_session_sequence_increments_on_reopen(self, mock_load, mock_requests):
+        mock_load.return_value = (
+            {"otel": {"enabled": True, "endpoint": "http://localhost:4318"}},
+            None,
+        )
+        mock_requests.post.return_value = MagicMock()
+        from ai_guardian.daemon.state import DaemonState
+
+        state = DaemonState.__new__(DaemonState)
+        state._lock = __import__("threading").Lock()
+        state._otel_emitters = {}
+        state._session_open_counts = {}
+
+        em1 = state.get_otel_emitter("session-1")
+        assert em1._session_sequence == 1
+        state.flush_otel_emitter("session-1")
+
+        em2 = state.get_otel_emitter("session-1")
+        assert em2._session_sequence == 2
+        assert em2 is not em1
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_flush_includes_session_sequence(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = HookOtelEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            session_sequence=3,
+        )
+        emitter.flush(session_id="s1")
+
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        root = spans[0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["ai_guardian.session_sequence"]["intValue"] == "3"
 
 
 # ---------------------------------------------------------------------------
@@ -1743,6 +1785,7 @@ class TestHookOtelEmitterTokenUsage:
         state = DaemonState.__new__(DaemonState)
         state._lock = __import__("threading").Lock()
         state._otel_emitters = {}
+        state._session_open_counts = {}
 
         emitter = state.get_otel_emitter("session-1")
         token_usage = {"input_tokens": 2000, "output_tokens": 300}
