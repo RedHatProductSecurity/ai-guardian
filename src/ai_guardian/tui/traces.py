@@ -245,6 +245,21 @@ def _filter_traces(traces, pattern):
     return [t for t in traces if fnmatch.fnmatch(t.get("filename", ""), pattern)]
 
 
+def _fmt_tok(n):
+    """Format token count with k/M suffix."""
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        s = f"{n / 1000:.1f}"
+        if s.endswith(".0"):
+            s = s[:-2]
+        return f"{s}k"
+    s = f"{n / 1_000_000:.1f}"
+    if s.endswith(".0"):
+        s = s[:-2]
+    return f"{s}M"
+
+
 def _format_trace_label(t):
     active_marker = "[green]●[/green] " if t.get("is_active") else "[dim]○[/dim] "
     name = t.get("agent_name", "unknown")
@@ -256,7 +271,9 @@ def _format_trace_label(t):
     tokens = t.get("total_tokens", {})
     total_input = tokens.get("input_tokens", 0)
     total_output = tokens.get("output_tokens", 0)
-    total_tok = total_input + total_output
+    cache_read = tokens.get("cache_read_input_tokens", 0)
+    cache_create = tokens.get("cache_creation_input_tokens", 0)
+    context = total_input + cache_read + cache_create
 
     duration = t.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
@@ -268,7 +285,7 @@ def _format_trace_label(t):
 
     return (
         f"{active_marker}[bold]{name}[/bold] ({model}) {status}{v_str}  "
-        f"{started} | {turns} turns | {total_tok:,} tokens | {duration_str}"
+        f"{started} | {turns} turns | ctx:{_fmt_tok(context)} | {duration_str}"
     )
 
 

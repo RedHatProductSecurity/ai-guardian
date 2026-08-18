@@ -8,8 +8,10 @@ from nicegui import run, ui
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.step_render import (
     STEP_ICON_MAP,
+    compute_context_tokens,
     create_sort_toggle,
     escape_html,
+    format_token_count,
     render_content_block,
     render_text_block,
     render_violation_badge,
@@ -239,7 +241,8 @@ _TOOLTIPS = {
     "Total:": "Input + output tokens combined",
     "Started:": "Timestamp of the first message in the session",
     "Last:": "Timestamp of the most recent message in the session",
-    "Context:": "Percentage of the model's context window used by this session",
+    "Context:": "Total tokens sent to the model per API call: input + cache read + cache create",
+    "Context %:": "Percentage of the model's context window used by this session",
     "Mode:": "Cursor composer mode (agent, edit, etc.)",
 }
 
@@ -285,6 +288,7 @@ def _render_session_card(session, daemon_name, ide):
     total_output = tokens.get("output_tokens", 0)
     total_tok = total_input + total_output
     cache_read = tokens.get("cache_read_input_tokens", 0)
+    context_tok = compute_context_tokens(tokens)
     ctx_pct = session.get("context_usage_percent", 0)
     mode = session.get("mode", "")
 
@@ -329,14 +333,17 @@ def _render_session_card(session, daemon_name, ide):
                 ui.label(date_str).classes("text-xs")
             _tlabel("Messages:")
             ui.label(str(msg_count)).classes("text-xs")
+            if context_tok:
+                _tlabel("Context:")
+                ui.label(format_token_count(context_tok)).classes("text-xs")
             if total_tok:
                 _tlabel("Tokens:")
                 ui.label(f"{total_tok:,}").classes("text-xs")
             if cache_read:
                 _tlabel("Cache Read:")
-                ui.label(f"{cache_read:,}").classes("text-xs")
+                ui.label(format_token_count(cache_read)).classes("text-xs")
             if ctx_pct:
-                _tlabel("Context:")
+                _tlabel("Context %:")
                 ui.label(f"{ctx_pct:.1f}%").classes("text-xs")
             if mode:
                 _tlabel("Mode:")
@@ -521,19 +528,21 @@ def _render_session_summary(summary):
     first_ts = (summary.get("first_timestamp", "") or "")[:19]
     last_ts = (summary.get("last_timestamp", "") or "")[:19]
 
+    context = total_in + cache_read + cache_create
+
     with ui.card().classes("w-full bg-grey-9"):
         ui.label("Session Summary").classes("text-sm font-bold")
         with ui.grid(columns=6).classes("gap-1"):
+            _tlabel("Context:")
+            ui.label(format_token_count(context)).classes("text-xs")
             _tlabel("Input:")
-            ui.label(f"{total_in:,}").classes("text-xs")
-            _tlabel("Output:")
-            ui.label(f"{total_out:,}").classes("text-xs")
-            _tlabel("Total:")
-            ui.label(f"{total_in + total_out:,}").classes("text-xs")
+            ui.label(format_token_count(total_in)).classes("text-xs")
             _tlabel("Cache Read:")
-            ui.label(f"{cache_read:,}").classes("text-xs")
+            ui.label(format_token_count(cache_read)).classes("text-xs")
             _tlabel("Cache Create:")
-            ui.label(f"{cache_create:,}").classes("text-xs")
+            ui.label(format_token_count(cache_create)).classes("text-xs")
+            _tlabel("Output:")
+            ui.label(format_token_count(total_out)).classes("text-xs")
             _tlabel("Messages:")
             ui.label(f"{user_msgs} user / {asst_msgs} assistant").classes("text-xs")
             if first_ts:
@@ -564,10 +573,16 @@ def _render_step(step, index, violations=None, daemon_name=""):
                 usage = step.get("usage", {})
                 tok_in = usage.get("input_tokens", 0)
                 tok_out = usage.get("output_tokens", 0)
+                ctx = compute_context_tokens(usage)
                 ui.label("Assistant").classes("text-xs font-bold text-green")
                 if model:
                     ui.label(f"({model})").classes("text-xs text-grey-6")
-                if tok_in or tok_out:
+                if ctx:
+                    ui.label(
+                        f"Context: {format_token_count(ctx)} | "
+                        f"Output: {format_token_count(tok_out)}"
+                    ).classes("text-xs text-grey-6")
+                elif tok_in or tok_out:
                     ui.label(f"{tok_in + tok_out:,} tok").classes("text-xs text-grey-6")
 
             elif step_type == "tool_use":

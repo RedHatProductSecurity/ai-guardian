@@ -194,14 +194,19 @@ class IDESessionsContent(Container):
         tokens = session.get("token_usage", {})
         total_in = tokens.get("input_tokens", 0)
         total_out = tokens.get("output_tokens", 0)
-        total = total_in + total_out
+        cache_read = tokens.get("cache_read_input_tokens", 0)
+        cache_create = tokens.get("cache_creation_input_tokens", 0)
+        context = total_in + cache_read + cache_create
         sid = session.get("session_id", "")
 
         lines = [
             f"[bold]{title}[/bold] ({model})",
             f"Session: {sid}",
-            f"Messages: {msgs} | Tokens: {total:,} "
-            f"(in: {total_in:,}, out: {total_out:,})",
+            f"Context: {_fmt_tok(context)} | Input: {_fmt_tok(total_in)} "
+            f"| Cache Read: {_fmt_tok(cache_read)} "
+            f"| Cache Create: {_fmt_tok(cache_create)} "
+            f"| Output: {_fmt_tok(total_out)}",
+            f"Messages: {msgs}",
         ]
 
         if sid:
@@ -250,12 +255,30 @@ def _get_ide_options():
     return [(ide.title(), ide) for ide in get_supported_ides()]
 
 
+def _fmt_tok(n):
+    """Format token count with k/M suffix."""
+    if n < 1000:
+        return str(n)
+    if n < 1_000_000:
+        s = f"{n / 1000:.1f}"
+        if s.endswith(".0"):
+            s = s[:-2]
+        return f"{s}k"
+    s = f"{n / 1_000_000:.1f}"
+    if s.endswith(".0"):
+        s = s[:-2]
+    return f"{s}M"
+
+
 def _format_session_label(session):
     title = session.get("title", "") or "Untitled"
     model = session.get("model", "") or ""
     msgs = session.get("message_count", 0)
     tokens = session.get("token_usage", {})
-    total_tok = tokens.get("input_tokens", 0) + tokens.get("output_tokens", 0)
+    total_in = tokens.get("input_tokens", 0)
+    cache_read = tokens.get("cache_read_input_tokens", 0)
+    cache_create = tokens.get("cache_creation_input_tokens", 0)
+    context = total_in + cache_read + cache_create
 
     modified = session.get("modified", 0)
     if modified:
@@ -268,6 +291,6 @@ def _format_session_label(session):
         date_str = ""
 
     model_str = f" ({model})" if model else ""
-    tok_str = f" {total_tok:,} tok" if total_tok else ""
+    ctx_str = f" ctx:{_fmt_tok(context)}" if context else ""
 
-    return f"[bold]{title}[/bold]{model_str} | {msgs} msgs{tok_str} | {date_str}"
+    return f"[bold]{title}[/bold]{model_str} | {msgs} msgs{ctx_str} | {date_str}"
