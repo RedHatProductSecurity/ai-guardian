@@ -3,8 +3,6 @@
 import json
 import re
 
-from nicegui import ui
-
 
 def detect_content_type(text):
     """Auto-detect content format from text content.
@@ -57,19 +55,19 @@ def format_content(text, content_type):
 
 def show_content_viewer(title, raw_text):
     """Open a dialog modal with formatted, syntax-highlighted content."""
+    from nicegui import ui
+
     content_type = detect_content_type(raw_text)
     formatted, language = format_content(raw_text, content_type)
     line_count = formatted.count("\n") + 1
 
-    with (
-        ui.dialog() as dialog,
-        ui.card()
-        .classes("w-full")
-        .style(
-            "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
-            "flex-direction: column"
-        ),
-    ):
+    dialog = ui.dialog()
+    card = ui.card().classes("w-full")
+    card.style(
+        "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
+        "flex-direction: column"
+    )
+    with dialog, card:
         with ui.row().classes("items-center justify-between w-full"):
             with ui.row().classes("items-center gap-2"):
                 ui.label(title).classes("text-lg font-bold")
@@ -95,6 +93,8 @@ def show_content_viewer(title, raw_text):
 
 def render_view_button(title, raw_text):
     """Render a small 'View Formatted' button that opens the content viewer."""
+    from nicegui import ui
+
     ui.button(
         "View Formatted",
         icon="code",
