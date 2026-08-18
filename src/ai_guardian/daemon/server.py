@@ -416,13 +416,13 @@ class DaemonServer:
             pass
 
         if self.state.paused:
-            return self._paused_hook_response(hook_data)
+            return self._paused_hook_response(hook_data, cwd)
 
         self.state.record_activity()
 
         # Per-directory pause (#958): skip scanning if this directory is paused
         if cwd and self.state.is_dir_paused(cwd):
-            return self._paused_hook_response(hook_data)
+            return self._paused_hook_response(hook_data, cwd)
         if cwd:
             from ai_guardian.config.utils import (
                 set_project_dir_override,
@@ -464,12 +464,81 @@ class DaemonServer:
         result.pop("_violation_type", None)
         return result
 
-    def _paused_hook_response(self, hook_data):
-        """Return a paused response, still injecting security instructions."""
+    def _paused_hook_response(self, hook_data, cwd=None):
+        """Return a paused response, still injecting security instructions.
+
+        OTEL lifecycle events are tracked even while paused — pausing
+        means stop scanning, not stop observing (#2034).
+        """
+        self._handle_paused_otel(hook_data, cwd)
+
         from ai_guardian import inject_security_only
 
         result = inject_security_only(hook_data, daemon_state=self.state)
         return result if result is not None else {"output": "{}", "exit_code": 0}
+
+    def _handle_paused_otel(self, hook_data, cwd):
+        """Track OTEL session lifecycle while daemon is paused (#2034)."""
+        session_id = hook_data.get("session_id")
+        if not session_id:
+            return
+        event_name = hook_data.get("hook_event_name") or hook_data.get(
+            "hookEventName", ""
+        )
+        try:
+            if event_name == "SessionEnd":
+                token_usage = None
+                try:
+                    from ai_guardian.scanners.transcript.common import (
+                        _get_transcript_path,
+                        parse_transcript_token_usage,
+                    )
+
+                    tp = _get_transcript_path(hook_data)
+                    if tp:
+                        token_usage = parse_transcript_token_usage(tp)
+                except Exception:
+                    pass
+                adapter_name = None
+                try:
+                    from ai_guardian.hook_processing import detect_adapter
+
+                    adapter_name = detect_adapter(hook_data).name
+                except Exception:
+                    pass
+                self.state.flush_otel_emitter(
+                    session_id,
+                    adapter_name=adapter_name,
+                    token_usage=token_usage,
+                )
+                return
+
+            emitter = self.state.get_otel_emitter(session_id)
+            if not emitter:
+                return
+
+            adapter_name = None
+            project_name = None
+            try:
+                from ai_guardian.hook_processing import detect_adapter
+
+                adapter_name = detect_adapter(hook_data).name
+            except Exception:
+                pass
+            try:
+                from ai_guardian.config.utils import get_project_name
+
+                if cwd:
+                    project_name = get_project_name(cwd)
+            except Exception:
+                pass
+            emitter.record_session_start(
+                adapter_name=adapter_name,
+                project_name=project_name,
+            )
+            emitter.record_hook_event()
+        except Exception:
+            logger.debug("Paused OTEL handling failed (non-fatal)", exc_info=True)
 
     def _handle_sdk_check(self, data):
         """Process an SDK security check request.

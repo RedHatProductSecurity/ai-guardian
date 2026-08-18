@@ -598,6 +598,141 @@ class TestDaemonServerPausedHook:
         assert "exit_code" in result
 
 
+class TestPausedOtelTracking:
+    """Test that OTEL lifecycle events are tracked while daemon is paused (#2034)."""
+
+    def test_paused_session_start_creates_otel_emitter(self, short_state_dir):
+        """First hook while paused should create OTEL emitter and record session start."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        mock_emitter = mock.MagicMock()
+        mock_get = mock.patch.object(
+            server.state, "get_otel_emitter", return_value=mock_emitter
+        )
+        with mock_get as patched_get:
+            server._handle_hook_request(
+                {
+                    "hook_event_name": "UserPromptSubmit",
+                    "session_id": "test-session-001",
+                    "prompt": "hello",
+                    "_daemon_cwd": "/tmp/project",
+                }
+            )
+            patched_get.assert_called_once_with("test-session-001")
+
+        mock_emitter.record_session_start.assert_called_once()
+        mock_emitter.record_hook_event.assert_called_once()
+
+    def test_paused_session_end_flushes_otel_emitter(self, short_state_dir):
+        """SessionEnd while paused should flush the OTEL emitter."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        with mock.patch.object(server.state, "flush_otel_emitter") as mock_flush:
+            server._handle_hook_request(
+                {
+                    "hook_event_name": "SessionEnd",
+                    "session_id": "test-session-002",
+                }
+            )
+
+        mock_flush.assert_called_once()
+        call_kwargs = mock_flush.call_args
+        assert call_kwargs[0][0] == "test-session-002"
+
+    def test_paused_hook_increments_event_count(self, short_state_dir):
+        """Each hook while paused should increment the OTEL event counter."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        mock_emitter = mock.MagicMock()
+        with mock.patch.object(
+            server.state, "get_otel_emitter", return_value=mock_emitter
+        ):
+            for event in ["UserPromptSubmit", "PreToolUse", "PostToolUse"]:
+                server._handle_hook_request(
+                    {
+                        "hook_event_name": event,
+                        "session_id": "test-session-003",
+                    }
+                )
+
+        assert mock_emitter.record_hook_event.call_count == 3
+
+    def test_paused_no_session_id_skips_otel(self, short_state_dir):
+        """Hooks without session_id should skip OTEL tracking."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        with mock.patch.object(server.state, "get_otel_emitter") as mock_get:
+            server._handle_hook_request(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                }
+            )
+
+        mock_get.assert_not_called()
+
+    def test_paused_otel_disabled_skips_gracefully(self, short_state_dir):
+        """When OTEL is disabled, get_otel_emitter returns None — no crash."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        with mock.patch.object(
+            server.state, "get_otel_emitter", return_value=None
+        ):
+            result = server._handle_hook_request(
+                {
+                    "hook_event_name": "UserPromptSubmit",
+                    "session_id": "test-session-004",
+                    "prompt": "hello",
+                }
+            )
+
+        assert result["exit_code"] == 0
+
+    def test_dir_paused_tracks_otel(self, short_state_dir):
+        """Per-directory pause should also track OTEL lifecycle."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        test_dir = "/tmp/test_project"
+        server.state.pause_dir(test_dir)
+
+        mock_emitter = mock.MagicMock()
+        with mock.patch.object(
+            server.state, "get_otel_emitter", return_value=mock_emitter
+        ):
+            server._handle_hook_request(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "session_id": "test-session-005",
+                    "_daemon_cwd": test_dir,
+                }
+            )
+
+        mock_emitter.record_session_start.assert_called_once()
+        mock_emitter.record_hook_event.assert_called_once()
+
+    def test_paused_otel_error_is_nonfatal(self, short_state_dir):
+        """OTEL errors while paused should not affect the paused response."""
+        server = DaemonServer(idle_timeout=30, enable_rest_api=False)
+        server.state.pause()
+
+        with mock.patch.object(
+            server.state, "get_otel_emitter", side_effect=RuntimeError("boom")
+        ):
+            result = server._handle_hook_request(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "session_id": "test-session-006",
+                }
+            )
+
+        assert result["exit_code"] == 0
+        assert result["output"] == "{}"
+
+
 class TestDaemonServerPauseResumeProtocol:
     """Test socket protocol handlers for pause and resume messages (issue #683)."""
 
