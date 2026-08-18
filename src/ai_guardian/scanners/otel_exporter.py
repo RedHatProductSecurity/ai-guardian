@@ -10,7 +10,7 @@ ID mapping:
     per OTEL spec.  UUID4 has sufficient entropy in all positions.
 
 Span hierarchy:
-  Root (gen_ai.agent)  — one per agent run (includes violation_count/types/ids)
+  Root (gen_ai.agent)  — one per agent run
     └─ Turn (gen_ai.turn)  — one per conversation turn
          ├─ gen_ai.chat  — LLM response
          ├─ tool  — tool_call / tool_result
@@ -364,23 +364,6 @@ def _make_root_span(
     stop_reason = trace_doc.get("stop_reason", "")
     status_code = _STATUS_CODE_ERROR if stop_reason == "error" else _STATUS_CODE_OK
 
-    compaction_count = sum(
-        1 for t in turns for s in t.get("steps", []) if s.get("type") == "compaction"
-    )
-
-    all_violations = [
-        v
-        for t in turns
-        for s in t.get("steps", [])
-        if s.get("type") == "scan"
-        for v in s.get("violations", [])
-    ]
-    violation_count = len(all_violations)
-    violation_types = (
-        ",".join(sorted({v.get("type", "") for v in all_violations})) or None
-    )
-    violation_ids = [v.get("id") for v in all_violations if v.get("id")] or None
-
     start_nano = _iso_to_unix_nano(trace_doc.get("started_at", ""))
     end_nano = _derive_end_nano(
         trace_doc.get("ended_at", ""),
@@ -401,24 +384,11 @@ def _make_root_span(
             ("gen_ai.agent.name", trace_doc.get("agent_name")),
             ("gen_ai.request.model", trace_doc.get("model")),
             ("gen_ai.request.max_tokens", trace_doc.get("max_tokens")),
-            ("gen_ai.usage.input_tokens", usage.get("input_tokens")),
-            ("gen_ai.usage.output_tokens", usage.get("output_tokens")),
-            (
-                "gen_ai.usage.cache_read_input_tokens",
-                usage.get("cache_read_input_tokens"),
-            ),
-            (
-                "gen_ai.usage.cache_creation_input_tokens",
-                usage.get("cache_creation_input_tokens"),
-            ),
             ("gen_ai.agent.stop_reason", stop_reason),
             ("gen_ai.agent.duration_ms", trace_doc.get("duration_ms")),
-            ("gen_ai.agent.turn_count", len(turns)),
-            ("gen_ai.agent.compaction_count", compaction_count),
-            ("gen_ai.agent.violation_count", violation_count),
-            ("gen_ai.agent.violation_types", violation_types),
-            ("gen_ai.agent.violation_ids", violation_ids),
             ("gen_ai.agent.hostname", platform.node() or None),
+            ("ai_guardian.session_id", trace_doc.get("session_id")),
+            ("ai_guardian.project.name", trace_doc.get("project_name")),
         ),
         status_code=status_code,
     )
@@ -916,13 +886,19 @@ class HookOtelEmitter:
         self._violation_count = 0
         self._block_count = 0
         self._adapter_name: Optional[str] = None
+        self._project_name: Optional[str] = None
         self._hook_event_count = 0
 
     @property
     def enabled(self) -> bool:
         return self._enabled
 
-    def record_session_start(self, *, adapter_name: Optional[str] = None) -> None:
+    def record_session_start(
+        self,
+        *,
+        adapter_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+    ) -> None:
         """Record session start metadata.
 
         Called at session creation so that even clean sessions (no
@@ -932,6 +908,8 @@ class HookOtelEmitter:
             return
         if adapter_name is not None:
             self._adapter_name = adapter_name
+        if project_name is not None:
+            self._project_name = project_name
 
     def record_hook_event(self) -> None:
         """Increment the hook event counter for this session."""
@@ -957,7 +935,7 @@ class HookOtelEmitter:
         attrs = _attrs(
             ("ai_guardian.violation_type", violation_type),
             ("ai_guardian.severity", severity),
-            ("ai_guardian.tool_name", tool_name),
+            ("tool.name", tool_name),
             ("ai_guardian.violation_id", violation_id),
             ("ai_guardian.scanner", scanner),
         )
@@ -997,7 +975,7 @@ class HookOtelEmitter:
             start_nano=now_nano,
             end_nano=now_nano,
             attributes=_attrs(
-                ("ai_guardian.tool_name", tool_name),
+                ("tool.name", tool_name),
                 ("ai_guardian.reason", reason),
                 ("ai_guardian.scanner", scanner),
             ),
@@ -1020,6 +998,7 @@ class HookOtelEmitter:
             effective_adapter = adapter_name or self._adapter_name
             root_attrs = _attrs(
                 ("ai_guardian.session_id", session_id),
+                ("ai_guardian.project.name", self._project_name),
                 ("ai_guardian.adapter", effective_adapter),
                 ("ai_guardian.violation_count", self._violation_count),
                 ("ai_guardian.block_count", self._block_count),

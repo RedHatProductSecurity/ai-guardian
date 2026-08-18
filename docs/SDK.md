@@ -956,29 +956,9 @@ Behavior:
 
 #### OTEL Custom Metadata
 
-When `otel.enabled` is `true`, you can attach custom metadata to OTEL spans for filtering in Grafana.
+For full OTEL configuration (endpoint, headers, resource attributes, span hierarchy) see the [Observability Guide](OBSERVABILITY.md).
 
-**Static attributes** — fixed values from config, applied as OTEL resource attributes:
-
-```json
-{
-    "sdk": {
-        "otel": {
-            "enabled": true,
-            "endpoint": "http://localhost:4318",
-            "resource_attributes": {
-                "team.name": "AT",
-                "pipeline.name": "ao-exterminator",
-                "deployment.environment": "dev"
-            }
-        }
-    }
-}
-```
-
-Grafana query: `{ resource.team.name = "AT" }`
-
-**Dynamic attributes** — runtime values via callback, applied as span attributes:
+The `otel_metadata_fn` callback lets you attach dynamic, per-run attributes to OTEL spans:
 
 ```python
 agent = GuardedAgent(
@@ -991,11 +971,7 @@ agent = GuardedAgent(
 )
 ```
 
-Grafana query: `{ span.case.id = "AAP-85065" }`
-
-The callback receives `(agent_name: str, context: dict)` where context contains `model`, `turn` (0 for root span), `usage` (cumulative), and `stop_reason` (final call only). It is called once for the root span and once per turn for turn spans.
-
-Static config attributes are base. Dynamic callback attributes merge on top — callback values override config values of the same key for a specific run.
+The callback receives `(agent_name: str, context: dict)` where context contains `model`, `turn` (0 for root span), `usage` (cumulative), and `stop_reason` (final call only). It is called once for the root span and once per turn for turn spans. Dynamic attributes merge on top of static `resource_attributes` from config.
 
 ### `agent.run(prompt)` Return Value
 

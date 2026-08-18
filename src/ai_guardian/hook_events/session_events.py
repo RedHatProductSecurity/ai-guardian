@@ -3,7 +3,7 @@
 import logging
 
 import ai_guardian.config.loaders as _loaders
-from ai_guardian.config.utils import get_project_dir
+from ai_guardian.config.utils import get_project_dir, get_project_name
 from ai_guardian.constants import ViolationType
 from ai_guardian.hook_events.scanners import run_config_file_scan
 from ai_guardian.hook_events.utils import _format_response
@@ -117,6 +117,7 @@ def _handle_bootstrap_scan(
         if _otel_emitter:
             _otel_emitter.record_session_start(
                 adapter_name=adapter.name if adapter else None,
+                project_name=get_project_name(_bs_cwd),
             )
         _bs_config, _ = _loaders._load_config_scanner_config()
         _bs_results = _run_bootstrap_scan(_bs_cwd, config=_bs_config)

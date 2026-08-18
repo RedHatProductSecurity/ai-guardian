@@ -5,10 +5,15 @@ Unit tests for config_utils module
 import unittest
 from datetime import datetime, timezone
 
+from unittest.mock import patch
+
 from ai_guardian.config.utils import (
-    parse_iso8601,
+    _parse_org_repo,
+    _project_name_cache,
+    get_project_name,
     is_expired,
     is_feature_enabled,
+    parse_iso8601,
     validate_regex_pattern,
 )
 
@@ -386,6 +391,77 @@ class ValidateRegexPatternTest(unittest.TestCase):
         pattern = "a" * 100
         self.assertTrue(validate_regex_pattern(pattern, max_length=200))
         self.assertFalse(validate_regex_pattern(pattern, max_length=50))
+
+
+class TestParseOrgRepo(unittest.TestCase):
+    def test_ssh_url(self):
+        assert (
+            _parse_org_repo("git@github.com:RedHatProductSecurity/ai-guardian.git")
+            == "RedHatProductSecurity/ai-guardian"
+        )
+
+    def test_https_url(self):
+        assert (
+            _parse_org_repo("https://github.com/RedHatProductSecurity/ai-guardian.git")
+            == "RedHatProductSecurity/ai-guardian"
+        )
+
+    def test_https_no_git_suffix(self):
+        assert _parse_org_repo("https://github.com/org/repo") == "org/repo"
+
+    def test_gitlab_ssh(self):
+        assert (
+            _parse_org_repo("git@gitlab.example.com:team/project.git") == "team/project"
+        )
+
+    def test_bare_url(self):
+        assert _parse_org_repo("host:org/repo") == "org/repo"
+
+    def test_no_match(self):
+        assert _parse_org_repo("not-a-url") is None
+
+    def test_empty(self):
+        assert _parse_org_repo("") is None
+
+
+class TestGetProjectName(unittest.TestCase):
+    def setUp(self):
+        _project_name_cache.clear()
+
+    def test_none_path(self):
+        assert get_project_name(None) is None
+
+    def test_empty_path(self):
+        assert get_project_name("") is None
+
+    @patch("ai_guardian.config.utils.subprocess.run")
+    def test_git_remote_success(self, mock_run):
+        mock_run.return_value = type(
+            "R",
+            (),
+            {
+                "returncode": 0,
+                "stdout": "git@github.com:RedHatProductSecurity/ai-guardian.git\n",
+            },
+        )()
+        assert get_project_name("/some/path") == "RedHatProductSecurity/ai-guardian"
+
+    @patch("ai_guardian.config.utils.subprocess.run")
+    def test_git_remote_fails_falls_back_to_basename(self, mock_run):
+        mock_run.return_value = type(
+            "R",
+            (),
+            {
+                "returncode": 128,
+                "stdout": "",
+            },
+        )()
+        assert get_project_name("/home/user/my-project") == "my-project"
+
+    @patch("ai_guardian.config.utils.subprocess.run")
+    def test_git_remote_exception_falls_back(self, mock_run):
+        mock_run.side_effect = FileNotFoundError("git not found")
+        assert get_project_name("/home/user/my-project") == "my-project"
 
 
 if __name__ == "__main__":
