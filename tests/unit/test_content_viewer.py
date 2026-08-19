@@ -1,6 +1,7 @@
 """Tests for the content viewer component (#2025)."""
 
 import json
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -8,6 +9,7 @@ from ai_guardian.web.components.content_viewer import (
     _escape_html,
     detect_content_type,
     format_content,
+    show_content_viewer,
 )
 
 
@@ -122,3 +124,35 @@ class TestEscapeHtml:
 
     def test_plain_text_unchanged(self):
         assert _escape_html("hello world") == "hello world"
+
+
+class TestShowContentViewer:
+    def _make_chainable(self):
+        mock = MagicMock()
+        mock.classes.return_value = mock
+        mock.style.return_value = mock
+        mock.props.return_value = mock
+        mock.tooltip.return_value = mock
+        mock.__enter__ = MagicMock(return_value=mock)
+        mock.__exit__ = MagicMock(return_value=False)
+        return mock
+
+    def test_dialog_has_persistent_prop(self):
+        mock_ui = MagicMock()
+        mock_dialog = self._make_chainable()
+        mock_ui.dialog.return_value = mock_dialog
+        mock_ui.card.return_value = self._make_chainable()
+        mock_ui.row.return_value = self._make_chainable()
+        mock_ui.scroll_area.return_value = self._make_chainable()
+        mock_ui.label.return_value = self._make_chainable()
+        mock_ui.badge.return_value = self._make_chainable()
+        mock_ui.button.return_value = self._make_chainable()
+        mock_ui.code.return_value = self._make_chainable()
+
+        nicegui_mod = MagicMock()
+        nicegui_mod.ui = mock_ui
+        with patch.dict("sys.modules", {"nicegui": nicegui_mod}):
+            show_content_viewer("Test", '{"key": "value"}')
+
+        mock_dialog.props.assert_called_once_with("persistent")
+        mock_dialog.open.assert_called_once()

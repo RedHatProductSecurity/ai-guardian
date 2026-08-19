@@ -479,6 +479,7 @@ def create_ide_session_detail_page(service, daemon_name: str):
             )
 
         steps_container = ui.column().classes("w-full gap-1")
+        dialog_host = ui.element("div")
         auto_timer = {"ref": None}
 
         async def load_detail():
@@ -542,7 +543,11 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 else:
                     for i, step in enumerate(detail_steps):
                         _render_step(
-                            step, i, violations_by_step.get(i, []), daemon_name
+                            step,
+                            i,
+                            violations_by_step.get(i, []),
+                            daemon_name,
+                            dialog_host=dialog_host,
                         )
 
             if auto_timer["ref"] is None:
@@ -590,7 +595,7 @@ def _render_session_summary(summary):
                 ui.label(last_ts).classes("text-xs")
 
 
-def _render_step(step, index, violations=None, daemon_name=""):
+def _render_step(step, index, violations=None, daemon_name="", dialog_host=None):
     """Render a single conversation step with optional violation badges."""
     step_type = step.get("type", "")
     icon_name, icon_color = STEP_ICON_MAP.get(step_type, ("help", "text-grey-6"))
@@ -671,4 +676,5 @@ def _render_step(step, index, violations=None, daemon_name=""):
             tool_input=step.get("tool_input"),
             step_type=step_type,
             step_label=step_label,
+            dialog_host=dialog_host,
         )
