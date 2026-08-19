@@ -697,6 +697,80 @@ def _resolve_headers(config_headers: Optional[Dict[str, str]] = None) -> Dict[st
     return headers
 
 
+class _OtelConfig:
+    """Shared OTEL configuration resolved from config dict and environment."""
+
+    __slots__ = (
+        "enabled",
+        "endpoint",
+        "service_name",
+        "headers",
+        "resource_attributes",
+    )
+
+    def __init__(self, config: Dict[str, Any]) -> None:
+        self.enabled: bool = config.get("enabled", False)
+        if not self.enabled:
+            return
+        self.endpoint: str = os.environ.get(
+            "OTEL_EXPORTER_OTLP_ENDPOINT"
+        ) or config.get("endpoint", "http://localhost:4318")
+        self.service_name: str = os.environ.get("OTEL_SERVICE_NAME") or config.get(
+            "service_name", "ai-guardian"
+        )
+        self.headers: Dict[str, str] = _resolve_headers(config.get("headers"))
+        self.resource_attributes: Dict[str, Any] = (
+            config.get("resource_attributes") or {}
+        )
+
+
+def _post_otel_spans(
+    cfg: _OtelConfig,
+    spans: List[Dict[str, Any]],
+) -> None:
+    """POST spans to an OTEL collector. Fire-and-forget."""
+    try:
+        from ai_guardian import __version__
+
+        version = __version__
+    except Exception:
+        version = "unknown"
+
+    res_attrs = _attrs(
+        ("service.name", cfg.service_name),
+        ("service.version", version),
+    )
+    for key, value in cfg.resource_attributes.items():
+        attr = _make_attribute(key, value)
+        if attr is not None:
+            res_attrs.append(attr)
+
+    payload = {
+        "resourceSpans": [
+            {
+                "resource": {"attributes": res_attrs},
+                "scopeSpans": [
+                    {
+                        "scope": {
+                            "name": "ai-guardian",
+                            "version": version,
+                        },
+                        "spans": spans,
+                    }
+                ],
+            }
+        ]
+    }
+
+    url = cfg.endpoint.rstrip("/") + "/v1/traces"
+    try:
+        hdrs = {"Content-Type": "application/json"}
+        hdrs.update(cfg.headers)
+        requests.post(url, json=payload, headers=hdrs, timeout=5)
+    except Exception:
+        logger.debug("OTEL flush to %s failed", url, exc_info=True)
+
+
 class OtelSpanEmitter:
     """Emit OTEL spans to a collector during an agent run.
 
@@ -712,19 +786,11 @@ class OtelSpanEmitter:
         model: str,
         metadata_fn: Optional[Callable[[str, Dict[str, Any]], Dict[str, Any]]] = None,
     ) -> None:
-        self._enabled = config.get("enabled", False)
+        self._cfg = _OtelConfig(config)
+        self._enabled = self._cfg.enabled
         self._metadata_fn = metadata_fn
         if not self._enabled:
             return
-        self._endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or config.get(
-            "endpoint", "http://localhost:4318"
-        )
-        self._service_name = os.environ.get("OTEL_SERVICE_NAME") or config.get(
-            "service_name", "ai-guardian"
-        )
-        self._format = config.get("export_format", "otlp-json")
-        self._headers = _resolve_headers(config.get("headers"))
-        self._resource_attributes = config.get("resource_attributes") or {}
         self._trace_id = trace_id
         self._agent_name = agent_name
         self._model = model
@@ -810,54 +876,7 @@ class OtelSpanEmitter:
 
     def _flush(self, spans: List[Dict[str, Any]]) -> None:
         """POST spans to the OTEL collector.  Fire-and-forget."""
-
-        try:
-            from ai_guardian import __version__
-
-            version = __version__
-        except Exception:
-            version = "unknown"
-
-        res_attrs = _attrs(
-            ("service.name", self._service_name),
-            ("service.version", version),
-        )
-        for key, value in self._resource_attributes.items():
-            attr = _make_attribute(key, value)
-            if attr is not None:
-                res_attrs.append(attr)
-
-        payload = {
-            "resourceSpans": [
-                {
-                    "resource": {
-                        "attributes": res_attrs,
-                    },
-                    "scopeSpans": [
-                        {
-                            "scope": {
-                                "name": "ai-guardian",
-                                "version": version,
-                            },
-                            "spans": spans,
-                        }
-                    ],
-                }
-            ]
-        }
-
-        url = self._endpoint.rstrip("/") + "/v1/traces"
-        try:
-            hdrs = {"Content-Type": "application/json"}
-            hdrs.update(self._headers)
-            requests.post(
-                url,
-                json=payload,
-                headers=hdrs,
-                timeout=5,
-            )
-        except Exception:
-            logger.debug("OTEL flush to %s failed", url, exc_info=True)
+        _post_otel_spans(self._cfg, spans)
 
 
 def _read_session_violations(
@@ -962,17 +981,10 @@ class HookOtelEmitter:
         *,
         session_sequence: int = 1,
     ) -> None:
-        self._enabled = config.get("enabled", False)
+        self._cfg = _OtelConfig(config)
+        self._enabled = self._cfg.enabled
         if not self._enabled:
             return
-        self._endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or config.get(
-            "endpoint", "http://localhost:4318"
-        )
-        self._service_name = os.environ.get("OTEL_SERVICE_NAME") or config.get(
-            "service_name", "ai-guardian"
-        )
-        self._headers = _resolve_headers(config.get("headers"))
-        self._resource_attributes = config.get("resource_attributes") or {}
         self._trace_id = uuid.uuid4().hex
         self._root_span_id = _new_span_id()
         self._start_nano = str(int(datetime.now(timezone.utc).timestamp() * 1e9))
@@ -1080,43 +1092,4 @@ class HookOtelEmitter:
 
     def _post_spans(self, spans: List[Dict[str, Any]]) -> None:
         """POST spans to the OTEL collector. Fire-and-forget."""
-        try:
-            from ai_guardian import __version__
-
-            version = __version__
-        except Exception:
-            version = "unknown"
-
-        res_attrs = _attrs(
-            ("service.name", self._service_name),
-            ("service.version", version),
-        )
-        for key, value in self._resource_attributes.items():
-            attr = _make_attribute(key, value)
-            if attr is not None:
-                res_attrs.append(attr)
-
-        payload = {
-            "resourceSpans": [
-                {
-                    "resource": {"attributes": res_attrs},
-                    "scopeSpans": [
-                        {
-                            "scope": {
-                                "name": "ai-guardian",
-                                "version": version,
-                            },
-                            "spans": spans,
-                        }
-                    ],
-                }
-            ]
-        }
-
-        url = self._endpoint.rstrip("/") + "/v1/traces"
-        try:
-            hdrs = {"Content-Type": "application/json"}
-            hdrs.update(self._headers)
-            requests.post(url, json=payload, headers=hdrs, timeout=5)
-        except Exception:
-            logger.debug("OTEL hook flush to %s failed", url, exc_info=True)
+        _post_otel_spans(self._cfg, spans)
