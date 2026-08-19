@@ -240,6 +240,7 @@ def setup_hooks(
             dry_run=dry_run,
             interactive=interactive,
             allow_auto_install=auto_install_hooks,
+            force=force,
         )
         print(message)
         if not success:
