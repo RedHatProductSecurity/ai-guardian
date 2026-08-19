@@ -704,7 +704,7 @@ class GuardedAgent:
         otel_emitter = None
         try:
             from ai_guardian.config.loaders import _load_otel_config
-            from ai_guardian.scanners.otel_exporter import OtelSpanEmitter
+            from ai_guardian.observability.otel_exporter import OtelSpanEmitter
 
             otel_config = _load_otel_config()
             if otel_config.get("enabled"):

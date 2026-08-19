@@ -187,7 +187,7 @@ class TracesContent(Container):
                     read_trace_detail,
                     resolve_trace_dirs,
                 )
-                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+                from ai_guardian.observability.otel_exporter import trace_to_otlp_json
 
                 trace_dirs = resolve_trace_dirs()
                 if not trace_dirs:

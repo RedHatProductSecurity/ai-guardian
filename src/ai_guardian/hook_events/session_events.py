@@ -91,7 +91,7 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
             )
         else:
             from ai_guardian.config.loaders import _load_otel_config
-            from ai_guardian.scanners.otel_exporter import HookOtelEmitter
+            from ai_guardian.observability.otel_exporter import HookOtelEmitter
 
             _otel_cfg = _load_otel_config()
             if _otel_cfg.get("enabled"):
