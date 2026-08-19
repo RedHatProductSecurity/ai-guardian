@@ -30,6 +30,16 @@ _MODEL_PRICING = {
 }
 
 
+def _count_violations(trace: list) -> int:
+    """Count total violations across all turns and scan steps."""
+    count = 0
+    for turn_obj in trace:
+        for step in turn_obj.get("steps", []):
+            if step.get("type") == "scan":
+                count += len(step.get("violations") or [])
+    return count
+
+
 def resolve_trace_dirs() -> List[str]:
     """Return the fixed XDG state trace directory.
 
@@ -121,11 +131,7 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
     stop_reason = doc.get("stop_reason")
 
     total_turns = len(trace)
-    violation_count = 0
-    for turn_obj in trace:
-        for step in turn_obj.get("steps", []):
-            if step.get("type") == "scan":
-                violation_count += len(step.get("violations") or [])
+    violation_count = _count_violations(trace)
 
     started_at = doc.get("started_at", "")
     duration = _compute_duration(started_at, stop_reason, filepath)
@@ -213,7 +219,7 @@ def read_trace_detail(
                         }
                     )
 
-    computed["violation_count"] = sum(len(v["violations"]) for v in violations)
+    computed["violation_count"] = _count_violations(trace)
     computed["violations"] = violations
 
     doc["is_active"] = stop_reason == "in_progress"
@@ -349,11 +355,7 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
     trace = doc.get("trace") or []
     stop_reason = doc.get("stop_reason")
 
-    violation_count = 0
-    for turn_obj in trace:
-        for step in turn_obj.get("steps", []):
-            if step.get("type") == "scan":
-                violation_count += len(step.get("violations") or [])
+    violation_count = _count_violations(trace)
 
     return {
         "filename": filename,

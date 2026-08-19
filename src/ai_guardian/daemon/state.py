@@ -675,6 +675,16 @@ class DaemonState:
             # Invalidate compiled pattern cache on config change
             self._compiled_patterns.clear()
 
+            # Invalidate cached detector instances so new config takes effect
+            try:
+                from ai_guardian.scanners.prompt_injection import (
+                    invalidate_detector_cache,
+                )
+
+                invalidate_detector_cache()
+            except ImportError:
+                pass
+
             self._last_config_reload_at = time.time()
 
             self._config_error = None

@@ -44,22 +44,27 @@ _FAIL_CLOSED_SCANNERS = frozenset(
     {ScannerName.PROMPT_INJECTION, ScannerName.CONFIG_FILE}
 )
 
-# Mapping from violation_type string → ScannerName for post-processing lookup
-_VIOLATION_TYPE_TO_SCANNER = {
-    ViolationType.PROMPT_INJECTION.value: ScannerName.PROMPT_INJECTION,
-    ViolationType.CONTEXT_POISONING.value: ScannerName.CONTEXT_POISONING,
-    ViolationType.SUPPLY_CHAIN.value: ScannerName.SUPPLY_CHAIN,
-    ViolationType.OFFENSIVE_LANGUAGE.value: ScannerName.OFFENSIVE_LANGUAGE,
-    ViolationType.CANARY_DETECTED.value: ScannerName.CANARY_DETECTION,
-    ViolationType.CONFIG_FILE_EXFIL.value: ScannerName.CONFIG_FILE,
-    ViolationType.SECRET_DETECTED.value: ScannerName.SECRET,
-    ViolationType.PII_DETECTED.value: ScannerName.PII,
-}
+# Derived from registry: violation_type string → ScannerName
+_VIOLATION_TYPE_TO_SCANNER = None
+_SCANNER_TO_VIOLATION_TYPE = None
 
-# Reverse mapping (derived): ScannerName → ViolationType
-_SCANNER_TO_VIOLATION_TYPE = {
-    v: ViolationType(k) for k, v in _VIOLATION_TYPE_TO_SCANNER.items()
-}
+
+def _ensure_violation_maps():
+    """Build violation type <-> scanner name mappings from registry (lazy)."""
+    global _VIOLATION_TYPE_TO_SCANNER, _SCANNER_TO_VIOLATION_TYPE
+    if _VIOLATION_TYPE_TO_SCANNER is not None:
+        return
+    from ai_guardian.scanners.scanner_registry import get_default_registry
+
+    registry = get_default_registry()
+    _VIOLATION_TYPE_TO_SCANNER = {}
+    for entry in registry.all_entries():
+        vtype = entry.violation_type
+        if hasattr(vtype, "value"):
+            _VIOLATION_TYPE_TO_SCANNER[vtype.value] = entry.name
+    _SCANNER_TO_VIOLATION_TYPE = {
+        v: ViolationType(k) for k, v in _VIOLATION_TYPE_TO_SCANNER.items()
+    }
 
 
 def run_content_pipeline(
@@ -100,6 +105,8 @@ def run_content_pipeline(
     Returns (response_dict, log_only_count) if blocked, or (None, log_only_count) to continue.
     warning_messages list is mutated in-place with any warnings.
     """
+    _ensure_violation_maps()
+
     if ctx is not None:
         hook_data = ctx.hook_data
         hook_event = ctx.hook_event
@@ -382,7 +389,10 @@ def run_content_pipeline(
 
     # --- Return combined response if any scanners blocked (#2026) ---
     if _blocking_violations:
-        all_errors = [err for err, _ in _blocking_violations]
+        all_errors = [
+            err or f"{vt.value if hasattr(vt, 'value') else vt} violation detected"
+            for err, vt in _blocking_violations
+        ]
         all_vtypes = [vt for _, vt in _blocking_violations]
         if len(all_errors) == 1:
             combined_error = all_errors[0]

@@ -375,7 +375,7 @@ def _get_content_pipeline(registry, *, hook_event=None, file_path=None):
 
     # SDK fallback: all content scanners, filtered by available inputs
     applicable = []
-    for entry in registry._entries.values():
+    for entry in registry.all_entries():
         if entry.name not in _CONTENT_SCANNER_NAMES:
             continue
         if entry.requires_file_path and not file_path:
