@@ -95,21 +95,71 @@ _ENV_DETECTORS = {
 }
 
 
-def create_client(**kwargs: Any) -> Any:
-    """Auto-detect and create the right Anthropic client from env vars.
+_PROVIDER_ALIASES = {
+    "anthropic": "api_key",
+    "direct": "api_key",
+}
 
-    Detection order (by env var presence):
+_ANTHROPIC_PROVIDERS = frozenset(
+    {"vertex", "bedrock", "foundry", "api_key", "direct", "anthropic"}
+)
 
-    - ``ANTHROPIC_VERTEX_PROJECT_ID`` → ``AnthropicVertex``
-    - ``ANTHROPIC_BEDROCK_BASE_URL`` → ``AnthropicBedrock``
-    - ``ANTHROPIC_API_KEY`` → ``Anthropic``
+_OPENAI_PROVIDERS = frozenset({"openai", "azure", "ollama", "llamacpp", "vllm"})
 
-    Raises ``ValueError`` if conflicting env vars are set for multiple
-    providers, or if none are set.
+_VALID_PROVIDERS = _ANTHROPIC_PROVIDERS | _OPENAI_PROVIDERS
 
-    Any extra ``**kwargs`` are forwarded to the client constructor
-    (e.g. ``region``, ``project_id``).
+
+def create_client(
+    *,
+    provider: str | None = None,
+    provider_config: dict | None = None,
+    **kwargs: Any,
+) -> Any:
+    """Auto-detect and create the right LLM client.
+
+    When *provider* is not set, auto-detects from Anthropic env vars
+    (raises ``ValueError`` on conflict or if none are set).
+
+    When *provider* is set, uses that provider directly:
+
+    - Anthropic family (``direct``/``anthropic``/``vertex``/``bedrock``/
+      ``foundry``): creates the corresponding Anthropic SDK client.
+    - OpenAI-compatible (``openai``/``azure``/``ollama``/``llamacpp``/
+      ``vllm``): creates an OpenAI SDK client (with ``base_url``
+      from *provider_config* for local servers).
+
+    Environment variable overrides (highest precedence):
+
+    - ``AI_GUARDIAN_SDK_PROVIDER`` overrides *provider*
+    - ``AI_GUARDIAN_SDK_BASE_URL`` overrides *base_url* in provider_config
+
+    *provider_config* (optional dict) overrides env var names:
+
+    - ``base_url``: server endpoint (required for ollama/llamacpp/vllm)
+    - ``base_url_env``: env var name holding the base URL
+    - ``api_key_env``: env var holding the API key
+    - ``project_id_env``: env var for GCP project ID (vertex)
+    - ``region_env``: env var for region (vertex/bedrock)
+
+    Any extra ``**kwargs`` are forwarded to the client constructor.
     """
+    pcfg = provider_config or {}
+
+    env_provider = os.environ.get("AI_GUARDIAN_SDK_PROVIDER", "").strip()
+    if env_provider:
+        provider = env_provider
+
+    if provider is not None:
+        if provider not in _VALID_PROVIDERS:
+            raise ValueError(
+                f"Unknown provider {provider!r}. "
+                f"Valid values: {', '.join(sorted(_VALID_PROVIDERS))}"
+            )
+        if provider in _OPENAI_PROVIDERS:
+            return _build_openai_client(provider, pcfg, **kwargs)
+        resolved = _PROVIDER_ALIASES.get(provider, provider)
+        return _build_client(resolved, pcfg, **kwargs)
+
     detected = {
         name: env_var
         for name, env_var in _ENV_DETECTORS.items()
@@ -122,7 +172,8 @@ def create_client(**kwargs: Any) -> Any:
         )
         raise ValueError(
             f"Multiple Anthropic provider env vars detected: {vars_found}. "
-            f"Set only one, or pass an explicit client to guarded()."
+            f"Set only one, or pass an explicit client to guarded(), "
+            f"or set sdk.provider in ai-guardian.json."
         )
 
     if not detected:
@@ -132,16 +183,68 @@ def create_client(**kwargs: Any) -> Any:
             "ANTHROPIC_BEDROCK_BASE_URL"
         )
 
+    resolved = next(iter(detected))
+    return _build_client(resolved, pcfg, **kwargs)
+
+
+def _build_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
+    """Create an Anthropic SDK client for the resolved *provider* key."""
     import anthropic
 
-    provider = next(iter(detected))
+    api_key_env = pcfg.get("api_key_env")
 
     if provider == "vertex":
-        project_id = kwargs.pop("project_id", os.environ["ANTHROPIC_VERTEX_PROJECT_ID"])
-        region = kwargs.pop("region", os.environ.get("CLOUD_ML_REGION") or "us-east5")
+        pid_env = pcfg.get("project_id_env", "ANTHROPIC_VERTEX_PROJECT_ID")
+        region_env = pcfg.get("region_env", "CLOUD_ML_REGION")
+        project_id = kwargs.pop("project_id", os.environ.get(pid_env, ""))
+        region = kwargs.pop("region", os.environ.get(region_env) or "us-east5")
         return anthropic.AnthropicVertex(project_id=project_id, region=region, **kwargs)
 
     if provider == "bedrock":
         return anthropic.AnthropicBedrock(**kwargs)
 
+    if provider == "foundry":
+        return anthropic.AnthropicFoundry(**kwargs)
+
+    if api_key_env:
+        key = os.environ.get(api_key_env, "")
+        kwargs.setdefault("api_key", key)
     return anthropic.Anthropic(**kwargs)
+
+
+def _resolve_base_url(pcfg: dict) -> str | None:
+    """Resolve base URL: AI_GUARDIAN_SDK_BASE_URL > base_url_env > base_url."""
+    env_override = os.environ.get("AI_GUARDIAN_SDK_BASE_URL", "").strip()
+    if env_override:
+        return env_override
+    base_url_env = pcfg.get("base_url_env")
+    if base_url_env:
+        val = os.environ.get(base_url_env, "").strip()
+        if val:
+            return val
+    return pcfg.get("base_url")
+
+
+def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
+    """Create an OpenAI SDK client for OpenAI-compatible providers."""
+    import openai
+
+    base_url = _resolve_base_url(pcfg)
+    api_key_env = pcfg.get("api_key_env")
+
+    if provider == "azure":
+        if api_key_env:
+            kwargs.setdefault("api_key", os.environ.get(api_key_env, ""))
+        if base_url:
+            kwargs.setdefault("azure_endpoint", base_url)
+        return openai.AzureOpenAI(**kwargs)
+
+    ctor_kwargs: dict = {}
+    if base_url:
+        ctor_kwargs["base_url"] = base_url
+    if api_key_env:
+        ctor_kwargs["api_key"] = os.environ.get(api_key_env, "")
+    elif provider in ("ollama", "llamacpp", "vllm"):
+        ctor_kwargs.setdefault("api_key", "not-needed")
+    ctor_kwargs.update(kwargs)
+    return openai.OpenAI(**ctor_kwargs)

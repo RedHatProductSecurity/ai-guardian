@@ -846,9 +846,22 @@ def guarded(
             attribute contains the parser applied to the violating response.
     """
     if client is _MISSING:
+        from ai_guardian.config.loaders import _load_config_file
         from ai_guardian.integrations.anthropic import create_client
 
-        client = create_client()
+        sdk_provider = None
+        sdk_provider_config = None
+        try:
+            cfg, _ = _load_config_file()
+            if cfg:
+                sdk_section = cfg.get("sdk") or {}
+                sdk_provider = sdk_section.get("provider")
+                sdk_provider_config = sdk_section.get("provider_config")
+        except Exception:
+            pass
+        client = create_client(
+            provider=sdk_provider, provider_config=sdk_provider_config
+        )
 
     from ai_guardian.config.loaders import _load_sdk_profile, _sdk_scanning
 

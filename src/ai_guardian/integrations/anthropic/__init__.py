@@ -3,7 +3,10 @@
 from ai_guardian.integrations.anthropic._extractor import (
     AnthropicExtractor,
     create_client,
+    _ANTHROPIC_PROVIDERS,
     _ENV_DETECTORS,
+    _OPENAI_PROVIDERS,
+    _VALID_PROVIDERS,
 )
 from ai_guardian.integrations.anthropic.agent import (
     AnthropicLoopStrategy,
