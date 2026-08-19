@@ -3,6 +3,7 @@
 import threading
 from datetime import datetime
 
+from textual._context import NoActiveAppError
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
 from textual.widgets import Button, Input, Select, Static, Tree
@@ -108,7 +109,10 @@ class IDESessionsContent(Container):
                 config = {}
 
             ide = get_default_ide(config)
-            self.app.call_from_thread(self._set_ide_and_load, ide)
+            try:
+                self.app.call_from_thread(self._set_ide_and_load, ide)
+            except NoActiveAppError:
+                return
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -151,7 +155,10 @@ class IDESessionsContent(Container):
             except Exception:
                 sessions = []
 
-            self.app.call_from_thread(self._render_sessions, sessions)
+            try:
+                self.app.call_from_thread(self._render_sessions, sessions)
+            except NoActiveAppError:
+                return
 
         threading.Thread(target=_worker, daemon=True).start()
 
@@ -238,12 +245,15 @@ class IDESessionsContent(Container):
                 )
             except Exception:
                 violations = []
-            self.app.call_from_thread(
-                self._render_detail_with_violations,
-                detail_widget,
-                base_lines,
-                violations,
-            )
+            try:
+                self.app.call_from_thread(
+                    self._render_detail_with_violations,
+                    detail_widget,
+                    base_lines,
+                    violations,
+                )
+            except NoActiveAppError:
+                return
 
         threading.Thread(target=_worker, daemon=True).start()
 
