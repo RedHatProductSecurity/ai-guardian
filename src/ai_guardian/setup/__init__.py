@@ -77,6 +77,7 @@ def setup_hooks(
     create_config: bool = False,
     permissive: bool = False,
     pre_commit: bool = False,
+    log_violations: bool = False,
     auto_install_hooks: bool = False,
     uninstall_hooks: bool = False,
     install_scanner: Optional[List[str]] = None,
@@ -101,6 +102,7 @@ def setup_hooks(
         create_config: If True, create default ai-guardian.json config
         permissive: If True with create_config, use permissive config (permissions disabled)
         pre_commit: If True, install pre-commit hooks for git
+        log_violations: If True, include --log-violations in pre-commit scan command
         auto_install_hooks: If True, allow automatic hook installation (default: False for safety)
         uninstall_hooks: If True, remove AI Guardian pre-commit hooks
         install_scanner: Optional list of scanner names to install (gitleaks, betterleaks, or leaktk)
@@ -240,6 +242,7 @@ def setup_hooks(
             dry_run=dry_run,
             interactive=interactive,
             allow_auto_install=auto_install_hooks,
+            log_violations=log_violations,
             force=force,
         )
         print(message)

@@ -1675,7 +1675,11 @@ class IDESetup:
 
 
 def _auto_install_hook(
-    git_root_path: Path, hooks_dir: Path, git_template: Path, yaml_template: Path
+    git_root_path: Path,
+    hooks_dir: Path,
+    git_template: Path,
+    yaml_template: Path,
+    log_violations: bool = False,
 ) -> Tuple[bool, str]:
     """
     Automatically install pre-commit hook.
@@ -1704,7 +1708,12 @@ def _auto_install_hook(
         if has_precommit_framework:
             # Install pre-commit framework config
             dest = git_root_path / ".pre-commit-config.yaml"
-            shutil.copy(yaml_template, dest)
+            content = yaml_template.read_text(encoding="utf-8")
+            if log_violations:
+                content = content.replace(
+                    "scan --exit-code", "scan --exit-code --log-violations"
+                )
+            dest.write_text(content, encoding="utf-8")
 
             # Run pre-commit install
             try:
@@ -1730,7 +1739,13 @@ def _auto_install_hook(
         else:
             # Install git hook
             dest = hooks_dir / "pre-commit"
-            shutil.copy(git_template, dest)
+            content = git_template.read_text(encoding="utf-8")
+            if log_violations:
+                content = content.replace(
+                    "scan --diff --staged --exit-code",
+                    "scan --diff --staged --exit-code --log-violations",
+                )
+            dest.write_text(content, encoding="utf-8")
             os.chmod(dest, 0o755)
 
             return True, (
@@ -1878,19 +1893,20 @@ def _has_ai_guardian_line(content: str) -> bool:
 _AG_SCAN_LINE = "ai-guardian scan --exit-code ."
 
 
-def _build_scan_line() -> str:
+def _build_scan_line(log_violations: bool = False) -> str:
     """Build the ai-guardian scan command line with resolved binary path."""
     from ai_guardian.setup.utils import _resolve_binary_path
 
     abs_path = _resolve_binary_path()
+    lv = " --log-violations" if log_violations else ""
     if abs_path != "ai-guardian":
-        return f"{abs_path} scan --exit-code ."
-    return _AG_SCAN_LINE
+        return f"{abs_path} scan --exit-code{lv} ."
+    return f"ai-guardian scan --exit-code{lv} ."
 
 
-def _update_ai_guardian_line(content: str) -> str:
+def _update_ai_guardian_line(content: str, log_violations: bool = False) -> str:
     """Replace existing ai-guardian scan line with current resolved path."""
-    scan_line = _build_scan_line()
+    scan_line = _build_scan_line(log_violations=log_violations)
     lines = content.splitlines(keepends=True)
     updated = []
     for line in lines:
@@ -1907,9 +1923,9 @@ def _update_ai_guardian_line(content: str) -> str:
     return "".join(updated)
 
 
-def _append_ai_guardian_line(content: str) -> str:
+def _append_ai_guardian_line(content: str, log_violations: bool = False) -> str:
     """Append ai-guardian scan command to existing hook content."""
-    scan_line = _build_scan_line()
+    scan_line = _build_scan_line(log_violations=log_violations)
     if not content.endswith("\n"):
         content += "\n"
     content += f"\n# AI Guardian security scan\n{scan_line}\n"
@@ -1920,6 +1936,7 @@ def install_precommit_hooks(
     dry_run: bool = False,
     interactive: bool = True,
     allow_auto_install: bool = False,
+    log_violations: bool = False,
     force: bool = False,
 ) -> Tuple[bool, str]:
     """
@@ -1989,7 +2006,13 @@ def install_precommit_hooks(
     if existing_content is None:
         if dry_run:
             return True, f"[DRY RUN] Would install pre-commit hook at {hook_path}"
-        return _auto_install_hook(git_root_path, hooks_dir, git_template, yaml_template)
+        return _auto_install_hook(
+            git_root_path,
+            hooks_dir,
+            git_template,
+            yaml_template,
+            log_violations=log_violations,
+        )
 
     # --- Force: backup + replace ---
     if force:
@@ -2002,7 +2025,13 @@ def install_precommit_hooks(
 
         backup_path = Path(f"{hook_path}.bak")
         shutil.copy2(hook_path, backup_path)
-        shutil.copy(git_template, hook_path)
+        content = git_template.read_text(encoding="utf-8")
+        if log_violations:
+            content = content.replace(
+                "scan --diff --staged --exit-code",
+                "scan --diff --staged --exit-code --log-violations",
+            )
+        Path(hook_path).write_text(content, encoding="utf-8")
         os.chmod(hook_path, 0o755)
         return True, (
             f"Pre-commit hook replaced at {hook_path}\n"
@@ -2014,7 +2043,9 @@ def install_precommit_hooks(
 
     # --- Existing hook already has ai-guardian: update in place ---
     if _has_ai_guardian_line(existing_content):
-        updated = _update_ai_guardian_line(existing_content)
+        updated = _update_ai_guardian_line(
+            existing_content, log_violations=log_violations
+        )
         if updated == existing_content:
             return True, f"Pre-commit hook at {hook_path} already up to date."
 
@@ -2025,7 +2056,7 @@ def install_precommit_hooks(
         return True, f"Updated ai-guardian command in {hook_path}"
 
     # --- Existing hook without ai-guardian: append ---
-    updated = _append_ai_guardian_line(existing_content)
+    updated = _append_ai_guardian_line(existing_content, log_violations=log_violations)
     if dry_run:
         return True, (f"[DRY RUN] Would append ai-guardian scan to {hook_path}")
     with open(hook_path, "w", encoding="utf-8") as f:

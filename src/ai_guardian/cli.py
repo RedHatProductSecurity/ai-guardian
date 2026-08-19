@@ -333,6 +333,11 @@ def main():
             help="List available security profiles (built-in and custom)",
         )
         setup_parser.add_argument(
+            "--log-violations",
+            action="store_true",
+            help="Include --log-violations in pre-commit hook scan command (use with --pre-commit)",
+        )
+        setup_parser.add_argument(
             "--no-mcp",
             action="store_true",
             default=None,
@@ -561,6 +566,11 @@ def main():
             "--changed-lines-only",
             action="store_true",
             help="Filter findings to only lines changed in the diff",
+        )
+        scan_parser.add_argument(
+            "--log-violations",
+            action="store_true",
+            help="Write findings to violations.jsonl (same log used by hooks)",
         )
 
         # Show-config subcommand (NEW in v1.5.0, DEPRECATED in v1.13.0)
@@ -1376,6 +1386,7 @@ def main():
                 create_config=args.create_config,
                 permissive=args.permissive,
                 pre_commit=args.pre_commit,
+                log_violations=getattr(args, "log_violations", False),
                 auto_install_hooks=args.auto_install_hooks,
                 uninstall_hooks=args.uninstall_hooks,
                 install_scanner=install_scanner,
