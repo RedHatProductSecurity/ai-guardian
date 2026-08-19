@@ -14,6 +14,7 @@ from ai_guardian.web.components.step_render import (
     create_sort_toggle,
     format_duration,
     format_token_count,
+    render_guardian_icon,
     render_text_block,
     render_violation_badge,
 )
@@ -512,7 +513,7 @@ def _render_turn_row(
         "user": ("person", "text-blue"),
         "response": ("smart_toy", "text-green"),
         "tool_use": ("build", "text-orange"),
-        "scan_only": ("security", "text-yellow"),
+        "scan_only": (None, "text-yellow"),
     }
     icon_name, icon_color = icon_map.get(turn_type, ("help", "text-grey-6"))
     turn_label = _get_turn_label(steps, turn_type)
@@ -521,7 +522,10 @@ def _render_turn_row(
 
     with ui.card().classes("w-full py-1 px-2"):
         with ui.row().classes("items-center gap-2 w-full"):
-            ui.icon(icon_name).classes(f"{icon_color} text-sm")
+            if icon_name is None:
+                render_guardian_icon()
+            else:
+                ui.icon(icon_name).classes(f"{icon_color} text-sm")
             ui.label(f"Turn {turn_num}").classes("text-xs font-bold w-16")
             ui.label(turn_label).classes(f"text-xs font-bold {icon_color}")
 
@@ -667,7 +671,7 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
         "response": ("chat", "text-green"),
         "tool_call": ("build", "text-orange"),
         "tool_result": ("output", "text-orange"),
-        "scan": ("security", "text-yellow"),
+        "scan": (None, "text-yellow"),
         "compaction": ("compress", "text-purple"),
     }
     icon_name, icon_color = icon_map.get(step_type, ("help", "text-grey-6"))
@@ -675,7 +679,10 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
     step_el_id = f"step-{turn_num}-{step_num}"
     with ui.element("div").props(f'id="{step_el_id}"'):
         with ui.row().classes("items-start gap-2 py-1"):
-            ui.icon(icon_name).classes(f"{icon_color} text-xs mt-1")
+            if icon_name is None:
+                render_guardian_icon("mt-1")
+            else:
+                ui.icon(icon_name).classes(f"{icon_color} text-xs mt-1")
             with ui.column().classes("gap-0 w-full"):
                 if step_type == "system":
                     ui.label(f"Step {step_num}: system prompt").classes(

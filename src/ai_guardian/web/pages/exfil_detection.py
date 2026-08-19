@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import render_guardian_icon
 from ai_guardian.web.components.help_panel import add_help_button, field_help_icon
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
@@ -237,7 +238,7 @@ def create_exfil_detection_page(service, daemon_name: str):
                     if patterns:
                         for idx, pat in enumerate(patterns):
                             with ui.row().classes("items-center gap-2 w-full"):
-                                ui.icon("security").classes("text-blue-4")
+                                render_guardian_icon()
                                 ui.label(pat).classes("flex-grow text-sm").style(
                                     "font-family: monospace"
                                 )

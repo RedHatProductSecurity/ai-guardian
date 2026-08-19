@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import render_guardian_icon
 from ai_guardian.web.components.help_panel import add_help_button, field_help_icon
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
@@ -270,9 +271,7 @@ def create_secret_redaction_page(service, daemon_name: str):
                             ui.label(category).classes("font-bold text-sm mt-2")
                             for t in types:
                                 with ui.row().classes("items-center gap-1 ml-4"):
-                                    ui.image("/images/tray-icon-16.png").classes(
-                                        "w-4 h-4"
-                                    )
+                                    render_guardian_icon()
                                     ui.label(t).classes("text-xs")
 
                 # --- Action mode ---

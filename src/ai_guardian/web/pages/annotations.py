@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.step_render import render_guardian_icon
 from ai_guardian.web.config_helpers import load_web_config, save_web_config
 
 DURATION_RE = re_mod.compile(r"^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m)?$", re_mod.IGNORECASE)
@@ -257,12 +258,12 @@ def create_annotations_page(service, daemon_name: str):
                     ).classes("text-xs text-grey-6")
                     with ui.column().classes("gap-1 ml-4 mt-2"):
                         with ui.row().classes("items-center gap-1"):
-                            ui.image("/images/tray-icon-16.png").classes("w-4 h-4")
+                            render_guardian_icon()
                             ui.label("Inline: # ai-guardian:allow").classes(
                                 "text-xs"
                             ).style("font-family: monospace")
                         with ui.row().classes("items-center gap-1"):
-                            ui.image("/images/tray-icon-16.png").classes("w-4 h-4")
+                            render_guardian_icon()
                             ui.label(
                                 "Block: # ai-guardian:begin-allow ... # ai-guardian:end-allow"
                             ).classes("text-xs").style("font-family: monospace")
