@@ -8,10 +8,9 @@ from unittest.mock import patch
 
 import pytest
 
+from ai_guardian.sessions.adapters import ClaudeSessionAdapter
 from ai_guardian.sessions.discovery import (
     SUPPORTED_IDES,
-    _decode_claude_project_name,
-    _read_claude_session_meta,
     discover_sessions,
     get_default_ide,
     get_supported_ides,
@@ -58,19 +57,19 @@ class TestGetDefaultIde:
         assert result in SUPPORTED_IDES
 
 
-class TestDecodeClaudeProjectName:
+class TestClaudeDecodeProjectName:
     def test_decode_path(self):
         assert (
-            _decode_claude_project_name("-Users-dvernier-development-myproject")
+            ClaudeSessionAdapter.decode_project_name("-Users-dvernier-development-myproject")
             == "/Users/dvernier/development/myproject"
         )
 
     def test_decode_no_leading_dash(self):
-        result = _decode_claude_project_name("some-project")
+        result = ClaudeSessionAdapter.decode_project_name("some-project")
         assert isinstance(result, str)
 
 
-class TestReadClaudeSessionMeta:
+class TestClaudeReadSessionMeta:
     def test_reads_title_and_model(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             f.write(json.dumps({"type": "ai-title", "aiTitle": "Test Title"}) + "\n")
@@ -97,7 +96,7 @@ class TestReadClaudeSessionMeta:
             path = Path(f.name)
 
         try:
-            meta = _read_claude_session_meta(path)
+            meta = ClaudeSessionAdapter.read_session_meta(path)
             assert meta["title"] == "Test Title"
             assert meta["model"] == "claude-opus-4"
             assert meta["message_count"] == 2
@@ -111,7 +110,7 @@ class TestReadClaudeSessionMeta:
             path = Path(f.name)
 
         try:
-            meta = _read_claude_session_meta(path)
+            meta = ClaudeSessionAdapter.read_session_meta(path)
             assert meta["title"] == ""
             assert meta["message_count"] == 0
         finally:
@@ -125,7 +124,7 @@ class TestReadClaudeSessionMeta:
             path = Path(f.name)
 
         try:
-            meta = _read_claude_session_meta(path)
+            meta = ClaudeSessionAdapter.read_session_meta(path)
             assert meta["title"] == "OK"
         finally:
             path.unlink()
@@ -158,7 +157,7 @@ class TestDiscoverSessions:
             )
 
             with patch(
-                "ai_guardian.sessions.discovery._resolve_session_dir",
+                "ai_guardian.sessions.adapters.ClaudeSessionAdapter.resolve_session_dir",
                 return_value=Path(tmpdir),
             ):
                 sessions = discover_sessions("claude")
@@ -179,7 +178,7 @@ class TestDiscoverSessions:
             (proj2 / "s2.jsonl").write_text('{"type": "user"}\n')
 
             with patch(
-                "ai_guardian.sessions.discovery._resolve_session_dir",
+                "ai_guardian.sessions.adapters.ClaudeSessionAdapter.resolve_session_dir",
                 return_value=Path(tmpdir),
             ):
                 all_sessions = discover_sessions("claude")
