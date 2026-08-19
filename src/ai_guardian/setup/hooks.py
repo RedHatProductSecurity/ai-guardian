@@ -1675,7 +1675,11 @@ class IDESetup:
 
 
 def _auto_install_hook(
-    git_root_path: Path, hooks_dir: Path, git_template: Path, yaml_template: Path
+    git_root_path: Path,
+    hooks_dir: Path,
+    git_template: Path,
+    yaml_template: Path,
+    log_violations: bool = False,
 ) -> Tuple[bool, str]:
     """
     Automatically install pre-commit hook.
@@ -1704,7 +1708,12 @@ def _auto_install_hook(
         if has_precommit_framework:
             # Install pre-commit framework config
             dest = git_root_path / ".pre-commit-config.yaml"
-            shutil.copy(yaml_template, dest)
+            content = yaml_template.read_text(encoding="utf-8")
+            if log_violations:
+                content = content.replace(
+                    "scan --exit-code", "scan --exit-code --log-violations"
+                )
+            dest.write_text(content, encoding="utf-8")
 
             # Run pre-commit install
             try:
@@ -1730,7 +1739,13 @@ def _auto_install_hook(
         else:
             # Install git hook
             dest = hooks_dir / "pre-commit"
-            shutil.copy(git_template, dest)
+            content = git_template.read_text(encoding="utf-8")
+            if log_violations:
+                content = content.replace(
+                    "scan --diff --staged --exit-code",
+                    "scan --diff --staged --exit-code --log-violations",
+                )
+            dest.write_text(content, encoding="utf-8")
             os.chmod(dest, 0o755)
 
             return True, (
@@ -1856,7 +1871,10 @@ def uninstall_precommit_hooks(
 
 
 def install_precommit_hooks(
-    dry_run: bool = False, interactive: bool = True, allow_auto_install: bool = False
+    dry_run: bool = False,
+    interactive: bool = True,
+    allow_auto_install: bool = False,
+    log_violations: bool = False,
 ) -> Tuple[bool, str]:
     """
     Show pre-commit hook templates and integration instructions.
@@ -1940,7 +1958,13 @@ def install_precommit_hooks(
 
     # If auto-install is enabled and no existing hooks, perform installation
     if allow_auto_install and not has_existing_hooks and not dry_run:
-        return _auto_install_hook(git_root_path, hooks_dir, git_template, yaml_template)
+        return _auto_install_hook(
+            git_root_path,
+            hooks_dir,
+            git_template,
+            yaml_template,
+            log_violations=log_violations,
+        )
 
     # Check if pre-commit framework is available
     try:
@@ -1948,6 +1972,10 @@ def install_precommit_hooks(
         has_precommit_framework = True
     except (subprocess.CalledProcessError, FileNotFoundError):
         has_precommit_framework = False
+
+    # Build scan command string
+    lv = " --log-violations" if log_violations else ""
+    scan_cmd = f"ai-guardian scan --exit-code{lv}"
 
     # Build informational message
     message = [
@@ -1991,6 +2019,8 @@ def install_precommit_hooks(
         )
 
     # Option 1: Git hook (always available)
+    box_cmd = f"{scan_cmd} ."
+    box_w = max(len(box_cmd) + 2, 43)
     message.extend(
         [
             "Option 1: Git Hook (Direct Integration)",
@@ -1999,9 +2029,9 @@ def install_precommit_hooks(
             f"  chmod +x {existing_git_hook}",
             "",
             "  Or if you have existing hooks, add this to your hook:",
-            "  ┌─────────────────────────────────────────┐",
-            "  │ ai-guardian scan --exit-code .          │",
-            "  └─────────────────────────────────────────┘",
+            f"  ┌{'─' * box_w}┐",
+            f"  │ {box_cmd:<{box_w - 1}}│",
+            f"  └{'─' * box_w}┘",
             "",
         ]
     )
@@ -2015,21 +2045,23 @@ def install_precommit_hooks(
             ]
         )
         if existing_yaml_config.exists():
-            message.extend(
-                [
-                    f"  Add to existing {existing_yaml_config}:",
-                    "  ┌─────────────────────────────────────────┐",
-                    "  │ repos:                                  │",
-                    "  │   - repo: local                         │",
-                    "  │     hooks:                              │",
-                    "  │       - id: ai-guardian                 │",
-                    "  │         name: AI Guardian Security Scan │",
-                    "  │         entry: ai-guardian scan --exit-code │",
-                    "  │         language: system                │",
-                    "  │         pass_filenames: false           │",
-                    "  └─────────────────────────────────────────┘",
-                ]
-            )
+            entry_line = f"        entry: {scan_cmd}"
+            yaml_lines = [
+                "repos:",
+                "  - repo: local",
+                "    hooks:",
+                "      - id: ai-guardian",
+                "        name: AI Guardian Security Scan",
+                entry_line,
+                "        language: system",
+                "        pass_filenames: false",
+            ]
+            yaml_w = max(len(line) for line in yaml_lines) + 2
+            message.append(f"  Add to existing {existing_yaml_config}:")
+            message.append(f"  ┌{'─' * yaml_w}┐")
+            for line in yaml_lines:
+                message.append(f"  │ {line:<{yaml_w - 1}}│")
+            message.append(f"  └{'─' * yaml_w}┘")
         else:
             message.extend(
                 [

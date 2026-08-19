@@ -1510,7 +1510,72 @@ def scan_command(args) -> int:
             else:
                 print("✅ No security issues detected")
 
+    # Log findings to violations.jsonl
+    if getattr(args, "log_violations", False) and findings:
+        _log_scan_findings(findings, args)
+
     # Exit code
     if args.exit_code and findings:
         return 1
     return 0
+
+
+_RULE_ID_TO_VIOLATION_TYPE = {
+    "SECRET": "secret_detected",
+    "PROMPT": "prompt_injection",
+    "PII": "pii_detected",
+    "SSRF": "ssrf_blocked",
+    "CONFIG": "config_file_exfil",
+    "EXFIL": "exfil_detection",
+    "UNICODE": "prompt_injection",
+    "SUPPLY": "supply_chain",
+    "canary_detected": "canary_detection",
+}
+
+
+def _violation_type_from_rule_id(rule_id: str) -> str:
+    """Derive violation_type from a finding's rule_id.
+
+    Handles formats: PROMPT-INJECTION-001, SECRET-001, B101 (Bandit), etc.
+    """
+    if not rule_id:
+        return "scan_finding"
+    if rule_id in _RULE_ID_TO_VIOLATION_TYPE:
+        return _RULE_ID_TO_VIOLATION_TYPE[rule_id]
+    prefix = rule_id.split("-")[0]
+    if prefix in _RULE_ID_TO_VIOLATION_TYPE:
+        return _RULE_ID_TO_VIOLATION_TYPE[prefix]
+    if prefix.startswith("B") and prefix[1:].isdigit():
+        return "code_security"
+    return "scan_finding"
+
+
+def _log_scan_findings(findings: list, args) -> None:
+    """Write scan findings to violations.jsonl."""
+    try:
+        from ai_guardian.violations.logger import ViolationLogger
+
+        vlogger = ViolationLogger()
+        scan_path = getattr(args, "path", None) or "."
+        for finding in findings:
+            vtype = _violation_type_from_rule_id(finding.get("rule_id", ""))
+            blocked = {
+                "rule_id": finding.get("rule_id", ""),
+                "message": finding.get("message", ""),
+                "file_path": finding.get("file_path", ""),
+                "line_number": finding.get("line_number"),
+                "snippet": finding.get("snippet", ""),
+            }
+            context = {
+                "ide_type": "cli",
+                "hook_event": "scan",
+                "project_path": str(Path(scan_path).resolve()),
+            }
+            vlogger.log_violation(
+                violation_type=vtype,
+                blocked=blocked,
+                context=context,
+                severity=finding.get("severity", "warning"),
+            )
+    except Exception as e:
+        print(f"Warning: Could not log violations: {e}", file=sys.stderr)
