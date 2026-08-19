@@ -204,6 +204,46 @@ def run_content_pipeline(
 
     _blocking_violations = []
 
+    # --- Helper: apply post-scan pipeline and collect warnings/blocks ---
+    # Closes over shared state to avoid repeating the same 6-line pattern
+    # in every scanner branch.
+
+    def _collect(
+        scanner_name,
+        result,
+        vtype,
+        *,
+        log_message=None,
+        log_gate=True,
+        error_override=None,
+        non_block_warning=False,
+        fp_override=None,
+        **pipeline_kwargs,
+    ):
+        decision = apply_post_scan_pipeline(
+            _registry.get(scanner_name),
+            result,
+            _post_scan_ctx,
+            file_path=fp_override if fp_override is not None else file_path,
+            filename=filename,
+            **pipeline_kwargs,
+        )
+        warning_messages.extend(decision.warnings)
+        if warn_violation_types is not None and decision.warnings:
+            warn_violation_types.append(vtype)
+        if decision.should_block:
+            if log_gate and log_message:
+                logger.info(log_message)
+            error = (
+                error_override if error_override is not None else decision.error_message
+            )
+            _blocking_violations.append((error, vtype))
+        elif non_block_warning and result.error_message:
+            warning_messages.append(result.error_message)
+            if warn_violation_types is not None:
+                warn_violation_types.append(vtype)
+        return decision
+
     # --- Post-processing loop over scan results ---
 
     for result in scan_results:
@@ -269,66 +309,37 @@ def run_content_pipeline(
 
         if scanner_name == ScannerName.PROMPT_INJECTION:
             _pretool_pi_detected = True
-            decision = apply_post_scan_pipeline(
-                _registry.get(scanner_name),
+            _collect(
+                scanner_name,
                 result,
-                _post_scan_ctx,
-                file_path=file_path,
-                filename=filename,
+                vtype,
+                log_message=(
+                    f"Blocking operation for {file_path} "
+                    "due to prompt injection detection"
+                    if file_path
+                    else "Blocking operation due to prompt injection detection"
+                ),
+                log_gate=(ide_type != IDEType.CURSOR),
             )
-            warning_messages.extend(decision.warnings)
-            if warn_violation_types is not None and decision.warnings:
-                warn_violation_types.append(vtype)
-            if decision.should_block:
-                if ide_type != IDEType.CURSOR:
-                    if file_path:
-                        logger.info(
-                            f"Blocking operation for {file_path} "
-                            "due to prompt injection detection"
-                        )
-                    else:
-                        logger.info(
-                            "Blocking operation due to prompt injection detection"
-                        )
-                _blocking_violations.append((decision.error_message, vtype))
 
         elif scanner_name == ScannerName.CONTEXT_POISONING:
             _pretool_cp_detected = True
-            decision = apply_post_scan_pipeline(
-                _registry.get(scanner_name),
+            _collect(
+                scanner_name,
                 result,
-                _post_scan_ctx,
-                file_path=file_path,
-                filename=filename,
+                vtype,
+                log_message="Blocking operation due to context poisoning detection",
             )
-            warning_messages.extend(decision.warnings)
-            if warn_violation_types is not None and decision.warnings:
-                warn_violation_types.append(vtype)
-            if decision.should_block:
-                logger.info("Blocking operation due to context poisoning detection")
-                _blocking_violations.append((decision.error_message, vtype))
 
         elif scanner_name == ScannerName.SECRET:
             _secret_detected = True
-            has_secrets = result.detected
-            error_message = result.error_message
-
-            if has_secrets:
-                secret_decision = apply_post_scan_pipeline(
-                    _registry.get(scanner_name),
-                    result,
-                    _post_scan_ctx,
-                    file_path=file_path,
-                    filename=filename,
-                    skip_violation_log=True,
-                )
-                warning_messages.extend(secret_decision.warnings)
-                if warn_violation_types is not None and secret_decision.warnings:
-                    warn_violation_types.append(vtype)
-                has_secrets = secret_decision.should_block
-
-            if has_secrets:
-                _blocking_violations.append((error_message, vtype))
+            _collect(
+                scanner_name,
+                result,
+                vtype,
+                skip_violation_log=True,
+                error_override=result.error_message,
+            )
 
         elif scanner_name == ScannerName.PII:
             pii_block_msg, pii_log_only = _handle_pii_result(
@@ -347,50 +358,30 @@ def run_content_pipeline(
             log_only_count = pii_log_only
 
         elif scanner_name == ScannerName.CONFIG_FILE:
-            cfs_decision = apply_post_scan_pipeline(
-                _registry.get(scanner_name),
+            _collect(
+                scanner_name,
                 result,
-                _post_scan_ctx,
-                file_path=file_path,
-                filename=filename,
-                blocked_overrides={
-                    "details": result.extra.get("details"),
-                },
+                vtype,
+                blocked_overrides={"details": result.extra.get("details")},
+                log_message=(
+                    f"Blocking operation for {file_path} " "due to config file threat"
+                ),
+                log_gate=(ide_type != IDEType.CURSOR),
+                error_override=result.error_message,
+                non_block_warning=True,
             )
-            warning_messages.extend(cfs_decision.warnings)
-            if warn_violation_types is not None and cfs_decision.warnings:
-                warn_violation_types.append(vtype)
-            if cfs_decision.should_block:
-                if ide_type != IDEType.CURSOR:
-                    logger.info(
-                        f"Blocking operation for {file_path} "
-                        "due to config file threat"
-                    )
-                _blocking_violations.append((result.error_message, vtype))
-            elif result.error_message:
-                warning_messages.append(result.error_message)
-                if warn_violation_types is not None:
-                    warn_violation_types.append(vtype)
 
         else:
-            # Generic post-scan for SC, OL, CD
-            decision = apply_post_scan_pipeline(
-                _registry.get(scanner_name),
+            _collect(
+                scanner_name,
                 result,
-                _post_scan_ctx,
-                file_path=file_path or filename or "content",
-                filename=filename,
+                vtype,
+                fp_override=file_path or filename or "content",
+                log_message=(
+                    f"Blocking operation due to {scanner_name.value} detection"
+                ),
+                non_block_warning=True,
             )
-            warning_messages.extend(decision.warnings)
-            if warn_violation_types is not None and decision.warnings:
-                warn_violation_types.append(vtype)
-            if decision.should_block:
-                logger.info(f"Blocking operation due to {scanner_name.value} detection")
-                _blocking_violations.append((decision.error_message, vtype))
-            elif result.error_message:
-                warning_messages.append(result.error_message)
-                if warn_violation_types is not None:
-                    warn_violation_types.append(vtype)
 
     # --- Return combined response if any scanners blocked (#2026) ---
     if _blocking_violations:
