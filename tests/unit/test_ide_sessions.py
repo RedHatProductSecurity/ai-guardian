@@ -132,6 +132,97 @@ class TestClaudeReadSessionMeta:
             path.unlink()
 
 
+class TestClaudeSessionTitlePriority:
+    def test_custom_title_wins_over_ai_title(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "ai-title", "aiTitle": "AI Generated"}) + "\n")
+            f.write(
+                json.dumps({"type": "custom-title", "customTitle": "my-named-session"})
+                + "\n"
+            )
+            path = Path(f.name)
+
+        try:
+            meta = ClaudeSessionAdapter.read_session_meta(path)
+            assert meta["title"] == "my-named-session"
+        finally:
+            path.unlink()
+
+    def test_agent_name_wins_over_ai_title(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "ai-title", "aiTitle": "AI Generated"}) + "\n")
+            f.write(
+                json.dumps({"type": "agent-name", "agentName": "my-agent-session"})
+                + "\n"
+            )
+            path = Path(f.name)
+
+        try:
+            meta = ClaudeSessionAdapter.read_session_meta(path)
+            assert meta["title"] == "my-agent-session"
+        finally:
+            path.unlink()
+
+    def test_custom_title_wins_over_agent_name(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps({"type": "agent-name", "agentName": "agent-session"}) + "\n"
+            )
+            f.write(
+                json.dumps({"type": "custom-title", "customTitle": "user-session"})
+                + "\n"
+            )
+            path = Path(f.name)
+
+        try:
+            meta = ClaudeSessionAdapter.read_session_meta(path)
+            assert meta["title"] == "user-session"
+        finally:
+            path.unlink()
+
+    def test_ai_title_used_when_no_higher_priority(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "ai-title", "aiTitle": "AI Title"}) + "\n")
+            path = Path(f.name)
+
+        try:
+            meta = ClaudeSessionAdapter.read_session_meta(path)
+            assert meta["title"] == "AI Title"
+        finally:
+            path.unlink()
+
+    def test_custom_title_in_read_detail(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(
+                json.dumps({"type": "custom-title", "customTitle": "my-named-session"})
+                + "\n"
+            )
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            title_steps = [s for s in steps if s["type"] == "title"]
+            assert len(title_steps) == 1
+            assert title_steps[0]["content"] == "my-named-session"
+        finally:
+            Path(path).unlink()
+
+    def test_agent_name_in_read_detail(self):
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
+            f.write(json.dumps({"type": "agent-name", "agentName": "my-agent"}) + "\n")
+            path = f.name
+
+        try:
+            session = {"ide": "claude", "file_path": path}
+            steps = read_session_detail(session)
+            title_steps = [s for s in steps if s["type"] == "title"]
+            assert len(title_steps) == 1
+            assert title_steps[0]["content"] == "my-agent"
+        finally:
+            Path(path).unlink()
+
+
 class TestDiscoverSessions:
     def test_unsupported_ide_returns_empty(self):
         result = discover_sessions("notepad")

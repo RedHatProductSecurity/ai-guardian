@@ -108,7 +108,15 @@ class ClaudeSessionAdapter(SessionAdapter):
 
                     msg_type = d.get("type", "")
 
-                    if msg_type == "ai-title":
+                    if msg_type == "custom-title":
+                        steps.append(
+                            {"type": "title", "content": d.get("customTitle", "")}
+                        )
+                    elif msg_type == "agent-name":
+                        steps.append(
+                            {"type": "title", "content": d.get("agentName", "")}
+                        )
+                    elif msg_type == "ai-title":
                         steps.append({"type": "title", "content": d.get("aiTitle", "")})
 
                     elif msg_type == "user":
@@ -353,6 +361,7 @@ class ClaudeSessionAdapter(SessionAdapter):
         total_cache_create = 0
         user_count = 0
         assistant_count = 0
+        title_priority = 0
 
         try:
             with open(path, "r", encoding="utf-8") as f:
@@ -373,7 +382,13 @@ class ClaudeSessionAdapter(SessionAdapter):
                             meta["first_timestamp"] = ts
                         meta["last_timestamp"] = ts
 
-                    if msg_type == "ai-title":
+                    if msg_type == "custom-title":
+                        meta["title"] = d.get("customTitle", "")
+                        title_priority = 3
+                    elif msg_type == "agent-name" and title_priority < 3:
+                        meta["title"] = d.get("agentName", "")
+                        title_priority = 2
+                    elif msg_type == "ai-title" and title_priority < 2:
                         meta["title"] = d.get("aiTitle", "")
                     elif msg_type == "assistant":
                         msg = d.get("message", {})
