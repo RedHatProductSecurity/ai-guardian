@@ -2081,6 +2081,30 @@ class TestGuardedAgent:
         assert "Hello!" in content_args
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_result_dict_has_timestamps(self, mock_monitor):
+        """Result dict includes started_at/ended_at for live OTEL export."""
+        from datetime import datetime
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        result = agent.run("test")
+
+        assert "started_at" in result
+        assert "ended_at" in result
+        datetime.fromisoformat(result["started_at"])
+        datetime.fromisoformat(result["ended_at"])
+        assert result["ended_at"] >= result["started_at"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_tool_use_loop(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
