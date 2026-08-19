@@ -551,6 +551,10 @@ class GuardedAgent:
                 )
             with open(filepath, "w", encoding="utf-8") as fh:
                 json.dump(trace_doc, fh, indent=2, default=str)
+
+            from ai_guardian.daemon.traces import write_trace_meta
+
+            write_trace_meta(filepath, trace_doc)
             logger.debug("Trace written to %s", filepath)
             import sys
 

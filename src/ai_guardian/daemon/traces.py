@@ -30,6 +30,44 @@ _MODEL_PRICING = {
 }
 
 
+def _meta_path(filepath: str) -> str:
+    """Return the ``.meta.json`` sidecar path for a trace file."""
+    return filepath.rsplit(".json", 1)[0] + ".meta.json"
+
+
+def write_trace_meta(filepath: str, doc: Dict[str, Any]) -> None:
+    """Write a lightweight ``.meta.json`` sidecar next to a trace file.
+
+    The sidecar contains only summary fields so ``list_traces()`` can
+    avoid parsing the full (potentially multi-MB) trace array.
+    """
+    trace = doc.get("trace") or []
+    usage = doc.get("usage") or {}
+    stop_reason = doc.get("stop_reason")
+
+    meta = {
+        "agent_name": doc.get("agent_name", ""),
+        "model": doc.get("model", ""),
+        "started_at": doc.get("started_at", ""),
+        "stop_reason": stop_reason,
+        "usage": {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+        },
+        "total_turns": len(trace),
+        "violation_count": _count_violations(trace),
+    }
+
+    meta_fp = _meta_path(filepath)
+    try:
+        with open(meta_fp, "w", encoding="utf-8") as fh:
+            json.dump(meta, fh, separators=(",", ":"))
+    except OSError:
+        logger.debug("Failed to write trace meta %s", meta_fp)
+
+
 def _count_violations(trace: list) -> int:
     """Count total violations across all turns and scan steps."""
     count = 0
@@ -93,7 +131,7 @@ def list_traces(
 
         for dirpath, _dirnames, filenames in os.walk(trace_dir):
             for entry in filenames:
-                if not entry.endswith(".json"):
+                if not entry.endswith(".json") or entry.endswith(".meta.json"):
                     continue
                 filepath = os.path.join(dirpath, entry)
                 rel_path = os.path.relpath(filepath, trace_dir).replace("\\", "/")
@@ -115,7 +153,65 @@ def list_traces(
 
 
 def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]]:
-    """Read a trace file and extract summary metadata."""
+    """Read a trace file and extract summary metadata.
+
+    Prefers the lightweight ``.meta.json`` sidecar when available,
+    falling back to a full parse of the trace file.
+    """
+    meta_fp = _meta_path(filepath)
+    meta = _read_meta_sidecar(meta_fp)
+
+    if meta is None:
+        meta = _parse_full_trace_for_summary(filepath, filename)
+
+    if meta is None:
+        return None
+
+    stop_reason = meta.get("stop_reason")
+    started_at = meta.get("started_at", "")
+    usage = meta.get("usage") or {}
+
+    try:
+        file_mtime = os.path.getmtime(filepath)
+    except OSError:
+        file_mtime = 0.0
+
+    return {
+        "filename": filename,
+        "agent_name": meta.get("agent_name", ""),
+        "model": meta.get("model", ""),
+        "started_at": started_at,
+        "stop_reason": stop_reason,
+        "is_active": stop_reason == "in_progress",
+        "total_turns": meta.get("total_turns", 0),
+        "total_tokens": {
+            "input_tokens": usage.get("input_tokens", 0),
+            "output_tokens": usage.get("output_tokens", 0),
+            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
+            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
+        },
+        "duration_seconds": _compute_duration(started_at, stop_reason, filepath),
+        "violation_count": meta.get("violation_count", 0),
+        "file_mtime": file_mtime,
+    }
+
+
+def _read_meta_sidecar(meta_fp: str) -> Optional[Dict[str, Any]]:
+    """Try to read a ``.meta.json`` sidecar file."""
+    try:
+        with open(meta_fp, "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        if isinstance(meta, dict) and "agent_name" in meta:
+            return meta
+    except (OSError, json.JSONDecodeError):
+        pass
+    return None
+
+
+def _parse_full_trace_for_summary(
+    filepath: str, filename: str
+) -> Optional[Dict[str, Any]]:
+    """Parse the full trace JSON and return summary-shaped metadata."""
     try:
         with open(filepath, "r", encoding="utf-8") as fh:
             doc = json.load(fh)
@@ -126,38 +222,15 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
     if not isinstance(doc, dict) or "agent_name" not in doc:
         return None
 
-    usage = doc.get("usage") or {}
     trace = doc.get("trace") or []
-    stop_reason = doc.get("stop_reason")
-
-    total_turns = len(trace)
-    violation_count = _count_violations(trace)
-
-    started_at = doc.get("started_at", "")
-    duration = _compute_duration(started_at, stop_reason, filepath)
-
-    try:
-        file_mtime = os.path.getmtime(filepath)
-    except OSError:
-        file_mtime = 0.0
-
     return {
-        "filename": filename,
         "agent_name": doc.get("agent_name", ""),
         "model": doc.get("model", ""),
-        "started_at": started_at,
-        "stop_reason": stop_reason,
-        "is_active": stop_reason == "in_progress",
-        "total_turns": total_turns,
-        "total_tokens": {
-            "input_tokens": usage.get("input_tokens", 0),
-            "output_tokens": usage.get("output_tokens", 0),
-            "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
-            "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
-        },
-        "duration_seconds": duration,
-        "violation_count": violation_count,
-        "file_mtime": file_mtime,
+        "started_at": doc.get("started_at", ""),
+        "stop_reason": doc.get("stop_reason"),
+        "usage": doc.get("usage") or {},
+        "total_turns": len(trace),
+        "violation_count": _count_violations(trace),
     }
 
 

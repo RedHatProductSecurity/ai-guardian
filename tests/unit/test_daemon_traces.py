@@ -6,12 +6,14 @@ import os
 import pytest
 
 from ai_guardian.daemon.traces import (
+    _meta_path,
     compute_token_summary,
     estimate_cost,
     list_traces,
     pushed_trace_to_summary,
     read_trace_detail,
     validate_filename,
+    write_trace_meta,
 )
 
 
@@ -356,6 +358,90 @@ class TestEstimateCost:
         cache_read_cost = 3.0 * 0.1
         cache_create_cost = 3.0 * 1.25
         assert cost == pytest.approx(cache_read_cost + cache_create_cost, abs=0.01)
+
+
+class TestMetaSidecar:
+    def test_meta_path_derivation(self):
+        assert _meta_path("/tmp/agent_20260813-103000_abc.json") == (
+            "/tmp/agent_20260813-103000_abc.meta.json"
+        )
+
+    def test_write_and_read_meta(self, trace_dir):
+        doc = _sample_trace_doc()
+        filepath = str(
+            _write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc)
+        )
+        write_trace_meta(filepath, doc)
+
+        meta_fp = _meta_path(filepath)
+        assert os.path.isfile(meta_fp)
+
+        with open(meta_fp, "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        assert meta["agent_name"] == "test-agent"
+        assert meta["model"] == "claude-sonnet-5"
+        assert meta["total_turns"] == 2
+        assert meta["violation_count"] == 0
+        assert meta["usage"]["input_tokens"] == 200
+
+    def test_list_traces_prefers_meta(self, trace_dir):
+        doc = _sample_trace_doc()
+        filepath = str(
+            _write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc)
+        )
+        write_trace_meta(filepath, doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["agent_name"] == "test-agent"
+        assert result[0]["total_turns"] == 2
+
+    def test_list_traces_falls_back_without_meta(self, trace_dir):
+        doc = _sample_trace_doc()
+        _write_trace(trace_dir, "n_20260813-103000_a1b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["agent_name"] == "test-agent"
+        assert result[0]["total_turns"] == 2
+
+    def test_meta_not_listed_as_trace(self, trace_dir):
+        doc = _sample_trace_doc()
+        filepath = str(
+            _write_trace(trace_dir, "x_20260813-103000_a1b2c3d4.json", doc)
+        )
+        write_trace_meta(filepath, doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        filenames = [r["filename"] for r in result]
+        assert not any(".meta.json" in f for f in filenames)
+
+    def test_meta_with_violations(self, trace_dir):
+        doc = _sample_trace_doc()
+        doc["trace"][0]["steps"][2]["violations"] = [
+            {"type": "secret_detected", "message": "key found"}
+        ]
+        filepath = str(
+            _write_trace(trace_dir, "v_20260813-103000_a1b2c3d4.json", doc)
+        )
+        write_trace_meta(filepath, doc)
+
+        result = list_traces(str(trace_dir))
+        assert result[0]["violation_count"] == 1
+
+    def test_corrupt_meta_falls_back_to_full_parse(self, trace_dir):
+        doc = _sample_trace_doc()
+        filepath = str(
+            _write_trace(trace_dir, "c_20260813-103000_a1b2c3d4.json", doc)
+        )
+        meta_fp = _meta_path(filepath)
+        with open(meta_fp, "w") as fh:
+            fh.write("not json")
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["agent_name"] == "test-agent"
 
 
 class TestPushedTraceToSummary:
