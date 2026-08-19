@@ -12,16 +12,8 @@ import ai_guardian.config.loaders as _loaders
 from ai_guardian.hook_events.scanners import (
     apply_language_overlays,
     run_bash_exfil_scan,
-    run_canary_detection_scan,
-    run_config_file_scan,
-    run_context_poisoning_scan,
     run_directory_check,
     run_exfil_detection_scan,
-    run_offensive_language_scan,
-    run_pii_scan,
-    run_prompt_injection_scan,
-    run_secret_scan,
-    run_supply_chain_scan,
 )
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.scanners.scanner_registry import ScannerName
@@ -42,103 +34,6 @@ _CONTENT_SCANNER_NAMES = frozenset(
         ScannerName.PII,
     }
 )
-
-
-def _dispatch_scanner(
-    scanner_name,
-    text,
-    *,
-    scanner_config=None,
-    file_path=None,
-    filename="input",
-    tool_name=None,
-    tool_identifier=None,
-    source_type="file_content",
-    hook_event=None,
-    latency_timer=None,
-    secret_context=None,
-    ignore_files=None,
-    ignore_tools=None,
-    allowlist_patterns=None,
-):
-    """Dispatch to the correct ``run_*_scan()`` function for *scanner_name*.
-
-    Scanner signatures are not uniform; this function adapts shared
-    arguments to each scanner's specific API.  Returns ``Optional[ScanResult]``.
-    """
-    if scanner_name == ScannerName.PROMPT_INJECTION:
-        return run_prompt_injection_scan(
-            text,
-            config=scanner_config,
-            file_path=file_path,
-            tool_name=tool_name,
-            source_type=source_type,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.CONTEXT_POISONING:
-        return run_context_poisoning_scan(
-            text,
-            config=scanner_config,
-            file_path=file_path,
-            tool_identifier=tool_identifier,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.SUPPLY_CHAIN:
-        return run_supply_chain_scan(
-            text,
-            file_path or filename or "user_prompt",
-            config=scanner_config,
-            hook_event=hook_event,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.OFFENSIVE_LANGUAGE:
-        return run_offensive_language_scan(
-            text,
-            config=scanner_config,
-            file_path=file_path,
-            tool_identifier=tool_identifier,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.CANARY_DETECTION:
-        return run_canary_detection_scan(
-            text,
-            file_path or filename or "content",
-            config=scanner_config,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.CONFIG_FILE:
-        if not file_path:
-            return None
-        return run_config_file_scan(
-            file_path,
-            text,
-            config=scanner_config,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.SECRET:
-        return run_secret_scan(
-            text,
-            filename,
-            config=scanner_config,
-            context=secret_context,
-            file_path=file_path,
-            tool_name=tool_name,
-            ignore_files=ignore_files,
-            ignore_tools=ignore_tools,
-            allowlist_patterns=allowlist_patterns,
-            latency_timer=latency_timer,
-        )
-    elif scanner_name == ScannerName.PII:
-        return run_pii_scan(
-            text,
-            config=scanner_config,
-            file_path=file_path,
-            tool_identifier=tool_identifier,
-            latency_timer=latency_timer,
-        )
-    else:
-        logger.debug("No dispatcher for scanner %s", scanner_name)
-        return None
 
 
 def scan_content(
@@ -229,10 +124,9 @@ def scan_content(
             else:
                 merged_kwargs = {}
 
-            result = _dispatch_scanner(
-                scanner_name,
+            result = entry.run_fn(
                 scan_text,
-                scanner_config=scanner_config,
+                config=scanner_config,
                 file_path=file_path,
                 filename=filename,
                 tool_name=tool_name,

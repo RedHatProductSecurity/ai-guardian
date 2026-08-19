@@ -630,7 +630,9 @@ class SmokeTestRunner:
         expected = config.get("action", "block")
 
         t0 = time.monotonic()
-        result = run_canary_detection_scan(canary, "smoke-test", config=config or None)
+        result = run_canary_detection_scan(
+            canary, filename="smoke-test", config=config or None
+        )
         elapsed = (time.monotonic() - t0) * 1000
 
         if result and result.detected:
@@ -719,7 +721,9 @@ class SmokeTestRunner:
         expected = config.get("action", "block")
 
         t0 = time.monotonic()
-        result = run_supply_chain_scan(canary, "package.json", config=config or None)
+        result = run_supply_chain_scan(
+            canary, file_path="package.json", config=config or None
+        )
         elapsed = (time.monotonic() - t0) * 1000
 
         if result and result.detected:

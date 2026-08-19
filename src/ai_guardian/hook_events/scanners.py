@@ -147,6 +147,7 @@ def run_prompt_injection_scan(
     tool_name=None,
     source_type="file_content",
     latency_timer=None,
+    **_kwargs,
 ):
     """Run prompt injection scan on content.
 
@@ -209,6 +210,7 @@ def run_context_poisoning_scan(
     tool_name=None,
     tool_identifier=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run context poisoning scan on content.
 
@@ -268,17 +270,20 @@ def run_context_poisoning_scan(
 
 def run_supply_chain_scan(
     content,
-    file_path,
     *,
+    file_path=None,
+    filename=None,
     config=None,
     hook_event=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run supply chain scan on content.
 
     Args:
         content: Text to scan for supply chain threats.
         file_path: File path being scanned.
+        filename: Fallback label when file_path is not available.
         config: Pre-loaded SC config dict, or None to load internally.
         hook_event: Hook event type (skips on PROMPT).
         latency_timer: Optional _CheckTimer for performance tracking.
@@ -303,7 +308,7 @@ def run_supply_chain_scan(
         return None
 
     scanner = SupplyChainScanner(config)
-    scan_path = file_path or "unknown"
+    scan_path = file_path or filename or "unknown"
 
     with (latency_timer or _NULL_TIMER).check("supply_chain"):
         should_block, error_msg, detected = scanner.scan(scan_path, content)
@@ -350,6 +355,7 @@ def run_offensive_language_scan(
     tool_name=None,
     tool_identifier=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run offensive language scan on content.
 
@@ -397,16 +403,19 @@ def run_offensive_language_scan(
 
 def run_canary_detection_scan(
     content,
-    source,
     *,
+    file_path=None,
+    filename=None,
     config=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run canary token detection scan on content.
 
     Args:
         content: Text to scan for canary tokens.
-        source: Label for source (file path, tool name, etc.).
+        file_path: File path associated with the content.
+        filename: Fallback label when file_path is not available.
         config: Pre-loaded canary_detection config dict, or None to load internally.
         latency_timer: Optional _CheckTimer for performance tracking.
 
@@ -429,6 +438,7 @@ def run_canary_detection_scan(
     if not config.get("tokens"):
         return None
 
+    source = file_path or filename or "content"
     scanner = CanaryTokenScanner(config)
 
     with (latency_timer or _NULL_TIMER).check("canary_detection"):
@@ -525,17 +535,18 @@ def run_code_security_scan(
 
 
 def run_config_file_scan(
-    file_path,
     content,
     *,
+    file_path=None,
     config=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run config file exfiltration scan on content.
 
     Args:
-        file_path: File path being scanned.
         content: File content to scan.
+        file_path: File path being scanned.
         config: Pre-loaded config scanner config, or None to load internally.
         latency_timer: Optional _CheckTimer for performance tracking.
 
@@ -738,6 +749,7 @@ def run_pii_scan(
     tool_name=None,
     tool_identifier=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run PII scan on content.
 
@@ -787,16 +799,17 @@ def run_pii_scan(
 
 def run_secret_scan(
     content,
-    filename="temp_file",
     *,
+    filename="temp_file",
     config=None,
-    context=None,
+    secret_context=None,
     file_path=None,
     tool_name=None,
     ignore_files=None,
     ignore_tools=None,
     allowlist_patterns=None,
     latency_timer=None,
+    **_kwargs,
 ):
     """Run secret scan on content using gitleaks/scanner engines.
 
@@ -804,7 +817,7 @@ def run_secret_scan(
         content: Text to scan for secrets.
         filename: Label for the content being scanned.
         config: Pre-loaded secret scanning config dict, or None to load.
-        context: Additional context dict for violation logging.
+        secret_context: Additional context dict for violation logging.
         file_path: File path for ignore checks.
         tool_name: Tool name for ignore checks.
         ignore_files: Ignore file patterns (extracted from config if None).
@@ -838,7 +851,7 @@ def run_secret_scan(
         has_secrets, error_message = _secret_scanning_mod.check_secrets(
             content,
             filename,
-            context=context,
+            context=secret_context,
             file_path=file_path,
             tool_name=tool_name,
             ignore_files=ignore_files,

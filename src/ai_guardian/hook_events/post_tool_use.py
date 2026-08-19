@@ -290,9 +290,9 @@ def handle_post_tool_use(ctx=None, **kwargs):
         )
         post_secret_result = run_secret_scan(
             post_scan_content,
-            f"{tool_identifier}_output",
+            filename=f"{tool_identifier}_output",
             config=secret_config,
-            context=post_secret_ctx,
+            secret_context=post_secret_ctx,
             tool_name=tool_identifier,
             ignore_files=ignore_files,
             ignore_tools=ignore_tools,
