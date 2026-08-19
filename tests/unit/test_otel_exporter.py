@@ -10,6 +10,7 @@ import pytest
 from ai_guardian.scanners.otel_exporter import (
     HookOtelEmitter,
     OtelSpanEmitter,
+    _OtelConfig,
     _derive_end_nano,
     _iso_to_unix_nano,
     _make_attribute,
@@ -17,6 +18,7 @@ from ai_guardian.scanners.otel_exporter import (
     _make_span,
     _make_step_spans,
     _make_turn_span,
+    _post_otel_spans,
     _read_session_violations,
     _resolve_headers,
     _truncate_span_id,
@@ -1119,7 +1121,7 @@ class TestResolveHeaders:
             "agent",
             "model",
         )
-        assert emitter._endpoint == "http://custom:4318"
+        assert emitter._cfg.endpoint == "http://custom:4318"
 
     def test_env_service_name_override(self, monkeypatch):
         monkeypatch.setenv("OTEL_SERVICE_NAME", "my-custom-svc")
@@ -1129,7 +1131,7 @@ class TestResolveHeaders:
             "agent",
             "model",
         )
-        assert emitter._service_name == "my-custom-svc"
+        assert emitter._cfg.service_name == "my-custom-svc"
 
 
 class TestOtelSpanEmitter:
@@ -1591,8 +1593,8 @@ class TestHookOtelEmitter:
         monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://custom:9999")
         monkeypatch.setenv("OTEL_SERVICE_NAME", "custom-svc")
         emitter = HookOtelEmitter({"enabled": True})
-        assert emitter._endpoint == "http://custom:9999"
-        assert emitter._service_name == "custom-svc"
+        assert emitter._cfg.endpoint == "http://custom:9999"
+        assert emitter._cfg.service_name == "custom-svc"
 
     @patch("ai_guardian.scanners.otel_exporter.requests")
     def test_resource_attributes_included(self, mock_requests, tmp_path):
@@ -2130,3 +2132,122 @@ class TestParseTranscriptTokenUsage:
 
         assert parse_transcript_token_usage("") is None
         assert parse_transcript_token_usage(None) is None
+
+
+# ---------------------------------------------------------------------------
+# _OtelConfig / _post_otel_spans regression tests (#2048)
+# ---------------------------------------------------------------------------
+
+
+class TestOtelConfig:
+    def test_disabled_skips_resolution(self):
+        cfg = _OtelConfig({"enabled": False})
+        assert not cfg.enabled
+
+    def test_resolves_from_config(self):
+        cfg = _OtelConfig(
+            {
+                "enabled": True,
+                "endpoint": "http://grafana:4318",
+                "service_name": "my-svc",
+                "headers": {"Authorization": "Bearer tok"},
+                "resource_attributes": {"team": "AT"},
+            }
+        )
+        assert cfg.enabled
+        assert cfg.endpoint == "http://grafana:4318"
+        assert cfg.service_name == "my-svc"
+        assert cfg.headers == {"Authorization": "Bearer tok"}
+        assert cfg.resource_attributes == {"team": "AT"}
+
+    def test_env_overrides(self, monkeypatch):
+        monkeypatch.setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://env:9999")
+        monkeypatch.setenv("OTEL_SERVICE_NAME", "env-svc")
+        cfg = _OtelConfig(
+            {
+                "enabled": True,
+                "endpoint": "http://cfg:4318",
+                "service_name": "cfg-svc",
+            }
+        )
+        assert cfg.endpoint == "http://env:9999"
+        assert cfg.service_name == "env-svc"
+
+    def test_defaults(self):
+        cfg = _OtelConfig({"enabled": True})
+        assert cfg.endpoint == "http://localhost:4318"
+        assert cfg.service_name == "ai-guardian"
+        assert cfg.headers == {}
+        assert cfg.resource_attributes == {}
+
+    def test_shared_between_emitters(self):
+        config = {
+            "enabled": True,
+            "endpoint": "http://shared:4318",
+            "service_name": "shared-svc",
+            "resource_attributes": {"env": "test"},
+        }
+        sdk = OtelSpanEmitter(config, "trace1", "agent", "model")
+        hook = HookOtelEmitter(config)
+        assert sdk._cfg.endpoint == hook._cfg.endpoint
+        assert sdk._cfg.service_name == hook._cfg.service_name
+        assert sdk._cfg.resource_attributes == hook._cfg.resource_attributes
+
+
+class TestPostOtelSpans:
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_posts_payload(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        cfg = _OtelConfig(
+            {
+                "enabled": True,
+                "endpoint": "http://localhost:4318",
+                "service_name": "test-svc",
+                "resource_attributes": {"team": "AT"},
+            }
+        )
+        spans = [
+            _make_span(
+                trace_id="a" * 32,
+                span_id="b" * 16,
+                parent_span_id="",
+                name="test.span",
+                start_nano="1000",
+                end_nano="2000",
+                attributes=[],
+            )
+        ]
+        _post_otel_spans(cfg, spans)
+
+        mock_requests.post.assert_called_once()
+        call_args = mock_requests.post.call_args
+        assert call_args[0][0] == "http://localhost:4318/v1/traces"
+        payload = call_args[1]["json"]
+        assert "resourceSpans" in payload
+        res_attrs = payload["resourceSpans"][0]["resource"]["attributes"]
+        attr_map = {a["key"]: a["value"] for a in res_attrs}
+        assert attr_map["service.name"]["stringValue"] == "test-svc"
+        assert attr_map["team"]["stringValue"] == "AT"
+        assert payload["resourceSpans"][0]["scopeSpans"][0]["spans"] is spans
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_failure_is_silent(self, mock_requests):
+        mock_requests.post.side_effect = ConnectionError("refused")
+        cfg = _OtelConfig({"enabled": True, "endpoint": "http://localhost:4318"})
+        _post_otel_spans(cfg, [])
+
+    @patch("ai_guardian.scanners.otel_exporter.requests")
+    def test_headers_merged(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        cfg = _OtelConfig(
+            {
+                "enabled": True,
+                "endpoint": "http://localhost:4318",
+                "headers": {"X-Custom": "val"},
+            }
+        )
+        _post_otel_spans(cfg, [])
+
+        hdrs = mock_requests.post.call_args[1]["headers"]
+        assert hdrs["Content-Type"] == "application/json"
+        assert hdrs["X-Custom"] == "val"
