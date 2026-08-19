@@ -56,8 +56,8 @@ ai-guardian tray start -b          # system tray (optional — manage daemons vi
 ### 4. Open the Console
 
 ```bash
-ai-guardian console              # web console (recommended, Python 3.10+)
-ai-guardian tui                  # terminal console (all Python versions)
+ai-guardian console --web                # web console (recommended, Python 3.10+)
+ai-guardian console (or ai-guardian tui) # terminal console (all Python versions)
 ```
 
 Manage settings, view violations, and scan projects. See [docs/CONSOLE.md](docs/CONSOLE.md).
