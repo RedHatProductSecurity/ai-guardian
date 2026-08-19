@@ -119,51 +119,54 @@ class TestLogViolationsFlagScan:
 
 
 class TestLogViolationsFlagSetup:
-    """Tests for setup --pre-commit --log-violations."""
+    """Tests for setup --pre-commit --log-violations via helper functions."""
 
-    def test_install_precommit_includes_log_violations_in_message(self, tmp_path):
-        """--log-violations adds flag to displayed hook commands."""
-        from ai_guardian.setup.hooks import install_precommit_hooks
+    def test_build_scan_line_with_log_violations(self):
+        """_build_scan_line includes --log-violations when requested."""
+        from ai_guardian.setup.hooks import _build_scan_line
 
-        git_dir = tmp_path / ".git" / "hooks"
-        git_dir.mkdir(parents=True)
+        line = _build_scan_line(log_violations=True)
+        assert "--log-violations" in line
+        assert "scan --exit-code --log-violations ." in line
 
-        with (
-            patch(
-                "ai_guardian.setup.hooks.subprocess.check_output",
-                return_value=str(tmp_path),
-            ),
-            patch(
-                "ai_guardian.setup.hooks.subprocess.run",
-                side_effect=FileNotFoundError,
-            ),
-        ):
-            success, message = install_precommit_hooks(
-                log_violations=True, dry_run=True
-            )
-            assert "--log-violations" in message
+    def test_build_scan_line_without_log_violations(self):
+        """_build_scan_line omits --log-violations by default."""
+        from ai_guardian.setup.hooks import _build_scan_line
 
-    def test_install_precommit_without_log_violations(self, tmp_path):
-        """Without --log-violations, the flag doesn't appear in output."""
-        from ai_guardian.setup.hooks import install_precommit_hooks
+        line = _build_scan_line(log_violations=False)
+        assert "--log-violations" not in line
 
-        git_dir = tmp_path / ".git" / "hooks"
-        git_dir.mkdir(parents=True)
+    def test_append_ai_guardian_line_with_log_violations(self):
+        """_append_ai_guardian_line includes --log-violations in appended command."""
+        from ai_guardian.setup.hooks import _append_ai_guardian_line
 
-        with (
-            patch(
-                "ai_guardian.setup.hooks.subprocess.check_output",
-                return_value=str(tmp_path),
-            ),
-            patch(
-                "ai_guardian.setup.hooks.subprocess.run",
-                side_effect=FileNotFoundError,
-            ),
-        ):
-            success, message = install_precommit_hooks(
-                log_violations=False, dry_run=True
-            )
-            assert "--log-violations" not in message
+        content = "#!/bin/bash\necho hello\n"
+        result = _append_ai_guardian_line(content, log_violations=True)
+        assert "--log-violations" in result
+
+    def test_append_ai_guardian_line_without_log_violations(self):
+        """_append_ai_guardian_line omits --log-violations by default."""
+        from ai_guardian.setup.hooks import _append_ai_guardian_line
+
+        content = "#!/bin/bash\necho hello\n"
+        result = _append_ai_guardian_line(content, log_violations=False)
+        assert "--log-violations" not in result
+
+    def test_update_ai_guardian_line_with_log_violations(self):
+        """_update_ai_guardian_line includes --log-violations in updated command."""
+        from ai_guardian.setup.hooks import _update_ai_guardian_line
+
+        content = "#!/bin/bash\nai-guardian scan --exit-code .\n"
+        result = _update_ai_guardian_line(content, log_violations=True)
+        assert "--log-violations" in result
+
+    def test_update_ai_guardian_line_without_log_violations(self):
+        """_update_ai_guardian_line omits --log-violations by default."""
+        from ai_guardian.setup.hooks import _update_ai_guardian_line
+
+        content = "#!/bin/bash\nai-guardian scan --exit-code .\n"
+        result = _update_ai_guardian_line(content, log_violations=False)
+        assert "--log-violations" not in result
 
     def test_auto_install_git_hook_with_log_violations(self, tmp_path):
         """Auto-install injects --log-violations into the git hook script."""

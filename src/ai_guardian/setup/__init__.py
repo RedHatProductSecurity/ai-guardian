@@ -243,6 +243,7 @@ def setup_hooks(
             interactive=interactive,
             allow_auto_install=auto_install_hooks,
             log_violations=log_violations,
+            force=force,
         )
         print(message)
         if not success:
