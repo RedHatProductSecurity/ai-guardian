@@ -253,7 +253,7 @@ def _run_bootstrap_scan(cwd: str, config=None) -> list:
             content = file_path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        result = run_config_file_scan(str(file_path), content, config=config)
+        result = run_config_file_scan(content, file_path=str(file_path), config=config)
         if result is not None and result.detected:
             results.append(result)
 

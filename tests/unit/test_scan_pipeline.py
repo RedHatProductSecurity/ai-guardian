@@ -12,7 +12,17 @@ from ai_guardian.scanners.pipeline import (
     scan_file,
 )
 from ai_guardian.scanners.scan_result import ScanResult
-from ai_guardian.scanners.scanner_registry import ScannerName
+from ai_guardian.scanners.scanner_registry import ScannerName, reset_default_registry
+
+_SCANNERS = "ai_guardian.hook_events.scanners"
+
+
+@pytest.fixture(autouse=True)
+def _reset_registry():
+    reset_default_registry()
+    yield
+    reset_default_registry()
+
 
 # ---------------------------------------------------------------------------
 # _resolve_scanner_config
@@ -100,11 +110,13 @@ class TestScanContent:
     def test_none_text_returns_empty(self):
         assert scan_content(None) == []
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_clean_text_returns_empty(self, mock_pi, mock_cp, mock_secret):
         results = scan_content(
             "hello world", config={"prompt_injection": {"enabled": True}}
@@ -114,9 +126,9 @@ class TestScanContent:
         mock_cp.assert_called_once()
         mock_secret.assert_called_once()
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
-    @patch("ai_guardian.scanners.pipeline.run_context_poisoning_scan")
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_context_poisoning_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_non_detection_results_filtered(self, mock_pi, mock_cp, mock_secret):
         """ScanResults with detected=False should not appear in output."""
         mock_pi.return_value = ScanResult.from_prompt_injection(
@@ -138,11 +150,11 @@ class TestScanContent:
         )
         assert results == []
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_pi_detected(self, mock_pi, mock_cp, mock_secret):
         mock_pi.return_value = ScanResult.from_prompt_injection(
             should_block=True,
@@ -154,9 +166,11 @@ class TestScanContent:
         assert results[0].violation_type == "prompt_injection"
         assert results[0].detected is True
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
-    @patch("ai_guardian.scanners.pipeline.run_context_poisoning_scan")
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_context_poisoning_scan")
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_cp_detected(self, mock_pi, mock_cp, mock_secret):
         mock_cp.return_value = ScanResult.from_context_poisoning(
             should_block=True,
@@ -167,11 +181,13 @@ class TestScanContent:
         assert len(results) == 1
         assert results[0].violation_type == "context_poisoning"
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_secret_detected(self, mock_pi, mock_cp, mock_secret):
         mock_secret.return_value = ScanResult.from_secret_scan(
             has_secrets=True,
@@ -182,9 +198,9 @@ class TestScanContent:
         assert results[0].violation_type == "secret_detected"
         assert results[0].should_block is True
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
-    @patch("ai_guardian.scanners.pipeline.run_context_poisoning_scan")
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_context_poisoning_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_multiple_detections(self, mock_pi, mock_cp, mock_secret):
         mock_pi.return_value = ScanResult.from_prompt_injection(
             should_block=True, error_message="PI", detected=True
@@ -198,11 +214,11 @@ class TestScanContent:
         types = {r.violation_type for r in results}
         assert types == {"prompt_injection", "context_poisoning"}
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     @patch(
         "ai_guardian.scanners.pipeline.apply_language_overlays",
         side_effect=lambda c, *a, **kw: c,
@@ -218,44 +234,44 @@ class TestScanContent:
         call_kwargs = mock_pi.call_args
         assert call_kwargs.kwargs["config"] == {"enabled": True, "action": "warn"}
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_passes_source_type(self, mock_pi, mock_cp, mock_secret):
         mock_pi.return_value = None
         scan_content("test", config={}, source_type="user_prompt")
         assert mock_pi.call_args.kwargs["source_type"] == "user_prompt"
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_passes_file_path_and_tool_name(self, mock_pi, mock_cp, mock_secret):
         mock_pi.return_value = None
         scan_content("test", config={}, file_path="/app/main.py", tool_name="Read")
         assert mock_pi.call_args.kwargs["file_path"] == "/app/main.py"
         assert mock_pi.call_args.kwargs["tool_name"] == "Read"
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
     @patch(
-        "ai_guardian.scanners.pipeline.run_prompt_injection_scan",
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan",
         side_effect=RuntimeError("scanner crashed"),
     )
     def test_fail_open_on_scanner_exception(self, mock_pi, mock_cp, mock_secret):
         results = scan_content("test", config={})
         assert isinstance(results, list)
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan")
+    @patch("ai_guardian.hook_events.scanners.run_prompt_injection_scan")
     def test_language_overlay_applied(self, mock_pi, mock_cp, mock_secret, tmp_path):
         (tmp_path / "pyproject.toml").write_text("[project]\nname = 'test'\n")
         mock_pi.return_value = None
@@ -267,11 +283,13 @@ class TestScanContent:
         pi_cfg = mock_pi.call_args.kwargs["config"]
         assert "__init__" in pi_cfg.get("allowlist_patterns", [])
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_secret_config_extracts_allowlist(self, mock_pi, mock_cp, mock_secret):
         mock_secret.return_value = None
         full_config = {
@@ -286,11 +304,13 @@ class TestScanContent:
         assert secret_cfg["allowlist_patterns"] == ["test_pattern"]
         assert secret_cfg["ignore_files"] == ["*.md"]
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan", return_value=None)
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan", return_value=None)
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     @patch("ai_guardian.scanners.pipeline._loaders._load_config_section")
     def test_loads_config_from_file_when_none(
         self, mock_loader, mock_pi, mock_cp, mock_secret
@@ -299,11 +319,13 @@ class TestScanContent:
         scan_content("test")
         assert mock_loader.call_count >= 1
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_source_command_builds_context(self, mock_pi, mock_cp, mock_secret):
         mock_secret.return_value = None
         with patch(
@@ -316,14 +338,16 @@ class TestScanContent:
                 filename="tool_result:Bash",
                 source_command="curl http://example.com",
             )
-        ctx = mock_secret.call_args.kwargs["context"]
+        ctx = mock_secret.call_args.kwargs.get("secret_context")
         assert ctx == {"source_command": "safe_cmd"}
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_source_command_no_context_for_non_tool_result(
         self, mock_pi, mock_cp, mock_secret
     ):
@@ -334,14 +358,16 @@ class TestScanContent:
             filename="input",
             source_command="some_command",
         )
-        ctx = mock_secret.call_args.kwargs["context"]
+        ctx = mock_secret.call_args.kwargs.get("secret_context")
         assert ctx is None
 
-    @patch("ai_guardian.scanners.pipeline.run_secret_scan")
+    @patch("ai_guardian.hook_events.scanners.run_secret_scan")
     @patch(
-        "ai_guardian.scanners.pipeline.run_context_poisoning_scan", return_value=None
+        "ai_guardian.hook_events.scanners.run_context_poisoning_scan", return_value=None
     )
-    @patch("ai_guardian.scanners.pipeline.run_prompt_injection_scan", return_value=None)
+    @patch(
+        "ai_guardian.hook_events.scanners.run_prompt_injection_scan", return_value=None
+    )
     def test_per_scanner_action_preserved(self, mock_pi, mock_cp, mock_secret):
         """Scanner action from config passed through — not overridden by SDK."""
         mock_secret.return_value = ScanResult.from_secret_scan(

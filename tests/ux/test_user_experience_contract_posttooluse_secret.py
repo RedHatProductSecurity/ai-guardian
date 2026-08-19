@@ -637,9 +637,9 @@ class PostToolUseEnvVarDetectionTests(TestCase):
 
         result = _run_secret_scan(
             content,
-            "Bash_output",
+            filename="Bash_output",
             config={"enabled": True, "engines": ["toml-patterns"]},
-            context={"hook_event": "PostToolUse"},
+            secret_context={"hook_event": "PostToolUse"},
             tool_name="Bash",
         )
         assert result is not None, "run_secret_scan must return a result"
@@ -658,9 +658,9 @@ class PostToolUseEnvVarDetectionTests(TestCase):
 
         result = _run_secret_scan(
             content,
-            "Bash_output",
+            filename="Bash_output",
             config={"enabled": True, "engines": ["toml-patterns"]},
-            context={"hook_event": "PostToolUse"},
+            secret_context={"hook_event": "PostToolUse"},
             tool_name="Bash",
         )
         assert result is not None, "run_secret_scan must return a result"
