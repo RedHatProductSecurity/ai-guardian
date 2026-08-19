@@ -724,9 +724,7 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
                         else str(inp)
                     )
                     if len(inp_text) > 200 or inp_text.count("\n") > 5:
-                        render_view_button(
-                            f"Tool Call: {name}", inp_text, dialog_host
-                        )
+                        render_view_button(f"Tool Call: {name}", inp_text, dialog_host)
                     _render_text_block(inp_text)
                 elif step_type == "tool_result":
                     name = step.get("name", "")

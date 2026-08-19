@@ -76,24 +76,23 @@ def show_content_viewer(title, raw_text, dialog_host=None):
         ctx = nullcontext()
 
     with ctx:
-        with ui.dialog().props("persistent") as dialog, ui.card().classes(
-            "w-full"
-        ).style(
-            "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
-            "flex-direction: column"
+        with (
+            ui.dialog().props("persistent") as dialog,
+            ui.card()
+            .classes("w-full")
+            .style(
+                "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
+                "flex-direction: column"
+            ),
         ):
             with ui.row().classes("items-center justify-between w-full"):
                 with ui.row().classes("items-center gap-2"):
                     ui.label(title).classes("text-lg font-bold")
                     ui.badge(content_type).classes("text-xs")
                     ui.label(f"{line_count} lines").classes("text-xs text-grey-6")
-                ui.button(icon="close", on_click=dialog.close).props(
-                    "flat dense round"
-                )
+                ui.button(icon="close", on_click=dialog.close).props("flat dense round")
 
-            with ui.scroll_area().classes("w-full flex-grow").style(
-                "max-height: 75vh"
-            ):
+            with ui.scroll_area().classes("w-full flex-grow").style("max-height: 75vh"):
                 if language:
                     ui.code(formatted, language=language).classes("w-full")
                 else:
