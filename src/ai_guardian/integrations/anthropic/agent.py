@@ -1347,6 +1347,8 @@ class GuardedAgent:
             "usage": usage_totals,
             "compaction_count": compaction_count,
             "trace": trace,
+            "started_at": started_at.isoformat(),
+            "ended_at": datetime.now(timezone.utc).isoformat(),
         }
 
         if self._trace_dir:
