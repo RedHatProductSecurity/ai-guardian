@@ -232,6 +232,7 @@ def create_trace_detail_page(service, daemon_name: str):
             )
 
         turns_container = ui.column().classes("w-full gap-1")
+        dialog_host = ui.element("div")
         scroll_anchor = ui.element("div")
 
         async def load_detail():
@@ -288,7 +289,12 @@ def create_trace_detail_page(service, daemon_name: str):
             with turns_container:
                 for turn_obj in trace:
                     _render_turn_row(
-                        turn_obj, per_turn, violations_map, expanded_turns, daemon_name
+                        turn_obj,
+                        per_turn,
+                        violations_map,
+                        expanded_turns,
+                        daemon_name,
+                        dialog_host=dialog_host,
                     )
 
             await ui.run_javascript(
@@ -467,7 +473,12 @@ def _collect_turn_violations(steps):
 
 
 def _render_turn_row(
-    turn_obj, per_turn, violations_map, expanded_turns=None, daemon_name=""
+    turn_obj,
+    per_turn,
+    violations_map,
+    expanded_turns=None,
+    daemon_name="",
+    dialog_host=None,
 ):
     """Render a single turn as a row with summary and expandable details."""
     turn_num = turn_obj.get("turn", 0)
@@ -697,7 +708,9 @@ def _render_step(step, daemon_name="", turn_num=0):
                     )
                     if text:
                         if len(text) > 200 or text.count("\n") > 5:
-                            render_view_button(f"Response [{signal}]", text)
+                            render_view_button(
+                                f"Response [{signal}]", text, dialog_host
+                            )
                         _render_text_block(text)
                 elif step_type == "tool_call":
                     name = step.get("name", "")
@@ -711,7 +724,9 @@ def _render_step(step, daemon_name="", turn_num=0):
                         else str(inp)
                     )
                     if len(inp_text) > 200 or inp_text.count("\n") > 5:
-                        render_view_button(f"Tool Call: {name}", inp_text)
+                        render_view_button(
+                            f"Tool Call: {name}", inp_text, dialog_host
+                        )
                     _render_text_block(inp_text)
                 elif step_type == "tool_result":
                     name = step.get("name", "")
@@ -722,7 +737,9 @@ def _render_step(step, daemon_name="", turn_num=0):
                     if output:
                         output_text = str(output)
                         if len(output_text) > 200 or output_text.count("\n") > 5:
-                            render_view_button(f"Tool Result: {name}", output_text)
+                            render_view_button(
+                                f"Tool Result: {name}", output_text, dialog_host
+                            )
                         _render_text_block(output_text)
                 elif step_type == "scan":
                     scanned = step.get("scanned", "")

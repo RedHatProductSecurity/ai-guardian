@@ -53,52 +53,69 @@ def format_content(text, content_type):
     return text, None
 
 
-def show_content_viewer(title, raw_text):
-    """Open a dialog modal with formatted, syntax-highlighted content."""
+def show_content_viewer(title, raw_text, dialog_host=None):
+    """Open a dialog modal with formatted, syntax-highlighted content.
+
+    Args:
+        dialog_host: stable container outside any auto-refresh zone.
+            When provided, the dialog is created inside it so that
+            container.clear() cycles do not destroy an open dialog.
+    """
     from nicegui import ui
 
     content_type = detect_content_type(raw_text)
     formatted, language = format_content(raw_text, content_type)
     line_count = formatted.count("\n") + 1
 
-    dialog = ui.dialog().props("persistent")
-    card = ui.card().classes("w-full")
-    card.style(
-        "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
-        "flex-direction: column"
-    )
-    with dialog, card:
-        with ui.row().classes("items-center justify-between w-full"):
-            with ui.row().classes("items-center gap-2"):
-                ui.label(title).classes("text-lg font-bold")
-                ui.badge(content_type).classes("text-xs")
-                ui.label(f"{line_count} lines").classes("text-xs text-grey-6")
-            ui.button(icon="close", on_click=dialog.close).props("flat dense round")
+    if dialog_host is not None:
+        dialog_host.clear()
+        ctx = dialog_host
+    else:
+        from contextlib import nullcontext
 
-        content_area = (
-            ui.scroll_area().classes("w-full flex-grow").style("max-height: 75vh")
-        )
-        with content_area:
-            if language:
-                ui.code(formatted, language=language).classes("w-full")
-            else:
-                ui.html(
-                    f'<pre style="white-space: pre-wrap; word-break: break-word; '
-                    f'font-size: 0.8rem; line-height: 1.4">'
-                    f"{_escape_html(formatted)}</pre>"
-                ).classes("w-full")
+        ctx = nullcontext()
+
+    with ctx:
+        with ui.dialog().props("persistent") as dialog, ui.card().classes(
+            "w-full"
+        ).style(
+            "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
+            "flex-direction: column"
+        ):
+            with ui.row().classes("items-center justify-between w-full"):
+                with ui.row().classes("items-center gap-2"):
+                    ui.label(title).classes("text-lg font-bold")
+                    ui.badge(content_type).classes("text-xs")
+                    ui.label(f"{line_count} lines").classes("text-xs text-grey-6")
+                ui.button(icon="close", on_click=dialog.close).props(
+                    "flat dense round"
+                )
+
+            with ui.scroll_area().classes("w-full flex-grow").style(
+                "max-height: 75vh"
+            ):
+                if language:
+                    ui.code(formatted, language=language).classes("w-full")
+                else:
+                    ui.html(
+                        f'<pre style="white-space: pre-wrap; word-break: break-word; '
+                        f'font-size: 0.8rem; line-height: 1.4">'
+                        f"{_escape_html(formatted)}</pre>"
+                    ).classes("w-full")
 
     dialog.open()
 
 
-def render_view_button(title, raw_text):
+def render_view_button(title, raw_text, dialog_host=None):
     """Render a small 'View Formatted' button that opens the content viewer."""
     from nicegui import ui
 
     ui.button(
         "View Formatted",
         icon="code",
-        on_click=lambda t=title, r=raw_text: show_content_viewer(t, r),
+        on_click=lambda t=title, r=raw_text, h=dialog_host: show_content_viewer(
+            t, r, h
+        ),
     ).props("dense flat size=sm color=grey-7").tooltip(
         "Open in formatted viewer with syntax highlighting"
     )
