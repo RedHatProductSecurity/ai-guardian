@@ -1855,26 +1855,91 @@ def uninstall_precommit_hooks(
     return True, "\n".join(message)
 
 
+def _is_sample_hook(content: str) -> bool:
+    """Return True if content looks like a git sample hook (not a real hook)."""
+    return (
+        content.startswith("#!/bin/sh")
+        and "sample" in content.lower()
+        and len(content) < 500
+    )
+
+
+def _has_ai_guardian_line(content: str) -> bool:
+    """Return True if content already contains an ai-guardian scan command."""
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#"):
+            continue
+        if "ai-guardian" in stripped and "scan" in stripped:
+            return True
+    return False
+
+
+_AG_SCAN_LINE = "ai-guardian scan --exit-code ."
+
+
+def _build_scan_line() -> str:
+    """Build the ai-guardian scan command line with resolved binary path."""
+    from ai_guardian.setup.utils import _resolve_binary_path
+
+    abs_path = _resolve_binary_path()
+    if abs_path != "ai-guardian":
+        return f"{abs_path} scan --exit-code ."
+    return _AG_SCAN_LINE
+
+
+def _update_ai_guardian_line(content: str) -> str:
+    """Replace existing ai-guardian scan line with current resolved path."""
+    scan_line = _build_scan_line()
+    lines = content.splitlines(keepends=True)
+    updated = []
+    for line in lines:
+        stripped = line.strip()
+        if (
+            not stripped.startswith("#")
+            and "ai-guardian" in stripped
+            and "scan" in stripped
+        ):
+            indent = line[: len(line) - len(line.lstrip())]
+            updated.append(f"{indent}{scan_line}\n")
+        else:
+            updated.append(line)
+    return "".join(updated)
+
+
+def _append_ai_guardian_line(content: str) -> str:
+    """Append ai-guardian scan command to existing hook content."""
+    scan_line = _build_scan_line()
+    if not content.endswith("\n"):
+        content += "\n"
+    content += f"\n# AI Guardian security scan\n{scan_line}\n"
+    return content
+
+
 def install_precommit_hooks(
-    dry_run: bool = False, interactive: bool = True, allow_auto_install: bool = False
+    dry_run: bool = False,
+    interactive: bool = True,
+    allow_auto_install: bool = False,
+    force: bool = False,
 ) -> Tuple[bool, str]:
     """
-    Show pre-commit hook templates and integration instructions.
+    Install pre-commit hook for git workflow.
 
-    By default, does NOT auto-install to avoid conflicts with existing company hooks.
-    Instead, provides templates and instructions for manual integration.
-
-    Auto-install can be enabled with allow_auto_install=True (e.g., from config file).
+    Behavior matrix:
+      - No existing hook         → install fresh
+      - Existing, has ai-guardian → update ai-guardian line in place
+      - Existing, no ai-guardian  → append ai-guardian scan line
+      - --force with existing     → backup + replace entire hook
 
     Args:
-        dry_run: If True, show what would be done without checking files
-        interactive: If True, show interactive prompts for warnings
-        allow_auto_install: If True, allow automatic installation (default: False for safety)
+        dry_run: If True, show what would be done without applying
+        interactive: If True, show interactive prompts (unused, kept for compat)
+        allow_auto_install: Deprecated, kept for backward compat (ignored)
+        force: If True, replace existing hook entirely (backup saved)
 
     Returns:
         Tuple of (success, message)
     """
-    # Find git root
     try:
         git_root = subprocess.check_output(
             ["git", "rev-parse", "--show-toplevel"],
@@ -1890,180 +1955,88 @@ def install_precommit_hooks(
     if not hooks_dir.exists():
         return False, f"Error: Git hooks directory not found: {hooks_dir}"
 
-    # Get template paths
     import ai_guardian
 
-    # Templates are in the repo root, not in the package
     package_dir = Path(ai_guardian.__file__).parent
-    # Go up to find templates (handles both dev and installed scenarios)
     for parent_level in ["..", "../..", "../../.."]:
         potential_template_dir = (package_dir / parent_level / "templates").resolve()
         if potential_template_dir.exists():
             template_dir = potential_template_dir
             break
     else:
-        # Fallback: check if templates are next to the package
         template_dir = package_dir.parent / "templates"
 
     git_template = template_dir / "pre-commit.sh"
     yaml_template = template_dir / ".pre-commit-config.yaml"
 
     if not git_template.exists() or not yaml_template.exists():
-        return False, f"Error: Templates not found in {package_dir / 'templates'}"
+        return False, f"Error: Templates not found in {template_dir}"
 
-    # Check for existing hooks (ignore .sample files from git init)
-    existing_git_hook = hooks_dir / "pre-commit"
-    existing_yaml_config = git_root_path / ".pre-commit-config.yaml"
+    hook_path = hooks_dir / "pre-commit"
 
-    warnings = []
-    has_existing_hooks = False
-    if existing_git_hook.exists() and not existing_git_hook.is_symlink():
-        # Check if it's a real hook (not just the sample)
+    # Read existing hook content (if any real hook exists)
+    existing_content = None
+    if hook_path.exists() and not hook_path.is_symlink():
         try:
-            with open(existing_git_hook, "r") as f:
+            with open(hook_path, "r", encoding="utf-8") as f:
                 content = f.read()
-                # Git's sample hooks start with a shebang and contain "sample"
-                if content.strip() and not (
-                    content.startswith("#!/bin/sh")
-                    and "sample" in content.lower()
-                    and len(content) < 500
-                ):
-                    warnings.append(f"⚠️  Existing git hook found: {existing_git_hook}")
-                    has_existing_hooks = True
+            if content.strip() and not _is_sample_hook(content):
+                existing_content = content
         except Exception:
-            # If we can't read it, assume it's real
-            warnings.append(f"⚠️  Existing git hook found: {existing_git_hook}")
-            has_existing_hooks = True
-    if existing_yaml_config.exists():
-        warnings.append(f"⚠️  Existing pre-commit config found: {existing_yaml_config}")
-        has_existing_hooks = True
+            existing_content = ""
 
-    # If auto-install is enabled and no existing hooks, perform installation
-    if allow_auto_install and not has_existing_hooks and not dry_run:
+    # --- No existing hook: install fresh ---
+    if existing_content is None:
+        if dry_run:
+            return True, f"[DRY RUN] Would install pre-commit hook at {hook_path}"
         return _auto_install_hook(git_root_path, hooks_dir, git_template, yaml_template)
 
-    # Check if pre-commit framework is available
-    try:
-        subprocess.run(["pre-commit", "--version"], capture_output=True, check=True)
-        has_precommit_framework = True
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        has_precommit_framework = False
-
-    # Build informational message
-    message = [
-        "📋 AI Guardian Pre-commit Hook Templates",
-        "",
-        "Templates are available at:",
-        f"  • Git hook: {git_template}",
-        f"  • pre-commit framework: {yaml_template}",
-        "",
-    ]
-
-    if allow_auto_install and has_existing_hooks:
-        message.extend(
-            [
-                "ℹ️  Auto-install flag provided, but existing hooks detected.",
-                "   Showing manual integration instructions to avoid conflicts.",
-                "",
-            ]
-        )
-
-    if warnings:
-        message.extend(warnings)
-        message.extend(
-            [
-                "",
-                "❌ Auto-install disabled - existing hooks detected!",
-                "",
-                "To avoid conflicts with company/existing hooks, AI Guardian",
-                "does NOT auto-install. Instead, manually integrate:",
-                "",
-            ]
-        )
-    else:
-        message.extend(
-            [
-                "No existing hooks detected.",
-                "",
-                "Choose your integration method:",
-                "",
-            ]
-        )
-
-    # Option 1: Git hook (always available)
-    message.extend(
-        [
-            "Option 1: Git Hook (Direct Integration)",
-            "──────────────────────────────────────",
-            f"  cp {git_template} {existing_git_hook}",
-            f"  chmod +x {existing_git_hook}",
-            "",
-            "  Or if you have existing hooks, add this to your hook:",
-            "  ┌─────────────────────────────────────────┐",
-            "  │ ai-guardian scan --exit-code .          │",
-            "  └─────────────────────────────────────────┘",
-            "",
-        ]
-    )
-
-    # Option 2: pre-commit framework (if available)
-    if has_precommit_framework:
-        message.extend(
-            [
-                "Option 2: pre-commit Framework (Recommended)",
-                "─────────────────────────────────────────────",
-            ]
-        )
-        if existing_yaml_config.exists():
-            message.extend(
-                [
-                    f"  Add to existing {existing_yaml_config}:",
-                    "  ┌─────────────────────────────────────────┐",
-                    "  │ repos:                                  │",
-                    "  │   - repo: local                         │",
-                    "  │     hooks:                              │",
-                    "  │       - id: ai-guardian                 │",
-                    "  │         name: AI Guardian Security Scan │",
-                    "  │         entry: ai-guardian scan --exit-code │",
-                    "  │         language: system                │",
-                    "  │         pass_filenames: false           │",
-                    "  └─────────────────────────────────────────┘",
-                ]
+    # --- Force: backup + replace ---
+    if force:
+        if dry_run:
+            return True, (
+                f"[DRY RUN] Would replace pre-commit hook at {hook_path}\n"
+                f"  Backup would be saved as {hook_path}.bak"
             )
-        else:
-            message.extend(
-                [
-                    f"  cp {yaml_template} {existing_yaml_config}",
-                    "  pre-commit install",
-                ]
-            )
-        message.extend(["", "  Then test: pre-commit run --all-files", ""])
-    else:
-        message.extend(
-            [
-                "Option 2: pre-commit Framework",
-                "──────────────────────────────",
-                "  Not installed. Install with:",
-                "    pip install pre-commit",
-                "",
-                f"  Then: cp {yaml_template} {existing_yaml_config}",
-                "        pre-commit install",
-                "",
-            ]
+        import shutil
+
+        backup_path = Path(f"{hook_path}.bak")
+        shutil.copy2(hook_path, backup_path)
+        shutil.copy(git_template, hook_path)
+        os.chmod(hook_path, 0o755)
+        return True, (
+            f"Pre-commit hook replaced at {hook_path}\n"
+            f"  Backup saved: {backup_path}\n"
+            f"\n"
+            f"The hook will run automatically on 'git commit'.\n"
+            f"To skip: git commit --no-verify"
         )
 
-    # Footer
-    message.extend(
-        [
-            "Testing:",
-            "  git commit      # Hook runs automatically",
-            "  git commit --no-verify  # Skip hook (not recommended)",
-            "",
-            "Need help? See templates for full examples.",
-        ]
-    )
+    # --- Existing hook already has ai-guardian: update in place ---
+    if _has_ai_guardian_line(existing_content):
+        updated = _update_ai_guardian_line(existing_content)
+        if updated == existing_content:
+            return True, f"Pre-commit hook at {hook_path} already up to date."
 
-    return True, "\n".join(message)
+        if dry_run:
+            return True, (f"[DRY RUN] Would update ai-guardian command in {hook_path}")
+        with open(hook_path, "w", encoding="utf-8") as f:
+            f.write(updated)
+        return True, f"Updated ai-guardian command in {hook_path}"
+
+    # --- Existing hook without ai-guardian: append ---
+    updated = _append_ai_guardian_line(existing_content)
+    if dry_run:
+        return True, (f"[DRY RUN] Would append ai-guardian scan to {hook_path}")
+    with open(hook_path, "w", encoding="utf-8") as f:
+        f.write(updated)
+    os.chmod(hook_path, 0o755)
+    return True, (
+        f"Appended ai-guardian scan to existing hook at {hook_path}\n"
+        f"\n"
+        f"The hook will run automatically on 'git commit'.\n"
+        f"To skip: git commit --no-verify"
+    )
 
 
 # --- IDE extension/plugin template constants ---
