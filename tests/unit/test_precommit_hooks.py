@@ -60,14 +60,22 @@ class TestHasAiGuardianLine:
 
 
 class TestAppendAiGuardianLine:
-    def test_appends_with_comment(self):
+    @mock.patch(
+        "ai_guardian.setup.hooks._build_scan_line",
+        return_value="ai-guardian scan --exit-code .",
+    )
+    def test_appends_with_comment(self, _mock):
         content = "#!/bin/bash\nnpm test\n"
         result = _append_ai_guardian_line(content)
         assert "# AI Guardian security scan" in result
         assert "ai-guardian scan --exit-code ." in result
         assert result.startswith("#!/bin/bash\nnpm test\n")
 
-    def test_adds_newline_if_missing(self):
+    @mock.patch(
+        "ai_guardian.setup.hooks._build_scan_line",
+        return_value="ai-guardian scan --exit-code .",
+    )
+    def test_adds_newline_if_missing(self, _mock):
         content = "#!/bin/bash\nnpm test"
         result = _append_ai_guardian_line(content)
         assert "npm test\n\n# AI Guardian" in result
@@ -190,7 +198,7 @@ class TestInstallPrecommitAppend:
 
         content = hook_path.read_text()
         assert "npm test" in content
-        assert "ai-guardian scan" in content
+        assert "scan --exit-code" in content
 
     def test_append_dry_run(self, mock_git_root):
         hook_path = mock_git_root / ".git" / "hooks" / "pre-commit"
