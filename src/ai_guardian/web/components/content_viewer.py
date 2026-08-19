@@ -61,7 +61,7 @@ def show_content_viewer(title, raw_text):
     formatted, language = format_content(raw_text, content_type)
     line_count = formatted.count("\n") + 1
 
-    dialog = ui.dialog()
+    dialog = ui.dialog().props("persistent")
     card = ui.card().classes("w-full")
     card.style(
         "max-width: 80vw; max-height: 90vh; overflow: hidden; display: flex; "
