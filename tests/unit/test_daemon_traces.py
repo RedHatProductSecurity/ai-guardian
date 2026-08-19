@@ -368,9 +368,7 @@ class TestMetaSidecar:
 
     def test_write_and_read_meta(self, trace_dir):
         doc = _sample_trace_doc()
-        filepath = str(
-            _write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc)
-        )
+        filepath = str(_write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc))
         write_trace_meta(filepath, doc)
 
         meta_fp = _meta_path(filepath)
@@ -386,9 +384,7 @@ class TestMetaSidecar:
 
     def test_list_traces_prefers_meta(self, trace_dir):
         doc = _sample_trace_doc()
-        filepath = str(
-            _write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc)
-        )
+        filepath = str(_write_trace(trace_dir, "m_20260813-103000_a1b2c3d4.json", doc))
         write_trace_meta(filepath, doc)
 
         result = list_traces(str(trace_dir))
@@ -407,9 +403,7 @@ class TestMetaSidecar:
 
     def test_meta_not_listed_as_trace(self, trace_dir):
         doc = _sample_trace_doc()
-        filepath = str(
-            _write_trace(trace_dir, "x_20260813-103000_a1b2c3d4.json", doc)
-        )
+        filepath = str(_write_trace(trace_dir, "x_20260813-103000_a1b2c3d4.json", doc))
         write_trace_meta(filepath, doc)
 
         result = list_traces(str(trace_dir))
@@ -422,9 +416,7 @@ class TestMetaSidecar:
         doc["trace"][0]["steps"][2]["violations"] = [
             {"type": "secret_detected", "message": "key found"}
         ]
-        filepath = str(
-            _write_trace(trace_dir, "v_20260813-103000_a1b2c3d4.json", doc)
-        )
+        filepath = str(_write_trace(trace_dir, "v_20260813-103000_a1b2c3d4.json", doc))
         write_trace_meta(filepath, doc)
 
         result = list_traces(str(trace_dir))
@@ -432,9 +424,7 @@ class TestMetaSidecar:
 
     def test_corrupt_meta_falls_back_to_full_parse(self, trace_dir):
         doc = _sample_trace_doc()
-        filepath = str(
-            _write_trace(trace_dir, "c_20260813-103000_a1b2c3d4.json", doc)
-        )
+        filepath = str(_write_trace(trace_dir, "c_20260813-103000_a1b2c3d4.json", doc))
         meta_fp = _meta_path(filepath)
         with open(meta_fp, "w") as fh:
             fh.write("not json")
