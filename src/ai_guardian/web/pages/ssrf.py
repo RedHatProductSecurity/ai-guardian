@@ -229,8 +229,8 @@ def create_ssrf_page(service, daemon_name: str):
                             ui.label(category).classes("font-bold text-sm mt-2")
                             for item in items:
                                 with ui.row().classes("items-center gap-1 ml-4"):
-                                    ui.icon("shield").classes("text-blue-4").style(
-                                        "font-size: 14px"
+                                    ui.image("/images/tray-icon-16.png").classes(
+                                        "w-4 h-4"
                                     )
                                     ui.label(item).classes("text-xs")
 

@@ -220,8 +220,8 @@ def create_config_scanner_page(service, daemon_name: str):
                             ui.label(category).classes("font-bold text-sm mt-2")
                             for f in files:
                                 with ui.row().classes("items-center gap-1 ml-4"):
-                                    ui.icon("shield").classes("text-blue-4").style(
-                                        "font-size: 14px"
+                                    ui.image("/images/tray-icon-16.png").classes(
+                                        "w-4 h-4"
                                     )
                                     ui.label(f).classes("text-xs")
 
