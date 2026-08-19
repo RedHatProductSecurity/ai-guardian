@@ -137,9 +137,7 @@ class TestClaudeSessionTitlePriority:
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             f.write(json.dumps({"type": "ai-title", "aiTitle": "AI Generated"}) + "\n")
             f.write(
-                json.dumps(
-                    {"type": "custom-title", "customTitle": "my-named-session"}
-                )
+                json.dumps({"type": "custom-title", "customTitle": "my-named-session"})
                 + "\n"
             )
             path = Path(f.name)
@@ -168,8 +166,7 @@ class TestClaudeSessionTitlePriority:
     def test_custom_title_wins_over_agent_name(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             f.write(
-                json.dumps({"type": "agent-name", "agentName": "agent-session"})
-                + "\n"
+                json.dumps({"type": "agent-name", "agentName": "agent-session"}) + "\n"
             )
             f.write(
                 json.dumps({"type": "custom-title", "customTitle": "user-session"})
@@ -197,9 +194,7 @@ class TestClaudeSessionTitlePriority:
     def test_custom_title_in_read_detail(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
             f.write(
-                json.dumps(
-                    {"type": "custom-title", "customTitle": "my-named-session"}
-                )
+                json.dumps({"type": "custom-title", "customTitle": "my-named-session"})
                 + "\n"
             )
             path = f.name
@@ -215,9 +210,7 @@ class TestClaudeSessionTitlePriority:
 
     def test_agent_name_in_read_detail(self):
         with tempfile.NamedTemporaryFile(mode="w", suffix=".jsonl", delete=False) as f:
-            f.write(
-                json.dumps({"type": "agent-name", "agentName": "my-agent"}) + "\n"
-            )
+            f.write(json.dumps({"type": "agent-name", "agentName": "my-agent"}) + "\n")
             path = f.name
 
         try:
