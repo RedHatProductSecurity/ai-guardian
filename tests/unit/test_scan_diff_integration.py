@@ -187,6 +187,27 @@ class TestScanCommandDiffMode:
 
         assert rc == 0
 
+    @mock.patch("ai_guardian.scanners.file_scanner.sys")
+    @mock.patch("ai_guardian.tools.diff_provider.get_staged_diff")
+    @mock.patch("ai_guardian.scanners.file_scanner.FileScanner.scan_files")
+    def test_diff_staged_skips_stdin_in_git_hooks(
+        self, mock_scan, mock_staged, mock_sys
+    ):
+        """Issue #2069: --diff --staged must not fall into stdin mode when
+        stdin is not a tty (as happens inside git pre-commit hooks)."""
+        mock_sys.stdin.isatty.return_value = False
+        mock_sys.stderr = __import__("sys").stderr
+        mock_sys.stdout = __import__("sys").stdout
+        mock_staged.return_value = SAMPLE_DIFF
+        mock_scan.return_value = []
+
+        args = _make_args(diff=True, staged=True, path=None)
+        rc = scan_command(args)
+
+        assert rc == 0
+        mock_staged.assert_called_once()
+        mock_sys.stdin.read.assert_not_called()
+
     @mock.patch("ai_guardian.tools.diff_provider.get_pr_diff")
     def test_diff_provider_error(self, mock_pr, capsys):
         from ai_guardian.tools.diff_provider import DiffProviderError

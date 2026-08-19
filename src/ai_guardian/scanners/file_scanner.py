@@ -1291,10 +1291,19 @@ def scan_command(args) -> int:
     # Handle --text flag or stdin pipe
     text_input = getattr(args, "text", None)
     text_mode = False
+    has_diff_flag = (
+        getattr(args, "diff", False)
+        or getattr(args, "staged", False)
+        or getattr(args, "pr", None) is not None
+        or getattr(args, "mr", None) is not None
+        or getattr(args, "stdin_diff", False)
+    )
     if text_input is not None:
         findings = scanner.scan_text(text_input, source_label="inline")
         text_mode = True
-    elif args.path == "--" or (args.path is None and not sys.stdin.isatty()):
+    elif not has_diff_flag and (
+        args.path == "--" or (args.path is None and not sys.stdin.isatty())
+    ):
         stdin_text = sys.stdin.read()
         if not stdin_text.strip():
             print("No input received from stdin", file=sys.stderr)
