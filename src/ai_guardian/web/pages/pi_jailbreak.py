@@ -189,9 +189,7 @@ def create_pi_jailbreak_page(service, daemon_name: str):
                         description,
                     ) in BUILTIN_JAILBREAK_CATEGORIES.items():
                         with ui.row().classes("items-center gap-2 ml-4"):
-                            ui.image("/images/tray-icon-16.png").classes(
-                                "w-4 h-4"
-                            )
+                            ui.image("/images/tray-icon-16.png").classes("w-4 h-4")
                             ui.label(category).classes("font-bold text-sm")
                             ui.label(f"— {description}").classes("text-xs text-grey-6")
 
