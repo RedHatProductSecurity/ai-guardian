@@ -60,7 +60,9 @@ class TestGetDefaultIde:
 class TestClaudeDecodeProjectName:
     def test_decode_path(self):
         assert (
-            ClaudeSessionAdapter.decode_project_name("-Users-dvernier-development-myproject")
+            ClaudeSessionAdapter.decode_project_name(
+                "-Users-dvernier-development-myproject"
+            )
             == "/Users/dvernier/development/myproject"
         )
 

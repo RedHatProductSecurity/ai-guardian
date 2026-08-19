@@ -109,9 +109,7 @@ class ClaudeSessionAdapter(SessionAdapter):
                     msg_type = d.get("type", "")
 
                     if msg_type == "ai-title":
-                        steps.append(
-                            {"type": "title", "content": d.get("aiTitle", "")}
-                        )
+                        steps.append({"type": "title", "content": d.get("aiTitle", "")})
 
                     elif msg_type == "user":
                         content = d.get("message", {}).get("content", "")
@@ -452,18 +450,14 @@ class CursorSessionAdapter(SessionAdapter):
                 value_str,
             ) in cur.fetchall():
                 try:
-                    header = (
-                        json.loads(value_str) if isinstance(value_str, str) else {}
-                    )
+                    header = json.loads(value_str) if isinstance(value_str, str) else {}
                 except (json.JSONDecodeError, ValueError):
                     header = {}
 
                 name = header.get("name", "")
                 workspace_info = header.get("workspaceIdentifier", {})
                 ws_uri = workspace_info.get("uri", {})
-                ws_path = (
-                    ws_uri.get("fsPath", "") if isinstance(ws_uri, dict) else ""
-                )
+                ws_path = ws_uri.get("fsPath", "") if isinstance(ws_uri, dict) else ""
 
                 if project_path and ws_path and project_path not in ws_path:
                     continue
@@ -545,9 +539,7 @@ class CursorSessionAdapter(SessionAdapter):
 
                 if btype == 1:
                     if text:
-                        steps.append(
-                            {"type": "user", "content": text, "timestamp": ts}
-                        )
+                        steps.append({"type": "user", "content": text, "timestamp": ts})
                 elif btype == 2:
                     thinking = d.get("thinking", {})
                     if isinstance(thinking, dict) and thinking.get("content"):
@@ -864,9 +856,7 @@ class CodexSessionAdapter(SessionAdapter):
                     if rtype == "session_meta":
                         cwd = payload.get("cwd", "")
                         if cwd:
-                            steps.append(
-                                {"type": "system", "content": f"cwd: {cwd}"}
-                            )
+                            steps.append({"type": "system", "content": f"cwd: {cwd}"})
                     elif rtype == "response_item":
                         role = payload.get("role", "")
                         content = payload.get("content", [])
@@ -910,9 +900,7 @@ class CodexSessionAdapter(SessionAdapter):
                             elif ptype == "reasoning":
                                 text = part.get("text", "")
                                 if text:
-                                    steps.append(
-                                        {"type": "thinking", "content": text}
-                                    )
+                                    steps.append({"type": "thinking", "content": text})
         except OSError:
             pass
 
