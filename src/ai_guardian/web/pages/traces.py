@@ -566,7 +566,7 @@ def _render_turn_row(
 
         with exp:
             for step in steps:
-                _render_step(step, daemon_name, turn_num)
+                _render_step(step, daemon_name, turn_num, dialog_host)
 
 
 def _get_turn_label(steps, turn_type):
@@ -658,7 +658,7 @@ def _render_step_violation_badge(
     badge.on("click.stop", _scroll_to_step)
 
 
-def _render_step(step, daemon_name="", turn_num=0):
+def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
     step_type = step.get("type", "")
     step_num = step.get("step", 0)
     icon_map = {
