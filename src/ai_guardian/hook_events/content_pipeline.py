@@ -50,21 +50,26 @@ _SCANNER_TO_VIOLATION_TYPE = None
 
 
 def _ensure_violation_maps():
-    """Build violation type <-> scanner name mappings from registry (lazy)."""
+    """Build violation type <-> scanner name mappings from registry (lazy).
+
+    Both globals are built in locals first, then published atomically
+    (reverse map before forward map) so concurrent readers never see a
+    half-initialized state.
+    """
     global _VIOLATION_TYPE_TO_SCANNER, _SCANNER_TO_VIOLATION_TYPE
     if _VIOLATION_TYPE_TO_SCANNER is not None:
         return
     from ai_guardian.scanners.scanner_registry import get_default_registry
 
     registry = get_default_registry()
-    _VIOLATION_TYPE_TO_SCANNER = {}
+    fwd: dict = {}
     for entry in registry.all_entries():
         vtype = entry.violation_type
         if hasattr(vtype, "value"):
-            _VIOLATION_TYPE_TO_SCANNER[vtype.value] = entry.name
-    _SCANNER_TO_VIOLATION_TYPE = {
-        v: ViolationType(k) for k, v in _VIOLATION_TYPE_TO_SCANNER.items()
-    }
+            fwd[vtype.value] = entry.name
+    rev = {v: ViolationType(k) for k, v in fwd.items()}
+    _SCANNER_TO_VIOLATION_TYPE = rev
+    _VIOLATION_TYPE_TO_SCANNER = fwd
 
 
 def run_content_pipeline(

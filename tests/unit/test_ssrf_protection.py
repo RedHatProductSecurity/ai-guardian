@@ -1529,6 +1529,35 @@ class TestIPEncodingBypass:
         )
         assert should_block
 
+    # --- 1-part octal, 2-part, and 3-part notation ---
+
+    def test_normalize_one_part_octal_loopback(self):
+        assert SSRFProtector._normalize_ip("017700000001") == "127.0.0.1"
+
+    def test_normalize_two_part_metadata(self):
+        # 169.16689662 = 169.(254*65536 + 169*256 + 254) = 169.254.169.254
+        assert SSRFProtector._normalize_ip("169.16689662") == "169.254.169.254"
+
+    def test_normalize_three_part(self):
+        # 10.1.512 = 10.1.(2*256 + 0) = 10.1.2.0
+        assert SSRFProtector._normalize_ip("10.1.512") == "10.1.2.0"
+
+    def test_block_one_part_octal_loopback_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://017700000001/admin"}
+        )
+        assert should_block
+
+    def test_block_two_part_metadata_url(self):
+        should_block, msg = self.protector.check(
+            "Bash", {"command": "curl http://169.16689662/latest/meta-data/"}
+        )
+        assert should_block
+
+    def test_normalize_octal_with_invalid_digit_falls_back_to_decimal(self):
+        # 0169 has digit 9 invalid in octal — should fall back to decimal 169
+        assert SSRFProtector._normalize_ip("0169.254.169.254") == "169.254.169.254"
+
     # --- Safe scenarios: no false positives ---
 
     def test_safe_public_domain(self):

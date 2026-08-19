@@ -652,6 +652,18 @@ class DaemonState:
         except OSError:
             return False
 
+    @staticmethod
+    def _invalidate_detector_cache():
+        """Clear cached prompt injection detectors so new config takes effect."""
+        try:
+            from ai_guardian.scanners.prompt_injection import (
+                invalidate_detector_cache,
+            )
+
+            invalidate_detector_cache()
+        except ImportError:
+            logger.debug("prompt_injection module not available, skipping cache clear")
+
     def _reload_config(self):
         """Reload config from disk (must be called with lock held).
 
@@ -659,6 +671,11 @@ class DaemonState:
             bool: True if config was successfully reloaded
         """
         try:
+            # Invalidate caches regardless of whether config exists — removal
+            # of the config file should also clear stale detector state.
+            self._compiled_patterns.clear()
+            self._invalidate_detector_cache()
+
             if not self._config_path.exists():
                 self._config = None
                 self._config_mtime = 0.0
@@ -671,19 +688,6 @@ class DaemonState:
             self._config_mtime = stat.st_mtime
             self._config_checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
             self._last_checksum_check = time.monotonic()
-
-            # Invalidate compiled pattern cache on config change
-            self._compiled_patterns.clear()
-
-            # Invalidate cached detector instances so new config takes effect
-            try:
-                from ai_guardian.scanners.prompt_injection import (
-                    invalidate_detector_cache,
-                )
-
-                invalidate_detector_cache()
-            except ImportError:
-                pass
 
             self._last_config_reload_at = time.time()
 

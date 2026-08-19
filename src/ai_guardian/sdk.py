@@ -639,6 +639,11 @@ def monitor(
             DeprecationWarning,
             stacklevel=2,
         )
+    unknown = set(kwargs) - {"action", "scan"}
+    if unknown:
+        raise TypeError(
+            f"monitor() got unexpected keyword argument(s): {', '.join(sorted(unknown))}"
+        )
     if mode not in ("direct", "rest"):
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 

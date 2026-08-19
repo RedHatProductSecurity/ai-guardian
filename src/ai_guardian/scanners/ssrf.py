@@ -491,10 +491,10 @@ class SSRFProtector:
             except (ValueError, struct.error):
                 pass
 
-        # Full decimal: 2130706433
+        # Full decimal or 1-part octal: 2130706433 or 017700000001
         if host.isdigit():
             try:
-                val = int(host)
+                val = SSRFProtector._parse_octet(host)
                 if 0 <= val <= 0xFFFFFFFF:
                     return socket.inet_ntoa(struct.pack("!I", val))
             except (ValueError, struct.error):

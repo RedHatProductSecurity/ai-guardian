@@ -1162,3 +1162,34 @@ class TestDaemonServerIdleTimeout:
 
         server.stop()
         thread.join(timeout=3)
+
+
+class TestReloadConfigDetectorCache:
+    """Regression tests for detector cache invalidation on config reload."""
+
+    def test_reload_invalidates_cache_when_config_exists(self, short_state_dir):
+        state = DaemonState(idle_timeout=0)
+        config_path = state._config_path
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text('{"prompt_injection": {"enabled": true}}')
+        with mock.patch(
+            "ai_guardian.daemon.state.DaemonState._invalidate_detector_cache"
+        ) as mock_inv:
+            state._reload_config()
+            mock_inv.assert_called_once()
+
+    def test_reload_invalidates_cache_when_config_removed(self, short_state_dir):
+        state = DaemonState(idle_timeout=0)
+        with mock.patch(
+            "ai_guardian.daemon.state.DaemonState._invalidate_detector_cache"
+        ) as mock_inv:
+            result = state._reload_config()
+            assert result is False
+            mock_inv.assert_called_once()
+
+    def test_invalidate_detector_cache_logs_on_import_error(self):
+        with mock.patch(
+            "ai_guardian.scanners.prompt_injection.invalidate_detector_cache",
+            side_effect=ImportError("test"),
+        ):
+            DaemonState._invalidate_detector_cache()
