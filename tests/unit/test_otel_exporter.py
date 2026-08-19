@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from ai_guardian.scanners.otel_exporter import (
+from ai_guardian.observability.otel_exporter import (
     HookOtelEmitter,
     OtelSpanEmitter,
     _OtelConfig,
@@ -1026,7 +1026,7 @@ class TestHandleTraceCommand:
         result = handle_trace_command(args, MagicMock())
         assert result == 1
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_export_to_endpoint(self, mock_requests):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -1140,7 +1140,7 @@ class TestOtelSpanEmitter:
         emitter.on_turn_complete({"turn": 1, "steps": []})
         emitter.on_run_complete(MINIMAL_TRACE_DOC)
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_on_turn_complete_posts(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         emitter = OtelSpanEmitter(
@@ -1163,7 +1163,7 @@ class TestOtelSpanEmitter:
         payload = call_kwargs[1]["json"]
         assert "resourceSpans" in payload
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_on_run_complete_posts_root(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         emitter = OtelSpanEmitter(
@@ -1186,7 +1186,7 @@ class TestOtelSpanEmitter:
         attr_map = {a["key"]: a["value"] for a in spans[0]["attributes"]}
         assert attr_map["ai_guardian.span_type"]["stringValue"] == "agent_run"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_failure_does_not_raise(self, mock_requests):
         mock_requests.post.side_effect = Exception("connection refused")
         emitter = OtelSpanEmitter(
@@ -1197,7 +1197,7 @@ class TestOtelSpanEmitter:
         )
         emitter.on_run_complete(MINIMAL_TRACE_DOC)
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_resource_attributes_in_flush(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         emitter = OtelSpanEmitter(
@@ -1222,7 +1222,7 @@ class TestOtelSpanEmitter:
         assert attr_map["deployment.environment"]["stringValue"] == "dev"
         assert "service.name" in attr_map
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_metadata_fn_on_turn_complete(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
 
@@ -1248,7 +1248,7 @@ class TestOtelSpanEmitter:
         assert attr_map["case.id"]["stringValue"] == "AAP-85065"
         assert attr_map["attempt"]["intValue"] == "1"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_metadata_fn_on_run_complete(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
 
@@ -1270,7 +1270,7 @@ class TestOtelSpanEmitter:
         assert attr_map["case.id"]["stringValue"] == "AAP-99999"
         assert attr_map["final"]["boolValue"] is True
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_metadata_fn_receives_correct_context(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         captured_contexts = []
@@ -1309,7 +1309,7 @@ class TestOtelSpanEmitter:
         assert ctx["stop_reason"] == "end_turn"
         assert ctx["usage"]["input_tokens"] == 1000
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_metadata_fn_error_does_not_raise(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
 
@@ -1326,7 +1326,7 @@ class TestOtelSpanEmitter:
         emitter.on_turn_complete(_make_full_trace()["trace"][1])
         emitter.on_run_complete(MINIMAL_TRACE_DOC)
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_emitter_tracks_messages_count_growth(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         emitter = OtelSpanEmitter(
@@ -1351,7 +1351,7 @@ class TestOtelSpanEmitter:
         t2_map = {a["key"]: a["value"] for a in turn2_span["attributes"]}
         assert t2_map["gen_ai.turn.messages_count_growth"]["intValue"] == "2"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_metadata_fn_none_is_noop(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         emitter = OtelSpanEmitter(
@@ -1498,7 +1498,7 @@ class TestHookOtelEmitter:
         assert len(emitter._trace_id) == 32
         assert len(emitter._root_span_id) == 16
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_reads_violations_jsonl(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1537,7 +1537,7 @@ class TestHookOtelEmitter:
         assert spans[1]["name"] == "ai_guardian.violation"
         assert spans[2]["name"] == "ai_guardian.block"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_empty_session(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1554,7 +1554,7 @@ class TestHookOtelEmitter:
         assert len(spans) == 1
         assert spans[0]["name"] == "ai_guardian.session"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_filters_by_session_id(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1578,7 +1578,7 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.block_count"]["intValue"] == "1"
         assert attr_map["ai_guardian.violation_count"]["intValue"] == "1"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_failure_is_silent(self, mock_requests, tmp_path):
         mock_requests.post.side_effect = ConnectionError("refused")
         log = tmp_path / "violations.jsonl"
@@ -1596,7 +1596,7 @@ class TestHookOtelEmitter:
         assert emitter._cfg.endpoint == "http://custom:9999"
         assert emitter._cfg.service_name == "custom-svc"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_resource_attributes_included(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1634,7 +1634,7 @@ class TestHookOtelEmitter:
         emitter.record_session_start(adapter_name="Claude Code")
         assert not hasattr(emitter, "_adapter_name") or emitter._adapter_name is None
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_uses_stored_adapter_name(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1651,7 +1651,7 @@ class TestHookOtelEmitter:
         attr_map = {a["key"]: a["value"] for a in root["attributes"]}
         assert attr_map["ai_guardian.adapter"]["stringValue"] == "Gemini CLI"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_explicit_adapter_overrides_stored(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1670,7 +1670,7 @@ class TestHookOtelEmitter:
         attr_map = {a["key"]: a["value"] for a in root["attributes"]}
         assert attr_map["ai_guardian.adapter"]["stringValue"] == "explicit"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_clean_session_produces_root_span(self, mock_requests, tmp_path):
         """Clean session (no violations) should still flush a root span."""
         mock_requests.post.return_value = MagicMock()
@@ -1694,7 +1694,7 @@ class TestHookOtelEmitter:
         assert attr_map["ai_guardian.violation_count"]["intValue"] == "0"
         assert attr_map["ai_guardian.block_count"]["intValue"] == "0"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_includes_project_name(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1713,7 +1713,7 @@ class TestHookOtelEmitter:
         attr_map = {a["key"]: a["value"] for a in root["attributes"]}
         assert attr_map["ai_guardian.project.name"]["stringValue"] == "ai-guardian"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_no_project_name_when_not_set(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1729,7 +1729,7 @@ class TestHookOtelEmitter:
         attr_keys = {a["key"] for a in root["attributes"]}
         assert "ai_guardian.project.name" not in attr_keys
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_direct_mode(self, mock_requests, tmp_path):
         """Direct mode: no daemon, emitter reads violations from disk."""
         mock_requests.post.return_value = MagicMock()
@@ -1841,7 +1841,7 @@ class TestDaemonStateOtel:
 
         assert state.get_otel_emitter("session-1") is None
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     @patch("ai_guardian.config.loaders._load_config_file")
     def test_flush_otel_emitter(self, mock_load, mock_requests, tmp_path):
         mock_load.return_value = (
@@ -1871,7 +1871,7 @@ class TestDaemonStateOtel:
         mock_requests.post.assert_called_once()
         assert "session-1" not in state._otel_emitters
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     @patch("ai_guardian.config.loaders._load_config_file")
     def test_session_sequence_increments_on_reopen(self, mock_load, mock_requests):
         mock_load.return_value = (
@@ -1894,7 +1894,7 @@ class TestDaemonStateOtel:
         assert em2._session_sequence == 2
         assert em2 is not em1
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_includes_session_sequence(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1918,7 +1918,7 @@ class TestDaemonStateOtel:
 
 
 class TestHookOtelEmitterTokenUsage:
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_includes_token_usage(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1945,7 +1945,7 @@ class TestHookOtelEmitterTokenUsage:
         assert attr_map["gen_ai.usage.cache_read_input_tokens"]["intValue"] == "800"
         assert attr_map["gen_ai.usage.cache_creation_input_tokens"]["intValue"] == "200"
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_without_token_usage_has_no_gen_ai_attrs(
         self, mock_requests, tmp_path
     ):
@@ -1963,7 +1963,7 @@ class TestHookOtelEmitterTokenUsage:
         attr_keys = {a["key"] for a in root["attributes"]}
         assert "gen_ai.usage.input_tokens" not in attr_keys
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_flush_with_partial_token_usage(self, mock_requests, tmp_path):
         mock_requests.post.return_value = MagicMock()
         log = tmp_path / "violations.jsonl"
@@ -1984,7 +1984,7 @@ class TestHookOtelEmitterTokenUsage:
         assert attr_map["gen_ai.usage.output_tokens"]["intValue"] == "50"
         assert "gen_ai.usage.cache_read_input_tokens" not in attr_map
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     @patch("ai_guardian.config.loaders._load_config_file")
     def test_daemon_state_passes_token_usage(self, mock_load, mock_requests, tmp_path):
         mock_load.return_value = (
@@ -2195,7 +2195,7 @@ class TestOtelConfig:
 
 
 class TestPostOtelSpans:
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_posts_payload(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         cfg = _OtelConfig(
@@ -2230,13 +2230,13 @@ class TestPostOtelSpans:
         assert attr_map["team"]["stringValue"] == "AT"
         assert payload["resourceSpans"][0]["scopeSpans"][0]["spans"] is spans
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_failure_is_silent(self, mock_requests):
         mock_requests.post.side_effect = ConnectionError("refused")
         cfg = _OtelConfig({"enabled": True, "endpoint": "http://localhost:4318"})
         _post_otel_spans(cfg, [])
 
-    @patch("ai_guardian.scanners.otel_exporter.requests")
+    @patch("ai_guardian.observability.otel_exporter.requests")
     def test_headers_merged(self, mock_requests):
         mock_requests.post.return_value = MagicMock()
         cfg = _OtelConfig(

@@ -322,7 +322,7 @@ class DaemonState:
                 return cached
         try:
             from ai_guardian.config.loaders import _load_otel_config
-            from ai_guardian.scanners.otel_exporter import HookOtelEmitter
+            from ai_guardian.observability.otel_exporter import HookOtelEmitter
 
             config = _load_otel_config()
             with self._lock:

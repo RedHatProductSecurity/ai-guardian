@@ -2005,7 +2005,7 @@ def main():
         # Handle trace command (Issue #1958)
         if args.command == "trace":
             try:
-                from ai_guardian.scanners.otel_exporter import handle_trace_command
+                from ai_guardian.observability.otel_exporter import handle_trace_command
 
                 return handle_trace_command(args, trace_parser)
             except ImportError as e:

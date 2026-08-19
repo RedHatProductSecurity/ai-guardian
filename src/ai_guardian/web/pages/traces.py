@@ -155,7 +155,7 @@ def create_trace_detail_page(service, daemon_name: str):
                 ui.notify("No trace loaded", type="warning")
                 return
             try:
-                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+                from ai_guardian.observability.otel_exporter import trace_to_otlp_json
 
                 otlp = trace_to_otlp_json(result)
                 tmp = tempfile.NamedTemporaryFile(
@@ -179,7 +179,7 @@ def create_trace_detail_page(service, daemon_name: str):
             try:
                 import requests as req
 
-                from ai_guardian.scanners.otel_exporter import trace_to_otlp_json
+                from ai_guardian.observability.otel_exporter import trace_to_otlp_json
 
                 otlp = trace_to_otlp_json(result)
                 endpoint = endpoint_input.value.strip()
