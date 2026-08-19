@@ -54,11 +54,11 @@ def _iso_to_unix_nano(iso_str: str) -> str:
     if not iso_str:
         return "0"
     try:
-        if iso_str.endswith("Z"):
-            iso_str = iso_str[:-1] + "+00:00"
-        dt = datetime.fromisoformat(iso_str)
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+        from ai_guardian.config.utils import parse_iso8601
+
+        dt = parse_iso8601(iso_str)
+        if dt is None:
+            return "0"
         epoch_s = dt.timestamp()
         return str(int(epoch_s * 1_000_000_000))
     except (ValueError, TypeError):

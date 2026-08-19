@@ -337,7 +337,7 @@ class _DirectSession(GuardSession):
                 req.add_header("Authorization", f"Bearer {auth_token}")
             urlopen(req, timeout=2)
         except Exception:
-            pass
+            logger.debug("Failed to register project with daemon", exc_info=True)
 
     def _log_scan_results(self, scan_results):
         """Log detected violations via unified log_violation (fixes #2019)."""
@@ -596,6 +596,7 @@ def monitor(
     config: Optional[Dict[str, Any]] = None,
     cwd: Optional[str] = None,
     target_dir: Optional[str] = None,
+    **kwargs,
 ):
     """Create a guarded session for security checks.
 
@@ -621,6 +622,28 @@ def monitor(
         GuardSession with check_content(), check_file(), check_command(),
         sanitize() methods.
     """
+    if "action" in kwargs:
+        import warnings as _w
+
+        _w.warn(
+            "monitor(action=...) is deprecated and ignored. "
+            "Per-scanner actions in config control blocking.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    if "scan" in kwargs:
+        import warnings as _w
+
+        _w.warn(
+            "monitor(scan=...) is deprecated and ignored.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+    unknown = set(kwargs) - {"action", "scan"}
+    if unknown:
+        raise TypeError(
+            f"monitor() got unexpected keyword argument(s): {', '.join(sorted(unknown))}"
+        )
     if mode not in ("direct", "rest"):
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 

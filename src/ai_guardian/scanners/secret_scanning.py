@@ -60,7 +60,6 @@ try:
 except ImportError:
     HAS_AST_SCANNER = False
 
-from ai_guardian.config.utils import get_project_dir
 from ai_guardian.config.loaders import (
     _load_secret_redaction_config,
     _load_pattern_server_config,
@@ -176,14 +175,7 @@ def _log_secret_detection_violation(
 
     log_violation(
         result,
-        ScanContext(
-            ide_type=ctx.get("ide_type", "unknown"),
-            hook_event=ctx.get("hook_event", "unknown"),
-            project_path=get_project_dir(),
-            session_id=hctx.get("session_id"),
-            tool_use_id=hctx.get("tool_use_id"),
-            tool_name=hctx.get("tool_name"),
-        ),
+        ScanContext.from_hook_dicts(context, hook_context),
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,
@@ -273,14 +265,7 @@ def _log_finding_violation(
 
     log_violation(
         result,
-        ScanContext(
-            ide_type=ctx.get("ide_type", "unknown"),
-            hook_event=ctx.get("hook_event", "unknown"),
-            project_path=get_project_dir(),
-            session_id=hctx.get("session_id"),
-            tool_use_id=hctx.get("tool_use_id"),
-            tool_name=hctx.get("tool_name"),
-        ),
+        ScanContext.from_hook_dicts(context, hook_context),
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,

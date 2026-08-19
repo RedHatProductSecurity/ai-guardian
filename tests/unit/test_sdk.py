@@ -128,6 +128,34 @@ class TestMonitor:
         with monitor() as s:
             assert isinstance(s, _DirectSession)
 
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_deprecated_action_warns(self, mock_config):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with monitor(action="block") as s:
+                assert isinstance(s, _DirectSession)
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "action" in str(w[0].message)
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    def test_deprecated_scan_warns(self, mock_config):
+        import warnings
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with monitor(scan=True) as s:
+                assert isinstance(s, _DirectSession)
+            assert len(w) == 1
+            assert "scan" in str(w[0].message)
+
+    def test_unknown_kwargs_raises_typeerror(self):
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            with monitor(typo_param=True):
+                pass
+
 
 # ---------------------------------------------------------------------------
 # GuardSession._merge_results

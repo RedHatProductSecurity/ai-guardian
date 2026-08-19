@@ -32,6 +32,26 @@ class ScanContext:
     tool_use_id: Optional[str] = None
     tool_name: Optional[str] = None
 
+    @classmethod
+    def from_hook_dicts(
+        cls,
+        context: Optional[Dict[str, Any]] = None,
+        hook_context: Optional[Dict[str, Any]] = None,
+    ) -> "ScanContext":
+        """Build a ScanContext from the standard context/hook_context dict pair."""
+        from ai_guardian.config.utils import get_project_dir
+
+        ctx = context or {}
+        hctx = hook_context or {}
+        return cls(
+            ide_type=ctx.get("ide_type", "unknown"),
+            hook_event=ctx.get("hook_event", "unknown"),
+            project_path=get_project_dir(),
+            session_id=hctx.get("session_id"),
+            tool_use_id=hctx.get("tool_use_id"),
+            tool_name=hctx.get("tool_name"),
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         ctx: Dict[str, Any] = {
             "ide_type": self.ide_type,

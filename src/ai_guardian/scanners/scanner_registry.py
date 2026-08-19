@@ -107,6 +107,10 @@ class ScannerRegistry:
     def __contains__(self, name: ScannerName) -> bool:
         return name in self._entries
 
+    def all_entries(self) -> List[ScannerEntry]:
+        """Return all registered scanner entries."""
+        return list(self._entries.values())
+
 
 _default_registry: Optional[ScannerRegistry] = None
 

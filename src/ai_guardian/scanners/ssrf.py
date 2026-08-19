@@ -455,6 +455,18 @@ class SSRFProtector:
             return None, None, None, None, None
 
     @staticmethod
+    def _parse_octet(p: str) -> int:
+        """Parse a single IP octet that may be hex, octal, or decimal."""
+        if p.lower().startswith("0x"):
+            return int(p, 16)
+        if p.startswith("0") and len(p) > 1 and p.isdigit():
+            try:
+                return int(p, 8)
+            except ValueError:
+                return int(p)
+        return int(p)
+
+    @staticmethod
     def _normalize_ip(host: str) -> str:
         """Convert hex/octal/decimal-encoded IPs to dotted-decimal for CIDR matching.
 
@@ -464,6 +476,8 @@ class SSRFProtector:
         - Octal octets: 0177.0.0.1 -> 127.0.0.1
         - Hex octets: 0x7f.0x00.0x00.0x01 -> 127.0.0.1
         - Mixed: 0x7f.0.0.1 -> 127.0.0.1
+        - 2-part: 169.16689918 -> 169.254.169.254 (a.X where X is 24-bit)
+        - 3-part: 10.1.512 -> 10.1.2.0 (a.b.X where X is 16-bit)
         """
         if not host:
             return host
@@ -477,27 +491,45 @@ class SSRFProtector:
             except (ValueError, struct.error):
                 pass
 
-        # Full decimal: 2130706433
+        # Full decimal or 1-part octal: 2130706433 or 017700000001
         if host.isdigit():
             try:
-                val = int(host)
+                val = SSRFProtector._parse_octet(host)
                 if 0 <= val <= 0xFFFFFFFF:
                     return socket.inet_ntoa(struct.pack("!I", val))
             except (ValueError, struct.error):
                 pass
 
-        # Octal/hex/mixed octets: 0177.0.0.1 or 0x7f.0x00.0x00.0x01
         parts = host.split(".")
-        if len(parts) == 4:
+        num_parts = len(parts)
+
+        # 2-part: a.X (X is 24-bit value for last 3 octets)
+        if num_parts == 2:
             try:
-                octets = []
-                for p in parts:
-                    if p.lower().startswith("0x"):
-                        octets.append(int(p, 16))
-                    elif p.startswith("0") and len(p) > 1 and p.isdigit():
-                        octets.append(int(p, 8))
-                    else:
-                        octets.append(int(p))
+                a = SSRFProtector._parse_octet(parts[0])
+                b = SSRFProtector._parse_octet(parts[1])
+                if 0 <= a <= 255 and 0 <= b <= 0xFFFFFF:
+                    val = (a << 24) | b
+                    return socket.inet_ntoa(struct.pack("!I", val))
+            except (ValueError, struct.error):
+                pass
+
+        # 3-part: a.b.X (X is 16-bit value for last 2 octets)
+        if num_parts == 3:
+            try:
+                a = SSRFProtector._parse_octet(parts[0])
+                b = SSRFProtector._parse_octet(parts[1])
+                c = SSRFProtector._parse_octet(parts[2])
+                if 0 <= a <= 255 and 0 <= b <= 255 and 0 <= c <= 0xFFFF:
+                    val = (a << 24) | (b << 16) | c
+                    return socket.inet_ntoa(struct.pack("!I", val))
+            except (ValueError, struct.error):
+                pass
+
+        # 4-part: octal/hex/mixed octets
+        if num_parts == 4:
+            try:
+                octets = [SSRFProtector._parse_octet(p) for p in parts]
                 if all(0 <= o <= 255 for o in octets):
                     normalized = ".".join(str(o) for o in octets)
                     if normalized != host:
