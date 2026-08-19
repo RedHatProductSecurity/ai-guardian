@@ -34,6 +34,15 @@ from ai_guardian.sdk import SecurityViolation
 # ---------------------------------------------------------------------------
 
 
+def _list_trace_files(path):
+    """List only trace .json files, excluding .meta.json sidecars."""
+    return [
+        f
+        for f in os.listdir(str(path))
+        if f.endswith(".json") and not f.endswith(".meta.json")
+    ]
+
+
 def _make_mock_anthropic_client():
     """Build a mock object that looks like anthropic.Anthropic()."""
     mock_create = MagicMock(name="messages.create")
@@ -6256,7 +6265,7 @@ class TestGuardedAgentPartialTrace:
             agent.run("Hi")
 
         trace_dir = str(tmp_path / "traces")
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 1
         assert files[0].startswith("crash-agent_")
 
@@ -6344,7 +6353,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("Hi")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 1
         assert files[0].startswith("triage-verifier_")
         assert files[0].endswith(".json")
@@ -6367,7 +6376,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("test prompt")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
@@ -6400,7 +6409,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("test prompt")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
@@ -6432,7 +6441,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("test")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
@@ -6534,7 +6543,7 @@ class TestGuardedAgentTraceDir:
         agent.run("Hi")
 
         assert os.path.isdir(nested)
-        assert len(os.listdir(nested)) == 1
+        assert len(_list_trace_files(nested)) == 1
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_default_trace_dir_is_xdg(self, mock_monitor, tmp_path):
@@ -6557,9 +6566,9 @@ class TestGuardedAgentTraceDir:
         agent.run("Hi")
 
         assert xdg_trace_dir.is_dir()
-        files = list(xdg_trace_dir.iterdir())
+        files = _list_trace_files(xdg_trace_dir)
         assert len(files) == 1
-        assert files[0].name.startswith("test_")
+        assert files[0].startswith("test_")
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_write_error_does_not_fail_agent(self, mock_monitor):
@@ -6596,7 +6605,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("Hi")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert files[0].startswith("agent_")
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -6648,7 +6657,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("user prompt with secret")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
@@ -6680,7 +6689,7 @@ class TestGuardedAgentTraceDir:
         client.messages.create.return_value = response
         agent.run("Hi")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
 
@@ -6710,7 +6719,7 @@ class TestGuardedAgentTraceDir:
 
         expected_dir = tmp_path / "logs" / "agents"
         assert expected_dir.is_dir()
-        assert len(list(expected_dir.iterdir())) == 1
+        assert len(_list_trace_files(expected_dir)) == 1
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_concurrent_traces_no_collision(self, mock_monitor, tmp_path):
@@ -6733,7 +6742,7 @@ class TestGuardedAgentTraceDir:
         for agent in agents:
             agent.run("Hi")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 5, f"Expected 5 unique files, got {len(files)}: {files}"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -6760,7 +6769,7 @@ class TestGuardedAgentTraceDir:
 
         expected_dir = tmp_path / "my-traces"
         assert expected_dir.is_dir()
-        assert len(list(expected_dir.iterdir())) == 1
+        assert len(_list_trace_files(expected_dir)) == 1
 
 
 class TestTracePathFn:
@@ -6810,39 +6819,39 @@ class TestTracePathFn:
         traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123/")
         subdir = traces / "case-123"
         assert subdir.is_dir()
-        files = list(subdir.iterdir())
+        files = _list_trace_files(subdir)
         assert len(files) == 1
-        assert files[0].name.startswith("test-agent_")
+        assert files[0].startswith("test-agent_")
 
     def test_prefix_when_no_trailing_slash(self, tmp_path):
         """Return 'case-123_' becomes filename prefix."""
         traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123_")
-        files = list(traces.iterdir())
+        files = _list_trace_files(traces)
         assert len(files) == 1
-        assert files[0].name.startswith("case-123_test-agent_")
+        assert files[0].startswith("case-123_test-agent_")
 
     def test_mixed_subdir_and_prefix(self, tmp_path):
         """Return 'case-123/obs-456_' creates subdir with prefix."""
         traces = self._run_with_trace(tmp_path, lambda name, ctx: "case-123/obs-456_")
         subdir = traces / "case-123"
         assert subdir.is_dir()
-        files = list(subdir.iterdir())
+        files = _list_trace_files(subdir)
         assert len(files) == 1
-        assert files[0].name.startswith("obs-456_test-agent_")
+        assert files[0].startswith("obs-456_test-agent_")
 
     def test_none_return_uses_default(self, tmp_path):
         """Return None falls back to default behavior."""
         traces = self._run_with_trace(tmp_path, lambda name, ctx: None)
-        files = list(traces.iterdir())
+        files = _list_trace_files(traces)
         assert len(files) == 1
-        assert files[0].name.startswith("test-agent_")
+        assert files[0].startswith("test-agent_")
 
     def test_no_callback_uses_default(self, tmp_path):
         """No trace_path_fn set at all uses default."""
         traces = self._run_with_trace(tmp_path, None)
-        files = list(traces.iterdir())
+        files = _list_trace_files(traces)
         assert len(files) == 1
-        assert files[0].name.startswith("test-agent_")
+        assert files[0].startswith("test-agent_")
 
     def test_callback_receives_agent_name_and_context(self, tmp_path):
         """Callback receives (agent_name, context_dict)."""
@@ -6892,9 +6901,9 @@ class TestTracePathFn:
     def test_empty_string_return_uses_default(self, tmp_path):
         """Return '' uses default behavior."""
         traces = self._run_with_trace(tmp_path, lambda name, ctx: "")
-        files = list(traces.iterdir())
+        files = _list_trace_files(traces)
         assert len(files) == 1
-        assert files[0].name.startswith("test-agent_")
+        assert files[0].startswith("test-agent_")
 
 
 class TestIncrementalTracePersist:
@@ -6962,7 +6971,7 @@ class TestIncrementalTracePersist:
         assert "in_progress" in snapshots
         assert snapshots[-1] == "end_turn"
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 1
 
         with open(os.path.join(trace_dir, files[0])) as fh:
@@ -7045,7 +7054,7 @@ class TestIncrementalTracePersist:
 
         agent.run("multi-turn")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 1, f"Expected 1 file, got {len(files)}: {files}"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -7079,7 +7088,7 @@ class TestIncrementalTracePersist:
         with pytest.raises(RuntimeError, match="API down"):
             agent.run("do it")
 
-        files = os.listdir(trace_dir)
+        files = _list_trace_files(trace_dir)
         assert len(files) == 1
 
         with open(os.path.join(trace_dir, files[0])) as fh:

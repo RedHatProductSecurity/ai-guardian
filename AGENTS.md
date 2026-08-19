@@ -483,6 +483,8 @@ Use `logging.getLogger(__name__)` in all modules. Choose levels as follows:
 
 ### Linting
 
+When the user says "lint", it means run both **ruff** and **black** (in that order).
+
 The project uses multiple linters enforced by CI. **Run these after finishing all implementations:**
 
 ```bash
