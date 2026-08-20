@@ -1163,6 +1163,8 @@ class GuardedAgent:
                     break
 
                 if parsed.stop_reason == "end_turn":
+                    strategy.append_assistant_message(messages, parsed.raw_content)
+
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
@@ -1202,9 +1204,6 @@ class GuardedAgent:
                                     _injection_blocked = True
                                     _violation_type = exc.result.violation_type
                                     _violation_id = exc.result.violation_id
-                            strategy.append_assistant_message(
-                                messages, parsed.raw_content
-                            )
                             if _injection_blocked:
                                 user_text = (
                                     "[ai-guardian] Injected content was "
@@ -1226,7 +1225,6 @@ class GuardedAgent:
                             continue
 
                     if self._output_schema and structured_output is None:
-                        strategy.append_assistant_message(messages, parsed.raw_content)
                         messages.append(
                             {
                                 "role": "user",

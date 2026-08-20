@@ -3814,7 +3814,9 @@ class TestGuardedAgent:
         assert len(injected) == 1
         assert injected[0]["role"] == "user"
         assert msgs[1]["role"] == "assistant"
-        assert msgs[-1] is injected[0]
+        inject_idx = msgs.index(injected[0])
+        assert msgs[inject_idx - 1]["role"] == "assistant"
+        assert msgs[inject_idx + 1]["role"] == "assistant"
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_between_turns_false_stops(self, mock_monitor):
