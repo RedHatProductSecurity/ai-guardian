@@ -111,6 +111,7 @@ NAV_GROUPS = [
             ("Config File", "/config-file"),
             ("Config Editor", "/config-editor"),
             ("Console Settings", "/console-settings"),
+            ("Tray Plugins", "/tray-plugins"),
             ("Effective Config", "/config-effective"),
             ("About", "/about"),
         ],
