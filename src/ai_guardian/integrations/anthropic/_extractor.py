@@ -104,7 +104,11 @@ _ANTHROPIC_PROVIDERS = frozenset(
     {"vertex", "bedrock", "foundry", "api_key", "direct", "anthropic"}
 )
 
-_OPENAI_PROVIDERS = frozenset({"openai", "azure", "ollama", "llamacpp", "vllm"})
+_OPENAI_COMPAT_ALIASES = frozenset(
+    {"openai-compatible", "ollama", "mlx", "llamacpp", "vllm", "lm-studio"}
+)
+
+_OPENAI_PROVIDERS = frozenset({"openai", "azure"}) | _OPENAI_COMPAT_ALIASES
 
 _VALID_PROVIDERS = _ANTHROPIC_PROVIDERS | _OPENAI_PROVIDERS
 
@@ -124,9 +128,10 @@ def create_client(
 
     - Anthropic family (``direct``/``anthropic``/``vertex``/``bedrock``/
       ``foundry``): creates the corresponding Anthropic SDK client.
-    - OpenAI-compatible (``openai``/``azure``/``ollama``/``llamacpp``/
-      ``vllm``): creates an OpenAI SDK client (with ``base_url``
-      from *provider_config* for local servers).
+    - OpenAI-compatible (``openai``/``azure``/``openai-compatible``/
+      ``ollama``/``mlx``/``llamacpp``/``vllm``/``lm-studio``): creates
+      an OpenAI SDK client (with ``base_url`` from *provider_config*
+      for local servers).
 
     Environment variable overrides (highest precedence):
 
@@ -135,7 +140,7 @@ def create_client(
 
     *provider_config* (optional dict) overrides env var names:
 
-    - ``base_url``: server endpoint (required for ollama/llamacpp/vllm)
+    - ``base_url``: server endpoint (required for local servers)
     - ``base_url_env``: env var name holding the base URL
     - ``api_key_env``: env var holding the API key
     - ``project_id_env``: env var for GCP project ID (vertex)
@@ -246,7 +251,7 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
         ctor_kwargs["base_url"] = base_url
     if api_key_env:
         ctor_kwargs["api_key"] = os.environ.get(api_key_env, "")
-    elif provider in ("ollama", "llamacpp", "vllm"):
+    elif provider in _OPENAI_COMPAT_ALIASES:
         ctor_kwargs.setdefault("api_key", "not-needed")
     ctor_kwargs.update(kwargs)
     client = openai.OpenAI(**ctor_kwargs)

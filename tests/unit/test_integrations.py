@@ -929,6 +929,48 @@ class TestCreateClient:
         assert result._ai_guardian_provider == "ollama"
 
     @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_openai_compatible_with_base_url(self):
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="openai-compatible",
+                provider_config={"base_url": "http://localhost:8080/v1"},
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:8080/v1"
+        assert call_kwargs["api_key"] == "not-needed"
+        assert result._ai_guardian_provider == "openai-compatible"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_mlx_tagged_on_client(self):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="mlx",
+                provider_config={"base_url": "http://localhost:8080/v1"},
+            )
+        assert result._ai_guardian_provider == "mlx"
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["api_key"] == "not-needed"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_lm_studio_tagged_on_client(self):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="lm-studio",
+                provider_config={"base_url": "http://localhost:1234/v1"},
+            )
+        assert result._ai_guardian_provider == "lm-studio"
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["api_key"] == "not-needed"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
     def test_provider_azure_tagged_on_client(self):
         mock_openai = MagicMock()
         mock_client = MagicMock()
