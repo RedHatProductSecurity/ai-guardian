@@ -1147,21 +1147,39 @@
   "_comment_support_email_auth": "Email auth: 'none' for corporate SMTP relays (no credentials), 'env' for env vars (recommended), 'inline' for hardcoded creds (doctor warns).",
   "_comment_support_email_fallback": "If no smtp_host is set, opens system mailto: with the bundle zipped for manual attachment.",
   "otel": {
-    "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions",
+    "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions (v1.16.0+). Requires 'pip install ai-guardian[otel]' for protobuf format.",
     "enabled": false,
     "endpoint": "http://localhost:4318",
     "service_name": "ai-guardian",
-    "metadata": {}
+    "_comment_export_format": "Export format: 'otlp-json' (no extra deps) or 'otlp-proto' (requires ai-guardian[otel])",
+    "export_format": "otlp-json",
+    "_comment_headers": "HTTP headers for OTLP export (e.g., {\"Authorization\": \"Bearer <token>\"}). Also reads OTEL_EXPORTER_OTLP_HEADERS env var.",
+    "headers": {},
+    "_comment_resource_attributes": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>.",
+    "resource_attributes": {}
   },
 
   "sdk": {
-    "_comment_sdk": "SDK scanning settings for GuardedAgent",
-    "enabled": true,
-    "secret_redaction": false,
+    "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper",
+    "_comment_scanning": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",
+    "scanning": true,
+    "_comment_use_global_config": "When true, SDK uses global ai-guardian.json scanner settings. When false, SDK runs standalone.",
+    "use_global_config": true,
+    "_comment_secret_redaction": "SDK-specific secret redaction override. SDK defaults to disabled because redacting between agent turns breaks code.",
+    "secret_redaction": {"enabled": false},
+    "_comment_provider": "LLM provider: direct, anthropic, vertex, bedrock, foundry, openai, azure, openai-compatible, ollama, mlx, llamacpp, vllm, lm-studio",
+    "_comment_provider_config": "Provider-specific config: base_url, base_url_env, api_key_env, project_id_env, region_env. No secrets — only env var names.",
+    "provider_config": {},
     "agents": {
       "*": {
         "enabled": true,
-        "_comment_mcpServers": "MCP servers available to GuardedAgent. Keys are server names. Use 'command' for stdio transport or 'url' for SSE.",
+        "_comment_compact": "Context compaction: compact_threshold (0-1, ratio triggering compaction), compact_keep_turns (recent turns kept), compact_keep_first (initial turns kept)",
+        "compact_threshold": 0.8,
+        "compact_keep_turns": 5,
+        "compact_keep_first": 1,
+        "_comment_provider": "Per-agent provider override: different agents can use different providers",
+        "_comment_provider_config": "Per-agent provider config override: { \"base_url\": \"http://localhost:11434/v1\", \"api_key_env\": \"MY_KEY\" }",
+        "_comment_mcpServers": "MCP servers available to this agent. Keys are server names. Use 'command' for stdio transport or 'url' for SSE.",
         "mcpServers": {
           "_comment_example_stdio": "Stdio transport: { \"command\": \"python\", \"args\": [\"-m\", \"my_mcp_server\"], \"env\": {\"API_KEY_ENV\": \"MY_API_KEY\"}, \"timeout\": 60 }",
           "_comment_example_sse": "SSE transport: { \"url\": \"https://mcp.internal/sse\", \"headers\": {\"Authorization\": \"Bearer ...\"}, \"startup_timeout\": 15 }",

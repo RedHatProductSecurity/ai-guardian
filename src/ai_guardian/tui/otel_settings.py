@@ -122,6 +122,14 @@ class OtelSettingsContent(Container):
                     classes="otel-field-input",
                 )
 
+            with Horizontal(classes="otel-field-row"):
+                yield Label("Resource Attributes", classes="otel-field-label")
+                yield Input(
+                    placeholder="team.name=AT, deployment.environment=dev",
+                    id="otel-resource-attrs",
+                    classes="otel-field-input",
+                )
+
             with Horizontal():
                 yield Button("Save", id="otel-save", variant="success")
                 yield Button("Test Connection", id="otel-test", variant="default")
@@ -152,6 +160,12 @@ class OtelSettingsContent(Container):
             self.query_one("#otel-auth-header", Input).value = header_str
         else:
             self.query_one("#otel-auth-header", Input).value = ""
+        res_attrs = cfg.get("resource_attributes", {})
+        if res_attrs:
+            attrs_str = ", ".join(f"{k}={v}" for k, v in res_attrs.items())
+            self.query_one("#otel-resource-attrs", Input).value = attrs_str
+        else:
+            self.query_one("#otel-resource-attrs", Input).value = ""
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "otel-save":
@@ -171,20 +185,30 @@ class OtelSettingsContent(Container):
                         k, v = pair.split("=", 1)
                         headers[k.strip()] = v.strip()
 
-            cfg = {
-                "enabled": self.query_one("#otel-enabled", Switch).value,
-                "endpoint": self.query_one("#otel-endpoint", Input).value.strip()
-                or "http://localhost:4318",
-                "service_name": self.query_one(
-                    "#otel-service-name", Input
-                ).value.strip()
-                or "ai-guardian",
-                "export_format": self.query_one("#otel-format", Select).value,
-            }
-            if headers:
-                cfg["headers"] = headers
+            resource_attributes = {}
+            attrs_str = self.query_one("#otel-resource-attrs", Input).value.strip()
+            if attrs_str:
+                for pair in attrs_str.split(","):
+                    pair = pair.strip()
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        resource_attributes[k.strip()] = v.strip()
 
-            _save_otel_config(cfg)
+            existing = _load_otel_config()
+            existing["enabled"] = self.query_one("#otel-enabled", Switch).value
+            existing["endpoint"] = (
+                self.query_one("#otel-endpoint", Input).value.strip()
+                or "http://localhost:4318"
+            )
+            existing["service_name"] = (
+                self.query_one("#otel-service-name", Input).value.strip()
+                or "ai-guardian"
+            )
+            existing["export_format"] = self.query_one("#otel-format", Select).value
+            existing["headers"] = headers
+            existing["resource_attributes"] = resource_attributes
+
+            _save_otel_config(existing)
             status.update("[green]Configuration saved[/green]")
             self.app.notify("OTEL settings saved")
         except Exception as exc:

@@ -94,6 +94,19 @@ def create_otel_settings_page(service, daemon_name: str):
                 "Format: key=value,key=value — Override: OTEL_EXPORTER_OTLP_HEADERS"
             ).classes("text-xs text-grey-6 -mt-2")
 
+            res_attrs = cfg.get("resource_attributes", {})
+            res_attrs_str = (
+                ", ".join(f"{k}={v}" for k, v in res_attrs.items()) if res_attrs else ""
+            )
+            resource_attrs_input = ui.input(
+                label="Resource Attributes",
+                value=res_attrs_str,
+                placeholder="team.name=AT, deployment.environment=dev",
+            ).classes("w-full")
+            ui.label(
+                "Static key-value pairs added as OTEL resource attributes on every span."
+            ).classes("text-xs text-grey-6 -mt-2")
+
         status_label = ui.label("").classes("text-sm")
 
         with ui.row().classes("gap-2"):
@@ -109,16 +122,28 @@ def create_otel_settings_page(service, daemon_name: str):
                                 k, v = pair.split("=", 1)
                                 hdrs[k.strip()] = v.strip()
 
-                    new_cfg = {
-                        "enabled": enabled.value,
-                        "endpoint": endpoint.value.strip() or "http://localhost:4318",
-                        "service_name": service_name.value.strip() or "ai-guardian",
-                        "export_format": export_format.value,
-                    }
-                    if hdrs:
-                        new_cfg["headers"] = hdrs
+                    rattrs = {}
+                    raval = resource_attrs_input.value.strip()
+                    if raval:
+                        for pair in raval.split(","):
+                            pair = pair.strip()
+                            if "=" in pair:
+                                k, v = pair.split("=", 1)
+                                rattrs[k.strip()] = v.strip()
 
-                    await run.io_bound(lambda: _save_otel_config(new_cfg))
+                    existing = _load_otel_config()
+                    existing["enabled"] = enabled.value
+                    existing["endpoint"] = (
+                        endpoint.value.strip() or "http://localhost:4318"
+                    )
+                    existing["service_name"] = (
+                        service_name.value.strip() or "ai-guardian"
+                    )
+                    existing["export_format"] = export_format.value
+                    existing["headers"] = hdrs
+                    existing["resource_attributes"] = rattrs
+
+                    await run.io_bound(lambda: _save_otel_config(existing))
                     status_label.text = "Configuration saved"
                     status_label.classes("text-green", remove="text-red")
                     ui.notify("OTEL settings saved")
