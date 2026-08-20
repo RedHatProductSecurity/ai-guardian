@@ -261,12 +261,24 @@ def _fmt_tok(n):
 
 
 def _format_trace_label(t):
-    active_marker = "[green]●[/green] " if t.get("is_active") else "[dim]○[/dim] "
     name = t.get("agent_name", "unknown")
     model = t.get("model", "")
     turns = t.get("total_turns", 0)
     started = (t.get("started_at") or "")[:19]
     stop = t.get("stop_reason", "")
+
+    if t.get("is_active"):
+        active_marker = "[green]●[/green] "
+        status = "[green]ACTIVE[/green]"
+    elif stop in ("error", "crashed"):
+        active_marker = "[red]✕[/red] "
+        status = f"[red]{stop.upper()}[/red]"
+    elif stop == "interrupted":
+        active_marker = "[yellow]⚡[/yellow] "
+        status = "[yellow]INTERRUPTED[/yellow]"
+    else:
+        active_marker = "[dim]○[/dim] "
+        status = f"[dim]{stop}[/dim]"
 
     tokens = t.get("total_tokens", {})
     total_input = tokens.get("input_tokens", 0)
@@ -280,8 +292,6 @@ def _format_trace_label(t):
 
     violations = t.get("violation_count", 0)
     v_str = f" [red]({violations} violations)[/red]" if violations else ""
-
-    status = "[green]ACTIVE[/green]" if t.get("is_active") else f"[dim]{stop}[/dim]"
 
     return (
         f"{active_marker}[bold]{name}[/bold] ({model}) {status}{v_str}  "

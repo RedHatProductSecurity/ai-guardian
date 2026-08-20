@@ -1,5 +1,6 @@
 """GuardedAgent — tool-use agent loop with security scanning."""
 
+import atexit
 import json
 import logging
 import os
@@ -776,6 +777,31 @@ class GuardedAgent:
         if self._trace_dir:
             trace_filepath = self._resolve_trace_filepath(started_at)
 
+        _atexit_fn = None
+        if trace_filepath:
+
+            def _flush_on_exit():
+                try:
+                    with open(trace_filepath, "r", encoding="utf-8") as fh:
+                        doc = json.load(fh)
+                    if doc.get("stop_reason") != "in_progress":
+                        return
+                    doc["stop_reason"] = "crashed"
+                    mtime = os.path.getmtime(trace_filepath)
+                    doc["ended_at"] = datetime.fromtimestamp(
+                        mtime, tz=timezone.utc
+                    ).isoformat()
+                    with open(trace_filepath, "w", encoding="utf-8") as fh:
+                        json.dump(doc, fh, indent=2, default=str)
+                    from ai_guardian.daemon.traces import write_trace_meta
+
+                    write_trace_meta(trace_filepath, doc)
+                except Exception:
+                    pass
+
+            atexit.register(_flush_on_exit)
+            _atexit_fn = _flush_on_exit
+
         otel_emitter = None
         try:
             from ai_guardian.config.loaders import _load_otel_config
@@ -830,8 +856,9 @@ class GuardedAgent:
                         "step": len(last_turn["steps"]),
                     }
                 )
+                stop = "interrupted" if isinstance(exc, KeyboardInterrupt) else "error"
                 if self._trace_dir:
-                    partial = {"trace": trace, "stop_reason": "error"}
+                    partial = {"trace": trace, "stop_reason": stop}
                     self._persist_trace(
                         partial,
                         started_at,
@@ -843,7 +870,7 @@ class GuardedAgent:
                 if otel_emitter is not None:
                     try:
                         otel_emitter.on_run_complete(
-                            {"trace": trace, "stop_reason": "error"}
+                            {"trace": trace, "stop_reason": stop}
                         )
                     except Exception:
                         logger.debug("OTEL run emit failed (error path)", exc_info=True)
@@ -851,6 +878,8 @@ class GuardedAgent:
             finally:
                 if mcp_manager:
                     mcp_manager.stop()
+                if _atexit_fn is not None:
+                    atexit.unregister(_atexit_fn)
 
     def _run_loop_inner(
         self,

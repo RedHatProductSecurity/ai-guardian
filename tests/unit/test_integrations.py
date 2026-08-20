@@ -7389,6 +7389,99 @@ class TestGuardedAgentPartialTrace:
         assert len(agent._last_trace) > 0
 
 
+class TestStaleTraceCleanShutdown:
+    """Tests for crash/CTRL-C trace handling (#2110)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_keyboard_interrupt_sets_interrupted(self, mock_monitor, tmp_path):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        agent, client = self._make_agent(
+            name="int-test", trace_dir=str(tmp_path / "traces")
+        )
+        client.messages.create.side_effect = KeyboardInterrupt()
+
+        with pytest.raises(KeyboardInterrupt):
+            agent.run("Hi")
+
+        import json
+
+        files = _list_trace_files(str(tmp_path / "traces"))
+        assert len(files) == 1
+        with open(os.path.join(str(tmp_path / "traces"), files[0])) as fh:
+            doc = json.load(fh)
+        assert doc["stop_reason"] == "interrupted"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_runtime_error_sets_error(self, mock_monitor, tmp_path):
+        import json
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        agent, client = self._make_agent(
+            name="err-test", trace_dir=str(tmp_path / "traces")
+        )
+        client.messages.create.side_effect = RuntimeError("boom")
+
+        with pytest.raises(RuntimeError):
+            agent.run("Hi")
+
+        files = _list_trace_files(str(tmp_path / "traces"))
+        assert len(files) == 1
+        with open(os.path.join(str(tmp_path / "traces"), files[0])) as fh:
+            doc = json.load(fh)
+        assert doc["stop_reason"] == "error"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_atexit_unregistered_after_normal_run(self, mock_monitor):
+        import atexit
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="OK")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent(
+            name="atexit-test", trace_dir="/tmp/atexit-test-traces"
+        )
+        client.messages.create.return_value = response
+
+        with (
+            patch.object(atexit, "register") as mock_reg,
+            patch.object(atexit, "unregister") as mock_unreg,
+        ):
+            agent.run("Hi")
+
+        assert mock_reg.call_count == 1
+        assert mock_unreg.call_count == 1
+        registered_fn = mock_reg.call_args[0][0]
+        unregistered_fn = mock_unreg.call_args[0][0]
+        assert registered_fn is unregistered_fn
+
+
 class TestGuardedAgentTraceDir:
     """Tests for auto-persist trace logs to disk (#1877)."""
 
