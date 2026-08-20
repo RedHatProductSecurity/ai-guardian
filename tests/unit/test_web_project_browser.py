@@ -97,9 +97,7 @@ class TestBrowseResetGuard:
         class FakeEvent:
             value = "/some/project"
 
-        import asyncio
-
-        async def on_project_change(e):
+        def on_project_change(e):
             if e.value == _BROWSE_SENTINEL:
                 return
             if _browsing["active"]:
@@ -107,7 +105,7 @@ class TestBrowseResetGuard:
                 return
             reloaded["called"] = True
 
-        asyncio.get_event_loop().run_until_complete(on_project_change(FakeEvent()))
+        on_project_change(FakeEvent())
         assert not _browsing["active"], "_browsing['active'] should be reset"
         assert not reloaded["called"], "page reload should be skipped"
 
