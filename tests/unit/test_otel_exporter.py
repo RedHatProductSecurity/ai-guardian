@@ -389,6 +389,21 @@ class TestMakeRootSpan:
         span = _make_root_span(doc, doc["trace_id"])
         assert span["spanId"] == "ffffffffffffffff"
 
+    def test_root_span_explicit_root_span_id(self):
+        """Explicit root_span_id overrides derivation from turn data."""
+        doc = {
+            **MINIMAL_TRACE_DOC,
+            "trace": [
+                {
+                    "turn": 0,
+                    "steps": [],
+                    "parent_span_id": "ffffffffffffffff0000000000000000",
+                }
+            ],
+        }
+        span = _make_root_span(doc, doc["trace_id"], root_span_id="abcdef1234567890")
+        assert span["spanId"] == "abcdef1234567890"
+
     def test_root_span_derives_start_from_turns(self):
         """When trace_doc has no started_at, derive from first turn."""
         doc = {
@@ -1367,6 +1382,130 @@ class TestOtelSpanEmitter:
         root_span = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
         attr_keys = {a["key"] for a in root_span["attributes"]}
         assert "case.id" not in attr_keys
+
+    @patch("ai_guardian.observability.otel_exporter.requests")
+    def test_on_run_start_sends_root_span(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "my-agent",
+            "claude-sonnet-5",
+        )
+
+        emitter.on_run_start(
+            started_at="2026-08-20T12:00:00+00:00",
+            parent_span_id="dddd4444cccc3333bbbb2222aaaa1111",
+        )
+
+        mock_requests.post.assert_called_once()
+        payload = mock_requests.post.call_args[1]["json"]
+        spans = payload["resourceSpans"][0]["scopeSpans"][0]["spans"]
+        assert len(spans) == 1
+        root = spans[0]
+        assert root["name"] == "gen_ai.agent"
+        assert root["traceId"] == "aaaa1111bbbb2222cccc3333dddd4444"
+        assert root["spanId"] == "dddd4444cccc3333"
+        assert "parentSpanId" not in root
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["gen_ai.agent.stop_reason"]["stringValue"] == "in_progress"
+        assert attr_map["gen_ai.agent.name"]["stringValue"] == "my-agent"
+        assert attr_map["gen_ai.request.model"]["stringValue"] == "claude-sonnet-5"
+        assert attr_map["ai_guardian.span_type"]["stringValue"] == "agent_run"
+
+    @patch("ai_guardian.observability.otel_exporter.requests")
+    def test_on_run_start_stores_root_span_id(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "agent",
+            "model",
+        )
+        assert emitter._root_span_id is None
+
+        emitter.on_run_start(
+            started_at="2026-08-20T12:00:00+00:00",
+            parent_span_id="dddd4444cccc3333bbbb2222aaaa1111",
+        )
+        assert emitter._root_span_id == "dddd4444cccc3333"
+
+    @patch("ai_guardian.observability.otel_exporter.requests")
+    def test_on_run_start_consistent_with_run_complete(self, mock_requests):
+        """Root span from on_run_start uses same span_id as on_run_complete."""
+        mock_requests.post.return_value = MagicMock()
+        parent_span_id = "dddd4444cccc3333bbbb2222aaaa1111"
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "aaaa1111bbbb2222cccc3333dddd4444",
+            "agent",
+            "model",
+        )
+
+        emitter.on_run_start(
+            started_at="2026-08-20T12:00:00+00:00",
+            parent_span_id=parent_span_id,
+        )
+        start_payload = mock_requests.post.call_args[1]["json"]
+        start_span_id = start_payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0][
+            "spanId"
+        ]
+
+        trace_doc = dict(MINIMAL_TRACE_DOC)
+        trace_doc["trace"] = [
+            {
+                "turn": 0,
+                "parent_span_id": parent_span_id,
+                "steps": [],
+                "started_at": "2026-08-20T12:00:00+00:00",
+                "ended_at": "2026-08-20T12:00:05+00:00",
+            }
+        ]
+        emitter.on_run_complete(trace_doc)
+        end_payload = mock_requests.post.call_args[1]["json"]
+        end_span_id = end_payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0][
+            "spanId"
+        ]
+
+        assert start_span_id == end_span_id
+
+    def test_on_run_start_disabled_is_noop(self):
+        emitter = OtelSpanEmitter({"enabled": False}, "trace123", "agent", "model")
+        emitter.on_run_start(
+            started_at="2026-08-20T12:00:00+00:00",
+            parent_span_id="abcd" * 8,
+        )
+        assert emitter._root_span_id is None
+
+    @patch("ai_guardian.observability.otel_exporter.requests")
+    def test_on_run_start_calls_metadata_fn(self, mock_requests):
+        mock_requests.post.return_value = MagicMock()
+        captured = []
+
+        def metadata_fn(agent_name, ctx):
+            captured.append((agent_name, dict(ctx)))
+            return {"env": "test"}
+
+        emitter = OtelSpanEmitter(
+            {"enabled": True, "endpoint": "http://localhost:4318"},
+            "trace123" + "a" * 24,
+            "my-agent",
+            "model",
+            metadata_fn=metadata_fn,
+        )
+        emitter.on_run_start(
+            started_at="2026-08-20T12:00:00+00:00",
+            parent_span_id="abcd" * 8,
+        )
+
+        assert len(captured) == 1
+        assert captured[0][0] == "my-agent"
+        assert captured[0][1]["turn"] == 0
+
+        payload = mock_requests.post.call_args[1]["json"]
+        root = payload["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
+        attr_map = {a["key"]: a["value"] for a in root["attributes"]}
+        assert attr_map["env"]["stringValue"] == "test"
 
 
 # ---------------------------------------------------------------------------
