@@ -1179,28 +1179,27 @@ class GuardedAgent:
                                     _injection_blocked = True
                                     _violation_type = exc.result.violation_type
                                     _violation_id = exc.result.violation_id
-                            if _injection_blocked:
-                                strategy.append_assistant_message(
-                                    messages, parsed.raw_content
-                                )
-                                messages.append(
-                                    {
-                                        "role": "user",
-                                        "content": (
-                                            "[ai-guardian] Injected content was "
-                                            f"blocked: {_violation_type}. "
-                                            "The content contained flagged "
-                                            "patterns and was not added to "
-                                            "context. "
-                                            f"Violation ID: {_violation_id}"
-                                        ),
-                                    }
-                                )
-                                continue
                             strategy.append_assistant_message(
                                 messages, parsed.raw_content
                             )
-                            messages.append({"role": "user", "content": hook_result})
+                            if _injection_blocked:
+                                user_text = (
+                                    "[ai-guardian] Injected content was "
+                                    f"blocked: {_violation_type}. "
+                                    "The content contained flagged "
+                                    "patterns and was not added to "
+                                    "context. "
+                                    f"Violation ID: {_violation_id}"
+                                )
+                            else:
+                                user_text = hook_result
+                            if self._output_schema and structured_output is None:
+                                user_text += (
+                                    "\n\nYou must call the submit_result tool "
+                                    "with your structured output. Do not "
+                                    "respond with plain text."
+                                )
+                            messages.append({"role": "user", "content": user_text})
                             continue
 
                     if self._output_schema and structured_output is None:

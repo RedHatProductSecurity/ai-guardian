@@ -4350,6 +4350,54 @@ class TestGuardedAgent:
         assert result["output"] == {"test_code": "assert True"}
         assert result["stop_reason"] == "end_turn"
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_string_with_output_schema_includes_nudge(self, mock_monitor):
+        """between_turns string + output_schema: both feedback and nudge injected (#2101)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_agent_response(
+            [SimpleNamespace(type="text", text='{"test_code": "pass"}')],
+            stop_reason="end_turn",
+        )
+        r2 = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="submit_result",
+                    id="t1",
+                    input={"test_code": "assert 1 + 1 == 2"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(side_effect=["Tests failed, try again", None])
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.messages.create.side_effect = [r1, r2]
+
+        result = agent.run("generate test code")
+
+        assert hook.call_count == 2
+        assert result["output"] == {"test_code": "assert 1 + 1 == 2"}
+        assert result["stop_reason"] == "end_turn"
+        assert client.messages.create.call_count == 2
+
+        feedback_msgs = [
+            m
+            for m in result["messages"]
+            if m.get("role") == "user"
+            and isinstance(m.get("content"), str)
+            and "Tests failed" in m["content"]
+        ]
+        assert feedback_msgs, "between_turns feedback not found in messages"
+        assert "submit_result" in feedback_msgs[0]["content"]
+
     @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
     def test_agent_profile_provider_creates_correct_client(self):
         """Agent profile provider overrides default Anthropic auto-detect."""
