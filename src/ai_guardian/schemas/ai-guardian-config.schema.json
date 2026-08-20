@@ -2711,7 +2711,7 @@
         },
         "provider": {
           "type": "string",
-          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "ollama", "llamacpp", "vllm"],
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "openai-compatible", "ollama", "mlx", "llamacpp", "vllm", "lm-studio"],
           "description": "LLM provider for this agent. Overrides top-level sdk.provider. Different agents can use different providers."
         },
         "provider_config": {
@@ -2816,8 +2816,8 @@
         },
         "provider": {
           "type": "string",
-          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "ollama", "llamacpp", "vllm"],
-          "description": "LLM provider to use when auto-creating clients. Overrides env var auto-detection, resolving conflicts when multiple provider env vars are set. Anthropic family: 'direct'/'anthropic' (API key), 'vertex' (GCP), 'bedrock' (AWS), 'foundry'. OpenAI-compatible: 'openai', 'azure', 'ollama', 'llamacpp', 'vllm'."
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "openai-compatible", "ollama", "mlx", "llamacpp", "vllm", "lm-studio"],
+          "description": "LLM provider to use when auto-creating clients. Overrides env var auto-detection, resolving conflicts when multiple provider env vars are set. Anthropic family: 'direct'/'anthropic' (API key), 'vertex' (GCP), 'bedrock' (AWS), 'foundry'. OpenAI-compatible: 'openai', 'azure', 'openai-compatible' (canonical), 'ollama', 'mlx', 'llamacpp', 'vllm', 'lm-studio'."
         },
         "provider_config": {
           "type": "object",
@@ -2826,7 +2826,7 @@
           "properties": {
             "base_url": {
               "type": "string",
-              "description": "Server endpoint URL. Required for ollama, llamacpp, vllm. Optional for openai, azure. Overridden by AI_GUARDIAN_SDK_BASE_URL env var."
+              "description": "Server endpoint URL. Required for local servers (openai-compatible, ollama, mlx, llamacpp, vllm, lm-studio). Optional for openai, azure. Overridden by AI_GUARDIAN_SDK_BASE_URL env var."
             },
             "base_url_env": {
               "type": "string",

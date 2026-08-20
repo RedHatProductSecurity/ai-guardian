@@ -42,6 +42,21 @@ class TestGetProviderCaps(unittest.TestCase):
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
 
+    def test_openai_compatible_canonical(self):
+        caps = get_provider_caps("openai-compatible")
+        self.assertFalse(caps.flatten_content)
+        self.assertTrue(caps.supports_tools)
+
+    def test_mlx(self):
+        caps = get_provider_caps("mlx")
+        self.assertTrue(caps.flatten_content)
+        self.assertTrue(caps.supports_tools)
+
+    def test_lm_studio(self):
+        caps = get_provider_caps("lm-studio")
+        self.assertFalse(caps.flatten_content)
+        self.assertTrue(caps.supports_tools)
+
     def test_unknown_provider_returns_openai_defaults(self):
         caps = get_provider_caps("some-future-provider")
         self.assertFalse(caps.flatten_content)

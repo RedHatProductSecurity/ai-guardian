@@ -23,9 +23,12 @@ class ProviderCaps:
 _PROVIDER_CAPS: Dict[str, ProviderCaps] = {
     "openai": ProviderCaps(),
     "azure": ProviderCaps(),
+    "openai-compatible": ProviderCaps(),
     "ollama": ProviderCaps(flatten_content=True),
+    "mlx": ProviderCaps(flatten_content=True),
     "llamacpp": ProviderCaps(flatten_content=True),
     "vllm": ProviderCaps(),
+    "lm-studio": ProviderCaps(),
 }
 
 

@@ -262,8 +262,8 @@ client = create_client(provider="vertex")
 
 # OpenAI-compatible local server
 client = create_client(
-    provider="ollama",
-    provider_config={"base_url": "http://localhost:11434/v1"},
+    provider="openai-compatible",
+    provider_config={"base_url": "http://localhost:8080/v1"},
 )
 
 # Custom env var for API key
@@ -277,7 +277,7 @@ client = create_client(
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `provider` | str | `None` | Provider to use. Anthropic: `direct`/`anthropic`, `vertex`, `bedrock`, `foundry`. OpenAI-compatible: `openai`, `azure`, `ollama`, `llamacpp`, `vllm`. If `None`, auto-detects from env vars. |
+| `provider` | str | `None` | Provider to use. Anthropic: `direct`/`anthropic`, `vertex`, `bedrock`, `foundry`. OpenAI-compatible: `openai`, `azure`, `openai-compatible` (canonical), `ollama`, `mlx`, `llamacpp`, `vllm`, `lm-studio`. If `None`, auto-detects from env vars. |
 | `provider_config` | dict | `None` | Provider-specific overrides: `base_url`, `base_url_env`, `api_key_env`, `project_id_env`, `region_env`. |
 
 Raises `ValueError` if multiple conflicting env vars are set (and no `provider` specified), or if no credentials are found.
@@ -292,15 +292,18 @@ Raises `ValueError` if multiple conflicting env vars are set (and no `provider` 
 | `foundry` | `AnthropicFoundry()` | Foundry credentials |
 | `openai` | `OpenAI()` | `OPENAI_API_KEY` |
 | `azure` | `AzureOpenAI()` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` |
-| `ollama` | `OpenAI(base_url=...)` | None (local server) |
-| `llamacpp` | `OpenAI(base_url=...)` | None (local server) |
-| `vllm` | `OpenAI(base_url=...)` | None (optional `api_key_env`) |
+| `openai-compatible` | `OpenAI(base_url=...)` | None (local server) |
+| `ollama` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `mlx` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `llamacpp` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `vllm` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `lm-studio` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
 
 Use `provider_config` fields to override these defaults:
 
 | Field | Description |
 |-------|-------------|
-| `base_url` | Server endpoint (required for ollama/llamacpp/vllm) |
+| `base_url` | Server endpoint (required for local servers) |
 | `base_url_env` | Env var name holding the server endpoint URL |
 | `api_key_env` | Env var name holding the API key (overrides default) |
 | `project_id_env` | Env var name for GCP project ID (vertex, default: `ANTHROPIC_VERTEX_PROJECT_ID`) |
