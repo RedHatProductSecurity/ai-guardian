@@ -1140,20 +1140,6 @@ class GuardedAgent:
                     break
 
                 if parsed.stop_reason == "end_turn":
-                    if self._output_schema and structured_output is None:
-                        strategy.append_assistant_message(messages, parsed.raw_content)
-                        messages.append(
-                            {
-                                "role": "user",
-                                "content": (
-                                    "You must call the submit_result tool with "
-                                    "your structured output. Do not respond "
-                                    "with plain text."
-                                ),
-                            }
-                        )
-                        continue
-
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
@@ -1216,6 +1202,20 @@ class GuardedAgent:
                             )
                             messages.append({"role": "user", "content": hook_result})
                             continue
+
+                    if self._output_schema and structured_output is None:
+                        strategy.append_assistant_message(messages, parsed.raw_content)
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "You must call the submit_result tool with "
+                                    "your structured output. Do not respond "
+                                    "with plain text."
+                                ),
+                            }
+                        )
+                        continue
 
                     final_text = parsed.text
                     stop_reason = "end_turn"
