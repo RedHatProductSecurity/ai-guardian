@@ -660,6 +660,58 @@ Both are configurable via `ai-guardian.json`:
 }
 ```
 
+#### MCP Servers
+
+GuardedAgent can connect to MCP (Model Context Protocol) servers, making their tools available to the agent. Configure MCP servers in `ai-guardian.json` under `sdk.agents.*.mcpServers`:
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": {
+        "mcpServers": {
+          "jira": {
+            "command": "python",
+            "args": ["-m", "jira_mcp_server"],
+            "env": {"JIRA_URL": "https://jira.example.com"},
+            "timeout": 60
+          },
+          "remote-api": {
+            "url": "https://mcp.internal/sse",
+            "headers": {"Authorization": "Bearer ..."},
+            "startup_timeout": 15
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Standard MCP parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `command` | string | Command to start server (stdio transport) |
+| `args` | list | Command arguments |
+| `env` | dict | Environment variables for server process |
+| `url` | string | SSE endpoint URL (SSE transport) |
+| `headers` | dict | HTTP headers for SSE connection |
+
+**Operational parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable this server |
+| `timeout` | int | `30` | Tool call timeout in seconds |
+| `startup_timeout` | int | `10` | Max seconds to wait for server to initialize |
+| `trust` | string | `"check"` | Trust level: `trusted` (skip scanning), `check` (scan results), `untrusted` (scan results) |
+| `scan_results` | bool | `true` | Scan tool results through ai-guardian |
+
+MCP tools are named `mcp__{server_name}__{tool_name}` following Claude Code convention. Security scanning of tool results follows the same pipeline as built-in tools unless the server is marked as `trusted` or has `scan_results: false`.
+
+Requires Python >= 3.10 and the `mcp` package (included in ai-guardian dependencies).
+
 #### Presets
 
 | Preset | Tools | Use when |

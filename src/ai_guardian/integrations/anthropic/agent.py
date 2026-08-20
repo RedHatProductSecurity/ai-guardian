@@ -9,10 +9,16 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
 
 from ai_guardian.integrations.anthropic.tools import (
+    MCP_TOOL_PREFIX,
     execute_tool,
     is_server_tool,
     resolve_tools,
     validate_tools,
+)
+from ai_guardian.integrations.mcp_client import (
+    MCPClientManager,
+    is_mcp_tool,
+    parse_mcp_tool_name,
 )
 from ai_guardian.integrations.base import (
     AgentLoopStrategy,
@@ -381,6 +387,7 @@ class GuardedAgent:
         self._compact_threshold = compact_threshold
         self._compact_keep_turns = compact_keep_turns
         self._compact_keep_first = compact_keep_first
+        self._mcp_servers_config: Optional[Dict[str, Any]] = None
 
         if strategy is not None:
             self._strategy = strategy
@@ -471,7 +478,18 @@ class GuardedAgent:
 
         display_name = self._name or "*"
 
+        mcp_servers = profile.get("mcpServers")
+        if mcp_servers and isinstance(mcp_servers, dict):
+            self._mcp_servers_config = mcp_servers
+            logger.info(
+                "GuardedAgent '%s': %d MCP server(s) configured",
+                display_name,
+                len(mcp_servers),
+            )
+
         for param, config_value in profile.items():
+            if param in ("mcpServers", "provider", "provider_config"):
+                continue
             if param == "tools":
                 if config_value != tools_spec:
                     logger.info(
@@ -720,6 +738,22 @@ class GuardedAgent:
             return result.messages, True, result
         return messages, False, None
 
+    def _start_mcp_servers(self) -> Optional[MCPClientManager]:
+        """Start MCP servers if configured, returning the manager."""
+        if not self._mcp_servers_config:
+            return None
+        try:
+            manager = MCPClientManager(self._mcp_servers_config)
+            manager.start()
+            mcp_tools = manager.get_tools()
+            if mcp_tools:
+                self._resolved_tools.extend(mcp_tools)
+                logger.info("Added %d MCP tool(s) to agent", len(mcp_tools))
+            return manager
+        except Exception as exc:
+            logger.error("Failed to start MCP servers: %s", exc)
+            return None
+
     def _run_loop(self, prompt: str) -> Dict[str, Any]:
         strategy = self._strategy
         self._last_trace = []
@@ -759,6 +793,8 @@ class GuardedAgent:
         except Exception:
             pass
 
+        mcp_manager = self._start_mcp_servers()
+
         with monitor(
             mode=self._mode,
             config=self._config,
@@ -777,6 +813,7 @@ class GuardedAgent:
                     trace_id=trace_id,
                     run_start_mono=run_start_mono,
                     otel_emitter=otel_emitter,
+                    mcp_manager=mcp_manager,
                 )
             except BaseException as exc:
                 exc.trace = trace
@@ -791,6 +828,9 @@ class GuardedAgent:
                         run_start_mono=run_start_mono,
                     )
                 raise
+            finally:
+                if mcp_manager:
+                    mcp_manager.stop()
 
     def _run_loop_inner(
         self,
@@ -804,6 +844,7 @@ class GuardedAgent:
         trace_id: Optional[str] = None,
         run_start_mono: Optional[float] = None,
         otel_emitter: Optional[Any] = None,
+        mcp_manager: Optional[MCPClientManager] = None,
     ) -> Dict[str, Any]:
         parent_span_id = uuid.uuid4().hex
         _emit(
@@ -1192,13 +1233,20 @@ class GuardedAgent:
                         )
 
                         tool_start = time.monotonic()
-                        result_text = execute_tool(
-                            tc.name,
-                            tc.input,
-                            self._cwd,
-                            self._allowed_paths,
-                            self._follow_symlinks,
-                        )
+                        mcp_parsed = parse_mcp_tool_name(tc.name)
+                        if mcp_parsed and mcp_manager:
+                            mcp_server, mcp_tool = mcp_parsed
+                            result_text = mcp_manager.call_tool(
+                                mcp_server, mcp_tool, tc.input
+                            )
+                        else:
+                            result_text = execute_tool(
+                                tc.name,
+                                tc.input,
+                                self._cwd,
+                                self._allowed_paths,
+                                self._follow_symlinks,
+                            )
                         tool_latency_ms = int((time.monotonic() - tool_start) * 1000)
                         tool_output_bytes = (
                             len(result_text.encode("utf-8")) if result_text else 0
@@ -1215,7 +1263,12 @@ class GuardedAgent:
                             ),
                         )
 
-                        if self._scanning and result_text:
+                        _skip_scan = (
+                            mcp_manager
+                            and mcp_parsed
+                            and tc.name in mcp_manager.get_skip_scan_tools()
+                        )
+                        if self._scanning and result_text and not _skip_scan:
                             bash_cmd = (
                                 tc.input.get("command") if tc.name == "Bash" else None
                             )

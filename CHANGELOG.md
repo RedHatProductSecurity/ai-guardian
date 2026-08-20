@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
+
 - **`--log-violations` flag for `ai-guardian scan`** — writes findings to `violations.jsonl` (the same log used by hooks), enabling unified violation tracking from both hooks and CLI scans. Also available as `ai-guardian setup --pre-commit --log-violations` to include the flag in auto-installed pre-commit hooks (#2068)
 
 ## [1.16.0] - 2026-08-18

@@ -1160,7 +1160,13 @@
     "secret_redaction": false,
     "agents": {
       "*": {
-        "enabled": true
+        "enabled": true,
+        "_comment_mcpServers": "MCP servers available to GuardedAgent. Keys are server names. Use 'command' for stdio transport or 'url' for SSE.",
+        "mcpServers": {
+          "_comment_example_stdio": "Stdio transport: { \"command\": \"python\", \"args\": [\"-m\", \"my_mcp_server\"], \"env\": {\"API_KEY_ENV\": \"MY_API_KEY\"}, \"timeout\": 60 }",
+          "_comment_example_sse": "SSE transport: { \"url\": \"https://mcp.internal/sse\", \"headers\": {\"Authorization\": \"Bearer ...\"}, \"startup_timeout\": 15 }",
+          "_comment_trust": "trust: 'trusted' skips scanning results, 'check' (default) scans results, 'untrusted' scans results"
+        }
       }
     }
   },
