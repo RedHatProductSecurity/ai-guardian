@@ -1051,6 +1051,41 @@ class TestGuardedAutoClient:
                     guarded()
         mock_create.assert_called_once_with(provider="direct", provider_config=None)
 
+    @patch.dict(
+        "os.environ",
+        {
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+        clear=False,
+    )
+    def test_guarded_client_profile_provider_overrides_top_level(self):
+        """Client profile provider takes precedence over top-level sdk.provider."""
+        fake_mod = _fake_anthropic_module()
+        mock_client = fake_mod.Anthropic()
+        mock_client.messages = SimpleNamespace(create=lambda: None, stream=lambda: None)
+        config_with_both = {
+            "sdk": {
+                "provider": "vertex",
+                "agents": {
+                    "my-client": {
+                        "provider": "direct",
+                    },
+                },
+            }
+        }
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            with patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(config_with_both, None),
+            ):
+                with patch(
+                    "ai_guardian.integrations.anthropic.create_client",
+                    return_value=mock_client,
+                ) as mock_create:
+                    guarded(name="my-client")
+        mock_create.assert_called_once_with(provider="direct", provider_config=None)
+
 
 # ============================================================================
 # Helpers — OpenAI
@@ -3910,6 +3945,43 @@ class TestGuardedAgent:
 
         hook.assert_called_once()
         assert result["stop_reason"] == "hook_early_stop"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_agent_profile_provider_creates_correct_client(self):
+        """Agent profile provider overrides default Anthropic auto-detect."""
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        mock_openai = MagicMock()
+        mock_openai_client = MagicMock()
+        mock_openai_client.chat = MagicMock()
+        mock_openai.OpenAI.return_value = mock_openai_client
+
+        profile_config = {
+            "sdk": {
+                "agents": {
+                    "local-agent": {
+                        "provider": "ollama",
+                        "provider_config": {
+                            "base_url": "http://localhost:11434/v1",
+                        },
+                    },
+                },
+            }
+        }
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            with patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(profile_config, None),
+            ):
+                agent = GuardedAgent(
+                    model="llama3",
+                    tools=[],
+                    name="local-agent",
+                )
+
+        mock_openai.OpenAI.assert_called_once()
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:11434/v1"
 
 
 # ============================================================================

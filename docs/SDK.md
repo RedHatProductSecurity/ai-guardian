@@ -336,7 +336,7 @@ Wraps an LLM client with automatic security scanning.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
-| `name` | str | `None` | Profile name linking to `sdk.clients.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
+| `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
 | `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |

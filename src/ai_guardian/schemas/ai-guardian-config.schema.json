@@ -2708,6 +2708,23 @@
           "type": "boolean",
           "description": "When true, built-in tools allow access through symlinks inside cwd even when the real target is outside cwd. The logical (unresolved) path must still be within cwd.",
           "default": false
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "ollama", "llamacpp", "vllm"],
+          "description": "LLM provider for this agent. Overrides top-level sdk.provider. Different agents can use different providers."
+        },
+        "provider_config": {
+          "type": "object",
+          "description": "Provider-specific configuration for this agent. Same fields as top-level sdk.provider_config.",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": { "type": "string" },
+            "base_url_env": { "type": "string" },
+            "api_key_env": { "type": "string" },
+            "project_id_env": { "type": "string" },
+            "region_env": { "type": "string" }
+          }
         }
       }
     },
@@ -2760,17 +2777,9 @@
         },
         "agents": {
           "type": "object",
-          "description": "GuardedAgent profiles. Use '*' for defaults applied to all agents. Named keys match the agent's 'name' parameter.",
+          "description": "Unified profiles for GuardedAgent and guarded() wrapper. Use '*' for defaults applied to all. Named keys match the 'name' parameter. Different agents can use different providers.",
           "additionalProperties": {
             "$ref": "#/definitions/sdk_agent_profile"
-          }
-        },
-        "clients": {
-          "type": "object",
-          "description": "guarded() client profiles. Use '*' for defaults applied to all clients.",
-          "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
           }
         },
         "trace_viewer": {

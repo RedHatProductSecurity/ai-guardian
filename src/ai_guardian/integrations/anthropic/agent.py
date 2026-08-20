@@ -389,8 +389,7 @@ class GuardedAgent:
             self._client = client
             self._strategy = _strategy_registry.detect(client)
         else:
-            self._strategy = AnthropicLoopStrategy()
-            self._client = self._strategy.create_default_client()
+            self._strategy, self._client = self._create_client_from_profile()
 
         tools = self._apply_config_profile(tools)
 
@@ -410,6 +409,48 @@ class GuardedAgent:
             self._resolved_tools.append(
                 self._strategy.format_submit_result_tool(output_schema)
             )
+
+    def _create_client_from_profile(self):
+        """Create client from agent profile provider, falling back to defaults.
+
+        Resolution: agent profile > ``*`` profile > top-level ``sdk.provider``
+        > auto-detect from env vars.
+
+        Returns (strategy, client) tuple.
+        """
+        from ai_guardian.config.loaders import _load_config_file, _load_sdk_profile
+        from ai_guardian.integrations.anthropic._extractor import (
+            _OPENAI_PROVIDERS,
+            create_client,
+        )
+
+        provider = None
+        provider_config = None
+
+        profile = _load_sdk_profile("agents", self._name)
+        if profile:
+            provider = profile.get("provider")
+            provider_config = profile.get("provider_config")
+
+        if provider is None:
+            try:
+                cfg, _ = _load_config_file()
+                if cfg:
+                    sdk_section = cfg.get("sdk") or {}
+                    provider = sdk_section.get("provider")
+                    if provider_config is None:
+                        provider_config = sdk_section.get("provider_config")
+            except Exception:
+                pass
+
+        if provider and provider in _OPENAI_PROVIDERS:
+            from ai_guardian.integrations.openai import OpenAILoopStrategy
+
+            client = create_client(provider=provider, provider_config=provider_config)
+            return OpenAILoopStrategy(), client
+
+        client = create_client(provider=provider, provider_config=provider_config)
+        return AnthropicLoopStrategy(), client
 
     def _apply_config_profile(
         self, tools_spec: Union[str, List[Any]]

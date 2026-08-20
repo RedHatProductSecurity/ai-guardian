@@ -846,26 +846,37 @@ def guarded(
             attribute contains the parser applied to the violating response.
     """
     if client is _MISSING:
-        from ai_guardian.config.loaders import _load_config_file
+        from ai_guardian.config.loaders import (
+            _load_config_file,
+            _load_sdk_profile as _load_profile,
+        )
         from ai_guardian.integrations.anthropic import create_client
 
         sdk_provider = None
         sdk_provider_config = None
-        try:
-            cfg, _ = _load_config_file()
-            if cfg:
-                sdk_section = cfg.get("sdk") or {}
-                sdk_provider = sdk_section.get("provider")
-                sdk_provider_config = sdk_section.get("provider_config")
-        except Exception:
-            pass
+
+        client_profile = _load_profile("agents", name)
+        if client_profile:
+            sdk_provider = client_profile.get("provider")
+            sdk_provider_config = client_profile.get("provider_config")
+
+        if sdk_provider is None:
+            try:
+                cfg, _ = _load_config_file()
+                if cfg:
+                    sdk_section = cfg.get("sdk") or {}
+                    sdk_provider = sdk_section.get("provider")
+                    if sdk_provider_config is None:
+                        sdk_provider_config = sdk_section.get("provider_config")
+            except Exception:
+                pass
         client = create_client(
             provider=sdk_provider, provider_config=sdk_provider_config
         )
 
     from ai_guardian.config.loaders import _load_sdk_profile, _sdk_scanning
 
-    if not _sdk_scanning("clients", name):
+    if not _sdk_scanning("agents", name):
         logger.info(
             "ai-guardian SDK scanning disabled via config — returning unwrapped client"
         )
@@ -877,7 +888,7 @@ def guarded(
     model_override = None
     max_tokens_override = None
     preamble = None
-    profile = _load_sdk_profile("clients", name)
+    profile = _load_sdk_profile("agents", name)
     if profile:
         display_name = name or "*"
         param_map = {
