@@ -1723,7 +1723,7 @@ class TestToolResolution:
 
         tools = resolve_tools("coding")
         names = [t["name"] for t in tools]
-        assert names == ["bash", "str_replace_based_edit_tool", "grep", "glob"]
+        assert names == ["bash", "str_replace_based_edit_tool", "write", "grep", "glob"]
 
     def test_preset_readonly(self):
         from ai_guardian.integrations.anthropic.tools import resolve_tools
@@ -1907,7 +1907,7 @@ class TestToolValidation:
             validate_tools,
         )
 
-        tools = resolve_tools(["grep", "glob", "read_file"])
+        tools = resolve_tools(["grep", "glob", "read_file", "write", "notebook_edit"])
         with caplog.at_level(logging.WARNING):
             validate_tools(tools)
         assert not caplog.records
@@ -2095,6 +2095,267 @@ class TestToolExecution:
         (tmp_path / "subdir" / "a.txt").write_text("")
         result = execute_tool("read_file", {"path": "subdir"}, str(tmp_path))
         assert "a.txt" in result
+
+    def test_execute_write_creates_file(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "write", {"file_path": "new.py", "content": "print('hi')\n"}, str(tmp_path)
+        )
+        assert "Wrote" in result
+        assert (tmp_path / "new.py").read_text() == "print('hi')\n"
+
+    def test_execute_write_creates_parent_dirs(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "write",
+            {"file_path": "deep/nested/dir/file.txt", "content": "hello"},
+            str(tmp_path),
+        )
+        assert "Wrote" in result
+        assert (
+            tmp_path / "deep" / "nested" / "dir" / "file.txt"
+        ).read_text() == "hello"
+
+    def test_execute_write_overwrites_existing(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        (tmp_path / "existing.txt").write_text("old content")
+        result = execute_tool(
+            "write",
+            {"file_path": "existing.txt", "content": "new content"},
+            str(tmp_path),
+        )
+        assert "Wrote" in result
+        assert (tmp_path / "existing.txt").read_text() == "new content"
+
+    def test_execute_write_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "write",
+            {"file_path": "../escape.txt", "content": "bad"},
+            str(tmp_path),
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_write_missing_path(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool("write", {"content": "data"}, str(tmp_path))
+        assert "Error" in result
+
+    def test_execute_notebook_edit_cell(self, tmp_path):
+        import json
+
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        nb = {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["x = 1\n"],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                },
+                {"cell_type": "markdown", "source": ["# Title\n"], "metadata": {}},
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        nb_path = tmp_path / "test.ipynb"
+        nb_path.write_text(json.dumps(nb))
+
+        result = execute_tool(
+            "notebook_edit",
+            {
+                "notebook_path": "test.ipynb",
+                "command": "edit",
+                "cell_number": 0,
+                "new_source": "x = 42\n",
+            },
+            str(tmp_path),
+        )
+        assert "Edited cell 0" in result
+
+        updated = json.loads(nb_path.read_text())
+        assert updated["cells"][0]["source"] == ["x = 42\n"]
+
+    def test_execute_notebook_insert_after(self, tmp_path):
+        import json
+
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        nb = {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["x = 1\n"],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                },
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        nb_path = tmp_path / "test.ipynb"
+        nb_path.write_text(json.dumps(nb))
+
+        result = execute_tool(
+            "notebook_edit",
+            {
+                "notebook_path": "test.ipynb",
+                "command": "insert_after",
+                "cell_number": 0,
+                "new_source": "y = 2\n",
+                "cell_type": "code",
+            },
+            str(tmp_path),
+        )
+        assert "Inserted code cell at position 1" in result
+
+        updated = json.loads(nb_path.read_text())
+        assert len(updated["cells"]) == 2
+        assert updated["cells"][1]["source"] == ["y = 2\n"]
+        assert updated["cells"][1]["cell_type"] == "code"
+        assert updated["cells"][1]["outputs"] == []
+
+    def test_execute_notebook_insert_before(self, tmp_path):
+        import json
+
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        nb = {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["x = 1\n"],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                },
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        nb_path = tmp_path / "test.ipynb"
+        nb_path.write_text(json.dumps(nb))
+
+        result = execute_tool(
+            "notebook_edit",
+            {
+                "notebook_path": "test.ipynb",
+                "command": "insert_before",
+                "cell_number": 0,
+                "new_source": "# Header",
+                "cell_type": "markdown",
+            },
+            str(tmp_path),
+        )
+        assert "Inserted markdown cell at position 0" in result
+
+        updated = json.loads(nb_path.read_text())
+        assert len(updated["cells"]) == 2
+        assert updated["cells"][0]["cell_type"] == "markdown"
+        assert "outputs" not in updated["cells"][0]
+
+    def test_execute_notebook_delete_cell(self, tmp_path):
+        import json
+
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        nb = {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": ["x = 1\n"],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                },
+                {
+                    "cell_type": "code",
+                    "source": ["y = 2\n"],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                },
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        nb_path = tmp_path / "test.ipynb"
+        nb_path.write_text(json.dumps(nb))
+
+        result = execute_tool(
+            "notebook_edit",
+            {"notebook_path": "test.ipynb", "command": "delete", "cell_number": 0},
+            str(tmp_path),
+        )
+        assert "Deleted cell 0" in result
+
+        updated = json.loads(nb_path.read_text())
+        assert len(updated["cells"]) == 1
+        assert updated["cells"][0]["source"] == ["y = 2\n"]
+
+    def test_execute_notebook_cell_out_of_range(self, tmp_path):
+        import json
+
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        nb = {
+            "cells": [
+                {
+                    "cell_type": "code",
+                    "source": [],
+                    "metadata": {},
+                    "outputs": [],
+                    "execution_count": None,
+                }
+            ],
+            "metadata": {},
+            "nbformat": 4,
+            "nbformat_minor": 5,
+        }
+        (tmp_path / "nb.ipynb").write_text(json.dumps(nb))
+
+        result = execute_tool(
+            "notebook_edit",
+            {"notebook_path": "nb.ipynb", "command": "edit", "cell_number": 5},
+            str(tmp_path),
+        )
+        assert "Error" in result
+        assert "out of range" in result
+
+    def test_execute_notebook_path_escape(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "notebook_edit",
+            {"notebook_path": "../escape.ipynb", "command": "edit", "cell_number": 0},
+            str(tmp_path),
+        )
+        assert "Error" in result
+        assert "escapes" in result
+
+    def test_execute_notebook_not_found(self, tmp_path):
+        from ai_guardian.integrations.anthropic.tools import execute_tool
+
+        result = execute_tool(
+            "notebook_edit",
+            {"notebook_path": "missing.ipynb", "command": "edit", "cell_number": 0},
+            str(tmp_path),
+        )
+        assert "Error" in result
+        assert "does not exist" in result
 
     def test_unknown_tool(self, tmp_path):
         from ai_guardian.integrations.anthropic.tools import execute_tool
@@ -4975,9 +5236,10 @@ class TestOpenAILoopStrategy:
     def test_resolve_tools_preset(self):
         strategy = OpenAILoopStrategy()
         tools = strategy.resolve_tools("coding")
-        assert len(tools) == 4
+        assert len(tools) == 5
         names = [t["function"]["name"] for t in tools]
         assert "bash" in names
+        assert "write" in names
         assert "grep" in names
 
     def test_inject_user_text_after_results(self):

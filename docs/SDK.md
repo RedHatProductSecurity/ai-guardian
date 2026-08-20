@@ -539,7 +539,7 @@ agent = GuardedAgent(
 
 Tools fall into two categories based on where they run:
 
-- **Client tools** (`bash`, `text_editor`, `read_file`, `grep`, `glob`): GuardedAgent executes these locally in the agent's `cwd`. Tool output (results) is scanned by ai-guardian before returning to the model.
+- **Client tools** (`bash`, `text_editor`, `read_file`, `write`, `notebook_edit`, `grep`, `glob`): GuardedAgent executes these locally in the agent's `cwd`. Tool output (results) is scanned by ai-guardian before returning to the model.
 - **Server tools** (`web_search`, `web_fetch`, `code_execution`): Anthropic executes these on their infrastructure. Results pass through ai-guardian output scanning when returned.
 - **`computer`**: Declared as a client tool but requires external desktop integration to execute. GuardedAgent passes it to the API but has no built-in executor — typically used with the `"browser"` preset in environments that provide screenshot/input handling.
 
@@ -570,6 +570,8 @@ These are lightweight tools implemented by GuardedAgent itself (not Anthropic bu
 | Name | Description |
 |------|-------------|
 | `read_file` | Read a file from the local filesystem (with optional offset/limit) |
+| `write` | Write content to a file, creating parent directories if needed |
+| `notebook_edit` | Edit a Jupyter notebook: replace, insert, or delete cells |
 | `grep` | Search for a regex pattern in files (uses system `grep -rn`, skips common non-code directories) |
 | `glob` | List files matching a glob pattern (skips common non-code directories) |
 
@@ -582,6 +584,25 @@ These are lightweight tools implemented by GuardedAgent itself (not Anthropic bu
 | `path` | string | yes | Absolute or relative path to the file to read |
 | `offset` | integer | no | Line number to start reading from (0-based) |
 | `limit` | integer | no | Maximum number of lines to read |
+
+**`write`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | yes | Absolute or relative path to the file to write |
+| `content` | string | yes | The content to write to the file |
+
+Creates parent directories automatically. Overwrites existing files.
+
+**`notebook_edit`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `notebook_path` | string | yes | Path to the `.ipynb` notebook file |
+| `command` | string | yes | Operation: `edit`, `insert_before`, `insert_after`, or `delete` |
+| `cell_number` | integer | yes | 0-based cell index to operate on |
+| `new_source` | string | no | New source content (required for `edit`/`insert_*` commands) |
+| `cell_type` | string | no | Cell type for insert commands: `code` (default) or `markdown` |
 
 **`grep`**
 
@@ -643,7 +664,7 @@ Both are configurable via `ai-guardian.json`:
 
 | Preset | Tools | Use when |
 |--------|-------|----------|
-| `"coding"` | `bash` + `text_editor` + `grep` + `glob` | Agent needs to read, write, and execute code |
+| `"coding"` | `bash` + `text_editor` + `write` + `grep` + `glob` | Agent needs to read, write, and execute code |
 | `"readonly"` | `read_file` + `grep` + `glob` | Agent should only read and search code, not modify it |
 | `"browser"` | `computer` + `bash` | Agent needs to interact with a GUI/desktop |
 
@@ -659,7 +680,7 @@ tools=["coding", "web_search", {"name": "my_tool", "input_schema": {...}}]
 
 #### Adding Custom Tools
 
-Pass raw tool dicts alongside built-in names to define additional tools the model can call. GuardedAgent dispatches tool calls by name — built-in names (`bash`, `text_editor`, `read_file`, `grep`, `glob`) route to their executors; unknown names return `"Error: no executor for tool 'name'"` as the tool result.
+Pass raw tool dicts alongside built-in names to define additional tools the model can call. GuardedAgent dispatches tool calls by name — built-in names (`bash`, `text_editor`, `read_file`, `write`, `notebook_edit`, `grep`, `glob`) route to their executors; unknown names return `"Error: no executor for tool 'name'"` as the tool result.
 
 Custom tool dicts are sent to the Anthropic API as standard tool definitions, so the model can call them. However, GuardedAgent has no executor for them — the error result is what gets sent back to the model. To properly execute custom tools, you have two options:
 
