@@ -817,6 +817,19 @@ class GuardedAgent:
                 )
             except BaseException as exc:
                 exc.trace = trace
+                error_msg = f"{type(exc).__name__}: {exc}"
+                if trace:
+                    last_turn = trace[-1]
+                else:
+                    last_turn = {"turn": 0, "steps": []}
+                    trace.append(last_turn)
+                last_turn["steps"].append(
+                    {
+                        "type": "error",
+                        "message": error_msg,
+                        "step": len(last_turn["steps"]),
+                    }
+                )
                 if self._trace_dir:
                     partial = {"trace": trace, "stop_reason": "error"}
                     self._persist_trace(
@@ -827,6 +840,13 @@ class GuardedAgent:
                         trace_id=trace_id,
                         run_start_mono=run_start_mono,
                     )
+                if otel_emitter is not None:
+                    try:
+                        otel_emitter.on_run_complete(
+                            {"trace": trace, "stop_reason": "error"}
+                        )
+                    except Exception:
+                        logger.debug("OTEL run emit failed (error path)", exc_info=True)
                 raise
             finally:
                 if mcp_manager:

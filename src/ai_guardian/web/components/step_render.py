@@ -26,6 +26,7 @@ STEP_ICON_MAP = {
     "tool_use": ("build", "text-orange"),
     "tool_result": ("output", "text-orange"),
     "thinking": ("psychology", "text-purple"),
+    "error": ("error_outline", "text-red"),
     "system": ("settings", "text-grey-6"),
     "title": ("title", "text-grey-6"),
 }

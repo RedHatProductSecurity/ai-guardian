@@ -269,6 +269,8 @@ def create_trace_detail_page(service, daemon_name: str):
                 with ui.row().classes("items-center gap-2"):
                     if is_active:
                         ui.badge("ACTIVE", color="green").classes("text-xs")
+                    elif stop_reason == "error":
+                        ui.badge("ERROR", color="red").classes("text-xs")
                     else:
                         ui.badge(stop_reason or "done", color="grey").classes("text-xs")
                     started = (result.get("started_at") or "")[:19]
@@ -396,6 +398,8 @@ def _render_trace_card(trace, daemon_name):
 
             if is_active:
                 ui.badge("ACTIVE", color="green").classes("text-xs")
+            elif stop_reason == "error":
+                ui.badge("ERROR", color="red").classes("text-xs")
             else:
                 ui.badge(stop_reason or "done", color="grey").classes("text-xs")
 
@@ -505,6 +509,7 @@ def _render_turn_row(
         "response": "green",
         "tool_use": "orange",
         "scan_only": "yellow",
+        "error": "red",
     }
     type_color = type_colors.get(turn_type, "grey")
 
@@ -514,11 +519,13 @@ def _render_turn_row(
         "response": ("smart_toy", "text-green"),
         "tool_use": ("build", "text-orange"),
         "scan_only": (None, "text-yellow"),
+        "error": ("error_outline", "text-red"),
     }
     icon_name, icon_color = icon_map.get(turn_type, ("help", "text-grey-6"))
     turn_label = _get_turn_label(steps, turn_type)
 
     turn_violations = _collect_turn_violations(steps)
+    has_error = any(s.get("type") == "error" for s in steps)
 
     with ui.card().classes("w-full py-1 px-2"):
         with ui.row().classes("items-center gap-2 w-full"):
@@ -536,6 +543,9 @@ def _render_turn_row(
                 ).classes("text-xs text-grey-6")
             elif turn_tokens > 0:
                 ui.label(f"{turn_tokens:,} tok").classes("text-xs text-grey-6")
+
+            if has_error:
+                ui.badge("ERROR", color="red").classes("text-xs")
 
             if has_violations:
                 vc = len(violations_map[turn_num].get("violations", []))
@@ -575,6 +585,11 @@ def _render_turn_row(
 
 def _get_turn_label(steps, turn_type):
     """Build a descriptive label for the turn header."""
+    if turn_type == "error":
+        for s in steps:
+            if s.get("type") == "error":
+                return f"Error: {s.get('message', 'unknown')[:80]}"
+        return "Error"
     if turn_type == "system":
         return "System"
     if turn_type == "user":
@@ -599,6 +614,8 @@ def _get_turn_label(steps, turn_type):
 
 def _get_turn_type(steps):
     types = {s.get("type") for s in steps}
+    if "error" in types:
+        return "error"
     if "system" in types:
         return "system"
     if "response" in types:
@@ -611,6 +628,10 @@ def _get_turn_type(steps):
 
 
 def _get_turn_prompt_preview(steps):
+    for step in steps:
+        if step.get("type") == "error":
+            return _truncate(step.get("message", ""), 120)
+
     for step in steps:
         if step.get("type") == "system":
             prompt = step.get("user_prompt") or step.get("system_prompt") or ""
@@ -673,6 +694,7 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
         "tool_result": ("output", "text-orange"),
         "scan": (None, "text-yellow"),
         "compaction": ("compress", "text-purple"),
+        "error": ("error_outline", "text-red"),
     }
     icon_name, icon_color = icon_map.get(step_type, ("help", "text-grey-6"))
 
@@ -759,6 +781,13 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
                         ui.label(f"Step {step_num}: scan {scanned} (clean)").classes(
                             "text-xs"
                         )
+                elif step_type == "error":
+                    msg = step.get("message", "")
+                    ui.label(f"Step {step_num}: error").classes(
+                        "text-xs font-bold text-red"
+                    )
+                    if msg:
+                        _render_text_block(msg)
                 elif step_type == "compaction":
                     before = step.get("tokens_before", 0)
                     after = step.get("tokens_after", 0)
