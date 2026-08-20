@@ -5232,6 +5232,151 @@ class TestOpenAIGuardedAgent:
         assert result["output"] == {"test_code": "assert True"}
         assert result["stop_reason"] == "end_turn"
 
+    # -- between_turns + output_schema interaction (#2107) --
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_false_stops_text_only_with_output_schema(self, mock_monitor):
+        """between_turns=False stops loop when model returns text instead of tool call (#2107)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_openai_agent_response(content='{"test_code": "assert True"}')
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(return_value=False)
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.chat.completions.create.return_value = response
+
+        result = agent.run("generate test code")
+
+        hook.assert_called_once()
+        assert result["stop_reason"] == "hook_early_stop"
+        assert client.chat.completions.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_none_nudges_submit_result_with_output_schema(
+        self, mock_monitor
+    ):
+        """between_turns=None nudges model then accepts submit_result (#2107)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_openai_agent_response(content='{"test_code": "pass"}')
+        r2 = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call(
+                    "call_1",
+                    "submit_result",
+                    {"test_code": "assert True"},
+                ),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook)
+        client.chat.completions.create.side_effect = [r1, r2]
+
+        result = agent.run("generate test code")
+
+        assert hook.call_count == 2
+        assert result["output"] == {"test_code": "assert True"}
+        assert result["stop_reason"] == "end_turn"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_string_with_output_schema_includes_nudge(self, mock_monitor):
+        """between_turns string + output_schema: both feedback and nudge injected (#2107)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_openai_agent_response(content='{"test_code": "pass"}')
+        r2 = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call(
+                    "call_1",
+                    "submit_result",
+                    {"test_code": "final"},
+                ),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        call_count = {"n": 0}
+
+        def hook_fn(messages, response, turn):
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                return "Include edge cases"
+            return None
+
+        agent, client = self._make_agent(output_schema=schema, between_turns=hook_fn)
+        client.chat.completions.create.side_effect = [r1, r2]
+
+        result = agent.run("generate test code")
+
+        assert call_count["n"] == 2
+        assert result["output"] == {"test_code": "final"}
+        nudge_messages = [
+            m
+            for m in result["messages"]
+            if isinstance(m.get("content"), str)
+            and "submit_result" in m.get("content", "")
+        ]
+        assert len(nudge_messages) >= 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_append_assistant_message_no_nested_content(self, mock_monitor):
+        """OpenAI append_assistant_message must not nest content in a dict (#2107)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        r1 = _make_openai_agent_response(content="plain text response")
+        r2 = _make_openai_agent_response(
+            content=None,
+            tool_calls=[
+                _make_openai_tool_call(
+                    "call_1",
+                    "submit_result",
+                    {"test_code": "done"},
+                ),
+            ],
+            finish_reason="tool_calls",
+        )
+
+        schema = {
+            "type": "object",
+            "properties": {"test_code": {"type": "string"}},
+        }
+        agent, client = self._make_agent(
+            output_schema=schema, between_turns=lambda m, r, t: None
+        )
+        client.chat.completions.create.side_effect = [r1, r2]
+
+        result = agent.run("generate test code")
+
+        for msg in result["messages"]:
+            if msg.get("role") == "assistant":
+                assert not isinstance(
+                    msg.get("content"), dict
+                ), f"Nested dict content in assistant message: {msg}"
+
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_output_violation_injects_warning_and_continues(self, mock_monitor):
         from ai_guardian.sdk import CheckResult
@@ -5450,6 +5595,16 @@ class TestOpenAILoopStrategy:
         assert messages[0]["role"] == "assistant"
         assert messages[0]["content"] == "thinking"
         assert messages[1] == tool_results[0]
+
+    def test_append_assistant_message_flat(self):
+        """append_assistant_message must produce flat content, not nested dict (#2107)."""
+        strategy = OpenAILoopStrategy()
+        messages = []
+        raw_msg = SimpleNamespace(content="model output", tool_calls=None)
+        strategy.append_assistant_message(messages, raw_msg)
+        assert len(messages) == 1
+        assert messages[0]["role"] == "assistant"
+        assert messages[0]["content"] == "model output"
 
     def test_validate_cache_ttl_accepts_zero(self):
         strategy = OpenAILoopStrategy()

@@ -382,6 +382,13 @@ class OpenAILoopStrategy(AgentLoopStrategy):
     def serialize_assistant_content(self, raw_content: Any) -> Any:
         return self._message_to_dict(raw_content)
 
+    def append_assistant_message(
+        self,
+        messages: List[Dict[str, Any]],
+        raw_content: Any,
+    ) -> None:
+        messages.append(self._message_to_dict(raw_content))
+
     def replace_response_text(self, raw_content: Any, sanitized_text: str) -> Any:
         from types import SimpleNamespace
 
