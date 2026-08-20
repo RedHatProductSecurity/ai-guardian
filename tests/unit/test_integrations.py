@@ -7895,3 +7895,38 @@ class TestIncrementalTracePersist:
         with open(os.path.join(trace_dir, files[0])) as fh:
             doc = json.load(fh)
         assert doc["stop_reason"] == "error"
+
+
+# ============================================================================
+# TestMissingProviderPackage
+# ============================================================================
+
+
+class TestMissingProviderPackage:
+    """Import errors give a helpful install hint when provider package missing."""
+
+    def test_anthropic_missing_gives_install_hint(self):
+        import ai_guardian.integrations.anthropic._extractor as mod
+
+        with patch.dict(sys.modules, {"anthropic": None}):
+            with pytest.raises(
+                ImportError, match="pip install ai-guardian\\[anthropic\\]"
+            ):
+                mod._build_client("direct", {})
+
+    def test_openai_missing_in_extractor_gives_install_hint(self):
+        import ai_guardian.integrations.anthropic._extractor as mod
+
+        with patch.dict(sys.modules, {"openai": None}):
+            with pytest.raises(
+                ImportError, match="pip install ai-guardian\\[openai\\]"
+            ):
+                mod._build_openai_client("openai", {})
+
+    def test_openai_missing_in_strategy_gives_install_hint(self):
+        with patch.dict(sys.modules, {"openai": None}):
+            strategy = OpenAILoopStrategy()
+            with pytest.raises(
+                ImportError, match="pip install ai-guardian\\[openai\\]"
+            ):
+                strategy.create_default_client()

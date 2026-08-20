@@ -194,7 +194,13 @@ def create_client(
 
 def _build_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
     """Create an Anthropic SDK client for the resolved *provider* key."""
-    import anthropic
+    try:
+        import anthropic
+    except ImportError:
+        raise ImportError(
+            "The 'anthropic' package is required for Anthropic providers. "
+            "Install it with: pip install ai-guardian[anthropic]"
+        ) from None
 
     api_key_env = pcfg.get("api_key_env")
 
@@ -232,7 +238,14 @@ def _resolve_base_url(pcfg: dict) -> Optional[str]:
 
 def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
     """Create an OpenAI SDK client for OpenAI-compatible providers."""
-    import openai
+    try:
+        import openai
+    except ImportError:
+        raise ImportError(
+            "The 'openai' package is required for OpenAI-compatible providers "
+            "(OpenAI, Azure, Ollama, llama.cpp, vLLM). "
+            "Install it with: pip install ai-guardian[openai]"
+        ) from None
 
     base_url = _resolve_base_url(pcfg)
     api_key_env = pcfg.get("api_key_env")
