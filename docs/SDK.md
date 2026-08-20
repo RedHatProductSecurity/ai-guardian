@@ -707,6 +707,7 @@ GuardedAgent can connect to MCP (Model Context Protocol) servers, making their t
 | `startup_timeout` | int | `10` | Max seconds to wait for server to initialize |
 | `trust` | string | `"check"` | Trust level: `trusted` (skip scanning), `check` (scan results), `untrusted` (scan results) |
 | `scan_results` | bool | `true` | Scan tool results through ai-guardian |
+| `defer_loading` | bool | `false` | Defer server startup until first tool call. Tools are discovered via a brief probe at agent start, then the server shuts down and reconnects lazily on the first call. Useful for servers that are expensive to keep running but may not be needed every run. |
 
 MCP tools are named `mcp__{server_name}__{tool_name}` following Claude Code convention. Security scanning of tool results follows the same pipeline as built-in tools unless the server is marked as `trusted` or has `scan_results: false`.
 
