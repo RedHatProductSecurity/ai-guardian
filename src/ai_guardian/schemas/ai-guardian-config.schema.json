@@ -2853,6 +2853,18 @@
             "$ref": "#/definitions/sdk_agent_profile"
           }
         },
+        "secret_redaction": {
+          "type": "object",
+          "description": "SDK-specific secret redaction override. When set, takes precedence over the global secret_redaction section for SDK context. SDK defaults to disabled because redacting secrets in content flowing between agent turns breaks code and confuses the agent.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable secret redaction in SDK context. Overrides global secret_redaction.enabled for SDK. Default: false.",
+              "default": false
+            }
+          }
+        },
         "trace_viewer": {
           "type": "object",
           "description": "Console trace viewer settings. Traces are stored in the XDG state directory (~/.local/state/ai-guardian/sdk/traces/).",

@@ -52,6 +52,12 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
                 classes="sdk-toggle",
             )
             yield Checkbox(
+                "Use global config",
+                value=True,
+                id="sdk-use-global-config-toggle",
+                classes="sdk-toggle",
+            )
+            yield Checkbox(
                 "Secret redaction (SDK)",
                 value=False,
                 id="sdk-redaction-toggle",
@@ -68,6 +74,9 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
                 "[bold]About SDK Settings[/bold]\n\n"
                 "  [bold]Scanning[/bold] — Global enable/disable for all SDK "
                 "scanning. When off, SDK skips all input/output scanning.\n\n"
+                "  [bold]Use Global Config[/bold] — When on, SDK uses global "
+                "ai-guardian.json scanner settings (per-scanner actions, "
+                "thresholds, allowlists). When off, SDK runs standalone.\n\n"
                 "  [bold]Secret Redaction[/bold] — Redact detected secrets in "
                 "live SDK content. Off by default because redaction breaks "
                 "code in the agentic loop. Traces are always sanitized "
@@ -85,6 +94,7 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
         config = self._load_full_config()
         sdk = config.get("sdk", {})
         scanning = sdk.get("scanning", True)
+        use_global = sdk.get("use_global_config", True)
         redaction = sdk.get("secret_redaction", {})
         redaction_enabled = (
             redaction.get("enabled", False) if isinstance(redaction, dict) else False
@@ -92,6 +102,12 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
 
         try:
             self.query_one("#sdk-scanning-toggle", Checkbox).value = bool(scanning)
+        except Exception:
+            pass
+        try:
+            self.query_one("#sdk-use-global-config-toggle", Checkbox).value = bool(
+                use_global
+            )
         except Exception:
             pass
         try:
@@ -111,6 +127,16 @@ class SDKSettingsContent(ConfigSaveMixin, Container):
                 state = "enabled" if event.value else "disabled"
                 self._set_status(f"SDK scanning {state}", "success")
                 self.app.notify(f"SDK scanning {state}", severity="information")
+            else:
+                self._set_status("Save failed", "error")
+        elif event.checkbox.id == "sdk-use-global-config-toggle":
+            sdk["use_global_config"] = event.value
+            if self._write_full_config(config):
+                state = "enabled" if event.value else "disabled"
+                self._set_status(f"SDK use_global_config {state}", "success")
+                self.app.notify(
+                    f"SDK use_global_config {state}", severity="information"
+                )
             else:
                 self._set_status("Save failed", "error")
         elif event.checkbox.id == "sdk-redaction-toggle":

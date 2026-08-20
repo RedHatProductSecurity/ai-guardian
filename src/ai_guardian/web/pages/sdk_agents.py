@@ -16,6 +16,7 @@ _COLUMNS = [
         "sortable": True,
     },
     {"name": "model", "label": "Model", "field": "model", "align": "left"},
+    {"name": "provider", "label": "Provider", "field": "provider", "align": "left"},
     {
         "name": "max_turns",
         "label": "Max Turns",
@@ -35,6 +36,22 @@ _COLUMNS = [
 
 _MODE_OPTIONS = ["direct", "rest"]
 _TOOLS_OPTIONS = ["coding", "readonly", "[]"]
+_PROVIDER_OPTIONS = [
+    "",
+    "direct",
+    "anthropic",
+    "vertex",
+    "bedrock",
+    "foundry",
+    "openai",
+    "azure",
+    "openai-compatible",
+    "ollama",
+    "mlx",
+    "llamacpp",
+    "vllm",
+    "lm-studio",
+]
 
 
 def _profiles_to_rows(agents: dict) -> list:
@@ -47,6 +64,7 @@ def _profiles_to_rows(agents: dict) -> list:
             {
                 "name": name,
                 "model": profile.get("model", ""),
+                "provider": profile.get("provider", ""),
                 "max_turns": profile.get("max_turns", ""),
                 "tools": str(tools_val),
                 "mode": profile.get("mode", "direct"),
@@ -95,6 +113,24 @@ def _show_edit_dialog(
             label="Mode",
         ).classes("w-full")
 
+        provider_select = ui.select(
+            options=_PROVIDER_OPTIONS,
+            value=profile.get("provider", ""),
+            label="Provider",
+        ).classes("w-full")
+
+        pc = profile.get("provider_config", {})
+        if not isinstance(pc, dict):
+            pc = {}
+        base_url_input = ui.input(
+            label="Provider Base URL",
+            value=pc.get("base_url", ""),
+        ).classes("w-full")
+        api_key_env_input = ui.input(
+            label="API Key Env Var",
+            value=pc.get("api_key_env", ""),
+        ).classes("w-full")
+
         compact_input = ui.number(
             label="Compact Threshold (0.0 - 1.0)",
             value=profile.get("compact_threshold", 0.8),
@@ -102,6 +138,24 @@ def _show_edit_dialog(
             max=1.0,
             step=0.05,
         ).classes("w-full")
+        compact_keep_turns_input = ui.number(
+            label="Compact Keep Turns",
+            value=profile.get("compact_keep_turns"),
+            min=0,
+        ).classes("w-full")
+        compact_keep_first_input = ui.number(
+            label="Compact Keep First",
+            value=profile.get("compact_keep_first"),
+            min=0,
+        ).classes("w-full")
+
+        mcp_servers = profile.get("mcpServers", {})
+        if isinstance(mcp_servers, dict):
+            server_names = [k for k in mcp_servers if not k.startswith("_comment")]
+            if server_names:
+                ui.label(f"MCP Servers: {', '.join(server_names)}").classes(
+                    "text-xs text-grey-6"
+                )
 
         with ui.row().classes("w-full justify-end gap-2 mt-4"):
             ui.button("Cancel", on_click=dialog.close).props("flat")
@@ -125,8 +179,21 @@ def _show_edit_dialog(
                     else:
                         updated["tools"] = tv
                 updated["mode"] = mode_select.value
+                if provider_select.value:
+                    updated["provider"] = provider_select.value
+                provider_config = {}
+                if base_url_input.value.strip():
+                    provider_config["base_url"] = base_url_input.value.strip()
+                if api_key_env_input.value.strip():
+                    provider_config["api_key_env"] = api_key_env_input.value.strip()
+                if provider_config:
+                    updated["provider_config"] = provider_config
                 if compact_input.value is not None:
                     updated["compact_threshold"] = float(compact_input.value)
+                if compact_keep_turns_input.value is not None:
+                    updated["compact_keep_turns"] = int(compact_keep_turns_input.value)
+                if compact_keep_first_input.value is not None:
+                    updated["compact_keep_first"] = int(compact_keep_first_input.value)
 
                 for k, v in profile.items():
                     if k not in updated:

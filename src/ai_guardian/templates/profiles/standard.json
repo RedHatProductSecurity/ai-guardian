@@ -1,7 +1,7 @@
 {
-  "$schema": "__SCHEMA_URI__",
+  "$schema": "file:///Users/dvernier/development/ai/ai-guardian/src/ai_guardian/schemas/ai-guardian-config.schema.json",
   "_comment_project_overlay": "Project-level .ai-guardian/ai-guardian.json at repo root merges on top of this global config. Use immutable arrays to lock fields from project override.",
-  "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks — use allowlist_patterns for false positives. Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
+  "_comment_secret_scanning": "Scan for secrets (API keys, tokens, passwords). Detection always blocks \u2014 use allowlist_patterns for false positives. Supported engines: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, gitguardian",
   "secret_scanning": {
     "enabled": true,
     "ignore_files": [],
@@ -173,6 +173,12 @@
     "action": "block",
     "tokens": []
   },
+  "_comment_exfil_detection": "Exfiltration behavior detection \u2014 detects bash commands that steal credentials: curl/wget with token vars, base64 encoding of secrets, key file theft, cloud credential exfil (NEW in v1.14.0, Issue #1393).",
+  "exfil_detection": {
+    "enabled": true,
+    "action": "block",
+    "allowlist_patterns": []
+  },
   "_comment_permissions": "Control which tools (Skills, MCP servers, Bash, etc.) are allowed to run. Rules evaluated in order, last match wins.",
   "permissions": {
     "enabled": true,
@@ -340,10 +346,23 @@
     },
     "bundle_ttl_minutes": 30
   },
-  "_comment_exfil_detection": "Exfiltration behavior detection \u2014 detects bash commands that steal credentials: curl/wget with token vars, base64 encoding of secrets, key file theft, cloud credential exfil (NEW in v1.14.0, Issue #1393).",
-  "exfil_detection": {
-    "enabled": true,
-    "action": "block",
-    "allowlist_patterns": []
+  "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions (NEW in v1.16.0). Requires 'pip install ai-guardian[otel]' for protobuf format.",
+  "otel": {
+    "enabled": false,
+    "endpoint": "http://localhost:4318",
+    "service_name": "ai-guardian",
+    "export_format": "otlp-json",
+    "headers": {},
+    "resource_attributes": {}
+  },
+  "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper. Controls scanning, secret redaction, provider selection, and agent profiles.",
+  "sdk": {
+    "scanning": true,
+    "use_global_config": true,
+    "secret_redaction": {
+      "enabled": false
+    },
+    "provider_config": {},
+    "agents": {}
   }
 }

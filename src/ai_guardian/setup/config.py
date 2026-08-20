@@ -451,6 +451,23 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             },
             "bundle_ttl_minutes": 30,
         },
+        "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions (NEW in v1.16.0). Requires 'pip install ai-guardian[otel]' for protobuf format.",
+        "otel": {
+            "enabled": False,
+            "endpoint": "http://localhost:4318",
+            "service_name": "ai-guardian",
+            "export_format": "otlp-json",
+            "headers": {},
+            "resource_attributes": {},
+        },
+        "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper. Controls scanning, secret redaction, provider selection, and agent profiles.",
+        "sdk": {
+            "scanning": True,
+            "use_global_config": True,
+            "secret_redaction": {"enabled": False},
+            "provider_config": {},
+            "agents": {},
+        },
     }
 
     return config

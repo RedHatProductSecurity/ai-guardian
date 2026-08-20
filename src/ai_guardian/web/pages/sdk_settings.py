@@ -17,8 +17,14 @@ def create_sdk_settings_page(service, daemon_name: str):
         )
 
         scanning_switch = ui.switch("SDK Scanning enabled").classes("mt-2")
-        redaction_switch = ui.switch("Secret redaction (SDK)")
+        use_global_switch = ui.switch("Use global config")
+        ui.label(
+            "When on, SDK uses global ai-guardian.json scanner settings "
+            "(per-scanner actions, thresholds, allowlists). "
+            "When off, SDK runs standalone."
+        ).classes("text-xs text-grey-6 ml-10 -mt-2 max-w-lg")
 
+        redaction_switch = ui.switch("Secret redaction (SDK)")
         ui.label(
             "SDK defaults secret redaction to OFF — redacting content "
             "in the agentic loop breaks code. Traces are always sanitized "
@@ -36,6 +42,8 @@ def create_sdk_settings_page(service, daemon_name: str):
                 sdk = config.setdefault("sdk", {})
                 if section_path == "scanning":
                     sdk["scanning"] = value
+                elif section_path == "use_global_config":
+                    sdk["use_global_config"] = value
                 elif section_path == "secret_redaction.enabled":
                     sr = sdk.setdefault("secret_redaction", {})
                     sr["enabled"] = value
@@ -47,6 +55,9 @@ def create_sdk_settings_page(service, daemon_name: str):
                 saving["active"] = False
 
         scanning_switch.on_value_change(lambda e: _save_toggle("scanning", e.value))
+        use_global_switch.on_value_change(
+            lambda e: _save_toggle("use_global_config", e.value)
+        )
         redaction_switch.on_value_change(
             lambda e: _save_toggle("secret_redaction.enabled", e.value)
         )
@@ -56,6 +67,7 @@ def create_sdk_settings_page(service, daemon_name: str):
             sdk = config.get("sdk", {})
             saving["active"] = True
             scanning_switch.value = sdk.get("scanning", True)
+            use_global_switch.value = sdk.get("use_global_config", True)
             sr = sdk.get("secret_redaction", {})
             redaction_switch.value = (
                 sr.get("enabled", False) if isinstance(sr, dict) else False

@@ -12,6 +12,7 @@ from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 _PROFILE_FIELDS = [
     ("model", "Model", "text"),
     ("mode", "Mode", "select"),
+    ("provider", "Provider", "select_provider"),
     ("max_turns", "Max Turns", "int"),
     ("max_tokens", "Max Tokens", "int"),
     ("tools", "Tools", "text"),
@@ -21,9 +22,30 @@ _PROFILE_FIELDS = [
     ("cwd", "Working Directory", "text"),
 ]
 
+_PROVIDER_CONFIG_FIELDS = [
+    ("base_url", "Base URL", "text"),
+    ("api_key_env", "API Key Env Var", "text"),
+]
+
 _MODE_OPTIONS = [
     ("Direct", "direct"),
     ("REST", "rest"),
+]
+
+_PROVIDER_OPTIONS = [
+    ("(default)", ""),
+    ("Direct/Anthropic", "direct"),
+    ("Vertex AI", "vertex"),
+    ("AWS Bedrock", "bedrock"),
+    ("Foundry", "foundry"),
+    ("OpenAI", "openai"),
+    ("Azure OpenAI", "azure"),
+    ("OpenAI-Compatible", "openai-compatible"),
+    ("Ollama", "ollama"),
+    ("MLX", "mlx"),
+    ("llama.cpp", "llamacpp"),
+    ("vLLM", "vllm"),
+    ("LM Studio", "lm-studio"),
 ]
 
 
@@ -220,6 +242,13 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                     value=str(value) if value else "direct",
                     id=f"profile-field-{field_key}",
                 )
+            elif field_type == "select_provider":
+                widget = Select(
+                    [(lbl, val) for lbl, val in _PROVIDER_OPTIONS],
+                    value=str(value) if value else "",
+                    id=f"profile-field-{field_key}",
+                    allow_blank=True,
+                )
             elif field_type == "text":
                 display_val = str(value) if value else ""
                 if isinstance(value, list):
@@ -244,6 +273,38 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                 )
             row.mount(widget)
 
+        provider_config = profile.get("provider_config", {})
+        if not isinstance(provider_config, dict):
+            provider_config = {}
+        detail.mount(
+            Static(
+                "[bold]Provider Config[/bold] [dim](env var names only, no secrets)[/dim]"
+            )
+        )
+        for pc_key, pc_label, _ in _PROVIDER_CONFIG_FIELDS:
+            pc_value = provider_config.get(pc_key, "")
+            row = Horizontal(classes="setting-row")
+            detail.mount(row)
+            row.mount(Label(f"  {pc_label}:"))
+            row.mount(
+                Input(
+                    value=str(pc_value) if pc_value else "",
+                    placeholder=f"Enter {pc_label.lower()}",
+                    id=f"profile-field-pc-{pc_key}",
+                )
+            )
+
+        mcp_servers = profile.get("mcpServers", {})
+        if isinstance(mcp_servers, dict) and mcp_servers:
+            server_names = [k for k in mcp_servers if not k.startswith("_comment")]
+            if server_names:
+                detail.mount(
+                    Static(
+                        f"[bold]MCP Servers[/bold] [dim]({len(server_names)} configured: "
+                        f"{', '.join(server_names)})[/dim]"
+                    )
+                )
+
         save_row = Horizontal(classes="setting-row")
         detail.mount(save_row)
         save_row.mount(Button("Save Profile", id="btn-save-profile", variant="primary"))
@@ -254,7 +315,12 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
             return
 
         name = self._selected_profile
-        updated: Dict[str, Any] = {}
+        config = self._load_full_config()
+        sdk = config.setdefault("sdk", {})
+        agents = sdk.setdefault("agents", {})
+        existing = agents.get(name, {})
+        if not isinstance(existing, dict):
+            existing = {}
 
         for field_key, _, field_type in _PROFILE_FIELDS:
             widget_id = f"profile-field-{field_key}"
@@ -271,11 +337,12 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                 continue
 
             if raw == "" or raw == Select.BLANK:
+                existing.pop(field_key, None)
                 continue
 
             if field_type == "int":
                 try:
-                    updated[field_key] = int(raw)
+                    existing[field_key] = int(raw)
                 except ValueError:
                     self.app.notify(
                         f"Invalid integer for {field_key}", severity="error"
@@ -283,7 +350,7 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                     return
             elif field_type == "float":
                 try:
-                    updated[field_key] = float(raw)
+                    existing[field_key] = float(raw)
                 except ValueError:
                     self.app.notify(f"Invalid number for {field_key}", severity="error")
                     return
@@ -291,16 +358,32 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                 import json
 
                 try:
-                    updated[field_key] = json.loads(raw)
+                    existing[field_key] = json.loads(raw)
                 except json.JSONDecodeError:
-                    updated[field_key] = raw
+                    existing[field_key] = raw
             else:
-                updated[field_key] = raw
+                existing[field_key] = raw
 
-        config = self._load_full_config()
-        sdk = config.setdefault("sdk", {})
-        agents = sdk.setdefault("agents", {})
-        agents[name] = updated
+        provider_config = existing.get("provider_config", {})
+        if not isinstance(provider_config, dict):
+            provider_config = {}
+        for pc_key, _, _ in _PROVIDER_CONFIG_FIELDS:
+            widget_id = f"profile-field-pc-{pc_key}"
+            try:
+                widget = self.query_one(f"#{widget_id}", Input)
+            except Exception:
+                continue
+            raw = widget.value.strip()
+            if raw:
+                provider_config[pc_key] = raw
+            else:
+                provider_config.pop(pc_key, None)
+        if provider_config:
+            existing["provider_config"] = provider_config
+        else:
+            existing.pop("provider_config", None)
+
+        agents[name] = existing
         if self._write_full_config(config):
             self.app.notify(f"Profile '{name}' saved", severity="information")
             self._load_profiles()
