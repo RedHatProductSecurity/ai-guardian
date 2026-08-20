@@ -269,8 +269,10 @@ def create_trace_detail_page(service, daemon_name: str):
                 with ui.row().classes("items-center gap-2"):
                     if is_active:
                         ui.badge("ACTIVE", color="green").classes("text-xs")
-                    elif stop_reason == "error":
-                        ui.badge("ERROR", color="red").classes("text-xs")
+                    elif stop_reason in ("error", "crashed"):
+                        ui.badge(stop_reason.upper(), color="red").classes("text-xs")
+                    elif stop_reason == "interrupted":
+                        ui.badge("INTERRUPTED", color="orange").classes("text-xs")
                     else:
                         ui.badge(stop_reason or "done", color="grey").classes("text-xs")
                     started = (result.get("started_at") or "")[:19]
@@ -388,6 +390,10 @@ def _render_trace_card(trace, daemon_name):
         with ui.row().classes("items-center gap-2 w-full"):
             if is_active:
                 ui.icon("fiber_manual_record").classes("text-green text-xs")
+            elif stop_reason in ("error", "crashed"):
+                ui.icon("error_outline").classes("text-red text-xs")
+            elif stop_reason == "interrupted":
+                ui.icon("pan_tool").classes("text-orange text-xs")
             else:
                 ui.icon("check_circle").classes("text-grey-6 text-xs")
 
@@ -398,8 +404,10 @@ def _render_trace_card(trace, daemon_name):
 
             if is_active:
                 ui.badge("ACTIVE", color="green").classes("text-xs")
-            elif stop_reason == "error":
-                ui.badge("ERROR", color="red").classes("text-xs")
+            elif stop_reason in ("error", "crashed"):
+                ui.badge(stop_reason.upper(), color="red").classes("text-xs")
+            elif stop_reason == "interrupted":
+                ui.badge("INTERRUPTED", color="orange").classes("text-xs")
             else:
                 ui.badge(stop_reason or "done", color="grey").classes("text-xs")
 

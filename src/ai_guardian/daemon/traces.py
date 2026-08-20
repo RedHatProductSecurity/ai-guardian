@@ -10,10 +10,13 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+_STALE_THRESHOLD_SECONDS = 300
 
 _FILENAME_PATTERN = re.compile(
     r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*_\d{8}-\d{6}_[a-f0-9]{8}\.json$"
@@ -76,6 +79,23 @@ def _count_violations(trace: list) -> int:
             if step.get("type") == "scan":
                 count += len(step.get("violations") or [])
     return count
+
+
+def _mark_trace_crashed(filepath: str) -> None:
+    """Rewrite a stale in-progress trace file to stop_reason='crashed'."""
+    try:
+        with open(filepath, "r", encoding="utf-8") as fh:
+            doc = json.load(fh)
+        if doc.get("stop_reason") != "in_progress":
+            return
+        doc["stop_reason"] = "crashed"
+        mtime = os.path.getmtime(filepath)
+        doc["ended_at"] = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+        with open(filepath, "w", encoding="utf-8") as fh:
+            json.dump(doc, fh, indent=2, default=str)
+        write_trace_meta(filepath, doc)
+    except Exception:
+        logger.debug("Failed to mark trace as crashed: %s", filepath)
 
 
 def resolve_trace_dirs() -> List[str]:
@@ -176,6 +196,11 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
     except OSError:
         file_mtime = 0.0
 
+    if stop_reason == "in_progress" and file_mtime:
+        if (time.time() - file_mtime) > _STALE_THRESHOLD_SECONDS:
+            _mark_trace_crashed(filepath)
+            stop_reason = "crashed"
+
     return {
         "filename": filename,
         "agent_name": meta.get("agent_name", ""),
@@ -272,6 +297,16 @@ def read_trace_detail(
     model = doc.get("model", "")
     stop_reason = doc.get("stop_reason")
     started_at = doc.get("started_at", "")
+
+    if stop_reason == "in_progress":
+        try:
+            file_mtime = os.path.getmtime(filepath)
+            if (time.time() - file_mtime) > _STALE_THRESHOLD_SECONDS:
+                _mark_trace_crashed(filepath)
+                stop_reason = "crashed"
+                doc["stop_reason"] = "crashed"
+        except OSError:
+            pass
 
     computed = compute_token_summary(trace, usage, model)
     computed["duration_seconds"] = _compute_duration(started_at, stop_reason, filepath)

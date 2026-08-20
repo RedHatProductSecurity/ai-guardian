@@ -2,10 +2,13 @@
 
 import json
 import os
+import time
 
 import pytest
 
 from ai_guardian.daemon.traces import (
+    _STALE_THRESHOLD_SECONDS,
+    _mark_trace_crashed,
     _meta_path,
     compute_token_summary,
     estimate_cost,
@@ -432,6 +435,83 @@ class TestMetaSidecar:
         result = list_traces(str(trace_dir))
         assert len(result) == 1
         assert result[0]["agent_name"] == "test-agent"
+
+
+class TestStaleTraceDetection:
+    def test_stale_in_progress_marked_crashed_in_listing(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        fp = _write_trace(trace_dir, "s_20260813-103000_a1b2c3d4.json", doc)
+        stale_time = time.time() - _STALE_THRESHOLD_SECONDS - 60
+        os.utime(fp, (stale_time, stale_time))
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["stop_reason"] == "crashed"
+        assert result[0]["is_active"] is False
+
+    def test_fresh_in_progress_stays_active(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        _write_trace(trace_dir, "f_20260813-103000_a1b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["stop_reason"] == "in_progress"
+        assert result[0]["is_active"] is True
+
+    def test_stale_trace_file_rewritten(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        fp = _write_trace(trace_dir, "r_20260813-103000_a1b2c3d4.json", doc)
+        stale_time = time.time() - _STALE_THRESHOLD_SECONDS - 60
+        os.utime(fp, (stale_time, stale_time))
+
+        list_traces(str(trace_dir))
+
+        with open(fp, "r", encoding="utf-8") as fh:
+            rewritten = json.load(fh)
+        assert rewritten["stop_reason"] == "crashed"
+        assert "ended_at" in rewritten
+
+    def test_stale_meta_sidecar_also_rewritten(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        fp = _write_trace(trace_dir, "m2_20260813-103000_a1b2c3d4.json", doc)
+        write_trace_meta(str(fp), doc)
+        stale_time = time.time() - _STALE_THRESHOLD_SECONDS - 60
+        os.utime(fp, (stale_time, stale_time))
+
+        list_traces(str(trace_dir))
+
+        meta_fp = _meta_path(str(fp))
+        with open(meta_fp, "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        assert meta["stop_reason"] == "crashed"
+
+    def test_mark_trace_crashed_noop_if_not_in_progress(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="end_turn")
+        fp = _write_trace(trace_dir, "n_20260813-103000_a1b2c3d4.json", doc)
+        _mark_trace_crashed(str(fp))
+        with open(fp, "r", encoding="utf-8") as fh:
+            reread = json.load(fh)
+        assert reread["stop_reason"] == "end_turn"
+
+    def test_stale_detection_in_read_trace_detail(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        fp = _write_trace(trace_dir, "d_20260813-103000_a1b2c3d4.json", doc)
+        stale_time = time.time() - _STALE_THRESHOLD_SECONDS - 60
+        os.utime(fp, (stale_time, stale_time))
+
+        result = read_trace_detail(str(trace_dir), "d_20260813-103000_a1b2c3d4.json")
+        assert result is not None
+        assert result["stop_reason"] == "crashed"
+        assert result["is_active"] is False
+
+    def test_fresh_detail_stays_in_progress(self, trace_dir):
+        doc = _sample_trace_doc(stop_reason="in_progress")
+        _write_trace(trace_dir, "fd_20260813-103000_a1b2c3d4.json", doc)
+
+        result = read_trace_detail(str(trace_dir), "fd_20260813-103000_a1b2c3d4.json")
+        assert result is not None
+        assert result["stop_reason"] == "in_progress"
+        assert result["is_active"] is True
 
 
 class TestPushedTraceToSummary:
