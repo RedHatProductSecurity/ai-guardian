@@ -2771,7 +2771,7 @@
         },
         "defer_loading": {
           "type": "boolean",
-          "description": "Reserved for future use. When implemented, defers server startup until first tool call.",
+          "description": "Defer server startup until first tool call. Tools are discovered via a brief probe at agent start, then the server shuts down and reconnects lazily on the first call_tool().",
           "default": false
         },
         "timeout": {

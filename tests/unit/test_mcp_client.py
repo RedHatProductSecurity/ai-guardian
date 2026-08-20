@@ -220,6 +220,206 @@ class TestCallToolNotConnected:
     sys.version_info < (3, 10),
     reason="MCP requires Python >= 3.10",
 )
+class TestDeferredLoading:
+    """Tests for defer_loading MCP server lifecycle."""
+
+    @staticmethod
+    def _make_mock_session(tool_names):
+        """Create a mock session that discovers the given tool names."""
+        mock_tools = []
+        for name in tool_names:
+            t = MagicMock()
+            t.name = name
+            t.description = f"Tool {name}"
+            t.input_schema = {"type": "object", "properties": {}}
+            mock_tools.append(t)
+
+        mock_tools_result = MagicMock()
+        mock_tools_result.tools = mock_tools
+
+        mock_session = MagicMock()
+
+        async def _init():
+            return None
+
+        async def _list_tools():
+            return mock_tools_result
+
+        mock_session.initialize = _init
+        mock_session.list_tools = _list_tools
+
+        async def _aenter(self_):
+            return mock_session
+
+        async def _aexit(self_, *a):
+            return None
+
+        mock_session.__aenter__ = _aenter
+        mock_session.__aexit__ = _aexit
+        return mock_session
+
+    @patch("ai_guardian.integrations.mcp_client.stdio_client")
+    @patch("ai_guardian.integrations.mcp_client.ClientSession")
+    def test_deferred_server_tools_discovered(self, mock_session_cls, mock_stdio):
+        from contextlib import asynccontextmanager
+
+        mock_session_cls.return_value = self._make_mock_session(["probe_tool"])
+
+        @asynccontextmanager
+        async def fake_stdio(params):
+            yield (MagicMock(), MagicMock())
+
+        mock_stdio.side_effect = fake_stdio
+
+        manager = MCPClientManager(
+            {"deferred-srv": {"command": "test-cmd", "defer_loading": True}}
+        )
+        try:
+            manager.start()
+            tools = manager.get_tools()
+            assert len(tools) == 1
+            assert tools[0]["name"] == "mcp__deferred-srv__probe_tool"
+        finally:
+            manager.stop()
+
+    @patch("ai_guardian.integrations.mcp_client.stdio_client")
+    @patch("ai_guardian.integrations.mcp_client.ClientSession")
+    def test_deferred_server_not_in_sessions(self, mock_session_cls, mock_stdio):
+        from contextlib import asynccontextmanager
+
+        mock_session_cls.return_value = self._make_mock_session(["t1"])
+
+        @asynccontextmanager
+        async def fake_stdio(params):
+            yield (MagicMock(), MagicMock())
+
+        mock_stdio.side_effect = fake_stdio
+
+        manager = MCPClientManager(
+            {"deferred-srv": {"command": "test-cmd", "defer_loading": True}}
+        )
+        try:
+            manager.start()
+            assert "deferred-srv" not in manager._sessions
+            assert "deferred-srv" in manager._deferred
+        finally:
+            manager.stop()
+
+    @patch("ai_guardian.integrations.mcp_client.stdio_client")
+    @patch("ai_guardian.integrations.mcp_client.ClientSession")
+    def test_deferred_server_lazy_connects_on_call(self, mock_session_cls, mock_stdio):
+        from contextlib import asynccontextmanager
+
+        call_result = MagicMock()
+        call_result.is_error = False
+        text_block = MagicMock()
+        text_block.text = "tool output"
+        call_result.content = [text_block]
+        call_result.structured_content = None
+
+        mock_session = self._make_mock_session(["my_tool"])
+
+        async def _call_tool(name, arguments):
+            return call_result
+
+        mock_session.call_tool = _call_tool
+        mock_session_cls.return_value = mock_session
+
+        @asynccontextmanager
+        async def fake_stdio(params):
+            yield (MagicMock(), MagicMock())
+
+        mock_stdio.side_effect = fake_stdio
+
+        manager = MCPClientManager(
+            {"lazy-srv": {"command": "test-cmd", "defer_loading": True}}
+        )
+        try:
+            manager.start()
+            assert "lazy-srv" not in manager._sessions
+
+            result = manager.call_tool("lazy-srv", "my_tool", {})
+            assert result == "tool output"
+            assert "lazy-srv" in manager._sessions
+        finally:
+            manager.stop()
+
+    @patch("ai_guardian.integrations.mcp_client.stdio_client")
+    @patch("ai_guardian.integrations.mcp_client.ClientSession")
+    def test_deferred_and_immediate_mix(self, mock_session_cls, mock_stdio):
+        from contextlib import asynccontextmanager
+
+        call_count = {"stdio": 0}
+
+        @asynccontextmanager
+        async def fake_stdio(params):
+            call_count["stdio"] += 1
+            yield (MagicMock(), MagicMock())
+
+        mock_stdio.side_effect = fake_stdio
+        mock_session_cls.return_value = self._make_mock_session(["tool_a"])
+
+        manager = MCPClientManager(
+            {
+                "immediate": {"command": "cmd1"},
+                "deferred": {"command": "cmd2", "defer_loading": True},
+            }
+        )
+        try:
+            manager.start()
+            assert "immediate" in manager._sessions
+            assert "deferred" not in manager._sessions
+            assert "deferred" in manager._deferred
+
+            tools = manager.get_tools()
+            assert len(tools) == 2
+        finally:
+            manager.stop()
+
+    @patch("ai_guardian.integrations.mcp_client.stdio_client")
+    @patch("ai_guardian.integrations.mcp_client.ClientSession")
+    def test_deferred_server_stays_connected(self, mock_session_cls, mock_stdio):
+        from contextlib import asynccontextmanager
+
+        call_result = MagicMock()
+        call_result.is_error = False
+        text_block = MagicMock()
+        text_block.text = "ok"
+        call_result.content = [text_block]
+        call_result.structured_content = None
+
+        mock_session = self._make_mock_session(["t"])
+
+        async def _call_tool(name, arguments):
+            return call_result
+
+        mock_session.call_tool = _call_tool
+        mock_session_cls.return_value = mock_session
+
+        @asynccontextmanager
+        async def fake_stdio(params):
+            yield (MagicMock(), MagicMock())
+
+        mock_stdio.side_effect = fake_stdio
+
+        manager = MCPClientManager({"srv": {"command": "cmd", "defer_loading": True}})
+        try:
+            manager.start()
+
+            manager.call_tool("srv", "t", {"a": 1})
+            assert "srv" in manager._sessions
+            session_after_first = manager._sessions["srv"]
+
+            manager.call_tool("srv", "t", {"a": 2})
+            assert manager._sessions["srv"] is session_after_first
+        finally:
+            manager.stop()
+
+
+@pytest.mark.skipif(
+    sys.version_info < (3, 10),
+    reason="MCP requires Python >= 3.10",
+)
 class TestMCPClientManagerLifecycle:
     """Integration-style tests using mocked MCP transports."""
 
