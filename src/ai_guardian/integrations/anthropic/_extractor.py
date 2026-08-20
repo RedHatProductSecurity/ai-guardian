@@ -2,7 +2,7 @@
 
 import os
 import sys
-from typing import Any, List
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.integrations.base import ProviderExtractor, _extractor_registry
 
@@ -111,8 +111,8 @@ _VALID_PROVIDERS = _ANTHROPIC_PROVIDERS | _OPENAI_PROVIDERS
 
 def create_client(
     *,
-    provider: str | None = None,
-    provider_config: dict | None = None,
+    provider: Optional[str] = None,
+    provider_config: Optional[Dict[str, Any]] = None,
     **kwargs: Any,
 ) -> Any:
     """Auto-detect and create the right LLM client.
@@ -212,7 +212,7 @@ def _build_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
     return anthropic.Anthropic(**kwargs)
 
 
-def _resolve_base_url(pcfg: dict) -> str | None:
+def _resolve_base_url(pcfg: dict) -> Optional[str]:
     """Resolve base URL: AI_GUARDIAN_SDK_BASE_URL > base_url_env > base_url."""
     env_override = os.environ.get("AI_GUARDIAN_SDK_BASE_URL", "").strip()
     if env_override:
