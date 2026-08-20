@@ -38,6 +38,8 @@ _CLIENT_EXECUTOR_NAMES = frozenset(
     {"bash", "text_editor", "str_replace_based_edit_tool", "read_file", "grep", "glob"}
 )
 
+MCP_TOOL_PREFIX = "mcp__"
+
 _API_NAME_TO_LOGICAL: Dict[str, str] = {v: k for k, v in _TOOL_NAMES.items()}
 
 # ---------------------------------------------------------------------------
@@ -116,6 +118,9 @@ def validate_tools(
         if name in SERVER_TOOLS or tool_type.startswith(
             ("web_search", "web_fetch", "code_execution")
         ):
+            continue
+
+        if name and name.startswith(MCP_TOOL_PREFIX):
             continue
 
         if name and name not in _CLIENT_EXECUTOR_NAMES:

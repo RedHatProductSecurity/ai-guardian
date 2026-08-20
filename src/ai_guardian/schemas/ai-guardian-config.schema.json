@@ -2725,6 +2725,77 @@
             "project_id_env": { "type": "string" },
             "region_env": { "type": "string" }
           }
+        },
+        "mcpServers": {
+          "type": "object",
+          "description": "MCP servers available to this agent. Keys are server display names. Each server connects via stdio (command) or SSE (url) transport.",
+          "additionalProperties": {
+            "$ref": "#/definitions/sdk_mcp_server"
+          }
+        }
+      }
+    },
+    "sdk_mcp_server": {
+      "type": "object",
+      "description": "Configuration for a single MCP server connection.",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the server process (stdio transport). Mutually exclusive with 'url'."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Command-line arguments for the server process.",
+          "default": []
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables passed to the server process. Merged over the current environment.",
+          "additionalProperties": { "type": "string" }
+        },
+        "url": {
+          "type": "string",
+          "description": "SSE endpoint URL (SSE transport). Mutually exclusive with 'command'."
+        },
+        "headers": {
+          "type": "object",
+          "description": "HTTP headers for SSE connections (e.g., Authorization).",
+          "additionalProperties": { "type": "string" }
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable this server without removing its config.",
+          "default": true
+        },
+        "defer_loading": {
+          "type": "boolean",
+          "description": "Reserved for future use. When implemented, defers server startup until first tool call.",
+          "default": false
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Tool call timeout in seconds.",
+          "default": 30,
+          "minimum": 1
+        },
+        "startup_timeout": {
+          "type": "integer",
+          "description": "Maximum seconds to wait for server initialization.",
+          "default": 10,
+          "minimum": 1
+        },
+        "trust": {
+          "type": "string",
+          "enum": ["trusted", "check", "untrusted"],
+          "description": "Trust level: 'trusted' skips scanning tool results, 'check' scans results (default), 'untrusted' scans results.",
+          "default": "check"
+        },
+        "scan_results": {
+          "type": "boolean",
+          "description": "Scan tool results through ai-guardian. Set to false to skip scanning (same effect as trust='trusted').",
+          "default": true
         }
       }
     },
