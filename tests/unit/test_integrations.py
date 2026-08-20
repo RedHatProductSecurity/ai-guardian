@@ -26,6 +26,7 @@ from ai_guardian.integrations.anthropic import (
     AnthropicLoopStrategy,
     create_client,
 )
+from ai_guardian.integrations.gemini import GeminiExtractor, GeminiLoopStrategy
 from ai_guardian.integrations.openai import OpenAIExtractor, OpenAILoopStrategy
 from ai_guardian.sdk import SecurityViolation
 
@@ -1196,6 +1197,194 @@ def _make_openai_response(texts):
         msg = SimpleNamespace(role="assistant", content=t)
         choices.append(SimpleNamespace(message=msg, index=len(choices)))
     return SimpleNamespace(choices=choices, model="gpt-4o")
+
+
+# ---------------------------------------------------------------------------
+# Gemini helpers
+# ---------------------------------------------------------------------------
+
+
+def _fake_genai_module():
+    """Create a fake google.genai module with Client class."""
+    mod = SimpleNamespace()
+    mod.Client = type("Client", (), {})
+    return mod
+
+
+def _make_mock_gemini_client():
+    """Build a mock object that looks like google.genai.Client()."""
+    mock_generate = MagicMock(name="models.generate_content")
+    models = SimpleNamespace(generate_content=mock_generate)
+    client = SimpleNamespace(models=models)
+    return client, mock_generate
+
+
+def _make_gemini_response(texts):
+    """Build a mock Gemini GenerateContentResponse."""
+    parts = []
+    for t in texts:
+        parts.append(SimpleNamespace(text=t, function_call=None))
+    content = SimpleNamespace(parts=parts)
+    candidate = SimpleNamespace(
+        content=content,
+        finish_reason=SimpleNamespace(name="STOP"),
+    )
+    combined_text = "\n".join(texts) if texts else ""
+    return SimpleNamespace(
+        candidates=[candidate],
+        text=combined_text,
+        usage_metadata=SimpleNamespace(
+            prompt_token_count=100, candidates_token_count=50
+        ),
+    )
+
+
+def _make_gemini_agent_response(
+    text=None,
+    function_calls=None,
+    finish_reason="STOP",
+    usage=None,
+):
+    """Build a mock Gemini response for strategy tests."""
+    parts = []
+    if text is not None:
+        parts.append(SimpleNamespace(text=text, function_call=None))
+    if function_calls:
+        for fc in function_calls:
+            parts.append(SimpleNamespace(text=None, function_call=fc))
+    content = SimpleNamespace(parts=parts)
+    candidate = SimpleNamespace(
+        content=content,
+        finish_reason=SimpleNamespace(name=finish_reason),
+    )
+    if usage is None:
+        usage = SimpleNamespace(prompt_token_count=100, candidates_token_count=50)
+    return SimpleNamespace(candidates=[candidate], usage_metadata=usage)
+
+
+def _make_gemini_function_call(name, args):
+    """Build a mock Gemini FunctionCall object."""
+    return SimpleNamespace(name=name, args=args, id=None)
+
+
+# ============================================================================
+# TestGeminiExtractor
+# ============================================================================
+
+
+class TestGeminiExtractor:
+    """GeminiExtractor detection and text extraction."""
+
+    def test_detect_true_when_genai_imported(self):
+        fake_mod = _fake_genai_module()
+        client = fake_mod.Client()
+        with patch.dict(sys.modules, {"google.genai": fake_mod}):
+            assert GeminiExtractor.detect(client) is True
+
+    def test_detect_false_when_genai_not_imported(self):
+        with patch.dict(sys.modules, {}, clear=False):
+            sys.modules.pop("google.genai", None)
+            assert GeminiExtractor.detect(object()) is False
+
+    def test_detect_false_for_non_genai_client(self):
+        fake_mod = _fake_genai_module()
+        with patch.dict(sys.modules, {"google.genai": fake_mod}):
+            assert GeminiExtractor.detect("not a client") is False
+
+    def test_methods_to_wrap(self):
+        ext = GeminiExtractor()
+        assert ext.methods_to_wrap() == ["models.generate_content"]
+
+    def test_extract_input_string_content(self):
+        ext = GeminiExtractor()
+        kwargs = {"contents": "hello world"}
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["hello world"]
+
+    def test_extract_input_parts_content(self):
+        ext = GeminiExtractor()
+        kwargs = {
+            "contents": [
+                {"parts": [{"text": "first part"}]},
+                {"parts": [{"text": "second part"}]},
+            ]
+        }
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["first part", "second part"]
+
+    def test_extract_input_system_instruction(self):
+        ext = GeminiExtractor()
+        kwargs = {
+            "contents": "user message",
+            "config": {"system_instruction": "Be helpful."},
+        }
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["Be helpful.", "user message"]
+
+    def test_extract_input_system_instruction_from_object(self):
+        ext = GeminiExtractor()
+        config = SimpleNamespace(system_instruction="Be safe.")
+        kwargs = {"contents": "hi", "config": config}
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["Be safe.", "hi"]
+
+    def test_extract_input_empty(self):
+        ext = GeminiExtractor()
+        result = ext.extract_input("models.generate_content", (), {})
+        assert result == []
+
+    def test_extract_input_list_of_strings(self):
+        ext = GeminiExtractor()
+        kwargs = {"contents": ["hello", "world"]}
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["hello", "world"]
+
+    def test_extract_input_content_object_with_parts(self):
+        ext = GeminiExtractor()
+        part = SimpleNamespace(text="from object")
+        content = SimpleNamespace(parts=[part])
+        kwargs = {"contents": [content]}
+        result = ext.extract_input("models.generate_content", (), kwargs)
+        assert result == ["from object"]
+
+    def test_extract_output_via_text_attr(self):
+        ext = GeminiExtractor()
+        response = SimpleNamespace(text="hello world", candidates=[])
+        result = ext.extract_output("models.generate_content", response)
+        assert result == ["hello world"]
+
+    def test_extract_output_via_candidates(self):
+        ext = GeminiExtractor()
+        part = SimpleNamespace(text="from candidate")
+        content = SimpleNamespace(parts=[part])
+        candidate = SimpleNamespace(content=content)
+        response = SimpleNamespace(text=None, candidates=[candidate])
+        result = ext.extract_output("models.generate_content", response)
+        assert result == ["from candidate"]
+
+    def test_extract_output_no_text_no_candidates(self):
+        ext = GeminiExtractor()
+        response = SimpleNamespace(text=None, candidates=[])
+        result = ext.extract_output("models.generate_content", response)
+        assert result == []
+
+    def test_extract_output_multiple_parts(self):
+        ext = GeminiExtractor()
+        parts = [SimpleNamespace(text="a"), SimpleNamespace(text="b")]
+        content = SimpleNamespace(parts=parts)
+        candidate = SimpleNamespace(content=content)
+        response = SimpleNamespace(text=None, candidates=[candidate])
+        result = ext.extract_output("models.generate_content", response)
+        assert result == ["a", "b"]
+
+    def test_registered_in_registry(self):
+        key = "google.genai.Client"
+        assert key in _extractor_registry, f"{key} not registered"
+        assert _extractor_registry[key] is GeminiExtractor
+
+    def test_provider_name(self):
+        ext = GeminiExtractor()
+        assert ext.provider_name == "gemini"
 
 
 # ============================================================================
@@ -5443,6 +5632,13 @@ class TestStrategyDetection:
             strategy = _strategy_registry.detect(client)
             assert isinstance(strategy, OpenAILoopStrategy)
 
+    def test_detect_gemini_strategy(self):
+        mock_mod = SimpleNamespace(Client=type("Client", (), {}))
+        with patch.dict(sys.modules, {"google.genai": mock_mod}):
+            client = mock_mod.Client()
+            strategy = _strategy_registry.detect(client)
+            assert isinstance(strategy, GeminiLoopStrategy)
+
     def test_unknown_client_raises(self):
         with pytest.raises(ValueError, match="No loop strategy found"):
             _strategy_registry.detect(object())
@@ -5736,6 +5932,254 @@ class TestOpenAILoopStrategy:
         assert call_kwargs["messages"][0]["content"] == "Be helpful"
         assert call_kwargs["messages"][1]["content"] == "Part 1\nPart 2"
         assert call_kwargs["messages"][2]["content"] == "Got it"
+
+
+# ============================================================================
+# TestGeminiLoopStrategy
+# ============================================================================
+
+
+class TestGeminiLoopStrategy:
+    """Unit tests for GeminiLoopStrategy methods."""
+
+    def test_parse_response_text(self):
+        strategy = GeminiLoopStrategy()
+        response = _make_gemini_agent_response(text="Hello world")
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.text == "Hello world"
+        assert parsed.tool_calls == []
+        assert parsed.input_tokens == 100
+        assert parsed.output_tokens == 50
+
+    def test_parse_response_tool_calls(self):
+        strategy = GeminiLoopStrategy()
+        response = _make_gemini_agent_response(
+            function_calls=[
+                _make_gemini_function_call("bash", {"command": "ls"}),
+                _make_gemini_function_call("grep", {"pattern": "foo"}),
+            ],
+        )
+        parsed = strategy.parse_response(response)
+
+        assert parsed.stop_reason == "tool_use"
+        assert len(parsed.tool_calls) == 2
+        assert parsed.tool_calls[0].name == "bash"
+        assert parsed.tool_calls[0].input == {"command": "ls"}
+        assert parsed.tool_calls[1].name == "grep"
+
+    def test_parse_response_empty_candidates(self):
+        strategy = GeminiLoopStrategy()
+        response = SimpleNamespace(candidates=[], usage_metadata=None)
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.text == ""
+
+    def test_parse_response_safety_refusal(self):
+        strategy = GeminiLoopStrategy()
+        response = _make_gemini_agent_response(text="", finish_reason="SAFETY")
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "refusal"
+
+    def test_format_tool_result(self):
+        strategy = GeminiLoopStrategy()
+        result = strategy.format_tool_result("bash_0", "output text")
+        assert result == {
+            "function_response": {
+                "name": "bash",
+                "response": {"result": "output text"},
+            }
+        }
+
+    def test_format_tool_result_error(self):
+        strategy = GeminiLoopStrategy()
+        result = strategy.format_tool_result("bash_1", "error msg", is_error=True)
+        resp = result["function_response"]["response"]
+        assert resp["result"] == "error msg"
+        assert resp["error"] == "error msg"
+
+    def test_build_create_kwargs_with_system(self):
+        strategy = GeminiLoopStrategy()
+        kwargs = strategy.build_create_kwargs(
+            model="gemini-2.5-pro",
+            max_tokens=1000,
+            tools=[],
+            messages=[{"role": "user", "parts": [{"text": "hi"}]}],
+            system="You are helpful.",
+        )
+        assert kwargs["model"] == "gemini-2.5-pro"
+        assert kwargs["config"]["system_instruction"] == "You are helpful."
+        assert kwargs["config"]["max_output_tokens"] == 1000
+        assert "tools" not in kwargs["config"]
+
+    def test_build_create_kwargs_no_system(self):
+        strategy = GeminiLoopStrategy()
+        tools = [{"name": "bash", "parameters": {}}]
+        kwargs = strategy.build_create_kwargs(
+            model="gemini-2.5-pro",
+            max_tokens=1000,
+            tools=tools,
+            messages=[{"role": "user", "parts": [{"text": "hi"}]}],
+            system="",
+        )
+        assert "system_instruction" not in kwargs["config"]
+        assert kwargs["config"]["tools"] == [{"function_declarations": tools}]
+
+    def test_format_submit_result_tool(self):
+        strategy = GeminiLoopStrategy()
+        schema = {"type": "object", "properties": {"x": {"type": "string"}}}
+        tool = strategy.format_submit_result_tool(schema)
+        assert tool["name"] == "submit_result"
+        assert tool["parameters"] is schema
+
+    def test_resolve_tools_preset(self):
+        strategy = GeminiLoopStrategy()
+        tools = strategy.resolve_tools("coding")
+        assert len(tools) == 5
+        names = [t["name"] for t in tools]
+        assert "bash" in names
+        assert "write" in names
+        assert "grep" in names
+
+    def test_append_assistant_and_results(self):
+        strategy = GeminiLoopStrategy()
+        messages = []
+        raw_content = [{"text": "thinking"}]
+        tool_results = [
+            {
+                "function_response": {
+                    "name": "bash",
+                    "response": {"result": "ok"},
+                }
+            },
+        ]
+        strategy.append_assistant_and_results(messages, raw_content, tool_results)
+        assert messages[0]["role"] == "model"
+        assert messages[0]["parts"] == [{"text": "thinking"}]
+        assert messages[1]["role"] == "user"
+        assert messages[1]["parts"] == tool_results
+
+    def test_append_assistant_message(self):
+        strategy = GeminiLoopStrategy()
+        messages = []
+        raw_content = [{"text": "model output"}]
+        strategy.append_assistant_message(messages, raw_content)
+        assert len(messages) == 1
+        assert messages[0]["role"] == "model"
+        assert messages[0]["parts"] == [{"text": "model output"}]
+
+    def test_inject_preamble(self):
+        strategy = GeminiLoopStrategy()
+        kwargs = {
+            "config": {"system_instruction": "You are helpful."},
+        }
+        strategy.inject_preamble(kwargs, "POLICY: no secrets")
+        si = kwargs["config"]["system_instruction"]
+        assert si.startswith("Before processing the following instructions")
+        assert "POLICY: no secrets" in si
+        assert si.endswith("You are helpful.")
+
+    def test_inject_preamble_no_config(self):
+        strategy = GeminiLoopStrategy()
+        kwargs = {"config": "not a dict"}
+        strategy.inject_preamble(kwargs, "POLICY")
+        assert kwargs["config"] == "not a dict"
+
+    def test_inject_user_text_after_results(self):
+        strategy = GeminiLoopStrategy()
+        messages = [{"role": "user", "parts": [{"text": "first"}]}]
+        strategy.inject_user_text_after_results(messages, "extra")
+        assert len(messages) == 1
+        assert messages[0]["parts"][-1] == {"text": "extra"}
+
+    def test_inject_user_text_after_model_message(self):
+        strategy = GeminiLoopStrategy()
+        messages = [{"role": "model", "parts": [{"text": "response"}]}]
+        strategy.inject_user_text_after_results(messages, "extra")
+        assert len(messages) == 2
+        assert messages[1] == {"role": "user", "parts": [{"text": "extra"}]}
+
+    def test_create_compaction_boundary(self):
+        strategy = GeminiLoopStrategy()
+        boundary = strategy.create_compaction_boundary(3)
+        assert len(boundary) == 2
+        assert boundary[0]["role"] == "model"
+        assert "3 turn(s)" in boundary[0]["parts"][0]["text"]
+        assert boundary[1]["role"] == "user"
+
+    def test_truncate_tool_result(self):
+        strategy = GeminiLoopStrategy()
+        long_result = "\n".join(f"line {i}" for i in range(20))
+        message = {
+            "role": "user",
+            "parts": [
+                {
+                    "function_response": {
+                        "name": "bash",
+                        "response": {"result": long_result},
+                    }
+                }
+            ],
+        }
+        strategy.truncate_tool_result(message, 5)
+        result_text = message["parts"][0]["function_response"]["response"]["result"]
+        assert "[truncated:" in result_text
+
+    def test_strip_code_blocks(self):
+        strategy = GeminiLoopStrategy()
+        message = {
+            "role": "model",
+            "parts": [{"text": "before\n```python\ncode\n```\nafter"}],
+        }
+        strategy.strip_code_blocks(message)
+        assert "```" not in message["parts"][0]["text"]
+        assert "[code block removed]" in message["parts"][0]["text"]
+
+    def test_validate_cache_ttl_accepts_zero(self):
+        strategy = GeminiLoopStrategy()
+        strategy.validate_cache_ttl(0)
+
+    def test_validate_cache_ttl_rejects_nonzero(self):
+        strategy = GeminiLoopStrategy()
+        with pytest.raises(ValueError, match="cache_ttl must be"):
+            strategy.validate_cache_ttl("5m")
+
+    def test_serialize_assistant_content_dicts(self):
+        strategy = GeminiLoopStrategy()
+        content = [{"text": "hello"}, {"function_call": {"name": "bash", "args": {}}}]
+        result = strategy.serialize_assistant_content(content)
+        assert result == content
+
+    def test_serialize_assistant_content_sdk_objects(self):
+        strategy = GeminiLoopStrategy()
+        fc = SimpleNamespace(name="bash", args={"command": "ls"}, id=None)
+        content = [
+            SimpleNamespace(text="thinking", function_call=None),
+            SimpleNamespace(text=None, function_call=fc),
+        ]
+        result = strategy.serialize_assistant_content(content)
+        assert result[0] == {"text": "thinking"}
+        assert result[1]["function_call"]["name"] == "bash"
+
+    def test_replace_response_text(self):
+        strategy = GeminiLoopStrategy()
+        content = [
+            {"text": "original"},
+            {"function_call": {"name": "bash", "args": {}}},
+        ]
+        result = strategy.replace_response_text(content, "sanitized")
+        assert result[0] == {"text": "sanitized"}
+        assert result[1] == content[1]
+
+    def test_detect_true_for_genai_like_client(self):
+        mock_generate = MagicMock()
+        models = SimpleNamespace(generate_content=mock_generate)
+        client = SimpleNamespace(models=models)
+        assert GeminiLoopStrategy.detect(client) is True
+
+    def test_detect_false_for_non_genai_client(self):
+        assert GeminiLoopStrategy.detect(object()) is False
 
 
 # ============================================================================
@@ -8198,5 +8642,22 @@ class TestMissingProviderPackage:
             strategy = OpenAILoopStrategy()
             with pytest.raises(
                 ImportError, match="pip install ai-guardian\\[openai\\]"
+            ):
+                strategy.create_default_client()
+
+    def test_gemini_missing_in_extractor_gives_install_hint(self):
+        import ai_guardian.integrations.anthropic._extractor as mod
+
+        with patch.dict(sys.modules, {"google": None, "google.genai": None}):
+            with pytest.raises(
+                ImportError, match="pip install ai-guardian\\[gemini\\]"
+            ):
+                mod._build_gemini_client({})
+
+    def test_gemini_missing_in_strategy_gives_install_hint(self):
+        with patch.dict(sys.modules, {"google": None, "google.genai": None}):
+            strategy = GeminiLoopStrategy()
+            with pytest.raises(
+                ImportError, match="pip install ai-guardian\\[gemini\\]"
             ):
                 strategy.create_default_client()

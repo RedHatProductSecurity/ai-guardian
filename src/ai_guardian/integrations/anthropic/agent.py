@@ -456,6 +456,12 @@ class GuardedAgent:
             client = create_client(provider=provider, provider_config=provider_config)
             return OpenAILoopStrategy(), client
 
+        if provider == "gemini":
+            from ai_guardian.integrations.gemini import GeminiLoopStrategy
+
+            client = create_client(provider=provider, provider_config=provider_config)
+            return GeminiLoopStrategy(), client
+
         client = create_client(provider=provider, provider_config=provider_config)
         return AnthropicLoopStrategy(), client
 
