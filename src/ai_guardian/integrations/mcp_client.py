@@ -93,6 +93,11 @@ class MCPClientManager:
     Starts a background thread with its own event loop to host the
     async MCP client sessions.  Provides sync methods for tool
     discovery and execution.
+
+    Servers with ``defer_loading: true`` are probed at startup to
+    discover their tools, then disconnected.  They reconnect lazily
+    on the first ``call_tool()`` and stay connected for the rest of
+    the run.
     """
 
     def __init__(self, servers_config: Dict[str, Dict[str, Any]]) -> None:
@@ -101,6 +106,7 @@ class MCPClientManager:
         self._thread: Optional[threading.Thread] = None
         self._sessions: Dict[str, Any] = {}
         self._tools: Dict[str, List[Any]] = {}
+        self._deferred: Set[str] = set()
         self._started = False
 
     def start(self) -> None:
@@ -140,9 +146,12 @@ class MCPClientManager:
 
         self._started = True
         total_tools = sum(len(t) for t in self._tools.values())
+        immediate = len(self._sessions)
+        deferred = len(self._deferred)
         logger.info(
-            "MCP servers started: %d server(s), %d tool(s)",
-            len(self._sessions),
+            "MCP servers started: %d immediate, %d deferred, %d tool(s)",
+            immediate,
+            deferred,
             total_tools,
         )
 
@@ -173,10 +182,29 @@ class MCPClientManager:
     ) -> str:
         """Call a tool on an MCP server (sync wrapper).
 
-        Returns the tool result as a text string.
+        Returns the tool result as a text string.  Deferred servers
+        are lazily started on the first call.
         """
-        if not self._started or server_name not in self._sessions:
+        if not self._started:
             return f"Error: MCP server '{server_name}' is not connected"
+
+        if server_name not in self._sessions:
+            if server_name in self._deferred:
+                startup_timeout = self._config.get(server_name, {}).get(
+                    "startup_timeout", 10
+                )
+                future = asyncio.run_coroutine_threadsafe(
+                    self._lazy_connect(server_name), self._loop
+                )
+                try:
+                    future.result(timeout=startup_timeout + 5)
+                except Exception as exc:
+                    return (
+                        f"Error: failed to start deferred MCP server "
+                        f"'{server_name}': {exc}"
+                    )
+            if server_name not in self._sessions:
+                return f"Error: MCP server '{server_name}' is not connected"
 
         timeout = self._config.get(server_name, {}).get("timeout", 30)
         future = asyncio.run_coroutine_threadsafe(
@@ -211,6 +239,7 @@ class MCPClientManager:
 
         self._sessions.clear()
         self._tools.clear()
+        self._deferred.clear()
         self._started = False
         self._loop = None
         self._thread = None
@@ -221,13 +250,22 @@ class MCPClientManager:
         self._loop.run_forever()
 
     async def _connect_all(self, servers: Dict[str, Dict[str, Any]]) -> None:
-        """Connect to all configured MCP servers."""
+        """Connect to all configured MCP servers.
+
+        Servers with ``defer_loading: true`` are probed for tool
+        discovery then disconnected — they reconnect lazily on first
+        ``call_tool()``.
+        """
         self._exit_stack = AsyncExitStack()
         await self._exit_stack.__aenter__()
 
         for name, cfg in servers.items():
             try:
-                await self._connect_one(name, cfg)
+                if cfg.get("defer_loading", False):
+                    await self._probe_tools(name, cfg)
+                    self._deferred.add(name)
+                else:
+                    await self._connect_one(name, cfg)
             except Exception as exc:
                 logger.error("Failed to connect to MCP server '%s': %s", name, exc)
 
@@ -272,6 +310,63 @@ class MCPClientManager:
             name,
             len(tools_result.tools),
         )
+
+    async def _probe_tools(self, name: str, cfg: Dict[str, Any]) -> None:
+        """Connect briefly to discover tools, then disconnect.
+
+        Uses a disposable ``AsyncExitStack`` so the transport and
+        session are torn down after probing, leaving no running server
+        process.
+        """
+        probe_stack = AsyncExitStack()
+        await probe_stack.__aenter__()
+        try:
+            startup_timeout = cfg.get("startup_timeout", 10)
+
+            if "command" in cfg:
+                params = StdioServerParameters(
+                    command=cfg["command"],
+                    args=cfg.get("args", []),
+                    env=cfg.get("env"),
+                )
+                transport_cm = stdio_client(params)
+            elif "url" in cfg:
+                transport_cm = sse_client(
+                    cfg["url"],
+                    headers=cfg.get("headers"),
+                    timeout=float(startup_timeout),
+                )
+            else:
+                logger.warning(
+                    "MCP server '%s': no 'command' or 'url' — skipping", name
+                )
+                return
+
+            read_stream, write_stream = await probe_stack.enter_async_context(
+                transport_cm
+            )
+            session = ClientSession(read_stream, write_stream)
+            await probe_stack.enter_async_context(session)
+            await asyncio.wait_for(session.initialize(), timeout=startup_timeout)
+            tools_result = await asyncio.wait_for(
+                session.list_tools(), timeout=startup_timeout
+            )
+            self._tools[name] = list(tools_result.tools)
+            logger.info(
+                "MCP server '%s' probed (deferred): %d tool(s)",
+                name,
+                len(tools_result.tools),
+            )
+        finally:
+            await probe_stack.aclose()
+
+    async def _lazy_connect(self, name: str) -> None:
+        """Connect a deferred server on first tool call."""
+        cfg = self._config.get(name)
+        if not cfg:
+            return
+        await self._connect_one(name, cfg)
+        logger.info("MCP server '%s' lazy-started on first tool call", name)
 
     async def _call_tool_async(
         self, server_name: str, tool_name: str, arguments: Dict[str, Any]
