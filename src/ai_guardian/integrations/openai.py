@@ -304,6 +304,14 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         return kwargs
 
     def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+        from ai_guardian.integrations.openai_compat import (
+            get_provider_caps,
+            normalize_request_kwargs,
+        )
+
+        provider = getattr(client, "_ai_guardian_provider", None)
+        caps = get_provider_caps(provider)
+        kwargs = normalize_request_kwargs(kwargs, caps)
         return client.chat.completions.create(**kwargs)
 
     def parse_response(self, response: Any) -> ParsedResponse:
