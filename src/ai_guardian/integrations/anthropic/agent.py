@@ -963,6 +963,29 @@ class GuardedAgent:
                     )
                 return result
 
+        if trace_filepath:
+            self._persist_trace(
+                {
+                    "trace": trace,
+                    "stop_reason": "in_progress",
+                    "usage": {f: 0 for f in _USAGE_TOKEN_FIELDS},
+                },
+                started_at,
+                session,
+                trace_filepath,
+                trace_id=trace_id,
+                run_start_mono=run_start_mono,
+            )
+
+        if otel_emitter is not None:
+            try:
+                otel_emitter.on_run_start(
+                    started_at=started_at.isoformat(),
+                    parent_span_id=parent_span_id,
+                )
+            except Exception:
+                logger.debug("OTEL run start emit failed", exc_info=True)
+
         messages: List[Dict[str, Any]] = [{"role": "user", "content": prompt}]
 
         system = self._system_prompt

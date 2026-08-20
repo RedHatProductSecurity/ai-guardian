@@ -351,16 +351,21 @@ def _make_turn_span(
 def _make_root_span(
     trace_doc: Dict[str, Any],
     trace_id: str,
+    *,
+    root_span_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Create the root gen_ai.agent span from the trace document."""
-    parent_span_id_raw = ""
-    turns = trace_doc.get("trace", [])
-    if turns:
-        parent_span_id_raw = turns[0].get("parent_span_id", "")
+    if root_span_id is None:
+        parent_span_id_raw = ""
+        turns = trace_doc.get("trace", [])
+        if turns:
+            parent_span_id_raw = turns[0].get("parent_span_id", "")
 
-    root_span_id = (
-        _truncate_span_id(parent_span_id_raw) if parent_span_id_raw else _new_span_id()
-    )
+        root_span_id = (
+            _truncate_span_id(parent_span_id_raw)
+            if parent_span_id_raw
+            else _new_span_id()
+        )
 
     usage = trace_doc.get("usage") or {}
     stop_reason = trace_doc.get("stop_reason", "")
@@ -789,6 +794,7 @@ class OtelSpanEmitter:
         self._cfg = _OtelConfig(config)
         self._enabled = self._cfg.enabled
         self._metadata_fn = metadata_fn
+        self._root_span_id: Optional[str] = None
         if not self._enabled:
             return
         self._trace_id = trace_id
@@ -821,6 +827,42 @@ class OtelSpanEmitter:
             logger.debug("OTEL metadata_fn failed", exc_info=True)
             return []
 
+    def on_run_start(
+        self,
+        *,
+        started_at: str,
+        parent_span_id: str,
+    ) -> None:
+        """Send initial root span at agent start so traces are visible immediately."""
+        if not self._enabled:
+            return
+        try:
+            self._root_span_id = _truncate_span_id(parent_span_id)
+            start_nano = _iso_to_unix_nano(started_at)
+            end_nano = str(int(start_nano) + 1_000_000) if start_nano != "0" else "0"
+
+            root = _make_span(
+                trace_id=self._trace_id,
+                span_id=self._root_span_id,
+                parent_span_id="",
+                name="gen_ai.agent",
+                start_nano=start_nano,
+                end_nano=end_nano,
+                attributes=_attrs(
+                    ("gen_ai.system", "anthropic"),
+                    ("gen_ai.agent.name", self._agent_name),
+                    ("gen_ai.request.model", self._model),
+                    ("gen_ai.agent.stop_reason", "in_progress"),
+                    ("ai_guardian.span_type", "agent_run"),
+                ),
+            )
+            dynamic_attrs = self._call_metadata_fn(turn=0)
+            if dynamic_attrs:
+                root["attributes"].extend(dynamic_attrs)
+            self._flush([root])
+        except Exception:
+            logger.debug("OTEL run start emit failed", exc_info=True)
+
     def on_turn_complete(
         self,
         turn_data: Dict[str, Any],
@@ -831,7 +873,7 @@ class OtelSpanEmitter:
         if not self._enabled:
             return
         try:
-            root_span_id = _truncate_span_id(
+            root_span_id = self._root_span_id or _truncate_span_id(
                 turn_data.get("parent_span_id", _new_span_id())
             )
             spans = _make_turn_span(
@@ -861,7 +903,9 @@ class OtelSpanEmitter:
         if not self._enabled:
             return
         try:
-            root = _make_root_span(trace_doc, self._trace_id)
+            root = _make_root_span(
+                trace_doc, self._trace_id, root_span_id=self._root_span_id
+            )
             root["attributes"].extend(_attrs(("ai_guardian.span_type", "agent_run")))
             dynamic_attrs = self._call_metadata_fn(
                 turn=0,
