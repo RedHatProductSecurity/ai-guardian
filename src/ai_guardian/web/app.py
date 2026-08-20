@@ -424,6 +424,14 @@ class WebConsole:
 
             create_console_settings_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/tray-plugins")
+        def tray_plugins_page(daemon_name: str):
+            from ai_guardian.web.pages.tray_plugins import (
+                create_tray_plugins_page,
+            )
+
+            create_tray_plugins_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/config-effective")
         def config_effective_page(daemon_name: str):
             from ai_guardian.web.pages.config_effective import (

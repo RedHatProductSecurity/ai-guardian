@@ -1102,6 +1102,179 @@ def copy_to_clipboard(text: str) -> bool:
 # Split from tray.py (Issue #1492)
 # ---------------------------------------------------------------------------
 
+_SAFE_FILENAME_RE = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_.-]*\.json$")
+
+
+def list_plugin_files(
+    working_dir: Optional[str] = None,
+) -> List[Dict[str, Union[str, bool]]]:
+    """List all plugin files with source and status metadata.
+
+    Returns a list of dicts with keys: filename, source, enabled, plugin_name.
+    Sources: "bundled", "user", "project".
+    """
+    from ai_guardian.daemon import get_tray_plugins_dir
+
+    result: List[Dict[str, Union[str, bool]]] = []
+    seen_ids: set = set()
+
+    def _scan_dir(directory: Path, source: str) -> None:
+        if not directory.is_dir():
+            return
+        for path in sorted(directory.iterdir()):
+            if path.name.startswith("."):
+                continue
+            is_disabled = path.name.endswith(".json.disabled")
+            is_json = path.name.endswith(".json")
+            if not is_json and not is_disabled:
+                continue
+            base_name = path.name[: -len(".disabled")] if is_disabled else path.name
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                plugin_name = data.get("name", base_name)
+                plugin_id = data.get("id", plugin_name)
+            except (json.JSONDecodeError, OSError):
+                plugin_name = base_name
+                plugin_id = base_name
+            if plugin_id in seen_ids:
+                continue
+            seen_ids.add(plugin_id)
+            result.append(
+                {
+                    "filename": path.name,
+                    "source": source,
+                    "enabled": not is_disabled,
+                    "plugin_name": plugin_name,
+                }
+            )
+
+    project_dir = find_project_plugins_dir(working_dir)
+    if project_dir:
+        _scan_dir(project_dir, "project")
+
+    _scan_dir(get_tray_plugins_dir(), "user")
+
+    bundled_dir = _get_bundled_plugins_dir()
+    if bundled_dir:
+        _scan_dir(bundled_dir, "bundled")
+
+    return result
+
+
+def get_bundled_templates() -> List[Dict[str, str]]:
+    """Return bundled plugin templates as a list of {filename, name, content}."""
+    bundled_dir = _get_bundled_plugins_dir()
+    if bundled_dir is None or not bundled_dir.is_dir():
+        return []
+    templates = []
+    for path in sorted(bundled_dir.glob("*.json")):
+        try:
+            raw = path.read_text(encoding="utf-8")
+            data = json.loads(raw)
+            templates.append(
+                {
+                    "filename": path.name,
+                    "name": data.get("name", path.stem),
+                    "content": raw,
+                }
+            )
+        except (json.JSONDecodeError, OSError):
+            continue
+    return templates
+
+
+def save_user_plugin(filename: str, content: dict) -> Tuple[bool, str]:
+    """Save a plugin JSON file to the user plugins directory.
+
+    Returns (success, message).
+    """
+    from ai_guardian.daemon import get_tray_plugins_dir
+
+    if not _SAFE_FILENAME_RE.match(filename):
+        return (
+            False,
+            "Invalid filename — use alphanumeric, hyphens, dots, ending in .json",
+        )
+
+    plugins_dir = get_tray_plugins_dir()
+    plugins_dir.mkdir(parents=True, exist_ok=True)
+
+    if not isinstance(content, dict) or "name" not in content:
+        return False, "Plugin must be a JSON object with a 'name' field"
+
+    plugin = _parse_plugin(content, filename)
+    if plugin is None:
+        return False, "Invalid plugin structure"
+
+    path = plugins_dir / filename
+    try:
+        path.write_text(
+            json.dumps(content, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+    except OSError as e:
+        return False, f"Write failed: {e}"
+
+    return True, f"Saved {filename}"
+
+
+def delete_user_plugin(filename: str) -> Tuple[bool, str]:
+    """Delete a plugin file from the user plugins directory.
+
+    Returns (success, message). Refuses to delete bundled plugins.
+    """
+    from ai_guardian.daemon import get_tray_plugins_dir
+
+    if not _SAFE_FILENAME_RE.match(filename) and not filename.endswith(
+        ".json.disabled"
+    ):
+        return False, "Invalid filename"
+
+    path = get_tray_plugins_dir() / filename
+    if not path.is_file():
+        return False, f"File not found: {filename}"
+
+    try:
+        path.unlink()
+    except OSError as e:
+        return False, f"Delete failed: {e}"
+
+    return True, f"Deleted {filename}"
+
+
+def toggle_user_plugin(filename: str, enabled: bool) -> Tuple[bool, str]:
+    """Enable or disable a user plugin by renaming .json ↔ .json.disabled.
+
+    Returns (success, message).
+    """
+    from ai_guardian.daemon import get_tray_plugins_dir
+
+    plugins_dir = get_tray_plugins_dir()
+
+    if enabled:
+        src = plugins_dir / (filename + ".disabled")
+        dst = plugins_dir / filename
+        if not src.is_file():
+            if (plugins_dir / filename).is_file():
+                return True, "Already enabled"
+            return False, f"File not found: {filename}.disabled"
+    else:
+        src = plugins_dir / filename
+        dst = plugins_dir / (filename + ".disabled")
+        if not src.is_file():
+            if (plugins_dir / (filename + ".disabled")).is_file():
+                return True, "Already disabled"
+            return False, f"File not found: {filename}"
+
+    try:
+        src.rename(dst)
+    except OSError as e:
+        return False, f"Toggle failed: {e}"
+
+    state = "enabled" if enabled else "disabled"
+    return True, f"Plugin {state}: {filename}"
+
+
 MAX_PLUGIN_SLOTS = 8
 MAX_ITEMS_PER_PLUGIN = 12
 MAX_SUBMENU_ITEMS = 8

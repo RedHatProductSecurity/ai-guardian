@@ -399,11 +399,15 @@ class TestTrayPluginsEndpoint:
             mock.patch(
                 "ai_guardian.tray.plugins._load_bundled_plugins", return_value=[]
             ),
+            mock.patch(
+                "ai_guardian.tray.plugins._get_bundled_plugins_dir",
+                return_value=None,
+            ),
         ):
             url = f"http://127.0.0.1:{port}/api/tray-plugins"
             with urlopen(url, timeout=5) as resp:
                 data = json.loads(resp.read())
-        assert data == {"plugins": []}
+        assert data == {"plugins": [], "files": []}
 
     def test_get_tray_plugins_with_multiple_plugins(self, rest_api, tmp_path):
         api, port, state = rest_api

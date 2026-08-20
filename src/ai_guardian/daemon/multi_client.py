@@ -449,6 +449,80 @@ class MultiDaemonClient:
 
         return plugins_to_dict(load_merged_plugins(working_dir))
 
+    def get_plugins_enhanced(self, target: DaemonTarget) -> Optional[dict]:
+        """Get tray plugins with file metadata."""
+        if target.runtime == "local":
+            return self._local_plugins_enhanced(
+                working_dir=getattr(target, "working_dir", None),
+            )
+        return self._rest_request(target, "GET", "/api/tray-plugins")
+
+    @staticmethod
+    def _local_plugins_enhanced(working_dir: Optional[str] = None) -> dict:
+        from ai_guardian.tray.plugins import (
+            list_plugin_files,
+            load_merged_plugins,
+            plugins_to_dict,
+        )
+
+        result = plugins_to_dict(load_merged_plugins(working_dir))
+        result["files"] = list_plugin_files(working_dir)
+        return result
+
+    def get_plugin_templates(self, target: DaemonTarget) -> Optional[dict]:
+        """Get bundled plugin templates."""
+        if target.runtime == "local":
+            from ai_guardian.tray.plugins import get_bundled_templates
+
+            return {"templates": get_bundled_templates()}
+        return self._rest_request(target, "GET", "/api/tray-plugin-templates")
+
+    def save_plugin(
+        self, target: DaemonTarget, filename: str, content: dict
+    ) -> Optional[dict]:
+        """Save a user plugin file."""
+        if target.runtime == "local":
+            from ai_guardian.tray.plugins import save_user_plugin
+
+            ok, msg = save_user_plugin(filename, content)
+            return {"status": "saved" if ok else "error", "message": msg}
+        return self._rest_request(
+            target,
+            "POST",
+            "/api/tray-plugins",
+            {"filename": filename, "content": content},
+        )
+
+    def delete_plugin(self, target: DaemonTarget, filename: str) -> Optional[dict]:
+        """Delete a user plugin file."""
+        if target.runtime == "local":
+            from ai_guardian.tray.plugins import delete_user_plugin
+
+            ok, msg = delete_user_plugin(filename)
+            return {"status": "deleted" if ok else "error", "message": msg}
+        return self._rest_request(
+            target,
+            "DELETE",
+            "/api/tray-plugins",
+            {"filename": filename},
+        )
+
+    def toggle_plugin(
+        self, target: DaemonTarget, filename: str, enabled: bool
+    ) -> Optional[dict]:
+        """Toggle a user plugin enabled/disabled."""
+        if target.runtime == "local":
+            from ai_guardian.tray.plugins import toggle_user_plugin
+
+            ok, msg = toggle_user_plugin(filename, enabled)
+            return {"status": "toggled" if ok else "error", "message": msg}
+        return self._rest_request(
+            target,
+            "POST",
+            "/api/tray-plugins/toggle",
+            {"filename": filename, "enabled": enabled},
+        )
+
     def get_about(self, target: DaemonTarget) -> Optional[dict]:
         """Get about info from a daemon."""
         if target.runtime == "local":

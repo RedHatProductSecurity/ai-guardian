@@ -305,3 +305,37 @@ class DaemonService:
             )
         except Exception:
             return None
+
+    def get_tray_plugins(self, target: DaemonTarget) -> Optional[dict]:
+        try:
+            return self._client.get_plugins_enhanced(target)
+        except Exception:
+            return None
+
+    def get_tray_plugin_templates(self, target: DaemonTarget) -> Optional[dict]:
+        try:
+            return self._client.get_plugin_templates(target)
+        except Exception:
+            return None
+
+    def save_tray_plugin(
+        self, target: DaemonTarget, filename: str, content: dict
+    ) -> Optional[dict]:
+        try:
+            return self._client.save_plugin(target, filename, content)
+        except Exception:
+            return None
+
+    def delete_tray_plugin(self, target: DaemonTarget, filename: str) -> Optional[dict]:
+        try:
+            return self._client.delete_plugin(target, filename)
+        except Exception:
+            return None
+
+    def toggle_tray_plugin(
+        self, target: DaemonTarget, filename: str, enabled: bool
+    ) -> Optional[dict]:
+        try:
+            return self._client.toggle_plugin(target, filename, enabled)
+        except Exception:
+            return None

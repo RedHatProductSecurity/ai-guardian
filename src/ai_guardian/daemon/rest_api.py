@@ -51,7 +51,9 @@ class _RestHandler(BaseHTTPRequestHandler):
         elif path == "/api/about":
             self._send_json(self._get_about())
         elif path == "/api/tray-plugins":
-            self._send_json(self._get_tray_plugins())
+            self._send_json(self._get_tray_plugins_enhanced())
+        elif path == "/api/tray-plugin-templates":
+            self._send_json(self._get_tray_plugin_templates())
         elif path == "/api/config":
             qs = urllib.parse.parse_qs(parsed.query)
             project_dir = qs.get("project_dir", [None])[0]
@@ -270,6 +272,16 @@ class _RestHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             self._handle_push_trace(body)
+        elif self.path == "/api/tray-plugins":
+            body = self._read_body()
+            if body is None:
+                return
+            self._handle_tray_plugin_save(body)
+        elif self.path == "/api/tray-plugins/toggle":
+            body = self._read_body()
+            if body is None:
+                return
+            self._handle_tray_plugin_toggle(body)
         elif self.path == "/api/register-project":
             body = self._read_body()
             if body is None:
@@ -291,6 +303,11 @@ class _RestHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             self._handle_config_delete(body)
+        elif self.path == "/api/tray-plugins":
+            body = self._read_body()
+            if body is None:
+                return
+            self._handle_tray_plugin_delete(body)
         else:
             self._send_error(404, "Not found")
 
@@ -353,20 +370,84 @@ class _RestHandler(BaseHTTPRequestHandler):
             logger.debug("Failed to get about info: %s", e)
             return {}
 
-    def _get_tray_plugins(self):
+    def _get_tray_plugins_enhanced(self):
         try:
+            from ai_guardian.daemon.working_dir import get_working_dir
             from ai_guardian.tray.plugins import (
+                list_plugin_files,
                 load_merged_plugins,
                 plugins_to_dict,
             )
-            from ai_guardian.daemon.working_dir import get_working_dir
 
             name = self._get_instance_name()
             working_dir = get_working_dir(name)
-            return plugins_to_dict(load_merged_plugins(working_dir))
+            result = plugins_to_dict(load_merged_plugins(working_dir))
+            result["files"] = list_plugin_files(working_dir)
+            return result
         except Exception as e:
             logger.debug("Failed to load tray plugins: %s", e)
-            return {"plugins": []}
+            return {"plugins": [], "files": []}
+
+    def _get_tray_plugin_templates(self):
+        try:
+            from ai_guardian.tray.plugins import get_bundled_templates
+
+            return {"templates": get_bundled_templates()}
+        except Exception as e:
+            logger.debug("Failed to load tray plugin templates: %s", e)
+            return {"templates": []}
+
+    def _handle_tray_plugin_save(self, body):
+        filename = body.get("filename", "")
+        content = body.get("content")
+        if not filename or not isinstance(content, dict):
+            self._send_error(400, "filename (str) and content (object) required")
+            return
+        try:
+            from ai_guardian.tray.plugins import save_user_plugin
+
+            ok, msg = save_user_plugin(filename, content)
+            if ok:
+                self._send_json({"status": "saved", "filename": filename})
+            else:
+                self._send_error(400, msg)
+        except Exception as e:
+            self._send_error(500, str(e))
+
+    def _handle_tray_plugin_delete(self, body):
+        filename = body.get("filename", "")
+        if not filename:
+            self._send_error(400, "filename is required")
+            return
+        try:
+            from ai_guardian.tray.plugins import delete_user_plugin
+
+            ok, msg = delete_user_plugin(filename)
+            if ok:
+                self._send_json({"status": "deleted", "filename": filename})
+            else:
+                self._send_error(400, msg)
+        except Exception as e:
+            self._send_error(500, str(e))
+
+    def _handle_tray_plugin_toggle(self, body):
+        filename = body.get("filename", "")
+        enabled = body.get("enabled")
+        if not filename or not isinstance(enabled, bool):
+            self._send_error(400, "filename (str) and enabled (bool) required")
+            return
+        try:
+            from ai_guardian.tray.plugins import toggle_user_plugin
+
+            ok, msg = toggle_user_plugin(filename, enabled)
+            if ok:
+                self._send_json(
+                    {"status": "toggled", "filename": filename, "enabled": enabled}
+                )
+            else:
+                self._send_error(400, msg)
+        except Exception as e:
+            self._send_error(500, str(e))
 
     @staticmethod
     def _get_config():
