@@ -68,6 +68,10 @@ anthropic = [
 openai = [
   "openai>=1.0.0",
 ]
+all-providers = [
+  "anthropic>=0.30.0",
+  "openai>=1.0.0",
+]
 otel = [
   "opentelemetry-api>=1.20.0",
   "opentelemetry-sdk>=1.20.0",

@@ -243,7 +243,13 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         return "chat.completions.create"
 
     def create_default_client(self) -> Any:
-        import openai
+        try:
+            import openai
+        except ImportError:
+            raise ImportError(
+                "The 'openai' package is required for OpenAI-compatible providers. "
+                "Install it with: pip install ai-guardian[openai]"
+            ) from None
 
         return openai.OpenAI()
 
