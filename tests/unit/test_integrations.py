@@ -7922,7 +7922,7 @@ class TestIncrementalTracePersist:
         with patch.object(type(agent), "_persist_trace", spy_persist):
             agent.run("Hi")
 
-        assert snapshots == ["in_progress", "end_turn"]
+        assert snapshots == ["in_progress", "in_progress", "end_turn"]
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_incremental_trace_same_file(self, mock_monitor, tmp_path):
