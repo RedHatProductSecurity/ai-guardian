@@ -82,6 +82,34 @@ class TestCustomProjectDirs:
         assert mock_app.storage.user["custom_project_dirs"] == ["/existing"]
 
 
+class TestBrowseResetGuard:
+    """Verify that resetting value after Browse selection skips page reload."""
+
+    def test_browsing_active_skips_reload(self):
+        """When _browsing['active'] is True, on_project_change should return
+        early without reloading — prevents the page reload that was killing
+        the browse dialog timer (#2089)."""
+        from ai_guardian.web.components.header import _BROWSE_SENTINEL
+
+        _browsing = {"active": True}
+        reloaded = {"called": False}
+
+        class FakeEvent:
+            value = "/some/project"
+
+        def on_project_change(e):
+            if e.value == _BROWSE_SENTINEL:
+                return
+            if _browsing["active"]:
+                _browsing["active"] = False
+                return
+            reloaded["called"] = True
+
+        on_project_change(FakeEvent())
+        assert not _browsing["active"], "_browsing['active'] should be reset"
+        assert not reloaded["called"], "page reload should be skipped"
+
+
 class TestShortenProjectPath:
     """Verify _shorten_project_path handles various inputs."""
 

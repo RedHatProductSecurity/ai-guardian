@@ -690,16 +690,13 @@ def _create_project_selector(daemon_name: str):
 
         async def on_project_change(e):
             if e.value == _BROWSE_SENTINEL:
-                if not _browsing["active"]:
-                    _browsing["active"] = True
-                    project_select.value = current
-                    ui.timer(
-                        0.1,
-                        lambda: _open_project_browse_dialog(project_select),
-                        once=True,
-                    )
+                _browsing["active"] = True
+                project_select.value = current
+                _open_project_browse_dialog(project_select)
                 return
-            _browsing["active"] = False
+            if _browsing["active"]:
+                _browsing["active"] = False
+                return
             try:
                 from nicegui import app as _app
 
