@@ -699,7 +699,9 @@ def _create_project_selector(daemon_name: str):
                         once=True,
                     )
                 return
-            _browsing["active"] = False
+            if _browsing["active"]:
+                _browsing["active"] = False
+                return
             try:
                 from nicegui import app as _app
 
