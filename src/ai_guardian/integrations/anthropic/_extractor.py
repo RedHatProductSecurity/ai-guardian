@@ -237,7 +237,9 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
             kwargs.setdefault("api_key", os.environ.get(api_key_env, ""))
         if base_url:
             kwargs.setdefault("azure_endpoint", base_url)
-        return openai.AzureOpenAI(**kwargs)
+        client = openai.AzureOpenAI(**kwargs)
+        client._ai_guardian_provider = provider  # type: ignore[attr-defined]
+        return client
 
     ctor_kwargs: dict = {}
     if base_url:
@@ -247,4 +249,6 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
     elif provider in ("ollama", "llamacpp", "vllm"):
         ctor_kwargs.setdefault("api_key", "not-needed")
     ctor_kwargs.update(kwargs)
-    return openai.OpenAI(**ctor_kwargs)
+    client = openai.OpenAI(**ctor_kwargs)
+    client._ai_guardian_provider = provider  # type: ignore[attr-defined]
+    return client

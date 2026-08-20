@@ -917,6 +917,42 @@ class TestCreateClient:
         assert call_kwargs["api_key"] == "not-needed"
 
     @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_ollama_tagged_on_client(self):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="ollama",
+                provider_config={"base_url": "http://localhost:11434/v1"},
+            )
+        assert result._ai_guardian_provider == "ollama"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_azure_tagged_on_client(self):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.AzureOpenAI.return_value = mock_client
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="azure",
+                provider_config={"base_url": "https://my.openai.azure.com"},
+            )
+        assert result._ai_guardian_provider == "azure"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_vllm_tagged_on_client(self):
+        mock_openai = MagicMock()
+        mock_client = MagicMock()
+        mock_openai.OpenAI.return_value = mock_client
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="vllm",
+                provider_config={"base_url": "http://localhost:8000/v1"},
+            )
+        assert result._ai_guardian_provider == "vllm"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
     def test_provider_azure(self):
         mock_openai = MagicMock()
         mock_openai.AzureOpenAI.return_value = MagicMock()
@@ -5039,6 +5075,93 @@ class TestOpenAILoopStrategy:
         kwargs = {"messages": []}
         strategy.inject_preamble(kwargs, "POLICY: no secrets")
         assert kwargs["messages"] == []
+
+    def test_call_api_flattens_content_for_ollama(self):
+        strategy = OpenAILoopStrategy()
+        mock_client = MagicMock()
+        mock_client._ai_guardian_provider = "ollama"
+        mock_client.chat.completions.create.return_value = _make_openai_agent_response(
+            content="OK"
+        )
+
+        kwargs = {
+            "model": "llama3",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [{"type": "text", "text": "Hello world"}],
+                },
+            ],
+        }
+        strategy.call_api(mock_client, kwargs)
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["messages"][0]["content"] == "Hello world"
+
+    def test_call_api_no_flatten_for_openai(self):
+        strategy = OpenAILoopStrategy()
+        mock_client = MagicMock()
+        mock_client._ai_guardian_provider = "openai"
+        mock_client.chat.completions.create.return_value = _make_openai_agent_response(
+            content="OK"
+        )
+
+        structured = [{"type": "text", "text": "Hello"}]
+        kwargs = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": structured}],
+        }
+        strategy.call_api(mock_client, kwargs)
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["messages"][0]["content"] == structured
+
+    def test_call_api_no_flatten_for_untagged_client(self):
+        strategy = OpenAILoopStrategy()
+        mock_client = MagicMock(spec=[])
+        mock_client.chat = MagicMock()
+        mock_client.chat.completions.create.return_value = _make_openai_agent_response(
+            content="OK"
+        )
+
+        structured = [{"type": "text", "text": "Hello"}]
+        kwargs = {
+            "model": "gpt-4o",
+            "messages": [{"role": "user", "content": structured}],
+        }
+        strategy.call_api(mock_client, kwargs)
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["messages"][0]["content"] == structured
+
+    def test_call_api_flattens_multiple_messages_for_llamacpp(self):
+        strategy = OpenAILoopStrategy()
+        mock_client = MagicMock()
+        mock_client._ai_guardian_provider = "llamacpp"
+        mock_client.chat.completions.create.return_value = _make_openai_agent_response(
+            content="OK"
+        )
+
+        kwargs = {
+            "model": "codellama",
+            "messages": [
+                {"role": "system", "content": "Be helpful"},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": "Part 1"},
+                        {"type": "text", "text": "Part 2"},
+                    ],
+                },
+                {"role": "assistant", "content": "Got it"},
+            ],
+        }
+        strategy.call_api(mock_client, kwargs)
+
+        call_kwargs = mock_client.chat.completions.create.call_args[1]
+        assert call_kwargs["messages"][0]["content"] == "Be helpful"
+        assert call_kwargs["messages"][1]["content"] == "Part 1\nPart 2"
+        assert call_kwargs["messages"][2]["content"] == "Got it"
 
 
 # ============================================================================
