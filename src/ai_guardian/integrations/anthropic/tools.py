@@ -35,7 +35,16 @@ _TOOL_NAMES: Dict[str, str] = {
 SERVER_TOOLS = frozenset({"web_search", "web_fetch", "code_execution"})
 
 _CLIENT_EXECUTOR_NAMES = frozenset(
-    {"bash", "text_editor", "str_replace_based_edit_tool", "read_file", "grep", "glob"}
+    {
+        "bash",
+        "text_editor",
+        "str_replace_based_edit_tool",
+        "read_file",
+        "write",
+        "notebook_edit",
+        "grep",
+        "glob",
+    }
 )
 
 _API_NAME_TO_LOGICAL: Dict[str, str] = {v: k for k, v in _TOOL_NAMES.items()}
@@ -162,7 +171,7 @@ def get_tool_type(
 # ---------------------------------------------------------------------------
 
 _PRESETS: Dict[str, List[str]] = {
-    "coding": ["bash", "text_editor", "grep", "glob"],
+    "coding": ["bash", "text_editor", "write", "grep", "glob"],
     "readonly": ["read_file", "grep", "glob"],
     "browser": ["computer", "bash"],
 }
@@ -232,6 +241,56 @@ _CUSTOM_TOOL_SCHEMAS: Dict[str, Dict[str, Any]] = {
                 },
             },
             "required": ["pattern"],
+        },
+    },
+    "write": {
+        "name": "write",
+        "description": "Write content to a file, creating parent directories if needed.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Absolute or relative path to the file to write.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "The content to write to the file.",
+                },
+            },
+            "required": ["file_path", "content"],
+        },
+    },
+    "notebook_edit": {
+        "name": "notebook_edit",
+        "description": "Edit a Jupyter notebook: replace, insert, or delete cells.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "notebook_path": {
+                    "type": "string",
+                    "description": "Path to the .ipynb notebook file.",
+                },
+                "command": {
+                    "type": "string",
+                    "enum": ["edit", "insert_after", "insert_before", "delete"],
+                    "description": "Operation to perform on a cell.",
+                },
+                "cell_number": {
+                    "type": "integer",
+                    "description": "0-based cell index to operate on.",
+                },
+                "new_source": {
+                    "type": "string",
+                    "description": "New source content (for edit/insert commands).",
+                },
+                "cell_type": {
+                    "type": "string",
+                    "enum": ["code", "markdown"],
+                    "description": "Cell type for insert commands. Defaults to 'code'.",
+                },
+            },
+            "required": ["notebook_path", "command", "cell_number"],
         },
     },
 }
@@ -359,6 +418,10 @@ def execute_tool(
         return _execute_text_editor(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "read_file":
         return _execute_read_file(tool_input, cwd, allowed_paths, follow_symlinks)
+    if name == "write":
+        return _execute_write(tool_input, cwd, allowed_paths, follow_symlinks)
+    if name == "notebook_edit":
+        return _execute_notebook_edit(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "grep":
         return _execute_grep(tool_input, cwd, allowed_paths, follow_symlinks)
     if name == "glob":
@@ -509,6 +572,116 @@ def _execute_read_file(
         lines = lines[:limit]
 
     return "".join(lines) or "(empty file)"
+
+
+def _execute_write(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
+    raw_path = tool_input.get("file_path", "")
+    if not raw_path:
+        return "Error: file_path is required."
+
+    content = tool_input.get("content", "")
+
+    resolved = _resolve_safe_path(raw_path, cwd, allowed_paths, follow_symlinks)
+    if isinstance(resolved, str):
+        return resolved
+
+    try:
+        resolved.parent.mkdir(parents=True, exist_ok=True)
+        resolved.write_text(content, encoding="utf-8")
+    except Exception as e:
+        return f"Error writing {raw_path}: {e}"
+    return f"Wrote {raw_path}"
+
+
+def _execute_notebook_edit(
+    tool_input: Dict[str, Any],
+    cwd: str,
+    allowed_paths: Optional[List[str]] = None,
+    follow_symlinks: bool = False,
+) -> str:
+    import json as _json
+
+    raw_path = tool_input.get("notebook_path", "")
+    if not raw_path:
+        return "Error: notebook_path is required."
+
+    resolved = _resolve_safe_path(raw_path, cwd, allowed_paths, follow_symlinks)
+    if isinstance(resolved, str):
+        return resolved
+
+    if not resolved.exists():
+        return f"Error: {raw_path} does not exist."
+
+    command = tool_input.get("command", "")
+    cell_number = tool_input.get("cell_number", 0)
+
+    try:
+        nb = _json.loads(resolved.read_text(encoding="utf-8"))
+    except Exception as e:
+        return f"Error reading notebook {raw_path}: {e}"
+
+    cells = nb.get("cells", [])
+
+    if command == "edit":
+        if cell_number < 0 or cell_number >= len(cells):
+            return (
+                f"Error: cell_number {cell_number} out of range (0..{len(cells) - 1})"
+            )
+        new_source = tool_input.get("new_source", "")
+        cells[cell_number]["source"] = new_source.splitlines(keepends=True)
+        try:
+            resolved.write_text(
+                _json.dumps(nb, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except Exception as e:
+            return f"Error writing notebook {raw_path}: {e}"
+        return f"Edited cell {cell_number} in {raw_path}"
+
+    if command in ("insert_before", "insert_after"):
+        if cell_number < 0 or cell_number >= len(cells):
+            return (
+                f"Error: cell_number {cell_number} out of range (0..{len(cells) - 1})"
+            )
+        new_source = tool_input.get("new_source", "")
+        cell_type = tool_input.get("cell_type", "code")
+        new_cell: Dict[str, Any] = {
+            "cell_type": cell_type,
+            "source": new_source.splitlines(keepends=True),
+            "metadata": {},
+        }
+        if cell_type == "code":
+            new_cell["outputs"] = []
+            new_cell["execution_count"] = None
+        idx = cell_number if command == "insert_before" else cell_number + 1
+        cells.insert(idx, new_cell)
+        try:
+            resolved.write_text(
+                _json.dumps(nb, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except Exception as e:
+            return f"Error writing notebook {raw_path}: {e}"
+        return f"Inserted {cell_type} cell at position {idx} in {raw_path}"
+
+    if command == "delete":
+        if cell_number < 0 or cell_number >= len(cells):
+            return (
+                f"Error: cell_number {cell_number} out of range (0..{len(cells) - 1})"
+            )
+        cells.pop(cell_number)
+        try:
+            resolved.write_text(
+                _json.dumps(nb, indent=1, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except Exception as e:
+            return f"Error writing notebook {raw_path}: {e}"
+        return f"Deleted cell {cell_number} from {raw_path}"
+
+    return f"Error: unknown notebook_edit command: {command!r}"
 
 
 def _execute_grep(
