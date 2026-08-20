@@ -247,21 +247,85 @@ agent = GuardedAgent(
 | **Security scanning** | ai-guardian scans identically regardless of provider — secrets, PII, prompt injection all work the same |
 | **Install** | Requires `pip install ai-guardian[openai]` |
 
-### `create_client(**kwargs)`
+### `create_client(*, provider, provider_config, **kwargs)`
 
-Auto-detect and create an Anthropic client from environment variables.
+Auto-detect and create an LLM client from environment variables.
 
 ```python
 from ai_guardian.integrations import create_client
 
-# Returns the right client type based on which env var is set
+# Auto-detect from env vars (default — raises ValueError on conflict)
 client = create_client()
 
-# Pass kwargs to the underlying client constructor
-client = create_client(timeout=30.0)
+# Explicit provider — resolves env var conflicts
+client = create_client(provider="vertex")
+
+# OpenAI-compatible local server
+client = create_client(
+    provider="ollama",
+    provider_config={"base_url": "http://localhost:11434/v1"},
+)
+
+# Custom env var for API key
+client = create_client(
+    provider="direct",
+    provider_config={"api_key_env": "MY_CUSTOM_KEY"},
+)
 ```
 
-Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `provider` | str | `None` | Provider to use. Anthropic: `direct`/`anthropic`, `vertex`, `bedrock`, `foundry`. OpenAI-compatible: `openai`, `azure`, `ollama`, `llamacpp`, `vllm`. If `None`, auto-detects from env vars. |
+| `provider_config` | dict | `None` | Provider-specific overrides: `base_url`, `base_url_env`, `api_key_env`, `project_id_env`, `region_env`. |
+
+Raises `ValueError` if multiple conflicting env vars are set (and no `provider` specified), or if no credentials are found.
+
+**Default auth env vars per provider:**
+
+| Provider | Client | Default env vars |
+|----------|--------|------------------|
+| `direct` / `anthropic` | `Anthropic()` | `ANTHROPIC_API_KEY` |
+| `vertex` | `AnthropicVertex()` | `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION` |
+| `bedrock` | `AnthropicBedrock()` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `foundry` | `AnthropicFoundry()` | Foundry credentials |
+| `openai` | `OpenAI()` | `OPENAI_API_KEY` |
+| `azure` | `AzureOpenAI()` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` |
+| `ollama` | `OpenAI(base_url=...)` | None (local server) |
+| `llamacpp` | `OpenAI(base_url=...)` | None (local server) |
+| `vllm` | `OpenAI(base_url=...)` | None (optional `api_key_env`) |
+
+Use `provider_config` fields to override these defaults:
+
+| Field | Description |
+|-------|-------------|
+| `base_url` | Server endpoint (required for ollama/llamacpp/vllm) |
+| `base_url_env` | Env var name holding the server endpoint URL |
+| `api_key_env` | Env var name holding the API key (overrides default) |
+| `project_id_env` | Env var name for GCP project ID (vertex, default: `ANTHROPIC_VERTEX_PROJECT_ID`) |
+| `region_env` | Env var name for region (vertex, default: `CLOUD_ML_REGION`) |
+
+**Config-driven:** Set `sdk.provider` and `sdk.provider_config` in `ai-guardian.json` to avoid passing these in code:
+
+```json
+{
+  "sdk": {
+    "provider": "vertex",
+    "provider_config": {
+      "project_id_env": "MY_GCP_PROJECT",
+      "region_env": "MY_GCP_REGION"
+    }
+  }
+}
+```
+
+**Environment variable overrides** (highest precedence):
+
+| Env var | Overrides |
+|---------|-----------|
+| `AI_GUARDIAN_SDK_PROVIDER` | `sdk.provider` config and code `provider=` argument |
+| `AI_GUARDIAN_SDK_BASE_URL` | `sdk.provider_config.base_url` and `base_url_env` |
 
 ### `guarded(client, *, name, mode, config, extractor, response_parser, before_call, after_call)`
 
@@ -272,7 +336,7 @@ Wraps an LLM client with automatic security scanning.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
-| `name` | str | `None` | Profile name linking to `sdk.clients.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
+| `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
 | `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |

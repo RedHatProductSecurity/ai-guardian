@@ -2708,6 +2708,23 @@
           "type": "boolean",
           "description": "When true, built-in tools allow access through symlinks inside cwd even when the real target is outside cwd. The logical (unresolved) path must still be within cwd.",
           "default": false
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "ollama", "llamacpp", "vllm"],
+          "description": "LLM provider for this agent. Overrides top-level sdk.provider. Different agents can use different providers."
+        },
+        "provider_config": {
+          "type": "object",
+          "description": "Provider-specific configuration for this agent. Same fields as top-level sdk.provider_config.",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": { "type": "string" },
+            "base_url_env": { "type": "string" },
+            "api_key_env": { "type": "string" },
+            "project_id_env": { "type": "string" },
+            "region_env": { "type": "string" }
+          }
         }
       }
     },
@@ -2726,19 +2743,43 @@
           "description": "When true, SDK uses global ai-guardian.json scanner settings (per-scanner actions, thresholds, allowlists). When false, SDK runs standalone without global config.",
           "default": true
         },
-        "agents": {
+        "provider": {
+          "type": "string",
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "ollama", "llamacpp", "vllm"],
+          "description": "LLM provider to use when auto-creating clients. Overrides env var auto-detection, resolving conflicts when multiple provider env vars are set. Anthropic family: 'direct'/'anthropic' (API key), 'vertex' (GCP), 'bedrock' (AWS), 'foundry'. OpenAI-compatible: 'openai', 'azure', 'ollama', 'llamacpp', 'vllm'."
+        },
+        "provider_config": {
           "type": "object",
-          "description": "GuardedAgent profiles. Use '*' for defaults applied to all agents. Named keys match the agent's 'name' parameter.",
-          "additionalProperties": {
-            "$ref": "#/definitions/sdk_agent_profile"
+          "description": "Provider-specific configuration. Anthropic family reads from standard env vars by default; use these fields to override env var names. OpenAI-compatible providers use base_url for server endpoints.",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "description": "Server endpoint URL. Required for ollama, llamacpp, vllm. Optional for openai, azure. Overridden by AI_GUARDIAN_SDK_BASE_URL env var."
+            },
+            "base_url_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the server endpoint URL. Takes precedence over base_url but is overridden by AI_GUARDIAN_SDK_BASE_URL."
+            },
+            "api_key_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the API key. Overrides the default env var for the provider. No secrets in config — only the env var name."
+            },
+            "project_id_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the GCP project ID. Only used by vertex provider. Default: ANTHROPIC_VERTEX_PROJECT_ID."
+            },
+            "region_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the region. Used by vertex and bedrock providers. Default: CLOUD_ML_REGION."
+            }
           }
         },
-        "clients": {
+        "agents": {
           "type": "object",
-          "description": "guarded() client profiles. Use '*' for defaults applied to all clients.",
+          "description": "Unified profiles for GuardedAgent and guarded() wrapper. Use '*' for defaults applied to all. Named keys match the 'name' parameter. Different agents can use different providers.",
           "additionalProperties": {
-            "type": "object",
-            "additionalProperties": true
+            "$ref": "#/definitions/sdk_agent_profile"
           }
         },
         "trace_viewer": {

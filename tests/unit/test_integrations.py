@@ -751,6 +751,258 @@ class TestCreateClient:
         call_kwargs = mock_mod.AnthropicVertex.call_args[1]
         assert call_kwargs["timeout"] == 30.0
 
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+    )
+    def test_provider_overrides_conflict(self):
+        """Config provider resolves env var conflicts."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="vertex")
+        mock_mod.AnthropicVertex.assert_called_once()
+        assert result is mock_mod.AnthropicVertex.return_value
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+    )
+    def test_provider_direct_ignores_vertex(self):
+        """provider='direct' selects API key client despite vertex env var."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="direct")
+        mock_mod.Anthropic.assert_called_once()
+        assert result is mock_mod.Anthropic.return_value
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+    )
+    def test_provider_anthropic_alias(self):
+        """provider='anthropic' is an alias for 'direct'."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="anthropic")
+        mock_mod.Anthropic.assert_called_once()
+        assert result is mock_mod.Anthropic.return_value
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_invalid_raises(self):
+        with pytest.raises(ValueError, match="Unknown provider"):
+            create_client(provider="gcp")
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "ANTHROPIC_BEDROCK_BASE_URL": "https://bedrock.us-east-1.amazonaws.com",
+            "ANTHROPIC_API_KEY": "sk-test",
+        },
+    )
+    def test_provider_bedrock_ignores_api_key(self):
+        """provider='bedrock' selects bedrock despite API key env var."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="bedrock")
+        mock_mod.AnthropicBedrock.assert_called_once()
+        assert result is mock_mod.AnthropicBedrock.return_value
+
+    @patch.dict("os.environ", {**_CLEAN_ANTHROPIC_ENV, "ANTHROPIC_API_KEY": "sk-test"})
+    def test_provider_none_falls_back_to_autodetect(self):
+        """provider=None uses existing auto-detect behavior."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider=None)
+        mock_mod.Anthropic.assert_called_once()
+        assert result is mock_mod.Anthropic.return_value
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_foundry(self):
+        mock_mod = self._mock_anthropic()
+        mock_mod.AnthropicFoundry = MagicMock()
+        mock_mod.AnthropicFoundry.return_value = MagicMock()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="foundry")
+        mock_mod.AnthropicFoundry.assert_called_once()
+        assert result is mock_mod.AnthropicFoundry.return_value
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "AI_GUARDIAN_SDK_PROVIDER": "direct",
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+    )
+    def test_env_var_overrides_provider_arg(self):
+        """AI_GUARDIAN_SDK_PROVIDER env var takes precedence."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            result = create_client(provider="vertex")
+        mock_mod.Anthropic.assert_called_once()
+        assert result is mock_mod.Anthropic.return_value
+
+    @patch.dict(
+        "os.environ",
+        {**_CLEAN_ANTHROPIC_ENV, "MY_KEY": "sk-custom"},
+    )
+    def test_provider_config_api_key_env(self):
+        """provider_config.api_key_env reads custom env var."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            create_client(
+                provider="direct",
+                provider_config={"api_key_env": "MY_KEY"},
+            )
+        call_kwargs = mock_mod.Anthropic.call_args[1]
+        assert call_kwargs["api_key"] == "sk-custom"
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "MY_PROJECT": "custom-proj",
+            "MY_REGION": "europe-west1",
+        },
+    )
+    def test_provider_config_vertex_env_overrides(self):
+        """provider_config overrides vertex env var names."""
+        mock_mod = self._mock_anthropic()
+        with patch.dict(sys.modules, {"anthropic": mock_mod}):
+            create_client(
+                provider="vertex",
+                provider_config={
+                    "project_id_env": "MY_PROJECT",
+                    "region_env": "MY_REGION",
+                },
+            )
+        call_kwargs = mock_mod.AnthropicVertex.call_args[1]
+        assert call_kwargs["project_id"] == "custom-proj"
+        assert call_kwargs["region"] == "europe-west1"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_openai(self):
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(provider="openai")
+        mock_openai.OpenAI.assert_called_once()
+        assert result is mock_openai.OpenAI.return_value
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_ollama_with_base_url(self):
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            create_client(
+                provider="ollama",
+                provider_config={"base_url": "http://localhost:11434/v1"},
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:11434/v1"
+        assert call_kwargs["api_key"] == "not-needed"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_provider_azure(self):
+        mock_openai = MagicMock()
+        mock_openai.AzureOpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            result = create_client(
+                provider="azure",
+                provider_config={"base_url": "https://my.openai.azure.com"},
+            )
+        call_kwargs = mock_openai.AzureOpenAI.call_args[1]
+        assert call_kwargs["azure_endpoint"] == "https://my.openai.azure.com"
+        assert result is mock_openai.AzureOpenAI.return_value
+
+    @patch.dict(
+        "os.environ",
+        {**_CLEAN_ANTHROPIC_ENV, "VLLM_KEY": "sk-vllm"},
+    )
+    def test_provider_vllm_with_api_key_env(self):
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            create_client(
+                provider="vllm",
+                provider_config={
+                    "base_url": "http://localhost:8000/v1",
+                    "api_key_env": "VLLM_KEY",
+                },
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:8000/v1"
+        assert call_kwargs["api_key"] == "sk-vllm"
+
+    @patch.dict(
+        "os.environ",
+        {**_CLEAN_ANTHROPIC_ENV, "MY_ENDPOINT": "http://my-server:8000/v1"},
+    )
+    def test_base_url_env_resolves_from_env_var(self):
+        """base_url_env reads URL from named env var."""
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            create_client(
+                provider="vllm",
+                provider_config={"base_url_env": "MY_ENDPOINT"},
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://my-server:8000/v1"
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "AI_GUARDIAN_SDK_BASE_URL": "http://override:9999/v1",
+        },
+    )
+    def test_sdk_base_url_env_overrides_config(self):
+        """AI_GUARDIAN_SDK_BASE_URL overrides provider_config.base_url."""
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            create_client(
+                provider="ollama",
+                provider_config={"base_url": "http://localhost:11434/v1"},
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://override:9999/v1"
+
+    @patch.dict(
+        "os.environ",
+        {
+            **_CLEAN_ANTHROPIC_ENV,
+            "AI_GUARDIAN_SDK_BASE_URL": "http://override:9999/v1",
+            "MY_ENDPOINT": "http://from-env-name:8000/v1",
+        },
+    )
+    def test_sdk_base_url_env_beats_base_url_env(self):
+        """AI_GUARDIAN_SDK_BASE_URL takes precedence over base_url_env."""
+        mock_openai = MagicMock()
+        mock_openai.OpenAI.return_value = MagicMock()
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            create_client(
+                provider="vllm",
+                provider_config={"base_url_env": "MY_ENDPOINT"},
+            )
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://override:9999/v1"
+
 
 # ============================================================================
 # TestGuardedAutoClient
@@ -772,6 +1024,67 @@ class TestGuardedAutoClient:
             ):
                 wrapped = guarded()
         assert isinstance(wrapped, _GuardedClient)
+
+    @patch.dict(
+        "os.environ",
+        {
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+        clear=False,
+    )
+    def test_guarded_reads_sdk_provider_from_config(self):
+        """guarded() passes sdk.provider from config to create_client."""
+        fake_mod = _fake_anthropic_module()
+        mock_client = fake_mod.Anthropic()
+        mock_client.messages = SimpleNamespace(create=lambda: None, stream=lambda: None)
+        config_with_provider = {"sdk": {"provider": "direct"}}
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            with patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(config_with_provider, None),
+            ):
+                with patch(
+                    "ai_guardian.integrations.anthropic.create_client",
+                    return_value=mock_client,
+                ) as mock_create:
+                    guarded()
+        mock_create.assert_called_once_with(provider="direct", provider_config=None)
+
+    @patch.dict(
+        "os.environ",
+        {
+            "ANTHROPIC_API_KEY": "sk-test",
+            "ANTHROPIC_VERTEX_PROJECT_ID": "my-project",
+        },
+        clear=False,
+    )
+    def test_guarded_client_profile_provider_overrides_top_level(self):
+        """Client profile provider takes precedence over top-level sdk.provider."""
+        fake_mod = _fake_anthropic_module()
+        mock_client = fake_mod.Anthropic()
+        mock_client.messages = SimpleNamespace(create=lambda: None, stream=lambda: None)
+        config_with_both = {
+            "sdk": {
+                "provider": "vertex",
+                "agents": {
+                    "my-client": {
+                        "provider": "direct",
+                    },
+                },
+            }
+        }
+        with patch.dict(sys.modules, {"anthropic": fake_mod}):
+            with patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(config_with_both, None),
+            ):
+                with patch(
+                    "ai_guardian.integrations.anthropic.create_client",
+                    return_value=mock_client,
+                ) as mock_create:
+                    guarded(name="my-client")
+        mock_create.assert_called_once_with(provider="direct", provider_config=None)
 
 
 # ============================================================================
@@ -3632,6 +3945,43 @@ class TestGuardedAgent:
 
         hook.assert_called_once()
         assert result["stop_reason"] == "hook_early_stop"
+
+    @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
+    def test_agent_profile_provider_creates_correct_client(self):
+        """Agent profile provider overrides default Anthropic auto-detect."""
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        mock_openai = MagicMock()
+        mock_openai_client = MagicMock()
+        mock_openai_client.chat = MagicMock()
+        mock_openai.OpenAI.return_value = mock_openai_client
+
+        profile_config = {
+            "sdk": {
+                "agents": {
+                    "local-agent": {
+                        "provider": "ollama",
+                        "provider_config": {
+                            "base_url": "http://localhost:11434/v1",
+                        },
+                    },
+                },
+            }
+        }
+        with patch.dict(sys.modules, {"openai": mock_openai}):
+            with patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=(profile_config, None),
+            ):
+                agent = GuardedAgent(
+                    model="llama3",
+                    tools=[],
+                    name="local-agent",
+                )
+
+        mock_openai.OpenAI.assert_called_once()
+        call_kwargs = mock_openai.OpenAI.call_args[1]
+        assert call_kwargs["base_url"] == "http://localhost:11434/v1"
 
 
 # ============================================================================

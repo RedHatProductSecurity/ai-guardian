@@ -676,7 +676,7 @@ class TestLoadSDKProfile:
             json.dumps(
                 {
                     "sdk": {
-                        "clients": {
+                        "agents": {
                             "api-scanner": {
                                 "mode": "rest",
                                 "model": "claude-haiku-4-5-20251001",
@@ -688,7 +688,7 @@ class TestLoadSDKProfile:
         )
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_DIR": str(config_dir)}):
             _clear_config_cache()
-            result = _load_sdk_profile("clients", "api-scanner")
+            result = _load_sdk_profile("agents", "api-scanner")
         assert result == {"mode": "rest", "model": "claude-haiku-4-5-20251001"}
 
 
@@ -1122,7 +1122,7 @@ class TestGuardedFunctionConfigProfile:
             json.dumps(
                 {
                     "sdk": {
-                        "clients": {
+                        "agents": {
                             "api-scanner": {
                                 "mode": "rest",
                                 "model": "claude-haiku-4-5-20251001",

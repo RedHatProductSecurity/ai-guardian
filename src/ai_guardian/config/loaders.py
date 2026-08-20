@@ -787,7 +787,8 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     4. If neither exists, return ``{}``.
 
     Args:
-        section: ``"agents"`` or ``"clients"``
+        section: ``"agents"`` (unified profile section for both
+            ``GuardedAgent`` and ``guarded()``).
         name: Profile name, or ``None`` for ``*`` only.
 
     Returns:
@@ -819,13 +820,13 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     return dict(default_profile)
 
 
-def _sdk_scanning(section: str = "clients", name: Optional[str] = None) -> bool:
+def _sdk_scanning(section: str = "agents", name: Optional[str] = None) -> bool:
     """Check whether SDK scanning is active.
 
     Reads ``sdk.scanning`` from the merged config.
 
     Args:
-        section: ``"agents"`` or ``"clients"``
+        section: ``"agents"`` (unified profile section).
         name: Profile name (unused, kept for call-site compat).
 
     Returns:
