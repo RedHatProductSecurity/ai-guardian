@@ -15,7 +15,7 @@ name: Scenario Tests
 
 on:
   push:
-    branches: [main, 'dev/*']
+    branches: ['dev/*']
     paths:
       - 'container/**'
       - 'src/ai_guardian/**'
