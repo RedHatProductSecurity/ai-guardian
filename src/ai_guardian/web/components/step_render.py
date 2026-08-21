@@ -179,6 +179,23 @@ def create_sort_toggle(state, storage_key, reload_fn):
     return btn
 
 
+def create_pause_toggle(auto_timer):
+    """Create a pause/resume toggle for auto-refresh timers."""
+
+    def _toggle():
+        timer = auto_timer.get("ref")
+        if timer is None:
+            return
+        timer.active = not timer.active
+        paused = not timer.active
+        auto_timer["paused"] = paused
+        btn.text = "▶ Resume" if paused else "⏸ Pause"
+        btn.update()
+
+    btn = ui.button("⏸ Pause", on_click=_toggle).props("dense outline")
+    return btn
+
+
 def format_duration(seconds):
     if seconds < 60:
         return f"{seconds:.0f}s"

@@ -11,6 +11,7 @@ from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.content_viewer import render_view_button
 from ai_guardian.web.components.step_render import (
     compute_context_tokens,
+    create_pause_toggle,
     create_sort_toggle,
     format_duration,
     format_token_count,
@@ -39,7 +40,13 @@ def create_traces_page(service, daemon_name: str):
 
         state = {"load_fn": None, "newest_first": saved_sort}
 
-        with ui.row().classes("items-end gap-4 w-full"):
+        auto_timer = {"ref": None, "paused": False}
+
+        with (
+            ui.row()
+            .classes("items-end gap-4 w-full")
+            .style("position: sticky; top: 0; z-index: 10; background: #121212")
+        ):
             filter_input = ui.input(
                 label="Filter filenames",
                 placeholder="Wildcard: *, ?  e.g. triage-*",
@@ -66,9 +73,9 @@ def create_traces_page(service, daemon_name: str):
                     await fn()
 
             create_sort_toggle(state, "traces_sort_newest", _reload_traces)
+            create_pause_toggle(auto_timer)
 
         cards_container = ui.column().classes("w-full gap-2")
-        auto_timer = {"ref": None}
 
         async def load_traces():
             try:
@@ -98,7 +105,7 @@ def create_traces_page(service, daemon_name: str):
                 _populate_agent_filter(traces, agent_select)
                 _render_trace_list(traces, cards_container, daemon_name)
 
-                if auto_timer["ref"] is None:
+                if auto_timer["ref"] is None and not auto_timer.get("paused"):
                     interval = _get_auto_refresh_interval(service, target)
                     auto_timer["ref"] = ui.timer(interval, load_traces)
             except Exception as exc:
@@ -220,7 +227,13 @@ def create_trace_detail_page(service, daemon_name: str):
                 on_click=_send_to_collector,
             ).props("dense outline")
 
-        with ui.row().classes("items-center gap-2"):
+        auto_timer = {"ref": None, "paused": False}
+
+        with (
+            ui.row()
+            .classes("items-center gap-2")
+            .style("position: sticky; top: 0; z-index: 10; background: #121212")
+        ):
             ui.label("Turns").classes("text-lg font-bold")
 
             async def _reload_trace_detail():
@@ -231,6 +244,7 @@ def create_trace_detail_page(service, daemon_name: str):
             create_sort_toggle(
                 detail_state, "trace_detail_sort_newest", _reload_trace_detail
             )
+            create_pause_toggle(auto_timer)
 
         turns_container = ui.column().classes("w-full gap-1")
         dialog_host = ui.element("div")
@@ -312,12 +326,11 @@ def create_trace_detail_page(service, daemon_name: str):
                 "})()"
             )
 
-            if auto_timer["ref"] is None:
+            if auto_timer["ref"] is None and not auto_timer.get("paused"):
                 interval = _get_auto_refresh_interval(service, target)
                 auto_timer["ref"] = ui.timer(interval, load_detail)
 
         detail_state["load_fn"] = load_detail
-        auto_timer = {"ref": None}
         ui.timer(0.1, load_detail, once=True)
 
 

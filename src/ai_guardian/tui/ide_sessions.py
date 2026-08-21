@@ -1,5 +1,6 @@
 """IDE Sessions panel for the TUI console."""
 
+import re
 import threading
 from datetime import datetime
 
@@ -39,6 +40,9 @@ class IDESessionsContent(Container):
         self._sessions = []
         self._selected_session = None
         self._newest_first = True
+        self._refresh_timer = None
+        self._refresh_paused = False
+        self._detail_text = ""
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -60,6 +64,8 @@ class IDESessionsContent(Container):
             yield Button(
                 "Showing: Newest ↓", id="ide-sessions-sort-toggle", variant="default"
             )
+            yield Button("⏸ Pause", id="ide-sessions-pause-toggle", variant="default")
+            yield Button("Copy", id="ide-sessions-copy", variant="default")
         yield Static("", id="ide-sessions-detail")
         with VerticalScroll():
             yield Tree("Sessions", id="ide-sessions-tree")
@@ -68,7 +74,9 @@ class IDESessionsContent(Container):
         tree = self.query_one("#ide-sessions-tree", Tree)
         tree.show_root = False
         self._detect_default_ide()
-        self.set_interval(self._get_refresh_interval(), self._load_sessions)
+        self._refresh_timer = self.set_interval(
+            self._get_refresh_interval(), self._load_sessions
+        )
 
     def refresh_content(self) -> None:
         self._load_sessions()
@@ -82,6 +90,19 @@ class IDESessionsContent(Container):
                 "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
             )
             self._apply_filter()
+        elif event.button.id == "ide-sessions-pause-toggle":
+            if self._refresh_timer is not None:
+                if self._refresh_paused:
+                    self._refresh_timer.resume()
+                    self._refresh_paused = False
+                    event.button.label = "⏸ Pause"
+                else:
+                    self._refresh_timer.pause()
+                    self._refresh_paused = True
+                    event.button.label = "▶ Resume"
+        elif event.button.id == "ide-sessions-copy":
+            if self._detail_text:
+                self.app.copy_to_clipboard(self._detail_text)
 
     def on_select_changed(self, event: Select.Changed) -> None:
         if event.select.id == "ide-sessions-ide-select":
@@ -233,7 +254,9 @@ class IDESessionsContent(Container):
         if sid:
             self._load_session_violations(sid, detail, lines)
         else:
-            detail.update("\n".join(lines))
+            text = "\n".join(lines)
+            detail.update(text)
+            self._detail_text = _strip_rich_markup(text)
 
     def _load_session_violations(self, session_id, detail_widget, base_lines):
         def _worker():
@@ -270,7 +293,14 @@ class IDESessionsContent(Container):
             lines.append(
                 f"[bold red]Violations: {len(violations)}[/bold red] ({', '.join(parts)})"
             )
-        detail_widget.update("\n".join(lines))
+        text = "\n".join(lines)
+        detail_widget.update(text)
+        self._detail_text = _strip_rich_markup(text)
+
+
+def _strip_rich_markup(text):
+    """Strip Rich markup tags for plain-text clipboard copy."""
+    return re.sub(r"\[/?[^\]]*\]", "", text)
 
 
 def _get_ide_options():
