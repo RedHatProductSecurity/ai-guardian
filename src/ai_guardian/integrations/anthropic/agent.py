@@ -4,6 +4,7 @@ import atexit
 import json
 import logging
 import os
+import subprocess
 import time
 import uuid
 from datetime import datetime, timezone
@@ -410,6 +411,10 @@ class GuardedAgent:
 
         tools = self._apply_config_profile(tools)
 
+        from ai_guardian.config.loaders import _load_sdk_hooks
+
+        self._shell_hooks = _load_sdk_hooks(self._name)
+
         if self._trace_dir and not os.path.isabs(self._trace_dir):
             self._trace_dir = os.path.join(self._cwd, self._trace_dir)
 
@@ -504,7 +509,7 @@ class GuardedAgent:
             )
 
         for param, config_value in profile.items():
-            if param in ("mcpServers", "provider", "provider_config"):
+            if param in ("mcpServers", "provider", "provider_config", "hooks"):
                 continue
             if param == "tools":
                 if config_value != tools_spec:
@@ -542,6 +547,82 @@ class GuardedAgent:
 
         return tools_spec
 
+    def _exec_hook(self, hook_name: str, phase: str, turn: int = 0) -> bool:
+        """Execute a config-driven shell hook if configured.
+
+        Returns ``True`` to continue, ``False`` to abort.
+        """
+        if not self._shell_hooks:
+            return True
+        hook_config = self._shell_hooks.get(hook_name)
+        if not isinstance(hook_config, dict):
+            return True
+        command = hook_config.get(f"{phase}_command")
+        if not command:
+            return True
+        return self._run_shell_hook(command, hook_name, phase, turn)
+
+    def _run_shell_hook(
+        self, command: str, hook_name: str, phase: str, turn: int = 0
+    ) -> bool:
+        """Run a shell command with JSON context via stdin.
+
+        Returns ``True`` if the command exited 0, ``False`` otherwise.
+        """
+        context = {
+            "hook": hook_name,
+            "phase": phase,
+            "agent_name": self._name or "agent",
+            "turn": turn,
+            "model": self._model,
+        }
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                input=json.dumps(context),
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=self._cwd,
+            )
+            if result.returncode != 0:
+                logger.warning(
+                    "Shell hook %s/%s_command exited %d: %s",
+                    hook_name,
+                    phase,
+                    result.returncode,
+                    result.stderr.strip()[:200] if result.stderr else "",
+                )
+                return False
+            return True
+        except subprocess.TimeoutExpired:
+            logger.warning(
+                "Shell hook %s/%s_command timed out after 30s",
+                hook_name,
+                phase,
+            )
+            return False
+        except Exception as exc:
+            logger.warning(
+                "Shell hook %s/%s_command failed: %s",
+                hook_name,
+                phase,
+                exc,
+            )
+            return False
+
+    @staticmethod
+    def _hook_abort_result() -> Dict[str, Any]:
+        return {
+            "output": "",
+            "messages": [],
+            "stop_reason": "hook_abort",
+            "usage": {f: 0 for f in _USAGE_TOKEN_FIELDS},
+            "compaction_count": 0,
+            "trace": [],
+        }
+
     def run(self, prompt: str) -> Dict[str, Any]:
         """Run the agent loop and return the result.
 
@@ -558,16 +639,22 @@ class GuardedAgent:
             "max_turns": self._max_turns,
             "max_budget_tokens": self._max_budget_tokens,
         }
+        if not self._exec_hook("pre_run", "pre"):
+            return self._hook_abort_result()
         if self._pre_run:
             self._pre_run(prompt, run_config)
+        if not self._exec_hook("pre_run", "post"):
+            return self._hook_abort_result()
 
         result = None
         try:
             result = self._run_loop(prompt)
             return result
         finally:
+            self._exec_hook("post_run", "pre")
             if self._post_run:
                 self._post_run(result)
+            self._exec_hook("post_run", "post")
 
     def _resolve_trace_filepath(self, started_at: datetime) -> str:
         """Compute the trace file path once per run for reuse."""
@@ -1055,6 +1142,10 @@ class GuardedAgent:
             compact_result = None
 
             try:
+                if not self._exec_hook("on_turn", "pre", turn_num):
+                    stop_reason = "hook_abort"
+                    break
+
                 if _turn > 0:
                     messages, did_compact, compact_result = self._maybe_compact(
                         strategy, messages, last_input_tokens
@@ -1091,8 +1182,14 @@ class GuardedAgent:
                     cache_ttl=self._cache_ttl,
                 )
 
+                if not self._exec_hook("before_call", "pre", turn_num):
+                    stop_reason = "hook_abort"
+                    break
                 if self._before_call:
                     self._before_call(strategy.api_method_name, (), create_kwargs)
+                if not self._exec_hook("before_call", "post", turn_num):
+                    stop_reason = "hook_abort"
+                    break
 
                 effective_timeout = (
                     self._api_timeout
@@ -1248,11 +1345,17 @@ class GuardedAgent:
                             messages.append({"role": "user", "content": warning})
                         continue
 
+                if not self._exec_hook("after_call", "pre", turn_num):
+                    stop_reason = "hook_abort"
+                    break
                 early_stop = False
                 if self._after_call:
                     hook_result = self._after_call(strategy.api_method_name, response)
                     if hook_result is False:
                         early_stop = True
+                if not self._exec_hook("after_call", "post", turn_num):
+                    stop_reason = "hook_abort"
+                    break
 
                 if self._max_budget_tokens > 0:
                     total_spent = (
@@ -1271,6 +1374,10 @@ class GuardedAgent:
                 if parsed.stop_reason == "end_turn":
                     strategy.append_assistant_message(messages, parsed.raw_content)
 
+                    if not self._exec_hook("between_turns", "pre", turn_num):
+                        final_text = parsed.text
+                        stop_reason = "hook_abort"
+                        break
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
@@ -1327,8 +1434,16 @@ class GuardedAgent:
                                     "with your structured output. Do not "
                                     "respond with plain text."
                                 )
+                            if not self._exec_hook("between_turns", "post", turn_num):
+                                final_text = parsed.text
+                                stop_reason = "hook_abort"
+                                break
                             messages.append({"role": "user", "content": user_text})
                             continue
+                    if not self._exec_hook("between_turns", "post", turn_num):
+                        final_text = parsed.text
+                        stop_reason = "hook_abort"
+                        break
 
                     if self._output_schema and structured_output is None:
                         messages.append(
@@ -1487,6 +1602,10 @@ class GuardedAgent:
                             run_start_mono=run_start_mono,
                         )
 
+                    if not self._exec_hook("between_turns", "pre", turn_num):
+                        final_text = parsed.text
+                        stop_reason = "hook_abort"
+                        break
                     if self._between_turns:
                         hook_result = self._between_turns(messages, response, _turn)
                         if hook_result is False:
@@ -1536,12 +1655,26 @@ class GuardedAgent:
                                     f"Violation ID: {_violation_id}",
                                 )
                                 structured_output = None
+                                if not self._exec_hook(
+                                    "between_turns", "post", turn_num
+                                ):
+                                    final_text = parsed.text
+                                    stop_reason = "hook_abort"
+                                    break
                                 continue
                             strategy.inject_user_text_after_results(
                                 messages, hook_result
                             )
                             structured_output = None
+                            if not self._exec_hook("between_turns", "post", turn_num):
+                                final_text = parsed.text
+                                stop_reason = "hook_abort"
+                                break
                             continue
+                    if not self._exec_hook("between_turns", "post", turn_num):
+                        final_text = parsed.text
+                        stop_reason = "hook_abort"
+                        break
 
                     if structured_output is not None:
                         stop_reason = "end_turn"
@@ -1554,6 +1687,7 @@ class GuardedAgent:
                 stop_reason = parsed.stop_reason
                 break
             finally:
+                self._exec_hook("on_turn", "post", turn_num)
                 if trace and trace[-1].get("turn") == turn_num:
                     turn_end_mono = time.monotonic()
                     trace[-1].update(

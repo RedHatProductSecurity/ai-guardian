@@ -834,19 +834,26 @@ agent = GuardedAgent(
 
 ```
 agent.run("prompt")
+  ├── [pre_run.pre_command]            ← shell hook (config)
   ├── pre_run(prompt, config)          ← once, before loop
+  ├── [pre_run.post_command]           ← shell hook (config)
   ├── Turn 1:
+  │     ├── [on_turn.pre_command]
+  │     ├── [before_call.pre_command]
   │     ├── before_call(...)           ← per turn
+  │     ├── [before_call.post_command]
   │     ├── messages.create()
+  │     ├── [after_call.pre_command]
   │     ├── after_call(...)            ← per turn (return False to stop)
-  │     └── between_turns(...)         ← per successful turn (return str to inject)
-  ├── Turn 2+:
-  │     ├── compact check              ← compacts or raises if context exhausted
-  │     ├── before_call(...)
-  │     ├── messages.create()
-  │     ├── after_call(...)
-  │     └── between_turns(...)
-  └── post_run(result)                 ← once, after loop (even on exception)
+  │     ├── [after_call.post_command]
+  │     ├── [between_turns.pre_command]
+  │     ├── between_turns(...)         ← per successful turn (return str to inject)
+  │     ├── [between_turns.post_command]
+  │     └── [on_turn.post_command]
+  ├── Turn 2+: (same as Turn 1 with compact check first)
+  ├── [post_run.pre_command]
+  ├── post_run(result)                 ← once, after loop (even on exception)
+  └── [post_run.post_command]
 ```
 
 The `config` dict passed to `pre_run` contains: `model`, `tools`, `system_prompt`, `max_turns`, `max_budget_tokens`.
@@ -900,6 +907,82 @@ agent = GuardedAgent(
 )
 result = agent.run("Write a pytest test for the calculate_discount function...")
 ```
+
+### Shell Hooks (Config-Driven)
+
+Run external shell commands before/after each GuardedAgent callback — without code changes. Useful for audit logging, notifications, approval gates, and metrics push.
+
+**Config** (`ai-guardian.json`):
+
+```json
+{
+    "sdk": {
+        "hooks": {
+            "before_call": {
+                "pre_command": "bash /path/to/audit-log.sh",
+                "post_command": "bash /path/to/notify.sh"
+            },
+            "after_call": {
+                "pre_command": "bash /path/to/validate-response.sh"
+            },
+            "between_turns": {
+                "post_command": "bash /path/to/slack-notify.sh"
+            },
+            "pre_run": {
+                "pre_command": "bash /path/to/setup-env.sh"
+            },
+            "post_run": {
+                "post_command": "bash /path/to/cleanup.sh"
+            }
+        }
+    }
+}
+```
+
+**Execution order per hook point:**
+
+1. `pre_command` (shell) — from config
+2. Python callback — from code (`before_call`, `after_call`, etc.)
+3. `post_command` (shell) — from config
+
+**Shell command interface:**
+
+Commands receive JSON context via stdin:
+
+```json
+{
+    "hook": "before_call",
+    "phase": "pre",
+    "agent_name": "remediation-planner",
+    "turn": 3,
+    "model": "claude-opus-4-6"
+}
+```
+
+Exit code `0` = continue. Non-zero = abort (`stop_reason: "hook_abort"`).
+
+**Per-agent hooks** via agent profiles — different agents get different hooks:
+
+```json
+{
+    "sdk": {
+        "agents": {
+            "*": {
+                "hooks": {"post_run": {"post_command": "bash log.sh"}}
+            },
+            "remediation-implementer": {
+                "hooks": {"before_call": {"pre_command": "bash approve.sh"}}
+            }
+        }
+    }
+}
+```
+
+**Resolution order** (each layer overrides the previous):
+
+1. `sdk.hooks` — global hooks for all agents
+2. `sdk.agents.*.hooks` — wildcard profile hooks
+3. `sdk.agents.<name>.hooks` — named profile hooks
 
 ### Auto-Compaction
 
