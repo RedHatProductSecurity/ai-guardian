@@ -1361,6 +1361,11 @@ def main():
             metavar="PATTERN",
             help="Exclude glob pattern from scan (repeatable, e.g. --exclude 'data/*')",
         )
+        init_project_parser.add_argument(
+            "--annotate",
+            action="store_true",
+            help="Insert inline annotations around false positives (requires --scan, creates branch + PR)",
+        )
 
         args = parser.parse_args()
 
