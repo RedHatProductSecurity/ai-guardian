@@ -99,7 +99,7 @@ jobs:
         run: |
           EXPIRY=$(date -u -d '+24 hours' +%s 2>/dev/null || date -u -v+24H +%s)
           curl -sf -X PUT \
-            -H "Authorization: Bearer ${{ secrets.QUAY_PASSWORD }}" \
+            -u "${{ secrets.QUAY_USERNAME }}:${{ secrets.QUAY_PASSWORD }}" \
             -H "Content-Type: application/json" \
             -d "{\"expiration\": ${EXPIRY}}" \
             "https://quay.io/api/v1/repository/itdove/ai-guardian/tag/${{ github.sha }}"
