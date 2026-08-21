@@ -4628,6 +4628,248 @@ class TestGuardedAgent:
 
 
 # ============================================================================
+# TestGuardedAgentApiTimeout
+# ============================================================================
+
+
+class TestGuardedAgentApiTimeout:
+    """Tests for configurable API call timeout (#2097)."""
+
+    def _make_agent(self, mock_client=None, **kwargs):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        if mock_client is None:
+            mock_create = MagicMock()
+            mock_messages = SimpleNamespace(create=mock_create)
+            mock_client = SimpleNamespace(messages=mock_messages)
+
+        defaults = {
+            "model": "claude-sonnet-5",
+            "tools": ["bash"],
+            "client": mock_client,
+        }
+        defaults.update(kwargs)
+        return GuardedAgent(**defaults), mock_client
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_timeout_retry_then_stop(self, mock_monitor):
+        """Both attempts time out -> stop_reason='timeout'."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        timeout_exc = type("APITimeoutError", (Exception,), {})()
+        agent, client = self._make_agent(api_timeout=5)
+        client.messages.create.side_effect = timeout_exc
+
+        result = agent.run("Hi")
+
+        assert result["stop_reason"] == "timeout"
+        assert client.messages.create.call_count == 2
+        trace_steps = []
+        for turn in result.get("trace", []):
+            for step in turn.get("steps", []):
+                if step.get("type") == "timeout":
+                    trace_steps.append(step)
+        assert len(trace_steps) == 2
+        assert "attempt 1/2" in trace_steps[0]["text"]
+        assert "attempt 2/2" in trace_steps[1]["text"]
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_timeout_retry_succeeds(self, mock_monitor):
+        """First attempt times out, retry succeeds."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        timeout_exc = type("APITimeoutError", (Exception,), {})()
+        ok_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")],
+            stop_reason="end_turn",
+        )
+
+        agent, client = self._make_agent(api_timeout=5)
+        client.messages.create.side_effect = [timeout_exc, ok_response]
+
+        result = agent.run("Hi")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Hello!"
+        assert client.messages.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_non_timeout_error_propagates(self, mock_monitor):
+        """Non-timeout errors raise normally, no retry."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        agent, client = self._make_agent(api_timeout=5)
+        client.messages.create.side_effect = ValueError("bad request")
+
+        with pytest.raises(ValueError, match="bad request"):
+            agent.run("Hi")
+
+        assert client.messages.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_default_timeout_cloud(self, mock_monitor):
+        """Cloud client gets 300s default timeout."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent()
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        call_kwargs = client.messages.create.call_args
+        assert call_kwargs.kwargs.get("timeout") == 300.0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_default_timeout_local_provider(self, mock_monitor):
+        """Local provider (Ollama) gets 600s default timeout."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent()
+        client._ai_guardian_provider = "ollama"
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        call_kwargs = client.messages.create.call_args
+        assert call_kwargs.kwargs.get("timeout") == 600.0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_explicit_timeout_overrides_default(self, mock_monitor):
+        """Constructor api_timeout overrides provider default."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+        agent, client = self._make_agent(api_timeout=120)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        call_kwargs = client.messages.create.call_args
+        assert call_kwargs.kwargs.get("timeout") == 120.0
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_timeout_partial_result_returned(self, mock_monitor):
+        """On timeout after successful turns, partial output preserved."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="tool_use",
+                    name="bash",
+                    id="tool_1",
+                    input={"command": "echo test"},
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        timeout_exc = type("APITimeoutError", (Exception,), {})()
+
+        agent, client = self._make_agent(api_timeout=5)
+        client.messages.create.side_effect = [
+            tool_response,
+            timeout_exc,
+            timeout_exc,
+        ]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="test output",
+        ):
+            result = agent.run("Run a command")
+
+        assert result["stop_reason"] == "timeout"
+        assert result["usage"]["input_tokens"] == 100
+        assert result["usage"]["output_tokens"] == 50
+
+
+class TestIsTimeoutError:
+    """Tests for _is_timeout_error helper."""
+
+    def test_anthropic_timeout(self):
+        from ai_guardian.integrations.base import _is_timeout_error
+
+        exc = type("APITimeoutError", (Exception,), {})()
+        assert _is_timeout_error(exc) is True
+
+    def test_deadline_exceeded(self):
+        from ai_guardian.integrations.base import _is_timeout_error
+
+        exc = type("DeadlineExceeded", (Exception,), {})()
+        assert _is_timeout_error(exc) is True
+
+    def test_regular_exception(self):
+        from ai_guardian.integrations.base import _is_timeout_error
+
+        assert _is_timeout_error(ValueError("nope")) is False
+
+    def test_connection_error(self):
+        from ai_guardian.integrations.base import _is_timeout_error
+
+        exc = type("APIConnectionError", (Exception,), {})()
+        assert _is_timeout_error(exc) is False
+
+
+class TestResolveDefaultApiTimeout:
+    """Tests for resolve_default_api_timeout."""
+
+    def test_cloud_default(self):
+        from ai_guardian.integrations.base import resolve_default_api_timeout
+
+        client = SimpleNamespace()
+        assert resolve_default_api_timeout(client) == 300
+
+    def test_ollama_default(self):
+        from ai_guardian.integrations.base import resolve_default_api_timeout
+
+        client = SimpleNamespace(_ai_guardian_provider="ollama")
+        assert resolve_default_api_timeout(client) == 600
+
+    def test_llamacpp_default(self):
+        from ai_guardian.integrations.base import resolve_default_api_timeout
+
+        client = SimpleNamespace(_ai_guardian_provider="llamacpp")
+        assert resolve_default_api_timeout(client) == 600
+
+    def test_vllm_default(self):
+        from ai_guardian.integrations.base import resolve_default_api_timeout
+
+        client = SimpleNamespace(_ai_guardian_provider="vllm")
+        assert resolve_default_api_timeout(client) == 600
+
+    def test_openai_cloud(self):
+        from ai_guardian.integrations.base import resolve_default_api_timeout
+
+        client = SimpleNamespace(_ai_guardian_provider="openai")
+        assert resolve_default_api_timeout(client) == 300
+
+
+# ============================================================================
 # TestGuardedClientHooks
 # ============================================================================
 
@@ -5668,7 +5910,7 @@ class TestAgentLoopStrategyBase:
             def build_create_kwargs(self, **kw):
                 return {}
 
-            def call_api(self, client, kwargs):
+            def call_api(self, client, kwargs, timeout=None):
                 pass
 
             def parse_response(self, response):
@@ -6533,6 +6775,24 @@ class TestAnthropicLoopStrategy:
         kwargs = {"messages": [{"role": "user", "content": "Hi"}]}
         strategy.inject_preamble(kwargs, "POLICY: no secrets")
         assert "system" not in kwargs
+
+    def test_call_api_passes_timeout(self):
+        strategy = AnthropicLoopStrategy()
+        mock_client = MagicMock()
+        kwargs = {"model": "claude-sonnet-5", "max_tokens": 1024}
+        strategy.call_api(mock_client, kwargs, timeout=120)
+
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert call_kwargs["timeout"] == 120.0
+
+    def test_call_api_no_timeout_by_default(self):
+        strategy = AnthropicLoopStrategy()
+        mock_client = MagicMock()
+        kwargs = {"model": "claude-sonnet-5", "max_tokens": 1024}
+        strategy.call_api(mock_client, kwargs)
+
+        call_kwargs = mock_client.messages.create.call_args[1]
+        assert "timeout" not in call_kwargs
 
 
 class TestGuardedAgentCacheTtl:

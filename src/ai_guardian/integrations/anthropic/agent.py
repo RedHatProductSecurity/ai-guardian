@@ -28,9 +28,11 @@ from ai_guardian.integrations.base import (
     TurnEvent,
     _PREAMBLE_PREFIX,
     _USAGE_TOKEN_FIELDS,
+    _is_timeout_error,
     _try_sanitize_batch,
     _try_sanitize_text,
     _strategy_registry,
+    resolve_default_api_timeout,
 )
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -167,7 +169,11 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
                 }
             ]
 
-    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+    def call_api(
+        self, client: Any, kwargs: Dict[str, Any], timeout: Optional[int] = None
+    ) -> Any:
+        if timeout is not None:
+            kwargs = dict(kwargs, timeout=float(timeout))
         return client.messages.create(**kwargs)
 
     def parse_response(self, response: Any) -> ParsedResponse:
@@ -315,6 +321,7 @@ class GuardedAgent:
             "compact_threshold",
             "compact_keep_turns",
             "compact_keep_first",
+            "api_timeout",
         }
     )
 
@@ -349,10 +356,12 @@ class GuardedAgent:
         target_dir: Optional[str] = None,
         allowed_paths: Optional[List[str]] = None,
         follow_symlinks: bool = False,
+        api_timeout: Optional[int] = None,
         otel_metadata_fn: Optional[
             Callable[[str, Dict[str, Any]], Dict[str, Any]]
         ] = None,
     ):
+        self._api_timeout = api_timeout
         self._name = name
         self._otel_metadata_fn = otel_metadata_fn
         self._target_dir = target_dir
@@ -1085,8 +1094,70 @@ class GuardedAgent:
                 if self._before_call:
                     self._before_call(strategy.api_method_name, (), create_kwargs)
 
+                effective_timeout = (
+                    self._api_timeout
+                    if self._api_timeout is not None
+                    else resolve_default_api_timeout(self._client)
+                )
+
                 api_start = time.monotonic()
-                response = strategy.call_api(self._client, create_kwargs)
+                try:
+                    response = strategy.call_api(
+                        self._client, create_kwargs, timeout=effective_timeout
+                    )
+                except Exception as api_exc:
+                    if not _is_timeout_error(api_exc):
+                        raise
+                    logger.warning(
+                        "API call timed out after %ds on turn %d "
+                        "(model=%s), retrying once",
+                        effective_timeout,
+                        turn_num,
+                        self._model,
+                    )
+                    _emit(
+                        turn_num,
+                        TurnEvent(
+                            type="timeout",
+                            text=(
+                                f"API call timed out after "
+                                f"{effective_timeout}s (attempt 1/2)"
+                            ),
+                            latency_ms=int((time.monotonic() - api_start) * 1000),
+                        ),
+                    )
+                    retry_start = time.monotonic()
+                    try:
+                        response = strategy.call_api(
+                            self._client,
+                            create_kwargs,
+                            timeout=effective_timeout,
+                        )
+                    except Exception as retry_exc:
+                        if not _is_timeout_error(retry_exc):
+                            raise
+                        retry_latency = int((time.monotonic() - retry_start) * 1000)
+                        logger.warning(
+                            "API retry also timed out after %ds on "
+                            "turn %d — stopping run",
+                            effective_timeout,
+                            turn_num,
+                        )
+                        _emit(
+                            turn_num,
+                            TurnEvent(
+                                type="timeout",
+                                text=(
+                                    f"Retry timed out after "
+                                    f"{effective_timeout}s (attempt "
+                                    f"2/2) — stopping"
+                                ),
+                                latency_ms=retry_latency,
+                            ),
+                        )
+                        stop_reason = "timeout"
+                        break
+
                 api_latency_ms = int((time.monotonic() - api_start) * 1000)
                 parsed = strategy.parse_response(response)
 

@@ -13,6 +13,24 @@ logger = logging.getLogger(__name__)
 
 _CODE_BLOCK_RE = re.compile(r"```[^\n]*\n.*?```", re.DOTALL)
 
+_LOCAL_PROVIDERS = frozenset({"ollama", "llamacpp", "vllm"})
+_DEFAULT_TIMEOUT_CLOUD = 300
+_DEFAULT_TIMEOUT_LOCAL = 600
+
+
+def _is_timeout_error(exc: Exception) -> bool:
+    """Check if an exception is an API timeout error (provider-agnostic)."""
+    type_name = type(exc).__name__
+    return "Timeout" in type_name or "DeadlineExceeded" in type_name
+
+
+def resolve_default_api_timeout(client: Any) -> int:
+    """Return default API timeout based on provider type."""
+    provider = getattr(client, "_ai_guardian_provider", None)
+    if provider in _LOCAL_PROVIDERS:
+        return _DEFAULT_TIMEOUT_LOCAL
+    return _DEFAULT_TIMEOUT_CLOUD
+
 
 # ---------------------------------------------------------------------------
 # Agent loop strategy — dataclasses
@@ -87,6 +105,8 @@ class TurnEvent:
         if self.type == "input":
             c = " (compacted)" if self.compacted else ""
             return f"[input] {self.messages_count} messages{c}"
+        if self.type == "timeout":
+            return f"[timeout] {self.text}"
         return f"[{self.type}]"
 
     def to_dict(self) -> Dict[str, Any]:
@@ -204,7 +224,9 @@ class AgentLoopStrategy(ABC):
         """Build the kwargs dict for the provider's create/completions call."""
 
     @abstractmethod
-    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+    def call_api(
+        self, client: Any, kwargs: Dict[str, Any], timeout: Optional[int] = None
+    ) -> Any:
         """Send the request and return the raw provider response."""
 
     @abstractmethod

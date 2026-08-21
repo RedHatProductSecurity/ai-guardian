@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Configurable API call timeout for GuardedAgent** — new `api_timeout` parameter (constructor and `sdk.agents.*.api_timeout` config) sets per-API-call timeout in seconds. Defaults: 300s for cloud providers (Anthropic, OpenAI, Azure), 600s for local providers (Ollama, llama.cpp, vLLM). On timeout: logs warning, retries once, then stops with `stop_reason='timeout'` and returns partial result. Timeout events emitted in trace (#2097)
+
 - **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
 
 - **`--log-violations` flag for `ai-guardian scan`** — writes findings to `violations.jsonl` (the same log used by hooks), enabling unified violation tracking from both hooks and CLI scans. Also available as `ai-guardian setup --pre-commit --log-violations` to include the flag in auto-installed pre-commit hooks (#2068)
