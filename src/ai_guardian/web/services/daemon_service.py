@@ -174,10 +174,11 @@ class DaemonService:
         target: DaemonTarget,
         agent_name: Optional[str] = None,
         directory: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> Optional[dict]:
         try:
             return self._client.get_traces(
-                target, agent_name=agent_name, directory=directory
+                target, agent_name=agent_name, directory=directory, limit=limit
             )
         except Exception:
             return None

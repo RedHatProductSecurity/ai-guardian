@@ -38,7 +38,8 @@ def create_traces_page(service, daemon_name: str):
         except Exception:
             saved_sort = True
 
-        state = {"load_fn": None, "newest_first": saved_sort}
+        PAGE_SIZE = 50
+        state = {"load_fn": None, "newest_first": saved_sort, "page": 1}
 
         auto_timer = {"ref": None, "paused": False}
 
@@ -58,7 +59,14 @@ def create_traces_page(service, daemon_name: str):
                 label="Agent",
             ).classes("w-48")
 
+            top_input = (
+                ui.number(label="Top", value=1000, min=10, max=10000, step=100)
+                .classes("w-24")
+                .props("dense")
+            )
+
             async def _on_refresh():
+                state["page"] = 1
                 fn = state["load_fn"]
                 if fn:
                     await fn()
@@ -68,12 +76,36 @@ def create_traces_page(service, daemon_name: str):
             )
 
             async def _reload_traces():
+                state["page"] = 1
                 fn = state["load_fn"]
                 if fn:
                     await fn()
 
             create_sort_toggle(state, "traces_sort_newest", _reload_traces)
             create_pause_toggle(auto_timer)
+
+        with (
+            ui.row()
+            .classes("items-center gap-2 w-full")
+            .style("position: sticky; top: 48px; z-index: 9; background: #121212")
+        ):
+
+            async def _prev_page():
+                if state["page"] > 1:
+                    state["page"] -= 1
+                    fn = state["load_fn"]
+                    if fn:
+                        await fn()
+
+            async def _next_page():
+                state["page"] += 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            prev_btn = ui.button("◀ Prev", on_click=_prev_page).props("dense outline")
+            page_label = ui.label("").classes("text-xs text-grey-5")
+            next_btn = ui.button("Next ▶", on_click=_next_page).props("dense outline")
 
         cards_container = ui.column().classes("w-full gap-2")
 
@@ -90,11 +122,13 @@ def create_traces_page(service, daemon_name: str):
                     return
 
                 agent_filter = agent_select.value or None
+                limit = int(top_input.value or 1000)
                 result = await run.io_bound(
-                    service.get_daemon_traces, target, agent_filter, None
+                    service.get_daemon_traces, target, agent_filter, None, limit
                 )
 
                 traces = (result or {}).get("traces", [])
+                total_on_disk = (result or {}).get("total_count", len(traces))
                 pattern = filter_input.value.strip() if filter_input.value else None
                 if pattern:
                     traces = _filter_traces(traces, pattern)
@@ -103,7 +137,22 @@ def create_traces_page(service, daemon_name: str):
                     reverse=state["newest_first"],
                 )
                 _populate_agent_filter(traces, agent_select)
-                _render_trace_list(traces, cards_container, daemon_name)
+
+                total_matches = len(traces)
+                total_pages = max(1, -(-total_matches // PAGE_SIZE))
+                state["page"] = max(1, min(state["page"], total_pages))
+                page = state["page"]
+                start = (page - 1) * PAGE_SIZE
+                page_traces = traces[start : start + PAGE_SIZE]
+
+                _render_trace_list(page_traces, cards_container, daemon_name)
+
+                prev_btn.set_enabled(page > 1)
+                next_btn.set_enabled(page < total_pages)
+                parts = [f"Page {page} of {total_pages} ({total_matches} matches)"]
+                if total_on_disk > len((result or {}).get("traces", [])):
+                    parts.append(f" — showing top {limit} of {total_on_disk}")
+                page_label.set_text("".join(parts))
 
                 if auto_timer["ref"] is None and not auto_timer.get("paused"):
                     interval = _get_auto_refresh_interval(service, target)
@@ -114,6 +163,14 @@ def create_traces_page(service, daemon_name: str):
                     ui.label(f"Error: {exc}").classes("text-red")
 
         state["load_fn"] = load_traces
+
+        async def _on_filter_change():
+            state["page"] = 1
+            await load_traces()
+
+        filter_input.on_value_change(lambda _: _on_filter_change())
+        top_input.on_value_change(lambda _: _on_filter_change())
+
         ui.timer(0.1, load_traces, once=True)
 
 

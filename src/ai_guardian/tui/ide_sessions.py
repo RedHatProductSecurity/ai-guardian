@@ -29,11 +29,20 @@ class IDESessionsContent(Container):
     #ide-sessions-filter {
         width: 1fr;
     }
+    #ide-sessions-top-input {
+        width: 10;
+    }
+    #ide-sessions-page-info {
+        width: auto;
+        margin: 0 1;
+    }
     #ide-sessions-detail {
         margin: 0 1;
         height: auto;
     }
     """
+
+    PAGE_SIZE = 50
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -43,6 +52,8 @@ class IDESessionsContent(Container):
         self._refresh_timer = None
         self._refresh_paused = False
         self._detail_text = ""
+        self._page = 1
+        self._filtered_sessions = []
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -60,12 +71,21 @@ class IDESessionsContent(Container):
                 placeholder="Filter by project or title...",
                 id="ide-sessions-filter",
             )
+            yield Input(
+                value="1000",
+                placeholder="Top N",
+                id="ide-sessions-top-input",
+            )
             yield Button("Refresh", id="ide-sessions-refresh", variant="success")
             yield Button(
                 "Showing: Newest ↓", id="ide-sessions-sort-toggle", variant="default"
             )
             yield Button("⏸ Pause", id="ide-sessions-pause-toggle", variant="default")
             yield Button("Copy", id="ide-sessions-copy", variant="default")
+        with Horizontal():
+            yield Button("◀ Prev", id="ide-sessions-prev-page", variant="default")
+            yield Static("", id="ide-sessions-page-info")
+            yield Button("Next ▶", id="ide-sessions-next-page", variant="default")
         yield Static("", id="ide-sessions-detail")
         with VerticalScroll():
             yield Tree("Sessions", id="ide-sessions-tree")
@@ -83,13 +103,25 @@ class IDESessionsContent(Container):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ide-sessions-refresh":
+            self._page = 1
             self.refresh_content()
         elif event.button.id == "ide-sessions-sort-toggle":
             self._newest_first = not self._newest_first
+            self._page = 1
             event.button.label = (
                 "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
             )
             self._apply_filter()
+        elif event.button.id == "ide-sessions-prev-page":
+            if self._page > 1:
+                self._page -= 1
+                self._render_current_page()
+        elif event.button.id == "ide-sessions-next-page":
+            total = len(self._filtered_sessions)
+            total_pages = max(1, -(-total // self.PAGE_SIZE))
+            if self._page < total_pages:
+                self._page += 1
+                self._render_current_page()
         elif event.button.id == "ide-sessions-pause-toggle":
             if self._refresh_timer is not None:
                 if self._refresh_paused:
@@ -110,7 +142,11 @@ class IDESessionsContent(Container):
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "ide-sessions-filter":
+            self._page = 1
             self._apply_filter()
+        elif event.input.id == "ide-sessions-top-input":
+            self._page = 1
+            self._load_sessions()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
         node = event.node
@@ -168,11 +204,17 @@ class IDESessionsContent(Container):
         tree.clear()
         tree.root.add_leaf("[dim]Loading...[/dim]")
 
+        top_input = self.query_one("#ide-sessions-top-input", Input)
+        try:
+            limit = int(top_input.value.strip()) if top_input.value.strip() else 1000
+        except ValueError:
+            limit = 1000
+
         def _worker():
             from ai_guardian.sessions.discovery import discover_sessions
 
             try:
-                sessions = discover_sessions(str(ide))
+                sessions = discover_sessions(str(ide), limit=limit)
             except Exception:
                 sessions = []
 
@@ -188,9 +230,6 @@ class IDESessionsContent(Container):
         self._apply_filter()
 
     def _apply_filter(self) -> None:
-        tree = self.query_one("#ide-sessions-tree", Tree)
-        tree.clear()
-
         filter_input = self.query_one("#ide-sessions-filter", Input)
         query = (filter_input.value or "").strip().lower()
 
@@ -210,23 +249,42 @@ class IDESessionsContent(Container):
             reverse=self._newest_first,
         )
 
-        if not filtered:
+        self._filtered_sessions = filtered
+        total_pages = max(1, -(-len(filtered) // self.PAGE_SIZE))
+        self._page = max(1, min(self._page, total_pages))
+        self._render_current_page()
+
+    def _render_current_page(self) -> None:
+        """Render current page of filtered sessions."""
+        tree = self.query_one("#ide-sessions-tree", Tree)
+        tree.clear()
+
+        filtered = self._filtered_sessions
+        total = len(filtered)
+        total_pages = max(1, -(-total // self.PAGE_SIZE))
+        page = self._page
+        start = (page - 1) * self.PAGE_SIZE
+        page_sessions = filtered[start : start + self.PAGE_SIZE]
+
+        if not page_sessions:
             tree.root.add_leaf("[dim]No sessions found.[/dim]")
-            return
+        else:
+            projects = {}
+            for s in page_sessions:
+                proj = s.get("project_path", "") or "No project"
+                projects.setdefault(proj, []).append(s)
 
-        projects = {}
-        for s in filtered:
-            proj = s.get("project_path", "") or "No project"
-            projects.setdefault(proj, []).append(s)
+            for proj in sorted(projects.keys()):
+                parent = tree.root.add(f"[bold]{proj}[/bold]")
+                for s in projects[proj]:
+                    label = _format_session_label(s)
+                    node = parent.add_leaf(label)
+                    node.data = s
 
-        for proj in sorted(projects.keys()):
-            parent = tree.root.add(f"[bold]{proj}[/bold]")
-            for s in projects[proj]:
-                label = _format_session_label(s)
-                node = parent.add_leaf(label)
-                node.data = s
+            tree.root.expand_all()
 
-        tree.root.expand_all()
+        page_info = self.query_one("#ide-sessions-page-info", Static)
+        page_info.update(f"Page {page} of {total_pages} ({total} matches)")
 
     def _show_session_detail(self, session) -> None:
         detail = self.query_one("#ide-sessions-detail", Static)
