@@ -313,6 +313,7 @@ class GuardedAgent:
             "max_turns",
             "max_tokens",
             "max_budget_tokens",
+            "max_schema_nudges",
             "mode",
             "model",
             "cwd",
@@ -323,6 +324,7 @@ class GuardedAgent:
             "compact_keep_turns",
             "compact_keep_first",
             "api_timeout",
+            "text_tool_parsing",
         }
     )
 
@@ -358,11 +360,15 @@ class GuardedAgent:
         allowed_paths: Optional[List[str]] = None,
         follow_symlinks: bool = False,
         api_timeout: Optional[int] = None,
+        max_schema_nudges: int = 3,
+        text_tool_parsing: bool = False,
         otel_metadata_fn: Optional[
             Callable[[str, Dict[str, Any]], Dict[str, Any]]
         ] = None,
     ):
         self._api_timeout = api_timeout
+        self._max_schema_nudges = max_schema_nudges
+        self._text_tool_parsing = text_tool_parsing
         self._name = name
         self._otel_metadata_fn = otel_metadata_fn
         self._target_dir = target_dir
@@ -431,6 +437,18 @@ class GuardedAgent:
             self._resolved_tools.append(
                 self._strategy.format_submit_result_tool(output_schema)
             )
+
+        if hasattr(self._strategy, "set_known_tool_names"):
+            names: List[str] = []
+            for t in self._resolved_tools:
+                if isinstance(t, dict):
+                    fn = t.get("function", {})
+                    n = fn.get("name") or t.get("name")
+                    if n:
+                        names.append(n)
+            self._strategy.set_known_tool_names(names)
+        if self._text_tool_parsing and hasattr(self._strategy, "set_text_tool_parsing"):
+            self._strategy.set_text_tool_parsing(True)
 
     def _create_client_from_profile(self):
         """Create client from agent profile provider, falling back to defaults.
@@ -611,6 +629,58 @@ class GuardedAgent:
                 exc,
             )
             return False
+
+    def _text_tool_parsing_enabled(self) -> bool:
+        """Check if text-as-tool-call parsing is active."""
+        if self._text_tool_parsing:
+            return True
+        caps = getattr(self._strategy, "_last_caps", None)
+        return caps is not None and caps.text_tool_parsing
+
+    def _try_extract_structured_output(
+        self, text: Optional[str]
+    ) -> Optional[Dict[str, Any]]:
+        """Try to parse *text* as structured output matching output_schema.
+
+        Only activates when text_tool_parsing is enabled (via caps or param).
+        Returns the validated dict, or ``None``.
+        """
+        if not text or not self._output_schema:
+            return None
+        if not self._text_tool_parsing_enabled():
+            return None
+
+        import re
+
+        from ai_guardian.integrations.openai_compat import try_parse_json_flexible
+
+        fence_re = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+        candidates: List[str] = []
+        for match in fence_re.finditer(text):
+            candidates.append(match.group(1).strip())
+        stripped = text.strip()
+        if stripped.startswith("{") or stripped.startswith("["):
+            candidates.append(stripped)
+
+        for candidate in candidates:
+            parsed = try_parse_json_flexible(candidate)
+            if isinstance(parsed, dict):
+                try:
+                    from jsonschema import Draft7Validator
+
+                    validator = Draft7Validator(self._output_schema)
+                    if validator.is_valid(parsed):
+                        return parsed
+                    # Model may wrap output in a submit_result tool call
+                    if (
+                        parsed.get("name") == "submit_result"
+                        and isinstance(parsed.get("arguments"), dict)
+                        and validator.is_valid(parsed["arguments"])
+                    ):
+                        return parsed["arguments"]
+                except Exception:
+                    pass
+        return None
 
     @staticmethod
     def _hook_abort_result() -> Dict[str, Any]:
@@ -1132,6 +1202,7 @@ class GuardedAgent:
         stop_reason = "max_turns"
         compaction_count = 0
         last_input_tokens = 0
+        schema_nudge_count = 0
 
         for _turn in range(self._max_turns):
             turn_num = _turn + 1
@@ -1429,6 +1500,18 @@ class GuardedAgent:
                             else:
                                 user_text = hook_result
                             if self._output_schema and structured_output is None:
+                                extracted = self._try_extract_structured_output(
+                                    parsed.text
+                                )
+                                if extracted is not None:
+                                    structured_output = extracted
+                                    stop_reason = "end_turn"
+                                    break
+                                schema_nudge_count += 1
+                                if schema_nudge_count > self._max_schema_nudges:
+                                    final_text = parsed.text
+                                    stop_reason = "max_schema_nudges"
+                                    break
                                 user_text += (
                                     "\n\nYou must call the submit_result tool "
                                     "with your structured output. Do not "
@@ -1446,6 +1529,16 @@ class GuardedAgent:
                         break
 
                     if self._output_schema and structured_output is None:
+                        extracted = self._try_extract_structured_output(parsed.text)
+                        if extracted is not None:
+                            structured_output = extracted
+                            stop_reason = "end_turn"
+                            break
+                        schema_nudge_count += 1
+                        if schema_nudge_count > self._max_schema_nudges:
+                            final_text = parsed.text
+                            stop_reason = "max_schema_nudges"
+                            break
                         messages.append(
                             {
                                 "role": "user",

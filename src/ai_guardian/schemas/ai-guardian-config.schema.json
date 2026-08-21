@@ -2668,6 +2668,17 @@
           "minimum": 1,
           "description": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local providers like Ollama/MLX). On timeout, retries once; if retry also times out, stops with stop_reason='timeout'."
         },
+        "max_schema_nudges": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max times to re-prompt the model to call submit_result before stopping with stop_reason='max_schema_nudges'. Only relevant when output_schema is set.",
+          "default": 3
+        },
+        "text_tool_parsing": {
+          "type": "boolean",
+          "description": "Enable text-as-tool-call extraction for models that write tool calls as plain text instead of using the function calling API. Auto-enabled for Ollama, llama.cpp, MLX, vLLM providers.",
+          "default": false
+        },
         "tools": {
           "description": "Tool preset name or list of tool definitions.",
           "oneOf": [

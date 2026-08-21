@@ -877,6 +877,8 @@ print(result["output"])  # validated structured object
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
 | `output_schema` | dict | `None` | JSON schema for structured output |
+| `max_schema_nudges` | int | `3` | Max times to re-prompt the model to call `submit_result` before stopping with `stop_reason='max_schema_nudges'` |
+| `text_tool_parsing` | bool | `False` | Enable text-as-tool-call extraction for models that write tool calls as plain text (auto-enabled for Ollama, llama.cpp, MLX, vLLM) |
 | `tool_types` | dict | `None` | Override tool type versions |
 | `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each `messages.create()` |
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
@@ -1303,6 +1305,7 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 | `hook_early_stop` | `after_call` or `between_turns` callback returned `False` to stop the loop |
 | `max_turns` | Reached the `max_turns` limit without the model finishing |
 | `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
+| `max_schema_nudges` | Model failed to call `submit_result` after `max_schema_nudges` re-prompts |
 | `refusal` | Model refused to respond |
 | `security_violation` | Response or tool result blocked by a security scan |
 | `timeout` | API call timed out on both initial attempt and retry — partial result returned |

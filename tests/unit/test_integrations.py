@@ -5851,6 +5851,211 @@ class TestOpenAIGuardedAgent:
         assert result["output"] == "Safe answer"
         assert client.chat.completions.create.call_count == 2
 
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_text_as_tool_call_executes_tool(self, mock_monitor):
+        """Model returns tool call as text — detected, executed, loop continues."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        text_tc_response = _make_openai_agent_response(
+            content='{"name": "bash", "arguments": {"command": "echo hi"}}'
+        )
+        final_response = _make_openai_agent_response(content="Done!")
+
+        agent, client = self._make_agent()
+        client._ai_guardian_provider = "ollama"
+        client.chat.completions.create.side_effect = [
+            text_tc_response,
+            final_response,
+        ]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.tools.execute_tool",
+            return_value="hi",
+        ):
+            result = agent.run("Run echo hi")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Done!"
+        assert client.chat.completions.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_text_as_submit_result_accepted(self, mock_monitor):
+        """Model returns valid schema as text — accepted without nudge."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"score": {"type": "integer"}},
+            "required": ["score"],
+        }
+
+        text_response = _make_openai_agent_response(content='{"score": 42}')
+
+        agent, client = self._make_agent(output_schema=schema, text_tool_parsing=True)
+        client.chat.completions.create.return_value = text_response
+
+        result = agent.run("Score this")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == {"score": 42}
+        assert client.chat.completions.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_text_as_submit_result_invalid_nudges(self, mock_monitor):
+        """Model returns JSON that doesn't match schema — nudge happens."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"score": {"type": "integer"}},
+            "required": ["score"],
+        }
+
+        bad_text = _make_openai_agent_response(content='{"wrong_key": "nope"}')
+        good_tc = _make_openai_agent_response(
+            tool_calls=[_make_openai_tool_call("c1", "submit_result", {"score": 5})],
+            finish_reason="tool_calls",
+        )
+
+        agent, client = self._make_agent(output_schema=schema, text_tool_parsing=True)
+        client.chat.completions.create.side_effect = [bad_text, good_tc]
+
+        result = agent.run("Score this")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == {"score": 5}
+        assert client.chat.completions.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_max_schema_nudges_stops_loop(self, mock_monitor):
+        """After max_schema_nudges, loop stops with 'max_schema_nudges'."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"score": {"type": "integer"}},
+            "required": ["score"],
+        }
+
+        text_response = _make_openai_agent_response(content="I cannot do that")
+
+        agent, client = self._make_agent(
+            output_schema=schema, max_turns=20, max_schema_nudges=2
+        )
+        client.chat.completions.create.return_value = text_response
+
+        result = agent.run("Score this")
+
+        assert result["stop_reason"] == "max_schema_nudges"
+        assert client.chat.completions.create.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_max_schema_nudges_default_3(self, mock_monitor):
+        """Default max_schema_nudges is 3."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"x": {"type": "integer"}},
+            "required": ["x"],
+        }
+
+        text_response = _make_openai_agent_response(content="nope")
+
+        agent, client = self._make_agent(output_schema=schema, max_turns=20)
+        client.chat.completions.create.return_value = text_response
+
+        result = agent.run("Do it")
+
+        assert result["stop_reason"] == "max_schema_nudges"
+        assert client.chat.completions.create.call_count == 4
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_text_tool_parsing_param_override(self, mock_monitor):
+        """text_tool_parsing=True enables extraction regardless of caps."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"v": {"type": "string"}},
+            "required": ["v"],
+        }
+
+        text_response = _make_openai_agent_response(content='{"v": "ok"}')
+
+        agent, client = self._make_agent(output_schema=schema, text_tool_parsing=True)
+        client.chat.completions.create.return_value = text_response
+
+        result = agent.run("Do it")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == {"v": "ok"}
+        assert client.chat.completions.create.call_count == 1
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_text_tool_parsing_propagates_to_strategy(self, mock_monitor):
+        """text_tool_parsing=True propagates to strategy for parse_response."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        text_tc = _make_openai_agent_response(
+            content='{"name": "bash", "arguments": {"command": "echo ok"}}'
+        )
+        final = _make_openai_agent_response(content="Done")
+
+        agent, client = self._make_agent(text_tool_parsing=True)
+        client.chat.completions.create.side_effect = [text_tc, final]
+
+        with patch(
+            "ai_guardian.integrations.anthropic.tools.execute_tool",
+            return_value="ok",
+        ):
+            result = agent.run("Run it")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == "Done"
+        assert client.chat.completions.create.call_count == 2
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_submit_result_wrapper_unwrapped(self, mock_monitor):
+        """Model wraps output in submit_result tool call text — unwrapped."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        schema = {
+            "type": "object",
+            "properties": {"score": {"type": "integer"}},
+            "required": ["score"],
+        }
+
+        wrapped = (
+            "```json\n" '{"name": "submit_result", "arguments": {"score": 42}}\n' "```"
+        )
+        text_response = _make_openai_agent_response(content=wrapped)
+
+        agent, client = self._make_agent(output_schema=schema, text_tool_parsing=True)
+        client.chat.completions.create.return_value = text_response
+
+        result = agent.run("Score this")
+
+        assert result["stop_reason"] == "end_turn"
+        assert result["output"] == {"score": 42}
+        assert client.chat.completions.create.call_count == 1
+
 
 # ============================================================================
 # TestStrategyDetection
@@ -6174,6 +6379,69 @@ class TestOpenAILoopStrategy:
         assert call_kwargs["messages"][0]["content"] == "Be helpful"
         assert call_kwargs["messages"][1]["content"] == "Part 1\nPart 2"
         assert call_kwargs["messages"][2]["content"] == "Got it"
+
+    def test_parse_response_extracts_text_tool_calls(self):
+        """When caps.text_tool_parsing=True, text tool calls are extracted."""
+        from ai_guardian.integrations.openai_compat import ProviderCaps
+
+        strategy = OpenAILoopStrategy()
+        strategy._last_caps = ProviderCaps(text_tool_parsing=True)
+        strategy._known_tool_names = ["bash"]
+
+        text = '{"name": "bash", "arguments": {"command": "ls"}}'
+        response = _make_openai_agent_response(content=text)
+
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "tool_use"
+        assert len(parsed.tool_calls) == 1
+        assert parsed.tool_calls[0].name == "bash"
+        assert parsed.tool_calls[0].input == {"command": "ls"}
+
+    def test_parse_response_no_text_extraction_when_disabled(self):
+        """When caps.text_tool_parsing=False, text is not parsed as tool calls."""
+        from ai_guardian.integrations.openai_compat import ProviderCaps
+
+        strategy = OpenAILoopStrategy()
+        strategy._last_caps = ProviderCaps(text_tool_parsing=False)
+
+        text = '{"name": "bash", "arguments": {"command": "ls"}}'
+        response = _make_openai_agent_response(content=text)
+
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.tool_calls == []
+        assert parsed.text == text
+
+    def test_parse_response_no_text_extraction_without_caps(self):
+        """Without _last_caps set, text is not parsed."""
+        strategy = OpenAILoopStrategy()
+
+        text = '{"name": "bash", "arguments": {"command": "ls"}}'
+        response = _make_openai_agent_response(content=text)
+
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.tool_calls == []
+
+    def test_parse_response_text_extraction_filters_unknown_tools(self):
+        """Known tool names filter prevents false positives."""
+        from ai_guardian.integrations.openai_compat import ProviderCaps
+
+        strategy = OpenAILoopStrategy()
+        strategy._last_caps = ProviderCaps(text_tool_parsing=True)
+        strategy._known_tool_names = ["Read"]
+
+        text = '{"name": "unknown_tool", "arguments": {"x": 1}}'
+        response = _make_openai_agent_response(content=text)
+
+        parsed = strategy.parse_response(response)
+        assert parsed.stop_reason == "end_turn"
+        assert parsed.tool_calls == []
+
+    def test_set_known_tool_names(self):
+        strategy = OpenAILoopStrategy()
+        strategy.set_known_tool_names(["bash", "Read"])
+        assert strategy._known_tool_names == ["bash", "Read"]
 
 
 # ============================================================================

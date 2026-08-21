@@ -6,8 +6,10 @@ from ai_guardian.integrations.openai_compat import (
     ProviderCaps,
     _flatten_content,
     _flatten_message,
+    extract_tool_calls_from_text,
     get_provider_caps,
     normalize_request_kwargs,
+    try_parse_json_flexible,
 )
 
 
@@ -16,51 +18,61 @@ class TestGetProviderCaps(unittest.TestCase):
         caps = get_provider_caps(None)
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
     def test_openai(self):
         caps = get_provider_caps("openai")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
     def test_ollama(self):
         caps = get_provider_caps("ollama")
         self.assertTrue(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertTrue(caps.text_tool_parsing)
 
     def test_llamacpp(self):
         caps = get_provider_caps("llamacpp")
         self.assertTrue(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertTrue(caps.text_tool_parsing)
 
     def test_vllm(self):
         caps = get_provider_caps("vllm")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertTrue(caps.text_tool_parsing)
 
     def test_azure(self):
         caps = get_provider_caps("azure")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
     def test_openai_compatible_canonical(self):
         caps = get_provider_caps("openai-compatible")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
     def test_mlx(self):
         caps = get_provider_caps("mlx")
         self.assertTrue(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertTrue(caps.text_tool_parsing)
 
     def test_lm_studio(self):
         caps = get_provider_caps("lm-studio")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
     def test_unknown_provider_returns_openai_defaults(self):
         caps = get_provider_caps("some-future-provider")
         self.assertFalse(caps.flatten_content)
         self.assertTrue(caps.supports_tools)
+        self.assertFalse(caps.text_tool_parsing)
 
 
 class TestFlattenContent(unittest.TestCase):
@@ -228,6 +240,139 @@ class TestNormalizeRequestKwargs(unittest.TestCase):
         kwargs = {"model": "mistral", "messages": [structured_msg]}
         result = normalize_request_kwargs(kwargs, caps)
         self.assertIs(result, kwargs)
+
+
+class TestTryParseJsonFlexible(unittest.TestCase):
+    def test_valid_json(self):
+        result = try_parse_json_flexible('{"name": "bash"}')
+        self.assertEqual(result, {"name": "bash"})
+
+    def test_single_quotes(self):
+        result = try_parse_json_flexible("{'name': 'bash'}")
+        self.assertEqual(result, {"name": "bash"})
+
+    def test_invalid_returns_none(self):
+        self.assertIsNone(try_parse_json_flexible("hello world"))
+
+    def test_newline_separated_objects(self):
+        text = '{"a": 1}\n{"b": 2}'
+        result = try_parse_json_flexible(text)
+        self.assertEqual(result, [{"a": 1}, {"b": 2}])
+
+    def test_mixed_newline_returns_none(self):
+        text = '{"a": 1}\nnot json'
+        self.assertIsNone(try_parse_json_flexible(text))
+
+    def test_json_list(self):
+        result = try_parse_json_flexible('[{"a": 1}, {"b": 2}]')
+        self.assertEqual(result, [{"a": 1}, {"b": 2}])
+
+
+class TestExtractToolCallsFromText(unittest.TestCase):
+    def test_json_with_name_and_arguments(self):
+        text = '{"name": "bash", "arguments": {"command": "ls"}}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "bash")
+        self.assertEqual(result[0]["arguments"], {"command": "ls"})
+        self.assertTrue(result[0]["id"].startswith("text_tc_"))
+
+    def test_json_with_name_and_input(self):
+        text = '{"name": "Read", "input": {"path": "src/main.py"}}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "Read")
+        self.assertEqual(result[0]["arguments"], {"path": "src/main.py"})
+
+    def test_code_fence_wrapped(self):
+        text = '```json\n{"name": "bash", "arguments": {"command": "pwd"}}\n```'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "bash")
+
+    def test_code_fence_no_language_tag(self):
+        text = '```\n{"name": "bash", "arguments": {"command": "pwd"}}\n```'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "bash")
+
+    def test_single_quote_python_dict(self):
+        text = "{'name': 'bash', 'arguments': {'command': 'ls'}}"
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "bash")
+
+    def test_multiple_tool_calls_list(self):
+        text = (
+            '[{"name": "bash", "arguments": {"command": "ls"}},'
+            ' {"name": "Read", "arguments": {"path": "f.py"}}]'
+        )
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["name"], "bash")
+        self.assertEqual(result[1]["name"], "Read")
+
+    def test_newline_separated_tool_calls(self):
+        text = (
+            '{"name": "bash", "arguments": {"command": "ls"}}\n'
+            '{"name": "Read", "arguments": {"path": "f.py"}}'
+        )
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 2)
+
+    def test_unknown_tool_name_filtered(self):
+        text = '{"name": "unknown_tool", "arguments": {"x": 1}}'
+        result = extract_tool_calls_from_text(text, known_tool_names=["bash", "Read"])
+        self.assertEqual(result, [])
+
+    def test_known_tool_names_none_accepts_any(self):
+        text = '{"name": "any_tool", "arguments": {"x": 1}}'
+        result = extract_tool_calls_from_text(text, known_tool_names=None)
+        self.assertEqual(len(result), 1)
+
+    def test_known_tool_name_accepted(self):
+        text = '{"name": "bash", "arguments": {"command": "ls"}}'
+        result = extract_tool_calls_from_text(text, known_tool_names=["bash", "Read"])
+        self.assertEqual(len(result), 1)
+
+    def test_plain_text_no_extraction(self):
+        result = extract_tool_calls_from_text("Hello, how can I help?")
+        self.assertEqual(result, [])
+
+    def test_json_without_name_key(self):
+        text = '{"foo": "bar", "baz": 42}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(result, [])
+
+    def test_empty_string(self):
+        self.assertEqual(extract_tool_calls_from_text(""), [])
+        self.assertEqual(extract_tool_calls_from_text("   "), [])
+
+    def test_arguments_as_json_string(self):
+        text = '{"name": "bash", "arguments": "{\\"command\\": \\"ls\\"}"}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["arguments"], {"command": "ls"})
+
+    def test_no_arguments_or_input_key(self):
+        text = '{"name": "bash", "params": {"command": "ls"}}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(result, [])
+
+    def test_arguments_not_dict(self):
+        text = '{"name": "bash", "arguments": [1, 2, 3]}'
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(result, [])
+
+    def test_text_with_surrounding_prose(self):
+        text = (
+            "I'll run the command:\n"
+            '```json\n{"name": "bash", "arguments": {"command": "ls"}}\n```\n'
+            "This will list files."
+        )
+        result = extract_tool_calls_from_text(text)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["name"], "bash")
 
 
 if __name__ == "__main__":

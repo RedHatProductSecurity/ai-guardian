@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Text-as-tool-call parsing for OpenAI-compatible providers** — local models (Ollama, llama.cpp, MLX, vLLM) that write tool calls as plain text are now detected and executed automatically. The SDK extracts JSON tool-call patterns from text responses, including fenced code blocks, Python dict syntax, and multiple tool calls. Enabled by default for known local providers; opt in for others with `text_tool_parsing=True` (#2124)
+
+- **Text-as-structured-output parsing** — when `output_schema` is set and a local model returns valid JSON matching the schema as text instead of calling `submit_result`, the SDK now accepts it directly without nudging (#2124)
+
+- **Configurable schema nudge limit** — new `max_schema_nudges` parameter (default: 3) stops the agent loop after N failed attempts to get the model to call `submit_result`, returning `stop_reason='max_schema_nudges'` instead of burning through `max_turns` (#2124)
+
 - **Configurable API call timeout for GuardedAgent** — new `api_timeout` parameter (constructor and `sdk.agents.*.api_timeout` config) sets per-API-call timeout in seconds. Defaults: 300s for cloud providers (Anthropic, OpenAI, Azure), 600s for local providers (Ollama, llama.cpp, vLLM). On timeout: logs warning, retries once, then stops with `stop_reason='timeout'` and returns partial result. Timeout events emitted in trace (#2097)
 
 - **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
