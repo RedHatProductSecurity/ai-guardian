@@ -385,6 +385,32 @@ with client.messages.stream(
 | OpenAI | `OpenAI`, `AsyncOpenAI`, `AzureOpenAI`, `AsyncAzureOpenAI` | `chat.completions.create` |
 | OpenAI-compatible | Ollama, llama.cpp, vLLM, LiteLLM, Mistral — via `OpenAI(base_url=...)` | `chat.completions.create` |
 
+### Tested Providers
+
+| Provider | Status | Tools | Notes |
+|----------|--------|-------|-------|
+| Anthropic (direct) | Verified | Full | Primary provider |
+| Vertex AI | Verified | Full | |
+| Bedrock | Verified | Full | |
+| OpenAI | Verified | Full | |
+| Azure OpenAI | Untested | Expected full | Same API as OpenAI |
+| Ollama | In progress | Model-dependent | Needs content normalization (#2083) |
+| llama.cpp | Untested | Limited | Needs testing |
+| vLLM | Untested | Expected full | Needs testing |
+| Foundry | Untested | Unknown | New provider |
+
+### Tool Support by Provider
+
+Not all providers and models support tool calling. Without tool support, `GuardedAgent` cannot execute actions — only `guarded()` works for scan-only protection.
+
+| Provider | Tool calling | Models with tools |
+|----------|-------------|-------------------|
+| Anthropic | All models | claude-sonnet-\*, claude-opus-\*, claude-haiku-\* |
+| OpenAI | Most models | gpt-4, gpt-4o, gpt-4o-mini |
+| Ollama | Model-dependent | llama3.1, qwen2.5-coder, mistral-large — NOT llama3, phi3 |
+| llama.cpp | Model + grammar dependent | Varies |
+| vLLM | Model-dependent | Most instruction-tuned models |
+
 ### Custom Extractors
 
 Implement `ProviderExtractor` to support any LLM client:
@@ -471,6 +497,59 @@ client = guarded(
     before_call=on_call,
     after_call=on_response,
 )
+```
+
+## `guarded()` vs `GuardedAgent`
+
+Both provide security scanning but serve different use cases.
+
+| Feature | `guarded()` | `GuardedAgent` |
+|---------|------------|----------------|
+| **What it does** | Wraps an LLM client to scan input/output | Full agent loop with tool execution and per-step scanning |
+| **Agent loop** | None — caller manages the conversation | Built-in tool-use loop with configurable turns |
+| **Scanning scope** | Input prompts, output responses | Input, output, system prompt, tool results, intermediate responses |
+| **Tool execution** | None — caller handles tools | Built-in executors for bash, text_editor, read_file, grep, glob, MCP |
+| **Setup complexity** | One line — `client = guarded(Anthropic())` | Configuration for tools, cwd, max_turns, etc. |
+| **Streaming** | Supported (scans on stream exit) | Not directly exposed (internal API calls) |
+| **Custom extractors** | Supported — extend to any LLM client | Uses `guarded()` internally |
+| **Response parser** | Supported — transform responses | Not applicable (returns structured result dict) |
+| **Structured output** | Not built-in | `output_schema` parameter |
+| **Callbacks** | `before_call`, `after_call` | `before_call`, `after_call`, `pre_run`, `post_run`, `between_turns`, `on_turn` |
+| **Tracing** | None | Full per-step trace with OTEL export |
+| **Auto-compaction** | None — caller manages context | Built-in context window management |
+| **Provider support** | Anthropic, OpenAI, any via custom extractor | Anthropic, OpenAI (via strategy parameter) |
+
+### When to Use `guarded()`
+
+- Adding security scanning to an existing LLM integration
+- Building your own agent loop with custom control flow
+- Single request/response patterns (chatbots, one-shot generation)
+- Streaming responses to users in real time
+- Custom LLM providers via `ProviderExtractor`
+
+### When to Use `GuardedAgent`
+
+- Need a complete agent with tool execution (bash, file editing, code search)
+- Want security scanning at every interaction point without building it yourself
+- Multi-turn agentic workflows (code review, bug fixing, analysis)
+- Need structured output, auto-compaction, or trace logging
+- Running agents in CI/CD or containers
+
+### Combining Both
+
+`GuardedAgent` uses `guarded()` internally. If you need both standalone scanned calls and an agent loop:
+
+```python
+from ai_guardian.integrations import guarded
+from ai_guardian.integrations.anthropic import GuardedAgent
+
+# Standalone scanned calls
+client = guarded()
+response = client.messages.create(model="claude-sonnet-5", ...)
+
+# Agent with full tool loop
+agent = GuardedAgent(model="claude-sonnet-5", tools="coding")
+result = agent.run("fix the bug")
 ```
 
 ## GuardedAgent
