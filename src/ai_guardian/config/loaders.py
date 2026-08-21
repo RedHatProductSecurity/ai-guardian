@@ -820,6 +820,62 @@ def _load_sdk_profile(section: str, name: Optional[str]) -> Dict[str, Any]:
     return dict(default_profile)
 
 
+def _load_sdk_hooks(name: Optional[str]) -> Dict[str, Any]:
+    """Load shell hooks config for an SDK agent.
+
+    Resolution order (each layer overrides the previous):
+    1. ``sdk.hooks`` — global hooks for all agents
+    2. ``sdk.agents.*.hooks`` — wildcard profile hooks
+    3. ``sdk.agents.<name>.hooks`` — named profile hooks
+
+    Returns:
+        Dict mapping hook points to their pre/post command config.
+    """
+    config, error_msg = _load_config_file()
+    if error_msg or config is None:
+        return {}
+
+    sdk = config.get("sdk")
+    if not isinstance(sdk, dict):
+        return {}
+
+    layers: list = []
+
+    base = sdk.get("hooks")
+    if isinstance(base, dict):
+        layers.append(base)
+
+    agents = sdk.get("agents")
+    if isinstance(agents, dict):
+        wildcard = agents.get("*")
+        if isinstance(wildcard, dict):
+            wh = wildcard.get("hooks")
+            if isinstance(wh, dict):
+                layers.append(wh)
+        if name and name in agents:
+            named = agents[name]
+            if isinstance(named, dict):
+                nh = named.get("hooks")
+                if isinstance(nh, dict):
+                    layers.append(nh)
+
+    if not layers:
+        return {}
+
+    result: Dict[str, Any] = {}
+    for layer in layers:
+        for hp, hp_cfg in layer.items():
+            existing = result.get(hp, {})
+            if isinstance(existing, dict) and isinstance(hp_cfg, dict):
+                merged = dict(existing)
+                merged.update(hp_cfg)
+                result[hp] = merged
+            else:
+                result[hp] = hp_cfg
+
+    return result
+
+
 def _sdk_scanning(section: str = "agents", name: Optional[str] = None) -> bool:
     """Check whether SDK scanning is active.
 

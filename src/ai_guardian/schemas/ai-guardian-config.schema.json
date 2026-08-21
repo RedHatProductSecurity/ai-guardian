@@ -2737,7 +2737,39 @@
           "additionalProperties": {
             "$ref": "#/definitions/sdk_mcp_server"
           }
+        },
+        "hooks": {
+          "$ref": "#/definitions/sdk_shell_hooks",
+          "description": "Per-agent shell hooks. Merged on top of wildcard (*) profile hooks and sdk.hooks."
         }
+      }
+    },
+    "sdk_shell_hook_point": {
+      "type": "object",
+      "description": "Shell commands to run before/after a GuardedAgent callback. Commands receive JSON context via stdin. Exit 0 = continue, non-zero = abort.",
+      "additionalProperties": false,
+      "properties": {
+        "pre_command": {
+          "type": "string",
+          "description": "Shell command to run BEFORE the Python callback."
+        },
+        "post_command": {
+          "type": "string",
+          "description": "Shell command to run AFTER the Python callback returns."
+        }
+      }
+    },
+    "sdk_shell_hooks": {
+      "type": "object",
+      "description": "Config-driven shell hooks around GuardedAgent callbacks. Each hook point can have pre_command and post_command.",
+      "additionalProperties": false,
+      "properties": {
+        "pre_run": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "post_run": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "before_call": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "after_call": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "between_turns": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "on_turn": { "$ref": "#/definitions/sdk_shell_hook_point" }
       }
     },
     "sdk_mcp_server": {
@@ -2850,6 +2882,10 @@
               "description": "Name of the environment variable holding the region. Used by vertex and bedrock providers. Default: CLOUD_ML_REGION."
             }
           }
+        },
+        "hooks": {
+          "$ref": "#/definitions/sdk_shell_hooks",
+          "description": "Global shell hooks applied to all GuardedAgent instances. Per-agent hooks in agents.*.hooks or agents.<name>.hooks override these."
         },
         "agents": {
           "type": "object",
