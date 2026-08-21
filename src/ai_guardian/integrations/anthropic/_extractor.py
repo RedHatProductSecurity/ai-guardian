@@ -110,7 +110,9 @@ _OPENAI_COMPAT_ALIASES = frozenset(
 
 _OPENAI_PROVIDERS = frozenset({"openai", "azure"}) | _OPENAI_COMPAT_ALIASES
 
-_VALID_PROVIDERS = _ANTHROPIC_PROVIDERS | _OPENAI_PROVIDERS
+_GEMINI_PROVIDERS = frozenset({"gemini"})
+
+_VALID_PROVIDERS = _ANTHROPIC_PROVIDERS | _OPENAI_PROVIDERS | _GEMINI_PROVIDERS
 
 
 def create_client(
@@ -160,6 +162,8 @@ def create_client(
                 f"Unknown provider {provider!r}. "
                 f"Valid values: {', '.join(sorted(_VALID_PROVIDERS))}"
             )
+        if provider in _GEMINI_PROVIDERS:
+            return _build_gemini_client(pcfg, **kwargs)
         if provider in _OPENAI_PROVIDERS:
             return _build_openai_client(provider, pcfg, **kwargs)
         resolved = _PROVIDER_ALIASES.get(provider, provider)
@@ -270,3 +274,20 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
     client = openai.OpenAI(**ctor_kwargs)
     client._ai_guardian_provider = provider  # type: ignore[attr-defined]
     return client
+
+
+def _build_gemini_client(pcfg: dict, **kwargs: Any) -> Any:
+    """Create a Google Gemini SDK client."""
+    try:
+        from google import genai
+    except ImportError:
+        raise ImportError(
+            "The 'google-genai' package is required for Google Gemini. "
+            "Install it with: pip install ai-guardian[gemini]"
+        ) from None
+
+    api_key_env = pcfg.get("api_key_env", "GOOGLE_API_KEY")
+    api_key = os.environ.get(api_key_env, "")
+    if api_key:
+        kwargs.setdefault("api_key", api_key)
+    return genai.Client(**kwargs)
