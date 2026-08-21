@@ -8993,6 +8993,65 @@ class TestGuardedAgentTraceDir:
         ]
         assert response_events[0]["text"] == "some text"
 
+    def test_sanitize_trace_redacts_violation_messages(self):
+        """_sanitize_trace must redact message fields inside violation records (#2131)."""
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        trace = [
+            {
+                "turn": 1,
+                "steps": [
+                    {
+                        "type": "scan",
+                        "scanned": "tool_result:Bash",
+                        "violations": [
+                            {
+                                "id": "v-001",
+                                "type": "secret_detected",
+                                "message": "Secret AKIA1234SECRET found",
+                            }
+                        ],
+                    },
+                    {
+                        "type": "response",
+                        "text": "raw response with AKIA1234SECRET",
+                    },
+                ],
+            }
+        ]
+
+        mock_session = MagicMock()
+        mock_session.sanitize_batch.side_effect = lambda texts: [
+            t.replace("AKIA1234SECRET", "[REDACTED]") for t in texts
+        ]
+
+        result = GuardedAgent._sanitize_trace(trace, mock_session)
+
+        resp_step = result[0]["steps"][1]
+        assert resp_step["text"] == "raw response with [REDACTED]"
+
+        scan_step = result[0]["steps"][0]
+        assert scan_step["violations"][0]["message"] == "Secret [REDACTED] found"
+
+        assert trace[0]["steps"][0]["violations"][0]["message"] == (
+            "Secret AKIA1234SECRET found"
+        )
+
+    def test_sanitize_trace_no_mutations_without_content(self):
+        """_sanitize_trace returns copy when no text or violation messages exist."""
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        trace = [
+            {
+                "turn": 1,
+                "steps": [{"type": "scan", "scanned": "user_prompt"}],
+            }
+        ]
+        mock_session = MagicMock()
+        result = GuardedAgent._sanitize_trace(trace, mock_session)
+        mock_session.sanitize_batch.assert_not_called()
+        assert result == trace
+
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_relative_dir_resolved_to_cwd(self, mock_monitor, tmp_path):
         mock_session = MagicMock()

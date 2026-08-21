@@ -855,28 +855,50 @@ class GuardedAgent:
     def _sanitize_trace(
         cls, trace: List[Dict[str, Any]], session: Any
     ) -> List[Dict[str, Any]]:
-        items: List[tuple] = []
+        field_items: List[tuple] = []
+        violation_items: List[tuple] = []
         for ti, turn_obj in enumerate(trace):
             for si, step in enumerate(turn_obj.get("steps", [])):
                 for fld in cls._TRACE_TEXT_FIELDS:
                     val = step.get(fld)
                     if val and isinstance(val, str):
-                        items.append((ti, si, fld, val))
+                        field_items.append((ti, si, fld, val))
+                for vi, v in enumerate(step.get("violations") or []):
+                    msg = v.get("message")
+                    if msg and isinstance(msg, str):
+                        violation_items.append((ti, si, vi, msg))
 
-        if not items:
+        if not field_items and not violation_items:
             return list(trace)
 
-        texts = [val for _, _, _, val in items]
-        sanitized_texts = _try_sanitize_batch(session, texts)
+        all_texts = [val for _, _, _, val in field_items] + [
+            msg for _, _, _, msg in violation_items
+        ]
+        sanitized_texts = _try_sanitize_batch(session, all_texts)
 
         trace_copy: List[Dict[str, Any]] = []
         for turn_obj in trace:
             turn_copy = dict(turn_obj)
-            turn_copy["steps"] = [dict(s) for s in turn_obj.get("steps", [])]
+            steps = []
+            for s in turn_obj.get("steps", []):
+                sc = dict(s)
+                if sc.get("violations"):
+                    sc["violations"] = [dict(v) for v in sc["violations"]]
+                steps.append(sc)
+            turn_copy["steps"] = steps
             trace_copy.append(turn_copy)
 
-        for (ti, si, fld, original), sanitized in zip(items, sanitized_texts):
+        n_fields = len(field_items)
+        for (ti, si, fld, original), sanitized in zip(
+            field_items, sanitized_texts[:n_fields]
+        ):
             trace_copy[ti]["steps"][si][fld] = sanitized or original
+        for (ti, si, vi, original), sanitized in zip(
+            violation_items, sanitized_texts[n_fields:]
+        ):
+            trace_copy[ti]["steps"][si]["violations"][vi]["message"] = (
+                sanitized or original
+            )
         return trace_copy
 
     def _maybe_compact(
