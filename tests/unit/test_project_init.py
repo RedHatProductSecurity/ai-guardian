@@ -1204,3 +1204,66 @@ class TestAiguardignoreOnScan:
                 assert "data/*" in excludes
                 assert "vendor/**" in excludes
                 assert result.exclude_patterns == ["data/*", "vendor/**"]
+
+
+class TestAnnotateFlag:
+    """Tests for --annotate flag validation and flow."""
+
+    def test_annotate_requires_scan(self, tmp_path, capsys):
+        (tmp_path / "app.py").write_text("x = 1")
+
+        class Args:
+            dir = str(tmp_path)
+            force = False
+            merge = False
+            dry_run = False
+            json = False
+            scan = False
+            threshold = 10
+            exact = False
+            exclude = []
+            annotate = True
+
+        result = init_project_command(Args())
+        assert result == 1
+        captured = capsys.readouterr()
+        assert "--annotate requires --scan" in captured.err
+
+    def test_annotate_dry_run_shows_plan(self, tmp_path, capsys):
+        (tmp_path / "app.py").write_text("x = 1\n")
+
+        class Args:
+            dir = str(tmp_path)
+            force = False
+            merge = False
+            dry_run = True
+            json = False
+            scan = True
+            threshold = 10
+            exact = False
+            exclude = []
+            annotate = True
+
+        with patch.object(ProjectInitializer, "scan_project", return_value=[]):
+            result = init_project_command(Args())
+            assert result == 0
+
+    def test_annotate_plans_annotations(self, tmp_path):
+        (tmp_path / "test.py").write_text("api_key = 'secret'\n")
+        init = ProjectInitializer(tmp_path)
+
+        findings = [
+            {
+                "rule_id": "SECRET-001",
+                "file_path": str(tmp_path / "test.py"),
+                "line_number": 1,
+                "details": {"secret_type": "generic"},
+                "level": "error",
+                "message": "test",
+            }
+        ]
+
+        with patch.object(init, "scan_project", return_value=findings):
+            result = init.run(scan=True, threshold=10, annotate=True, dry_run=True)
+            assert result.annotation_result is not None
+            assert result.annotation_count >= 0

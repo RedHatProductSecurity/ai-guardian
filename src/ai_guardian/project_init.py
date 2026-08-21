@@ -73,6 +73,11 @@ class InitResult:
     aiguardignore_path: Optional[Path] = None
     aiguardignore_created: bool = False
     exclude_patterns: List[str] = field(default_factory=list)
+    raw_findings: List[Dict] = field(default_factory=list)
+    annotation_result: Optional[Any] = None
+    annotated_files: List[str] = field(default_factory=list)
+    annotation_count: int = 0
+    pr_url: Optional[str] = None
 
 
 class ProjectInitializer:
@@ -395,6 +400,7 @@ class ProjectInitializer:
         progressive: bool = True,
         confirm_callback=None,
         exclude_patterns: Optional[List[str]] = None,
+        annotate: bool = False,
     ) -> InitResult:
         result = InitResult(project_dir=self.project_dir, dry_run=dry_run)
 
@@ -424,12 +430,16 @@ class ProjectInitializer:
             result.scan_analysis = analysis
             scan_config = analysis.recommended_config
             merged = self.merge_configs(language_config, scan_config)
+
+            if annotate:
+                result.raw_findings = findings
+                self._plan_annotations(result)
         else:
             merged = language_config
 
         result.merged_config = merged
 
-        if not merged:
+        if not merged and not (annotate and result.annotation_result):
             return result
 
         if confirm_callback is not None and not confirm_callback(result):
@@ -455,6 +465,21 @@ class ProjectInitializer:
             result.aiguardignore_created = aiguardignore_created
 
         return result
+
+    def _plan_annotations(self, result: "InitResult") -> None:
+        """Plan code-level annotations for below-threshold findings."""
+        from ai_guardian.code_annotator import plan_annotations
+
+        if not result.scan_analysis or not result.raw_findings:
+            return
+
+        high_freq_fps: Set = set()
+        for cluster in result.scan_analysis.high_frequency_clusters:
+            high_freq_fps.add((cluster.rule_id, cluster.sub_type))
+
+        annotation_result = plan_annotations(result.raw_findings, high_freq_fps)
+        result.annotation_result = annotation_result
+        result.annotation_count = annotation_result.total_annotations
 
 
 def _format_evidence(lang: DetectedLanguage) -> str:
@@ -669,6 +694,29 @@ def _print_json(result: InitResult) -> None:
         )
         output["aiguardignore_created"] = result.aiguardignore_created
 
+    if result.annotation_result is not None:
+        ann = result.annotation_result
+        output["annotations"] = {
+            "total_files": ann.total_files,
+            "total_annotations": ann.total_annotations,
+            "skipped_unsupported": ann.skipped_unsupported,
+            "skipped_annotated": ann.skipped_annotated,
+            "skipped_never_suppress": ann.skipped_never_suppress,
+            "skipped_no_location": ann.skipped_no_location,
+            "files": [
+                {
+                    "file_path": p.file_path,
+                    "annotation_count": len(p.annotations),
+                    "scanner_types": sorted(
+                        {st for a in p.annotations for st in a.scanner_types}
+                    ),
+                }
+                for p in ann.plans
+            ],
+            "annotated_files": result.annotated_files,
+            "pr_url": result.pr_url,
+        }
+
     print(json.dumps(output, indent=2))
 
 
@@ -701,6 +749,147 @@ def _confirm_write() -> bool:
         return False
 
 
+def _print_annotation_summary(result: "InitResult") -> None:
+    """Print annotation summary section."""
+    ann = result.annotation_result
+    if ann is None:
+        return
+
+    print()
+    print("Annotation Plan")
+    print("=" * 40)
+
+    if ann.total_annotations == 0:
+        print("No annotations needed — all findings handled by config suppression.")
+        return
+
+    print(f"Files to annotate: {ann.total_files}")
+    print(f"Annotations to insert: {ann.total_annotations}")
+
+    for plan in ann.plans:
+        count = len(plan.annotations)
+        scanner_types = set()
+        for a in plan.annotations:
+            scanner_types.update(a.scanner_types)
+        types_str = ", ".join(sorted(scanner_types))
+        print(f"  - {plan.file_path} ({count} annotations: {types_str})")
+
+    if ann.skipped_annotated:
+        print(f"Skipped (already annotated): {ann.skipped_annotated}")
+    if ann.skipped_unsupported:
+        print(f"Skipped (unsupported file type): {ann.skipped_unsupported}")
+    if ann.skipped_no_location:
+        print(f"Skipped (no line number): {ann.skipped_no_location}")
+
+
+def _run_annotate_workflow(
+    result: "InitResult",
+    initializer: "ProjectInitializer",
+    dry_run: bool,
+    force: bool,
+    merge: bool,
+) -> int:
+    """Execute the annotation + git workflow. Returns exit code."""
+    from ai_guardian.code_annotator import (
+        apply_all_plans,
+        format_pr_body,
+        show_interactive_diff,
+    )
+    from ai_guardian.git_workflow import (
+        check_clean_working_tree,
+        create_annotation_branch,
+        get_current_branch,
+        push_and_create_pr,
+        restore_branch,
+        stage_and_commit,
+    )
+    from ai_guardian.tools.diff_provider import detect_platform
+
+    ann = result.annotation_result
+    if ann is None or ann.total_annotations == 0:
+        return 0
+
+    repo_path = str(result.project_dir)
+    platform = detect_platform(repo_path)
+
+    if platform in ("github", "gitlab"):
+        is_clean, msg = check_clean_working_tree(repo_path)
+        if not is_clean:
+            print(f"Error: {msg}", file=sys.stderr)
+            print(
+                "Working tree must be clean for --annotate (creates a branch + PR).",
+                file=sys.stderr,
+            )
+            return 1
+
+        original_branch = get_current_branch(repo_path)
+        branch = create_annotation_branch(repo_path)
+        if branch is None:
+            print("Error: Failed to create annotation branch.", file=sys.stderr)
+            return 1
+
+        print(f"\nCreated branch: {branch}")
+
+        all_modified: List[str] = []
+
+        config_path, created, existed = initializer.write_config(
+            result.merged_config or {}, force=force, merge=merge
+        )
+        if created and config_path:
+            all_modified.append(str(config_path))
+            result.config_path = config_path
+            result.config_created = True
+
+        if result.scan_analysis and result.scan_analysis.recommended_ignore_paths:
+            aig_path, aig_created = initializer.write_aiguardignore(
+                result.scan_analysis.recommended_ignore_paths,
+            )
+            if aig_created and aig_path:
+                all_modified.append(str(aig_path))
+
+        annotated = apply_all_plans(ann.plans)
+        all_modified.extend(annotated)
+        result.annotated_files = annotated
+
+        if not all_modified:
+            print("No files modified — nothing to commit.")
+            if original_branch:
+                restore_branch(original_branch, repo_path)
+            return 0
+
+        commit_msg = (
+            "feat: add ai-guardian inline annotations for false positive suppression\n\n"
+            f"Annotated {len(annotated)} file(s) with scanner-qualified annotations.\n"
+            "Generated by `ai-guardian init-project --scan --annotate`."
+        )
+        if not stage_and_commit(all_modified, commit_msg, repo_path):
+            print("Error: Failed to commit changes.", file=sys.stderr)
+            if original_branch:
+                restore_branch(original_branch, repo_path)
+            return 1
+
+        pr_body = format_pr_body(ann)
+        pr_title = "feat: ai-guardian inline annotation suppressions"
+        url = push_and_create_pr(branch, pr_title, pr_body, repo_path)
+        if url:
+            result.pr_url = url
+            print(f"\nPR created: {url}")
+        else:
+            print(f"\nBranch pushed: {branch}")
+            print("Create a PR manually to review the changes.")
+
+        return 0
+    else:
+        plans_to_apply = show_interactive_diff(ann.plans)
+        if plans_to_apply:
+            applied = apply_all_plans(plans_to_apply)
+            result.annotated_files = applied
+            print(f"\nAnnotated {len(applied)} file(s).")
+        else:
+            print("\nNo annotations applied.")
+        return 0
+
+
 def init_project_command(args) -> int:
     """CLI entry point for init-project command."""
     project_dir = Path(getattr(args, "dir", ".")).resolve()
@@ -712,6 +901,7 @@ def init_project_command(args) -> int:
     threshold = getattr(args, "threshold", 10)
     progressive = not getattr(args, "exact", False)
     exclude_patterns = getattr(args, "exclude", []) or []
+    annotate = getattr(args, "annotate", False)
 
     if not project_dir.is_dir():
         print(f"Error: Not a directory: {project_dir}", file=sys.stderr)
@@ -719,6 +909,10 @@ def init_project_command(args) -> int:
 
     if threshold < 1:
         print("Error: --threshold must be >= 1", file=sys.stderr)
+        return 1
+
+    if annotate and not scan:
+        print("Error: --annotate requires --scan", file=sys.stderr)
         return 1
 
     def _interactive_confirm(result_so_far):
@@ -731,12 +925,18 @@ def init_project_command(args) -> int:
             print()
         if result_so_far.scan_analysis:
             _print_scan_analysis(result_so_far.scan_analysis)
+            if result_so_far.annotation_result:
+                _print_annotation_summary(result_so_far)
             analysis = result_so_far.scan_analysis
             if (
                 not analysis.recommended_config
                 and not analysis.recommended_ignore_paths
                 and not result_so_far.allowlist_entries
                 and not result_so_far.ignore_files_entries
+                and not (
+                    result_so_far.annotation_result
+                    and result_so_far.annotation_result.total_annotations
+                )
             ):
                 print("\nNo configuration needed.")
                 return False
@@ -754,9 +954,13 @@ def init_project_command(args) -> int:
         _print_exclude_patterns(effective)
         print("Running full scan (this may take a moment)...")
         print()
-    confirm_cb = (
-        _interactive_confirm if (scan and not dry_run and not json_output) else None
-    )
+
+    confirm_cb = None
+    if annotate:
+        confirm_cb = _interactive_confirm if (not dry_run and not json_output) else None
+    elif scan and not dry_run and not json_output:
+        confirm_cb = _interactive_confirm
+
     result = initializer.run(
         force=force,
         merge=merge,
@@ -766,16 +970,25 @@ def init_project_command(args) -> int:
         progressive=progressive,
         confirm_callback=confirm_cb,
         exclude_patterns=exclude_patterns or None,
+        annotate=annotate,
     )
 
     if json_output:
         _print_json(result)
-    else:
+        return 0
+
+    if annotate and not dry_run:
         _print_result(result)
+        return _run_annotate_workflow(result, initializer, dry_run, force, merge)
+
+    if annotate and dry_run:
+        _print_result(result)
+        _print_annotation_summary(result)
+        return 0
+
+    _print_result(result)
 
     if result.config_existed and not result.config_created and not dry_run:
-        if json_output:
-            return 1
         choice = _ask_existing_config(result.config_path)
         if choice in ("m", "merge"):
             initializer.write_config(result.merged_config or {}, merge=True)
