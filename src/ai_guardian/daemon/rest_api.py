@@ -128,7 +128,9 @@ class _RestHandler(BaseHTTPRequestHandler):
             qs = urllib.parse.parse_qs(parsed.query)
             agent_name = qs.get("agent_name", [None])[0]
             directory = qs.get("directory", [None])[0]
-            self._send_json(self._get_traces(agent_name, directory))
+            limit_str = qs.get("limit", [None])[0]
+            limit = int(limit_str) if limit_str else None
+            self._send_json(self._get_traces(agent_name, directory, limit))
         elif path.startswith("/api/traces/"):
             filename = path[len("/api/traces/") :]
             qs = urllib.parse.parse_qs(parsed.query)
@@ -1135,7 +1137,7 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     # --- Trace viewer endpoints (#1951) ---
 
-    def _get_traces(self, agent_name=None, directory=None):
+    def _get_traces(self, agent_name=None, directory=None, limit=None):
         """Handle GET /api/traces — list trace files."""
         try:
             from ai_guardian.daemon.traces import (
@@ -1173,7 +1175,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                 self.server.daemon_state.remove_pushed_traces(stale)
 
             file_traces.sort(key=lambda t: t.get("started_at", ""), reverse=True)
-            return {"traces": file_traces}
+            total_count = len(file_traces)
+            if limit is not None and limit > 0:
+                file_traces = file_traces[:limit]
+            return {"traces": file_traces, "total_count": total_count}
         except Exception as exc:
             logger.debug("Failed to list traces: %s", exc)
             return {"traces": []}

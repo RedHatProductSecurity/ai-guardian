@@ -126,6 +126,7 @@ def validate_filename(filename: str) -> bool:
 def list_traces(
     trace_dirs: "str | List[str]",
     agent_name: Optional[str] = None,
+    limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """List trace files from one or more directories, returning metadata summaries.
 
@@ -136,6 +137,8 @@ def list_traces(
     Args:
         trace_dirs: Single directory path or list of directory paths.
         agent_name: Optional filter by agent_name (exact match).
+        limit: Maximum number of traces to return (after sorting).
+            None means no limit.
 
     Returns list sorted by started_at descending.
     """
@@ -169,6 +172,8 @@ def list_traces(
                 summaries.append(summary)
 
     summaries.sort(key=lambda t: t.get("started_at", ""), reverse=True)
+    if limit is not None and limit > 0:
+        summaries = summaries[:limit]
     return summaries
 
 

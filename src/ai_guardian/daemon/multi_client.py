@@ -1211,6 +1211,7 @@ class MultiDaemonClient:
         target: DaemonTarget,
         agent_name: Optional[str] = None,
         directory: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> Optional[dict]:
         """Get trace file listing from a daemon.
 
@@ -1224,15 +1225,19 @@ class MultiDaemonClient:
             import urllib.parse
 
             parts.append(f"directory={urllib.parse.quote(directory, safe='')}")
+        if limit is not None:
+            parts.append(f"limit={limit}")
         params = f"?{'&'.join(parts)}" if parts else ""
         result = self._rest_request(target, "GET", f"/api/traces{params}")
         if result is not None:
             return result
-        return self._local_traces(agent_name, directory)
+        return self._local_traces(agent_name, directory, limit)
 
     @staticmethod
     def _local_traces(
-        agent_name: Optional[str] = None, directory: Optional[str] = None
+        agent_name: Optional[str] = None,
+        directory: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> dict:
         from ai_guardian.daemon.traces import list_traces, resolve_trace_dirs
 
@@ -1240,7 +1245,8 @@ class MultiDaemonClient:
             trace_dirs = [directory]
         else:
             trace_dirs = resolve_trace_dirs()
-        return {"traces": list_traces(trace_dirs, agent_name)}
+        traces = list_traces(trace_dirs, agent_name, limit=limit)
+        return {"traces": traces, "total_count": len(traces)}
 
     def get_trace_detail(
         self,

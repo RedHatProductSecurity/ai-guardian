@@ -221,6 +221,31 @@ class TestListTraces:
         assert result[0]["agent_name"] == "nested"
         assert "run-001" in result[0]["filename"]
 
+    def test_limit_truncates_results(self, trace_dir):
+        for i in range(5):
+            doc = _sample_trace_doc(agent_name=f"agent-{i}")
+            doc["started_at"] = f"2026-08-13T1{i}:00:00+00:00"
+            _write_trace(trace_dir, f"agent-{i}_20260813-1{i}0000_a{i}b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir), limit=3)
+        assert len(result) == 3
+        assert result[0]["agent_name"] == "agent-4"
+
+    def test_limit_none_returns_all(self, trace_dir):
+        for i in range(3):
+            doc = _sample_trace_doc(agent_name=f"agent-{i}")
+            _write_trace(trace_dir, f"agent-{i}_20260813-10{i}000_a{i}b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir), limit=None)
+        assert len(result) == 3
+
+    def test_limit_larger_than_count_returns_all(self, trace_dir):
+        doc = _sample_trace_doc()
+        _write_trace(trace_dir, "only_20260813-103000_a1b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir), limit=100)
+        assert len(result) == 1
+
 
 class TestReadTraceDetail:
     def test_reads_full_trace(self, trace_dir):

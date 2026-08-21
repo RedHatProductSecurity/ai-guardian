@@ -37,11 +37,13 @@ def create_ide_sessions_page(service, daemon_name: str):
         except Exception:
             saved_sort = True
 
+        PAGE_SIZE = 50
         state = {
             "sessions": [],
             "ide": "",
             "load_fn": None,
             "newest_first": saved_sort,
+            "page": 1,
         }
 
         auto_timer = {"ref": None, "paused": False}
@@ -69,7 +71,14 @@ def create_ide_sessions_page(service, daemon_name: str):
                 placeholder="Search title, model, session ID...",
             ).classes("flex-grow")
 
+            top_input = (
+                ui.number(label="Top", value=1000, min=10, max=10000, step=100)
+                .classes("w-24")
+                .props("dense")
+            )
+
             async def _on_refresh():
+                state["page"] = 1
                 fn = state["load_fn"]
                 if fn:
                     await fn()
@@ -79,12 +88,36 @@ def create_ide_sessions_page(service, daemon_name: str):
             )
 
             async def _reload_sessions():
+                state["page"] = 1
                 fn = state["load_fn"]
                 if fn:
                     await fn()
 
             create_sort_toggle(state, "ide_sessions_sort_newest", _reload_sessions)
             create_pause_toggle(auto_timer)
+
+        with (
+            ui.row()
+            .classes("items-center gap-2 w-full")
+            .style("position: sticky; top: 48px; z-index: 9; background: #121212")
+        ):
+
+            async def _prev_page():
+                if state["page"] > 1:
+                    state["page"] -= 1
+                    fn = state["load_fn"]
+                    if fn:
+                        await fn()
+
+            async def _next_page():
+                state["page"] += 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            prev_btn = ui.button("◀ Prev", on_click=_prev_page).props("dense outline")
+            page_label = ui.label("").classes("text-xs text-grey-5")
+            next_btn = ui.button("Next ▶", on_click=_next_page).props("dense outline")
 
         stats_row = ui.row().classes("w-full gap-4")
         cards_container = ui.column().classes("w-full gap-2")
@@ -104,7 +137,8 @@ def create_ide_sessions_page(service, daemon_name: str):
 
             from ai_guardian.sessions.discovery import discover_sessions
 
-            all_sessions = await run.io_bound(discover_sessions, ide)
+            limit = int(top_input.value or 1000)
+            all_sessions = await run.io_bound(discover_sessions, ide, None, limit)
             state["sessions"] = all_sessions
 
             _populate_project_dropdown(all_sessions, project_select)
@@ -130,7 +164,21 @@ def create_ide_sessions_page(service, daemon_name: str):
                 reverse=state["newest_first"],
             )
             _render_stats(sessions, stats_row, ide)
-            _render_session_list(sessions, cards_container, daemon_name, ide)
+
+            total_matches = len(sessions)
+            total_pages = max(1, -(-total_matches // PAGE_SIZE))
+            state["page"] = max(1, min(state["page"], total_pages))
+            page = state["page"]
+            start = (page - 1) * PAGE_SIZE
+            page_sessions = sessions[start : start + PAGE_SIZE]
+
+            _render_session_list(page_sessions, cards_container, daemon_name, ide)
+
+            prev_btn.set_enabled(page > 1)
+            next_btn.set_enabled(page < total_pages)
+            page_label.set_text(
+                f"Page {page} of {total_pages} ({total_matches} matches)"
+            )
 
             if auto_timer["ref"] is None and not auto_timer.get("paused"):
                 interval = _get_auto_refresh_interval(service, daemon_name)
@@ -146,11 +194,17 @@ def create_ide_sessions_page(service, daemon_name: str):
                     _app.storage.user["ide_sessions_ide"] = e.value
                 except Exception:
                     pass
+                state["page"] = 1
                 await load_sessions()
 
+        async def _on_filter_change():
+            state["page"] = 1
+            await load_sessions()
+
         ide_select.on_value_change(_on_ide_change)
-        project_select.on_value_change(lambda _: load_sessions())
-        search_input.on_value_change(lambda _: load_sessions())
+        project_select.on_value_change(lambda _: _on_filter_change())
+        search_input.on_value_change(lambda _: _on_filter_change())
+        top_input.on_value_change(lambda _: _on_filter_change())
 
         async def _detect_and_load():
             saved_ide = None

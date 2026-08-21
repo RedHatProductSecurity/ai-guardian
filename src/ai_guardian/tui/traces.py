@@ -29,17 +29,28 @@ class TracesContent(Container):
     #traces-filter-input {
         width: 1fr;
     }
+    #traces-top-input {
+        width: 10;
+    }
+    #traces-page-info {
+        width: auto;
+        margin: 0 1;
+    }
     #traces-export-status {
         margin: 0 1;
         height: auto;
     }
     """
 
+    PAGE_SIZE = 50
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._last_export_path = None
         self._selected_filename = None
         self._newest_first = True
+        self._page = 1
+        self._all_traces = []
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -52,6 +63,11 @@ class TracesContent(Container):
                 placeholder="Filter filenames (wildcard: *, ?)",
                 id="traces-filter-input",
             )
+            yield Input(
+                value="1000",
+                placeholder="Top N",
+                id="traces-top-input",
+            )
             yield Button("Refresh", id="traces-refresh", variant="success")
             yield Button(
                 "Showing: Newest ↓", id="traces-sort-toggle", variant="default"
@@ -63,6 +79,10 @@ class TracesContent(Container):
                 variant="default",
                 disabled=True,
             )
+        with Horizontal():
+            yield Button("◀ Prev", id="traces-prev-page", variant="default")
+            yield Static("", id="traces-page-info")
+            yield Button("Next ▶", id="traces-next-page", variant="default")
         yield Static("", id="traces-export-status")
         with VerticalScroll():
             yield Tree("Traces", id="traces-tree")
@@ -81,13 +101,25 @@ class TracesContent(Container):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "traces-refresh":
+            self._page = 1
             self.refresh_content()
         elif event.button.id == "traces-sort-toggle":
             self._newest_first = not self._newest_first
+            self._page = 1
             event.button.label = (
                 "Showing: Newest ↓" if self._newest_first else "Showing: Oldest ↑"
             )
             self._load_traces()
+        elif event.button.id == "traces-prev-page":
+            if self._page > 1:
+                self._page -= 1
+                self._render_current_page()
+        elif event.button.id == "traces-next-page":
+            total = len(self._all_traces)
+            total_pages = max(1, -(-total // self.PAGE_SIZE))
+            if self._page < total_pages:
+                self._page += 1
+                self._render_current_page()
         elif event.button.id == "traces-export-otlp":
             self._export_otlp()
         elif event.button.id == "traces-open-folder":
@@ -100,11 +132,13 @@ class TracesContent(Container):
                 open_url(f"file://{folder}")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        if event.input.id == "traces-filter-input":
+        if event.input.id in ("traces-filter-input", "traces-top-input"):
+            self._page = 1
             self._load_traces()
 
     def on_input_changed(self, event: Input.Changed) -> None:
         if event.input.id == "traces-filter-input":
+            self._page = 1
             self._load_traces()
 
     def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
@@ -121,12 +155,18 @@ class TracesContent(Container):
         filter_input = self.query_one("#traces-filter-input", Input)
         pattern = filter_input.value.strip() if filter_input.value else None
 
+        top_input = self.query_one("#traces-top-input", Input)
+        try:
+            limit = int(top_input.value.strip()) if top_input.value.strip() else 1000
+        except ValueError:
+            limit = 1000
+
         def _worker():
             from ai_guardian.daemon.traces import list_traces, resolve_trace_dirs
 
             trace_dirs = resolve_trace_dirs()
             try:
-                traces = list_traces(trace_dirs)
+                traces = list_traces(trace_dirs, limit=limit)
             except Exception:
                 traces = []
 
@@ -134,9 +174,30 @@ class TracesContent(Container):
                 traces = _filter_traces(traces, pattern)
 
             newest = self._newest_first
-            self.app.call_from_thread(self._render_traces, traces, newest)
+            self.app.call_from_thread(self._on_traces_loaded, traces, newest)
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _on_traces_loaded(self, traces, newest_first=True) -> None:
+        """Store loaded traces and render current page."""
+        traces.sort(key=lambda t: t.get("started_at", ""), reverse=newest_first)
+        self._all_traces = traces
+        total_pages = max(1, -(-len(traces) // self.PAGE_SIZE))
+        self._page = max(1, min(self._page, total_pages))
+        self._render_current_page()
+
+    def _render_current_page(self) -> None:
+        """Render the current page of traces."""
+        total = len(self._all_traces)
+        total_pages = max(1, -(-total // self.PAGE_SIZE))
+        page = self._page
+        start = (page - 1) * self.PAGE_SIZE
+        page_traces = self._all_traces[start : start + self.PAGE_SIZE]
+
+        self._render_traces(page_traces, self._newest_first)
+
+        page_info = self.query_one("#traces-page-info", Static)
+        page_info.update(f"Page {page} of {total_pages} ({total} matches)")
 
     def _render_traces(self, traces, newest_first=True) -> None:
         """Render trace list as a directory tree (called on main thread)."""
