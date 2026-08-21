@@ -152,8 +152,8 @@ jobs:
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
-      # SHA tag: 24h expiry so commit-tagged images don't accumulate (#1895)
-      - name: Push SHA-tagged image (24h expiry)
+      # SHA tag: ephemeral commit-tagged image for CI/scenario tests (#1895)
+      - name: Push SHA-tagged image
         if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
         uses: docker/build-push-action@v7
         with:
@@ -161,10 +161,19 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
-          labels: quay.expires-after=24h
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
+      # Set 24h expiration via Quay API — OCI labels have no effect (#2122)
+      - name: Set SHA tag expiration (24h)
+        if: steps.params.outputs.skip != 'true' && steps.check.outputs.exists != 'true'
+        run: |
+          EXPIRY=$(date -u -d '+24 hours' +%s 2>/dev/null || date -u -v+24H +%s)
+          curl -sf -X PUT \
+            -H "Authorization: Bearer ${{ secrets.QUAY_RPS_PASSWORD }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"expiration\": ${EXPIRY}}" \
+            "https://quay.io/api/v1/repository/redhatproductsecurity/ai-guardian/tag/${{ github.sha }}"
 
       # --- Legacy mirror outputs for downstream jobs ---
       - name: Export image tag
@@ -196,3 +205,13 @@ jobs:
               "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
               "docker://quay.io/itdove/ai-guardian:${TAG}"
           done
+
+      # Set 24h expiration on SHA tag in legacy mirror (#2122)
+      - name: Set legacy SHA tag expiration (24h)
+        run: |
+          EXPIRY=$(date -u -d '+24 hours' +%s 2>/dev/null || date -u -v+24H +%s)
+          curl -sf -X PUT \
+            -H "Authorization: Bearer ${{ secrets.QUAY_PASSWORD }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"expiration\": ${EXPIRY}}" \
+            "https://quay.io/api/v1/repository/itdove/ai-guardian/tag/${{ github.sha }}"

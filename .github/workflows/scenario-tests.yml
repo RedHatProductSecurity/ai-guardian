@@ -93,3 +93,13 @@ jobs:
               "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
               "docker://quay.io/itdove/ai-guardian:${TAG}"
           done
+
+      # Set 24h expiration on SHA tag in legacy mirror (#2122)
+      - name: Set legacy SHA tag expiration (24h)
+        run: |
+          EXPIRY=$(date -u -d '+24 hours' +%s 2>/dev/null || date -u -v+24H +%s)
+          curl -sf -X PUT \
+            -H "Authorization: Bearer ${{ secrets.QUAY_PASSWORD }}" \
+            -H "Content-Type: application/json" \
+            -d "{\"expiration\": ${EXPIRY}}" \
+            "https://quay.io/api/v1/repository/itdove/ai-guardian/tag/${{ github.sha }}"
