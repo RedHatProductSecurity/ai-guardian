@@ -5,7 +5,10 @@ This module normalizes request kwargs so the OpenAI strategy works
 uniformly across all of them.
 """
 
+import json
 import logging
+import re
+import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
@@ -18,16 +21,17 @@ class ProviderCaps:
 
     flatten_content: bool = False
     supports_tools: bool = True
+    text_tool_parsing: bool = False
 
 
 _PROVIDER_CAPS: Dict[str, ProviderCaps] = {
     "openai": ProviderCaps(),
     "azure": ProviderCaps(),
     "openai-compatible": ProviderCaps(),
-    "ollama": ProviderCaps(flatten_content=True),
-    "mlx": ProviderCaps(flatten_content=True),
-    "llamacpp": ProviderCaps(flatten_content=True),
-    "vllm": ProviderCaps(),
+    "ollama": ProviderCaps(flatten_content=True, text_tool_parsing=True),
+    "mlx": ProviderCaps(flatten_content=True, text_tool_parsing=True),
+    "llamacpp": ProviderCaps(flatten_content=True, text_tool_parsing=True),
+    "vllm": ProviderCaps(text_tool_parsing=True),
     "lm-studio": ProviderCaps(),
 }
 
@@ -105,3 +109,122 @@ def _flatten_message(msg: Dict[str, Any]) -> Dict[str, Any]:
     if content is None or isinstance(content, str):
         return msg
     return dict(msg, content=_flatten_content(content))
+
+
+# ---------------------------------------------------------------------------
+# Text-as-tool-call extraction
+# ---------------------------------------------------------------------------
+
+_JSON_FENCE_RE = re.compile(r"```(?:json)?\s*\n(.*?)```", re.DOTALL)
+
+
+def try_parse_json_flexible(text: str) -> Any:
+    """Try JSON parsing with fallbacks for common model output quirks.
+
+    Attempts: strict JSON, single-quote replacement, newline-separated
+    JSON objects.  Returns the parsed value or ``None``.
+    """
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+    if "'" in text:
+        try:
+            return json.loads(text.replace("'", '"'))
+        except (json.JSONDecodeError, ValueError):
+            pass
+    lines = text.strip().split("\n")
+    if len(lines) > 1:
+        objects: List[Any] = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                objects.append(json.loads(line))
+            except (json.JSONDecodeError, ValueError):
+                return None
+        return objects if objects else None
+    return None
+
+
+def _maybe_tool_call(
+    obj: Dict[str, Any],
+    known_tool_names: Optional[List[str]],
+) -> Optional[Dict[str, Any]]:
+    """Check if *obj* looks like a tool call and normalise it."""
+    name = obj.get("name")
+    if not isinstance(name, str) or not name:
+        return None
+
+    if known_tool_names is not None and name not in known_tool_names:
+        return None
+
+    arguments = obj.get("arguments", obj.get("input"))
+    if arguments is None:
+        return None
+
+    if isinstance(arguments, str):
+        try:
+            arguments = json.loads(arguments)
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+    if not isinstance(arguments, dict):
+        return None
+
+    return {
+        "id": f"text_tc_{uuid.uuid4().hex[:12]}",
+        "name": name,
+        "arguments": arguments,
+    }
+
+
+def _extract_from_parsed(
+    parsed: Any,
+    known_tool_names: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    """Extract tool call dicts from a parsed JSON structure."""
+    if isinstance(parsed, dict):
+        tc = _maybe_tool_call(parsed, known_tool_names)
+        return [tc] if tc else []
+    if isinstance(parsed, list):
+        results: List[Dict[str, Any]] = []
+        for item in parsed:
+            if isinstance(item, dict):
+                tc = _maybe_tool_call(item, known_tool_names)
+                if tc:
+                    results.append(tc)
+        return results
+    return []
+
+
+def extract_tool_calls_from_text(
+    text: str,
+    known_tool_names: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    """Extract tool calls written as plain text in a model response.
+
+    Returns a list of ``{"id", "name", "arguments"}`` dicts, or ``[]``
+    if no tool-call patterns are found.
+    """
+    if not text or not text.strip():
+        return []
+
+    candidates: List[str] = []
+
+    for match in _JSON_FENCE_RE.finditer(text):
+        candidates.append(match.group(1).strip())
+
+    stripped = text.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        candidates.append(stripped)
+
+    for candidate in candidates:
+        parsed = try_parse_json_flexible(candidate)
+        if parsed is not None:
+            extracted = _extract_from_parsed(parsed, known_tool_names)
+            if extracted:
+                return extracted
+
+    return []

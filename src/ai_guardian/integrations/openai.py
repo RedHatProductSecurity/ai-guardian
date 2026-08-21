@@ -309,6 +309,14 @@ class OpenAILoopStrategy(AgentLoopStrategy):
             kwargs["tools"] = tools
         return kwargs
 
+    def set_known_tool_names(self, names: List[str]) -> None:
+        """Store resolved tool names for text-based tool-call filtering."""
+        self._known_tool_names = names
+
+    def set_text_tool_parsing(self, enabled: bool) -> None:
+        """Force text-tool-call parsing on/off (overrides provider caps)."""
+        self._text_tool_parsing_override = enabled
+
     def call_api(
         self, client: Any, kwargs: Dict[str, Any], timeout: Optional[int] = None
     ) -> Any:
@@ -319,6 +327,7 @@ class OpenAILoopStrategy(AgentLoopStrategy):
 
         provider = getattr(client, "_ai_guardian_provider", None)
         caps = get_provider_caps(provider)
+        self._last_caps = caps
         kwargs = normalize_request_kwargs(kwargs, caps)
         if timeout is not None:
             kwargs["timeout"] = float(timeout)
@@ -361,6 +370,37 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         usage = getattr(response, "usage", None)
         input_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
         output_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        _ttp_override = getattr(self, "_text_tool_parsing_override", None)
+        _ttp_caps = (
+            getattr(self, "_last_caps", None) is not None
+            and self._last_caps.text_tool_parsing
+        )
+        _text_parsing_active = _ttp_override if _ttp_override is not None else _ttp_caps
+        if (
+            not tool_calls
+            and text
+            and stop_reason == "end_turn"
+            and _text_parsing_active
+        ):
+            from ai_guardian.integrations.openai_compat import (
+                extract_tool_calls_from_text,
+            )
+
+            extracted = extract_tool_calls_from_text(
+                text,
+                known_tool_names=getattr(self, "_known_tool_names", None),
+            )
+            if extracted:
+                for tc_dict in extracted:
+                    tool_calls.append(
+                        ToolCall(
+                            id=tc_dict["id"],
+                            name=tc_dict["name"],
+                            input=tc_dict["arguments"],
+                        )
+                    )
+                stop_reason = "tool_use"
 
         return ParsedResponse(
             stop_reason=stop_reason,

@@ -149,6 +149,16 @@ def _show_edit_dialog(
             min=0,
         ).classes("w-full")
 
+        max_schema_nudges_input = ui.number(
+            label="Max Schema Nudges",
+            value=profile.get("max_schema_nudges", 3),
+            min=0,
+        ).classes("w-full")
+        text_tool_parsing_input = ui.switch(
+            "Text Tool Parsing",
+            value=profile.get("text_tool_parsing", False),
+        ).classes("w-full")
+
         mcp_servers = profile.get("mcpServers", {})
         if isinstance(mcp_servers, dict):
             server_names = [k for k in mcp_servers if not k.startswith("_comment")]
@@ -194,6 +204,9 @@ def _show_edit_dialog(
                     updated["compact_keep_turns"] = int(compact_keep_turns_input.value)
                 if compact_keep_first_input.value is not None:
                     updated["compact_keep_first"] = int(compact_keep_first_input.value)
+                if max_schema_nudges_input.value is not None:
+                    updated["max_schema_nudges"] = int(max_schema_nudges_input.value)
+                updated["text_tool_parsing"] = text_tool_parsing_input.value
 
                 for k, v in profile.items():
                     if k not in updated:

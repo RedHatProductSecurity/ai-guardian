@@ -15,6 +15,8 @@ _PROFILE_FIELDS = [
     ("provider", "Provider", "select_provider"),
     ("max_turns", "Max Turns", "int"),
     ("max_tokens", "Max Tokens", "int"),
+    ("max_schema_nudges", "Max Schema Nudges", "int"),
+    ("text_tool_parsing", "Text Tool Parsing", "select_bool"),
     ("tools", "Tools", "text"),
     ("compact_threshold", "Compact Threshold", "float"),
     ("compact_keep_turns", "Compact Keep Turns", "int"),
@@ -249,6 +251,15 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                     id=f"profile-field-{field_key}",
                     allow_blank=True,
                 )
+            elif field_type == "select_bool":
+                widget = Select(
+                    [("Yes", "true"), ("No", "false"), ("Default", "")],
+                    value=(
+                        "true" if value is True else ("false" if value is False else "")
+                    ),
+                    id=f"profile-field-{field_key}",
+                    allow_blank=True,
+                )
             elif field_type == "text":
                 display_val = str(value) if value else ""
                 if isinstance(value, list):
@@ -340,7 +351,10 @@ class SDKAgentsContent(ConfigSaveMixin, Container):
                 existing.pop(field_key, None)
                 continue
 
-            if field_type == "int":
+            if field_type == "select_bool":
+                existing[field_key] = raw == "true"
+                continue
+            elif field_type == "int":
                 try:
                     existing[field_key] = int(raw)
                 except ValueError:
