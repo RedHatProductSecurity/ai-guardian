@@ -1173,6 +1173,8 @@
     "agents": {
       "*": {
         "enabled": true,
+        "_comment_api_timeout": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local like Ollama/MLX). On timeout: retry once, then stop_reason='timeout' with partial result.",
+        "api_timeout": 300,
         "_comment_compact": "Context compaction: compact_threshold (0-1, ratio triggering compaction), compact_keep_turns (recent turns kept), compact_keep_first (initial turns kept)",
         "compact_threshold": 0.8,
         "compact_keep_turns": 5,

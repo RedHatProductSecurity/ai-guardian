@@ -309,7 +309,9 @@ class OpenAILoopStrategy(AgentLoopStrategy):
             kwargs["tools"] = tools
         return kwargs
 
-    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+    def call_api(
+        self, client: Any, kwargs: Dict[str, Any], timeout: Optional[int] = None
+    ) -> Any:
         from ai_guardian.integrations.openai_compat import (
             get_provider_caps,
             normalize_request_kwargs,
@@ -318,6 +320,8 @@ class OpenAILoopStrategy(AgentLoopStrategy):
         provider = getattr(client, "_ai_guardian_provider", None)
         caps = get_provider_caps(provider)
         kwargs = normalize_request_kwargs(kwargs, caps)
+        if timeout is not None:
+            kwargs["timeout"] = float(timeout)
         return client.chat.completions.create(**kwargs)
 
     def parse_response(self, response: Any) -> ParsedResponse:

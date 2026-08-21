@@ -793,6 +793,7 @@ print(result["output"])  # validated structured object
 | `max_turns` | int | `100` | Max tool-use loop iterations |
 | `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
+| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX). On timeout: retries once, then stops with `stop_reason='timeout'` |
 | `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
@@ -1142,6 +1143,7 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 | `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
 | `refusal` | Model refused to respond |
 | `security_violation` | Response or tool result blocked by a security scan |
+| `timeout` | API call timed out on both initial attempt and retry — partial result returned |
 | `error` | Exception during the agent loop (partial trace persisted) |
 | `in_progress` | Agent is still running (only appears in incremental trace files) |
 

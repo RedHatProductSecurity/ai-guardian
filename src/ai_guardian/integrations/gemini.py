@@ -352,7 +352,11 @@ class GeminiLoopStrategy(AgentLoopStrategy):
             "config": config,
         }
 
-    def call_api(self, client: Any, kwargs: Dict[str, Any]) -> Any:
+    def call_api(
+        self, client: Any, kwargs: Dict[str, Any], timeout: Optional[int] = None
+    ) -> Any:
+        if timeout is not None:
+            kwargs = dict(kwargs, timeout=float(timeout))
         return client.models.generate_content(**kwargs)
 
     def parse_response(self, response: Any) -> ParsedResponse:
