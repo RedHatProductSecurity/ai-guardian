@@ -4044,10 +4044,17 @@ class TestGuardedAgent:
 
         agent.run("Prompt")
 
+        from ai_guardian.integrations.base import AgentResponse
+
         args = hook.call_args[0]
         assert isinstance(args[0], list)
         assert args[0][0] == {"role": "user", "content": "Prompt"}
-        assert args[1] is response
+        agent_resp = args[1]
+        assert isinstance(agent_resp, AgentResponse)
+        assert agent_resp.text == "Hi"
+        assert agent_resp.stop_reason == "end_turn"
+        assert agent_resp.tool_calls == []
+        assert agent_resp.raw is response
         assert args[2] == 0
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
@@ -4588,6 +4595,158 @@ class TestGuardedAgent:
         ]
         assert feedback_msgs, "between_turns feedback not found in messages"
         assert "submit_result" in feedback_msgs[0]["content"]
+
+    # -- strip_chat_template_tokens --
+
+    def test_strip_chat_template_tokens_chatml(self):
+        from ai_guardian.integrations.base import strip_chat_template_tokens
+
+        assert (
+            strip_chat_template_tokens("<|im_start|>assistant\nHello world")
+            == "Hello world"
+        )
+        assert strip_chat_template_tokens("Hello<|im_end|>") == "Hello"
+        assert (
+            strip_chat_template_tokens("<|im_start|>assistant\nHello\n<|im_end|>")
+            == "Hello"
+        )
+
+    def test_strip_chat_template_tokens_llama(self):
+        from ai_guardian.integrations.base import strip_chat_template_tokens
+
+        assert strip_chat_template_tokens("[INST]prompt[/INST]answer") == "promptanswer"
+
+    def test_strip_chat_template_tokens_role_tokens(self):
+        from ai_guardian.integrations.base import strip_chat_template_tokens
+
+        assert strip_chat_template_tokens("<|assistant|>Hello") == "Hello"
+        assert strip_chat_template_tokens("<|user|>Hi<|system|>Note") == "HiNote"
+
+    def test_strip_chat_template_tokens_clean_text(self):
+        from ai_guardian.integrations.base import strip_chat_template_tokens
+
+        assert strip_chat_template_tokens("Normal text") == "Normal text"
+        assert (
+            strip_chat_template_tokens("Code: <div>hi</div>") == "Code: <div>hi</div>"
+        )
+
+    def test_strip_chat_template_tokens_empty(self):
+        from ai_guardian.integrations.base import strip_chat_template_tokens
+
+        assert strip_chat_template_tokens("") == ""
+        assert strip_chat_template_tokens(None) is None
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_between_turns_receives_agent_response_tool_use(self, mock_monitor):
+        """between_turns on tool_use path also passes AgentResponse."""
+        from ai_guardian.integrations.base import AgentResponse
+
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        tool_response = _make_agent_response(
+            [
+                SimpleNamespace(type="text", text="Running tool"),
+                SimpleNamespace(
+                    type="tool_use", id="t1", name="bash", input={"command": "ls"}
+                ),
+            ],
+            stop_reason="tool_use",
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.side_effect = [tool_response, final_response]
+
+        agent.run("Do work")
+
+        first_call_args = hook.call_args_list[0][0]
+        agent_resp = first_call_args[1]
+        assert isinstance(agent_resp, AgentResponse)
+        assert agent_resp.text == "Running tool"
+        assert len(agent_resp.tool_calls) == 1
+        assert agent_resp.tool_calls[0].name == "bash"
+        assert agent_resp.stop_reason == "tool_use"
+        assert agent_resp.raw is tool_response
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_strip_chat_tokens_auto_enabled_for_local_provider(self, mock_monitor):
+        """strip_chat_tokens auto-enables for local providers (ollama etc)."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello<|im_end|>")],
+            stop_reason="end_turn",
+        )
+
+        mock_create = MagicMock()
+        mock_messages = SimpleNamespace(create=mock_create)
+        mock_client = SimpleNamespace(
+            messages=mock_messages,
+            chat=MagicMock(),
+            _ai_guardian_provider="ollama",
+        )
+        mock_create.return_value = response
+
+        hook = MagicMock(return_value=None)
+        agent, _ = self._make_agent(mock_client=mock_client, between_turns=hook)
+        agent.run("Hi")
+
+        agent_resp = hook.call_args[0][1]
+        assert agent_resp.text == "Hello"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_strip_chat_tokens_disabled_for_cloud_provider(self, mock_monitor):
+        """strip_chat_tokens is off by default for cloud providers."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello<|im_end|>")],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(between_turns=hook)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        agent_resp = hook.call_args[0][1]
+        assert agent_resp.text == "Hello<|im_end|>"
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_strip_chat_tokens_explicit_override(self, mock_monitor):
+        """strip_chat_tokens=True forces stripping for any provider."""
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="text", text="<|im_start|>assistant\nHello<|im_end|>"
+                )
+            ],
+            stop_reason="end_turn",
+        )
+
+        hook = MagicMock(return_value=None)
+        agent, client = self._make_agent(between_turns=hook, strip_chat_tokens=True)
+        client.messages.create.return_value = response
+
+        agent.run("Hi")
+
+        agent_resp = hook.call_args[0][1]
+        assert agent_resp.text == "Hello"
 
     @patch.dict("os.environ", _CLEAN_ANTHROPIC_ENV)
     def test_agent_profile_provider_creates_correct_client(self):
