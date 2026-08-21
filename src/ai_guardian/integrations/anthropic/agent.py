@@ -491,7 +491,9 @@ class GuardedAgent:
                     if provider_config is None:
                         provider_config = sdk_section.get("provider_config")
             except Exception:
-                pass
+                logger.debug(
+                    "Config/provider parsing failed, using defaults", exc_info=True
+                )
 
         if provider and provider in _OPENAI_PROVIDERS:
             from ai_guardian.integrations.openai import OpenAILoopStrategy
@@ -689,7 +691,9 @@ class GuardedAgent:
                     ):
                         return parsed["arguments"]
                 except Exception:
-                    pass
+                    logger.debug(
+                        "JSON schema validation failed for candidate", exc_info=True
+                    )
         return None
 
     @staticmethod
@@ -1001,7 +1005,11 @@ class GuardedAgent:
 
                     write_trace_meta(trace_filepath, doc)
                 except Exception:
-                    pass
+                    logger.warning(
+                        "Failed to update trace meta for %s",
+                        trace_filepath,
+                        exc_info=True,
+                    )
 
             atexit.register(_flush_on_exit)
             _atexit_fn = _flush_on_exit
@@ -1021,7 +1029,9 @@ class GuardedAgent:
                     metadata_fn=self._otel_metadata_fn,
                 )
         except Exception:
-            pass
+            logger.warning(
+                "OTEL emitter setup failed — telemetry disabled", exc_info=True
+            )
 
         mcp_manager = self._start_mcp_servers()
 
@@ -1245,6 +1255,8 @@ class GuardedAgent:
             compact_result = None
 
             try:
+                logger.debug("Turn %d: sending %d messages", turn_num, len(messages))
+
                 if not self._exec_hook("on_turn", "pre", turn_num):
                     stop_reason = "hook_abort"
                     break
@@ -1359,6 +1371,11 @@ class GuardedAgent:
                         break
 
                 api_latency_ms = int((time.monotonic() - api_start) * 1000)
+                logger.debug(
+                    "Turn %d: API call completed in %.1fs",
+                    turn_num,
+                    api_latency_ms / 1000,
+                )
                 parsed = strategy.parse_response(response)
                 if self._strip_chat_tokens and parsed.text:
                     parsed.text = strip_chat_template_tokens(parsed.text)
@@ -1644,6 +1661,12 @@ class GuardedAgent:
                                 self._follow_symlinks,
                             )
                         tool_latency_ms = int((time.monotonic() - tool_start) * 1000)
+                        logger.debug(
+                            "Turn %d: tool %s completed in %.1fs",
+                            turn_num,
+                            tc.name,
+                            tool_latency_ms / 1000,
+                        )
                         tool_output_bytes = (
                             len(result_text.encode("utf-8")) if result_text else 0
                         )
@@ -1852,6 +1875,8 @@ class GuardedAgent:
                             )
                         except Exception:
                             logger.debug("OTEL turn emit failed", exc_info=True)
+
+        logger.info("Agent stopped: %s after %d turns", stop_reason, turn_num)
 
         output: Any = final_text
         if structured_output is not None:
