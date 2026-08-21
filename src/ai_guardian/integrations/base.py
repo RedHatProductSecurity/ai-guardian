@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 _CODE_BLOCK_RE = re.compile(r"```[^\n]*\n.*?```", re.DOTALL)
 
+_CHAT_TEMPLATE_RE = re.compile(
+    r"<\|im_(?:start|end)\|>[^\n]*" r"|<\|(?:assistant|user|system)\|>" r"|\[/?INST\]",
+)
+
 _LOCAL_PROVIDERS = frozenset({"ollama", "llamacpp", "vllm"})
 _DEFAULT_TIMEOUT_CLOUD = 300
 _DEFAULT_TIMEOUT_LOCAL = 600
@@ -30,6 +34,18 @@ def resolve_default_api_timeout(client: Any) -> int:
     if provider in _LOCAL_PROVIDERS:
         return _DEFAULT_TIMEOUT_LOCAL
     return _DEFAULT_TIMEOUT_CLOUD
+
+
+def strip_chat_template_tokens(text: str) -> str:
+    """Strip chat template tokens leaked by local models.
+
+    Removes ChatML (``<|im_start|>``, ``<|im_end|>``), role tokens
+    (``<|assistant|>``), and Llama-style (``[INST]``, ``[/INST]``)
+    markers that some local models emit in their output.
+    """
+    if not text:
+        return text
+    return _CHAT_TEMPLATE_RE.sub("", text).strip()
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +162,21 @@ class ToolCall:
     id: str
     name: str
     input: Dict[str, Any]
+
+
+@dataclass
+class AgentResponse:
+    """Normalized response passed to ``between_turns`` callbacks.
+
+    Provides a provider-agnostic view of the assistant's response
+    so consumers don't need to handle Anthropic / OpenAI / Gemini
+    formats individually.
+    """
+
+    text: str
+    tool_calls: List[ToolCall]
+    stop_reason: str
+    raw: Any
 
 
 @dataclass

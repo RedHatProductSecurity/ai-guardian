@@ -825,9 +825,10 @@ Custom tool dicts are sent to the Anthropic API as standard tool definitions, so
 
 ```python
 def handle_custom_tools(messages, response, turn):
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "my_tool":
-            result = my_tool_executor(block.input)
+    # response is an AgentResponse — provider-agnostic
+    for tc in response.tool_calls:
+        if tc.name == "my_tool":
+            result = my_tool_executor(tc.input)
             return f"Tool result for my_tool: {result}"
     return None
 
@@ -884,7 +885,8 @@ print(result["output"])  # validated structured object
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
-| `between_turns` | callable | `None` | `(messages: list, response: Any, turn: int) -> str \| None \| False` — called after each successful assistant turn. Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `between_turns` | callable | `None` | `(messages: list, response: AgentResponse, turn: int) -> str \| None \| False` — called after each successful assistant turn. `response` is a normalized `AgentResponse` with `.text`, `.tool_calls`, `.stop_reason`, and `.raw` (original provider response). Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `strip_chat_tokens` | bool | `None` | Strip chat template tokens (`<\|im_start\|>`, `[INST]`, etc.) from model output. `None` = auto-detect (enabled for Ollama, llama.cpp, vLLM). `True` = always strip. `False` = never strip |
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
 | `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
@@ -960,15 +962,17 @@ loop continues so the agent can adapt.
 import subprocess
 
 def run_pytest_between_turns(messages, response, turn):
-    """Run pytest on generated test code, feed results back."""
-    # Extract test code from the assistant's response
-    text = getattr(response.content[0], "text", "")
-    if "def test_" not in text:
+    """Run pytest on generated test code, feed results back.
+
+    response is an AgentResponse — use .text for extracted content,
+    .tool_calls for parsed tool calls, .raw for the original provider object.
+    """
+    if "def test_" not in response.text:
         return None  # No test code, let the loop end normally
 
     # Write and run the test
     with open("/tmp/test_generated.py", "w") as f:
-        f.write(text)
+        f.write(response.text)
     result = subprocess.run(
         ["pytest", "/tmp/test_generated.py", "-v"],
         capture_output=True, text=True, timeout=30,
@@ -1171,6 +1175,21 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
+
+#### `AgentResponse` Dataclass
+
+Normalized response passed to `between_turns` callbacks. Provider-agnostic — works the same for Anthropic, OpenAI, Gemini, and local models.
+
+```python
+@dataclass
+class AgentResponse:
+    text: str                # extracted text content (chat template tokens stripped if enabled)
+    tool_calls: List[ToolCall]  # parsed tool calls
+    stop_reason: str         # normalized: "end_turn", "tool_use", "refusal", etc.
+    raw: Any                 # original provider response for advanced use
+```
+
+When `strip_chat_tokens` is enabled (auto for local providers), `text` has chat template markers removed. Access `raw` for the original unmodified response.
 
 #### `TurnEvent` Dataclass
 

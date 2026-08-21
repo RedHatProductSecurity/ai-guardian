@@ -24,9 +24,11 @@ from ai_guardian.integrations.mcp_client import (
 )
 from ai_guardian.integrations.base import (
     AgentLoopStrategy,
+    AgentResponse,
     ParsedResponse,
     ToolCall,
     TurnEvent,
+    _LOCAL_PROVIDERS,
     _PREAMBLE_PREFIX,
     _USAGE_TOKEN_FIELDS,
     _is_timeout_error,
@@ -34,6 +36,7 @@ from ai_guardian.integrations.base import (
     _try_sanitize_text,
     _strategy_registry,
     resolve_default_api_timeout,
+    strip_chat_template_tokens,
 )
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -325,6 +328,7 @@ class GuardedAgent:
             "compact_keep_first",
             "api_timeout",
             "text_tool_parsing",
+            "strip_chat_tokens",
         }
     )
 
@@ -346,7 +350,7 @@ class GuardedAgent:
         after_call: Optional[Callable[[str, Any], Any]] = None,
         pre_run: Optional[Callable[[str, dict], None]] = None,
         post_run: Optional[Callable[[dict], None]] = None,
-        between_turns: Optional[Callable[[list, Any, int], Any]] = None,
+        between_turns: Optional[Callable[[list, AgentResponse, int], Any]] = None,
         on_turn: Optional[Callable[[int, TurnEvent], None]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
         cache_ttl: Optional[Union[str, int]] = None,
@@ -362,6 +366,7 @@ class GuardedAgent:
         api_timeout: Optional[int] = None,
         max_schema_nudges: int = 3,
         text_tool_parsing: bool = False,
+        strip_chat_tokens: Optional[bool] = None,
         otel_metadata_fn: Optional[
             Callable[[str, Dict[str, Any]], Dict[str, Any]]
         ] = None,
@@ -369,6 +374,7 @@ class GuardedAgent:
         self._api_timeout = api_timeout
         self._max_schema_nudges = max_schema_nudges
         self._text_tool_parsing = text_tool_parsing
+        self._strip_chat_tokens = strip_chat_tokens
         self._name = name
         self._otel_metadata_fn = otel_metadata_fn
         self._target_dir = target_dir
@@ -449,6 +455,10 @@ class GuardedAgent:
             self._strategy.set_known_tool_names(names)
         if self._text_tool_parsing and hasattr(self._strategy, "set_text_tool_parsing"):
             self._strategy.set_text_tool_parsing(True)
+
+        if self._strip_chat_tokens is None:
+            provider = getattr(self._client, "_ai_guardian_provider", None)
+            self._strip_chat_tokens = provider in _LOCAL_PROVIDERS
 
     def _create_client_from_profile(self):
         """Create client from agent profile provider, falling back to defaults.
@@ -1328,6 +1338,8 @@ class GuardedAgent:
 
                 api_latency_ms = int((time.monotonic() - api_start) * 1000)
                 parsed = strategy.parse_response(response)
+                if self._strip_chat_tokens and parsed.text:
+                    parsed.text = strip_chat_template_tokens(parsed.text)
 
                 turn_usage = {_f: getattr(parsed, _f, 0) for _f in _USAGE_TOKEN_FIELDS}
                 for _f, _v in turn_usage.items():
@@ -1450,7 +1462,15 @@ class GuardedAgent:
                         stop_reason = "hook_abort"
                         break
                     if self._between_turns:
-                        hook_result = self._between_turns(messages, response, _turn)
+                        agent_response = AgentResponse(
+                            text=parsed.text,
+                            tool_calls=parsed.tool_calls,
+                            stop_reason=parsed.stop_reason,
+                            raw=response,
+                        )
+                        hook_result = self._between_turns(
+                            messages, agent_response, _turn
+                        )
                         if hook_result is False:
                             final_text = parsed.text
                             stop_reason = "hook_early_stop"
@@ -1700,7 +1720,15 @@ class GuardedAgent:
                         stop_reason = "hook_abort"
                         break
                     if self._between_turns:
-                        hook_result = self._between_turns(messages, response, _turn)
+                        agent_response = AgentResponse(
+                            text=parsed.text,
+                            tool_calls=parsed.tool_calls,
+                            stop_reason=parsed.stop_reason,
+                            raw=response,
+                        )
+                        hook_result = self._between_turns(
+                            messages, agent_response, _turn
+                        )
                         if hook_result is False:
                             final_text = parsed.text
                             stop_reason = "hook_early_stop"
