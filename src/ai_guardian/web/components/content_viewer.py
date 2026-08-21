@@ -90,7 +90,23 @@ def show_content_viewer(title, raw_text, dialog_host=None):
                     ui.label(title).classes("text-lg font-bold")
                     ui.badge(content_type).classes("text-xs")
                     ui.label(f"{line_count} lines").classes("text-xs text-grey-6")
-                ui.button(icon="close", on_click=dialog.close).props("flat dense round")
+                with ui.row().classes("items-center gap-1"):
+                    ui.button(
+                        icon="content_copy",
+                        on_click=lambda t=raw_text: (
+                            ui.run_javascript(
+                                "navigator.clipboard.writeText(" + json.dumps(t) + ")"
+                            ),
+                            ui.notify(
+                                "Copied to clipboard",
+                                position="bottom",
+                                type="positive",
+                            ),
+                        ),
+                    ).props("flat dense round").tooltip("Copy to clipboard")
+                    ui.button(icon="close", on_click=dialog.close).props(
+                        "flat dense round"
+                    )
 
             with ui.scroll_area().classes("w-full flex-grow").style("max-height: 75vh"):
                 if language:

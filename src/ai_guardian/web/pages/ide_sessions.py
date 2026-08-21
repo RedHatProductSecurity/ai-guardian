@@ -9,6 +9,7 @@ from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.step_render import (
     STEP_ICON_MAP,
     compute_context_tokens,
+    create_pause_toggle,
     create_sort_toggle,
     escape_html,
     format_token_count,
@@ -43,7 +44,13 @@ def create_ide_sessions_page(service, daemon_name: str):
             "newest_first": saved_sort,
         }
 
-        with ui.row().classes("items-end gap-4 w-full"):
+        auto_timer = {"ref": None, "paused": False}
+
+        with (
+            ui.row()
+            .classes("items-end gap-4 w-full")
+            .style("position: sticky; top: 0; z-index: 10; background: #121212")
+        ):
             ide_options = _get_ide_options()
             ide_select = ui.select(
                 options=ide_options,
@@ -77,10 +84,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                     await fn()
 
             create_sort_toggle(state, "ide_sessions_sort_newest", _reload_sessions)
+            create_pause_toggle(auto_timer)
 
         stats_row = ui.row().classes("w-full gap-4")
         cards_container = ui.column().classes("w-full gap-2")
-        auto_timer = {"ref": None}
 
         async def load_sessions():
             try:
@@ -125,7 +132,7 @@ def create_ide_sessions_page(service, daemon_name: str):
             _render_stats(sessions, stats_row, ide)
             _render_session_list(sessions, cards_container, daemon_name, ide)
 
-            if auto_timer["ref"] is None:
+            if auto_timer["ref"] is None and not auto_timer.get("paused"):
                 interval = _get_auto_refresh_interval(service, daemon_name)
                 auto_timer["ref"] = ui.timer(interval, load_sessions)
 
@@ -466,7 +473,13 @@ def create_ide_session_detail_page(service, daemon_name: str):
         summary_container = ui.column().classes("w-full")
         violations_container = ui.column().classes("w-full")
 
-        with ui.row().classes("items-center gap-2 w-full"):
+        auto_timer = {"ref": None, "paused": False}
+
+        with (
+            ui.row()
+            .classes("items-center gap-2 w-full")
+            .style("position: sticky; top: 0; z-index: 10; background: #121212")
+        ):
             ui.label("Conversation").classes("text-lg font-bold")
 
             async def _reload_detail():
@@ -477,10 +490,10 @@ def create_ide_session_detail_page(service, daemon_name: str):
             create_sort_toggle(
                 detail_state, "ide_session_detail_sort_newest", _reload_detail
             )
+            create_pause_toggle(auto_timer)
 
         steps_container = ui.column().classes("w-full gap-1")
         dialog_host = ui.element("div")
-        auto_timer = {"ref": None}
 
         async def load_detail():
             try:
@@ -550,7 +563,7 @@ def create_ide_session_detail_page(service, daemon_name: str):
                             dialog_host=dialog_host,
                         )
 
-            if auto_timer["ref"] is None:
+            if auto_timer["ref"] is None and not auto_timer.get("paused"):
                 interval = _get_auto_refresh_interval(service, daemon_name)
                 auto_timer["ref"] = ui.timer(interval, load_detail)
 

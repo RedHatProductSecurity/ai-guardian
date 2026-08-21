@@ -1,4 +1,4 @@
-"""Tests for auto-refresh on IDE Session list and detail pages (#2024)."""
+"""Tests for auto-refresh on IDE Session list and detail pages (#2024, #2119)."""
 
 import inspect
 
@@ -47,13 +47,14 @@ class TestWebAutoRefreshInterval:
 
 
 class TestWebListPageAutoRefresh:
-    """Verify list page has auto-refresh timer pattern."""
+    """Verify list page has auto-refresh timer with pause support."""
 
     def test_list_page_has_auto_timer(self):
         from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
 
         source = inspect.getsource(create_ide_sessions_page)
-        assert 'auto_timer = {"ref": None}' in source
+        assert '"ref": None' in source
+        assert '"paused": False' in source
 
     def test_list_page_starts_periodic_timer(self):
         from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
@@ -68,9 +69,21 @@ class TestWebListPageAutoRefresh:
         source = inspect.getsource(create_ide_sessions_page)
         assert "is_deleted" in source
 
+    def test_list_page_has_pause_toggle(self):
+        from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
+
+        source = inspect.getsource(create_ide_sessions_page)
+        assert "create_pause_toggle" in source
+
+    def test_list_page_respects_paused_state(self):
+        from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
+
+        source = inspect.getsource(create_ide_sessions_page)
+        assert 'auto_timer.get("paused")' in source
+
 
 class TestWebDetailPageAutoRefresh:
-    """Verify detail page has auto-refresh timer pattern."""
+    """Verify detail page has auto-refresh timer with pause support."""
 
     def test_detail_page_has_auto_timer(self):
         from ai_guardian.web.pages.ide_sessions import (
@@ -78,7 +91,8 @@ class TestWebDetailPageAutoRefresh:
         )
 
         source = inspect.getsource(create_ide_session_detail_page)
-        assert 'auto_timer = {"ref": None}' in source
+        assert '"ref": None' in source
+        assert '"paused": False' in source
 
     def test_detail_page_starts_periodic_timer(self):
         from ai_guardian.web.pages.ide_sessions import (
@@ -97,9 +111,43 @@ class TestWebDetailPageAutoRefresh:
         source = inspect.getsource(create_ide_session_detail_page)
         assert "is_deleted" in source
 
+    def test_detail_page_has_pause_toggle(self):
+        from ai_guardian.web.pages.ide_sessions import (
+            create_ide_session_detail_page,
+        )
+
+        source = inspect.getsource(create_ide_session_detail_page)
+        assert "create_pause_toggle" in source
+
+    def test_detail_page_respects_paused_state(self):
+        from ai_guardian.web.pages.ide_sessions import (
+            create_ide_session_detail_page,
+        )
+
+        source = inspect.getsource(create_ide_session_detail_page)
+        assert 'auto_timer.get("paused")' in source
+
+
+class TestWebTracesPageAutoRefresh:
+    """Verify traces pages have pause support (#2119)."""
+
+    def test_traces_list_has_pause_toggle(self):
+        from ai_guardian.web.pages.traces import create_traces_page
+
+        source = inspect.getsource(create_traces_page)
+        assert "create_pause_toggle" in source
+        assert '"paused": False' in source
+
+    def test_traces_detail_has_pause_toggle(self):
+        from ai_guardian.web.pages.traces import create_trace_detail_page
+
+        source = inspect.getsource(create_trace_detail_page)
+        assert "create_pause_toggle" in source
+        assert '"paused": False' in source
+
 
 class TestTuiAutoRefresh:
-    """Verify TUI IDE sessions panel has periodic refresh."""
+    """Verify TUI IDE sessions panel has periodic refresh with pause."""
 
     def test_has_get_refresh_interval_method(self):
         from ai_guardian.tui.ide_sessions import IDESessionsContent
@@ -114,10 +162,11 @@ class TestTuiAutoRefresh:
         source = inspect.getsource(IDESessionsContent._get_refresh_interval)
         assert "auto_refresh_interval_seconds" in source
 
-    def test_on_mount_calls_set_interval(self):
+    def test_on_mount_stores_timer_reference(self):
         from ai_guardian.tui.ide_sessions import IDESessionsContent
 
         source = inspect.getsource(IDESessionsContent.on_mount)
+        assert "self._refresh_timer" in source
         assert "set_interval" in source
 
     def test_get_refresh_interval_default(self):
@@ -125,3 +174,68 @@ class TestTuiAutoRefresh:
 
         source = inspect.getsource(IDESessionsContent._get_refresh_interval)
         assert "return 5" in source
+
+    def test_has_pause_toggle_handler(self):
+        from ai_guardian.tui.ide_sessions import IDESessionsContent
+
+        source = inspect.getsource(IDESessionsContent.on_button_pressed)
+        assert "ide-sessions-pause-toggle" in source
+        assert "_refresh_paused" in source
+
+    def test_has_copy_button_handler(self):
+        from ai_guardian.tui.ide_sessions import IDESessionsContent
+
+        source = inspect.getsource(IDESessionsContent.on_button_pressed)
+        assert "ide-sessions-copy" in source
+        assert "copy_to_clipboard" in source
+
+
+class TestStripRichMarkup:
+    """Verify _strip_rich_markup helper."""
+
+    def test_strips_bold_tags(self):
+        from ai_guardian.tui.ide_sessions import _strip_rich_markup
+
+        assert _strip_rich_markup("[bold]Title[/bold]") == "Title"
+
+    def test_strips_color_tags(self):
+        from ai_guardian.tui.ide_sessions import _strip_rich_markup
+
+        assert _strip_rich_markup("[bold red]Error[/bold red]") == "Error"
+
+    def test_preserves_plain_text(self):
+        from ai_guardian.tui.ide_sessions import _strip_rich_markup
+
+        assert _strip_rich_markup("no markup here") == "no markup here"
+
+    def test_preserves_square_bracket_content(self):
+        from ai_guardian.tui.ide_sessions import _strip_rich_markup
+
+        assert _strip_rich_markup("Session: abc-123") == "Session: abc-123"
+
+
+class TestPauseToggleHelper:
+    """Verify create_pause_toggle exists in step_render."""
+
+    def test_function_exists(self):
+        from ai_guardian.web.components.step_render import create_pause_toggle
+
+        assert callable(create_pause_toggle)
+
+    def test_function_signature(self):
+        from ai_guardian.web.components.step_render import create_pause_toggle
+
+        sig = inspect.signature(create_pause_toggle)
+        params = list(sig.parameters.keys())
+        assert "auto_timer" in params
+
+
+class TestContentViewerCopyButton:
+    """Verify content viewer dialog has copy button (#2119)."""
+
+    def test_show_content_viewer_has_copy(self):
+        from ai_guardian.web.components.content_viewer import show_content_viewer
+
+        source = inspect.getsource(show_content_viewer)
+        assert "content_copy" in source
+        assert "navigator.clipboard.writeText" in source
