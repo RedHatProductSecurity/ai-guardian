@@ -1630,9 +1630,40 @@ AI_GUARDIAN_CONFIG_OVERLAY=/path/to/overlay.json ai-guardian scan
 AI_GUARDIAN_CONFIG_INLINE='{"preferred_ui":"headless","prompt_injection":{"action":"block"}}' ai-guardian scan
 ```
 
-#### Logging Control
+#### Logging & Debugging
 
-Suppress ai-guardian's stderr output by setting the log level:
+GuardedAgent uses Python's standard `logging` module under the `ai_guardian` namespace.
+
+##### Log level behavior
+
+| Level | Shows by default? | What you see |
+|---|---|---|
+| `WARNING+` | Yes (stderr) | Silent failures, degraded functionality |
+| `INFO` | No | Compaction events, agent stop reason, MCP setup |
+| `DEBUG` | No | Turn lifecycle, API timing, tool execution, config parsing |
+
+##### Enabling debug logs
+
+```bash
+# Option 1: environment variable
+AI_GUARDIAN_LOG_LEVEL=DEBUG python my_agent.py
+```
+
+```python
+# Option 2: in code
+import logging
+logging.getLogger("ai_guardian").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+
+# Option 3: only ai-guardian logs (suppress other libraries)
+import logging
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("ai_guardian").setLevel(logging.DEBUG)
+```
+
+**Tip:** For production, leave at default (`WARNING`). For debugging agent issues, use `DEBUG` to see per-turn API timing and tool execution details.
+
+##### Suppressing logs
 
 ```bash
 # Suppress all messages except errors
