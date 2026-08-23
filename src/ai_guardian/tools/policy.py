@@ -20,7 +20,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set, Union
 
-from ai_guardian.constants import AUGMENT_TOOL_MAP, HookEvent
+from ai_guardian.constants import (
+    AUGMENT_TOOL_MAP,
+    HookEvent,
+    antigravity_tool_name,
+)
 
 try:
     from jsonschema import Draft7Validator, ValidationError as JsonSchemaValidationError
@@ -725,6 +729,7 @@ class ToolPolicyChecker:
         try:
             tool_name = None
             tool_input = {}
+            is_antigravity = False
 
             # Claude Code format: tool_use.name + tool_use.input or tool_use.parameters
             if "tool_use" in hook_data and isinstance(hook_data["tool_use"], dict):
@@ -746,6 +751,21 @@ class ToolPolicyChecker:
                         tool_input = json.loads(hook_data["toolArgs"])
                     except (json.JSONDecodeError, TypeError):
                         tool_input = {}
+            # Antigravity: toolCall.name + toolCall.args (PascalCase arg keys)
+            elif isinstance(hook_data.get("toolCall"), dict):
+                is_antigravity = True
+                tool_call = hook_data["toolCall"]
+                tool_name = tool_call.get("name")
+                args = tool_call.get("args")
+                tool_input = dict(args) if isinstance(args, dict) else {}
+                command = tool_input.get("CommandLine")
+                if isinstance(command, str) and "command" not in tool_input:
+                    tool_input["command"] = command
+                for _key in ("TargetFile", "AbsolutePath", "FilePath", "Path"):
+                    _value = tool_input.get(_key)
+                    if isinstance(_value, str) and _value:
+                        tool_input.setdefault("file_path", _value)
+                        break
             # Alternative: direct tool_name field
             elif "tool_name" in hook_data:
                 tool_name = hook_data["tool_name"]
@@ -764,6 +784,14 @@ class ToolPolicyChecker:
                 elif effective_event in ("beforeshellexecution",):
                     tool_name = "Bash"
                     tool_input = hook_data.get("tool_input", {})
+
+            # Antigravity: map step-type tool names onto canonical names via
+            # the same helper the adapter uses, so both layers agree on the
+            # canonical name (including the mcp__server__tool rebuild).
+            # Gated on the payload shape — names like "find" and "list_dir" are
+            # generic enough to collide with other agents' tool names.
+            if is_antigravity:
+                tool_name = antigravity_tool_name(tool_name, tool_input)
 
             # Augment Code: normalize tool names and mcp: prefix
             if tool_name and tool_name in self._AUGMENT_TOOL_MAP:
@@ -1533,6 +1561,12 @@ class ToolPolicyChecker:
         ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
         if ide_override:
             return ide_override
+
+        # Antigravity detection (camelCase protojson payload)
+        if "conversationId" in hook_data and (
+            "workspacePaths" in hook_data or "toolCall" in hook_data
+        ):
+            return "antigravity"
 
         # GitHub Copilot detection
         if "toolName" in hook_data or ("timestamp" in hook_data and "cwd" in hook_data):

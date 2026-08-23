@@ -35,6 +35,7 @@ class IDEType(Enum):
     GITHUB_COPILOT = "github_copilot"  # JSON: {"permissionDecision": "allow"|"deny"}
     GEMINI_CLI = "gemini_cli"  # JSON: {"decision": "deny", "reason": str}
     CLINE = "cline"  # JSON: {"cancel": true, "reason": str}
+    ANTIGRAVITY = "antigravity"  # JSON: {"decision": "deny", "reason": str}
     KIRO = "kiro"  # Exit codes: 0=allow, 1=block; stdout→context, stderr→agent on error
     UNKNOWN = "unknown"  # Default to Claude Code format
 

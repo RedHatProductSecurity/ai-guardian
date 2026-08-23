@@ -1161,6 +1161,16 @@ def extract_file_content_from_tool(hook_data):
             if isinstance(tool, dict):
                 file_path = tool.get("file_path") or tool.get("path")
 
+        # Antigravity format: toolCall.args with PascalCase path keys
+        if not file_path and isinstance(hook_data.get("toolCall"), dict):
+            args = hook_data["toolCall"].get("args")
+            if isinstance(args, dict):
+                for key in ("TargetFile", "AbsolutePath", "FilePath", "Path"):
+                    value = args.get(key)
+                    if isinstance(value, str) and value:
+                        file_path = value
+                        break
+
         # GitHub Copilot format: toolName + toolArgs (JSON string)
         if not file_path and "toolName" in hook_data and "toolArgs" in hook_data:
             try:
@@ -1742,17 +1752,16 @@ def inject_security_only(hook_data, daemon_state=None):
         injection is not applicable (non-PROMPT event, non-Claude-Code, etc.)
     """
     try:
-        event_name = hook_data.get("hook_event_name") or hook_data.get(
-            "hookEventName", ""
-        )
-        if event_name != "UserPromptSubmit":
-            return None
-
         adapter = detect_adapter(hook_data)
-        if adapter.ide_type != IDEType.CLAUDE_CODE:
+        if adapter.ide_type not in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY):
             return None
 
         normalized = adapter.normalize_input(hook_data)
+
+        # Claude Code names the event in the payload; Antigravity does not, so
+        # the adapter's resolved event is the check that works for both.
+        if normalized.event != HookEvent.PROMPT:
+            return None
         now = datetime.now(timezone.utc)
         raw = _build_security_message(hook_data, daemon_state, now)
         if not raw:
@@ -1920,7 +1929,10 @@ def _process_hook_data(hook_data, daemon_state=None):
         # Load security instructions for systemMessage injection (#580, #584)
         # Inject only on first prompt per session + after blocks (not every prompt)
         security_message = None
-        if ide_type == IDEType.CLAUDE_CODE and hook_event == HookEvent.PROMPT:
+        if (
+            ide_type in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY)
+            and hook_event == HookEvent.PROMPT
+        ):
             try:
                 security_message = _build_security_message(hook_data, daemon_state, now)
             except Exception as e:

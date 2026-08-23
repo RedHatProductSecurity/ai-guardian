@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Antigravity CLI (`agy`) support** — new `--ide antigravity` (alias `--ide agy`) target with a hook adapter, `~/.gemini/config/hooks.json` + `mcp_config.json` setup, and tool-name mapping onto canonical names. Antigravity has no "no opinion" PreToolUse decision (an absent decision denies the call), so a clean check returns `ask`, deferring to Antigravity's own permission prompt without widening existing permissions. Its PreToolUse and PostToolUse payloads are near-identical, so generated hook commands declare `--hook-event`, stamped into the hook data to survive daemon forwarding. MCP calls arrive as `call_mcp_tool` and are rebuilt as `mcp__{server}__{tool}` so MCP restriction and `mcp__*` rules keep applying. PostToolUse fires but carries no tool output, so post-tool redaction is not available on Antigravity
+
 - **Text-as-tool-call parsing for OpenAI-compatible providers** — local models (Ollama, llama.cpp, MLX, vLLM) that write tool calls as plain text are now detected and executed automatically. The SDK extracts JSON tool-call patterns from text responses, including fenced code blocks, Python dict syntax, and multiple tool calls. Enabled by default for known local providers; opt in for others with `text_tool_parsing=True` (#2124)
 
 - **Text-as-structured-output parsing** — when `output_schema` is set and a local model returns valid JSON matching the schema as text instead of calling `submit_result`, the SDK now accepts it directly without nudging (#2124)

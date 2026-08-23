@@ -112,6 +112,60 @@ _DISPLAY_NAMES = {
 ALL_HOOK_EVENT_DISPLAY_NAMES = frozenset(_DISPLAY_NAMES.values())
 
 
+# Antigravity tool names are the lowercased CORTEX_STEP_TYPE_* enum with the
+# prefix stripped. Map the security-relevant ones to canonical Claude Code
+# names so the existing pattern/policy rules apply unchanged.
+ANTIGRAVITY_TOOL_MAP = {
+    "run_command": "Bash",
+    "shell_exec": "Bash",
+    "send_command_input": "Bash",
+    "view_file": "Read",
+    "view_code_item": "Read",
+    "view_file_outline": "Read",
+    "read_notebook": "Read",
+    "propose_code": "Edit",
+    "file_change": "Edit",
+    "edit_notebook": "NotebookEdit",
+    "write_blob": "Write",
+    "delete_directory": "Delete",
+    "list_directory": "LS",
+    "list_dir": "LS",
+    "grep_search": "Grep",
+    "code_search": "Grep",
+    "find": "Glob",
+    "find_by_name": "Glob",
+    "read_url_content": "WebFetch",
+    "open_browser_url": "WebFetch",
+    "search_web": "WebSearch",
+}
+
+
+def antigravity_tool_name(raw_name, args=None):
+    """Resolve an Antigravity step name to its canonical tool name.
+
+    MCP calls arrive as ``call_mcp_tool`` with the server and tool in the
+    arguments; they are rebuilt as ``mcp__<server>__<tool>`` so the existing
+    MCP restriction and ``mcp__*`` permission rules keep applying.
+    """
+    if not isinstance(raw_name, str) or not raw_name:
+        return raw_name
+
+    lowered = raw_name.lower()
+    if lowered in ANTIGRAVITY_MCP_STEPS:
+        args = args if isinstance(args, dict) else {}
+        server = args.get("ServerName") or args.get("server_name")
+        tool = args.get("ToolName") or args.get("tool_name")
+        if server and tool:
+            return f"mcp__{server}__{tool}"
+        return "mcp__unknown"
+
+    return ANTIGRAVITY_TOOL_MAP.get(lowered, raw_name)
+
+
+# Steps that invoke an MCP tool rather than a built-in one.
+ANTIGRAVITY_MCP_STEPS = frozenset({"call_mcp_tool", "mcp_tool"})
+
+
 AUGMENT_TOOL_MAP = {
     "launch-process": "Bash",
     "str-replace-editor": "Edit",

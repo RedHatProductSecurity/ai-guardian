@@ -186,6 +186,17 @@ def _handle_ml_command(args, ml_parser):
         return 1
 
 
+# CLI aliases that map onto a canonical IDE key.
+_IDE_ALIASES = {"agy": "antigravity"}
+
+
+def _canonical_ide(ide_type):
+    """Resolve a user-supplied --ide value to its canonical IDE key."""
+    if not ide_type:
+        return ide_type
+    return _IDE_ALIASES.get(ide_type, ide_type)
+
+
 def main():
     """Main entry point for the hook."""
     if sys.platform == "win32" and hasattr(sys.stdout, "reconfigure"):
@@ -224,8 +235,17 @@ def main():
                 "aiderdesk",
                 "openclaw",
                 "opencode",
+                "antigravity",
+                "agy",
             ],
             help="Specify IDE adapter for hook processing (auto-detected if not provided)",
+        )
+        parser.add_argument(
+            "--hook-event",
+            help=(
+                "Declare which hook event this invocation is for. Needed by "
+                "agents whose payloads do not name the event (Antigravity)."
+            ),
         )
 
         # Add subcommands
@@ -252,6 +272,8 @@ def main():
                 "aiderdesk",
                 "openclaw",
                 "opencode",
+                "antigravity",
+                "agy",
             ],
             help="Specify IDE type (auto-detected if not provided)",
         )
@@ -1455,7 +1477,7 @@ def main():
             if install_scanner is not None and len(install_scanner) == 0:
                 install_scanner = ["gitleaks"]
             success = setup_hooks(
-                ide_type=args.ide,
+                ide_type=_canonical_ide(args.ide),
                 remote_config_url=args.remote_config_url,
                 dry_run=args.dry_run,
                 force=args.force,
@@ -2251,7 +2273,9 @@ def main():
 
         # If --ide specified but no subcommand, set env var and fall through to hook mode
         if not args.command and getattr(args, "ide", None):
-            os.environ["AI_GUARDIAN_IDE_TYPE"] = args.ide
+            os.environ["AI_GUARDIAN_IDE_TYPE"] = _canonical_ide(args.ide)
+            if getattr(args, "hook_event", None):
+                os.environ["AI_GUARDIAN_HOOK_EVENT"] = args.hook_event
         elif not args.command:
             # No subcommand, no --ide — version was already handled
             return 0
@@ -2304,7 +2328,14 @@ def main():
         # Inject --ide override into hook_data so it survives daemon forwarding
         _cli_ide = os.environ.get("AI_GUARDIAN_IDE_TYPE")
         if _cli_ide and "_ide_type" not in hook_data:
-            hook_data["_ide_type"] = _cli_ide
+            hook_data["_ide_type"] = _canonical_ide(_cli_ide)
+
+        # Same treatment for the declared hook event: the daemon runs in a
+        # separate, long-lived process, so an env var would neither reach it
+        # nor stay correct across invocations.
+        _cli_event = os.environ.get("AI_GUARDIAN_HOOK_EVENT")
+        if _cli_event and "_hook_event" not in hook_data:
+            hook_data["_hook_event"] = _cli_event
 
         # Capture correlation context in the short-lived hook process. The daemon
         # may have started before this agent and therefore cannot reliably read
