@@ -1,11 +1,10 @@
 # CI: Dummy-Agent Scenario Tests
 #
-# Builds the hook-testing container image and runs all bundled scenarios
+# Builds the container image locally and runs all bundled scenarios
 # for each profile to catch regressions in hook processing before merge.
 #
-# Calls build-container.yml to build a commit-SHA-tagged base image, then
-# layers local source (src/) on top via Dockerfile.test so PRs always test
-# at HEAD with a matching base image (#1554).
+# No registry or secrets required — the base image is built from source
+# so fork PRs get full scenario coverage (#2135).
 #
 # Profiles tested: standard, strict, minimal
 # Moderator profile is excluded — action=ask auto-dismisses in headless CI,
@@ -33,16 +32,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-image:
-    name: Build Container Image
-    uses: ./.github/workflows/build-container.yml
-    with:
-      skip_legacy_mirror: true
-    secrets: inherit
-
   scenario-tests:
     name: Scenario Tests (${{ matrix.profile }})
-    needs: build-image
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -53,14 +44,31 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
-      - name: Pull base image
-        run: docker pull quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+          mkdir -p container/vendor/
+          cp dist/*.whl container/vendor/
+
+      - name: Build base image locally
+        run: |
+          WHL=$(ls container/vendor/ai_guardian-*.whl | xargs basename)
+          docker build \
+            --build-arg AI_GUARDIAN_VERSION="$WHL" \
+            -t ai-guardian-base \
+            container/
 
       - name: Build test image
         run: |
           docker build \
             -f container/Dockerfile.test \
-            --build-arg BASE_IMAGE=quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }} \
+            --build-arg BASE_IMAGE=ai-guardian-base \
             -t ai-guardian-test \
             .
 
@@ -73,23 +81,3 @@ jobs:
 
       - name: Run ${{ matrix.profile }} scenarios
         run: docker run --rm -e AI_GUARDIAN_PROFILE=${{ matrix.profile }} ai-guardian-test /sandbox/run-scenarios.sh
-
-  # --- Legacy mirror to itdove (runs in parallel with scenario-tests) ---
-  # Remove in v2.0, see #1774
-  legacy-mirror:
-    name: Legacy Mirror (itdove)
-    needs: build-image
-    runs-on: ubuntu-latest
-    steps:
-      - name: Copy to itdove legacy registry
-        env:
-          SRC_CREDS: ${{ secrets.QUAY_RPS_USERNAME }}:${{ secrets.QUAY_RPS_PASSWORD }}
-          DEST_CREDS: ${{ secrets.QUAY_USERNAME }}:${{ secrets.QUAY_PASSWORD }}
-        run: |
-          for TAG in "${{ github.sha }}"; do
-            skopeo copy --all \
-              --src-creds "$SRC_CREDS" \
-              --dest-creds "$DEST_CREDS" \
-              "docker://quay.io/redhatproductsecurity/ai-guardian:${TAG}" \
-              "docker://quay.io/itdove/ai-guardian:${TAG}"
-          done
