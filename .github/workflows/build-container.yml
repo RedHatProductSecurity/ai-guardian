@@ -16,11 +16,6 @@ on:
     branches: [main]
   push:
     tags: ['v*']
-  workflow_call:
-    inputs:
-      skip_legacy_mirror:
-        type: boolean
-        default: false
   workflow_dispatch:
     inputs:
       image_tag:
@@ -36,7 +31,7 @@ jobs:
       contents: read
 
     # For workflow_run: only run when Build Wheel succeeded.
-    # For push/dispatch/workflow_call (via scenario-tests): always run.
+    # For push/dispatch: always run.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
 
     steps:
@@ -65,11 +60,6 @@ jobs:
             echo "wheel_source=build" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
 
-          else
-            # workflow_call (from scenario-tests) — use commit SHA
-            echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
-            echo "wheel_source=build" >> "$GITHUB_OUTPUT"
-            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Checkout code
@@ -177,11 +167,10 @@ jobs:
       skip: ${{ steps.params.outputs.skip }}
 
   # --- Legacy mirror to itdove (transition period — remove in v2.0, see #1774) ---
-  # Callers pass skip_legacy_mirror: true when they run their own mirror job.
   legacy-mirror:
     name: Legacy Mirror (itdove)
     needs: build-and-push
-    if: needs.build-and-push.outputs.skip != 'true' && !inputs.skip_legacy_mirror
+    if: needs.build-and-push.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Copy to itdove legacy registry

@@ -313,7 +313,6 @@ jobs:
   scenario-tests:
     name: Scenario Tests
     uses: ./.github/workflows/scenario-tests.yml
-    secrets: inherit
 
   config-validation:
     name: Config Validation
