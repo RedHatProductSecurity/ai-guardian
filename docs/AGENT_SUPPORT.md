@@ -53,26 +53,28 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 
 Coverage per agent depends on which hooks are available. This table shows representative agents across the enforcement spectrum: full hooks + MCP, full hooks only, partial hooks, and MCP-only.
 
+Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
+
 Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
-| Violation Type | Requires | Claude Code | Cursor | Copilot | Junie (MCP) |
-|---|---|---|---|---|---|
-| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Advisory |
-| secret_redaction | Post | Enforce | Enforce | Enforce | No |
-| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| directory_blocking | Pre | Enforce | Enforce | Enforce | Advisory |
-| tool_permission | Pre | Enforce | Enforce | Enforce | No |
-| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Advisory |
-| config_file_exfil | Pre | Enforce | Enforce | Enforce | No |
-| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| image_secret | Pre | Caution | Caution | Caution | No |
-| image_pii | Pre | Caution | Caution | Caution | No |
-| offensive_language | Pre+Post | Enforce | Enforce | Partial | Advisory |
-| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Advisory |
+| Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
+|---|---|---|---|---|---|---|
+| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
+| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| tool_permission | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| config_file_exfil | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| image_secret | Pre | Caution | Caution | Caution | Caution | No |
+| image_pii | Pre | Caution | Caution | Caution | Caution | No |
+| offensive_language | Pre+Post | Enforce | Enforce | Partial | Partial | Advisory |
+| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Enforce | Advisory |
 
 **Legend:**
 
@@ -265,12 +267,12 @@ Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guar
 
 Each agent uses different event names. The adapter layer normalizes these.
 
-| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush |
-|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|
-| Session start | `SessionStart` | N/A | N/A | N/A | `SessionStart` | N/A | N/A | N/A | N/A |
-| Before tool | `PreToolUse` | `preToolUse` | `beforeShellExecution` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` |
-| After tool | `PostToolUse` | `postToolUse` | `postToolUse` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) |
-| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) |
+| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush | Antigravity |
+|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|-------------|
+| Session start | `SessionStart` | N/A | N/A | N/A | `SessionStart` | N/A | N/A | N/A | N/A | N/A |
+| Before tool | `PreToolUse` | `preToolUse` | `beforeShellExecution` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` | `PreToolUse` |
+| After tool | `PostToolUse` | `postToolUse` | `postToolUse` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) | `PostToolUse` |
+| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) | `PreInvocation` |
 
 ## Response Format Differences
 
@@ -286,6 +288,7 @@ Each agent uses different event names. The adapter layer normalizes these.
 | Codex | Same as Claude Code | Same as Claude Code |
 | OpenCode | Same as Claude Code | Same as Claude Code |
 | Crush | Same as Claude Code | Same as Claude Code |
+| Antigravity CLI | Flat JSON `decision` field (required — an absent decision denies) | `{"decision": "deny", "reason": "..."}`; a clean check returns `{"decision": "ask"}` |
 
 ## Agent-Facing Message Delivery
 
@@ -400,6 +403,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Augment Code | `~/.augment/settings.json` |
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
+| Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |
 | Junie | `.junie/guidelines` (MCP only) |
 
 ## Per-Agent Deep-Dive Guides

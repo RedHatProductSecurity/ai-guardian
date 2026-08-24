@@ -42,6 +42,16 @@ class TestDetection:
         data = {"hook_event_name": "BeforeTool", "transcript_path": "/t.jsonl"}
         assert not isinstance(detect_adapter(data), AntigravityAdapter)
 
+    def test_does_not_claim_payloads_that_name_their_event(self):
+        # AntigravityAdapter is first in the detection order; a future agent
+        # reusing conversationId but naming its event must not be captured.
+        data = {
+            "conversationId": "c",
+            "workspacePaths": ["/w"],
+            "hook_event_name": "PreToolUse",
+        }
+        assert not isinstance(detect_adapter(data), AntigravityAdapter)
+
     @pytest.mark.parametrize("alias", ["antigravity", "agy"])
     def test_ide_flag_selects_adapter(self, alias):
         data = {"_ide_type": alias, "hook_event_name": "PreToolUse"}

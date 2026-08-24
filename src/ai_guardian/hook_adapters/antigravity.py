@@ -83,6 +83,11 @@ class AntigravityAdapter(HookAdapter):
     def can_handle(cls, hook_data: Dict) -> bool:
         if "conversationId" not in hook_data:
             return False
+        # Defensive: a payload naming its own event is not Antigravity's, even
+        # if a future agent also adopts conversationId.  This adapter is first
+        # in the detection order, so it must not claim such payloads.
+        if "hook_event_name" in hook_data or "hookEventName" in hook_data:
+            return False
         return "workspacePaths" in hook_data or "toolCall" in hook_data
 
     # -- Input normalization --
