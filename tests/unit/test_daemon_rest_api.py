@@ -711,6 +711,8 @@ class TestAuthTokenGeneration:
     """Tests for auto-generated auth token (#2143)."""
 
     def test_ensure_auth_token_generates_file(self, tmp_path):
+        import sys
+
         from ai_guardian.daemon.server import DaemonServer
 
         token_path = tmp_path / "daemon.token"
@@ -723,9 +725,9 @@ class TestAuthTokenGeneration:
         assert token_path.exists()
         assert len(token) > 20
         assert token_path.read_text().strip() == token
-        # Owner-only permissions
-        mode = oct(token_path.stat().st_mode & 0o777)
-        assert mode == "0o600"
+        if sys.platform != "win32":
+            mode = oct(token_path.stat().st_mode & 0o777)
+            assert mode == "0o600"
 
     def test_ensure_auth_token_reuses_existing(self, tmp_path):
         from ai_guardian.daemon.server import DaemonServer
