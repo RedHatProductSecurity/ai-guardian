@@ -1136,6 +1136,56 @@ class TestRestApiHostResolution:
                 host = self._run_start_rest_api(server)
         assert host == "0.0.0.0"
 
+    def test_podman_container_detection(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        monkeypatch.delenv("TOOLBOX_PATH", raising=False)
+        monkeypatch.delenv("DISTROBOX", raising=False)
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+
+        def fake_exists(p):
+            return p == "/run/.containerenv"
+
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", fake_exists):
+                host = self._run_start_rest_api(server)
+        assert host == "0.0.0.0"
+
+    def test_toolbox_container_binds_localhost(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        monkeypatch.setenv("TOOLBOX_PATH", "/usr/bin/toolbox")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+
+        def fake_exists(p):
+            return p == "/run/.containerenv"
+
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", fake_exists):
+                host = self._run_start_rest_api(server)
+        assert host == "127.0.0.1"
+
+    def test_distrobox_container_binds_localhost(self, short_state_dir, monkeypatch):
+        monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
+        monkeypatch.delenv("TOOLBOX_PATH", raising=False)
+        monkeypatch.setenv("DISTROBOX", "1")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+
+        def fake_exists(p):
+            return p == "/run/.containerenv"
+
+        with mock.patch(
+            "ai_guardian.config.loaders._load_config_file",
+            return_value=(None, None),
+        ):
+            with mock.patch("os.path.exists", fake_exists):
+                host = self._run_start_rest_api(server)
+        assert host == "127.0.0.1"
+
     def test_env_var_with_container_detection(self, short_state_dir, monkeypatch):
         """Env var takes precedence over container auto-detection."""
         monkeypatch.setenv("AI_GUARDIAN_REST_HOST", "192.168.1.100")
