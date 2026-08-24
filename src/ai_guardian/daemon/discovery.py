@@ -194,11 +194,24 @@ class DaemonDiscovery:
         except (json.JSONDecodeError, OSError) as e:
             logger.debug("Failed to read config: %s", e)
 
+        local_auth_token = None
+        try:
+            from ai_guardian.daemon import get_auth_token_path
+
+            token_path = get_auth_token_path()
+            if token_path.exists():
+                token_text = token_path.read_text(encoding="utf-8").strip()
+                if token_text:
+                    local_auth_token = token_text
+        except Exception:
+            pass  # intentionally silent — optional
+
         target = DaemonTarget(
             name=name,
             runtime="local",
             socket_path=str(get_socket_path()),
             config_exists=True,
+            auth_token=local_auth_token,
         )
 
         local_pid = 0
@@ -391,6 +404,8 @@ class DaemonDiscovery:
                 if exec_name:
                     name = exec_name
 
+            container_token = self._sdk_exec_auth_token(c)
+
             target = DaemonTarget(
                 name=name,
                 runtime="container",
@@ -400,6 +415,7 @@ class DaemonDiscovery:
                 container_id=container_id,
                 container_engine=engine,
                 container_name=orig_container_name,
+                auth_token=container_token,
                 last_seen=time.monotonic(),
             )
             targets.append(target)
@@ -455,8 +471,53 @@ class DaemonDiscovery:
         return None
 
     @staticmethod
+    def _sdk_exec_auth_token(container, timeout=3):
+        """Read auto-generated auth token from container via SDK exec_run."""
+        try:
+            exit_code, output = container.exec_run(
+                [
+                    "cat",
+                    "/root/.local/state/ai-guardian/daemon.token",
+                ],
+                demux=False,
+            )
+            if exit_code == 0:
+                token = output.decode("utf-8", errors="replace").strip()
+                if token:
+                    return token
+        except Exception:
+            pass  # intentionally silent — best-effort operation
+
+        try:
+            exit_code, output = container.exec_run(
+                [
+                    "python3",
+                    "-c",
+                    "from pathlib import Path; "
+                    "import os; "
+                    "d=os.environ.get('XDG_STATE_HOME') or "
+                    "str(Path.home()/'.local'/'state'); "
+                    "p=Path(d)/'ai-guardian'/'daemon.token'; "
+                    "print(p.read_text().strip() if p.exists() else '')",
+                ],
+                demux=False,
+            )
+            if exit_code == 0:
+                token = output.decode("utf-8", errors="replace").strip()
+                if token:
+                    return token
+        except Exception:
+            pass  # intentionally silent — best-effort operation
+
+        return None
+
+    @staticmethod
     def _probe_daemon(port, host="127.0.0.1", timeout=1.0):
-        """Probe a daemon's REST API. Returns status dict or None if unreachable."""
+        """Probe a daemon's REST API via /api/health (unauthenticated).
+
+        Returns dict with at least {"status", "paused", "name"} or None
+        if unreachable.
+        """
         import socket as _socket
 
         try:
@@ -481,7 +542,7 @@ class DaemonDiscovery:
                         return None
                 except ValueError:
                     pass  # intentionally silent — daemon comm best-effort
-            url = f"http://{host}:{port}/api/status"
+            url = f"http://{host}:{port}/api/health"
             with urlopen(url, timeout=timeout) as resp:
                 return json_mod.loads(resp.read().decode("utf-8"))
         except Exception:
@@ -560,6 +621,8 @@ class DaemonDiscovery:
 
                 pod_status = "running" if phase == "Running" else "unknown"
 
+                k8s_token = self._kubectl_exec_auth_token(pod_name, namespace)
+
                 target = DaemonTarget(
                     name=name,
                     runtime="kubernetes",
@@ -567,6 +630,7 @@ class DaemonDiscovery:
                     port=rest_port,
                     pod_name=pod_name,
                     namespace=namespace,
+                    auth_token=k8s_token,
                     last_seen=time.monotonic(),
                 )
                 targets.append(target)
@@ -575,6 +639,33 @@ class DaemonDiscovery:
         except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as e:
             logger.debug("Kubernetes discovery error: %s", e)
             return []
+
+    @staticmethod
+    def _kubectl_exec_auth_token(pod_name, namespace):
+        """Read auto-generated auth token from K8s pod via kubectl exec."""
+        try:
+            result = subprocess.run(
+                [
+                    "kubectl",
+                    "exec",
+                    pod_name,
+                    "-n",
+                    namespace,
+                    "--",
+                    "cat",
+                    "/root/.local/state/ai-guardian/daemon.token",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            if result.returncode == 0:
+                token = result.stdout.strip()
+                if token:
+                    return token
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # intentionally silent — best-effort operation
+        return None
 
     def discover_manual(self) -> List[DaemonTarget]:
         """Load manually configured daemon targets from tray-targets.json."""

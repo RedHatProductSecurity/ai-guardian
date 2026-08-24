@@ -1,7 +1,9 @@
 """Tests for daemon REST API."""
 
 import json
+import os
 from unittest import mock
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import pytest
@@ -613,8 +615,143 @@ class TestRedactEndpoint:
         body = json.dumps({}).encode("utf-8")
         req = Request(url, data=body, method="POST")
         req.add_header("Content-Type", "application/json")
-        from urllib.error import HTTPError
 
         with pytest.raises(HTTPError) as exc_info:
             urlopen(req, timeout=5)
         assert exc_info.value.code == 400
+
+
+class TestAuthEnforcement:
+    """Tests for REST API authentication (#2143)."""
+
+    @pytest.fixture
+    def authed_api(self):
+        """REST API with auth token enabled."""
+        state = MockDaemonState()
+        api = DaemonRestAPI(
+            state=state, host="127.0.0.1", port=0, auth_token="test-secret-42"
+        )
+        port = api.start()
+        yield api, port, state
+        api.stop()
+
+    def test_health_bypasses_auth(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/health"
+        with urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["status"] == "ok"
+
+    def test_health_includes_paused_and_name(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/health"
+        with urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert "paused" in data
+        assert "name" in data
+
+    def test_get_status_rejected_without_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/status"
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(url, timeout=5)
+        assert exc_info.value.code == 401
+
+    def test_post_pause_rejected_without_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/pause"
+        body = json.dumps({"minutes": 5}).encode("utf-8")
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 401
+
+    def test_get_status_with_valid_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/status"
+        req = Request(url, method="GET")
+        req.add_header("Authorization", "Bearer test-secret-42")
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["running"] is True
+
+    def test_post_pause_with_valid_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/pause"
+        body = json.dumps({"minutes": 5}).encode("utf-8")
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", "Bearer test-secret-42")
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["status"] == "paused"
+
+    def test_wrong_token_rejected(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/status"
+        req = Request(url, method="GET")
+        req.add_header("Authorization", "Bearer wrong-token")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 401
+
+    def test_delete_rejected_without_token(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/config"
+        body = json.dumps({"section": "secret_scanning"}).encode("utf-8")
+        req = Request(url, data=body, method="DELETE")
+        req.add_header("Content-Type", "application/json")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 401
+
+
+class TestAuthTokenGeneration:
+    """Tests for auto-generated auth token (#2143)."""
+
+    def test_ensure_auth_token_generates_file(self, tmp_path):
+        from ai_guardian.daemon.server import DaemonServer
+
+        token_path = tmp_path / "daemon.token"
+        with mock.patch(
+            "ai_guardian.daemon.get_auth_token_path",
+            return_value=token_path,
+        ):
+            token = DaemonServer._ensure_auth_token()
+
+        assert token_path.exists()
+        assert len(token) > 20
+        assert token_path.read_text().strip() == token
+        # Owner-only permissions
+        mode = oct(token_path.stat().st_mode & 0o777)
+        assert mode == "0o600"
+
+    def test_ensure_auth_token_reuses_existing(self, tmp_path):
+        from ai_guardian.daemon.server import DaemonServer
+
+        token_path = tmp_path / "daemon.token"
+        token_path.write_text("existing-token-xyz")
+
+        with mock.patch(
+            "ai_guardian.daemon.get_auth_token_path",
+            return_value=token_path,
+        ):
+            token = DaemonServer._ensure_auth_token()
+
+        assert token == "existing-token-xyz"
+
+    def test_ensure_auth_token_regenerates_empty_file(self, tmp_path):
+        from ai_guardian.daemon.server import DaemonServer
+
+        token_path = tmp_path / "daemon.token"
+        token_path.write_text("")
+
+        with mock.patch(
+            "ai_guardian.daemon.get_auth_token_path",
+            return_value=token_path,
+        ):
+            token = DaemonServer._ensure_auth_token()
+
+        assert len(token) > 20
+        assert token_path.read_text().strip() == token

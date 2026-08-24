@@ -38,7 +38,12 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/health":
-            self._send_json({"status": "ok"})
+            state = self.server.daemon_state
+            stats = state.get_stats() if state else {}
+            result = {"status": "ok", "paused": stats.get("paused", False)}
+            name = getattr(self.server, "instance_name", None) or "ai-guardian"
+            result["name"] = name
+            self._send_json(result)
             return
         if not self._check_auth():
             return
