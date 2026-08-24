@@ -3083,13 +3083,8 @@ class TestOpenCodeMcpConfig:
         legacy.write_text('{"mcp": {}}')
 
         with mock.patch(
-            "ai_guardian.setup.mcp._MCP_IDE_CONFIGS",
-            {
-                "opencode": {
-                    "config_file": str(opencode_dir / "opencode.jsonc"),
-                    "config_key": "mcp",
-                },
-            },
+            "ai_guardian.setup.mcp._resolve_opencode_config",
+            return_value=legacy,
         ):
             with mock.patch(
                 "ai_guardian.setup.mcp._resolve_binary_path",
@@ -3103,25 +3098,20 @@ class TestOpenCodeMcpConfig:
         config = json.loads(legacy.read_text())
         assert "ai-guardian" in config["mcp"]
 
-    def test_prefers_jsonc_when_both_exist(self, tmp_path):
-        """When both .json and .jsonc exist, write to .jsonc."""
+    def test_prefers_json_when_both_exist(self, tmp_path):
+        """When both .json and .jsonc exist, write to .json."""
         from ai_guardian.setup import _install_mcp_config
 
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
-        legacy = opencode_dir / "opencode.json"
-        legacy.write_text('{"old": true}')
+        json_file = opencode_dir / "opencode.json"
+        json_file.write_text('{"mcp": {}}')
         jsonc = opencode_dir / "opencode.jsonc"
-        jsonc.write_text('{"mcp": {}}')
+        jsonc.write_text('{"old": true}')
 
         with mock.patch(
-            "ai_guardian.setup.mcp._MCP_IDE_CONFIGS",
-            {
-                "opencode": {
-                    "config_file": str(jsonc),
-                    "config_key": "mcp",
-                },
-            },
+            "ai_guardian.setup.mcp._resolve_opencode_config",
+            return_value=json_file,
         ):
             with mock.patch(
                 "ai_guardian.setup.mcp._resolve_binary_path",
@@ -3129,8 +3119,10 @@ class TestOpenCodeMcpConfig:
             ):
                 _install_mcp_config(mock.MagicMock(), "opencode")
 
-        config = json.loads(jsonc.read_text())
+        config = json.loads(json_file.read_text())
         assert "ai-guardian" in config["mcp"]
+        # jsonc untouched
+        assert json.loads(jsonc.read_text()) == {"old": True}
 
     def test_creates_jsonc_when_neither_exists(self, tmp_path):
         """When no config exists, create opencode.jsonc."""
@@ -3138,15 +3130,11 @@ class TestOpenCodeMcpConfig:
 
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
+        jsonc_path = opencode_dir / "opencode.jsonc"
 
         with mock.patch(
-            "ai_guardian.setup.mcp._MCP_IDE_CONFIGS",
-            {
-                "opencode": {
-                    "config_file": str(opencode_dir / "opencode.jsonc"),
-                    "config_key": "mcp",
-                },
-            },
+            "ai_guardian.setup.mcp._resolve_opencode_config",
+            return_value=jsonc_path,
         ):
             with mock.patch(
                 "ai_guardian.setup.mcp._resolve_binary_path",
@@ -3154,7 +3142,6 @@ class TestOpenCodeMcpConfig:
             ):
                 _install_mcp_config(mock.MagicMock(), "opencode")
 
-        jsonc_path = opencode_dir / "opencode.jsonc"
         assert jsonc_path.exists()
         config = json.loads(jsonc_path.read_text())
         assert "ai-guardian" in config["mcp"]
@@ -3776,3 +3763,207 @@ class TestWindowsSetup:
                 result = setup.check_hooks_configured(hooks_dir, "cline")
 
         assert result is True
+
+
+class TestOpenCodePluginRegistration:
+    """Tests for OpenCode plugin registration in opencode.json (#2139)."""
+
+    def _mock_resolve(self, config_file):
+        return mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config",
+            return_value=config_file,
+        )
+
+    def test_registers_plugin_in_existing_json(self, tmp_path):
+        """Plugin path added to plugins array in existing opencode.json."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.json"
+        config_file.write_text('{"mcp": {}}')
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        config = json.loads(config_file.read_text())
+        assert str(plugin_file) in config["plugins"]
+
+    def test_registers_plugin_in_jsonc(self, tmp_path):
+        """When only opencode.jsonc exists, register plugin there."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.jsonc"
+        config_file.write_text('{"mcp": {}}')
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        config = json.loads(config_file.read_text())
+        assert str(plugin_file) in config["plugins"]
+
+    def test_creates_jsonc_when_neither_exists(self, tmp_path):
+        """When no config exists, create opencode.jsonc with plugins."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.jsonc"
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        assert config_file.exists()
+        config = json.loads(config_file.read_text())
+        assert str(plugin_file) in config["plugins"]
+
+    def test_idempotent_no_duplicates(self, tmp_path):
+        """Running setup twice does not duplicate plugin entry."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.json"
+        config_file.write_text("{}")
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        config = json.loads(config_file.read_text())
+        assert config["plugins"].count(str(plugin_file)) == 1
+
+    def test_preserves_existing_plugins(self, tmp_path):
+        """Existing plugins array entries preserved."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.json"
+        config_file.write_text(json.dumps({"plugins": ["/some/other-plugin.ts"]}))
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        config = json.loads(config_file.read_text())
+        assert "/some/other-plugin.ts" in config["plugins"]
+        assert str(plugin_file) in config["plugins"]
+
+    def test_dry_run_returns_message(self, tmp_path):
+        """Dry run returns registration message without modifying config."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.json"
+        config_file.write_text("{}")
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            msg = setup._register_opencode_plugin(
+                plugin_file, plugins_dir, dry_run=True
+            )
+
+        assert "Register plugin in" in msg
+        assert json.loads(config_file.read_text()) == {}
+
+    def test_preserves_existing_config_keys(self, tmp_path):
+        """Existing config keys (mcp, theme, etc.) preserved."""
+        opencode_dir = tmp_path / ".config" / "opencode"
+        plugins_dir = opencode_dir / "plugins"
+        plugins_dir.mkdir(parents=True)
+        config_file = opencode_dir / "opencode.json"
+        config_file.write_text(
+            json.dumps({"mcp": {"some-server": {}}, "theme": "dark"})
+        )
+
+        plugin_file = plugins_dir / "ai-guardian.ts"
+        plugin_file.write_text("// plugin")
+
+        setup = IDESetup()
+        with self._mock_resolve(config_file):
+            setup._register_opencode_plugin(plugin_file, plugins_dir)
+
+        config = json.loads(config_file.read_text())
+        assert config["mcp"] == {"some-server": {}}
+        assert config["theme"] == "dark"
+        assert str(plugin_file) in config["plugins"]
+
+
+class TestResolveOpenCodeConfig:
+    """Tests for _resolve_opencode_config shared helper (#2139)."""
+
+    def _with_home(self, monkeypatch, tmp_path):
+        """Set HOME/USERPROFILE to tmp_path for cross-platform expanduser."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
+    def test_prefers_json_when_both_exist(self, tmp_path, monkeypatch):
+        """When both .json and .jsonc exist, prefer .json."""
+        from ai_guardian.setup.utils import _resolve_opencode_config
+
+        self._with_home(monkeypatch, tmp_path)
+        opencode_dir = tmp_path / ".config" / "opencode"
+        opencode_dir.mkdir(parents=True)
+        json_file = opencode_dir / "opencode.json"
+        json_file.write_text("{}")
+        (opencode_dir / "opencode.jsonc").write_text("{}")
+
+        result = _resolve_opencode_config()
+        assert result == json_file
+
+    def test_falls_back_to_jsonc(self, tmp_path, monkeypatch):
+        """When only .jsonc exists, use it."""
+        from ai_guardian.setup.utils import _resolve_opencode_config
+
+        self._with_home(monkeypatch, tmp_path)
+        opencode_dir = tmp_path / ".config" / "opencode"
+        opencode_dir.mkdir(parents=True)
+        jsonc_file = opencode_dir / "opencode.jsonc"
+        jsonc_file.write_text("{}")
+
+        result = _resolve_opencode_config()
+        assert result == jsonc_file
+
+    def test_creates_jsonc_path_when_none_exist(self, tmp_path, monkeypatch):
+        """When neither exists, return .jsonc path."""
+        from ai_guardian.setup.utils import _resolve_opencode_config
+
+        self._with_home(monkeypatch, tmp_path)
+        opencode_dir = tmp_path / ".config" / "opencode"
+        opencode_dir.mkdir(parents=True)
+
+        result = _resolve_opencode_config()
+        assert result == opencode_dir / "opencode.jsonc"
+        assert not result.exists()
+
+    def test_prefers_json_over_jsonc(self, tmp_path, monkeypatch):
+        """Only .json exists — returns .json, not .jsonc."""
+        from ai_guardian.setup.utils import _resolve_opencode_config
+
+        self._with_home(monkeypatch, tmp_path)
+        opencode_dir = tmp_path / ".config" / "opencode"
+        opencode_dir.mkdir(parents=True)
+        json_file = opencode_dir / "opencode.json"
+        json_file.write_text("{}")
+
+        result = _resolve_opencode_config()
+        assert result == json_file

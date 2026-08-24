@@ -191,3 +191,16 @@ def _strip_jsonc_comments(text: str) -> str:
     stripped = "".join(result)
     stripped = re.sub(r",\s*([}\]])", r"\1", stripped)
     return stripped
+
+
+def _resolve_opencode_config() -> Path:
+    """Find existing OpenCode config or return default path.
+
+    Priority: opencode.json (if exists) > opencode.jsonc (if exists) > new opencode.jsonc.
+    """
+    base = Path("~/.config/opencode").expanduser()
+    for name in ("opencode.json", "opencode.jsonc"):
+        candidate = base / name
+        if candidate.exists():
+            return candidate
+    return base / "opencode.jsonc"

@@ -4,7 +4,11 @@ import json
 import logging
 from pathlib import Path
 
-from ai_guardian.setup.utils import _resolve_binary_path, _strip_jsonc_comments
+from ai_guardian.setup.utils import (
+    _resolve_binary_path,
+    _resolve_opencode_config,
+    _strip_jsonc_comments,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -114,13 +118,10 @@ def _install_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
     if not config_file:
         return
 
-    config_path = Path(config_file).expanduser()
-
-    # OpenCode: prefer existing opencode.json over creating opencode.jsonc
-    if ide_type == "opencode" and config_path.suffix == ".jsonc":
-        legacy_path = config_path.with_suffix(".json")
-        if legacy_path.exists() and not config_path.exists():
-            config_path = legacy_path
+    if ide_type == "opencode":
+        config_path = _resolve_opencode_config()
+    else:
+        config_path = Path(config_file).expanduser()
 
     if dry_run:
         print(f"  MCP: Would add ai-guardian MCP server to {config_path}")
