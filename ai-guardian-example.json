@@ -512,6 +512,20 @@
     "_aiguard_note": "# ai-guardian:allow on a line suppresses all ai-guardian checks including Bandit."
   },
 
+  "_comment_secret_redaction": "Redact secrets from tool outputs instead of blocking (NEW in v1.5.0, Phase 4)",
+  "_comment_secret_redaction2": "When enabled, detected secrets are replaced with [REDACTED:type] placeholders instead of blocking the tool call",
+  "secret_redaction": {
+    "enabled": true,
+    "action": "warn",
+    "_action_options": ["block", "warn", "log-only"],
+    "preserve_format": true,
+    "_preserve_format_note": "Keep surrounding context intact, only replace the secret value",
+    "log_redactions": true,
+    "_log_redactions_note": "Log each redaction event to violations.jsonl for audit",
+    "additional_patterns": [],
+    "_additional_patterns_note": "Extra regex patterns for custom secret types beyond built-in detection"
+  },
+
   "scan_pii": {
     "_comment": "PII detection for GDPR/CCPA compliance (v1.6.0+, Phase 2 in v1.8.0)",
     "_comment2": "Scans user prompts, file reads, and tool outputs for personally identifiable information",
@@ -1113,6 +1127,35 @@
   "_comment_on_scan_error3": "'block': block operation if any scanner fails (fail-closed, for strict compliance)",
   "on_scan_error": "allow",
 
+  "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
+  "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in TUI/web console",
+  "violation_logging": {
+    "enabled": true,
+    "max_entries": 1000,
+    "_max_entries_note": "Maximum entries in violations.jsonl before oldest are rotated out",
+    "retention_days": 30,
+    "_retention_days_note": "Days to keep violation entries before cleanup",
+    "log_types": [
+      "tool_permission",
+      "directory_blocking",
+      "secret_detected",
+      "secret_redaction",
+      "prompt_injection",
+      "jailbreak_detected",
+      "ssrf_blocked",
+      "config_file_exfil",
+      "pii_detected",
+      "secret_in_transcript",
+      "pii_in_transcript",
+      "prompt_injection_in_transcript",
+      "annotation_suppressed",
+      "image_secret_detected",
+      "image_pii_detected",
+      "supply_chain"
+    ],
+    "_log_types_note": "Which violation types to log. Remove types to suppress specific categories."
+  },
+
   "_comment_security_instructions": "Security rule injection into AI context (v1.7.0 #580, v1.8.0 #584)",
   "_comment_security_instructions2": "Injects 'never bypass' rules via systemMessage on first prompt per session + re-injects after blocks",
   "_comment_security_instructions3": "Default: true. Disable only for ai-guardian development (the AI needs to modify security files)",
@@ -1186,6 +1229,13 @@
           "_comment_example_stdio": "Stdio transport: { \"command\": \"python\", \"args\": [\"-m\", \"my_mcp_server\"], \"env\": {\"API_KEY_ENV\": \"MY_API_KEY\"}, \"timeout\": 60 }",
           "_comment_example_sse": "SSE transport: { \"url\": \"https://mcp.internal/sse\", \"headers\": {\"Authorization\": \"Bearer ...\"}, \"startup_timeout\": 15 }",
           "_comment_trust": "trust: 'trusted' skips scanning results, 'check' (default) scans results, 'untrusted' scans results"
+        },
+        "_comment_hooks": "Config-driven shell hooks around agent callbacks (NEW in v1.17.0, #2087). Each hook point can have pre_command and post_command.",
+        "hooks": {
+          "_comment_pre_run": "Runs before agent loop starts. Env: AI_GUARDIAN_AGENT_NAME, AI_GUARDIAN_MODEL",
+          "_comment_post_run": "Runs after agent loop ends. Env: AI_GUARDIAN_STOP_REASON, AI_GUARDIAN_TURNS",
+          "_comment_between_turns": "Runs between each agent turn. Env: AI_GUARDIAN_TURN_NUMBER",
+          "_comment_example": "{ \"pre_run\": { \"pre_command\": \"echo Starting agent\" }, \"post_run\": { \"post_command\": \"curl -X POST https://webhook/done\" } }"
         }
       }
     }

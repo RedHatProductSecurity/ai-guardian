@@ -2158,3 +2158,132 @@ result = agent.run("task")
 ```
 
 Default trace directory: `~/.local/state/ai-guardian/traces/`. Use `trace_path_fn` for custom organization.
+
+---
+
+## SDK Enhancements (v1.17.0)
+
+### How do I use GuardedAgent with a local model (Ollama, llama.cpp, vLLM)?
+
+```python
+from ai_guardian.sdk import guarded
+
+client = guarded(provider="ollama")
+agent = client.agent(model="llama3.1")
+result = agent.run("Summarize this document")
+```
+
+Local providers auto-enable `text_tool_parsing` — the SDK detects tool calls written as plain text and executes them. Set `text_tool_parsing=False` to disable.
+
+### How do I use GuardedAgent with Google Gemini?
+
+```python
+from ai_guardian.sdk import guarded
+
+client = guarded(provider="gemini")
+agent = client.agent(model="gemini-2.0-flash")
+result = agent.run("Analyze this code")
+```
+
+Requires `google-genai` package. Set `GOOGLE_API_KEY` or use Vertex AI with `provider="vertex"`.
+
+### How do I add MCP servers to GuardedAgent?
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "my-agent": {
+        "mcpServers": {
+          "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            "trust_level": "sandboxed"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+MCP tools appear as `mcp__filesystem__read_file`. Use `defer_loading: true` to delay server startup until first use. Requires Python >= 3.10.
+
+### How do I set API call timeout for GuardedAgent?
+
+```python
+agent = client.agent(model="llama3.1", api_timeout=120)
+```
+
+Or via config:
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": { "api_timeout": 120 }
+    }
+  }
+}
+```
+
+Defaults: 300s for cloud providers, 600s for local. On timeout: retries once, then stops with `stop_reason='timeout'`.
+
+### How do I limit schema nudge retries?
+
+```python
+agent = client.agent(model="llama3.1", max_schema_nudges=2)
+```
+
+When `output_schema` is set and the model fails to produce valid output after N nudges, the agent stops with `stop_reason='max_schema_nudges'` instead of consuming all `max_turns`.
+
+### How do I run shell hooks at agent lifecycle points?
+
+```json
+{
+  "sdk": {
+    "hooks": {
+      "pre_run": "echo 'Agent starting' >> /tmp/agent.log",
+      "between_turns": "curl -s localhost:9090/metrics",
+      "post_run": "echo 'Agent done' >> /tmp/agent.log"
+    }
+  }
+}
+```
+
+Hook commands receive agent context as environment variables (`AI_GUARDIAN_AGENT_NAME`, `AI_GUARDIAN_TURN`, etc.).
+
+### How do I use inline annotations to suppress false positives?
+
+Add a comment on the line that triggers a false positive:
+
+```python
+api_key = "test-key-not-real"  # ai-guardian:ignore secret_scanning
+```
+
+For multi-line blocks:
+
+```python
+# ai-guardian:ignore-start secret_scanning
+TEST_KEYS = {
+    "aws": "AKIAIOSFODNN7EXAMPLE",
+    "github": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+}
+# ai-guardian:ignore-end
+```
+
+Also available via `ai-guardian init-project --annotate` to scan and auto-annotate existing code.
+
+### How do I configure `strip_chat_tokens` for local models?
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": { "strip_chat_tokens": true }
+    }
+  }
+}
+```
+
+Strips leftover chat template tokens (`<|im_start|>`, `<|assistant|>`, etc.) from local model output before processing. Enabled by default for Ollama and llama.cpp providers.

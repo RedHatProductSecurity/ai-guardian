@@ -394,7 +394,7 @@ with client.messages.stream(
 | Bedrock | Verified | Full | |
 | OpenAI | Verified | Full | |
 | Azure OpenAI | Untested | Expected full | Same API as OpenAI |
-| Ollama | In progress | Model-dependent | Needs content normalization (#2083) |
+| Ollama | Verified | Model-dependent | Content normalization included (#2083) |
 | llama.cpp | Untested | Limited | Needs testing |
 | vLLM | Untested | Expected full | Needs testing |
 | Foundry | Untested | Unknown | New provider |

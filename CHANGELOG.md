@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.0] - 2026-08-24
+
 ### Added
 
 - **Text-as-tool-call parsing for OpenAI-compatible providers** — local models (Ollama, llama.cpp, MLX, vLLM) that write tool calls as plain text are now detected and executed automatically. The SDK extracts JSON tool-call patterns from text responses, including fenced code blocks, Python dict syntax, and multiple tool calls. Enabled by default for known local providers; opt in for others with `text_tool_parsing=True` (#2124)
@@ -19,7 +21,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
 
+- **`defer_loading` for MCP servers** — delay MCP server startup until the agent first needs a tool from that server, reducing initial agent startup time when servers are slow to initialize. Configure per-server with `defer_loading: true` in `mcpServers` config (#2090)
+
+- **Google Gemini integration** — new `gemini` provider for GuardedAgent enables using Google Gemini models with full security scanning. Supports both `google-genai` SDK and Vertex AI. Provider-specific content normalization handles Gemini's message format. Configure with `provider='gemini'` or `AI_GUARDIAN_SDK_PROVIDER=gemini` (#1865)
+
+- **Config-driven shell hooks for agent callbacks** — new `sdk.hooks` config section allows running shell commands at agent lifecycle points (`on_start`, `on_turn`, `on_stop`). Commands receive agent context as environment variables. Useful for logging, notifications, and custom integrations (#2087)
+
+- **Inline code annotations for false positive suppression** — suppress specific scanner findings on individual lines using `# ai-guardian:ignore <scanner>` comments. Supports all scanner types. Also available as block annotations with `# ai-guardian:ignore-start` / `# ai-guardian:ignore-end` pairs (#1664)
+
+- **Tray plugin management UI** — manage tray menu plugins from the web console and TUI. Create, edit, delete, and reorder custom menu items. Plugin files stored in project `.ai-guardian/plugins/` directory with JSON format (#1736)
+
+- **OpenCode plugin registration** — `ai-guardian setup` now detects and configures OpenCode IDE with appropriate hook settings (#2139)
+
 - **`--log-violations` flag for `ai-guardian scan`** — writes findings to `violations.jsonl` (the same log used by hooks), enabling unified violation tracking from both hooks and CLI scans. Also available as `ai-guardian setup --pre-commit --log-violations` to include the flag in auto-installed pre-commit hooks (#2068)
+
+- **Pagination with configurable search limit** — traces and IDE sessions pages now support pagination with a configurable page size. API endpoints accept `limit` and `offset` parameters. Default limit configurable via `console.search_limit` (#2125)
+
+- **Pause auto-refresh toggle** — traces and IDE sessions pages have a pause button to stop auto-refresh, allowing text selection and copy operations without interruption (#2119)
+
+- **Copy button on formatted modal views** — content viewer dialogs now include a copy-to-clipboard button for easy extraction of JSON and code content (#2119)
+
+- **Error step tracking in traces** — agent errors are now captured as explicit steps in the trace viewer, showing error messages and stack traces for debugging (#2101)
+
+- **Helpful error messages for missing provider packages** — when a provider SDK package is not installed, the error message now names the specific package to install (e.g., `pip install google-genai`) instead of a generic import error (#2081)
+
+- **Root span at agent start** — traces now emit an initial root span when the agent starts, providing early visibility in trace viewers before the first API call completes (#2104)
+
+### Changed
+
+- **AgentResponse for provider-agnostic normalized responses** — all provider strategies now return a unified `AgentResponse` dataclass instead of provider-specific response objects. Standardizes access to `content`, `tool_calls`, `stop_reason`, and `usage` across Anthropic, OpenAI, and Gemini providers (#2128)
+
+- **Structured logging throughout agent lifecycle** — replaced silent `except: pass` patterns with proper `logging.warning()` and `logging.debug()` calls. All SDK exceptions now log context before re-raising or swallowing (#2133)
+
+- **Sanitize violation messages in agent traces** — violation details written to trace files are now sanitized to remove raw secret values, replacing them with redacted placeholders (#2131)
+
+- **Provider compatibility tables in SDK docs** — added feature comparison matrix and provider capability tables to `docs/SDK.md` (#2082)
+
+### Fixed
+
+- **Windows `expanduser` compatibility** — tests now set `USERPROFILE` environment variable for Windows compatibility with `os.path.expanduser()` (#2139)
+
+- **Stale in-progress traces marked as crashed** — traces that remain in `in_progress` state beyond a timeout are now automatically detected and marked as `crashed` in the trace viewer (#2110)
+
+- **Output schema check runs after `between_turns` hook** — previously the schema validation ran before the hook, meaning hook modifications to the response were not validated (#2096)
+
+- **Project browse button in console** — fixed file browser dialog not opening when clicking the project browse button (#2089)
+
+### CI/CD
+
+- **Removed redundant post-merge test runs** — `test.yml`, `lint.yml`, and `integration-tests.yml` no longer trigger on pushes to `main`, eliminating duplicate runs after PR merges. Tests still run on pull requests (#2113)
+
+- **Decoupled scenario tests from Quay** — scenario tests no longer require Quay container registry access, enabling them to run on fork PRs (#2135)
+
+### Compatibility
+
+- Verified Cursor hook compatibility with Cursor v3.17.8
 
 ## [1.16.0] - 2026-08-18
 
@@ -3294,7 +3350,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.17.0...HEAD
+[1.17.0]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.16.0
 [1.15.5]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...v1.15.5
 [1.15.4]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.3...v1.15.4
