@@ -3911,11 +3911,16 @@ class TestOpenCodePluginRegistration:
 class TestResolveOpenCodeConfig:
     """Tests for _resolve_opencode_config shared helper (#2139)."""
 
+    def _with_home(self, monkeypatch, tmp_path):
+        """Set HOME/USERPROFILE to tmp_path for cross-platform expanduser."""
+        monkeypatch.setenv("HOME", str(tmp_path))
+        monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
     def test_prefers_json_when_both_exist(self, tmp_path, monkeypatch):
         """When both .json and .jsonc exist, prefer .json."""
         from ai_guardian.setup.utils import _resolve_opencode_config
 
-        monkeypatch.setenv("HOME", str(tmp_path))
+        self._with_home(monkeypatch, tmp_path)
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
         json_file = opencode_dir / "opencode.json"
@@ -3929,7 +3934,7 @@ class TestResolveOpenCodeConfig:
         """When only .jsonc exists, use it."""
         from ai_guardian.setup.utils import _resolve_opencode_config
 
-        monkeypatch.setenv("HOME", str(tmp_path))
+        self._with_home(monkeypatch, tmp_path)
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
         jsonc_file = opencode_dir / "opencode.jsonc"
@@ -3942,7 +3947,7 @@ class TestResolveOpenCodeConfig:
         """When neither exists, return .jsonc path."""
         from ai_guardian.setup.utils import _resolve_opencode_config
 
-        monkeypatch.setenv("HOME", str(tmp_path))
+        self._with_home(monkeypatch, tmp_path)
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
 
@@ -3954,7 +3959,7 @@ class TestResolveOpenCodeConfig:
         """Only .json exists — returns .json, not .jsonc."""
         from ai_guardian.setup.utils import _resolve_opencode_config
 
-        monkeypatch.setenv("HOME", str(tmp_path))
+        self._with_home(monkeypatch, tmp_path)
         opencode_dir = tmp_path / ".config" / "opencode"
         opencode_dir.mkdir(parents=True)
         json_file = opencode_dir / "opencode.json"
