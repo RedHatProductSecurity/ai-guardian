@@ -14,6 +14,7 @@ from ai_guardian.setup.utils import (
     _create_vbs_wrapper,
     _is_ai_guardian_command,
     _resolve_binary_path,
+    _resolve_opencode_config,
     _strip_jsonc_comments,
     _substitute_command,
     _upgrade_ide_flag,
@@ -901,17 +902,28 @@ class IDESetup:
 
             ide_config = self.IDE_CONFIGS.get(ide_type, {})
 
-            # Plugin-file hooks (OpenCode): check for ai-guardian.ts
+            # Plugin-file hooks (OpenCode): check for ai-guardian.ts AND registration
             if ide_config.get("plugin_file"):
                 plugin_file = config_path / "ai-guardian.ts"
-                if plugin_file.exists():
-                    try:
-                        content = plugin_file.read_text(encoding="utf-8")
-                        if "ai-guardian" in content:
-                            return True
-                    except Exception:
-                        pass  # intentionally silent — best-effort operation
-                return False
+                if not plugin_file.exists():
+                    return False
+                try:
+                    content = plugin_file.read_text(encoding="utf-8")
+                    if "ai-guardian" not in content:
+                        return False
+                except Exception:
+                    return False
+                config_file = _resolve_opencode_config()
+                if not config_file.exists():
+                    return False
+                try:
+                    raw = config_file.read_text(encoding="utf-8")
+                    if config_file.suffix == ".jsonc":
+                        raw = _strip_jsonc_comments(raw)
+                    cfg = json.loads(raw) if raw.strip() else {}
+                    return str(plugin_file) in cfg.get("plugins", [])
+                except (json.JSONDecodeError, OSError):
+                    return False
 
             # Extension-based hooks (AiderDesk, OpenClaw): check directory for index.ts
             if ide_config.get("extension_based"):
@@ -1140,6 +1152,44 @@ class IDESetup:
         """
         return _strip_jsonc_comments(text)
 
+    def _register_opencode_plugin(
+        self,
+        plugin_file: Path,
+        plugins_dir: Path,
+        dry_run: bool = False,
+    ) -> Optional[str]:
+        """Register plugin in opencode.json/opencode.jsonc config.
+
+        Returns a status message, or None if registration was skipped.
+        """
+        config_file = _resolve_opencode_config()
+        plugin_path = str(plugin_file)
+
+        if dry_run:
+            return f"  Register plugin in: {config_file}\n"
+
+        config: Dict[str, Any] = {}
+        if config_file.exists():
+            try:
+                raw = config_file.read_text(encoding="utf-8")
+                if config_file.suffix == ".jsonc":
+                    raw = _strip_jsonc_comments(raw)
+                if raw.strip():
+                    config = json.loads(raw)
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        plugins = config.get("plugins", [])
+        if plugin_path not in plugins:
+            plugins.append(plugin_path)
+            config["plugins"] = plugins
+            config_file.parent.mkdir(parents=True, exist_ok=True)
+            config_file.write_text(
+                json.dumps(config, indent=2) + "\n", encoding="utf-8"
+            )
+
+        return None
+
     def _setup_plugin_file(
         self,
         ide_type: str,
@@ -1149,7 +1199,8 @@ class IDESetup:
     ) -> Tuple[bool, str]:
         """Setup plugin-file based hooks (OpenCode).
 
-        Drops a single .ts file into the IDE's plugins directory.
+        Drops a single .ts file into the IDE's plugins directory and
+        registers it in opencode.json so OpenCode loads it.
         """
         ide_name = ide_config["name"]
         plugin_file = plugins_dir / "ai-guardian.ts"
@@ -1157,6 +1208,11 @@ class IDESetup:
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} plugin:\n"
             message += f"  Create: {plugin_file}\n"
+            reg_msg = self._register_opencode_plugin(
+                plugin_file, plugins_dir, dry_run=True
+            )
+            if reg_msg:
+                message += reg_msg
             return True, message
 
         plugins_dir.mkdir(parents=True, exist_ok=True)
@@ -1167,6 +1223,8 @@ class IDESetup:
             _OPENCODE_PLUGIN_TS.replace("execSync('ai-guardian'", f"execSync('{cmd}'"),
             encoding="utf-8",
         )
+
+        self._register_opencode_plugin(plugin_file, plugins_dir)
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
