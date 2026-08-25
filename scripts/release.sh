@@ -92,10 +92,11 @@ cd "$REPO_ROOT"
 
 section "Phase 1: Validate Prerequisites"
 
-command -v gh >/dev/null 2>&1    || die "gh CLI not found (brew install gh)"
-command -v python3 >/dev/null 2>&1 || die "python3 not found"
-command -v git >/dev/null 2>&1   || die "git not found"
-command -v sed >/dev/null 2>&1   || die "sed not found"
+command -v gh >/dev/null 2>&1        || die "gh CLI not found (brew install gh)"
+command -v python3 >/dev/null 2>&1   || die "python3 not found"
+command -v git >/dev/null 2>&1       || die "git not found"
+command -v sed >/dev/null 2>&1       || die "sed not found"
+command -v git-cliff >/dev/null 2>&1 || die "git-cliff not found (brew install git-cliff)"
 
 if ! $DRY_RUN; then
     gh auth status >/dev/null 2>&1 || die "gh not authenticated (run: gh auth login)"
@@ -128,6 +129,29 @@ fi
 CURRENT_VERSION=$($HELPER get-version 2>/dev/null | grep "Current version:" | awk '{print $3}')
 [[ -z "$CURRENT_VERSION" ]] && die "Could not determine current version"
 info "Current version: $CURRENT_VERSION"
+
+# Auto-populate CHANGELOG Unreleased section from git log if empty
+if ! $DRY_RUN; then
+    UNRELEASED_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md | grep -v '^$' || true)
+    if [[ -z "$UNRELEASED_CONTENT" ]]; then
+        if command -v git-cliff >/dev/null 2>&1; then
+            info "Generating CHANGELOG entries with git-cliff..."
+            CLIFF_OUTPUT=$(git-cliff --unreleased --strip header 2>/dev/null || true)
+            if [[ -n "$CLIFF_OUTPUT" ]]; then
+                # Insert generated content after the ## [Unreleased] line
+                awk -v content="$CLIFF_OUTPUT" '
+                    /^## \[Unreleased\]/ { print; print ""; print content; next }
+                    { print }
+                ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+                info "CHANGELOG.md Unreleased section populated from git history"
+            else
+                die "git-cliff produced no output — add entries to CHANGELOG.md manually"
+            fi
+        else
+            die "CHANGELOG [Unreleased] section is empty and git-cliff not installed.\nInstall: brew install git-cliff (or cargo install git-cliff)"
+        fi
+    fi
+fi
 
 if ! $DRY_RUN; then
     $HELPER validate --type regular || die "Prerequisite validation failed"
