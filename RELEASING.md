@@ -16,7 +16,7 @@ scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 
 The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
 
-**Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`.
+**Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `git-cliff` (`brew install git-cliff`).
 
 ## Table of Contents
 
