@@ -708,6 +708,8 @@ class DaemonServer:
             env_host = os.environ.get("AI_GUARDIAN_REST_HOST")
             host = daemon_cfg.get("rest_host", env_host or default_host)
             auth_token = daemon_cfg.get("auth_token")
+            if not auth_token:
+                auth_token = self._ensure_auth_token()
 
             for port in range(cfg_port, cfg_port + 10):
                 try:
@@ -867,6 +869,34 @@ class DaemonServer:
                 sock.close()
         except Exception:
             return False
+
+    @staticmethod
+    def _ensure_auth_token():
+        """Read or generate the auto-managed REST API auth token.
+
+        When no auth_token is set in config, the daemon generates a random
+        token on first start and persists it to the state directory with
+        owner-only permissions. Subsequent starts reuse the same token.
+        """
+        import secrets
+
+        from ai_guardian.daemon import get_auth_token_path
+
+        token_path = get_auth_token_path()
+        if token_path.exists():
+            try:
+                token = token_path.read_text(encoding="utf-8").strip()
+                if token:
+                    return token
+            except OSError:
+                pass
+
+        token = secrets.token_urlsafe(32)
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        token_path.write_text(token, encoding="utf-8")
+        os.chmod(str(token_path), 0o600)
+        logger.info("Generated REST API auth token: %s", token_path)
+        return token
 
     def _socket_info(self):
         """Get human-readable socket info string."""

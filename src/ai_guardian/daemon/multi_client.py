@@ -1436,7 +1436,18 @@ class MultiDaemonClient:
         try:
             with urlopen(req, timeout=timeout) as resp:
                 return json.loads(resp.read().decode("utf-8"))
-        except (URLError, OSError, json.JSONDecodeError, ValueError) as e:
+        except URLError as e:
+            if hasattr(e, "code") and e.code == 401 and not target.auth_token:
+                logger.warning(
+                    "REST request to %s returned 401 but no auth token available. "
+                    "The remote daemon may be a newer version that requires "
+                    "authentication. Upgrade the local tray/CLI to match.",
+                    target.name,
+                )
+            else:
+                logger.debug("REST request failed (%s %s): %s", method, url, e)
+            return None
+        except (OSError, json.JSONDecodeError, ValueError) as e:
             logger.debug("REST request failed (%s %s): %s", method, url, e)
             return None
 
