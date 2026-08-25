@@ -63,8 +63,8 @@ ai-guardian tray start -b          # system tray (optional — manage daemons vi
 ### 4. Open the Console
 
 ```bash
-ai-guardian console              # web console (recommended, Python 3.10+)
-ai-guardian tui                  # terminal console (all Python versions)
+ai-guardian console --web                # web console (recommended, Python 3.10+)
+ai-guardian console (or ai-guardian tui) # terminal console (all Python versions)
 ```
 
 Manage settings, view violations, and scan projects. See [docs/CONSOLE.md](docs/CONSOLE.md).
@@ -140,8 +140,8 @@ podman run -it -p 63152:63152 \
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.15.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.15.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.16.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.16.0
 
 # Or build from source
 podman build -t ai-guardian container/
@@ -6844,6 +6844,135 @@ result = agent.run("task")
 
 Default trace directory: `~/.local/state/ai-guardian/traces/`. Use `trace_path_fn` for custom organization.
 
+---
+
+## SDK Enhancements (v1.17.0)
+
+### How do I use GuardedAgent with a local model (Ollama, llama.cpp, vLLM)?
+
+```python
+from ai_guardian.sdk import guarded
+
+client = guarded(provider="ollama")
+agent = client.agent(model="llama3.1")
+result = agent.run("Summarize this document")
+```
+
+Local providers auto-enable `text_tool_parsing` — the SDK detects tool calls written as plain text and executes them. Set `text_tool_parsing=False` to disable.
+
+### How do I use GuardedAgent with Google Gemini?
+
+```python
+from ai_guardian.sdk import guarded
+
+client = guarded(provider="gemini")
+agent = client.agent(model="gemini-2.0-flash")
+result = agent.run("Analyze this code")
+```
+
+Requires `google-genai` package. Set `GOOGLE_API_KEY` or use Vertex AI with `provider="vertex"`.
+
+### How do I add MCP servers to GuardedAgent?
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "my-agent": {
+        "mcpServers": {
+          "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"],
+            "trust_level": "sandboxed"
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+MCP tools appear as `mcp__filesystem__read_file`. Use `defer_loading: true` to delay server startup until first use. Requires Python >= 3.10.
+
+### How do I set API call timeout for GuardedAgent?
+
+```python
+agent = client.agent(model="llama3.1", api_timeout=120)
+```
+
+Or via config:
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": { "api_timeout": 120 }
+    }
+  }
+}
+```
+
+Defaults: 300s for cloud providers, 600s for local. On timeout: retries once, then stops with `stop_reason='timeout'`.
+
+### How do I limit schema nudge retries?
+
+```python
+agent = client.agent(model="llama3.1", max_schema_nudges=2)
+```
+
+When `output_schema` is set and the model fails to produce valid output after N nudges, the agent stops with `stop_reason='max_schema_nudges'` instead of consuming all `max_turns`.
+
+### How do I run shell hooks at agent lifecycle points?
+
+```json
+{
+  "sdk": {
+    "hooks": {
+      "pre_run": "echo 'Agent starting' >> /tmp/agent.log",
+      "between_turns": "curl -s localhost:9090/metrics",
+      "post_run": "echo 'Agent done' >> /tmp/agent.log"
+    }
+  }
+}
+```
+
+Hook commands receive agent context as environment variables (`AI_GUARDIAN_AGENT_NAME`, `AI_GUARDIAN_TURN`, etc.).
+
+### How do I use inline annotations to suppress false positives?
+
+Add a comment on the line that triggers a false positive:
+
+```python
+api_key = "test-key-not-real"  # ai-guardian:ignore secret_scanning
+```
+
+For multi-line blocks:
+
+```python
+# ai-guardian:ignore-start secret_scanning
+TEST_KEYS = {
+    "aws": "AKIAIOSFODNN7EXAMPLE",
+    "github": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+}
+# ai-guardian:ignore-end
+```
+
+Also available via `ai-guardian init-project --annotate` to scan and auto-annotate existing code.
+
+### How do I configure `strip_chat_tokens` for local models?
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": { "strip_chat_tokens": true }
+    }
+  }
+}
+```
+
+Strips leftover chat template tokens (`<|im_start|>`, `<|assistant|>`, etc.) from local model output before processing. Enabled by default for Ollama and llama.cpp providers.
+
 # === docs/DEVELOPER_GUIDE.md ===
 
 # Developer Guide
@@ -13265,21 +13394,88 @@ agent = GuardedAgent(
 | **Security scanning** | ai-guardian scans identically regardless of provider — secrets, PII, prompt injection all work the same |
 | **Install** | Requires `pip install ai-guardian[openai]` |
 
-### `create_client(**kwargs)`
+### `create_client(*, provider, provider_config, **kwargs)`
 
-Auto-detect and create an Anthropic client from environment variables.
+Auto-detect and create an LLM client from environment variables.
 
 ```python
 from ai_guardian.integrations import create_client
 
-# Returns the right client type based on which env var is set
+# Auto-detect from env vars (default — raises ValueError on conflict)
 client = create_client()
 
-# Pass kwargs to the underlying client constructor
-client = create_client(timeout=30.0)
+# Explicit provider — resolves env var conflicts
+client = create_client(provider="vertex")
+
+# OpenAI-compatible local server
+client = create_client(
+    provider="openai-compatible",
+    provider_config={"base_url": "http://localhost:8080/v1"},
+)
+
+# Custom env var for API key
+client = create_client(
+    provider="direct",
+    provider_config={"api_key_env": "MY_CUSTOM_KEY"},
+)
 ```
 
-Raises `ValueError` if multiple conflicting env vars are set, or if none are set.
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `provider` | str | `None` | Provider to use. Anthropic: `direct`/`anthropic`, `vertex`, `bedrock`, `foundry`. OpenAI-compatible: `openai`, `azure`, `openai-compatible` (canonical), `ollama`, `mlx`, `llamacpp`, `vllm`, `lm-studio`. If `None`, auto-detects from env vars. |
+| `provider_config` | dict | `None` | Provider-specific overrides: `base_url`, `base_url_env`, `api_key_env`, `project_id_env`, `region_env`. |
+
+Raises `ValueError` if multiple conflicting env vars are set (and no `provider` specified), or if no credentials are found.
+
+**Default auth env vars per provider:**
+
+| Provider | Client | Default env vars |
+|----------|--------|------------------|
+| `direct` / `anthropic` | `Anthropic()` | `ANTHROPIC_API_KEY` |
+| `vertex` | `AnthropicVertex()` | `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION` |
+| `bedrock` | `AnthropicBedrock()` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` |
+| `foundry` | `AnthropicFoundry()` | Foundry credentials |
+| `openai` | `OpenAI()` | `OPENAI_API_KEY` |
+| `azure` | `AzureOpenAI()` | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_ENDPOINT` |
+| `openai-compatible` | `OpenAI(base_url=...)` | None (local server) |
+| `ollama` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `mlx` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `llamacpp` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `vllm` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+| `lm-studio` | `OpenAI(base_url=...)` | None (alias for `openai-compatible`) |
+
+Use `provider_config` fields to override these defaults:
+
+| Field | Description |
+|-------|-------------|
+| `base_url` | Server endpoint (required for local servers) |
+| `base_url_env` | Env var name holding the server endpoint URL |
+| `api_key_env` | Env var name holding the API key (overrides default) |
+| `project_id_env` | Env var name for GCP project ID (vertex, default: `ANTHROPIC_VERTEX_PROJECT_ID`) |
+| `region_env` | Env var name for region (vertex, default: `CLOUD_ML_REGION`) |
+
+**Config-driven:** Set `sdk.provider` and `sdk.provider_config` in `ai-guardian.json` to avoid passing these in code:
+
+```json
+{
+  "sdk": {
+    "provider": "vertex",
+    "provider_config": {
+      "project_id_env": "MY_GCP_PROJECT",
+      "region_env": "MY_GCP_REGION"
+    }
+  }
+}
+```
+
+**Environment variable overrides** (highest precedence):
+
+| Env var | Overrides |
+|---------|-----------|
+| `AI_GUARDIAN_SDK_PROVIDER` | `sdk.provider` config and code `provider=` argument |
+| `AI_GUARDIAN_SDK_BASE_URL` | `sdk.provider_config.base_url` and `base_url_env` |
 
 ### `guarded(client, *, name, mode, config, extractor, response_parser, before_call, after_call)`
 
@@ -13290,7 +13486,7 @@ Wraps an LLM client with automatic security scanning.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `client` | object | *(auto-detect)* | LLM provider client. If omitted, auto-created from env vars. |
-| `name` | str | `None` | Profile name linking to `sdk.clients.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
+| `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
 | `mode` | str | `"direct"` | `"direct"` runs checks in-process, `"rest"` delegates to daemon |
 | `config` | dict | `None` | Config override. If `None`, loads from `ai-guardian.json` |
 | `extractor` | ProviderExtractor | `None` | Explicit extractor (skips auto-detection) |
@@ -13335,6 +13531,32 @@ with client.messages.stream(
 | Anthropic | `Anthropic`, `AsyncAnthropic`, `AnthropicVertex`, `AnthropicBedrock`, `AnthropicFoundry` (+ async variants) | `messages.create`, `messages.stream` |
 | OpenAI | `OpenAI`, `AsyncOpenAI`, `AzureOpenAI`, `AsyncAzureOpenAI` | `chat.completions.create` |
 | OpenAI-compatible | Ollama, llama.cpp, vLLM, LiteLLM, Mistral — via `OpenAI(base_url=...)` | `chat.completions.create` |
+
+### Tested Providers
+
+| Provider | Status | Tools | Notes |
+|----------|--------|-------|-------|
+| Anthropic (direct) | Verified | Full | Primary provider |
+| Vertex AI | Verified | Full | |
+| Bedrock | Verified | Full | |
+| OpenAI | Verified | Full | |
+| Azure OpenAI | Untested | Expected full | Same API as OpenAI |
+| Ollama | Verified | Model-dependent | Content normalization included (#2083) |
+| llama.cpp | Untested | Limited | Needs testing |
+| vLLM | Untested | Expected full | Needs testing |
+| Foundry | Untested | Unknown | New provider |
+
+### Tool Support by Provider
+
+Not all providers and models support tool calling. Without tool support, `GuardedAgent` cannot execute actions — only `guarded()` works for scan-only protection.
+
+| Provider | Tool calling | Models with tools |
+|----------|-------------|-------------------|
+| Anthropic | All models | claude-sonnet-\*, claude-opus-\*, claude-haiku-\* |
+| OpenAI | Most models | gpt-4, gpt-4o, gpt-4o-mini |
+| Ollama | Model-dependent | llama3.1, qwen2.5-coder, mistral-large — NOT llama3, phi3 |
+| llama.cpp | Model + grammar dependent | Varies |
+| vLLM | Model-dependent | Most instruction-tuned models |
 
 ### Custom Extractors
 
@@ -13424,6 +13646,59 @@ client = guarded(
 )
 ```
 
+## `guarded()` vs `GuardedAgent`
+
+Both provide security scanning but serve different use cases.
+
+| Feature | `guarded()` | `GuardedAgent` |
+|---------|------------|----------------|
+| **What it does** | Wraps an LLM client to scan input/output | Full agent loop with tool execution and per-step scanning |
+| **Agent loop** | None — caller manages the conversation | Built-in tool-use loop with configurable turns |
+| **Scanning scope** | Input prompts, output responses | Input, output, system prompt, tool results, intermediate responses |
+| **Tool execution** | None — caller handles tools | Built-in executors for bash, text_editor, read_file, grep, glob, MCP |
+| **Setup complexity** | One line — `client = guarded(Anthropic())` | Configuration for tools, cwd, max_turns, etc. |
+| **Streaming** | Supported (scans on stream exit) | Not directly exposed (internal API calls) |
+| **Custom extractors** | Supported — extend to any LLM client | Uses `guarded()` internally |
+| **Response parser** | Supported — transform responses | Not applicable (returns structured result dict) |
+| **Structured output** | Not built-in | `output_schema` parameter |
+| **Callbacks** | `before_call`, `after_call` | `before_call`, `after_call`, `pre_run`, `post_run`, `between_turns`, `on_turn` |
+| **Tracing** | None | Full per-step trace with OTEL export |
+| **Auto-compaction** | None — caller manages context | Built-in context window management |
+| **Provider support** | Anthropic, OpenAI, any via custom extractor | Anthropic, OpenAI (via strategy parameter) |
+
+### When to Use `guarded()`
+
+- Adding security scanning to an existing LLM integration
+- Building your own agent loop with custom control flow
+- Single request/response patterns (chatbots, one-shot generation)
+- Streaming responses to users in real time
+- Custom LLM providers via `ProviderExtractor`
+
+### When to Use `GuardedAgent`
+
+- Need a complete agent with tool execution (bash, file editing, code search)
+- Want security scanning at every interaction point without building it yourself
+- Multi-turn agentic workflows (code review, bug fixing, analysis)
+- Need structured output, auto-compaction, or trace logging
+- Running agents in CI/CD or containers
+
+### Combining Both
+
+`GuardedAgent` uses `guarded()` internally. If you need both standalone scanned calls and an agent loop:
+
+```python
+from ai_guardian.integrations import guarded
+from ai_guardian.integrations.anthropic import GuardedAgent
+
+# Standalone scanned calls
+client = guarded()
+response = client.messages.create(model="claude-sonnet-5", ...)
+
+# Agent with full tool loop
+agent = GuardedAgent(model="claude-sonnet-5", tools="coding")
+result = agent.run("fix the bug")
+```
+
 ## GuardedAgent
 
 `GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII. Supports Anthropic and OpenAI providers.
@@ -13493,7 +13768,7 @@ agent = GuardedAgent(
 
 Tools fall into two categories based on where they run:
 
-- **Client tools** (`bash`, `text_editor`, `read_file`, `grep`, `glob`): GuardedAgent executes these locally in the agent's `cwd`. Tool output (results) is scanned by ai-guardian before returning to the model.
+- **Client tools** (`bash`, `text_editor`, `read_file`, `write`, `notebook_edit`, `grep`, `glob`): GuardedAgent executes these locally in the agent's `cwd`. Tool output (results) is scanned by ai-guardian before returning to the model.
 - **Server tools** (`web_search`, `web_fetch`, `code_execution`): Anthropic executes these on their infrastructure. Results pass through ai-guardian output scanning when returned.
 - **`computer`**: Declared as a client tool but requires external desktop integration to execute. GuardedAgent passes it to the API but has no built-in executor — typically used with the `"browser"` preset in environments that provide screenshot/input handling.
 
@@ -13524,6 +13799,8 @@ These are lightweight tools implemented by GuardedAgent itself (not Anthropic bu
 | Name | Description |
 |------|-------------|
 | `read_file` | Read a file from the local filesystem (with optional offset/limit) |
+| `write` | Write content to a file, creating parent directories if needed |
+| `notebook_edit` | Edit a Jupyter notebook: replace, insert, or delete cells |
 | `grep` | Search for a regex pattern in files (uses system `grep -rn`, skips common non-code directories) |
 | `glob` | List files matching a glob pattern (skips common non-code directories) |
 
@@ -13536,6 +13813,25 @@ These are lightweight tools implemented by GuardedAgent itself (not Anthropic bu
 | `path` | string | yes | Absolute or relative path to the file to read |
 | `offset` | integer | no | Line number to start reading from (0-based) |
 | `limit` | integer | no | Maximum number of lines to read |
+
+**`write`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `file_path` | string | yes | Absolute or relative path to the file to write |
+| `content` | string | yes | The content to write to the file |
+
+Creates parent directories automatically. Overwrites existing files.
+
+**`notebook_edit`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `notebook_path` | string | yes | Path to the `.ipynb` notebook file |
+| `command` | string | yes | Operation: `edit`, `insert_before`, `insert_after`, or `delete` |
+| `cell_number` | integer | yes | 0-based cell index to operate on |
+| `new_source` | string | no | New source content (required for `edit`/`insert_*` commands) |
+| `cell_type` | string | no | Cell type for insert commands: `code` (default) or `markdown` |
 
 **`grep`**
 
@@ -13593,11 +13889,64 @@ Both are configurable via `ai-guardian.json`:
 }
 ```
 
+#### MCP Servers
+
+GuardedAgent can connect to MCP (Model Context Protocol) servers, making their tools available to the agent. Configure MCP servers in `ai-guardian.json` under `sdk.agents.*.mcpServers`:
+
+```json
+{
+  "sdk": {
+    "agents": {
+      "*": {
+        "mcpServers": {
+          "jira": {
+            "command": "python",
+            "args": ["-m", "jira_mcp_server"],
+            "env": {"JIRA_URL": "https://jira.example.com"},
+            "timeout": 60
+          },
+          "remote-api": {
+            "url": "https://mcp.internal/sse",
+            "headers": {"Authorization": "Bearer ..."},
+            "startup_timeout": 15
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Standard MCP parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `command` | string | Command to start server (stdio transport) |
+| `args` | list | Command arguments |
+| `env` | dict | Environment variables for server process |
+| `url` | string | SSE endpoint URL (SSE transport) |
+| `headers` | dict | HTTP headers for SSE connection |
+
+**Operational parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `enabled` | bool | `true` | Enable/disable this server |
+| `timeout` | int | `30` | Tool call timeout in seconds |
+| `startup_timeout` | int | `10` | Max seconds to wait for server to initialize |
+| `trust` | string | `"check"` | Trust level: `trusted` (skip scanning), `check` (scan results), `untrusted` (scan results) |
+| `scan_results` | bool | `true` | Scan tool results through ai-guardian |
+| `defer_loading` | bool | `false` | Defer server startup until first tool call. Tools are discovered via a brief probe at agent start, then the server shuts down and reconnects lazily on the first call. Useful for servers that are expensive to keep running but may not be needed every run. |
+
+MCP tools are named `mcp__{server_name}__{tool_name}` following Claude Code convention. Security scanning of tool results follows the same pipeline as built-in tools unless the server is marked as `trusted` or has `scan_results: false`.
+
+Requires Python >= 3.10 and the `mcp` package (included in ai-guardian dependencies).
+
 #### Presets
 
 | Preset | Tools | Use when |
 |--------|-------|----------|
-| `"coding"` | `bash` + `text_editor` + `grep` + `glob` | Agent needs to read, write, and execute code |
+| `"coding"` | `bash` + `text_editor` + `write` + `grep` + `glob` | Agent needs to read, write, and execute code |
 | `"readonly"` | `read_file` + `grep` + `glob` | Agent should only read and search code, not modify it |
 | `"browser"` | `computer` + `bash` | Agent needs to interact with a GUI/desktop |
 
@@ -13613,7 +13962,7 @@ tools=["coding", "web_search", {"name": "my_tool", "input_schema": {...}}]
 
 #### Adding Custom Tools
 
-Pass raw tool dicts alongside built-in names to define additional tools the model can call. GuardedAgent dispatches tool calls by name — built-in names (`bash`, `text_editor`, `read_file`, `grep`, `glob`) route to their executors; unknown names return `"Error: no executor for tool 'name'"` as the tool result.
+Pass raw tool dicts alongside built-in names to define additional tools the model can call. GuardedAgent dispatches tool calls by name — built-in names (`bash`, `text_editor`, `read_file`, `write`, `notebook_edit`, `grep`, `glob`) route to their executors; unknown names return `"Error: no executor for tool 'name'"` as the tool result.
 
 Custom tool dicts are sent to the Anthropic API as standard tool definitions, so the model can call them. However, GuardedAgent has no executor for them — the error result is what gets sent back to the model. To properly execute custom tools, you have two options:
 
@@ -13623,9 +13972,10 @@ Custom tool dicts are sent to the Anthropic API as standard tool definitions, so
 
 ```python
 def handle_custom_tools(messages, response, turn):
-    for block in response.content:
-        if block.type == "tool_use" and block.name == "my_tool":
-            result = my_tool_executor(block.input)
+    # response is an AgentResponse — provider-agnostic
+    for tc in response.tool_calls:
+        if tc.name == "my_tool":
+            result = my_tool_executor(tc.input)
             return f"Tool result for my_tool: {result}"
     return None
 
@@ -13670,16 +14020,20 @@ print(result["output"])  # validated structured object
 | `max_turns` | int | `100` | Max tool-use loop iterations |
 | `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
+| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX). On timeout: retries once, then stops with `stop_reason='timeout'` |
 | `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
 | `output_schema` | dict | `None` | JSON schema for structured output |
+| `max_schema_nudges` | int | `3` | Max times to re-prompt the model to call `submit_result` before stopping with `stop_reason='max_schema_nudges'` |
+| `text_tool_parsing` | bool | `False` | Enable text-as-tool-call extraction for models that write tool calls as plain text (auto-enabled for Ollama, llama.cpp, MLX, vLLM) |
 | `tool_types` | dict | `None` | Override tool type versions |
 | `before_call` | callable | `None` | `(method_name: str, args: tuple, kwargs: dict) -> None` — called before each `messages.create()` |
 | `after_call` | callable | `None` | `(method_name: str, response: Any) -> Optional[bool]` — called after each API call. Return `False` to stop the loop early |
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
-| `between_turns` | callable | `None` | `(messages: list, response: Any, turn: int) -> str \| None \| False` — called after each successful assistant turn. Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `between_turns` | callable | `None` | `(messages: list, response: AgentResponse, turn: int) -> str \| None \| False` — called after each successful assistant turn. `response` is a normalized `AgentResponse` with `.text`, `.tool_calls`, `.stop_reason`, and `.raw` (original provider response). Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `strip_chat_tokens` | bool | `None` | Strip chat template tokens (`<\|im_start\|>`, `[INST]`, etc.) from model output. `None` = auto-detect (enabled for Ollama, llama.cpp, vLLM). `True` = always strip. `False` = never strip |
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
 | `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
@@ -13710,19 +14064,26 @@ agent = GuardedAgent(
 
 ```
 agent.run("prompt")
+  ├── [pre_run.pre_command]            ← shell hook (config)
   ├── pre_run(prompt, config)          ← once, before loop
+  ├── [pre_run.post_command]           ← shell hook (config)
   ├── Turn 1:
+  │     ├── [on_turn.pre_command]
+  │     ├── [before_call.pre_command]
   │     ├── before_call(...)           ← per turn
+  │     ├── [before_call.post_command]
   │     ├── messages.create()
+  │     ├── [after_call.pre_command]
   │     ├── after_call(...)            ← per turn (return False to stop)
-  │     └── between_turns(...)         ← per successful turn (return str to inject)
-  ├── Turn 2+:
-  │     ├── compact check              ← compacts or raises if context exhausted
-  │     ├── before_call(...)
-  │     ├── messages.create()
-  │     ├── after_call(...)
-  │     └── between_turns(...)
-  └── post_run(result)                 ← once, after loop (even on exception)
+  │     ├── [after_call.post_command]
+  │     ├── [between_turns.pre_command]
+  │     ├── between_turns(...)         ← per successful turn (return str to inject)
+  │     ├── [between_turns.post_command]
+  │     └── [on_turn.post_command]
+  ├── Turn 2+: (same as Turn 1 with compact check first)
+  ├── [post_run.pre_command]
+  ├── post_run(result)                 ← once, after loop (even on exception)
+  └── [post_run.post_command]
 ```
 
 The `config` dict passed to `pre_run` contains: `model`, `tools`, `system_prompt`, `max_turns`, `max_budget_tokens`.
@@ -13748,15 +14109,17 @@ loop continues so the agent can adapt.
 import subprocess
 
 def run_pytest_between_turns(messages, response, turn):
-    """Run pytest on generated test code, feed results back."""
-    # Extract test code from the assistant's response
-    text = getattr(response.content[0], "text", "")
-    if "def test_" not in text:
+    """Run pytest on generated test code, feed results back.
+
+    response is an AgentResponse — use .text for extracted content,
+    .tool_calls for parsed tool calls, .raw for the original provider object.
+    """
+    if "def test_" not in response.text:
         return None  # No test code, let the loop end normally
 
     # Write and run the test
     with open("/tmp/test_generated.py", "w") as f:
-        f.write(text)
+        f.write(response.text)
     result = subprocess.run(
         ["pytest", "/tmp/test_generated.py", "-v"],
         capture_output=True, text=True, timeout=30,
@@ -13776,6 +14139,82 @@ agent = GuardedAgent(
 )
 result = agent.run("Write a pytest test for the calculate_discount function...")
 ```
+
+### Shell Hooks (Config-Driven)
+
+Run external shell commands before/after each GuardedAgent callback — without code changes. Useful for audit logging, notifications, approval gates, and metrics push.
+
+**Config** (`ai-guardian.json`):
+
+```json
+{
+    "sdk": {
+        "hooks": {
+            "before_call": {
+                "pre_command": "bash /path/to/audit-log.sh",
+                "post_command": "bash /path/to/notify.sh"
+            },
+            "after_call": {
+                "pre_command": "bash /path/to/validate-response.sh"
+            },
+            "between_turns": {
+                "post_command": "bash /path/to/slack-notify.sh"
+            },
+            "pre_run": {
+                "pre_command": "bash /path/to/setup-env.sh"
+            },
+            "post_run": {
+                "post_command": "bash /path/to/cleanup.sh"
+            }
+        }
+    }
+}
+```
+
+**Execution order per hook point:**
+
+1. `pre_command` (shell) — from config
+2. Python callback — from code (`before_call`, `after_call`, etc.)
+3. `post_command` (shell) — from config
+
+**Shell command interface:**
+
+Commands receive JSON context via stdin:
+
+```json
+{
+    "hook": "before_call",
+    "phase": "pre",
+    "agent_name": "remediation-planner",
+    "turn": 3,
+    "model": "claude-opus-4-6"
+}
+```
+
+Exit code `0` = continue. Non-zero = abort (`stop_reason: "hook_abort"`).
+
+**Per-agent hooks** via agent profiles — different agents get different hooks:
+
+```json
+{
+    "sdk": {
+        "agents": {
+            "*": {
+                "hooks": {"post_run": {"post_command": "bash log.sh"}}
+            },
+            "remediation-implementer": {
+                "hooks": {"before_call": {"pre_command": "bash approve.sh"}}
+            }
+        }
+    }
+}
+```
+
+**Resolution order** (each layer overrides the previous):
+
+1. `sdk.hooks` — global hooks for all agents
+2. `sdk.agents.*.hooks` — wildcard profile hooks
+3. `sdk.agents.<name>.hooks` — named profile hooks
 
 ### Auto-Compaction
 
@@ -13883,6 +14322,21 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
+
+#### `AgentResponse` Dataclass
+
+Normalized response passed to `between_turns` callbacks. Provider-agnostic — works the same for Anthropic, OpenAI, Gemini, and local models.
+
+```python
+@dataclass
+class AgentResponse:
+    text: str                # extracted text content (chat template tokens stripped if enabled)
+    tool_calls: List[ToolCall]  # parsed tool calls
+    stop_reason: str         # normalized: "end_turn", "tool_use", "refusal", etc.
+    raw: Any                 # original provider response for advanced use
+```
+
+When `strip_chat_tokens` is enabled (auto for local providers), `text` has chat template markers removed. Access `raw` for the original unmodified response.
 
 #### `TurnEvent` Dataclass
 
@@ -14017,8 +14471,10 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 | `hook_early_stop` | `after_call` or `between_turns` callback returned `False` to stop the loop |
 | `max_turns` | Reached the `max_turns` limit without the model finishing |
 | `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
+| `max_schema_nudges` | Model failed to call `submit_result` after `max_schema_nudges` re-prompts |
 | `refusal` | Model refused to respond |
 | `security_violation` | Response or tool result blocked by a security scan |
+| `timeout` | API call timed out on both initial attempt and retry — partial result returned |
 | `error` | Exception during the agent loop (partial trace persisted) |
 | `in_progress` | Agent is still running (only appears in incremental trace files) |
 
@@ -14321,9 +14777,40 @@ AI_GUARDIAN_CONFIG_OVERLAY=/path/to/overlay.json ai-guardian scan
 AI_GUARDIAN_CONFIG_INLINE='{"preferred_ui":"headless","prompt_injection":{"action":"block"}}' ai-guardian scan
 ```
 
-#### Logging Control
+#### Logging & Debugging
 
-Suppress ai-guardian's stderr output by setting the log level:
+GuardedAgent uses Python's standard `logging` module under the `ai_guardian` namespace.
+
+##### Log level behavior
+
+| Level | Shows by default? | What you see |
+|---|---|---|
+| `WARNING+` | Yes (stderr) | Silent failures, degraded functionality |
+| `INFO` | No | Compaction events, agent stop reason, MCP setup |
+| `DEBUG` | No | Turn lifecycle, API timing, tool execution, config parsing |
+
+##### Enabling debug logs
+
+```bash
+# Option 1: environment variable
+AI_GUARDIAN_LOG_LEVEL=DEBUG python my_agent.py
+```
+
+```python
+# Option 2: in code
+import logging
+logging.getLogger("ai_guardian").setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG)
+
+# Option 3: only ai-guardian logs (suppress other libraries)
+import logging
+logging.basicConfig(level=logging.WARNING)
+logging.getLogger("ai_guardian").setLevel(logging.DEBUG)
+```
+
+**Tip:** For production, leave at default (`WARNING`). For debugging agent issues, use `DEBUG` to see per-turn API timing and tool execution details.
+
+##### Suppressing logs
 
 ```bash
 # Suppress all messages except errors
@@ -23236,6 +23723,20 @@ Violation logging is **extremely efficient**:
     "_aiguard_note": "# ai-guardian:allow on a line suppresses all ai-guardian checks including Bandit."
   },
 
+  "_comment_secret_redaction": "Redact secrets from tool outputs instead of blocking (NEW in v1.5.0, Phase 4)",
+  "_comment_secret_redaction2": "When enabled, detected secrets are replaced with [REDACTED:type] placeholders instead of blocking the tool call",
+  "secret_redaction": {
+    "enabled": true,
+    "action": "warn",
+    "_action_options": ["block", "warn", "log-only"],
+    "preserve_format": true,
+    "_preserve_format_note": "Keep surrounding context intact, only replace the secret value",
+    "log_redactions": true,
+    "_log_redactions_note": "Log each redaction event to violations.jsonl for audit",
+    "additional_patterns": [],
+    "_additional_patterns_note": "Extra regex patterns for custom secret types beyond built-in detection"
+  },
+
   "scan_pii": {
     "_comment": "PII detection for GDPR/CCPA compliance (v1.6.0+, Phase 2 in v1.8.0)",
     "_comment2": "Scans user prompts, file reads, and tool outputs for personally identifiable information",
@@ -23837,6 +24338,35 @@ Violation logging is **extremely efficient**:
   "_comment_on_scan_error3": "'block': block operation if any scanner fails (fail-closed, for strict compliance)",
   "on_scan_error": "allow",
 
+  "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
+  "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in TUI/web console",
+  "violation_logging": {
+    "enabled": true,
+    "max_entries": 1000,
+    "_max_entries_note": "Maximum entries in violations.jsonl before oldest are rotated out",
+    "retention_days": 30,
+    "_retention_days_note": "Days to keep violation entries before cleanup",
+    "log_types": [
+      "tool_permission",
+      "directory_blocking",
+      "secret_detected",
+      "secret_redaction",
+      "prompt_injection",
+      "jailbreak_detected",
+      "ssrf_blocked",
+      "config_file_exfil",
+      "pii_detected",
+      "secret_in_transcript",
+      "pii_in_transcript",
+      "prompt_injection_in_transcript",
+      "annotation_suppressed",
+      "image_secret_detected",
+      "image_pii_detected",
+      "supply_chain"
+    ],
+    "_log_types_note": "Which violation types to log. Remove types to suppress specific categories."
+  },
+
   "_comment_security_instructions": "Security rule injection into AI context (v1.7.0 #580, v1.8.0 #584)",
   "_comment_security_instructions2": "Injects 'never bypass' rules via systemMessage on first prompt per session + re-injects after blocks",
   "_comment_security_instructions3": "Default: true. Disable only for ai-guardian development (the AI needs to modify security files)",
@@ -23871,20 +24401,53 @@ Violation logging is **extremely efficient**:
   "_comment_support_email_auth": "Email auth: 'none' for corporate SMTP relays (no credentials), 'env' for env vars (recommended), 'inline' for hardcoded creds (doctor warns).",
   "_comment_support_email_fallback": "If no smtp_host is set, opens system mailto: with the bundle zipped for manual attachment.",
   "otel": {
-    "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions",
+    "_comment_otel": "OpenTelemetry trace export for SDK and hook sessions (v1.16.0+). Requires 'pip install ai-guardian[otel]' for protobuf format.",
     "enabled": false,
     "endpoint": "http://localhost:4318",
     "service_name": "ai-guardian",
-    "metadata": {}
+    "_comment_export_format": "Export format: 'otlp-json' (no extra deps) or 'otlp-proto' (requires ai-guardian[otel])",
+    "export_format": "otlp-json",
+    "_comment_headers": "HTTP headers for OTLP export (e.g., {\"Authorization\": \"Bearer <token>\"}). Also reads OTEL_EXPORTER_OTLP_HEADERS env var.",
+    "headers": {},
+    "_comment_resource_attributes": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>.",
+    "resource_attributes": {}
   },
 
   "sdk": {
-    "_comment_sdk": "SDK scanning settings for GuardedAgent",
-    "enabled": true,
-    "secret_redaction": false,
+    "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper",
+    "_comment_scanning": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",
+    "scanning": true,
+    "_comment_use_global_config": "When true, SDK uses global ai-guardian.json scanner settings. When false, SDK runs standalone.",
+    "use_global_config": true,
+    "_comment_secret_redaction": "SDK-specific secret redaction override. SDK defaults to disabled because redacting between agent turns breaks code.",
+    "secret_redaction": {"enabled": false},
+    "_comment_provider": "LLM provider: direct, anthropic, vertex, bedrock, foundry, openai, azure, openai-compatible, ollama, mlx, llamacpp, vllm, lm-studio",
+    "_comment_provider_config": "Provider-specific config: base_url, base_url_env, api_key_env, project_id_env, region_env. No secrets — only env var names.",
+    "provider_config": {},
     "agents": {
       "*": {
-        "enabled": true
+        "enabled": true,
+        "_comment_api_timeout": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local like Ollama/MLX). On timeout: retry once, then stop_reason='timeout' with partial result.",
+        "api_timeout": 300,
+        "_comment_compact": "Context compaction: compact_threshold (0-1, ratio triggering compaction), compact_keep_turns (recent turns kept), compact_keep_first (initial turns kept)",
+        "compact_threshold": 0.8,
+        "compact_keep_turns": 5,
+        "compact_keep_first": 1,
+        "_comment_provider": "Per-agent provider override: different agents can use different providers",
+        "_comment_provider_config": "Per-agent provider config override: { \"base_url\": \"http://localhost:11434/v1\", \"api_key_env\": \"MY_KEY\" }",
+        "_comment_mcpServers": "MCP servers available to this agent. Keys are server names. Use 'command' for stdio transport or 'url' for SSE.",
+        "mcpServers": {
+          "_comment_example_stdio": "Stdio transport: { \"command\": \"python\", \"args\": [\"-m\", \"my_mcp_server\"], \"env\": {\"API_KEY_ENV\": \"MY_API_KEY\"}, \"timeout\": 60 }",
+          "_comment_example_sse": "SSE transport: { \"url\": \"https://mcp.internal/sse\", \"headers\": {\"Authorization\": \"Bearer ...\"}, \"startup_timeout\": 15 }",
+          "_comment_trust": "trust: 'trusted' skips scanning results, 'check' (default) scans results, 'untrusted' scans results"
+        },
+        "_comment_hooks": "Config-driven shell hooks around agent callbacks (NEW in v1.17.0, #2087). Each hook point can have pre_command and post_command.",
+        "hooks": {
+          "_comment_pre_run": "Runs before agent loop starts. Env: AI_GUARDIAN_AGENT_NAME, AI_GUARDIAN_MODEL",
+          "_comment_post_run": "Runs after agent loop ends. Env: AI_GUARDIAN_STOP_REASON, AI_GUARDIAN_TURNS",
+          "_comment_between_turns": "Runs between each agent turn. Env: AI_GUARDIAN_TURN_NUMBER",
+          "_comment_example": "{ \"pre_run\": { \"pre_command\": \"echo Starting agent\" }, \"post_run\": { \"post_command\": \"curl -X POST https://webhook/done\" } }"
+        }
       }
     }
   },
@@ -23909,6 +24472,2990 @@ Violation logging is **extremely efficient**:
       }
     },
     "bundle_ttl_minutes": 30
+  }
+}
+```
+
+# === ai-guardian-config.schema.json ===
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/ai-guardian-config.schema.json",
+  "title": "AI Guardian Configuration",
+  "description": "Configuration file for ai-guardian security tool that protects IDE AI agents from unauthorized tool access and security risks",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "permissions": {
+      "type": "object",
+      "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "auto_directory_rules": {
+          "type": "object",
+          "description": "Auto-generate directory rules from skill permissions (NEW in v1.8.0, Issue #144). Eliminates duplication by automatically creating directory access rules for allowed skills. When enabled, scans standard skill locations and generates 'allow' directory rules for skills matching permission patterns. Generated rules are inserted FIRST (weakest) so user rules can override. Rule evaluation order: Generated → User → Immutable (last-match-wins). Opt-in feature - requires explicit enable.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable auto-generation of directory rules from skill permissions. Default: false (opt-in). When true, generates directory rules for allowed skills and inserts them at the beginning of directory_rules.rules array (before user rules). On first enable, shows interactive confirmation with preview.",
+              "default": false
+            },
+            "skill_directories": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "auto"
+                  ],
+                  "description": "Auto-discover skill directories from standard locations"
+                },
+                {
+                  "type": "array",
+                  "description": "Explicit list of skill directory paths to scan",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              ],
+              "description": "Skill directories to scan for auto-generation. Default: 'auto' scans standard locations (./.claude/skills, ~/.claude/skills, $CLAUDE_CONFIG_DIR/skills). Can also provide explicit array of paths.",
+              "default": "auto"
+            },
+            "allow_symlinks": {
+              "type": "boolean",
+              "description": "Allow following symlinks when discovering skills. Default: true. In container environments (e.g., carbonite), skills are installed as symlinks. When true, symlinked skill directories that resolve to valid directories are followed. When false, all symlinks are skipped (original behavior). Broken symlinks are always skipped regardless of this setting.",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "rules": {
+          "type": "array",
+          "description": "Permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed.",
+          "items": {
+            "$ref": "#/definitions/permission_rule"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "permissions_directories": {
+      "oneOf": [
+        {
+          "type": "object",
+          "description": "Object format with allow/deny arrays (backward compatible)",
+          "properties": {
+            "deny": {
+              "type": "array",
+              "description": "Directories to scan for deny patterns",
+              "items": {
+                "$ref": "#/definitions/directory_entry"
+              }
+            },
+            "allow": {
+              "type": "array",
+              "description": "Directories to scan for allow patterns",
+              "items": {
+                "$ref": "#/definitions/directory_entry"
+              }
+            }
+          }
+        },
+        {
+          "type": "array",
+          "description": "Array format with mode in each entry (NEW: mode field actually used)",
+          "items": {
+            "$ref": "#/definitions/directory_entry"
+          }
+        }
+      ],
+      "description": "OPTIONAL/ADVANCED: Auto-discover tool permissions - HOW TO AUTO-POPULATE RULES. Scans directories/GitHub repos for permission files and merges discovered rules INTO permissions.rules. Data flow: scan directories → discover permission files → generate rules → merge into permissions.rules. NOT related to directory_rules (filesystem path access control). Most users should use remote_configs instead. Supports both object format (allow/deny arrays) and direct array format."
+    },
+    "remote_configs": {
+      "type": "object",
+      "description": "RECOMMENDED: Load policies from remote URLs (enterprise/team policies). This is the preferred way to manage permissions.",
+      "properties": {
+        "urls": {
+          "type": "array",
+          "description": "List of remote configuration URLs to fetch",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Simple URL format"
+              },
+              {
+                "$ref": "#/definitions/remote_url_entry"
+              }
+            ]
+          }
+        },
+        "refresh_interval_hours": {
+          "type": "number",
+          "description": "Hours between automatic refresh of remote configs",
+          "default": 12,
+          "minimum": 1
+        },
+        "expire_after_hours": {
+          "type": "number",
+          "description": "Hours until cached remote config expires",
+          "default": 168,
+          "minimum": 1
+        }
+      }
+    },
+    "secret_scanning": {
+      "type": "object",
+      "description": "Secret scanning with multi-engine support (v1.4.0+). Object with 'enabled' property that supports boolean (permanent) or time-based (temporary) formats. Multi-engine support added in v1.5.0 - configure multiple engines with automatic fallback.",
+      "properties": {
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "engines": {
+          "type": "array",
+          "description": "List of secret scanning engines to use. Tries engines in order, using first available. Supported: 'gitleaks' (default, industry standard), 'betterleaks' (faster fork), 'leaktk' (auto-pattern management), 'trufflehog' (700+ detectors with verification), 'detect-secrets' (baseline workflow), Python-based custom scanners (type: 'python'), or custom engine config objects. See docs/MULTI_ENGINE_SUPPORT.md for examples.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Built-in engine name: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
+                "enum": [
+                  "gitleaks",
+                  "betterleaks",
+                  "leaktk",
+                  "trufflehog",
+                  "detect-secrets",
+                  "secretlint",
+                  "gitguardian"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Built-in TOML pattern scanner (runs in-process, no binary needed)",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "toml-patterns"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "description": "Python-based custom scanner (runs in-process, no binary needed)",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "python"
+                  },
+                  "module": {
+                    "type": "string",
+                    "description": "Dotted Python module path containing the scanner class (e.g., 'my_company.scanners.api_checker')"
+                  },
+                  "path": {
+                    "type": "string",
+                    "description": "File path to a .py file containing the scanner class (e.g., '~/.config/ai-guardian/scanners/custom_scanner.py')"
+                  },
+                  "class": {
+                    "type": "string",
+                    "description": "Name of the Scanner subclass in the module or file"
+                  },
+                  "scanner_config": {
+                    "type": "object",
+                    "description": "Scanner-specific configuration passed to the scanner's configure() method",
+                    "additionalProperties": true
+                  },
+                  "ignore_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Per-engine glob patterns for files to skip scanning"
+                  },
+                  "file_patterns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "File extensions/patterns this scanner should handle for file type routing"
+                  }
+                },
+                "required": [
+                  "type",
+                  "class"
+                ]
+              },
+              {
+                "type": "object",
+                "description": "Custom engine configuration or preset override",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "description": "Engine type: 'gitleaks', 'betterleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', 'gitguardian', or 'custom'",
+                    "enum": [
+                      "gitleaks",
+                      "betterleaks",
+                      "leaktk",
+                      "trufflehog",
+                      "detect-secrets",
+                      "secretlint",
+                      "gitguardian",
+                      "custom"
+                    ]
+                  },
+                  "binary": {
+                    "type": "string",
+                    "description": "Binary name or path"
+                  },
+                  "command_template": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Command template with placeholders (required for custom type)"
+                  },
+                  "config_flag": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Flags for specifying config file"
+                  },
+                  "extra_flags": {
+                    "type": [
+                      "array",
+                      "null"
+                    ],
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Additional command-line flags"
+                  },
+                  "success_exit_code": {
+                    "type": "integer",
+                    "description": "Exit code indicating no secrets found",
+                    "default": 0
+                  },
+                  "secrets_found_exit_code": {
+                    "type": "integer",
+                    "description": "Exit code indicating secrets detected",
+                    "default": 1
+                  },
+                  "output_parser": {
+                    "type": "string",
+                    "description": "Parser type: 'gitleaks', 'leaktk', 'trufflehog', 'detect-secrets', 'secretlint', or 'gitguardian'",
+                    "enum": [
+                      "gitleaks",
+                      "leaktk",
+                      "trufflehog",
+                      "detect-secrets",
+                      "secretlint",
+                      "gitguardian"
+                    ],
+                    "default": "gitleaks"
+                  },
+                  "ignore_files": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Per-engine glob patterns for files to skip scanning. Merged with global ignore_files. Use when one engine has more false positives on certain file types (e.g., TruffleHog on test fixtures)."
+                  },
+                  "pattern_server": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "Per-engine pattern server configuration. The canonical location for pattern server config (replaces the deprecated global secret_scanning.pattern_server). Set to null to explicitly disable pattern server for this engine.",
+                    "additionalProperties": true,
+                    "properties": {
+                      "enabled": {
+                        "oneOf": [
+                          {
+                            "type": "boolean"
+                          },
+                          {
+                            "$ref": "#/definitions/time_based_feature"
+                          }
+                        ],
+                        "default": true
+                      },
+                      "url": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Pattern server base URL"
+                      },
+                      "patterns_endpoint": {
+                        "type": "string",
+                        "description": "Endpoint path for patterns (appended to url)",
+                        "default": "/patterns/gitleaks/8.18.1"
+                      },
+                      "warn_on_failure": {
+                        "type": "boolean",
+                        "description": "Show warning when pattern server fails",
+                        "default": true
+                      },
+                      "immutable": {
+                        "type": "boolean",
+                        "description": "If true, local configs cannot override this pattern_server",
+                        "default": false
+                      },
+                      "auth": {
+                        "$ref": "#/definitions/pattern_server_auth"
+                      },
+                      "cache": {
+                        "$ref": "#/definitions/pattern_server_cache"
+                      }
+                    }
+                  },
+                  "file_patterns": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "File extensions/patterns this engine should handle for file type routing (e.g., ['*.env*', '*.yaml', '*.json']). Engines without file_patterns handle all files. Used with any-match and consensus strategies to route files to specialized engines."
+                  }
+                },
+                "required": [
+                  "type"
+                ]
+              }
+            ]
+          },
+          "default": [
+            "gitleaks"
+          ]
+        },
+        "execution_strategy": {
+          "type": "string",
+          "description": "Strategy for executing multiple scanner engines (v1.6.0+). 'first-match' uses first available engine (default, backward compatible). 'any-match' runs all engines and blocks if ANY finds secrets (maximum security, defense-in-depth). 'consensus' blocks only if N engines agree (reduces false positives, configurable via consensus_threshold). See docs/MULTI_ENGINE_SUPPORT.md for use cases and examples.",
+          "enum": [
+            "first-match",
+            "any-match",
+            "consensus"
+          ],
+          "default": "first-match"
+        },
+        "consensus_threshold": {
+          "type": "integer",
+          "description": "Minimum number of engines that must agree before blocking when using 'consensus' execution strategy (v1.6.0+). For example, threshold=2 means at least 2 engines must find the same secret at the same location before blocking. Higher values reduce false positives but may miss some secrets. Only used when execution_strategy='consensus'.",
+          "minimum": 1,
+          "default": 2
+        },
+        "cache_results": {
+          "type": "boolean",
+          "description": "Enable result caching to skip re-scanning unchanged content. Cached results are keyed by content hash, engine type, and config hash. Default: false.",
+          "default": false
+        },
+        "cache_ttl_hours": {
+          "type": "number",
+          "description": "Cache time-to-live in hours. Cached results older than this are re-scanned. Only used when cache_results is true. Default: 24.",
+          "default": 24,
+          "minimum": 0.1
+        },
+        "incremental": {
+          "type": "boolean",
+          "description": "Enable incremental scanning. Only scans files whose content has changed since last scan. Requires cache_results to be enabled (auto-enabled if not set). Default: false.",
+          "default": false
+        },
+        "audit_logging": {
+          "type": "boolean",
+          "description": "Enable audit logging of all scan operations for compliance. Logs engine used, scan results, timing, and failures to JSONL file. Default: false.",
+          "default": false
+        },
+        "remote_engine_config": {
+          "type": "object",
+          "description": "Fetch engine configuration from a remote URL for centralized enterprise management. Remote config can supplement or replace local engine config.",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "HTTPS URL to fetch engine config JSON from"
+            },
+            "refresh_interval_hours": {
+              "type": "integer",
+              "description": "How often to refresh remote config (hours)",
+              "default": 12
+            },
+            "expire_after_hours": {
+              "type": "integer",
+              "description": "Cache expiration for remote config (hours)",
+              "default": 168
+            },
+            "auth_token_env": {
+              "type": "string",
+              "description": "Environment variable name containing auth token for the remote URL"
+            },
+            "immutable": {
+              "type": "boolean",
+              "description": "If true, remote config completely replaces local engine config. If false (default), remote engines are merged with local.",
+              "default": false
+            }
+          },
+          "required": [
+            "url"
+          ]
+        },
+        "compliance": {
+          "type": "object",
+          "description": "Compliance reporting configuration for generating audit reports.",
+          "properties": {
+            "framework": {
+              "type": "string",
+              "description": "Target compliance framework",
+              "enum": [
+                "hipaa",
+                "pci-dss",
+                "soc2"
+              ]
+            }
+          }
+        },
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip during secret scanning (NEW in v1.4.0). Useful for test fixtures, examples, and documentation with fake credentials. Supports wildcards: * (any chars except /), ** (any chars including /), ? (single char), ~ (home directory). Examples: '**/tests/fixtures/**', '**/examples/**/*.example.*', '**/.gitleaks.toml'",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip during secret scanning (NEW in v1.4.0). Useful for tools that read test data or documentation. Supports wildcards: * (any chars), ? (single char). Examples: [] (scan all tools), specific use cases vary. Most users should use ignore_files instead for test fixtures.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "description": "Regex patterns for known-safe secret values to ignore (for false positives). Unlike ignore_files which skips entire files, this lets you keep scanning but exclude specific known-safe values such as test API key prefixes or example tokens. Complements inline '# gitleaks:allow' for cases where you cannot modify the source file. Supports time-based patterns for temporary allowlisting.",
+          "items": {
+            "$ref": "#/definitions/string_or_timed_pattern"
+          },
+          "default": []
+        },
+        "pattern_server": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "DEPRECATED: Move to per-engine format: secret_scanning.engines[].pattern_server. This global location only applies to gitleaks but implies all engines. Supported for backward compatibility; will be removed in v2.0.0. Run: ai-guardian setup --migrate-pattern-server",
+          "deprecated": true,
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "oneOf": [
+                {
+                  "type": "boolean",
+                  "description": "Controls whether the pattern server is active. Supports boolean or time-based temporary disable."
+                },
+                {
+                  "$ref": "#/definitions/time_based_feature"
+                }
+              ],
+              "default": false
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pattern server base URL (required if using pattern server)"
+            },
+            "patterns_endpoint": {
+              "type": "string",
+              "description": "Endpoint path for patterns (appended to url)",
+              "default": "/patterns/gitleaks/8.18.1"
+            },
+            "warn_on_failure": {
+              "type": "boolean",
+              "description": "Show warning when pattern server fails (auth errors, network errors, etc). Default: true. Set to false to suppress warnings.",
+              "default": true
+            },
+            "immutable": {
+              "type": "boolean",
+              "description": "If true, local configs cannot override this pattern_server section. Used in remote configs to enforce enterprise policies.",
+              "default": false
+            },
+            "auth": {
+              "$ref": "#/definitions/pattern_server_auth"
+            },
+            "cache": {
+              "$ref": "#/definitions/pattern_server_cache"
+            }
+          }
+        },
+        "validate_secrets": {
+          "type": "boolean",
+          "description": "Enable secret liveness validation (NEW in v1.11.0). When enabled, detected secrets are validated against their provider API to check if they're still active. Inactive (revoked/expired) secrets produce a warning instead of blocking. PRIVACY NOTE: sends detected secrets to provider APIs. Requires explicit opt-in. See Issue #971.",
+          "default": false
+        },
+        "validation_timeout_ms": {
+          "type": "integer",
+          "description": "Timeout in milliseconds for each secret validation HTTP request. Applies per-secret, not total. Default: 3000ms.",
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 30000
+        },
+        "on_inactive": {
+          "type": "string",
+          "description": "Action to take when a secret is validated as inactive (revoked/expired). 'warn' logs a warning but does not block. 'allow' silently skips without warning. Verified-active and unverified secrets always block regardless of this setting.",
+          "enum": [
+            "warn",
+            "allow"
+          ],
+          "default": "warn"
+        },
+        "min_entropy": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Minimum Shannon entropy threshold for secret detection (v1.12.0+). Matches below this value are rejected as likely placeholders. Range: 0.0 (all identical chars) to ~6.0 (fully random). Default: 3.0 (filters placeholders while keeping real secrets which score 4.0+). Set to null to disable.",
+          "minimum": 0,
+          "maximum": 8,
+          "default": 3.0
+        },
+        "stopwords": {
+          "type": "array",
+          "description": "Additional stopwords for false positive filtering (v1.12.0+). MERGED with (not replacing) the bundled stopwords. Matched secrets containing any stopword (case-insensitive substring) are suppressed. Minimum word length: 3 characters.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": true
+    },
+    "secret_redaction": {
+      "type": "object",
+      "description": "Secret redaction configuration (NEW in v1.5.0). Redacts secrets from tool outputs instead of blocking them entirely, providing defense-in-depth while allowing work to continue. Part of Phase 4: Hermes Security Patterns integration.",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "log-only",
+            "warn"
+          ],
+          "description": "Action to take when secrets are detected: 'log-only' (redact silently), 'warn' (redact with user warning and notification)",
+          "default": "warn"
+        },
+        "preserve_format": {
+          "type": "boolean",
+          "description": "Preserve format when redacting (e.g., 'sk-proj...901vwx' instead of '[REDACTED]')",
+          "default": true
+        },
+        "log_redactions": {
+          "type": "boolean",
+          "description": "Log redaction events to violation logger",
+          "default": true
+        },
+        "additional_patterns": {
+          "type": "array",
+          "description": "Custom secret patterns to redact in addition to built-in patterns",
+          "items": {
+            "type": "object",
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to match (case-insensitive)"
+              },
+              "strategy": {
+                "type": "string",
+                "enum": [
+                  "preserve_prefix_suffix",
+                  "full_redact",
+                  "env_assignment",
+                  "json_field",
+                  "connection_string"
+                ],
+                "description": "Masking strategy to apply",
+                "default": "preserve_prefix_suffix"
+              },
+              "type": {
+                "type": "string",
+                "description": "Human-readable name for this secret type"
+              }
+            },
+            "required": [
+              "pattern",
+              "type"
+            ]
+          },
+          "default": []
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "pattern_server": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "OPTIONAL/ADVANCED: Secret redaction patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise secret patterns that can be updated as new secret formats emerge. Supports override modes: 'replace' (use only server patterns) or 'extend' (add to defaults).",
+          "additionalProperties": true,
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pattern server base URL (required if using pattern server)"
+            },
+            "patterns_endpoint": {
+              "type": "string",
+              "description": "Endpoint path for secret patterns (appended to url)",
+              "default": "/patterns/secrets/v1"
+            },
+            "auth": {
+              "$ref": "#/definitions/pattern_server_auth"
+            },
+            "cache": {
+              "$ref": "#/definitions/pattern_server_cache"
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "scan_pii": {
+      "type": "object",
+      "description": "PII detection for GDPR/CCPA compliance (v1.6.0+). Scans user prompts, file reads, and tool outputs for personally identifiable information. Phase 1 (v1.6.0): SSN, credit card, phone, email, US passport, IBAN, international phone. Phase 2 defaults (v1.10.0): medical_id, passport, uk_nin. Phase 2 opt-in: canada_sin, india_aadhaar, address, email.",
+      "properties": {
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "pii_types": {
+          "type": "array",
+          "description": "PII types to detect. Remove types from this list to disable detection for specific PII categories.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "ssn",
+              "credit_card",
+              "phone",
+              "email",
+              "us_passport",
+              "iban",
+              "intl_phone",
+              "medical_id",
+              "passport",
+              "canada_sin",
+              "uk_nin",
+              "india_aadhaar",
+              "address"
+            ]
+          },
+          "default": [
+            "ssn",
+            "credit_card",
+            "phone",
+            "us_passport",
+            "iban",
+            "intl_phone",
+            "medical_id",
+            "passport",
+            "uk_nin"
+          ]
+        },
+        "action": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "redact",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action when PII is detected: 'block' (block in all hooks), 'redact' (replace PII with masked text in PostToolUse, block in PreToolUse/UserPromptSubmit), 'warn' (log violation and show warning but allow), 'log-only' (log violation silently), 'ask' prompts user interactively",
+          "default": "block"
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip during PII scanning (e.g., 'tests/**', '*.test.py'). Useful for test files containing example PII data.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip during PII scanning. Supports wildcards: * (any chars), ? (single char). Examples: 'mcp__*' (ignore all MCP tools), 'Skill:*' (ignore all skills), 'Bash' (ignore Bash tool). Useful for tools whose output legitimately contains PII-like patterns.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "description": "Regex patterns for known-safe PII values to ignore (for false positives). Unlike ignore_files which skips entire files, this lets you keep scanning but exclude specific known-safe values such as corporate email domains or example data. Supports time-based patterns for temporary allowlisting.",
+          "items": {
+            "$ref": "#/definitions/string_or_timed_pattern"
+          },
+          "default": []
+        },
+        "pattern_server": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "OPTIONAL/ADVANCED: PII patterns from a pattern server (NEW in v1.9.0). Configure to use enterprise or community PII patterns that can be updated without code changes. Supports extend (add to defaults) and replace (override defaults) modes.",
+          "additionalProperties": true,
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pattern server base URL (required if using pattern server)"
+            },
+            "patterns_endpoint": {
+              "type": "string",
+              "description": "Endpoint path for PII patterns (appended to url)",
+              "default": "/patterns/pii/v1"
+            },
+            "auth": {
+              "$ref": "#/definitions/pattern_server_auth"
+            },
+            "cache": {
+              "$ref": "#/definitions/pattern_server_cache"
+            }
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "pattern_server": {
+      "type": "object",
+      "description": "DEPRECATED: Move to secret_scanning.pattern_server (v1.7.0+). This root-level location is supported for backward compatibility but will be removed in v2.0.0.",
+      "deprecated": true,
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "Controls whether the pattern server is active"
+            },
+            {
+              "$ref": "#/definitions/time_based_feature"
+            }
+          ],
+          "default": false
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Pattern server base URL"
+        },
+        "patterns_endpoint": {
+          "type": "string",
+          "description": "Endpoint path for patterns (appended to url)",
+          "default": "/patterns/gitleaks/8.18.1"
+        },
+        "warn_on_failure": {
+          "type": "boolean",
+          "description": "Show warning when pattern server fails (auth errors, network errors, etc). Default: true. Set to false to suppress warnings.",
+          "default": true
+        },
+        "auth": {
+          "$ref": "#/definitions/pattern_server_auth"
+        },
+        "cache": {
+          "$ref": "#/definitions/pattern_server_cache"
+        }
+      }
+    },
+    "prompt_injection": {
+      "type": "object",
+      "description": "Prompt injection detection configuration (NEW in v1.2.0, time-based support in v1.4.0). Protects against prompt injection attacks that try to manipulate AI behavior.",
+      "additionalProperties": true,
+      "properties": {
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action on violation (NEW in v1.7.0): 'block' prevents execution (default), 'warn' logs violation and shows warning to user but allows execution, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively",
+          "default": "block"
+        },
+        "detector": {
+          "type": "string",
+          "enum": [
+            "heuristic",
+            "ml",
+            "hybrid",
+            "rebuff",
+            "llm-guard"
+          ],
+          "description": "Detection method: heuristic (local patterns, <1ms), ml (ML-only via daemon, 10-50ms), hybrid (heuristic first, ML for uncertain cases), rebuff/llm-guard (legacy stubs)",
+          "default": "heuristic"
+        },
+        "ml_engines": {
+          "type": "array",
+          "description": "ML engines for prompt injection detection (NEW in v1.11.0, Issue #185). Each engine runs an ONNX model in the daemon process. Requires: onnxruntime (included on Python < 3.13) and ai-guardian ml download.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "llm-guard"
+                ],
+                "description": "Engine type"
+              },
+              "model": {
+                "type": "string",
+                "description": "Model name from registry (e.g., protectai/deberta-v3-base-prompt-injection-v2)"
+              },
+              "threshold": {
+                "type": "number",
+                "description": "Confidence threshold for this engine (0.0-1.0)",
+                "default": 0.85,
+                "minimum": 0.0,
+                "maximum": 1.0
+              }
+            },
+            "required": [
+              "type",
+              "model"
+            ]
+          },
+          "default": []
+        },
+        "ml_strategy": {
+          "type": "string",
+          "enum": [
+            "first-match",
+            "any-match",
+            "consensus"
+          ],
+          "description": "Execution strategy across ML engines: first-match (use first detection), any-match (flag if any engine detects), consensus (flag if N engines agree)",
+          "default": "any-match"
+        },
+        "consensus_threshold": {
+          "type": "integer",
+          "description": "Minimum engines that must agree for consensus strategy",
+          "default": 2,
+          "minimum": 1
+        },
+        "auto_download_model": {
+          "type": "boolean",
+          "description": "Automatically download ML models from HuggingFace Hub when the daemon starts and ml_engines is configured. Only downloads models listed in the built-in registry. Set to false to disable outbound downloads.",
+          "default": true
+        },
+        "fallback_on_error": {
+          "type": "string",
+          "enum": [
+            "heuristic",
+            "block",
+            "allow"
+          ],
+          "description": "Action when ML detection is unavailable (daemon not running, model not loaded): heuristic (use pattern detection), block (fail closed), allow (fail open)",
+          "default": "heuristic"
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Detection sensitivity: low (obvious attacks only), medium (balanced), high (more aggressive)",
+          "default": "medium"
+        },
+        "max_score_threshold": {
+          "type": "number",
+          "description": "Confidence threshold (0.0-1.0) for blocking prompts",
+          "default": 0.75,
+          "minimum": 0.0,
+          "maximum": 1.0
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "description": "Regex patterns to ignore (for false positives). Supports time-based patterns.",
+          "items": {
+            "$ref": "#/definitions/string_or_timed_pattern"
+          },
+          "default": []
+        },
+        "custom_patterns": {
+          "type": "array",
+          "description": "Additional detection patterns to check",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "jailbreak_patterns": {
+          "type": "array",
+          "description": "Additional jailbreak-specific detection patterns (NEW in v1.6.0, Issue #263). Extends built-in jailbreak patterns that detect role-play attacks (DAN mode, sudo mode), identity manipulation (pretend you are unrestricted), constraint removal (no rules now), and hypothetical framing (fictional scenario without rules). User-defined patterns are matched against user prompts only (not file content).",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip during prompt injection detection (NEW in v1.4.0). Supports wildcards: * (any chars except /), ** (any chars including /), ? (single char), ~ (home directory). Example: '**/.claude/skills/*/SKILL.md' to ignore all skill documentation files.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip during prompt injection detection (NEW in v1.4.0). Supports wildcards: * (any chars), ? (single char). Examples: 'Skill:code-review' (ignore specific skill), 'Skill:*' or 'Skill' (ignore all skills), 'mcp__*' (ignore all MCP tools). Useful for tools that legitimately read documentation containing example attack patterns.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "unicode_detection": {
+          "type": "object",
+          "description": "Unicode-based attack detection configuration (NEW in Phase 2: Issue #195). Detects attacks using invisible characters, bidirectional overrides, tag characters, and homoglyphs that bypass pattern matching.",
+          "additionalProperties": true,
+          "properties": {
+            "enabled": {
+              "$ref": "#/definitions/time_based_enabled"
+            },
+            "detect_zero_width": {
+              "type": "boolean",
+              "description": "Detect zero-width characters (9 types: zero-width space, joiner, non-joiner, etc.) that break pattern matching",
+              "default": true
+            },
+            "detect_bidi_override": {
+              "type": "boolean",
+              "description": "Detect bidirectional text override characters (RTL/LTR override) used for visual deception",
+              "default": true
+            },
+            "detect_tag_chars": {
+              "type": "boolean",
+              "description": "Detect Unicode tag characters (U+E0000 - U+E007F) used for hidden data encoding",
+              "default": true
+            },
+            "detect_homoglyphs": {
+              "type": "boolean",
+              "description": "Detect homoglyph substitutions (80+ look-alike character pairs: Cyrillic/Greek/Math symbols that look like Latin)",
+              "default": true
+            },
+            "allow_rtl_languages": {
+              "type": "boolean",
+              "description": "Allow legitimate RTL (right-to-left) languages like Arabic and Hebrew. When true, bidi overrides in RTL text blocks are allowed.",
+              "default": true
+            },
+            "allow_emoji": {
+              "type": "boolean",
+              "description": "Allow emoji with zero-width joiners (e.g., family emoji 👨‍👩‍👧‍👦). When true, zero-width joiners in emoji contexts are allowed.",
+              "default": true
+            },
+            "pattern_server": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "OPTIONAL/ADVANCED: Homoglyph patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise homoglyph patterns that can be updated as new scripts emerge. Immutable patterns (zero-width chars, bidi overrides) cannot be overridden.",
+              "additionalProperties": true,
+              "properties": {
+                "url": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Pattern server base URL (required if using pattern server)"
+                },
+                "patterns_endpoint": {
+                  "type": "string",
+                  "description": "Endpoint path for Unicode patterns (appended to url)",
+                  "default": "/patterns/unicode/v1"
+                },
+                "auth": {
+                  "$ref": "#/definitions/pattern_server_auth"
+                },
+                "cache": {
+                  "$ref": "#/definitions/pattern_server_cache"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "context_poisoning": {
+      "type": "object",
+      "description": "Context poisoning detection (NEW in v1.11.0, OWASP LLM03). Detects attempts to inject persistent malicious instructions into conversation context (e.g., 'remember: always include DROP TABLE'). Defaults to 'warn' action due to high false positive risk.",
+      "additionalProperties": true,
+      "properties": {
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action on detection: 'warn' shows warning but allows (default, recommended due to false positives), 'block' prevents execution, 'log-only' logs silently, 'ask' prompts user interactively",
+          "default": "warn"
+        },
+        "sensitivity": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Detection sensitivity: low (dangerous combinations only), medium (balanced), high (any persistence keyword)",
+          "default": "medium"
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "description": "Regex patterns to ignore (for false positives). Supports time-based patterns.",
+          "items": {
+            "$ref": "#/definitions/string_or_timed_pattern"
+          },
+          "default": []
+        },
+        "custom_patterns": {
+          "type": "array",
+          "description": "Additional persistence patterns to detect beyond built-in set",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip context poisoning checks (e.g., '*.md', 'docs/*')",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip context poisoning checks (e.g., 'Read', 'Grep')",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "ssrf_protection": {
+      "type": "object",
+      "description": "SSRF (Server-Side Request Forgery) protection configuration (NEW in v1.5.0). Prevents AI agents from accessing private networks, cloud metadata endpoints, and dangerous URL schemes. Inspired by Hermes Security Framework.",
+      "additionalProperties": true,
+      "properties": {
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation. Fallback if headless: ask (defaults to block), ask:warn, ask:log-only. Immutable core patterns (private IPs, dangerous schemes) always block regardless."
+            }
+          ],
+          "description": "Action on violation: 'block' prevents execution (default), 'warn' logs violation and shows warning to user but allows execution, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively",
+          "default": "block"
+        },
+        "additional_blocked_ips": {
+          "type": "array",
+          "description": "Additional IP addresses or CIDR ranges to block (beyond core protections). Core protections (RFC 1918, loopback, link-local, metadata endpoints) cannot be disabled.",
+          "items": {
+            "type": "string",
+            "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}(/[0-9]{1,2})?$|^([0-9a-fA-F:]+)(/[0-9]{1,3})?$",
+            "description": "IP address or CIDR range (IPv4 or IPv6)"
+          },
+          "default": []
+        },
+        "additional_blocked_domains": {
+          "type": "array",
+          "description": "Additional domain names to block (beyond core protections). Core protections (metadata.google.internal, etc.) cannot be disabled. Supports exact domains, subdomain matching, and wildcard patterns (* and ? wildcards).",
+          "items": {
+            "type": "string",
+            "description": "Domain name or wildcard pattern to block. Examples: 'exact.example.com' (exact + subdomains), '*.internal.com' (all .internal.com), 'admin.*' (admin with any suffix), '*.corp.*' (any .corp. domain), 'test?.example.com' (test1, test2, etc.)"
+          },
+          "default": []
+        },
+        "allow_localhost": {
+          "type": "boolean",
+          "description": "Allow localhost access (127.0.0.1, ::1). Default: false. Enable for local development scenarios.",
+          "default": false
+        },
+        "allowed_domains": {
+          "type": "array",
+          "description": "Domain allow-list to override deny-list blocks (evaluated AFTER deny-list). Allows specific trusted domains while maintaining core protections. Core protections (metadata endpoints, dangerous schemes) cannot be overridden. Supports exact matching, subdomain matching, and regex patterns. Entries containing regex metacharacters (\\, *, +, ?, [, ], (, ), {, }, |, ^, $, :) are treated as regex and matched with re.fullmatch() against hostname and hostname:port. Plain strings use exact/subdomain matching (backward compatible).",
+          "items": {
+            "type": "string",
+            "description": "Domain name or regex pattern to allow (e.g., 'api.corp.internal', '.*\\.example\\.com', 'localhost:19200', 'localhost:\\d+')"
+          },
+          "default": []
+        },
+        "path_based_rules": {
+          "type": "array",
+          "description": "Path-based filtering rules for granular access control (NEW in v1.6.0). Allows blocking/allowing specific URL paths on domains. Useful for allowing public API endpoints while blocking admin pages on the same domain. Evaluation order: 1) Domain-level checks (blocked_domains/allowed_domains), 2) Path rules (if domain has path rules defined). Supports glob patterns: * (any chars except /), ** (any chars including /), ? (single char).",
+          "items": {
+            "type": "object",
+            "required": [
+              "domain"
+            ],
+            "properties": {
+              "domain": {
+                "type": "string",
+                "description": "Domain to apply path rules to (e.g., 'api.example.com', 'internal.corp.local')"
+              },
+              "allowed_paths": {
+                "type": "array",
+                "description": "URL paths to allow on this domain. If domain is blocked, these paths override the block. Glob patterns supported: /api/* (API endpoints), /public/** (recursive), /health (exact), /v?/users (version wildcard). Query parameters are included in matching.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              },
+              "blocked_paths": {
+                "type": "array",
+                "description": "URL paths to block on this domain. If domain is allowed, these paths override the allow. Glob patterns supported: /admin/* (admin pages), /internal/** (recursive), /*.php (file extension), /*secret* (contains). Query parameters are included in matching.",
+                "items": {
+                  "type": "string"
+                },
+                "default": []
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": []
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip during SSRF checks. Supports wildcards: * (any chars except /), ** (any chars including /), ? (single char), ~ (home directory).",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip during SSRF checks. Supports wildcards: * (any chars), ? (single char).",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "pattern_server": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "OPTIONAL/ADVANCED: SSRF protection patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise patterns instead of hardcoded defaults. Supports three-tier system: immutable core (metadata endpoints, dangerous schemes) + pattern server/defaults (RFC 1918 ranges) + local config additions.",
+          "additionalProperties": true,
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pattern server base URL (required if using pattern server)"
+            },
+            "patterns_endpoint": {
+              "type": "string",
+              "description": "Endpoint path for SSRF patterns (appended to url)",
+              "default": "/patterns/ssrf/v1"
+            },
+            "allow_override": {
+              "type": "boolean",
+              "description": "Allow pattern server to override default patterns (RFC 1918 ranges). Immutable patterns (metadata endpoints) cannot be overridden.",
+              "default": true
+            },
+            "validate_critical": {
+              "type": "boolean",
+              "description": "Validate that critical patterns are present in final config (auto-add if missing)",
+              "default": true
+            },
+            "auth": {
+              "$ref": "#/definitions/pattern_server_auth"
+            },
+            "cache": {
+              "$ref": "#/definitions/pattern_server_cache"
+            }
+          }
+        }
+      }
+    },
+    "supply_chain": {
+      "type": "object",
+      "description": "Supply chain scanning configuration (NEW in v1.11.0, Issue #1055). Detects malicious patterns in agent configuration files — hooks, MCP server configs, and plugin files. Catches download-and-execute chains, obfuscation, env var hijacking, network exfiltration, reverse shells, and plugin-specific threats.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
+          "default": "block",
+          "description": "Action to take when supply chain threats are detected. block = prevent operation, warn = allow with warning, log-only = silent logging, ask = interactive prompt (with fallback: block, warn, or log-only if headless)."
+        },
+        "scan_hooks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan agent hook configuration files (hooks.json, settings.json)"
+        },
+        "scan_mcp_configs": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan MCP server command configurations for suspicious patterns"
+        },
+        "scan_plugins": {
+          "type": "boolean",
+          "default": true,
+          "description": "Scan plugin files (OpenCode .ts, AiderDesk extensions) for dangerous APIs"
+        },
+        "allowlist_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "File paths to skip during supply chain scanning (supports ~ expansion and glob patterns). ai-guardian's own plugin files are always skipped."
+        }
+      }
+    },
+    "code_scanning": {
+      "type": "object",
+      "description": "Python code security scanning with Bandit (NEW in v1.13.0, Issue #828). Detects insecure code patterns in .py files: eval/exec, subprocess shell injection, weak crypto (md5/sha1), SQL injection, hardcoded credentials, path traversal, and XML vulnerabilities. Runs on PreToolUse Write/Edit and ai-guardian scan.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable Python code security scanning"
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
+          "default": "warn",
+          "description": "Action when insecure code is detected. block = prevent Write/Edit, warn = allow with warning, log-only = silent logging, ask = interactive prompt."
+        },
+        "severity_threshold": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "default": "MEDIUM",
+          "description": "Minimum Bandit severity to report. LOW = all findings, MEDIUM = medium+high (recommended), HIGH = critical only."
+        },
+        "allowlist": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "test_id": {
+                "type": "string",
+                "description": "Bandit test ID to suppress (e.g. B101, B324)"
+              },
+              "file": {
+                "type": "string",
+                "description": "Optional file path prefix to scope the suppression (e.g. tests/)"
+              },
+              "reason": {
+                "type": "string",
+                "description": "Human-readable explanation of why this finding is safe"
+              }
+            },
+            "required": [
+              "test_id"
+            ]
+          },
+          "default": [],
+          "description": "Allowlist entries to suppress specific Bandit findings by test ID, optionally scoped to a file path prefix. Bandit's native # nosec annotation is also honored."
+        },
+        "ignore_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for Python files to skip (e.g. tests/**/*.py, migrations/)"
+        }
+      }
+    },
+    "scan_offensive": {
+      "type": "object",
+      "description": "Offensive language scanner (NEW in v1.13.0, Issue #1417). Detects profanity, slurs, and non-inclusive terminology in code, comments, and variable names. Disabled by default — must opt in.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable offensive language scanning. Off by default."
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "log",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
+          "default": "log",
+          "description": "Action when offensive language is detected."
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "profanity",
+              "slurs",
+              "inclusive_language"
+            ]
+          },
+          "default": [
+            "profanity",
+            "slurs",
+            "inclusive_language"
+          ],
+          "description": "Pattern categories to enable. All three categories enabled by default when scanner is on. inclusive_language detects master/slave, blacklist/whitelist, dummy, etc."
+        },
+        "ignore_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Glob patterns for files to skip."
+        },
+        "ignore_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool names to skip offensive language scanning for."
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Regex patterns to suppress specific matches."
+        }
+      }
+    },
+    "canary_detection": {
+      "type": "object",
+      "description": "Canary token detection (NEW in v1.14.0, Issue #1392). Detects user-registered tripwire values in AI output to catch data exfiltration. Disabled by default — requires at least one token to be useful.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable/disable canary token detection. Off by default — set to true after registering at least one token."
+        },
+        "action": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode"
+            }
+          ],
+          "default": "block",
+          "description": "Action when a canary token is detected. 'block' prevents the operation (default and recommended)."
+        },
+        "tokens": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string",
+                "description": "Exact string to match (case-sensitive)."
+              },
+              "pattern": {
+                "type": "string",
+                "description": "Regex pattern to match canary-format values."
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable label for this token (shown in violation logs)."
+              }
+            },
+            "additionalProperties": false
+          },
+          "default": [],
+          "description": "List of canary tokens. Each entry must have either 'value' (exact match) or 'pattern' (regex), plus an optional 'description'."
+        }
+      }
+    },
+    "exfil_detection": {
+      "type": "object",
+      "description": "Exfiltration behavior detection (NEW in v1.14.0, Issue #1393). Detects bash commands that steal credentials: curl/wget with token vars, base64 encoding of secrets, key file theft, cloud credential exfil, env var collection. Complements config_file_scanning with broader behavioral coverage.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable/disable exfiltration behavior detection."
+        },
+        "action": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode"
+            }
+          ],
+          "default": "block",
+          "description": "Action when a credential exfiltration pattern is detected."
+        },
+        "allowlist_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "List of regex patterns to allowlist commands. If any pattern matches the command, scanning is skipped."
+        }
+      }
+    },
+    "config_file_scanning": {
+      "type": "object",
+      "description": "Config file scanning configuration (NEW in v1.5.0, Phase 3 of Hermes integration). Detects credential exfiltration commands in AI configuration files (CLAUDE.md, AGENTS.md, .cursorrules) that could cause persistent credential theft across all AI sessions. Scans for 8 core patterns: curl/wget with env vars, env|curl, printenv exfil, file exfil, base64 exfil, AWS S3, GCP Storage.",
+      "additionalProperties": true,
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "type": "string",
+          "oneOf": [
+            {
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action on violation: 'block' prevents execution (default), 'warn' logs violation and shows warning to user but allows execution, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively",
+          "default": "block"
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "additional_files": {
+          "type": "array",
+          "description": "Additional config file patterns to scan (beyond defaults: CLAUDE.md, AGENTS.md, .cursorrules, .aider.conf.yml, .github/CLAUDE.md). Examples: '.github/copilot-instructions.md', 'AI_INSTRUCTIONS.md', '.windsurf/rules.md'",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_files": {
+          "type": "array",
+          "description": "Glob patterns for files to skip during config file scanning. Useful for documentation with security examples. Supports wildcards: * (any chars except /), ** (any chars including /), ? (single char). Examples: '**/docs/security-examples.md', '**/examples/**'",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "ignore_tools": {
+          "type": "array",
+          "description": "Tool name patterns to skip during config file scanning. Supports wildcards: * (any chars), ? (single char).",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "additional_patterns": {
+          "type": "array",
+          "description": "Additional regex patterns to detect (beyond 8 core patterns). Core patterns cannot be disabled: curl with env vars, wget with env vars, env|curl, printenv|curl, cat /etc/|curl, base64|curl, aws s3 cp, gcloud storage cp",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "pattern_server": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "OPTIONAL/ADVANCED: Config exfiltration patterns from a pattern server (NEW in v1.5.0). Configure to use enterprise patterns for detecting credential exfiltration in AI config files. Immutable core patterns cannot be overridden.",
+          "additionalProperties": true,
+          "properties": {
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Pattern server base URL (required if using pattern server)"
+            },
+            "patterns_endpoint": {
+              "type": "string",
+              "description": "Endpoint path for config exfiltration patterns (appended to url)",
+              "default": "/patterns/config-exfil/v1"
+            },
+            "auth": {
+              "$ref": "#/definitions/pattern_server_auth"
+            },
+            "cache": {
+              "$ref": "#/definitions/pattern_server_cache"
+            }
+          }
+        }
+      }
+    },
+    "directory_rules": {
+      "oneOf": [
+        {
+          "type": "array",
+          "description": "DEPRECATED: Array format. Use object format with action field instead.",
+          "items": {
+            "type": "object",
+            "required": [
+              "mode",
+              "paths"
+            ],
+            "properties": {
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "allow",
+                  "deny"
+                ]
+              },
+              "paths": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Filesystem path access control - Controls which PATHS can be accessed/read. Order-based directory access control rules (NEW in v1.6.0). Rules are evaluated sequentially with last match winning. Supports flexible allow/deny patterns for enterprise skill allowlists and path restrictions. COMPLETELY SEPARATE from permissions_directories (which auto-discovers TOOL permissions, not path restrictions). Common confusion: permissions_directories = where to find tool permission config, directory_rules = which paths to protect.",
+          "properties": {
+            "action": {
+              "type": "string",
+              "oneOf": [
+                {
+                  "enum": [
+                    "block",
+                    "warn",
+                    "log-only"
+                  ]
+                },
+                {
+                  "type": "string",
+                  "pattern": "^ask(:(block|warn|log-only))?$",
+                  "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+                }
+              ],
+              "description": "Action on violation: 'block' prevents access (default), 'warn' logs violation and shows warning to user but allows access, 'log-only' logs violation silently without user warning, 'ask' prompts user interactively. Applies to ALL rules.",
+              "default": "block"
+            },
+            "exclusions": {
+              "type": "array",
+              "description": "Glob patterns that are always allowed, even when matched by deny rules. Used by ask mode's Allow Always flow to persist user decisions.",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            },
+            "rules": {
+              "type": "array",
+              "description": "List of directory access rules evaluated in order (last match wins)",
+              "items": {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "paths"
+                ],
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "allow",
+                      "deny"
+                    ],
+                    "description": "Access mode: 'allow' permits access, 'deny' blocks access"
+                  },
+                  "paths": {
+                    "type": "array",
+                    "description": "Directory paths for this rule. Supports ~ expansion, ** for recursive, * for single level.",
+                    "items": {
+                      "type": "string"
+                    },
+                    "minItems": 1
+                  }
+                },
+                "additionalProperties": false
+              },
+              "default": []
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "default": {
+        "action": "block",
+        "rules": []
+      }
+    },
+    "directory_exclusions": {
+      "type": "object",
+      "description": "DEPRECATED: Use directory_rules instead. Filesystem path access control - Controls which PATHS can be accessed/read. NOT related to permissions_directories (which auto-discovers TOOL permissions). Directory exclusions can override .ai-read-deny blocking (v1.5.0). Automatically converted to directory_rules internally.",
+      "deprecated": true,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable directory exclusions feature",
+          "default": false
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        },
+        "paths": {
+          "type": "array",
+          "description": "Directory paths to exclude from .ai-read-deny blocking (exclusions override deny markers). Supports ~ expansion, ** for recursive, * for single level. Ideal for enterprise skill allowlists.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      }
+    },
+    "annotations": {
+      "type": "object",
+      "description": "Inline annotation suppression for secrets and PII on specific lines (NEW in v1.8.0, Issue #481). Hardcoded markers: ai-guardian:allow (inline, secrets+PII), ai-guardian:begin-allow / ai-guardian:end-allow (block, secrets+PII). Configurable aliases for secrets-only suppression (gitleaks:allow, notsecret). Prompt injection, jailbreak, and config exfiltration are always scanned and cannot be suppressed. Only applies to file content scanning (PreToolUse/beforeReadFile). Unmatched begin-allow without end-allow is ignored (fail-safe).",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "inline_allow": {
+          "type": "array",
+          "description": "Additional inline aliases that suppress secrets and PII (extends hardcoded ai-guardian:allow). User config extends defaults.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "inline_allow_secrets": {
+          "type": "array",
+          "description": "Inline aliases that suppress secrets only (default: gitleaks:allow). User config extends defaults.",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "gitleaks:allow"
+          ]
+        },
+        "block_begin": {
+          "type": "array",
+          "description": "Additional block-begin aliases (extends hardcoded ai-guardian:begin-allow). User config extends defaults.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "block_end": {
+          "type": "array",
+          "description": "Additional block-end aliases (extends hardcoded ai-guardian:end-allow). User config extends defaults.",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "violation_logging": {
+      "type": "object",
+      "description": "Violation logging configuration (NEW in v1.1.0). Logs blocked operations to JSONL file for audit and review.",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "max_entries": {
+          "type": "number",
+          "description": "Maximum number of log entries to retain",
+          "default": 1000,
+          "minimum": 1
+        },
+        "retention_days": {
+          "type": "number",
+          "description": "Number of days to retain log entries",
+          "default": 30,
+          "minimum": 1
+        },
+        "log_types": {
+          "type": "array",
+          "description": "Types of violations to log. Empty array logs all types.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "tool_permission",
+              "directory_blocking",
+              "secret_detected",
+              "secret_redaction",
+              "prompt_injection",
+              "jailbreak_detected",
+              "ssrf_blocked",
+              "config_file_exfil",
+              "pii_detected",
+              "secret_in_transcript",
+              "pii_in_transcript",
+              "prompt_injection_in_transcript",
+              "annotation_suppressed",
+              "image_secret_detected",
+              "image_pii_detected",
+              "context_poisoning",
+              "supply_chain",
+              "code_security",
+              "offensive_language",
+              "canary_detected",
+              "exfil_detection"
+            ]
+          },
+          "default": [
+            "tool_permission",
+            "directory_blocking",
+            "secret_detected",
+            "secret_redaction",
+            "prompt_injection",
+            "jailbreak_detected",
+            "ssrf_blocked",
+            "config_file_exfil",
+            "pii_detected",
+            "secret_in_transcript",
+            "pii_in_transcript",
+            "prompt_injection_in_transcript",
+            "annotation_suppressed",
+            "context_poisoning",
+            "supply_chain",
+            "code_security",
+            "offensive_language",
+            "canary_detected",
+            "exfil_detection"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "latency_tracking": {
+      "type": "object",
+      "description": "Hook latency tracking — records per-hook and per-violation-type timing to latency.jsonl for performance analysis. Disabled by default; enable for debugging or performance testing. NEW in v1.11.0 (Issue #1057).",
+      "properties": {
+        "enabled": {
+          "oneOf": [
+            {
+              "type": "boolean",
+              "description": "Simple boolean format for permanent enable/disable"
+            },
+            {
+              "$ref": "#/definitions/time_based_feature"
+            }
+          ],
+          "default": false
+        },
+        "max_entries": {
+          "type": "number",
+          "description": "Maximum number of latency entries to retain",
+          "default": 5000,
+          "minimum": 1
+        },
+        "retention_days": {
+          "type": "number",
+          "description": "Number of days to retain latency entries",
+          "default": 30,
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "transcript_scanning": {
+      "type": "object",
+      "description": "Scan conversation transcript for secrets, PII, and prompt injection that bypassed hooks (e.g., from ! shell commands). Incrementally scans new transcript content on each UserPromptSubmit event. Detection only — warns but does not block (the content is already in the AI context). Supports Claude Code, Cursor, and GitHub Copilot. NEW in v1.7.0 (Issue #430).",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        }
+      },
+      "additionalProperties": false
+    },
+    "console": {
+      "$ref": "#/definitions/console"
+    },
+    "name": {
+      "$ref": "#/definitions/name"
+    },
+    "menu_tags": {
+      "$ref": "#/definitions/menu_tags"
+    },
+    "daemon": {
+      "$ref": "#/definitions/daemon"
+    },
+    "on_scan_error": {
+      "$ref": "#/definitions/on_scan_error"
+    },
+    "security_instructions": {
+      "$ref": "#/definitions/security_instructions"
+    },
+    "image_scanning": {
+      "$ref": "#/definitions/image_scanning"
+    },
+    "mcp_server": {
+      "$ref": "#/definitions/mcp_server"
+    },
+    "support": {
+      "$ref": "#/definitions/support"
+    },
+    "sdk": {
+      "$ref": "#/definitions/sdk"
+    }
+  },
+  "definitions": {
+    "permission_rule": {
+      "type": "object",
+      "required": [
+        "matcher",
+        "mode"
+      ],
+      "description": "Permission rule defining allow/deny patterns for a specific tool matcher. Rules are evaluated in order, last match wins (same as directory_rules). Use broad-to-specific ordering: allow all, then deny categories, then allow specific tools.",
+      "properties": {
+        "matcher": {
+          "type": "string",
+          "description": "Tool name pattern to match (e.g., 'Skill', 'mcp__*', 'Bash', 'Write', 'Read', '*' for all)"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "description": "Permission mode: 'allow' allows the tool, 'deny' denies the tool. action field only applies to deny rules."
+        },
+        "patterns": {
+          "type": "array",
+          "description": "List of patterns to match against tool-specific values (skill name, command, file path, or tool name for MCP). Defaults to ['*'] if omitted.",
+          "items": {
+            "oneOf": [
+              {
+                "type": "string",
+                "description": "Simple string pattern (e.g., 'daf-*', '*rm -rf*', '*')"
+              },
+              {
+                "$ref": "#/definitions/time_based_pattern"
+              }
+            ]
+          }
+        },
+        "action": {
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "log-only",
+            "ask",
+            "ask:warn",
+            "ask:log-only"
+          ],
+          "description": "Action when deny rule matches (v1.7.0+): 'block' prevents execution (default), 'warn' logs violation and shows warning but allows execution, 'log-only' logs silently, 'ask' shows interactive dialog (Allow Once / Allow Always / Block), 'ask:warn' or 'ask:log-only' use warn/log-only as fallback when dialog unavailable. Only meaningful on mode=deny rules.",
+          "default": "block"
+        },
+        "immutable": {
+          "type": "boolean",
+          "description": "If true, local configs cannot add or modify rules for this matcher. Used in remote configs to enforce enterprise policies.",
+          "default": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "time_based_pattern": {
+      "type": "object",
+      "required": [
+        "pattern"
+      ],
+      "description": "Pattern with optional time-based expiration (NEW in v1.3.0)",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "The pattern string"
+        },
+        "valid_until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp in UTC (e.g., '2026-04-13T12:00:00Z'). Pattern expires after this time."
+        }
+      },
+      "additionalProperties": true
+    },
+    "time_based_feature": {
+      "type": "object",
+      "required": [
+        "value"
+      ],
+      "description": "Feature toggle with optional time-based temporary disabling (NEW in v1.4.0)",
+      "properties": {
+        "value": {
+          "type": "boolean",
+          "description": "The feature's enabled/disabled state"
+        },
+        "disabled_until": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp in UTC (e.g., '2026-04-13T18:00:00Z'). Feature override expires after this time."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable reason for the temporary change"
+        }
+      },
+      "additionalProperties": false
+    },
+    "directory_entry": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "description": "Directory to scan for auto-discovery of tool permissions (NOT filesystem path blocking). Scans directory or GitHub repo for permission files and generates tool permission rules. Purpose: Auto-populate permissions.rules, not block directories. In object format (allow/deny arrays), mode is determined by which array the entry is in. In array format, mode defaults to 'allow' if not specified.",
+      "properties": {
+        "matcher": {
+          "type": "string",
+          "description": "Tool type to apply discovered patterns to (e.g., 'Skill', 'mcp__*'). Defaults to 'Skill' if not specified.",
+          "default": "Skill"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "description": "Permission mode for discovered patterns. Only used in array format; ignored in object format (allow/deny arrays). Defaults to 'allow'.",
+          "default": "allow"
+        },
+        "url": {
+          "type": "string",
+          "description": "Local directory path or GitHub URL to scan"
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Environment variable containing GitHub token (for private repos)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "remote_url_entry": {
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "description": "Remote configuration URL with optional settings",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Remote configuration URL (https://) or local file path"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this remote config is enabled",
+          "default": true
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Environment variable containing auth token for remote URL"
+        }
+      },
+      "additionalProperties": false
+    },
+    "pattern_server_auth": {
+      "type": "object",
+      "description": "Authentication configuration for pattern server",
+      "additionalProperties": true,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": [
+            "bearer",
+            "token"
+          ],
+          "description": "Authentication method",
+          "default": "bearer"
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Environment variable name containing auth token"
+        },
+        "token_file": {
+          "type": "string",
+          "description": "Path to file containing auth token (supports ~ expansion)"
+        }
+      }
+    },
+    "pattern_server_cache": {
+      "type": "object",
+      "description": "Pattern cache configuration",
+      "additionalProperties": true,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Cache file path (supports ~ expansion)",
+          "default": "~/.cache/ai-guardian/patterns.toml"
+        },
+        "refresh_interval_hours": {
+          "type": "number",
+          "description": "Hours between automatic pattern refresh",
+          "default": 12,
+          "minimum": 1
+        },
+        "expire_after_hours": {
+          "type": "number",
+          "description": "Hours until cached patterns expire",
+          "default": 168,
+          "minimum": 1
+        }
+      }
+    },
+    "console": {
+      "type": "object",
+      "description": "Console settings (editor theme, display preferences, web console)",
+      "properties": {
+        "preferred_ui": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "tkinter",
+            "nicegui",
+            "textual",
+            "headless"
+          ],
+          "default": "auto",
+          "description": "Preferred UI toolkit for interactive dialogs (tray-prompt, ask-prompt). auto = cascade tkinter → NiceGUI → Textual → headless. tkinter/nicegui/textual = use only that toolkit (fall to headless if unavailable). headless = no UI dialogs, ask actions use configured fallback. Env var override: AI_GUARDIAN_PREFERRED_UI"
+        },
+        "editor_theme": {
+          "type": "string",
+          "enum": [
+            "monokai",
+            "vscode_dark",
+            "dracula",
+            "github_light"
+          ],
+          "default": "monokai",
+          "description": "Color theme for the JSON config editor. Options: monokai, vscode_dark, dracula, github_light"
+        },
+        "preferred_theme": {
+          "type": "string",
+          "enum": [
+            "default",
+            "classic_green",
+            "high_contrast",
+            "solarized"
+          ],
+          "default": "default",
+          "description": "Color theme preset for AI Guardian UI. Affects TUI console, web console, and ask dialogs. default = Material dark blue, classic_green = original AI Guardian brand, high_contrast = WCAG AA accessibility, solarized = Solarized dark variant"
+        },
+        "web": {
+          "type": "object",
+          "description": "Web console settings. Launch with: ai-guardian console --web",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "default": 0,
+              "minimum": 0,
+              "maximum": 65535,
+              "description": "Port for web console. Default 0 (auto-assign free port)."
+            },
+            "host": {
+              "type": "string",
+              "default": "127.0.0.1",
+              "description": "Bind address for web console. Default 127.0.0.1 (localhost only). Do not change unless you understand the security implications."
+            }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "name": {
+      "type": "string",
+      "description": "Human-friendly instance name. Displayed in Console banner, tray menu, REST API, and MCP. Defaults to hostname if not set."
+    },
+    "menu_tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Tags identifying this daemon for tray plugin filtering. Plugins with tags only appear on daemons with at least one matching menu_tags entry."
+    },
+    "daemon": {
+      "type": "object",
+      "description": "Background daemon configuration. The daemon auto-starts on any CLI command and falls back to direct processing if it cannot start.",
+      "properties": {
+        "idle_timeout_minutes": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "description": "Minutes of inactivity before daemon auto-stops. 0 (default) disables auto-stop."
+        },
+        "client_timeout_seconds": {
+          "type": "number",
+          "default": 2.0,
+          "minimum": 0.5,
+          "maximum": 10.0,
+          "description": "Timeout in seconds for client to wait for daemon response before falling back to direct mode."
+        },
+        "rest_port": {
+          "type": "integer",
+          "default": 63152,
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "REST API port for tray-to-daemon communication. Default 63152. Set to 0 for OS-assigned port. Container daemons should use a fixed port for discovery."
+        },
+        "rest_host": {
+          "type": "string",
+          "default": "127.0.0.1",
+          "description": "REST API bind address. Default 127.0.0.1 (localhost only). Auto-detects Docker/Podman/Kubernetes containers and defaults to 0.0.0.0. Can also be set via AI_GUARDIAN_REST_HOST env var. Resolution order: config > env var > container detection > 127.0.0.1."
+        },
+        "tray": {
+          "type": "object",
+          "description": "System tray icon settings. Disable on headless servers without a display.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Show system tray icon when daemon is running. Set to false on headless servers."
+            },
+            "discovery_interval_seconds": {
+              "type": "integer",
+              "default": 15,
+              "minimum": 5,
+              "maximum": 300,
+              "description": "How often to poll for daemon discovery (seconds)."
+            },
+            "discover_containers": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable Podman/Docker container daemon discovery."
+            },
+            "auto_install": {
+              "type": "boolean",
+              "default": true,
+              "description": "Auto-install tray shortcut, autostart, and start tray on first CLI invocation. Set false to disable. Skipped on headless servers and CI/CD environments."
+            },
+            "terminal_app": {
+              "type": "string",
+              "pattern": "^[\\w ./-]*$",
+              "description": "Preferred terminal application for tray menu actions (Console, Terminal, Doctor). macOS: 'iTerm', 'iTerm2', or 'iTerm.app' for iTerm2; 'Warp' for Warp; 'alacritty'/'kitty'/'wezterm' for CLI terminals. Linux: binary name (e.g. 'alacritty', 'kitty'). Windows: executable name (e.g. 'wt'). Omit or leave empty for platform default (Terminal.app / auto-detect / cmd.exe). The '.app' suffix is stripped automatically on macOS."
+            },
+            "discover_kubernetes": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable Kubernetes pod daemon discovery. Requires kubectl and appropriate cluster access."
+            },
+            "kubernetes": {
+              "type": "object",
+              "description": "Kubernetes discovery settings.",
+              "properties": {
+                "namespace": {
+                  "type": "string",
+                  "default": "ai-sdlc",
+                  "description": "Kubernetes namespace to search for daemon pods."
+                },
+                "label_selector": {
+                  "type": "string",
+                  "default": "app=ai-guardian",
+                  "description": "Label selector for daemon pods. User label is added automatically."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "on_scan_error": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "block"
+      ],
+      "description": "Global behavior when a scanner encounters an error (exception, unavailable, network issue). 'allow' (default): log warning, allow operation to proceed (fail-open). 'block': block the operation if any scanner fails (fail-closed, for strict compliance). NEW in v1.7.0.",
+      "default": "allow"
+    },
+    "security_instructions": {
+      "type": "object",
+      "description": "Security instruction injection into AI context (NEW in v1.7.0, Issue #580). When enabled, security rules are injected via systemMessage on every UserPromptSubmit hook response. These rules instruct the AI to never bypass, disable, or work around security protections. Default: enabled.",
+      "properties": {
+        "inject_on_prompt": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "inject_trigger": {
+          "type": "string",
+          "enum": [
+            "first_per_session",
+            "every_prompt",
+            "after_block_only"
+          ],
+          "description": "When to inject security rules: first_per_session (default, inject once per session + after blocks), every_prompt (inject on every UserPromptSubmit), after_block_only (only inject after a block event).",
+          "default": "first_per_session"
+        },
+        "custom_rules": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional security rules to append to (or replace) the built-in rules. Each string is one rule line.",
+          "default": []
+        },
+        "replace_defaults": {
+          "type": "boolean",
+          "description": "If true, custom_rules replaces the built-in security rules entirely. If false (default), custom_rules is appended to the built-in rules.",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "image_scanning": {
+      "type": "object",
+      "description": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Enabled by default. Scans image files during PreToolUse (file reads) and image attachments during UserPromptSubmit. PostToolUse is excluded (AI already extracted text). Requires rapidocr-onnxruntime (included as dependency).",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled"
+        },
+        "action": {
+          "oneOf": [
+            {
+              "type": "string",
+              "enum": [
+                "block",
+                "warn",
+                "log-only"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^ask(:(block|warn|log-only))?$",
+              "description": "Interactive ask mode: prompts user on violation with Allow Once/Allow Always/Block choices"
+            }
+          ],
+          "description": "Action when secrets/PII found in image: 'block' prevents AI from seeing the image, 'warn' allows with warning, 'log-only' silently logs, 'ask' prompts user interactively",
+          "default": "block"
+        },
+        "scan_types": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "secrets",
+              "pii",
+              "ssrf",
+              "prompt_injection"
+            ]
+          },
+          "default": [
+            "secrets",
+            "pii"
+          ],
+          "description": "Types of threats to scan for in OCR-extracted text."
+        },
+        "max_processing_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 5000,
+          "default": 1500,
+          "description": "Maximum time in milliseconds for OCR processing per image."
+        },
+        "min_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5,
+          "description": "Minimum OCR confidence threshold. Text regions below this are ignored."
+        },
+        "redaction_method": {
+          "type": "string",
+          "enum": [
+            "blur",
+            "blackout",
+            "pixelate"
+          ],
+          "default": "blur",
+          "description": "Method for redacting sensitive regions in images."
+        },
+        "qr_scanning": {
+          "type": "boolean",
+          "default": false,
+          "description": "Scan QR codes in images for embedded secrets. Requires pyzbar."
+        },
+        "face_detection": {
+          "type": "boolean",
+          "default": false,
+          "description": "Detect faces in images (biometric PII). Requires opencv-python-headless."
+        },
+        "ignore_files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "File patterns to skip for image scanning (e.g., '*.ico', 'favicon.*')."
+        },
+        "ignore_tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Tool names to skip for image scanning."
+        },
+        "max_image_size_mb": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 10,
+          "description": "Maximum image file size in MB. Larger images are skipped."
+        }
+      },
+      "additionalProperties": true
+    },
+    "mcp_server": {
+      "type": "object",
+      "description": "MCP (Model Context Protocol) security advisor server settings. The MCP server exposes read-only security tools that AI agents can use proactively.",
+      "properties": {
+        "proactive_level": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "low",
+          "description": "How aggressively the AI should use proactive security checks. 'low' (default): only check when user asks or after a block. 'medium': check unfamiliar paths and suspicious commands. 'high': check every file access and command. Higher levels add latency and token usage."
+        }
+      },
+      "additionalProperties": false
+    },
+    "support": {
+      "type": "object",
+      "description": "Support bundle export settings. Allows AI agents to prepare sanitized diagnostic bundles for troubleshooting, with user approval before sending.",
+      "properties": {
+        "export_destination": {
+          "type": "string",
+          "description": "Destination for support bundles. Local path (e.g., '~/support-bundles'), S3 URI (e.g., 's3://bucket/prefix/'), GCS URI (e.g., 'gs://bucket-name/'), or email (e.g., 'mailto:support@company.com'). Default: XDG state directory (~/.local/state/ai-guardian/support-bundles/). Preconfigured by admin — agent cannot override.",
+          "default": ""
+        },
+        "auth": {
+          "type": "object",
+          "description": "Authentication for S3/GCS export destinations.",
+          "properties": {
+            "method": {
+              "type": "string",
+              "enum": [
+                "env",
+                "none"
+              ],
+              "default": "none",
+              "description": "Auth method: 'env' reads token from environment variable, 'none' for unauthenticated."
+            },
+            "token_env": {
+              "type": "string",
+              "default": "",
+              "description": "Environment variable name containing the auth token (when method='env')."
+            }
+          },
+          "additionalProperties": false
+        },
+        "email": {
+          "type": "object",
+          "description": "SMTP email settings for mailto: destinations. Uses Python stdlib only (smtplib, email.mime, zipfile).",
+          "properties": {
+            "smtp_host": {
+              "type": "string",
+              "default": "",
+              "description": "SMTP server hostname. Leave empty to use system mailto: fallback (opens default mail client)."
+            },
+            "smtp_port": {
+              "type": "integer",
+              "default": 587,
+              "description": "SMTP server port. 587 for STARTTLS (default), 465 for implicit SSL, 25 for plain."
+            },
+            "smtp_tls": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable STARTTLS for port 587. Ignored for port 465 (uses implicit SSL)."
+            },
+            "from": {
+              "type": "string",
+              "default": "",
+              "description": "Sender email address. Defaults to ai-guardian@hostname."
+            },
+            "subject_prefix": {
+              "type": "string",
+              "default": "[AI Guardian Support]",
+              "description": "Subject line prefix for support bundle emails."
+            },
+            "auth": {
+              "type": "object",
+              "description": "SMTP authentication settings.",
+              "properties": {
+                "method": {
+                  "type": "string",
+                  "enum": [
+                    "none",
+                    "env",
+                    "inline"
+                  ],
+                  "default": "none",
+                  "description": "Auth method: 'none' for corporate relays (no credentials), 'env' reads from environment variables (recommended), 'inline' stores credentials in config (doctor warns)."
+                },
+                "username_env": {
+                  "type": "string",
+                  "default": "",
+                  "description": "Environment variable for SMTP username (when method='env')."
+                },
+                "password_env": {
+                  "type": "string",
+                  "default": "",
+                  "description": "Environment variable for SMTP password (when method='env')."
+                },
+                "username": {
+                  "type": "string",
+                  "default": "",
+                  "description": "SMTP username (when method='inline'). Not recommended — doctor will warn."
+                },
+                "password": {
+                  "type": "string",
+                  "default": "",
+                  "description": "SMTP password (when method='inline'). Not recommended — doctor will warn."
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "bundle_ttl_minutes": {
+          "type": "integer",
+          "default": 30,
+          "minimum": 1,
+          "description": "Minutes before a prepared bundle auto-expires. Prevents stale bundles from being sent."
+        }
+      },
+      "additionalProperties": true
+    },
+    "immutable_fields": {
+      "oneOf": [
+        {
+          "type": "boolean",
+          "description": "true: section fully locked. false: fully overridable."
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of field names in this section that project-level configs cannot override."
+        },
+        {
+          "type": "string",
+          "enum": [
+            "tighten-only"
+          ],
+          "description": "Lower-level configs can tighten settings but not loosen them."
+        }
+      ],
+      "description": "Controls override policy. true/false: lock/unlock entire section. Array: lock specific fields. 'tighten-only': lower-level configs can tighten but not loosen.",
+      "default": false
+    },
+    "time_based_enabled": {
+      "oneOf": [
+        {
+          "type": "boolean",
+          "description": "Simple boolean format for permanent enable/disable"
+        },
+        {
+          "$ref": "#/definitions/time_based_feature"
+        }
+      ],
+      "default": true
+    },
+    "string_or_timed_pattern": {
+      "oneOf": [
+        {
+          "type": "string",
+          "description": "Simple regex pattern"
+        },
+        {
+          "$ref": "#/definitions/time_based_pattern"
+        }
+      ]
+    },
+    "sdk_agent_profile": {
+      "type": "object",
+      "description": "Per-agent configuration profile for GuardedAgent. Named profiles override * (wildcard) values. Operational params only — scanning behavior is controlled at sdk level.",
+      "additionalProperties": true,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["direct", "rest"],
+          "description": "Scanning mode."
+        },
+        "model": {
+          "type": "string",
+          "description": "LLM model ID override."
+        },
+        "max_turns": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum tool-use loop iterations."
+        },
+        "max_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum output tokens per API call."
+        },
+        "max_budget_tokens": {
+          "type": "integer",
+          "description": "Maximum cumulative tokens (input + output). -1 = no limit."
+        },
+        "api_timeout": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local providers like Ollama/MLX). On timeout, retries once; if retry also times out, stops with stop_reason='timeout'."
+        },
+        "max_schema_nudges": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Max times to re-prompt the model to call submit_result before stopping with stop_reason='max_schema_nudges'. Only relevant when output_schema is set.",
+          "default": 3
+        },
+        "text_tool_parsing": {
+          "type": "boolean",
+          "description": "Enable text-as-tool-call extraction for models that write tool calls as plain text instead of using the function calling API. Auto-enabled for Ollama, llama.cpp, MLX, vLLM providers.",
+          "default": false
+        },
+        "tools": {
+          "description": "Tool preset name or list of tool definitions.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array" }
+          ]
+        },
+        "system_prompt_preamble": {
+          "type": "string",
+          "description": "Text prepended to the system prompt via config."
+        },
+        "compact_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Ratio of input_tokens / context_window that triggers compaction. 1.0 = disabled (raises RuntimeError when exhausted).",
+          "default": 0.8
+        },
+        "compact_keep_turns": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Recent turns preserved verbatim during compaction.",
+          "default": 5
+        },
+        "compact_keep_first": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Initial turns preserved verbatim during compaction (system prompt).",
+          "default": 1
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for tool execution. Overrides the code-provided value."
+        },
+        "allowed_paths": {
+          "type": "array",
+          "description": "Additional directories that built-in tools may access. Paths resolving outside cwd (e.g. via symlinks) are normally rejected; directories listed here are whitelisted.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "follow_symlinks": {
+          "type": "boolean",
+          "description": "When true, built-in tools allow access through symlinks inside cwd even when the real target is outside cwd. The logical (unresolved) path must still be within cwd.",
+          "default": false
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "openai-compatible", "ollama", "mlx", "llamacpp", "vllm", "lm-studio"],
+          "description": "LLM provider for this agent. Overrides top-level sdk.provider. Different agents can use different providers."
+        },
+        "provider_config": {
+          "type": "object",
+          "description": "Provider-specific configuration for this agent. Same fields as top-level sdk.provider_config.",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": { "type": "string" },
+            "base_url_env": { "type": "string" },
+            "api_key_env": { "type": "string" },
+            "project_id_env": { "type": "string" },
+            "region_env": { "type": "string" }
+          }
+        },
+        "mcpServers": {
+          "type": "object",
+          "description": "MCP servers available to this agent. Keys are server display names. Each server connects via stdio (command) or SSE (url) transport.",
+          "additionalProperties": {
+            "$ref": "#/definitions/sdk_mcp_server"
+          }
+        },
+        "hooks": {
+          "$ref": "#/definitions/sdk_shell_hooks",
+          "description": "Per-agent shell hooks. Merged on top of wildcard (*) profile hooks and sdk.hooks."
+        }
+      }
+    },
+    "sdk_shell_hook_point": {
+      "type": "object",
+      "description": "Shell commands to run before/after a GuardedAgent callback. Commands receive JSON context via stdin. Exit 0 = continue, non-zero = abort.",
+      "additionalProperties": false,
+      "properties": {
+        "pre_command": {
+          "type": "string",
+          "description": "Shell command to run BEFORE the Python callback."
+        },
+        "post_command": {
+          "type": "string",
+          "description": "Shell command to run AFTER the Python callback returns."
+        }
+      }
+    },
+    "sdk_shell_hooks": {
+      "type": "object",
+      "description": "Config-driven shell hooks around GuardedAgent callbacks. Each hook point can have pre_command and post_command.",
+      "additionalProperties": false,
+      "properties": {
+        "pre_run": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "post_run": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "before_call": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "after_call": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "between_turns": { "$ref": "#/definitions/sdk_shell_hook_point" },
+        "on_turn": { "$ref": "#/definitions/sdk_shell_hook_point" }
+      }
+    },
+    "sdk_mcp_server": {
+      "type": "object",
+      "description": "Configuration for a single MCP server connection.",
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "Command to start the server process (stdio transport). Mutually exclusive with 'url'."
+        },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Command-line arguments for the server process.",
+          "default": []
+        },
+        "env": {
+          "type": "object",
+          "description": "Environment variables passed to the server process. Merged over the current environment.",
+          "additionalProperties": { "type": "string" }
+        },
+        "url": {
+          "type": "string",
+          "description": "SSE endpoint URL (SSE transport). Mutually exclusive with 'command'."
+        },
+        "headers": {
+          "type": "object",
+          "description": "HTTP headers for SSE connections (e.g., Authorization).",
+          "additionalProperties": { "type": "string" }
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable or disable this server without removing its config.",
+          "default": true
+        },
+        "defer_loading": {
+          "type": "boolean",
+          "description": "Defer server startup until first tool call. Tools are discovered via a brief probe at agent start, then the server shuts down and reconnects lazily on the first call_tool().",
+          "default": false
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Tool call timeout in seconds.",
+          "default": 30,
+          "minimum": 1
+        },
+        "startup_timeout": {
+          "type": "integer",
+          "description": "Maximum seconds to wait for server initialization.",
+          "default": 10,
+          "minimum": 1
+        },
+        "trust": {
+          "type": "string",
+          "enum": ["trusted", "check", "untrusted"],
+          "description": "Trust level: 'trusted' skips scanning tool results, 'check' scans results (default), 'untrusted' scans results.",
+          "default": "check"
+        },
+        "scan_results": {
+          "type": "boolean",
+          "description": "Scan tool results through ai-guardian. Set to false to skip scanning (same effect as trust='trusted').",
+          "default": true
+        }
+      }
+    },
+    "sdk": {
+      "type": "object",
+      "description": "SDK configuration for programmatic security checking (GuardedAgent, guarded() wrapper, monitor()). Controls scanning behavior, agent profiles, and client profiles.",
+      "additionalProperties": false,
+      "properties": {
+        "scanning": {
+          "type": "boolean",
+          "description": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",
+          "default": true
+        },
+        "use_global_config": {
+          "type": "boolean",
+          "description": "When true, SDK uses global ai-guardian.json scanner settings (per-scanner actions, thresholds, allowlists). When false, SDK runs standalone without global config.",
+          "default": true
+        },
+        "provider": {
+          "type": "string",
+          "enum": ["vertex", "bedrock", "foundry", "direct", "anthropic", "openai", "azure", "openai-compatible", "ollama", "mlx", "llamacpp", "vllm", "lm-studio"],
+          "description": "LLM provider to use when auto-creating clients. Overrides env var auto-detection, resolving conflicts when multiple provider env vars are set. Anthropic family: 'direct'/'anthropic' (API key), 'vertex' (GCP), 'bedrock' (AWS), 'foundry'. OpenAI-compatible: 'openai', 'azure', 'openai-compatible' (canonical), 'ollama', 'mlx', 'llamacpp', 'vllm', 'lm-studio'."
+        },
+        "provider_config": {
+          "type": "object",
+          "description": "Provider-specific configuration. Anthropic family reads from standard env vars by default; use these fields to override env var names. OpenAI-compatible providers use base_url for server endpoints.",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": {
+              "type": "string",
+              "description": "Server endpoint URL. Required for local servers (openai-compatible, ollama, mlx, llamacpp, vllm, lm-studio). Optional for openai, azure. Overridden by AI_GUARDIAN_SDK_BASE_URL env var."
+            },
+            "base_url_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the server endpoint URL. Takes precedence over base_url but is overridden by AI_GUARDIAN_SDK_BASE_URL."
+            },
+            "api_key_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the API key. Overrides the default env var for the provider. No secrets in config — only the env var name."
+            },
+            "project_id_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the GCP project ID. Only used by vertex provider. Default: ANTHROPIC_VERTEX_PROJECT_ID."
+            },
+            "region_env": {
+              "type": "string",
+              "description": "Name of the environment variable holding the region. Used by vertex and bedrock providers. Default: CLOUD_ML_REGION."
+            }
+          }
+        },
+        "hooks": {
+          "$ref": "#/definitions/sdk_shell_hooks",
+          "description": "Global shell hooks applied to all GuardedAgent instances. Per-agent hooks in agents.*.hooks or agents.<name>.hooks override these."
+        },
+        "agents": {
+          "type": "object",
+          "description": "Unified profiles for GuardedAgent and guarded() wrapper. Use '*' for defaults applied to all. Named keys match the 'name' parameter. Different agents can use different providers.",
+          "additionalProperties": {
+            "$ref": "#/definitions/sdk_agent_profile"
+          }
+        },
+        "secret_redaction": {
+          "type": "object",
+          "description": "SDK-specific secret redaction override. When set, takes precedence over the global secret_redaction section for SDK context. SDK defaults to disabled because redacting secrets in content flowing between agent turns breaks code and confuses the agent.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Enable secret redaction in SDK context. Overrides global secret_redaction.enabled for SDK. Default: false.",
+              "default": false
+            }
+          }
+        },
+        "trace_viewer": {
+          "type": "object",
+          "description": "Console trace viewer settings. Traces are stored in the XDG state directory (~/.local/state/ai-guardian/sdk/traces/).",
+          "additionalProperties": false,
+          "properties": {
+            "auto_refresh_interval_seconds": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 300,
+              "description": "Polling interval in seconds for auto-refresh of active conversations in the web console.",
+              "default": 5
+            }
+          }
+        }
+      }
+    },
+    "otel": {
+      "type": "object",
+      "description": "OpenTelemetry export configuration. Used by both SDK (agent run spans) and hooks (session activity spans). Requires 'pip install ai-guardian[otel]' for protobuf format.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Enable OTEL span export.",
+          "default": false
+        },
+        "endpoint": {
+          "type": "string",
+          "description": "OTLP HTTP collector endpoint URL. Override with OTEL_EXPORTER_OTLP_ENDPOINT env var.",
+          "default": "http://localhost:4318"
+        },
+        "service_name": {
+          "type": "string",
+          "description": "The service.name resource attribute for exported spans. Override with OTEL_SERVICE_NAME env var.",
+          "default": "ai-guardian"
+        },
+        "export_format": {
+          "type": "string",
+          "enum": ["otlp-json", "otlp-proto"],
+          "description": "Export format. 'otlp-json' requires no extra dependencies. 'otlp-proto' requires 'pip install ai-guardian[otel]'.",
+          "default": "otlp-json"
+        },
+        "headers": {
+          "type": "object",
+          "description": "HTTP headers sent with each OTLP export request. Use for authentication (e.g., {\"Authorization\": \"Bearer <token>\"}). Also reads OTEL_EXPORTER_OTLP_HEADERS env var (format: key1=val1,key2=val2). Config headers take precedence over env var.",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "resource_attributes": {
+          "type": "object",
+          "description": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>. Example: {\"team.name\": \"AT\", \"deployment.environment\": \"dev\"}.",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          }
+        }
+      }
+    }
   }
 }
 ```
@@ -23970,6 +27517,368 @@ Violation logging is **extremely efficient**:
 }
 ```
 
+# === scenario.schema.json ===
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/scenario.schema.json",
+  "title": "AI Guardian Dummy-Agent Scenario",
+  "description": "Scenario file for ai-guardian dummy-agent --script. Defines a sequence of hook events to fire and the expected outcome (allow or block) for each.",
+  "type": "object",
+  "required": ["events"],
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["expect"],
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "type": "string",
+            "description": "Human-readable name for this event shown in test output."
+          },
+          "event": {
+            "type": "string",
+            "enum": ["UserPromptSubmit", "SessionStart"],
+            "default": "UserPromptSubmit",
+            "description": "Hook event type to fire. Defaults to UserPromptSubmit."
+          },
+          "prompt": {
+            "type": "string",
+            "description": "User prompt text sent via UserPromptSubmit hook. Required when event is UserPromptSubmit."
+          },
+          "session_files": {
+            "type": "array",
+            "description": "Files to write to a temp workspace before firing SessionStart. Used to simulate agent config files (AGENTS.md, .cursorrules, etc.).",
+            "items": {
+              "type": "object",
+              "required": ["path", "content"],
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path of the file within the temp workspace (e.g. AGENTS.md)."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "File content to write."
+                }
+              }
+            }
+          },
+          "workspace_files": {
+            "type": "array",
+            "description": "Files to create in a temp workspace to simulate project structure. Sets project_dir_override for the event so language detection sees these marker files (e.g. pyproject.toml for Python).",
+            "items": {
+              "type": "object",
+              "required": ["path"],
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "description": "Relative path of the file within the temp workspace (e.g. pyproject.toml). Must not contain '..' or start with '/'.",
+                  "pattern": "^(?!/)(?!.*\\.\\./)"
+                },
+                "content": {
+                  "type": "string",
+                  "description": "File content to write. Defaults to empty string.",
+                  "default": ""
+                }
+              }
+            }
+          },
+          "tools": {
+            "type": "array",
+            "description": "Optional list of tool calls (PreToolUse + PostToolUse) to fire after the prompt.",
+            "items": {
+              "type": "object",
+              "required": ["name", "input"],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "description": "Tool name (e.g. Bash, Read, Write, Edit).",
+                  "examples": ["Bash", "Read", "Write", "Edit"]
+                },
+                "input": {
+                  "type": "object",
+                  "description": "Tool input parameters (e.g. {command: '...'} for Bash, {file_path: '...'} for Read)."
+                },
+                "fake_output": {
+                  "type": "string",
+                  "description": "Simulated tool output injected into the PostToolUse hook."
+                }
+              }
+            }
+          },
+          "expect": {
+            "type": "string",
+            "enum": ["allow", "block"],
+            "description": "Expected outcome: 'block' if the hook should block the operation, 'allow' if it should pass."
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+# === tray-plugin.schema.json ===
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/tray-plugin.schema.json",
+  "title": "AI Guardian Tray Plugin",
+  "description": "Plugin definition for the AI Guardian system tray menu. Each JSON file in the tray-plugins directory defines one submenu with a name and a list of menu items.",
+  "type": "object",
+  "required": ["name", "items"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "JSON Schema reference for IDE autocompletion"
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Unique deduplication key for this plugin. Used to identify the plugin during merge across bundled, user, and project layers. If omitted, 'name' is used as the dedup key. Two plugins with the same display name but different ids are treated as distinct."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Display name of the plugin submenu in the system tray"
+    },
+    "scope": {
+      "type": "string",
+      "enum": ["daemon", "global"],
+      "default": "daemon",
+      "description": "Where this plugin appears. 'daemon' (default) shows inside daemon submenus filtered by tags. 'global' shows at the tray top level, not inside any daemon submenu."
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "Tags to filter this plugin to specific daemons. Only shown on daemons with at least one matching menu_tags entry. Omit or leave empty to show on all daemons."
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 12,
+      "description": "Menu items in this plugin (max 12 per plugin due to pre-allocated tray slots)",
+      "items": {
+        "$ref": "#/definitions/plugin_item"
+      }
+    }
+  },
+  "definitions": {
+    "plugin_item": {
+      "type": "object",
+      "description": "A menu item: either a command item, an inline submenu, or an import reference",
+      "oneOf": [
+        { "$ref": "#/definitions/command_item" },
+        { "$ref": "#/definitions/submenu_item" },
+        { "$ref": "#/definitions/import_item" }
+      ]
+    },
+    "command_item": {
+      "type": "object",
+      "description": "A menu item that runs a command when clicked",
+      "required": ["label", "command"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text displayed in the tray menu for this item"
+        },
+        "command": {
+          "description": "Command to execute. Either a plain string or a platform map object with keys like 'darwin', 'linux', 'windows', 'default'. Use {tray.param_name} for user parameter placeholders and {variable} for target variable placeholders (container_id, host, port, etc.).",
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "$ref": "#/definitions/platform_command"
+            }
+          ]
+        },
+        "type": {
+          "type": "string",
+          "enum": ["terminal", "background", "notification", "clipboard", "modal"],
+          "default": "terminal",
+          "description": "Execution type: 'terminal' opens a terminal window, 'background' runs silently, 'notification' shows output as a system notification, 'clipboard' copies output to clipboard, 'modal' shows output in a dialog box"
+        },
+        "run_on_target": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, wrap the command for execution on the daemon's target runtime (container exec, kubectl exec). Only applies when the daemon monitors a container or Kubernetes pod."
+        },
+        "target": {
+          "type": "string",
+          "enum": ["select", "all", "containers"],
+          "description": "Multi-target execution mode. 'select' shows an interactive target picker at execution time. 'all' runs on all discovered targets without prompt. 'containers' runs on all container targets without prompt. Omit for default single-target behavior."
+        },
+        "params": {
+          "type": "array",
+          "description": "User-defined parameters that prompt for input before running. Values are substituted into the command via {tray.param_name} placeholders.",
+          "items": {
+            "$ref": "#/definitions/plugin_param"
+          }
+        }
+      }
+    },
+    "submenu_item": {
+      "type": "object",
+      "description": "A menu item that opens a nested submenu with child items",
+      "required": ["label", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text displayed in the tray menu for this submenu"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "description": "Child menu items in this submenu",
+          "items": {
+            "$ref": "#/definitions/plugin_item"
+          }
+        }
+      }
+    },
+    "import_item": {
+      "type": "object",
+      "description": "A menu item that imports child items from another JSON file in tray-plugins/",
+      "required": ["label", "import"],
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Text displayed in the tray menu for this imported submenu"
+        },
+        "import": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Filename of a JSON file in tray-plugins/ to import as submenu items. The file must contain an 'items' array. Tag filtering applies to imported files."
+        }
+      }
+    },
+    "import_file_schema": {
+      "type": "object",
+      "description": "Schema for imported submenu files referenced by 'import' items. These files live in tray-plugins/ alongside regular plugin files but only contain items (no name required).",
+      "required": ["items"],
+      "additionalProperties": false,
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "Tags for filtering. Only included when daemon has matching tray_menu_tags."
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 12,
+          "description": "Menu items to import into the parent submenu",
+          "items": {
+            "$ref": "#/definitions/plugin_item"
+          }
+        }
+      }
+    },
+    "platform_command": {
+      "type": "object",
+      "description": "Platform-specific command map. The command matching the current OS is used, falling back to 'default' if no platform match.",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "darwin": {
+          "type": "string",
+          "description": "Command for macOS"
+        },
+        "linux": {
+          "type": "string",
+          "description": "Command for Linux"
+        },
+        "windows": {
+          "type": "string",
+          "description": "Command for Windows"
+        },
+        "default": {
+          "type": "string",
+          "description": "Fallback command when no platform-specific command matches"
+        }
+      }
+    },
+    "plugin_param": {
+      "type": "object",
+      "description": "Parameter definition that prompts the user for input before running the command",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Parameter name used in {tray.name} placeholders"
+        },
+        "hint": {
+          "type": "string",
+          "description": "Help text shown to the user when prompting for this parameter"
+        },
+        "default": {
+          "type": "string",
+          "description": "Default value pre-filled in the input prompt"
+        },
+        "options": {
+          "type": "array",
+          "description": "Predefined choices shown as a dropdown instead of free-text input",
+          "items": {
+            "type": "string"
+          }
+        },
+        "type": {
+          "type": "string",
+          "enum": ["string", "int", "number", "boolean", "choice", "combobox", "path-file", "path-dir"],
+          "default": "string",
+          "description": "Field type controlling the widget and validation. 'string' (default) shows a text input, 'int'/'number' validates numeric input, 'boolean' shows a checkbox, 'choice' shows a dropdown, 'combobox' shows an editable input with suggestions, 'path-file' opens a native file picker dialog, 'path-dir' opens a native directory picker dialog."
+        },
+        "required": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether the field must have a value before submission. Defaults to true."
+        },
+        "pattern": {
+          "type": "string",
+          "description": "Regex pattern to validate string input (e.g. '^[a-z]+$'). Only applies to 'string' type."
+        },
+        "min": {
+          "type": "number",
+          "description": "Minimum value for 'int' or 'number' type parameters."
+        },
+        "max": {
+          "type": "number",
+          "description": "Maximum value for 'int' or 'number' type parameters."
+        }
+      }
+    }
+  }
+}
+```
+
 # === CHANGELOG.md (recent) ===
 
 # Changelog
@@ -23980,6 +27889,76 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [1.17.0] - 2026-08-24
+
+### Added
+
+- **Text-as-tool-call parsing for OpenAI-compatible providers** — local models (Ollama, llama.cpp, MLX, vLLM) that write tool calls as plain text are now detected and executed automatically. The SDK extracts JSON tool-call patterns from text responses, including fenced code blocks, Python dict syntax, and multiple tool calls. Enabled by default for known local providers; opt in for others with `text_tool_parsing=True` (#2124)
+
+- **Text-as-structured-output parsing** — when `output_schema` is set and a local model returns valid JSON matching the schema as text instead of calling `submit_result`, the SDK now accepts it directly without nudging (#2124)
+
+- **Configurable schema nudge limit** — new `max_schema_nudges` parameter (default: 3) stops the agent loop after N failed attempts to get the model to call `submit_result`, returning `stop_reason='max_schema_nudges'` instead of burning through `max_turns` (#2124)
+
+- **Configurable API call timeout for GuardedAgent** — new `api_timeout` parameter (constructor and `sdk.agents.*.api_timeout` config) sets per-API-call timeout in seconds. Defaults: 300s for cloud providers (Anthropic, OpenAI, Azure), 600s for local providers (Ollama, llama.cpp, vLLM). On timeout: logs warning, retries once, then stops with `stop_reason='timeout'` and returns partial result. Timeout events emitted in trace (#2097)
+
+- **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
+
+- **`defer_loading` for MCP servers** — delay MCP server startup until the agent first needs a tool from that server, reducing initial agent startup time when servers are slow to initialize. Configure per-server with `defer_loading: true` in `mcpServers` config (#2090)
+
+- **Google Gemini integration** — new `gemini` provider for GuardedAgent enables using Google Gemini models with full security scanning. Supports both `google-genai` SDK and Vertex AI. Provider-specific content normalization handles Gemini's message format. Configure with `provider='gemini'` or `AI_GUARDIAN_SDK_PROVIDER=gemini` (#1865)
+
+- **Config-driven shell hooks for agent callbacks** — new `sdk.hooks` config section allows running shell commands at agent lifecycle points (`on_start`, `on_turn`, `on_stop`). Commands receive agent context as environment variables. Useful for logging, notifications, and custom integrations (#2087)
+
+- **Inline code annotations for false positive suppression** — suppress specific scanner findings on individual lines using `# ai-guardian:ignore <scanner>` comments. Supports all scanner types. Also available as block annotations with `# ai-guardian:ignore-start` / `# ai-guardian:ignore-end` pairs (#1664)
+
+- **Tray plugin management UI** — manage tray menu plugins from the web console and TUI. Create, edit, delete, and reorder custom menu items. Plugin files stored in project `.ai-guardian/plugins/` directory with JSON format (#1736)
+
+- **OpenCode plugin registration** — `ai-guardian setup` now detects and configures OpenCode IDE with appropriate hook settings (#2139)
+
+- **`--log-violations` flag for `ai-guardian scan`** — writes findings to `violations.jsonl` (the same log used by hooks), enabling unified violation tracking from both hooks and CLI scans. Also available as `ai-guardian setup --pre-commit --log-violations` to include the flag in auto-installed pre-commit hooks (#2068)
+
+- **Pagination with configurable search limit** — traces and IDE sessions pages now support pagination with a configurable page size. API endpoints accept `limit` and `offset` parameters. Default limit configurable via `console.search_limit` (#2125)
+
+- **Pause auto-refresh toggle** — traces and IDE sessions pages have a pause button to stop auto-refresh, allowing text selection and copy operations without interruption (#2119)
+
+- **Copy button on formatted modal views** — content viewer dialogs now include a copy-to-clipboard button for easy extraction of JSON and code content (#2119)
+
+- **Error step tracking in traces** — agent errors are now captured as explicit steps in the trace viewer, showing error messages and stack traces for debugging (#2101)
+
+- **Helpful error messages for missing provider packages** — when a provider SDK package is not installed, the error message now names the specific package to install (e.g., `pip install google-genai`) instead of a generic import error (#2081)
+
+- **Root span at agent start** — traces now emit an initial root span when the agent starts, providing early visibility in trace viewers before the first API call completes (#2104)
+
+### Changed
+
+- **AgentResponse for provider-agnostic normalized responses** — all provider strategies now return a unified `AgentResponse` dataclass instead of provider-specific response objects. Standardizes access to `content`, `tool_calls`, `stop_reason`, and `usage` across Anthropic, OpenAI, and Gemini providers (#2128)
+
+- **Structured logging throughout agent lifecycle** — replaced silent `except: pass` patterns with proper `logging.warning()` and `logging.debug()` calls. All SDK exceptions now log context before re-raising or swallowing (#2133)
+
+- **Sanitize violation messages in agent traces** — violation details written to trace files are now sanitized to remove raw secret values, replacing them with redacted placeholders (#2131)
+
+- **Provider compatibility tables in SDK docs** — added feature comparison matrix and provider capability tables to `docs/SDK.md` (#2082)
+
+### Fixed
+
+- **Windows `expanduser` compatibility** — tests now set `USERPROFILE` environment variable for Windows compatibility with `os.path.expanduser()` (#2139)
+
+- **Stale in-progress traces marked as crashed** — traces that remain in `in_progress` state beyond a timeout are now automatically detected and marked as `crashed` in the trace viewer (#2110)
+
+- **Output schema check runs after `between_turns` hook** — previously the schema validation ran before the hook, meaning hook modifications to the response were not validated (#2096)
+
+- **Project browse button in console** — fixed file browser dialog not opening when clicking the project browse button (#2089)
+
+### CI/CD
+
+- **Removed redundant post-merge test runs** — `test.yml`, `lint.yml`, and `integration-tests.yml` no longer trigger on pushes to `main`, eliminating duplicate runs after PR merges. Tests still run on pull requests (#2113)
+
+- **Decoupled scenario tests from Quay** — scenario tests no longer require Quay container registry access, enabling them to run on fork PRs (#2135)
+
+### Compatibility
+
+- Verified Cursor hook compatibility with Cursor v3.17.8
 
 ## [1.16.0] - 2026-08-18
 
@@ -24216,18 +28195,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **36+ new secret detection patterns** — covers Cloud/SaaS providers (Cloudflare, Figma, GitLab, Salesforce) and AI/ML platforms (Groq, xAI, NVIDIA, Cerebras, etc.) (#1777, #1986)
 
 - **New exfiltration detection targets** — `nc`, `wget`, `socat` now detected as exfil channels; new credential paths covered (#1779)
-
-## [1.15.5] - 2026-08-03
-
-### Fixed
-
-- **Schema validation no longer requires `binary` for built-in scanner engines** — `{"type": "leaktk"}` engine config is now valid without a `binary` field; built-in engines resolve their binary name at runtime (#1760, #1762)
-
-- **Config validation failure no longer silently drops entire config** — schema validation errors in global config now log a warning and load the config anyway instead of silently falling back to defaults, which previously disabled all permission rules, SSRF protection, and other security settings (#1761, #1765)
-
-### Changed
-
-- **SHA-256 checksums added to release artifacts** — GitHub release assets now include a `checksums.txt` file with SHA-256 hashes for all published artifacts (#1768)
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*
