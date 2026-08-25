@@ -2,8 +2,25 @@
 
 This document describes the release management process for AI Guardian.
 
+## Automated Release Script (Recommended)
+
+The fastest way to create a release — no AI agent required:
+
+```bash
+scripts/release.sh minor              # minor release (1.16.0 -> 1.17.0)
+scripts/release.sh patch              # patch release (1.17.0 -> 1.17.1)
+scripts/release.sh major              # major release (1.0.0 -> 2.0.0)
+scripts/release.sh --dry-run minor    # preview without executing
+scripts/release.sh --skip-cursor patch # skip Cursor hook verification
+```
+
+The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
+
+**Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`.
+
 ## Table of Contents
 
+- [Automated Release Script](#automated-release-script-recommended)
 - [Release Authorization Policy](#release-authorization-policy)
 - [Version Numbering](#version-numbering)
 - [Branch Strategy](#branch-strategy)
@@ -79,17 +96,17 @@ Contributors can test locally but cannot push test tags to the repository.
 
 ### Automation Tools
 
-The `/release` skill helps maintainers automate releases:
+Use `scripts/release.sh` for fully automated releases (no AI agent required):
 
 ```bash
-/release minor   # Create minor version release
-/release patch   # Create patch version release
-/release major   # Create major version release
-/release hotfix v1.1.0  # Create patch/hotfix from tag (or use existing release branch)
-/release test    # Create TestPyPI test release
+scripts/release.sh minor   # Create minor version release
+scripts/release.sh patch   # Create patch version release
+scripts/release.sh major   # Create major version release
 ```
 
-**Note**: The skill prepares release branches and provides guidance, but only maintainers should push the resulting tags.
+The `/release` skill is also available for AI-assisted releases via Claude Code.
+
+**Note**: Only maintainers should push release tags.
 
 ### Tag Monitoring
 
