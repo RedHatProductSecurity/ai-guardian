@@ -160,7 +160,13 @@ info "Prerequisites validated"
 
 # --- Calculate versions -----------------------------------------------------
 
-NEW_VERSION=$($HELPER calc-version "$CURRENT_VERSION" "$RELEASE_TYPE")
+# Use last v* tag as base (not code version) — correct for patch after minor bump
+LAST_TAG=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v '\-' | head -1)
+[[ -z "$LAST_TAG" ]] && die "No release tags found (expected v*.*.* pattern)"
+LAST_RELEASED="${LAST_TAG#v}"
+info "Last release: $LAST_RELEASED (tag: $LAST_TAG)"
+
+NEW_VERSION=$($HELPER calc-version "$LAST_RELEASED" "$RELEASE_TYPE")
 [[ -z "$NEW_VERSION" ]] && die "Could not calculate next version"
 info "New version: $NEW_VERSION"
 
@@ -174,8 +180,9 @@ TAG_NAME="v${NEW_VERSION}"
 NEXT_MINOR=$((MINOR + 1))
 NEXT_DEV_VERSION="${MAJOR}.${NEXT_MINOR}.0-dev"
 
-echo "  Release branch: $RELEASE_BRANCH"
-echo "  Tag: $TAG_NAME"
+echo "  Last release:     $LAST_RELEASED"
+echo "  Release branch:   $RELEASE_BRANCH"
+echo "  Tag:              $TAG_NAME"
 echo "  Next dev version: $NEXT_DEV_VERSION"
 
 # --- Phase 2: Release readiness CI -----------------------------------------
