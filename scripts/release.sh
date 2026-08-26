@@ -139,10 +139,13 @@ if ! $DRY_RUN; then
             CLIFF_OUTPUT=$(git-cliff --unreleased --strip header 2>/dev/null || true)
             if [[ -n "$CLIFF_OUTPUT" ]]; then
                 # Insert generated content after the ## [Unreleased] line
-                awk -v content="$CLIFF_OUTPUT" '
-                    /^## \[Unreleased\]/ { print; print ""; print content; next }
+                CLIFF_TMP=$(mktemp)
+                echo "$CLIFF_OUTPUT" > "$CLIFF_TMP"
+                awk '
+                    /^## \[Unreleased\]/ { print; print ""; while ((getline line < "'"$CLIFF_TMP"'") > 0) print line; next }
                     { print }
                 ' CHANGELOG.md > CHANGELOG.md.tmp && mv CHANGELOG.md.tmp CHANGELOG.md
+                rm -f "$CLIFF_TMP"
                 info "CHANGELOG.md Unreleased section populated from git history"
             else
                 die "git-cliff produced no output — add entries to CHANGELOG.md manually"
