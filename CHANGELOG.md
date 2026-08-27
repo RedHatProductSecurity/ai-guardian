@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+### Added
+
+- **release**: Add git-cliff for automated CHANGELOG generation
+- **release**: Add automated release script
+- **daemon**: Add auth token discovery for daemon targets
+
+### Documentation
+
+- Generalize schema export and add SDK enhancement docs
+
+### Fixed
+
+- **release**: Use temp file for git-cliff output insertion
+- **release**: Source version from git tags for accurate calculation
+- **daemon**: Bind localhost in toolbox and distrobox containers
+
 ## [1.17.0] - 2026-08-24
 
 ### Added
