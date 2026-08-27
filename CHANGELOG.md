@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.17.1] - 2026-08-26
 
 ### Added
 
@@ -3367,7 +3368,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.17.0...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.17.1...HEAD
+[1.17.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.17.1
 [1.17.0]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.16.0
 [1.15.5]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.15.4...v1.15.5

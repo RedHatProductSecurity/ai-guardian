@@ -10,7 +10,7 @@ AI Guardian provides multi-layered protection for AI IDE interactions:
 Automatically detects IDE type and uses appropriate response format.
 """
 
-__version__ = "1.18.0-dev"
+__version__ = "1.17.1"
 
 import logging
 import os
