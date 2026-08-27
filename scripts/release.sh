@@ -131,7 +131,7 @@ CURRENT_VERSION=$($HELPER get-version 2>/dev/null | grep "Current version:" | aw
 info "Current version: $CURRENT_VERSION"
 
 # Auto-populate CHANGELOG Unreleased section from git log if empty
-if ! $DRY_RUN; then
+if ! $DRY_RUN && ! $RESUMING; then
     UNRELEASED_CONTENT=$(awk '/^## \[Unreleased\]/{found=1; next} /^## \[/{exit} found{print}' CHANGELOG.md | grep -v '^$' || true)
     if [[ -z "$UNRELEASED_CONTENT" ]]; then
         if command -v git-cliff >/dev/null 2>&1; then
@@ -156,7 +156,7 @@ if ! $DRY_RUN; then
     fi
 fi
 
-if ! $DRY_RUN; then
+if ! $DRY_RUN && ! $RESUMING; then
     $HELPER validate --type regular || die "Prerequisite validation failed"
 fi
 info "Prerequisites validated"
