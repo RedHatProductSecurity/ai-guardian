@@ -253,7 +253,8 @@ if $RESUMING; then
     info "Already on $RELEASE_BRANCH"
 elif git rev-parse --verify "$RELEASE_BRANCH" >/dev/null 2>&1; then
     run git checkout "$RELEASE_BRANCH"
-    warn "Switched to existing branch: $RELEASE_BRANCH"
+    run git merge main --no-edit
+    warn "Switched to existing branch: $RELEASE_BRANCH (merged main)"
 else
     run git checkout -b "$RELEASE_BRANCH"
     info "Created branch: $RELEASE_BRANCH"
