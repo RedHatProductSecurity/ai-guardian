@@ -262,6 +262,10 @@ jobs:
           ")
           echo "REST API port: $REST_PORT"
 
+          # Read auto-generated auth token
+          AUTH_TOKEN=$(cat ~/.local/state/ai-guardian/.auth_token 2>/dev/null || echo "")
+          echo "Auth token present: $([ -n "$AUTH_TOKEN" ] && echo yes || echo no)"
+
           echo "Testing /api/health..."
           curl -sf "http://127.0.0.1:${REST_PORT}/api/health" | python -c "
           import json, sys
@@ -271,7 +275,8 @@ jobs:
           "
 
           echo "Testing /api/status..."
-          curl -sf "http://127.0.0.1:${REST_PORT}/api/status" | python -c "
+          curl -sf -H "Authorization: Bearer ${AUTH_TOKEN}" \
+            "http://127.0.0.1:${REST_PORT}/api/status" | python -c "
           import json, sys
           data = json.load(sys.stdin)
           assert data['running'] is True, f'Not running: {data}'
@@ -279,8 +284,9 @@ jobs:
           "
 
           echo "Testing /api/pause..."
-          curl -sf -X POST "http://127.0.0.1:${REST_PORT}/api/pause" \
-            -H "Content-Type: application/json" -d '{"minutes": 1}' | python -c "
+          curl -sf -X POST -H "Authorization: Bearer ${AUTH_TOKEN}" \
+            -H "Content-Type: application/json" -d '{"minutes": 1}' \
+            "http://127.0.0.1:${REST_PORT}/api/pause" | python -c "
           import json, sys
           data = json.load(sys.stdin)
           assert data['status'] == 'paused', f'Not paused: {data}'
@@ -288,7 +294,8 @@ jobs:
           "
 
           echo "Testing /api/resume..."
-          curl -sf -X POST "http://127.0.0.1:${REST_PORT}/api/resume" | python -c "
+          curl -sf -X POST -H "Authorization: Bearer ${AUTH_TOKEN}" \
+            "http://127.0.0.1:${REST_PORT}/api/resume" | python -c "
           import json, sys
           data = json.load(sys.stdin)
           assert data['status'] == 'resumed', f'Not resumed: {data}'
