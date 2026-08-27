@@ -263,7 +263,11 @@ jobs:
           echo "REST API port: $REST_PORT"
 
           # Read auto-generated auth token
-          AUTH_TOKEN=$(cat ~/.local/state/ai-guardian/.auth_token 2>/dev/null || echo "")
+          AUTH_TOKEN=$(python -c "
+          from ai_guardian.daemon import get_auth_token_path
+          p = get_auth_token_path()
+          print(p.read_text().strip() if p.exists() else '')
+          ")
           echo "Auth token present: $([ -n "$AUTH_TOKEN" ] && echo yes || echo no)"
 
           echo "Testing /api/health..."
