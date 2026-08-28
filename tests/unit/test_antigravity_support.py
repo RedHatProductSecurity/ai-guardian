@@ -438,6 +438,15 @@ class TestPolicyExtraction:
         )
         assert name == "list_dir"
 
+    def test_alias_resolves_to_one_identifier(self, monkeypatch):
+        # AI_GUARDIAN_IDE_TYPE can be set directly, not just via --ide.  Both
+        # layers must report the same name or violations and metrics split
+        # across two identifiers for the same agent.
+        monkeypatch.setenv("AI_GUARDIAN_IDE_TYPE", "agy")
+        checker = ToolPolicyChecker()
+        assert checker._detect_ide_type(_pre_tool_use()) == "antigravity"
+        assert detect_adapter(_pre_tool_use()).ide_type.value == "antigravity"
+
     def test_detects_ide_type(self, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_IDE_TYPE", raising=False)
         checker = ToolPolicyChecker()

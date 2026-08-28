@@ -178,6 +178,17 @@ ANTIGRAVITY_PATH_ARG_KEYS = (
 ANTIGRAVITY_FILE_ARG_KEYS = ("TargetFile", "AbsolutePath", "FilePath", "Path")
 
 
+# CLI/env aliases that resolve onto a canonical IDE key.
+IDE_ALIASES = {"agy": "antigravity"}
+
+
+def canonical_ide(ide_type):
+    """Resolve a user-supplied IDE name or alias to its canonical key."""
+    if not ide_type or not isinstance(ide_type, str):
+        return ide_type
+    return IDE_ALIASES.get(ide_type.lower(), ide_type)
+
+
 # Steps that invoke an MCP tool rather than a built-in one.
 ANTIGRAVITY_MCP_STEPS = frozenset({"call_mcp_tool", "mcp_tool"})
 

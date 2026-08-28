@@ -186,15 +186,11 @@ def _handle_ml_command(args, ml_parser):
         return 1
 
 
-# CLI aliases that map onto a canonical IDE key.
-_IDE_ALIASES = {"agy": "antigravity"}
-
-
 def _canonical_ide(ide_type):
     """Resolve a user-supplied --ide value to its canonical IDE key."""
-    if not ide_type:
-        return ide_type
-    return _IDE_ALIASES.get(ide_type, ide_type)
+    from ai_guardian.constants import canonical_ide
+
+    return canonical_ide(ide_type)
 
 
 def main():

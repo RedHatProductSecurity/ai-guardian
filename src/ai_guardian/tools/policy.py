@@ -22,6 +22,7 @@ from typing import Dict, List, Optional, Tuple, Set, Union
 
 from ai_guardian.constants import (
     AUGMENT_TOOL_MAP,
+    canonical_ide,
     HookEvent,
     antigravity_tool_name,
 )
@@ -1563,7 +1564,9 @@ class ToolPolicyChecker:
         # Check for environment variable override
         ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
         if ide_override:
-            return ide_override
+            # Resolve aliases (e.g. "agy") so violation records and metrics
+            # use one identifier per agent, matching the adapter layer.
+            return canonical_ide(ide_override)
 
         # Antigravity detection (camelCase protojson payload)
         if "conversationId" in hook_data and (
