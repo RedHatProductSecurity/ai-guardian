@@ -446,8 +446,16 @@ class DaemonServer:
         violation_type = result.get("_violation_type")
         if exit_code != 0 or result.get("_blocked"):
             self.state.record_blocked(violation_type=violation_type)
-            session_key = hook_data.get("session_id") or hook_data.get(
-                "transcript_path"
+            # Also accept the camelCase spellings used by agents such as
+            # Antigravity, whose sessions would otherwise never be marked for
+            # security re-injection after a block.  Unlike derive_session_key,
+            # this deliberately has no cwd/time-bucket fallback: a payload with
+            # no session identity should still fall through as before.
+            session_key = (
+                hook_data.get("session_id")
+                or hook_data.get("conversationId")
+                or hook_data.get("transcript_path")
+                or hook_data.get("transcriptPath")
             )
             if session_key:
                 self.state.mark_security_reinject(session_key)

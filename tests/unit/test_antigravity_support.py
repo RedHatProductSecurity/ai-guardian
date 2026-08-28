@@ -105,10 +105,15 @@ class TestEventInference:
         assert n.event == HookEvent.POST_TOOL_USE
         assert n.tool_response == "exit status 1"
 
-    def test_env_var_overrides_inference(self, monkeypatch):
-        monkeypatch.setenv("AI_GUARDIAN_HOOK_EVENT", "PostToolUse")
+    def test_environment_is_never_trusted_for_the_event(self, monkeypatch):
+        # The daemon is long-lived and inherits the environment of whichever
+        # hook started it, so a stale AI_GUARDIAN_HOOK_EVENT must not override
+        # a payload that carries no declared event of its own.
+        monkeypatch.setenv("AI_GUARDIAN_HOOK_EVENT", "PreToolUse")
         adapter = AntigravityAdapter()
-        assert adapter.normalize_input(_pre_tool_use()).event == HookEvent.POST_TOOL_USE
+        post = _pre_tool_use()
+        post["error"] = ""
+        assert adapter.normalize_input(post).event == HookEvent.POST_TOOL_USE
 
     def test_stamped_event_survives_daemon_forwarding(self, monkeypatch):
         # The daemon is a separate process, so the declared event must travel
@@ -125,6 +130,24 @@ class TestEventInference:
         data = {"conversationId": "c", "workspacePaths": ["/w"], "invocationNum": 1}
         data["_hook_event"] = "PreInvocation"
         assert AntigravityAdapter().normalize_input(data).event == HookEvent.PROMPT
+
+    def test_policy_layer_ignores_tool_call_without_conversation_id(self):
+        # A future agent using "toolCall" but not conversationId must not have
+        # its tool names remapped through the Antigravity table.  No branch
+        # claims such a payload, so the name stays unresolved and the caller
+        # fails closed rather than acting on a mis-mapped tool.
+        checker = ToolPolicyChecker()
+        name, _ = checker._extract_tool_info(
+            {"toolCall": {"name": "list_dir", "args": {}}}
+        )
+        assert name != "LS"
+        assert name is None
+
+    def test_content_extraction_is_case_tolerant(self):
+        n = AntigravityAdapter().normalize_input(
+            _pre_tool_use("write_blob", {"TargetFile": "/w/a.py", "content": "x = 1"})
+        )
+        assert n.tool_input["content"] == "x = 1"
 
 
 # ── Normalization ────────────────────────────────────────────────────────
@@ -257,6 +280,23 @@ class TestResponseFormatting:
 
 
 # ── Policy layer ─────────────────────────────────────────────────────────
+
+
+class TestDaemonSessionTracking:
+    def test_session_key_lookup_accepts_camel_case_spellings(self):
+        # The daemon's stats path does its own session lookup before calling
+        # mark_security_reinject.  Without the camelCase spellings an
+        # Antigravity session is never marked, so the security instructions
+        # are not re-injected after a block.
+        import inspect
+
+        from ai_guardian.daemon.server import DaemonServer
+
+        source = inspect.getsource(DaemonServer)
+        marker = source.index("mark_security_reinject")
+        lookup = source[max(0, marker - 800) : marker]
+        for key in ("session_id", "conversationId", "transcriptPath"):
+            assert key in lookup, f"{key} not consulted before re-inject marking"
 
 
 class TestMcpNaming:

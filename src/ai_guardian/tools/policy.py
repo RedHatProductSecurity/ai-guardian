@@ -752,7 +752,10 @@ class ToolPolicyChecker:
                     except (json.JSONDecodeError, TypeError):
                         tool_input = {}
             # Antigravity: toolCall.name + toolCall.args (PascalCase arg keys)
-            elif isinstance(hook_data.get("toolCall"), dict):
+            elif (
+                isinstance(hook_data.get("toolCall"), dict)
+                and "conversationId" in hook_data
+            ):
                 is_antigravity = True
                 tool_call = hook_data["toolCall"]
                 tool_name = tool_call.get("name")

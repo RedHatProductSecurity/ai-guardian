@@ -162,6 +162,22 @@ def antigravity_tool_name(raw_name, args=None):
     return ANTIGRAVITY_TOOL_MAP.get(lowered, raw_name)
 
 
+# Argument keys Antigravity tools use for a path, in preference order.
+ANTIGRAVITY_PATH_ARG_KEYS = (
+    "TargetFile",
+    "AbsolutePath",
+    "FilePath",
+    "Path",
+    "DirectoryPath",
+    "SearchDirectory",
+    "Url",
+)
+
+# The subset that can name a readable file, used when pulling content to scan.
+# Directory and URL keys are deliberately excluded.
+ANTIGRAVITY_FILE_ARG_KEYS = ("TargetFile", "AbsolutePath", "FilePath", "Path")
+
+
 # Steps that invoke an MCP tool rather than a built-in one.
 ANTIGRAVITY_MCP_STEPS = frozenset({"call_mcp_tool", "mcp_tool"})
 

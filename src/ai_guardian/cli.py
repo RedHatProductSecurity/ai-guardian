@@ -242,6 +242,13 @@ def main():
         )
         parser.add_argument(
             "--hook-event",
+            choices=[
+                "PreToolUse",
+                "PostToolUse",
+                "PreInvocation",
+                "PostInvocation",
+                "Stop",
+            ],
             help=(
                 "Declare which hook event this invocation is for. Needed by "
                 "agents whose payloads do not name the event (Antigravity)."

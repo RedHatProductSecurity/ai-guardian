@@ -20,10 +20,10 @@ event from the payload shape.
 
 import json
 import logging
-import os
 from typing import ClassVar, Dict, List, Optional
 
 from ai_guardian.constants import (
+    ANTIGRAVITY_PATH_ARG_KEYS as _PATH_ARG_KEYS,
     HookEvent,
     antigravity_tool_name,
 )
@@ -40,16 +40,8 @@ logger = logging.getLogger(__name__)
 _CLEAN_PRE_TOOL_DECISION = "ask"
 
 
-# Argument keys Antigravity tools use for a path, in preference order.
-_PATH_ARG_KEYS = (
-    "TargetFile",
-    "AbsolutePath",
-    "FilePath",
-    "Path",
-    "DirectoryPath",
-    "SearchDirectory",
-    "Url",
-)
+# Argument keys carrying edit/write text, in preference order.
+_CONTENT_ARG_KEYS = ("Content", "CodeEdit", "NewContent", "Contents")
 
 _EVENT_BY_NAME = {
     "pretooluse": HookEvent.PRE_TOOL_USE,
@@ -99,12 +91,15 @@ class AntigravityAdapter(HookAdapter):
         Antigravity does not name the event in the payload, so prefer the
         event declared by ``--hook-event`` (stamped into the hook data as
         ``_hook_event``), then fall back to the distinguishing payload fields.
+
+        The declared event is read only from the payload, never from the
+        environment: the daemon is long-lived and inherits the environment of
+        whichever hook invocation happened to start it, so an inherited
+        ``AI_GUARDIAN_HOOK_EVENT`` would silently misroute every later payload
+        that does not carry its own ``_hook_event`` (a hand-written config).
+        The CLI stamps the value into the payload in its own fresh process.
         """
-        # Declared by --hook-event and stamped into the payload so it survives
-        # forwarding to the daemon; the env var is only a same-process fallback.
-        declared = hook_data.get("_hook_event") or os.environ.get(
-            "AI_GUARDIAN_HOOK_EVENT", ""
-        )
+        declared = hook_data.get("_hook_event")
         if isinstance(declared, str) and declared.strip().lower() in _EVENT_BY_NAME:
             return _EVENT_BY_NAME[declared.strip().lower()]
 
@@ -155,8 +150,9 @@ class AntigravityAdapter(HookAdapter):
     @staticmethod
     def _extract_content(args: Dict) -> Optional[str]:
         """Pull edit/write text out of Antigravity's PascalCase arguments."""
-        for key in ("Content", "CodeEdit", "NewContent", "Contents"):
-            value = args.get(key)
+        lowered = {k.lower(): v for k, v in args.items()}
+        for key in _CONTENT_ARG_KEYS:
+            value = lowered.get(key.lower())
             if isinstance(value, str) and value:
                 return value
 

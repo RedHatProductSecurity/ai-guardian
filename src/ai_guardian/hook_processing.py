@@ -67,7 +67,13 @@ from ai_guardian.config.utils import (
     get_state_dir,
     is_feature_enabled,
 )
-from ai_guardian.constants import ActionMode, ViolationType, HookEvent, AUGMENT_TOOL_MAP
+from ai_guardian.constants import (
+    ActionMode,
+    ANTIGRAVITY_FILE_ARG_KEYS,
+    AUGMENT_TOOL_MAP,
+    HookEvent,
+    ViolationType,
+)
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
 
@@ -1165,7 +1171,7 @@ def extract_file_content_from_tool(hook_data):
         if not file_path and isinstance(hook_data.get("toolCall"), dict):
             args = hook_data["toolCall"].get("args")
             if isinstance(args, dict):
-                for key in ("TargetFile", "AbsolutePath", "FilePath", "Path"):
+                for key in ANTIGRAVITY_FILE_ARG_KEYS:
                     value = args.get(key)
                     if isinstance(value, str) and value:
                         file_path = value
