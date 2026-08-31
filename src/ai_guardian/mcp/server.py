@@ -274,9 +274,12 @@ def create_server() -> "MCPServer":
     def sanitize_text(text: str) -> Dict[str, Any]:
         """Redact secrets and PII from text. Call before outputting potentially sensitive content."""
         try:
+            from ai_guardian.config.loaders import _load_config_file
             from ai_guardian.scanners.sanitizer import sanitize_text as _sanitize
 
-            result = _sanitize(text)
+            cfg, _ = _load_config_file()
+            pi_config = (cfg or {}).get("prompt_injection")
+            result = _sanitize(text, pi_config=pi_config)
             return {
                 "sanitized_text": result.get("sanitized_text", text),
                 "redaction_count": result.get("stats", {}).get("total", 0),

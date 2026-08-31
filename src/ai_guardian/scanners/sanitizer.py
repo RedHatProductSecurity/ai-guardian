@@ -134,6 +134,8 @@ def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
     if detector is None:
         detector = get_cached_detector(_PI_DETECTOR_CONFIG)
 
+    compiled_allowlist = getattr(detector, "_compiled_allowlist", [])
+
     redactions = []
 
     all_patterns = (
@@ -155,12 +157,18 @@ def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
             ):
                 continue
 
+            matched_text = match.group(0)
+            if compiled_allowlist and any(
+                ap.search(matched_text) for ap in compiled_allowlist
+            ):
+                continue
+
             redacted_regions.append((start, end))
-            replacements.append((start, end, match.group(0)))
+            replacements.append((start, end, matched_text))
             redactions.append(
                 {
                     "type": "prompt_injection",
-                    "matched_text": match.group(0)[:80],
+                    "matched_text": matched_text[:80],
                     "pattern": pattern.pattern[:60],
                 }
             )
@@ -172,7 +180,11 @@ def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
 
 
 def sanitize_text(
-    text: str, no_secrets: bool = False, no_pii: bool = False, no_threats: bool = False
+    text: str,
+    no_secrets: bool = False,
+    no_pii: bool = False,
+    no_threats: bool = False,
+    pi_config: Optional[Dict] = None,
 ) -> Dict:
     """
     Sanitize text by redacting secrets, PII, and threats.
@@ -182,6 +194,9 @@ def sanitize_text(
         no_secrets: Skip secret pattern redaction
         no_pii: Skip PII pattern redaction
         no_threats: Skip prompt injection and unicode attack neutralization
+        pi_config: Prompt injection config dict (with allowlist_patterns etc.).
+            When provided, overrides the hardcoded default so user allowlists
+            are respected.  Pass ``config.get("prompt_injection")``.
 
     Returns:
         Dict with sanitized_text, redactions list, and stats
@@ -237,7 +252,13 @@ def sanitize_text(
 
     # 3. Prompt injection (detect and replace)
     if not no_threats:
-        sanitized, pi_redactions = _sanitize_prompt_injection(sanitized)
+        detector = None
+        if pi_config is not None:
+            from ai_guardian.scanners.prompt_injection import get_cached_detector
+
+            merged = dict(_PI_DETECTOR_CONFIG, **pi_config)
+            detector = get_cached_detector(merged)
+        sanitized, pi_redactions = _sanitize_prompt_injection(sanitized, detector)
         stats["prompt_injection"] = len(pi_redactions)
         all_redactions.extend(pi_redactions)
 
@@ -250,12 +271,20 @@ def sanitize_text(
     }
 
 
-def sanitize_text_batch(texts: List[str]) -> List[str]:
+def sanitize_text_batch(
+    texts: List[str],
+    pi_config: Optional[Dict] = None,
+) -> List[str]:
     """Batch-sanitize texts, reusing compiled patterns across all entries.
 
     Creates one ``SecretRedactor`` and one ``PromptInjectionDetector`` instance
     and applies them to every text, avoiding repeated TOML loads and regex
     compilations.  Returns sanitized strings in the same order as *texts*.
+
+    Args:
+        texts: Strings to sanitize.
+        pi_config: Prompt injection config dict (with allowlist_patterns etc.).
+            When provided, merged with defaults so user allowlists are respected.
     """
     if not texts:
         return []
@@ -268,7 +297,8 @@ def sanitize_text_batch(texts: List[str]) -> List[str]:
         config={"enabled": True},
         pii_config=config["scan_pii"],
     )
-    detector = get_cached_detector(_PI_DETECTOR_CONFIG)
+    det_config = dict(_PI_DETECTOR_CONFIG, **(pi_config or {}))
+    detector = get_cached_detector(det_config)
 
     results = []
     for text in texts:

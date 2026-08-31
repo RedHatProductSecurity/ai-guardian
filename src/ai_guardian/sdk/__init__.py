@@ -504,18 +504,21 @@ class _DirectSession(GuardSession):
     ) -> Dict[str, Any]:
         from ai_guardian.scanners.sanitizer import sanitize_text
 
+        pi_config = self._config.get("prompt_injection")
         if context is not None:
             seq = context.next_sequence()
             try:
-                return sanitize_text(text)
+                return sanitize_text(text, pi_config=pi_config)
             finally:
                 context.end_sequence(seq)
-        return sanitize_text(text)
+        return sanitize_text(text, pi_config=pi_config)
 
     def sanitize_batch(self, texts: List[str]) -> List[str]:
         from ai_guardian.scanners.sanitizer import sanitize_text_batch
 
-        return sanitize_text_batch(texts)
+        return sanitize_text_batch(
+            texts, pi_config=self._config.get("prompt_injection")
+        )
 
     def get_violations(
         self,
@@ -525,6 +528,8 @@ class _DirectSession(GuardSession):
         violation_type: Optional[str] = None,
         limit: int = 50,
     ) -> List[Dict[str, Any]]:
+        from functools import partial
+
         from ai_guardian.scanners.sanitizer import sanitize_text
         from ai_guardian.violations.logger import ViolationLogger
 
@@ -536,7 +541,9 @@ class _DirectSession(GuardSession):
             tool_use_id=tool_use_id,
             session_id=session_id,
         )
-        return [self._sanitize_violation(v, sanitize_text) for v in raw]
+        pi_config = self._config.get("prompt_injection")
+        sanitize_fn = partial(sanitize_text, pi_config=pi_config)
+        return [self._sanitize_violation(v, sanitize_fn) for v in raw]
 
 
 class _RestSession(GuardSession):

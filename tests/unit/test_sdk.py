@@ -507,7 +507,34 @@ class TestDirectSessionSanitize:
             s._config = {}
             result = s.sanitize("some text")
             assert result["sanitized_text"] == "clean"
-            mock_sanitize.assert_called_once_with("some text")
+            mock_sanitize.assert_called_once_with("some text", pi_config=None)
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch(
+        "ai_guardian.scanners.sanitizer.sanitize_text",
+        return_value={
+            "sanitized_text": "clean",
+            "redactions": [],
+            "stats": {"total": 0},
+        },
+    )
+    def test_sanitize_passes_pi_config(self, mock_sanitize, mock_config):
+        pi = {"allowlist_patterns": ["__init__"]}
+        with monitor() as s:
+            s._config = {"prompt_injection": pi}
+            s.sanitize("from module import __init__")
+            mock_sanitize.assert_called_once_with(
+                "from module import __init__", pi_config=pi
+            )
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.sanitizer.sanitize_text_batch", return_value=["clean"])
+    def test_sanitize_batch_passes_pi_config(self, mock_batch, mock_config):
+        pi = {"allowlist_patterns": ["__init__"]}
+        with monitor() as s:
+            s._config = {"prompt_injection": pi}
+            s.sanitize_batch(["text"])
+            mock_batch.assert_called_once_with(["text"], pi_config=pi)
 
 
 # ---------------------------------------------------------------------------
