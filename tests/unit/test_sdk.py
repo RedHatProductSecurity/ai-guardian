@@ -1,5 +1,6 @@
 """Tests for the AI Guardian SDK module."""
 
+import threading
 import warnings
 from dataclasses import asdict
 from unittest.mock import patch
@@ -15,6 +16,7 @@ from ai_guardian.sdk import (
     _SecurityWarning,
     monitor,
 )
+from ai_guardian.sdk.run_context import RunContext
 
 # ---------------------------------------------------------------------------
 # CheckResult
@@ -1133,3 +1135,143 @@ class TestDirectSessionTargetDir:
         ) as session:
             pi = session._config["prompt_injection"]
             assert "from-target" in pi["allowlist_patterns"]
+
+
+# ---------------------------------------------------------------------------
+# RunContext
+# ---------------------------------------------------------------------------
+
+
+class TestRunContext:
+    def test_auto_generated_run_id(self):
+        ctx = RunContext()
+        assert len(ctx.run_id) == 32
+        assert ctx.run_id != RunContext().run_id
+
+    def test_custom_run_id(self):
+        ctx = RunContext(run_id="pipeline-123")
+        assert ctx.run_id == "pipeline-123"
+
+    def test_metadata_defaults_empty(self):
+        ctx = RunContext()
+        assert ctx.metadata == {}
+
+    def test_custom_metadata(self):
+        ctx = RunContext(metadata={"jira": "AAP-12345"})
+        assert ctx.metadata["jira"] == "AAP-12345"
+
+    def test_parent_trace_id(self):
+        ctx = RunContext(parent_trace_id="abc123")
+        assert ctx.parent_trace_id == "abc123"
+
+    def test_sequence_increments(self):
+        ctx = RunContext()
+        assert ctx.next_sequence() == 1
+        assert ctx.next_sequence() == 2
+        assert ctx.next_sequence() == 3
+
+    def test_end_sequence_timestamps(self):
+        ctx = RunContext()
+        seq = ctx.next_sequence()
+        assert seq in ctx._started_at
+        assert seq not in ctx._ended_at
+        ctx.end_sequence(seq)
+        assert seq in ctx._ended_at
+
+    def test_ran_concurrently_no_overlap(self):
+        ctx = RunContext()
+        seq1 = ctx.next_sequence()
+        ctx.end_sequence(seq1)
+        seq2 = ctx.next_sequence()
+        ctx.end_sequence(seq2)
+        assert not ctx.ran_concurrently(seq1, seq2)
+
+    def test_ran_concurrently_missing_timestamps(self):
+        ctx = RunContext()
+        assert not ctx.ran_concurrently(1, 2)
+
+    def test_thread_safe_sequence(self):
+        ctx = RunContext()
+        results = []
+        barrier = threading.Barrier(10)
+
+        def _inc():
+            barrier.wait()
+            results.append(ctx.next_sequence())
+
+        threads = [threading.Thread(target=_inc) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert sorted(results) == list(range(1, 11))
+
+
+class TestRunContextIntegration:
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
+    def test_check_content_with_context(self, mock_scan, mock_config):
+        ctx = RunContext(run_id="test-run-1")
+        with monitor() as s:
+            s._config = {}
+            result = s.check_content("hello", context=ctx)
+            assert result.blocked is False
+        assert ctx._sequence == 1
+        assert 1 in ctx._ended_at
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_file", return_value=[])
+    def test_check_file_with_context(self, mock_scan, mock_config):
+        ctx = RunContext(run_id="test-run-2")
+        with monitor() as s:
+            s._config = {}
+            result = s.check_file("/tmp/test.py", context=ctx)
+            assert result.blocked is False
+        assert ctx._sequence == 1
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_command", return_value=[])
+    def test_check_command_with_context(self, mock_scan, mock_config):
+        ctx = RunContext(run_id="test-run-3")
+        with monitor() as s:
+            s._config = {}
+            result = s.check_command("echo hi", context=ctx)
+            assert result.blocked is False
+        assert ctx._sequence == 1
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
+    def test_context_none_backward_compat(self, mock_scan, mock_config):
+        with monitor() as s:
+            s._config = {}
+            result = s.check_content("hello")
+            assert result.blocked is False
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_content", return_value=[])
+    def test_multiple_calls_increment_sequence(self, mock_scan, mock_config):
+        ctx = RunContext(run_id="multi")
+        with monitor() as s:
+            s._config = {}
+            s.check_content("a", context=ctx)
+            s.check_content("b", context=ctx)
+            s.check_content("c", context=ctx)
+        assert ctx._sequence == 3
+        for seq in range(1, 4):
+            assert seq in ctx._started_at
+            assert seq in ctx._ended_at
+
+    @patch("ai_guardian.sdk._DirectSession._ensure_config")
+    @patch("ai_guardian.scanners.pipeline.scan_content")
+    def test_context_end_sequence_on_violation(self, mock_scan, mock_config):
+        from ai_guardian.scanners.scan_result import ScanResult
+
+        mock_scan.return_value = [
+            ScanResult.from_secret_scan(has_secrets=True, error_message="secret found")
+        ]
+        ctx = RunContext(run_id="violation-run")
+        with monitor() as s:
+            s._config = {}
+            with pytest.raises(SecurityViolation):
+                s.check_content("secret", context=ctx)
+        assert 1 in ctx._ended_at

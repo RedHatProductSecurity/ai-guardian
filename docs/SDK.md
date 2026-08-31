@@ -552,6 +552,89 @@ agent = GuardedAgent(model="claude-sonnet-5", tools="coding")
 result = agent.run("fix the bug")
 ```
 
+## RunContext — Correlating Multiple SDK Calls
+
+When a program makes multiple `guarded()` calls or runs multiple `GuardedAgent` instances, each produces independent traces and violations. `RunContext` links them with a shared `run_id`.
+
+```python
+from ai_guardian.sdk import RunContext
+
+ctx = RunContext(
+    run_id="pipeline-2026-08-27",  # optional, auto-generated UUID if omitted
+    metadata={"jira": "AAP-12345", "pipeline": "remediation"},
+)
+```
+
+### With GuardedAgent
+
+```python
+agent1 = GuardedAgent(model="claude-sonnet-5", name="analyzer", context=ctx)
+agent2 = GuardedAgent(model="claude-sonnet-5", name="fixer", context=ctx)
+
+result1 = agent1.run("Analyze the bug")
+result2 = agent2.run(f"Fix based on: {result1['output']}")
+```
+
+### With monitor()
+
+```python
+from ai_guardian.sdk import monitor
+
+with monitor() as session:
+    result1 = session.check_content(text, context=ctx)
+    result2 = session.check_file("/path/to/file.py", context=ctx)
+    sanitized = session.sanitize(output, context=ctx)
+```
+
+### Mixed Pipeline
+
+```python
+ctx = RunContext(run_id="pipeline-123")
+
+with monitor() as session:
+    for f in files:
+        session.check_file(f, context=ctx)
+
+agent = GuardedAgent(model="claude-sonnet-5", name="fixer", context=ctx)
+agent.run("Fix the issues found")
+```
+
+### RunContext Fields
+
+| Field | Type | Purpose |
+|---|---|---|
+| `run_id` | `str` | Links all traces/violations. Auto-generated UUID if omitted |
+| `metadata` | `dict` | Custom key-values attached to every trace and OTEL span |
+| `parent_trace_id` | `str` (optional) | Link to a parent trace for nested orchestration |
+
+### Where run_id Appears
+
+- **Traces**: `run_id` and `run_sequence` fields in trace JSON
+- **OTEL**: `ai_guardian.run_id` as span attribute — query Grafana by run_id
+- **violations.jsonl**: `run_id` in the context dict
+- **Trace meta**: `run_id` in `.meta.json` sidecar files
+
+### Concurrency Detection
+
+Each SDK call records `started_at` / `ended_at` timestamps. Use `ran_concurrently()` to detect overlap:
+
+```python
+ctx = RunContext()
+# ... run agents in threads ...
+if ctx.ran_concurrently(1, 2):
+    print("agent1 and agent2 ran at the same time")
+```
+
+### Backward Compatibility
+
+`context` is an optional keyword argument defaulting to `None`. Existing code works unchanged:
+
+```python
+agent = GuardedAgent(model="claude-sonnet-5")       # still works
+session.check_content(text)                          # still works
+session.check_content(text, context=ctx)             # opt-in
+```
+
 ## GuardedAgent
 
 `GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII. Supports Anthropic and OpenAI providers.
