@@ -635,8 +635,8 @@ class TestGroupTracesByRun:
         assert group["total_violations"] == 1
         assert group["total_duration"] == 30.0
         assert len(group["traces"]) == 2
-        assert group["traces"][0]["run_sequence"] == 1
-        assert group["traces"][1]["run_sequence"] == 2
+        assert group["traces"][0]["agent_name"] == "analyzer"
+        assert group["traces"][1]["agent_name"] == "fixer"
 
     def test_single_trace_with_run_id_not_grouped(self):
         traces = [

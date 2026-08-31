@@ -470,7 +470,7 @@ def group_traces_by_run(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if len(members) == 1:
             result.append(members[0])
             continue
-        members.sort(key=lambda m: m.get("run_sequence") or 0)
+        members.sort(key=lambda m: m.get("started_at", ""))
         total_violations = sum(m.get("violation_count", 0) for m in members)
         earliest = min((m.get("started_at") or "" for m in members), default="")
         total_duration = sum(m.get("duration_seconds", 0) for m in members)
