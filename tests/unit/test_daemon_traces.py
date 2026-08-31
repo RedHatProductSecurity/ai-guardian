@@ -12,6 +12,7 @@ from ai_guardian.daemon.traces import (
     _meta_path,
     compute_token_summary,
     estimate_cost,
+    group_traces_by_run,
     list_traces,
     pushed_trace_to_summary,
     read_trace_detail,
@@ -547,3 +548,195 @@ class TestPushedTraceToSummary:
         assert result["agent_name"] == "test-agent"
         assert result["total_turns"] == 2
         assert result["is_active"] is False
+
+    def test_includes_run_id(self):
+        doc = _sample_trace_doc()
+        doc["run_id"] = "abc123"
+        doc["run_sequence"] = 2
+        result = pushed_trace_to_summary("test.json", doc)
+        assert result["run_id"] == "abc123"
+        assert result["run_sequence"] == 2
+
+    def test_omits_run_id_when_absent(self):
+        doc = _sample_trace_doc()
+        result = pushed_trace_to_summary("test.json", doc)
+        assert "run_id" not in result
+        assert "run_sequence" not in result
+
+
+class TestRunIdPropagation:
+    def test_list_traces_includes_run_id_from_meta(self, trace_dir):
+        doc = _sample_trace_doc()
+        doc["run_id"] = "run-aaa"
+        doc["run_sequence"] = 1
+        filepath = str(_write_trace(trace_dir, "r_20260813-103000_a1b2c3d4.json", doc))
+        write_trace_meta(filepath, doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["run_id"] == "run-aaa"
+        assert result[0]["run_sequence"] == 1
+
+    def test_list_traces_includes_run_id_from_full_parse(self, trace_dir):
+        doc = _sample_trace_doc()
+        doc["run_id"] = "run-bbb"
+        doc["run_sequence"] = 3
+        _write_trace(trace_dir, "r2_20260813-103000_a1b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert result[0]["run_id"] == "run-bbb"
+        assert result[0]["run_sequence"] == 3
+
+    def test_list_traces_omits_run_id_when_absent(self, trace_dir):
+        doc = _sample_trace_doc()
+        _write_trace(trace_dir, "n_20260813-103000_a1b2c3d4.json", doc)
+
+        result = list_traces(str(trace_dir))
+        assert len(result) == 1
+        assert "run_id" not in result[0]
+
+
+class TestGroupTracesByRun:
+    def test_no_run_ids_returns_unchanged(self):
+        traces = [
+            {"agent_name": "a", "started_at": "2026-01-01T10:00:00"},
+            {"agent_name": "b", "started_at": "2026-01-01T11:00:00"},
+        ]
+        result = group_traces_by_run(traces)
+        assert len(result) == 2
+        assert all(item.get("type") != "run_group" for item in result)
+
+    def test_groups_shared_run_id(self):
+        traces = [
+            {
+                "agent_name": "analyzer",
+                "run_id": "run-1",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T10:00:00",
+                "duration_seconds": 10.0,
+                "violation_count": 0,
+            },
+            {
+                "agent_name": "fixer",
+                "run_id": "run-1",
+                "run_sequence": 2,
+                "started_at": "2026-01-01T10:00:10",
+                "duration_seconds": 20.0,
+                "violation_count": 1,
+            },
+        ]
+        result = group_traces_by_run(traces)
+        assert len(result) == 1
+        group = result[0]
+        assert group["type"] == "run_group"
+        assert group["run_id"] == "run-1"
+        assert group["agent_count"] == 2
+        assert group["total_violations"] == 1
+        assert group["total_duration"] == 30.0
+        assert len(group["traces"]) == 2
+        assert group["traces"][0]["agent_name"] == "analyzer"
+        assert group["traces"][1]["agent_name"] == "fixer"
+
+    def test_single_trace_with_run_id_not_grouped(self):
+        traces = [
+            {
+                "agent_name": "solo",
+                "run_id": "run-solo",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T10:00:00",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+            },
+        ]
+        result = group_traces_by_run(traces)
+        assert len(result) == 1
+        assert result[0].get("type") != "run_group"
+        assert result[0]["agent_name"] == "solo"
+
+    def test_mixed_grouped_and_standalone(self):
+        traces = [
+            {
+                "agent_name": "a1",
+                "run_id": "run-x",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T10:00:00",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+            },
+            {
+                "agent_name": "a2",
+                "run_id": "run-x",
+                "run_sequence": 2,
+                "started_at": "2026-01-01T10:00:05",
+                "duration_seconds": 10.0,
+                "violation_count": 0,
+            },
+            {
+                "agent_name": "standalone",
+                "started_at": "2026-01-01T11:00:00",
+                "duration_seconds": 3.0,
+                "violation_count": 0,
+            },
+        ]
+        result = group_traces_by_run(traces)
+        assert len(result) == 2
+        types = [item.get("type") for item in result]
+        assert "run_group" in types
+
+    def test_is_active_propagated(self):
+        traces = [
+            {
+                "agent_name": "a1",
+                "run_id": "run-act",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T10:00:00",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+                "is_active": False,
+            },
+            {
+                "agent_name": "a2",
+                "run_id": "run-act",
+                "run_sequence": 2,
+                "started_at": "2026-01-01T10:00:05",
+                "duration_seconds": 0.0,
+                "violation_count": 0,
+                "is_active": True,
+            },
+        ]
+        result = group_traces_by_run(traces)
+        group = [r for r in result if r.get("type") == "run_group"][0]
+        assert group["is_active"] is True
+
+    def test_sorted_descending_by_started_at(self):
+        traces = [
+            {
+                "agent_name": "early",
+                "started_at": "2026-01-01T09:00:00",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+            },
+            {
+                "agent_name": "g1",
+                "run_id": "run-late",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T12:00:00",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+            },
+            {
+                "agent_name": "g2",
+                "run_id": "run-late",
+                "run_sequence": 2,
+                "started_at": "2026-01-01T12:00:05",
+                "duration_seconds": 5.0,
+                "violation_count": 0,
+            },
+        ]
+        result = group_traces_by_run(traces)
+        assert result[0].get("type") == "run_group"
+        assert result[1]["agent_name"] == "early"
+
+    def test_empty_list(self):
+        assert group_traces_by_run([]) == []

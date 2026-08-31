@@ -212,7 +212,7 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
             _mark_trace_crashed(filepath)
             stop_reason = "crashed"
 
-    return {
+    summary = {
         "filename": filename,
         "agent_name": meta.get("agent_name", ""),
         "model": meta.get("model", ""),
@@ -230,6 +230,13 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
         "violation_count": meta.get("violation_count", 0),
         "file_mtime": file_mtime,
     }
+    run_id = meta.get("run_id")
+    if run_id:
+        summary["run_id"] = run_id
+    run_sequence = meta.get("run_sequence")
+    if run_sequence is not None:
+        summary["run_sequence"] = run_sequence
+    return summary
 
 
 def _read_meta_sidecar(meta_fp: str) -> Optional[Dict[str, Any]]:
@@ -259,7 +266,7 @@ def _parse_full_trace_for_summary(
         return None
 
     trace = doc.get("trace") or []
-    return {
+    meta = {
         "agent_name": doc.get("agent_name", ""),
         "model": doc.get("model", ""),
         "started_at": doc.get("started_at", ""),
@@ -268,6 +275,13 @@ def _parse_full_trace_for_summary(
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
     }
+    run_id = doc.get("run_id")
+    if run_id:
+        meta["run_id"] = run_id
+    run_sequence = doc.get("run_sequence")
+    if run_sequence is not None:
+        meta["run_sequence"] = run_sequence
+    return meta
 
 
 def read_trace_detail(
@@ -433,6 +447,51 @@ def estimate_cost(model: str, usage: dict) -> float:
     return round(cost, 6)
 
 
+def group_traces_by_run(traces: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group traces sharing a ``run_id`` into aggregate run entries.
+
+    Returns a mixed list of run-group dicts (``type="run_group"``) and
+    standalone trace dicts (no ``run_id``).  Sorted by ``started_at``
+    descending.
+    """
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    standalone: List[Dict[str, Any]] = []
+
+    for t in traces:
+        rid = t.get("run_id")
+        if rid:
+            groups.setdefault(rid, []).append(t)
+        else:
+            standalone.append(t)
+
+    result: List[Dict[str, Any]] = list(standalone)
+
+    for rid, members in groups.items():
+        if len(members) == 1:
+            result.append(members[0])
+            continue
+        members.sort(key=lambda m: m.get("started_at", ""))
+        total_violations = sum(m.get("violation_count", 0) for m in members)
+        earliest = min((m.get("started_at") or "" for m in members), default="")
+        total_duration = sum(m.get("duration_seconds", 0) for m in members)
+        is_active = any(m.get("is_active", False) for m in members)
+        result.append(
+            {
+                "type": "run_group",
+                "run_id": rid,
+                "agent_count": len(members),
+                "traces": members,
+                "total_duration": total_duration,
+                "total_violations": total_violations,
+                "started_at": earliest,
+                "is_active": is_active,
+            }
+        )
+
+    result.sort(key=lambda t: t.get("started_at", ""), reverse=True)
+    return result
+
+
 def _compute_duration(
     started_at: str,
     stop_reason: str = "",
@@ -476,7 +535,7 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
 
     violation_count = _count_violations(trace)
 
-    return {
+    summary = {
         "filename": filename,
         "agent_name": doc.get("agent_name", ""),
         "model": doc.get("model", ""),
@@ -494,3 +553,10 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
         "violation_count": violation_count,
         "file_mtime": 0.0,
     }
+    run_id = doc.get("run_id")
+    if run_id:
+        summary["run_id"] = run_id
+    run_sequence = doc.get("run_sequence")
+    if run_sequence is not None:
+        summary["run_sequence"] = run_sequence
+    return summary

@@ -135,6 +135,52 @@ class TestStepElementIds:
         assert "turn_num" in sig.parameters
 
 
+class TestRunGroupRendering:
+    """Source-inspection tests for run group rendering in the trace list."""
+
+    def test_render_run_group_card_exists(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        assert callable(_render_run_group_card)
+
+    def test_run_group_shows_run_id(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        source = inspect.getsource(_render_run_group_card)
+        assert "run_id" in source
+
+    def test_run_group_shows_agent_count(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        source = inspect.getsource(_render_run_group_card)
+        assert "agent_count" in source
+
+    def test_run_group_shows_violations(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        source = inspect.getsource(_render_run_group_card)
+        assert "total_violations" in source
+
+    def test_run_group_has_expansion(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        source = inspect.getsource(_render_run_group_card)
+        assert "expansion" in source
+
+    def test_run_group_renders_child_traces(self):
+        from ai_guardian.web.pages.traces import _render_run_group_card
+
+        source = inspect.getsource(_render_run_group_card)
+        assert "_render_trace_card" in source
+
+    def test_trace_list_dispatches_on_type(self):
+        from ai_guardian.web.pages.traces import _render_trace_list
+
+        source = inspect.getsource(_render_trace_list)
+        assert "run_group" in source
+        assert "_render_run_group_card" in source
+
+
 class TestExpansionHeaderBadges:
     """Verify expansion header includes violation badges."""
 

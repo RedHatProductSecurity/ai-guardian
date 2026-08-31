@@ -201,6 +201,8 @@ class TracesContent(Container):
 
     def _render_traces(self, traces, newest_first=True) -> None:
         """Render trace list as a directory tree (called on main thread)."""
+        from ai_guardian.daemon.traces import group_traces_by_run
+
         tree = self.query_one("#traces-tree", Tree)
         tree.clear()
 
@@ -209,33 +211,38 @@ class TracesContent(Container):
             return
 
         traces.sort(key=lambda t: t.get("started_at", ""), reverse=newest_first)
+        grouped = group_traces_by_run(traces)
+        if not newest_first:
+            grouped.sort(key=lambda t: t.get("started_at", ""))
 
-        dirs: dict = {}
-        for t in traces:
-            filename = t.get("filename", "")
-            parts = filename.split("/")
-            if len(parts) > 1:
-                subdir = "/".join(parts[:-1])
+        for item in grouped:
+            if item.get("type") == "run_group":
+                label = _format_run_group_label(item)
+                group_node = tree.root.add(label)
+                group_node.data = item
+                for t in item.get("traces", []):
+                    child_label = _format_trace_label(t)
+                    child = group_node.add_leaf(child_label)
+                    child.data = t
             else:
-                subdir = ""
-
-            dirs.setdefault(subdir, []).append(t)
-
-        for subdir in sorted(dirs.keys()):
-            if subdir:
-                parent = tree.root.add(f"[bold]{subdir}/[/bold]")
-            else:
-                parent = tree.root
-
-            for t in dirs[subdir]:
-                label = _format_trace_label(t)
-                node = parent.add_leaf(label)
-                node.data = t
+                label = _format_trace_label(item)
+                node = tree.root.add_leaf(label)
+                node.data = item
 
         tree.root.expand_all()
 
-        if traces:
-            self._selected_filename = traces[0].get("filename")
+        first_trace = None
+        for item in grouped:
+            if item.get("type") == "run_group":
+                children = item.get("traces", [])
+                if children:
+                    first_trace = children[0]
+                    break
+            else:
+                first_trace = item
+                break
+        if first_trace:
+            self._selected_filename = first_trace.get("filename")
 
     def _export_otlp(self) -> None:
         """Export the most recent (or selected) trace as OTLP JSON."""
@@ -357,6 +364,32 @@ def _format_trace_label(t):
     return (
         f"{active_marker}[bold]{name}[/bold] ({model}) {status}{v_str}  "
         f"{started} | {turns} turns | ctx:{_fmt_tok(context)} | {duration_str}"
+    )
+
+
+def _format_run_group_label(group):
+    """Format a run group label for the TUI tree."""
+    run_id = group.get("run_id", "")
+    run_label = run_id
+    agent_count = group.get("agent_count", 0)
+    total_duration = group.get("total_duration", 0)
+    total_violations = group.get("total_violations", 0)
+    is_active = group.get("is_active", False)
+    started = (group.get("started_at") or "")[:19]
+
+    duration_str = _format_duration(total_duration)
+
+    if is_active:
+        marker = "[green]●[/green] "
+    else:
+        marker = "[blue]◆[/blue] "
+
+    v_str = f" [red]({total_violations} violations)[/red]" if total_violations else ""
+
+    return (
+        f"{marker}[bold]{run_label}[/bold]  "
+        f"{agent_count} agent{'s' if agent_count != 1 else ''}{v_str}  "
+        f"{started} | {duration_str}"
     )
 
 
