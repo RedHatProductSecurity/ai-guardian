@@ -488,6 +488,17 @@ class _RestHandler(BaseHTTPRequestHandler):
             logger.debug("Failed to compute provenance: %s", e)
             return {}
 
+    @staticmethod
+    def _load_pi_config():
+        """Load prompt_injection config section for sanitize allowlists."""
+        try:
+            from ai_guardian.config.loaders import _load_config_file
+
+            cfg, _ = _load_config_file()
+            return (cfg or {}).get("prompt_injection")
+        except Exception:
+            return None
+
     def _handle_config_write(self, body):
         """Handle POST /api/config — scoped config write."""
         scope = body.get("scope")
@@ -831,7 +842,8 @@ class _RestHandler(BaseHTTPRequestHandler):
                 try:
                     from ai_guardian.scanners.sanitizer import sanitize_text
 
-                    san_result = sanitize_text(content)
+                    pi_config = self._load_pi_config()
+                    san_result = sanitize_text(content, pi_config=pi_config)
                     redacted = san_result.get("sanitized_text") or san_result.get(
                         "redacted"
                     )
@@ -1116,7 +1128,8 @@ class _RestHandler(BaseHTTPRequestHandler):
         try:
             from ai_guardian.scanners.sanitizer import sanitize_text
 
-            result = sanitize_text(content)
+            pi_config = self._load_pi_config()
+            result = sanitize_text(content, pi_config=pi_config)
             redacted = result.get("sanitized_text") or result.get("redacted")
             if redacted is None:
                 logger.error(
