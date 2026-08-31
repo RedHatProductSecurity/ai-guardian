@@ -204,9 +204,10 @@ from ai_guardian.cli_handlers import (  # noqa: F401
     _handle_daemon_command,
 )
 
-# --- sdk.py ---
+# --- sdk ---
 from ai_guardian.sdk import (  # noqa: F401
     CheckResult,
+    RunContext,
     SecurityViolation,
     monitor,
 )

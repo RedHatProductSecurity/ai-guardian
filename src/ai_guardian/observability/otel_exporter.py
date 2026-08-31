@@ -386,6 +386,24 @@ def _make_root_span(
         output_tokens=usage.get("output_tokens"),
     )
 
+    root_attrs_pairs = [
+        ("gen_ai.system", "anthropic"),
+        ("gen_ai.agent.name", trace_doc.get("agent_name")),
+        ("gen_ai.request.model", trace_doc.get("model")),
+        ("gen_ai.request.max_tokens", trace_doc.get("max_tokens")),
+        ("gen_ai.agent.stop_reason", stop_reason),
+        ("gen_ai.agent.duration_ms", trace_doc.get("duration_ms")),
+        ("gen_ai.agent.hostname", platform.node() or None),
+        ("ai_guardian.session_id", trace_doc.get("session_id")),
+        ("ai_guardian.project.name", trace_doc.get("project_name")),
+        ("ai_guardian.run_id", trace_doc.get("run_id")),
+        ("ai_guardian.run_sequence", trace_doc.get("run_sequence")),
+    ]
+    run_metadata = trace_doc.get("run_metadata")
+    if run_metadata and isinstance(run_metadata, dict):
+        for k, v in run_metadata.items():
+            root_attrs_pairs.append((f"ai_guardian.meta.{k}", v))
+
     return _make_span(
         trace_id=trace_id,
         span_id=root_span_id,
@@ -393,17 +411,7 @@ def _make_root_span(
         name="gen_ai.agent",
         start_nano=start_nano,
         end_nano=end_nano,
-        attributes=_attrs(
-            ("gen_ai.system", "anthropic"),
-            ("gen_ai.agent.name", trace_doc.get("agent_name")),
-            ("gen_ai.request.model", trace_doc.get("model")),
-            ("gen_ai.request.max_tokens", trace_doc.get("max_tokens")),
-            ("gen_ai.agent.stop_reason", stop_reason),
-            ("gen_ai.agent.duration_ms", trace_doc.get("duration_ms")),
-            ("gen_ai.agent.hostname", platform.node() or None),
-            ("ai_guardian.session_id", trace_doc.get("session_id")),
-            ("ai_guardian.project.name", trace_doc.get("project_name")),
-        ),
+        attributes=_attrs(*root_attrs_pairs),
         status_code=status_code,
     )
 
@@ -790,11 +798,17 @@ class OtelSpanEmitter:
         agent_name: str,
         model: str,
         metadata_fn: Optional[Callable[[str, Dict[str, Any]], Dict[str, Any]]] = None,
+        run_id: Optional[str] = None,
+        run_sequence: Optional[int] = None,
+        run_metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         self._cfg = _OtelConfig(config)
         self._enabled = self._cfg.enabled
         self._metadata_fn = metadata_fn
         self._root_span_id: Optional[str] = None
+        self._run_id = run_id
+        self._run_sequence = run_sequence
+        self._run_metadata = run_metadata or {}
         if not self._enabled:
             return
         self._trace_id = trace_id
@@ -841,6 +855,14 @@ class OtelSpanEmitter:
             start_nano = _iso_to_unix_nano(started_at)
             end_nano = str(int(start_nano) + 1_000_000) if start_nano != "0" else "0"
 
+            run_attrs = []
+            if self._run_id:
+                run_attrs.append(("ai_guardian.run_id", self._run_id))
+            if self._run_sequence is not None:
+                run_attrs.append(("ai_guardian.run_sequence", self._run_sequence))
+            for k, v in self._run_metadata.items():
+                run_attrs.append((f"ai_guardian.meta.{k}", v))
+
             root = _make_span(
                 trace_id=self._trace_id,
                 span_id=self._root_span_id,
@@ -854,6 +876,7 @@ class OtelSpanEmitter:
                     ("gen_ai.request.model", self._model),
                     ("gen_ai.agent.stop_reason", "in_progress"),
                     ("ai_guardian.span_type", "agent_run"),
+                    *run_attrs,
                 ),
             )
             dynamic_attrs = self._call_metadata_fn(turn=0)

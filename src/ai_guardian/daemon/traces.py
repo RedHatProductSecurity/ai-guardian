@@ -62,6 +62,12 @@ def write_trace_meta(filepath: str, doc: Dict[str, Any]) -> None:
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
     }
+    run_id = doc.get("run_id")
+    if run_id:
+        meta["run_id"] = run_id
+    run_sequence = doc.get("run_sequence")
+    if run_sequence is not None:
+        meta["run_sequence"] = run_sequence
 
     meta_fp = _meta_path(filepath)
     try:

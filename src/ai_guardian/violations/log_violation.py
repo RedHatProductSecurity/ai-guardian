@@ -31,6 +31,8 @@ class ScanContext:
     session_id: Optional[str] = None
     tool_use_id: Optional[str] = None
     tool_name: Optional[str] = None
+    run_id: Optional[str] = None
+    run_sequence: Optional[int] = None
 
     @classmethod
     def from_hook_dicts(
@@ -64,6 +66,10 @@ class ScanContext:
             ctx["session_id"] = self.session_id
         if self.tool_name:
             ctx["tool_name"] = self.tool_name
+        if self.run_id:
+            ctx["run_id"] = self.run_id
+        if self.run_sequence is not None:
+            ctx["run_sequence"] = self.run_sequence
         return ctx
 
 

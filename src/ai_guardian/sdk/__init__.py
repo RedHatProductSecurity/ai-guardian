@@ -37,6 +37,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from ai_guardian.sdk.run_context import RunContext  # noqa: F401
+
 logger = logging.getLogger(__name__)
 
 
@@ -112,19 +114,36 @@ class GuardSession:
         *,
         filename: str = "input",
         source_command: Optional[str] = None,
+        context: Optional[RunContext] = None,
     ) -> CheckResult:
         """Check text for secrets, prompt injection, context poisoning."""
         raise NotImplementedError
 
-    def check_file(self, file_path: str, content: Optional[str] = None) -> CheckResult:
+    def check_file(
+        self,
+        file_path: str,
+        content: Optional[str] = None,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
         """Check file path access and optionally scan file content."""
         raise NotImplementedError
 
-    def check_command(self, command: str) -> CheckResult:
+    def check_command(
+        self,
+        command: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
         """Check a bash command for threats."""
         raise NotImplementedError
 
-    def sanitize(self, text: str) -> Dict[str, Any]:
+    def sanitize(
+        self,
+        text: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> Dict[str, Any]:
         """Sanitize text, redacting secrets and PII."""
         raise NotImplementedError
 
@@ -339,7 +358,13 @@ class _DirectSession(GuardSession):
         except Exception:
             logger.debug("Failed to register project with daemon", exc_info=True)
 
-    def _log_scan_results(self, scan_results):
+    def _log_scan_results(
+        self,
+        scan_results,
+        *,
+        run_id: Optional[str] = None,
+        run_sequence: Optional[int] = None,
+    ):
         """Log detected violations via unified log_violation (fixes #2019)."""
         detected = [r for r in scan_results if r.detected]
         if not detected:
@@ -355,10 +380,22 @@ class _DirectSession(GuardSession):
             ctx = ScanContext(
                 ide_type="sdk",
                 project_path=self._cwd or os.getcwd(),
+                run_id=run_id,
+                run_sequence=run_sequence,
             )
             log_violations(detected, ctx)
         except Exception as e:
             logger.debug("SDK violation logging failed: %s", e)
+
+    def _run_with_context(self, context, fn):
+        """Run *fn* with RunContext sequence tracking if context is provided."""
+        if context is None:
+            return fn(run_id=None, run_sequence=None)
+        seq = context.next_sequence()
+        try:
+            return fn(run_id=context.run_id, run_sequence=seq)
+        finally:
+            context.end_sequence(seq)
 
     def check_content(
         self,
@@ -366,84 +403,113 @@ class _DirectSession(GuardSession):
         *,
         filename: str = "input",
         source_command: Optional[str] = None,
+        context: Optional[RunContext] = None,
     ) -> CheckResult:
-        from ai_guardian.scanners.pipeline import scan_content
+        def _do(*, run_id, run_sequence):
+            from ai_guardian.scanners.pipeline import scan_content
 
-        scan_results = scan_content(
-            text,
-            config=self._config,
-            cwd=self._cwd,
-            filename=filename,
-            source_type="file_content",
-            source_command=source_command,
-        )
-
-        self._log_scan_results(scan_results)
-
-        results = [
-            CheckResult(
-                blocked=r.should_block,
-                detected=r.detected,
-                violation_type=r.violation_type,
-                violation_id=r.id,
-                message=r.error_message,
+            scan_results = scan_content(
+                text,
+                config=self._config,
+                cwd=self._cwd,
+                filename=filename,
+                source_type="file_content",
+                source_command=source_command,
             )
-            for r in scan_results
-        ]
-
-        merged = self._merge_results(results)
-        return self._handle_result(merged)
-
-    def check_file(self, file_path: str, content: Optional[str] = None) -> CheckResult:
-        from ai_guardian.scanners.pipeline import scan_file
-
-        scan_results = scan_file(
-            file_path,
-            content=content,
-            config=self._config,
-            cwd=self._cwd,
-        )
-
-        self._log_scan_results(scan_results)
-
-        results = [
-            CheckResult(
-                blocked=r.should_block,
-                detected=r.detected,
-                violation_type=r.violation_type,
-                violation_id=r.id,
-                message=r.error_message,
+            self._log_scan_results(
+                scan_results, run_id=run_id, run_sequence=run_sequence
             )
-            for r in scan_results
-        ]
+            results = [
+                CheckResult(
+                    blocked=r.should_block,
+                    detected=r.detected,
+                    violation_type=r.violation_type,
+                    violation_id=r.id,
+                    message=r.error_message,
+                )
+                for r in scan_results
+            ]
+            merged = self._merge_results(results)
+            return self._handle_result(merged)
 
-        merged = self._merge_results(results)
-        return self._handle_result(merged)
+        return self._run_with_context(context, _do)
 
-    def check_command(self, command: str) -> CheckResult:
-        from ai_guardian.scanners.pipeline import scan_command
+    def check_file(
+        self,
+        file_path: str,
+        content: Optional[str] = None,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
+        def _do(*, run_id, run_sequence):
+            from ai_guardian.scanners.pipeline import scan_file
 
-        scan_results = scan_command(command, config=self._config)
-
-        self._log_scan_results(scan_results)
-
-        results = [
-            CheckResult(
-                blocked=r.should_block,
-                detected=r.detected,
-                violation_type=r.violation_type,
-                violation_id=r.id,
-                message=r.error_message,
+            scan_results = scan_file(
+                file_path,
+                content=content,
+                config=self._config,
+                cwd=self._cwd,
             )
-            for r in scan_results
-        ]
+            self._log_scan_results(
+                scan_results, run_id=run_id, run_sequence=run_sequence
+            )
+            results = [
+                CheckResult(
+                    blocked=r.should_block,
+                    detected=r.detected,
+                    violation_type=r.violation_type,
+                    violation_id=r.id,
+                    message=r.error_message,
+                )
+                for r in scan_results
+            ]
+            merged = self._merge_results(results)
+            return self._handle_result(merged)
 
-        merged = self._merge_results(results)
-        return self._handle_result(merged)
+        return self._run_with_context(context, _do)
 
-    def sanitize(self, text: str) -> Dict[str, Any]:
+    def check_command(
+        self,
+        command: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
+        def _do(*, run_id, run_sequence):
+            from ai_guardian.scanners.pipeline import scan_command
+
+            scan_results = scan_command(command, config=self._config)
+            self._log_scan_results(
+                scan_results, run_id=run_id, run_sequence=run_sequence
+            )
+            results = [
+                CheckResult(
+                    blocked=r.should_block,
+                    detected=r.detected,
+                    violation_type=r.violation_type,
+                    violation_id=r.id,
+                    message=r.error_message,
+                )
+                for r in scan_results
+            ]
+            merged = self._merge_results(results)
+            return self._handle_result(merged)
+
+        return self._run_with_context(context, _do)
+
+    def sanitize(
+        self,
+        text: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> Dict[str, Any]:
         from ai_guardian.scanners.sanitizer import sanitize_text
 
+        if context is not None:
+            seq = context.next_sequence()
+            try:
+                return sanitize_text(text)
+            finally:
+                context.end_sequence(seq)
         return sanitize_text(text)
 
     def sanitize_batch(self, texts: List[str]) -> List[str]:
@@ -511,31 +577,76 @@ class _RestSession(GuardSession):
             if not is_daemon_running():
                 raise RuntimeError("Daemon started but not responding")
 
-    def check_content(self, text: str, *, filename: str = "input") -> CheckResult:
-        return self._send_check(
-            "content",
-            {
-                "text": text,
-                "filename": filename,
-            },
-        )
+    @staticmethod
+    def _add_run_context(data: Dict[str, Any], context) -> None:
+        if context is not None:
+            data["run_id"] = context.run_id
+            data["run_sequence"] = context.next_sequence()
 
-    def check_file(self, file_path: str, content: Optional[str] = None) -> CheckResult:
+    def check_content(
+        self,
+        text: str,
+        *,
+        filename: str = "input",
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
+        data: Dict[str, Any] = {"text": text, "filename": filename}
+        self._add_run_context(data, context)
+        try:
+            return self._send_check("content", data)
+        finally:
+            if context is not None and "run_sequence" in data:
+                context.end_sequence(data["run_sequence"])
+
+    def check_file(
+        self,
+        file_path: str,
+        content: Optional[str] = None,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
         data: Dict[str, Any] = {"file_path": file_path}
         if content is not None:
             data["content"] = content
-        return self._send_check("file", data)
+        self._add_run_context(data, context)
+        try:
+            return self._send_check("file", data)
+        finally:
+            if context is not None and "run_sequence" in data:
+                context.end_sequence(data["run_sequence"])
 
-    def check_command(self, command: str) -> CheckResult:
-        return self._send_check("command", {"command": command})
+    def check_command(
+        self,
+        command: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> CheckResult:
+        data: Dict[str, Any] = {"command": command}
+        self._add_run_context(data, context)
+        try:
+            return self._send_check("command", data)
+        finally:
+            if context is not None and "run_sequence" in data:
+                context.end_sequence(data["run_sequence"])
 
-    def sanitize(self, text: str) -> Dict[str, Any]:
+    def sanitize(
+        self,
+        text: str,
+        *,
+        context: Optional[RunContext] = None,
+    ) -> Dict[str, Any]:
         from ai_guardian.daemon.client import send_sdk_check
 
-        response = send_sdk_check("sanitize", {"text": text}, timeout=5.0)
-        if response is None:
-            return {"sanitized_text": text, "redactions": [], "stats": {}}
-        return response.get("data", response)
+        data: Dict[str, Any] = {"text": text}
+        self._add_run_context(data, context)
+        try:
+            response = send_sdk_check("sanitize", data, timeout=5.0)
+            if response is None:
+                return {"sanitized_text": text, "redactions": [], "stats": {}}
+            return response.get("data", response)
+        finally:
+            if context is not None and "run_sequence" in data:
+                context.end_sequence(data["run_sequence"])
 
     def get_violations(
         self,

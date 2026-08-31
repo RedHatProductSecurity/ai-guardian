@@ -370,7 +370,10 @@ class GuardedAgent:
         otel_metadata_fn: Optional[
             Callable[[str, Dict[str, Any]], Dict[str, Any]]
         ] = None,
+        context: Optional[Any] = None,
     ):
+        self._run_context = context
+        self._run_sequence: Optional[int] = None
         self._api_timeout = api_timeout
         self._max_schema_nudges = max_schema_nudges
         self._text_tool_parsing = text_tool_parsing
@@ -791,6 +794,14 @@ class GuardedAgent:
             }
             if trace_id:
                 trace_doc["trace_id"] = trace_id
+            if self._run_context is not None:
+                trace_doc["run_id"] = self._run_context.run_id
+                if self._run_sequence is not None:
+                    trace_doc["run_sequence"] = self._run_sequence
+                if self._run_context.metadata:
+                    trace_doc["run_metadata"] = self._run_context.metadata
+                if self._run_context.parent_trace_id:
+                    trace_doc["parent_trace_id"] = self._run_context.parent_trace_id
             if run_start_mono is not None:
                 trace_doc["duration_ms"] = int(
                     (time.monotonic() - run_start_mono) * 1000
@@ -981,6 +992,8 @@ class GuardedAgent:
         started_at = datetime.now(timezone.utc)
         run_start_mono = time.monotonic()
         trace_id = uuid.uuid4().hex
+        if self._run_context is not None:
+            self._run_sequence = self._run_context.next_sequence()
         trace_filepath = None
         if self._trace_dir:
             trace_filepath = self._resolve_trace_filepath(started_at)
@@ -1021,12 +1034,19 @@ class GuardedAgent:
 
             otel_config = _load_otel_config()
             if otel_config.get("enabled"):
+                otel_kwargs: Dict[str, Any] = {}
+                if self._run_context is not None:
+                    otel_kwargs["run_id"] = self._run_context.run_id
+                    otel_kwargs["run_sequence"] = self._run_sequence
+                    if self._run_context.metadata:
+                        otel_kwargs["run_metadata"] = self._run_context.metadata
                 otel_emitter = OtelSpanEmitter(
                     otel_config,
                     trace_id,
                     self._name or "agent",
                     self._model,
                     metadata_fn=self._otel_metadata_fn,
+                    **otel_kwargs,
                 )
         except Exception:
             logger.warning(
@@ -1094,6 +1114,8 @@ class GuardedAgent:
                     mcp_manager.stop()
                 if _atexit_fn is not None:
                     atexit.unregister(_atexit_fn)
+                if self._run_context is not None and self._run_sequence is not None:
+                    self._run_context.end_sequence(self._run_sequence)
 
     def _run_loop_inner(
         self,
