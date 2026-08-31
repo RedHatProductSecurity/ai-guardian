@@ -370,7 +370,7 @@ def _format_trace_label(t):
 def _format_run_group_label(group):
     """Format a run group label for the TUI tree."""
     run_id = group.get("run_id", "")
-    run_label = run_id[:12] if len(run_id) > 12 else run_id
+    run_label = run_id
     agent_count = group.get("agent_count", 0)
     total_duration = group.get("total_duration", 0)
     total_violations = group.get("total_violations", 0)

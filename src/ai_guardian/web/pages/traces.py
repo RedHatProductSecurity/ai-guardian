@@ -40,6 +40,7 @@ def create_traces_page(service, daemon_name: str):
 
         PAGE_SIZE = 50
         state = {"load_fn": None, "newest_first": saved_sort, "page": 1}
+        expanded_runs: set = set()
 
         auto_timer = {"ref": None, "paused": False}
 
@@ -151,7 +152,9 @@ def create_traces_page(service, daemon_name: str):
                 start = (page - 1) * PAGE_SIZE
                 page_items = grouped[start : start + PAGE_SIZE]
 
-                _render_trace_list(page_items, cards_container, daemon_name)
+                _render_trace_list(
+                    page_items, cards_container, daemon_name, expanded_runs
+                )
 
                 prev_btn.set_enabled(page > 1)
                 next_btn.set_enabled(page < total_pages)
@@ -428,7 +431,7 @@ def _populate_agent_filter(traces, agent_select):
     agent_select.update()
 
 
-def _render_trace_list(items, container, daemon_name):
+def _render_trace_list(items, container, daemon_name, expanded_runs=None):
     container.clear()
     if not items:
         with container:
@@ -438,12 +441,12 @@ def _render_trace_list(items, container, daemon_name):
     with container:
         for item in items:
             if item.get("type") == "run_group":
-                _render_run_group_card(item, daemon_name)
+                _render_run_group_card(item, daemon_name, expanded_runs)
             else:
                 _render_trace_card(item, daemon_name)
 
 
-def _render_run_group_card(group, daemon_name):
+def _render_run_group_card(group, daemon_name, expanded_runs=None):
     """Render a collapsible run group card with aggregate stats."""
     run_id = group.get("run_id", "")
     agent_count = group.get("agent_count", 0)
@@ -454,7 +457,8 @@ def _render_run_group_card(group, daemon_name):
     child_traces = group.get("traces", [])
 
     duration_str = _format_duration(total_duration)
-    run_label = run_id[:12] if len(run_id) > 12 else run_id
+
+    is_open = expanded_runs is not None and run_id in expanded_runs
 
     with ui.card().classes("w-full"):
         with ui.row().classes("items-center gap-2 w-full"):
@@ -463,7 +467,9 @@ def _render_run_group_card(group, daemon_name):
             else:
                 ui.icon("account_tree").classes("text-blue-4 text-xs")
 
-            ui.label(run_label).classes("font-bold text-sm text-blue-4").tooltip(run_id)
+            ui.label(run_id).classes("font-bold text-sm text-blue-4").style(
+                "font-family: monospace; word-break: break-all"
+            )
             ui.label(f"{agent_count} agent{'s' if agent_count != 1 else ''}").classes(
                 "text-xs text-grey-5"
             )
@@ -480,7 +486,18 @@ def _render_run_group_card(group, daemon_name):
 
             ui.label(started_at).classes("text-xs text-grey-6")
 
-        with ui.expansion("Traces").classes("w-full").props("dense"):
+        exp = ui.expansion("Traces", value=is_open).classes("w-full").props("dense")
+
+        def _on_toggle(e, rid=run_id):
+            if expanded_runs is not None:
+                if e.value:
+                    expanded_runs.add(rid)
+                else:
+                    expanded_runs.discard(rid)
+
+        exp.on_value_change(_on_toggle)
+
+        with exp:
             for t in child_traces:
                 seq = t.get("run_sequence")
                 seq_label = f"seq={seq}" if seq is not None else ""
