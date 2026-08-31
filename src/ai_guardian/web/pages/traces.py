@@ -138,14 +138,20 @@ def create_traces_page(service, daemon_name: str):
                 )
                 _populate_agent_filter(traces, agent_select)
 
-                total_matches = len(traces)
+                from ai_guardian.daemon.traces import group_traces_by_run
+
+                grouped = group_traces_by_run(traces)
+                if not state["newest_first"]:
+                    grouped.sort(key=lambda t: t.get("started_at", ""))
+
+                total_matches = len(grouped)
                 total_pages = max(1, -(-total_matches // PAGE_SIZE))
                 state["page"] = max(1, min(state["page"], total_pages))
                 page = state["page"]
                 start = (page - 1) * PAGE_SIZE
-                page_traces = traces[start : start + PAGE_SIZE]
+                page_items = grouped[start : start + PAGE_SIZE]
 
-                _render_trace_list(page_traces, cards_container, daemon_name)
+                _render_trace_list(page_items, cards_container, daemon_name)
 
                 prev_btn.set_enabled(page > 1)
                 next_btn.set_enabled(page < total_pages)
@@ -422,16 +428,66 @@ def _populate_agent_filter(traces, agent_select):
     agent_select.update()
 
 
-def _render_trace_list(traces, container, daemon_name):
+def _render_trace_list(items, container, daemon_name):
     container.clear()
-    if not traces:
+    if not items:
         with container:
             ui.label("No trace files found.").classes("text-grey-6")
         return
 
     with container:
-        for t in traces:
-            _render_trace_card(t, daemon_name)
+        for item in items:
+            if item.get("type") == "run_group":
+                _render_run_group_card(item, daemon_name)
+            else:
+                _render_trace_card(item, daemon_name)
+
+
+def _render_run_group_card(group, daemon_name):
+    """Render a collapsible run group card with aggregate stats."""
+    run_id = group.get("run_id", "")
+    agent_count = group.get("agent_count", 0)
+    total_duration = group.get("total_duration", 0)
+    total_violations = group.get("total_violations", 0)
+    is_active = group.get("is_active", False)
+    started_at = (group.get("started_at") or "")[:19]
+    child_traces = group.get("traces", [])
+
+    duration_str = _format_duration(total_duration)
+    run_label = run_id[:12] if len(run_id) > 12 else run_id
+
+    with ui.card().classes("w-full"):
+        with ui.row().classes("items-center gap-2 w-full"):
+            if is_active:
+                ui.icon("fiber_manual_record").classes("text-green text-xs")
+            else:
+                ui.icon("account_tree").classes("text-blue-4 text-xs")
+
+            ui.label(run_label).classes("font-bold text-sm text-blue-4").tooltip(run_id)
+            ui.label(f"{agent_count} agent{'s' if agent_count != 1 else ''}").classes(
+                "text-xs text-grey-5"
+            )
+            ui.label(duration_str).classes("text-xs text-grey-5")
+
+            if is_active:
+                ui.badge("ACTIVE", color="green").classes("text-xs")
+
+            if total_violations > 0:
+                ui.badge(
+                    f"{total_violations} violation{'s' if total_violations != 1 else ''}",
+                    color="red",
+                ).classes("text-xs")
+
+            ui.label(started_at).classes("text-xs text-grey-6")
+
+        with ui.expansion("Traces").classes("w-full").props("dense"):
+            for t in child_traces:
+                seq = t.get("run_sequence")
+                seq_label = f"seq={seq}" if seq is not None else ""
+                with ui.row().classes("items-center gap-1 w-full"):
+                    if seq_label:
+                        ui.badge(seq_label, color="grey").classes("text-xs")
+                _render_trace_card(t, daemon_name)
 
 
 def _render_trace_card(trace, daemon_name):
