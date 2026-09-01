@@ -1091,6 +1091,65 @@ class TestConfigDirEnvironmentVariable:
             assert checker.config is not None
 
 
+class TestCursorSetup:
+    """Test cases for Cursor IDE setup."""
+
+    def test_merge_hooks_cursor_preserves_other_hooks(self):
+        """Merging Cursor hooks preserves existing non-ai-guardian hooks."""
+        setup = IDESetup()
+        existing_config = {
+            "version": 1,
+            "hooks": {
+                "preToolUse": [{"command": "other-extension"}],
+            },
+        }
+        ai_guardian_hooks = IDESetup.IDE_CONFIGS["cursor"]["hooks"]
+
+        merged, warnings = setup.merge_hooks(
+            existing_config, ai_guardian_hooks, "cursor"
+        )
+
+        pre_tool = merged["hooks"]["preToolUse"]
+        commands = [h["command"] for h in pre_tool]
+        assert commands[0] == "ai-guardian"
+        assert "other-extension" in commands
+        assert len(warnings) > 0
+
+    def test_merge_hooks_cursor_no_duplicate_on_rerun(self):
+        """Re-running setup doesn't duplicate ai-guardian entries."""
+        setup = IDESetup()
+        existing_config = {
+            "version": 1,
+            "hooks": {
+                "preToolUse": [
+                    {"command": "ai-guardian"},
+                    {"command": "other-extension"},
+                ],
+            },
+        }
+        ai_guardian_hooks = IDESetup.IDE_CONFIGS["cursor"]["hooks"]
+
+        merged, warnings = setup.merge_hooks(
+            existing_config, ai_guardian_hooks, "cursor"
+        )
+
+        pre_tool = merged["hooks"]["preToolUse"]
+        ag_count = sum(1 for h in pre_tool if h.get("command") == "ai-guardian")
+        assert ag_count == 1
+        assert len(pre_tool) == 2
+
+    def test_merge_hooks_cursor_no_warning_when_alone(self):
+        """No warning when ai-guardian is the only hook."""
+        setup = IDESetup()
+        ai_guardian_hooks = IDESetup.IDE_CONFIGS["cursor"]["hooks"]
+
+        merged, warnings = setup.merge_hooks({}, ai_guardian_hooks, "cursor")
+
+        assert len(warnings) == 0
+        assert "hooks" in merged
+        assert "preToolUse" in merged["hooks"]
+
+
 class TestCodexSetup:
     """Test cases for Codex IDE setup."""
 
