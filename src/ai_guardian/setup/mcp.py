@@ -29,7 +29,7 @@ _MCP_IDE_CONFIGS = {
         "skill_dir": ".github/skills",
     },
     "codex": {
-        "config_file": "codex.json",
+        "config_file": "~/.codex/codex.json",
         "config_key": "mcpServers",
         "skill_dir": ".codex/skills",
     },
