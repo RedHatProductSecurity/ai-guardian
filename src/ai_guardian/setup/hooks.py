@@ -169,6 +169,12 @@ class IDESetup:
                         ],
                     }
                 ],
+                HookEvent.SESSION_END.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+                HookEvent.POST_COMPACT.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
             },
         },
         "windsurf": {
@@ -675,6 +681,8 @@ class IDESetup:
                 HookEvent.PROMPT.display_name,
                 HookEvent.PRE_TOOL_USE.display_name,
                 HookEvent.POST_TOOL_USE.display_name,
+                HookEvent.SESSION_END.display_name,
+                HookEvent.POST_COMPACT.display_name,
             ]:
                 if hook_name not in ai_guardian_hooks:
                     continue
@@ -966,6 +974,8 @@ class IDESetup:
                     HookEvent.PROMPT.display_name,
                     HookEvent.PRE_TOOL_USE.display_name,
                     HookEvent.POST_TOOL_USE.display_name,
+                    HookEvent.SESSION_END.display_name,
+                    HookEvent.POST_COMPACT.display_name,
                 ]:
                     if hook_name in hooks:
                         hook_list = hooks[hook_name]
