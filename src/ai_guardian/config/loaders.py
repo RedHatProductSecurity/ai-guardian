@@ -722,6 +722,21 @@ def _load_offensive_language_config():
     )
 
 
+_UPDATE_CHECKING_DEFAULTS = {
+    "enabled": True,
+    "check_interval_seconds": 300,
+    "include_prerelease": False,
+    "notify": True,
+    "auto_check_on_doctor": True,
+    "cache_ttl_days": 7,
+}
+
+
+def _load_update_checking_config():
+    """Load update checking configuration. Returns defaults when section is absent."""
+    return _load_config_section("update_checking", defaults=_UPDATE_CHECKING_DEFAULTS)
+
+
 def _load_security_instructions_config():
     """Load security instructions configuration from ai-guardian.json."""
     return _load_config_section("security_instructions")

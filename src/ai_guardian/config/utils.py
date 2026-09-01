@@ -85,6 +85,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "security_instructions",
         "on_scan_error",
         "remote_configs",
+        "update_checking",
     }
 )
 

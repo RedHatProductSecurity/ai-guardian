@@ -364,5 +364,13 @@
     },
     "provider_config": {},
     "agents": {}
+  },
+  "update_checking": {
+    "enabled": true,
+    "check_interval_seconds": 300,
+    "include_prerelease": false,
+    "notify": true,
+    "auto_check_on_doctor": true,
+    "cache_ttl_days": 7
   }
 }
