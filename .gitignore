@@ -20,6 +20,7 @@ uv.lock
 .idea/
 *.swp
 .DS_Store
+codex.json
 
 # Testing
 .pytest_cache/
