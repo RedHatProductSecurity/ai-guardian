@@ -59,6 +59,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
+from ai_guardian.violations.utils import is_temp_path
 from ai_guardian.config.utils import (
     format_config_paths,
     get_config_dir,
@@ -1483,6 +1484,9 @@ def _annotation_hint(
 ) -> str:
     """Append annotation suppression hint to error messages for file content scans."""
     if not error_message or not file_path:
+        return error_message
+
+    if is_temp_path(file_path):
         return error_message
 
     from ai_guardian.annotations import (

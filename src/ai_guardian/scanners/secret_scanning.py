@@ -12,6 +12,8 @@ import tempfile
 from pathlib import Path
 from typing import Dict, Optional
 
+from ai_guardian.violations.utils import is_temp_path
+
 try:
     from ai_guardian.violations.logger import ViolationLogger
 
@@ -123,6 +125,9 @@ def _build_secret_extras(details, context, *, file_path=None):
 
 def _build_false_positive_msg(details, *, for_secret=False):
     """Build false-positive suggestion text from scan details."""
+    file_path = details.get("file")
+    if file_path and is_temp_path(file_path):
+        return "Detection in temporary file. Add pattern to secret_scanning.allowlist_patterns"
     if details.get("end_line") and details["end_line"] != details.get("line_number"):
         line_num = details.get("line_number")
         end_line = details["end_line"]

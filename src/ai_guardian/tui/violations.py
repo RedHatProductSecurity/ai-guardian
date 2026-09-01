@@ -20,6 +20,7 @@ from textual import events
 
 from ai_guardian.violations.logger import ViolationLogger
 from ai_guardian.violations.guidance import get_resolution_instructions
+from ai_guardian.violations.utils import is_temp_path
 from ai_guardian.tui.widgets import format_local_time
 from ai_guardian.tui.pattern_editor import (
     config_section_for_violation,
@@ -264,9 +265,17 @@ class ViolationDetailsModal(ModalScreen):
                     yield Button("Copy Snippet", id="copy-snippet", variant="success")
                 vtype = self.violation.get("violation_type", "")
                 if vtype in _ALLOWLIST_TYPES:
-                    yield Button(
-                        "Always Allow...", id="always-allow", variant="warning"
-                    )
+                    blocked = self.violation.get("blocked", {})
+                    file_path = blocked.get("file_path", "")
+                    if is_temp_path(file_path):
+                        yield Static(
+                            "[dim]Temp file — use config allowlist[/dim]",
+                            id="temp-file-hint",
+                        )
+                    else:
+                        yield Button(
+                            "Always Allow...", id="always-allow", variant="warning"
+                        )
                 blocked = self.violation.get("blocked", {})
                 if isinstance(blocked, dict) and blocked.get("file_path"):
                     file_path = blocked["file_path"]

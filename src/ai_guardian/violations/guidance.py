@@ -8,6 +8,7 @@ IMPORTANT — self-protection rule (see AGENTS.md):
   They must NEVER be returned via MCP tool responses or hook messages.
 """
 
+from ai_guardian.violations.utils import is_temp_path
 import json
 from typing import Tuple
 
@@ -57,8 +58,10 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add this pattern to prompt_injection.allowlist_patterns:", snippet
 
     if vtype == "secret_detected":
-        secret_type = blocked.get("rule_id", blocked.get("secret_type", "unknown"))
         file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return "Detection in temporary file. Add pattern to secret_scanning.allowlist_patterns:", ""
+        secret_type = blocked.get("rule_id", blocked.get("secret_type", "unknown"))
         placeholder = (
             f"<regex-for-{secret_type}>" if secret_type != "unknown" else "<regex>"
         )
@@ -89,7 +92,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return instructions, snippet
 
     if vtype == "pii_detected":
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return "Detection in temporary file. Add pattern to scan_pii.allowlist_patterns:", ""
         pii_types = blocked.get("pii_types", [])
         placeholders = _type_placeholders(pii_types)
         cfg = {
@@ -130,7 +135,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add domain to ssrf_protection.additional_allowed_domains:", snippet
 
     if vtype == "config_file_exfil":
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return "Detection in temporary file. Add file to config_file_scanning.ignore_files:", ""
         snippet = json.dumps(
             {"config_file_scanning": {"ignore_files": [file_path]}}, indent=2
         )
@@ -165,7 +172,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return instructions, snippet
 
     if vtype in ("image_secret_detected", "image_pii_detected"):
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return "Detection in temporary file. Add file to image_scanning.ignore_files:", ""
         snippet = json.dumps(
             {"image_scanning": {"ignore_files": [file_path]}}, indent=2
         )
