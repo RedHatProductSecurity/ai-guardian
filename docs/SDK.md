@@ -956,7 +956,9 @@ print(result["output"])  # validated structured object
 | `max_turns` | int | `100` | Max tool-use loop iterations |
 | `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
-| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX). On timeout: retries once, then stops with `stop_reason='timeout'` |
+| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX) |
+| `retry_max_attempts` | int | `2` | Max total attempts per API call (1 = no retry). Retries on transient errors: timeouts, rate limits (429), overloaded (529), server errors (500/502/503), and connection failures |
+| `retry_base_delay` | float | `1.0` | Base delay in seconds for exponential backoff between retries. Actual delay: `base_delay * 2^(attempt-1) + random(0,1)` |
 | `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
@@ -1410,7 +1412,8 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 | `max_schema_nudges` | Model failed to call `submit_result` after `max_schema_nudges` re-prompts |
 | `refusal` | Model refused to respond |
 | `security_violation` | Response or tool result blocked by a security scan |
-| `timeout` | API call timed out on both initial attempt and retry — partial result returned |
+| `timeout` | API call timed out on all retry attempts — partial result returned |
+| `transient_error` | Non-timeout transient error (rate limit, overloaded, server error, connection failure) exhausted all retry attempts |
 | `error` | Exception during the agent loop (partial trace persisted) |
 | `in_progress` | Agent is still running (only appears in incremental trace files) |
 

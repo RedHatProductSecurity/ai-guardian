@@ -4,6 +4,7 @@ import atexit
 import json
 import logging
 import os
+import random
 import subprocess
 import time
 import uuid
@@ -32,6 +33,7 @@ from ai_guardian.integrations.base import (
     _PREAMBLE_PREFIX,
     _USAGE_TOKEN_FIELDS,
     _is_timeout_error,
+    _is_transient_error,
     _try_sanitize_batch,
     _try_sanitize_text,
     _strategy_registry,
@@ -329,6 +331,8 @@ class GuardedAgent:
             "api_timeout",
             "text_tool_parsing",
             "strip_chat_tokens",
+            "retry_max_attempts",
+            "retry_base_delay",
         }
     )
 
@@ -364,6 +368,8 @@ class GuardedAgent:
         allowed_paths: Optional[List[str]] = None,
         follow_symlinks: bool = False,
         api_timeout: Optional[int] = None,
+        retry_max_attempts: int = 2,
+        retry_base_delay: float = 1.0,
         max_schema_nudges: int = 3,
         text_tool_parsing: bool = False,
         strip_chat_tokens: Optional[bool] = None,
@@ -375,6 +381,8 @@ class GuardedAgent:
         self._run_context = context
         self._run_sequence: Optional[int] = None
         self._api_timeout = api_timeout
+        self._retry_max_attempts = max(1, retry_max_attempts)
+        self._retry_base_delay = max(0.0, retry_base_delay)
         self._max_schema_nudges = max_schema_nudges
         self._text_tool_parsing = text_tool_parsing
         self._strip_chat_tokens = strip_chat_tokens
@@ -644,6 +652,81 @@ class GuardedAgent:
                 exc,
             )
             return False
+
+    def _call_api_with_retry(
+        self,
+        strategy: AgentLoopStrategy,
+        create_kwargs: Dict[str, Any],
+        timeout: Optional[int],
+        turn_num: int,
+        _emit: Callable,
+    ) -> Optional[Any]:
+        """Call the API with configurable retry for transient errors.
+
+        Returns the response on success, or ``None`` if all retry
+        attempts are exhausted (caller sets ``stop_reason``).
+        Sets ``self._last_transient_exc`` for stop_reason classification.
+        """
+        max_attempts = self._retry_max_attempts
+        base_delay = self._retry_base_delay
+        self._last_transient_exc = None
+
+        for attempt in range(1, max_attempts + 1):
+            attempt_start = time.monotonic()
+            try:
+                return strategy.call_api(self._client, create_kwargs, timeout=timeout)
+            except Exception as exc:
+                if not _is_transient_error(exc):
+                    raise
+                attempt_latency = int((time.monotonic() - attempt_start) * 1000)
+                self._last_transient_exc = exc
+                error_type = type(exc).__name__
+
+                if attempt < max_attempts:
+                    delay = base_delay * (2 ** (attempt - 1)) + random.uniform(0, 1)
+                    logger.warning(
+                        "%s on turn %d (attempt %d/%d, model=%s), " "retrying in %.1fs",
+                        error_type,
+                        turn_num,
+                        attempt,
+                        max_attempts,
+                        self._model,
+                        delay,
+                    )
+                    _emit(
+                        turn_num,
+                        TurnEvent(
+                            type="retry",
+                            text=(
+                                f"{error_type} "
+                                f"(attempt {attempt}/{max_attempts}), "
+                                f"retrying in {delay:.1f}s"
+                            ),
+                            latency_ms=attempt_latency,
+                        ),
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.warning(
+                        "%s on turn %d (attempt %d/%d) — stopping run",
+                        error_type,
+                        turn_num,
+                        attempt,
+                        max_attempts,
+                    )
+                    _emit(
+                        turn_num,
+                        TurnEvent(
+                            type="retry",
+                            text=(
+                                f"{error_type} "
+                                f"(attempt {attempt}/{max_attempts}) "
+                                f"— stopping"
+                            ),
+                            latency_ms=attempt_latency,
+                        ),
+                    )
+        return None
 
     def _text_tool_parsing_enabled(self) -> bool:
         """Check if text-as-tool-call parsing is active."""
@@ -1335,62 +1418,21 @@ class GuardedAgent:
                 )
 
                 api_start = time.monotonic()
-                try:
-                    response = strategy.call_api(
-                        self._client, create_kwargs, timeout=effective_timeout
+                response = self._call_api_with_retry(
+                    strategy,
+                    create_kwargs,
+                    effective_timeout,
+                    turn_num,
+                    _emit,
+                )
+                if response is None:
+                    exc = self._last_transient_exc
+                    stop_reason = (
+                        "timeout"
+                        if exc is not None and _is_timeout_error(exc)
+                        else "transient_error"
                     )
-                except Exception as api_exc:
-                    if not _is_timeout_error(api_exc):
-                        raise
-                    logger.warning(
-                        "API call timed out after %ds on turn %d "
-                        "(model=%s), retrying once",
-                        effective_timeout,
-                        turn_num,
-                        self._model,
-                    )
-                    _emit(
-                        turn_num,
-                        TurnEvent(
-                            type="timeout",
-                            text=(
-                                f"API call timed out after "
-                                f"{effective_timeout}s (attempt 1/2)"
-                            ),
-                            latency_ms=int((time.monotonic() - api_start) * 1000),
-                        ),
-                    )
-                    retry_start = time.monotonic()
-                    try:
-                        response = strategy.call_api(
-                            self._client,
-                            create_kwargs,
-                            timeout=effective_timeout,
-                        )
-                    except Exception as retry_exc:
-                        if not _is_timeout_error(retry_exc):
-                            raise
-                        retry_latency = int((time.monotonic() - retry_start) * 1000)
-                        logger.warning(
-                            "API retry also timed out after %ds on "
-                            "turn %d — stopping run",
-                            effective_timeout,
-                            turn_num,
-                        )
-                        _emit(
-                            turn_num,
-                            TurnEvent(
-                                type="timeout",
-                                text=(
-                                    f"Retry timed out after "
-                                    f"{effective_timeout}s (attempt "
-                                    f"2/2) — stopping"
-                                ),
-                                latency_ms=retry_latency,
-                            ),
-                        )
-                        stop_reason = "timeout"
-                        break
+                    break
 
                 api_latency_ms = int((time.monotonic() - api_start) * 1000)
                 logger.debug(
