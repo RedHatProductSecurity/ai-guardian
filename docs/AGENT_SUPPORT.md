@@ -169,7 +169,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor | High | Extensively tested in production |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
-| Codex | Low | Hook format implemented but limited testing |
+| Codex | Medium | Tested — all 5 hooks install and work correctly |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |
 | Augment Code | Low | Hook format implemented but limited testing |
@@ -177,7 +177,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Junie | Low | MCP only, no hook enforcement |
 | AiderDesk | Low | Extension-based, limited testing |
 | OpenClaw | Low | Plugin-based, limited testing |
-| OpenCode | Low | Plugin-based, limited testing |
+| OpenCode | Medium | Tested — plugin hooks install and work correctly |
 | Crush | Low | Compatible with Claude Code format; only PreToolUse available |
 
 ## Community Testing Feedback
