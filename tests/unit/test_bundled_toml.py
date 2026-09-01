@@ -12,7 +12,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 107,
+    "secrets.toml": 113,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -313,12 +313,66 @@ ISSUE_1777_FALSE_POSITIVE_CASES = [
     ("azure-ad-client-secret", "shortQ~value"),
 ]
 
+ISSUE_2185_DETECTION_CASES = [
+    # Cartesia — distinctive prefix
+    ("cartesia-api-key", "CARTESIA_KEY=" + "sk_car_" + "A1b2C3d4E5f6G7h8I9j0"),
+    ("cartesia-api-key", 'key = "sk_car_' + "x" * 24 + '"'),
+    # LlamaCloud — distinctive prefix
+    ("llamacloud-api-key", "LLAMA_CLOUD_KEY=" + "llx-" + "a1B2c3D4" * 6),
+    ("llamacloud-api-key", 'key = "llx-' + "A" * 48 + '"'),
+    # Voyage AI — context-based
+    ("voyage-ai-api-key", 'VOYAGE_API_KEY="pa-' + "A1b2C3d4E5f6G7h8I9j0K1l2" * 2 + '"'),
+    ("voyage-ai-api-key", "voyage_ai_token = 'al-" + "x" * 43 + "'"),
+    # fal.ai — context-based
+    (
+        "fal-ai-api-key",
+        'FAL_KEY="a1b2c3d4-e5f6-7890-abcd-ef1234567890:' + "a" * 32 + '"',
+    ),
+    (
+        "fal-ai-api-key",
+        "fal.ai_api_token = 'deadbeef-1234-5678-9abc-def012345678:" + "f" * 32 + "'",
+    ),
+    # Mem0 — context-based
+    ("mem0-api-key", 'MEM0_API_KEY="m0-' + "A1b2C3d4E5f6G7h8I9j0K1l2" + '"'),
+    ("mem0-api-key", "mem0_token = 'm0-" + "x" * 40 + "'"),
+    # Retell AI — context-based
+    ("retell-ai-api-key", 'RETELL_API_KEY="key_' + "a1b2c3d4" * 3 + "a1b2" + '"'),
+    ("retell-ai-api-key", "retell_ai_token = 'key_" + "f" * 28 + "'"),
+]
+
+ISSUE_2185_FALSE_POSITIVE_CASES = [
+    # Cartesia — too short / placeholder
+    ("cartesia-api-key", "sk_car_short"),
+    ("cartesia-api-key", "# sk_car_ is the Cartesia prefix"),
+    # LlamaCloud — too short / too long / placeholder
+    ("llamacloud-api-key", "llx-short"),
+    ("llamacloud-api-key", "# llx- is the LlamaCloud prefix"),
+    ("llamacloud-api-key", "llx-" + "A" * 53),
+    # Voyage AI — missing provider context
+    ("voyage-ai-api-key", "KEY=pa-" + "A" * 43),
+    ("voyage-ai-api-key", "KEY=al-" + "x" * 43),
+    ("voyage-ai-api-key", "# pa- prefix for Voyage keys"),
+    # fal.ai — missing provider context
+    (
+        "fal-ai-api-key",
+        "KEY=a1b2c3d4-e5f6-7890-abcd-ef1234567890:" + "a" * 32,
+    ),
+    ("fal-ai-api-key", "# fal.ai UUID:hex format"),
+    # Mem0 — missing provider context
+    ("mem0-api-key", "KEY=m0-" + "A" * 30),
+    ("mem0-api-key", "# m0- is the Mem0 prefix"),
+    # Retell AI — missing provider context
+    ("retell-ai-api-key", "KEY=key_" + "a" * 28),
+    ("retell-ai-api-key", "# key_ prefix for Retell keys"),
+]
+
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
     + ISSUE_1617_DETECTION_CASES
     + GITLEAKS_DETECTION_CASES
     + ISSUE_1678_DETECTION_CASES
     + ISSUE_1777_DETECTION_CASES
+    + ISSUE_2185_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
@@ -326,6 +380,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + GITLEAKS_FALSE_POSITIVE_CASES
     + ISSUE_1678_FALSE_POSITIVE_CASES
     + ISSUE_1777_FALSE_POSITIVE_CASES
+    + ISSUE_2185_FALSE_POSITIVE_CASES
 )
 
 
