@@ -62,6 +62,15 @@ def daemon_status_label(
         }.get(target.status, "○")
     if target.runtime == "container" and target.container_engine:
         runtime = f" ({target.container_engine})"
+    elif target.runtime == "kubernetes":
+        k8s_parts = ["kubernetes"]
+        ctx = getattr(target, "context", None)
+        if ctx:
+            k8s_parts.append(ctx)
+        ns = getattr(target, "namespace", None)
+        if ns:
+            k8s_parts.append(ns)
+        runtime = f" ({'/'.join(k8s_parts)})"
     elif target.runtime != "local":
         runtime = f" ({target.runtime})"
     else:
