@@ -24,6 +24,15 @@ try:
 except ImportError:
     HAS_DOCKER_SDK = False
 
+try:
+    from kubernetes import client as k8s_client, config as k8s_config
+    from kubernetes.client.rest import ApiException as K8sApiException
+    from kubernetes.stream import stream as k8s_stream
+
+    HAS_K8S_SDK = True
+except ImportError:
+    HAS_K8S_SDK = False
+
 _CONTAINER_ID_RE = re.compile(r"^[a-fA-F0-9]{12,64}$")
 
 DOCKER_SOCKET = "/var/run/docker.sock"
@@ -74,6 +83,26 @@ from ai_guardian.daemon import (
 logger = logging.getLogger(__name__)
 
 
+def _find_service_port(ports, target_port: int) -> int:
+    """Return the service port number matching target_port, or 0."""
+    if not ports:
+        return 0
+    for p in ports:
+        if p.target_port == target_port or p.port == target_port:
+            return p.port
+    return ports[0].port if ports else 0
+
+
+def _find_service_port_obj(ports, target_port: int):
+    """Return the ServicePort object matching target_port, or None."""
+    if not ports:
+        return None
+    for p in ports:
+        if p.target_port == target_port or p.port == target_port:
+            return p
+    return ports[0] if ports else None
+
+
 @dataclass
 class DaemonTarget:
     """Represents a discovered AI Guardian daemon instance."""
@@ -90,6 +119,7 @@ class DaemonTarget:
     container_name: Optional[str] = None
     pod_name: Optional[str] = None
     namespace: Optional[str] = None
+    context: Optional[str] = None
     socket_path: Optional[str] = None
     url: Optional[str] = None
     auth_token: Optional[str] = dc_field(default=None, repr=False)
@@ -560,85 +590,303 @@ class DaemonDiscovery:
             return False
 
     def discover_kubernetes(self) -> List[DaemonTarget]:
-        """Discover Kubernetes pod daemons via kubectl."""
-        if not shutil.which("kubectl"):
-            return []
-
+        """Discover Kubernetes pod daemons via SDK or kubectl fallback."""
         daemon_cfg = self._config.get("daemon", {})
         tray_cfg = daemon_cfg.get("tray", {})
         k8s_cfg = tray_cfg.get("kubernetes", {})
 
-        namespace = k8s_cfg.get("namespace", "ai-sdlc")
-        if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", namespace):
-            logger.debug("Invalid Kubernetes namespace: %s", namespace)
-            return []
-
-        label_selector = k8s_cfg.get("label_selector", "app=ai-guardian")
-
-        user = os.environ.get("USER", os.environ.get("USERNAME", ""))
-        user = re.sub(r"[^a-zA-Z0-9._-]", "", user)
-        if user:
-            label_selector = f"{label_selector},user={user}"
-
+        label_selector = k8s_cfg.get("label_selector", "ai-guardian.daemon=true")
         rest_port = daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
 
-        try:
-            result = subprocess.run(
-                [
-                    "kubectl",
-                    "get",
-                    "pods",
-                    "-l",
-                    label_selector,
-                    "-n",
-                    namespace,
-                    "-o",
-                    "json",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=15,
+        namespaces = k8s_cfg.get("namespaces")
+        if namespaces is None:
+            ns_single = k8s_cfg.get("namespace")
+            if ns_single:
+                namespaces = [ns_single]
+
+        if HAS_K8S_SDK:
+            return self._discover_kubernetes_sdk(
+                k8s_cfg, namespaces, label_selector, rest_port
             )
-            if result.returncode != 0:
-                logger.debug("Kubernetes discovery failed: %s", result.stderr)
+        return self._discover_kubernetes_kubectl(namespaces, label_selector, rest_port)
+
+    def _discover_kubernetes_sdk(
+        self,
+        k8s_cfg: dict,
+        namespaces: Optional[List[str]],
+        label_selector: str,
+        rest_port: int,
+    ) -> List[DaemonTarget]:
+        """Discover K8s pod daemons via the kubernetes Python SDK."""
+        contexts_cfg = k8s_cfg.get("contexts")
+
+        try:
+            all_contexts, active_context = k8s_config.list_kube_config_contexts()
+        except Exception as e:
+            logger.debug("Failed to load kubeconfig: %s", e)
+            return []
+
+        if contexts_cfg:
+            available = {c["name"] for c in all_contexts}
+            context_names = [c for c in contexts_cfg if c in available]
+            if not context_names:
+                logger.debug(
+                    "No configured K8s contexts found in kubeconfig: %s",
+                    contexts_cfg,
+                )
                 return []
+        else:
+            context_names = [active_context["name"]] if active_context else []
 
-            data = json.loads(result.stdout)
-            items = data.get("items", [])
+        seen_keys: Dict[str, DaemonTarget] = {}
+        for ctx_name in context_names:
+            try:
+                api_client = k8s_config.new_client_from_config(context=ctx_name)
+                try:
+                    targets = self._sdk_discover_k8s_context(
+                        api_client,
+                        namespaces,
+                        label_selector,
+                        rest_port,
+                        ctx_name,
+                    )
+                    for t in targets:
+                        key = f"{ctx_name}/{t.namespace}/{t.pod_name}"
+                        if key not in seen_keys:
+                            seen_keys[key] = t
+                finally:
+                    try:
+                        api_client.close()
+                    except Exception:
+                        pass
+            except Exception as e:
+                logger.debug("K8s context %s failed: %s", ctx_name, e)
 
-            targets = []
-            for pod in items:
-                metadata = pod.get("metadata", {})
-                status = pod.get("status", {})
-                phase = status.get("phase", "Unknown")
+        return list(seen_keys.values())
 
-                pod_name = metadata.get("name", "")
-                if not pod_name:
+    def _sdk_discover_k8s_context(
+        self,
+        api_client,
+        namespaces: Optional[List[str]],
+        label_selector: str,
+        rest_port: int,
+        context_name: str,
+    ) -> List[DaemonTarget]:
+        """Discover pods in a single kubeconfig context."""
+        v1 = k8s_client.CoreV1Api(api_client)
+
+        pods = []
+        try:
+            if namespaces:
+                for ns in namespaces:
+                    result = v1.list_namespaced_pod(
+                        namespace=ns, label_selector=label_selector
+                    )
+                    pods.extend((pod, ns) for pod in result.items)
+            else:
+                result = v1.list_pod_for_all_namespaces(label_selector=label_selector)
+                pods.extend((pod, pod.metadata.namespace) for pod in result.items)
+        except K8sApiException as e:
+            logger.debug("K8s API error in context %s: %s", context_name, e)
+            return []
+
+        targets = []
+        for pod, ns in pods:
+            pod_name = pod.metadata.name
+            if not pod_name:
+                continue
+
+            labels = pod.metadata.labels or {}
+            name = labels.get("ai-guardian.name", pod_name)
+
+            phase = pod.status.phase if pod.status and pod.status.phase else "Unknown"
+            pod_status = "running" if phase == "Running" else "unknown"
+
+            host, port = self._sdk_k8s_resolve_pod_endpoint(
+                v1, ns, labels, pod, rest_port
+            )
+
+            if host and port:
+                api_data = self._probe_daemon(port, host=host)
+                if api_data is not None:
+                    pod_status = "paused" if api_data.get("paused") else "running"
+                    if not labels.get("ai-guardian.name") and api_data.get("name"):
+                        name = api_data["name"]
+
+            k8s_token = self._sdk_k8s_auth_token(v1, pod_name, ns)
+
+            target = DaemonTarget(
+                name=name,
+                runtime="kubernetes",
+                status=pod_status,
+                host=host or "127.0.0.1",
+                port=port or rest_port,
+                pod_name=pod_name,
+                namespace=ns,
+                context=context_name,
+                auth_token=k8s_token,
+                last_seen=time.monotonic(),
+            )
+            targets.append(target)
+
+        return targets
+
+    @staticmethod
+    def _sdk_k8s_resolve_pod_endpoint(
+        v1, namespace: str, pod_labels: dict, pod, rest_port: int
+    ) -> Tuple[str, int]:
+        """Find a routable host:port for a K8s pod daemon.
+
+        Checks for a matching Service (LoadBalancer > NodePort > ClusterIP),
+        then falls back to the pod IP.
+        """
+        try:
+            services = v1.list_namespaced_service(namespace=namespace)
+            for svc in services.items:
+                selector = svc.spec.selector if svc.spec and svc.spec.selector else {}
+                if not selector:
+                    continue
+                if not all(pod_labels.get(k) == v for k, v in selector.items()):
                     continue
 
-                labels = metadata.get("labels", {})
-                name = labels.get("ai-guardian.name", pod_name)
+                svc_type = svc.spec.type or "ClusterIP"
 
-                pod_status = "running" if phase == "Running" else "unknown"
+                if (
+                    svc_type == "LoadBalancer"
+                    and svc.status
+                    and svc.status.load_balancer
+                ):
+                    ingresses = svc.status.load_balancer.ingress or []
+                    if ingresses:
+                        ingress = ingresses[0]
+                        host = ingress.ip or ingress.hostname or ""
+                        if host:
+                            svc_port = _find_service_port(svc.spec.ports, rest_port)
+                            return host, svc_port or rest_port
 
-                k8s_token = self._kubectl_exec_auth_token(pod_name, namespace)
+                if svc_type == "NodePort":
+                    svc_port_obj = _find_service_port_obj(svc.spec.ports, rest_port)
+                    if svc_port_obj and svc_port_obj.node_port:
+                        return "127.0.0.1", svc_port_obj.node_port
 
-                target = DaemonTarget(
-                    name=name,
-                    runtime="kubernetes",
-                    status=pod_status,
-                    port=rest_port,
-                    pod_name=pod_name,
-                    namespace=namespace,
-                    auth_token=k8s_token,
-                    last_seen=time.monotonic(),
-                )
-                targets.append(target)
+                cluster_ip = svc.spec.cluster_ip
+                if cluster_ip and cluster_ip != "None":
+                    svc_port = _find_service_port(svc.spec.ports, rest_port)
+                    return cluster_ip, svc_port or rest_port
 
-            return targets
-        except (subprocess.TimeoutExpired, OSError, json.JSONDecodeError) as e:
-            logger.debug("Kubernetes discovery error: %s", e)
+        except Exception as e:
+            logger.debug("Service lookup in %s failed: %s", namespace, e)
+
+        pod_ip = (
+            pod.status.pod_ip if pod.status and hasattr(pod.status, "pod_ip") else None
+        )
+        if pod_ip:
+            return pod_ip, rest_port
+
+        return "", 0
+
+    @staticmethod
+    def _sdk_k8s_auth_token(v1, pod_name: str, namespace: str) -> Optional[str]:
+        """Read auth token from K8s pod via SDK exec."""
+        try:
+            resp = k8s_stream(
+                v1.connect_get_namespaced_pod_exec,
+                pod_name,
+                namespace,
+                command=[
+                    "cat",
+                    "/root/.local/state/ai-guardian/daemon.token",
+                ],
+                stderr=True,
+                stdin=False,
+                stdout=True,
+                tty=False,
+            )
+            token = resp.strip() if isinstance(resp, str) else ""
+            if token:
+                return token
+        except Exception:
+            pass
+        return None
+
+    def _discover_kubernetes_kubectl(
+        self,
+        namespaces: Optional[List[str]],
+        label_selector: str,
+        rest_port: int,
+    ) -> List[DaemonTarget]:
+        """Discover K8s pod daemons via kubectl subprocess (fallback)."""
+        if not shutil.which("kubectl"):
             return []
+
+        target_namespaces = namespaces or ["ai-sdlc"]
+
+        all_targets: List[DaemonTarget] = []
+        for namespace in target_namespaces:
+            if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", namespace):
+                logger.debug("Invalid Kubernetes namespace: %s", namespace)
+                continue
+
+            try:
+                result = subprocess.run(
+                    [
+                        "kubectl",
+                        "get",
+                        "pods",
+                        "-l",
+                        label_selector,
+                        "-n",
+                        namespace,
+                        "-o",
+                        "json",
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=15,
+                )
+                if result.returncode != 0:
+                    logger.debug(
+                        "kubectl discovery failed for %s: %s",
+                        namespace,
+                        result.stderr,
+                    )
+                    continue
+
+                data = json.loads(result.stdout)
+                for pod in data.get("items", []):
+                    metadata = pod.get("metadata", {})
+                    status = pod.get("status", {})
+                    phase = status.get("phase", "Unknown")
+
+                    pod_name = metadata.get("name", "")
+                    if not pod_name:
+                        continue
+
+                    labels = metadata.get("labels", {})
+                    name = labels.get("ai-guardian.name", pod_name)
+                    pod_status = "running" if phase == "Running" else "unknown"
+                    k8s_token = self._kubectl_exec_auth_token(pod_name, namespace)
+
+                    target = DaemonTarget(
+                        name=name,
+                        runtime="kubernetes",
+                        status=pod_status,
+                        port=rest_port,
+                        pod_name=pod_name,
+                        namespace=namespace,
+                        auth_token=k8s_token,
+                        last_seen=time.monotonic(),
+                    )
+                    all_targets.append(target)
+
+            except (
+                subprocess.TimeoutExpired,
+                OSError,
+                json.JSONDecodeError,
+            ) as e:
+                logger.debug("kubectl discovery error for %s: %s", namespace, e)
+
+        return all_targets
 
     @staticmethod
     def _kubectl_exec_auth_token(pod_name, namespace):

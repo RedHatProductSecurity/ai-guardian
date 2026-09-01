@@ -11,6 +11,7 @@ from unittest import mock
 from ai_guardian.daemon.discovery import (
     DaemonDiscovery,
     DaemonTarget,
+    HAS_K8S_SDK,
     _detect_engine,
     _engine_from_source,
     _get_podman_socket,
@@ -30,6 +31,7 @@ class TestDaemonTarget:
         assert t.container_name is None
         assert t.pod_name is None
         assert t.namespace is None
+        assert t.context is None
         assert t.socket_path is None
         assert t.stats is None
         assert t.last_seen == 0.0
@@ -1016,12 +1018,16 @@ class TestSdkExecInstanceName:
         assert DaemonDiscovery._sdk_exec_instance_name(c) == "from-config-show"
 
 
-class TestDiscoverKubernetes:
+class TestDiscoverKubernetesKubectl:
+    """Tests for kubectl-based Kubernetes discovery (fallback)."""
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
     def test_no_kubectl_returns_empty(self):
         d = DaemonDiscovery(config={"daemon": {"tray": {"discover_kubernetes": True}}})
         with mock.patch("shutil.which", return_value=None):
             assert d.discover_kubernetes() == []
 
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
     @mock.patch("subprocess.run")
     @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
     def test_discovers_running_pods(self, mock_which, mock_run):
@@ -1030,7 +1036,10 @@ class TestDiscoverKubernetes:
                 {
                     "metadata": {
                         "name": "guardian-abc12",
-                        "labels": {"app": "ai-guardian", "user": "testuser"},
+                        "labels": {
+                            "ai-guardian.daemon": "true",
+                            "user": "testuser",
+                        },
                     },
                     "status": {"phase": "Running"},
                 }
@@ -1039,21 +1048,648 @@ class TestDiscoverKubernetes:
         mock_run.return_value = mock.MagicMock(
             returncode=0, stdout=json.dumps(pods), stderr=""
         )
-        d = DaemonDiscovery(config={"daemon": {"tray": {"discover_kubernetes": True}}})
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "discover_kubernetes": True,
+                        "kubernetes": {"namespaces": ["ai-sdlc"]},
+                    }
+                }
+            }
+        )
         targets = d.discover_kubernetes()
         assert len(targets) == 1
         assert targets[0].name == "guardian-abc12"
         assert targets[0].runtime == "kubernetes"
         assert targets[0].status == "running"
 
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
     @mock.patch("subprocess.run")
     @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
     def test_kubectl_failure_returns_empty(self, mock_which, mock_run):
         mock_run.return_value = mock.MagicMock(
             returncode=1, stdout="", stderr="connection refused"
         )
-        d = DaemonDiscovery()
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["default"]},
+                    }
+                }
+            }
+        )
         assert d.discover_kubernetes() == []
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    @mock.patch("subprocess.run")
+    @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
+    def test_kubectl_multi_namespace(self, mock_which, mock_run):
+        pods_ns1 = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": "pod-a",
+                        "labels": {"ai-guardian.daemon": "true"},
+                    },
+                    "status": {"phase": "Running"},
+                }
+            ]
+        }
+        pods_ns2 = {
+            "items": [
+                {
+                    "metadata": {
+                        "name": "pod-b",
+                        "labels": {"ai-guardian.daemon": "true"},
+                    },
+                    "status": {"phase": "Running"},
+                }
+            ]
+        }
+        mock_run.side_effect = [
+            mock.MagicMock(returncode=0, stdout=json.dumps(pods_ns1), stderr=""),
+            mock.MagicMock(returncode=0, stdout="", stderr=""),
+            mock.MagicMock(returncode=0, stdout=json.dumps(pods_ns2), stderr=""),
+            mock.MagicMock(returncode=0, stdout="", stderr=""),
+        ]
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "namespaces": ["ns1", "ns2"],
+                        },
+                    }
+                }
+            }
+        )
+        targets = d.discover_kubernetes()
+        assert len(targets) == 2
+        names = {t.name for t in targets}
+        assert names == {"pod-a", "pod-b"}
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    def test_backward_compat_namespace_singular(self):
+        """namespace (singular) treated as namespaces list."""
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespace": "my-ns"},
+                    }
+                }
+            }
+        )
+        with (
+            mock.patch("shutil.which", return_value="/usr/bin/kubectl"),
+            mock.patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = mock.MagicMock(
+                returncode=0,
+                stdout=json.dumps({"items": []}),
+                stderr="",
+            )
+            d.discover_kubernetes()
+            call_args = mock_run.call_args_list[0]
+            assert "-n" in call_args[0][0]
+            ns_idx = call_args[0][0].index("-n")
+            assert call_args[0][0][ns_idx + 1] == "my-ns"
+
+
+def _make_mock_k8s_pod(
+    name="guardian-pod",
+    namespace="ai-guardian",
+    labels=None,
+    phase="Running",
+    pod_ip="10.0.0.5",
+):
+    """Create a mock K8s V1Pod object."""
+    pod = mock.MagicMock()
+    pod.metadata.name = name
+    pod.metadata.namespace = namespace
+    pod.metadata.labels = labels or {"ai-guardian.daemon": "true"}
+    pod.status.phase = phase
+    pod.status.pod_ip = pod_ip
+    return pod
+
+
+def _make_mock_k8s_service(
+    name="ai-guardian-svc",
+    selector=None,
+    svc_type="ClusterIP",
+    cluster_ip="10.96.0.10",
+    ports=None,
+    node_port=None,
+    lb_ip=None,
+):
+    """Create a mock K8s V1Service object."""
+    svc = mock.MagicMock()
+    svc.metadata.name = name
+    svc.spec.selector = selector or {"ai-guardian.daemon": "true"}
+    svc.spec.type = svc_type
+    svc.spec.cluster_ip = cluster_ip
+
+    if ports is None:
+        port_obj = mock.MagicMock()
+        port_obj.port = 63152
+        port_obj.target_port = 63152
+        port_obj.node_port = node_port
+        svc.spec.ports = [port_obj]
+    else:
+        svc.spec.ports = ports
+
+    if lb_ip:
+        ingress = mock.MagicMock()
+        ingress.ip = lb_ip
+        ingress.hostname = None
+        svc.status.load_balancer.ingress = [ingress]
+    else:
+        svc.status.load_balancer.ingress = []
+
+    return svc
+
+
+import contextlib
+
+_SENTINEL = object()
+
+
+@contextlib.contextmanager
+def _k8s_sdk_mocks():
+    """Replace k8s_config, k8s_client, K8sApiException, k8s_stream on the
+    discovery module with mocks, restoring originals on exit. Works whether
+    the kubernetes package is installed or not."""
+    import ai_guardian.daemon.discovery as disc
+
+    _mock_k8s_config = mock.MagicMock()
+    _mock_k8s_client = mock.MagicMock()
+    _mock_api_exc = type("ApiException", (Exception,), {"status": 0})
+    _mock_stream = mock.MagicMock()
+
+    originals = {}
+    for attr, val in [
+        ("k8s_config", _mock_k8s_config),
+        ("k8s_client", _mock_k8s_client),
+        ("K8sApiException", _mock_api_exc),
+        ("k8s_stream", _mock_stream),
+    ]:
+        originals[attr] = getattr(disc, attr, _SENTINEL)
+        setattr(disc, attr, val)
+
+    try:
+        yield _mock_k8s_config, _mock_k8s_client, _mock_api_exc, _mock_stream
+    finally:
+        for attr, orig in originals.items():
+            if orig is _SENTINEL:
+                delattr(disc, attr)
+            else:
+                setattr(disc, attr, orig)
+
+
+class TestDiscoverKubernetesSDK:
+    """Tests for kubernetes SDK-based discovery."""
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    @mock.patch("subprocess.run")
+    @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
+    def test_no_sdk_falls_back_to_kubectl(self, mock_which, mock_run):
+        mock_run.return_value = mock.MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "items": [
+                        {
+                            "metadata": {
+                                "name": "kubectl-pod",
+                                "labels": {"ai-guardian.daemon": "true"},
+                            },
+                            "status": {"phase": "Running"},
+                        }
+                    ]
+                }
+            ),
+            stderr="",
+        )
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["default"]},
+                    }
+                }
+            }
+        )
+        targets = d.discover_kubernetes()
+        assert len(targets) == 1
+        assert targets[0].name == "kubectl-pod"
+
+    def test_sdk_discovers_pods_single_namespace(self):
+        pod = _make_mock_k8s_pod()
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].name == "guardian-pod"
+        assert targets[0].runtime == "kubernetes"
+        assert targets[0].namespace == "ai-guardian"
+        assert targets[0].context == "default"
+        assert targets[0].host == "10.0.0.5"
+
+    def test_sdk_discovers_pods_multi_namespace(self):
+        pod1 = _make_mock_k8s_pod(name="pod-ns1", namespace="ns1")
+        pod2 = _make_mock_k8s_pod(name="pod-ns2", namespace="ns2", pod_ip="10.0.0.6")
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.side_effect = [
+            mock.MagicMock(items=[pod1]),
+            mock.MagicMock(items=[pod2]),
+        ]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ns1", "ns2"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 2
+        names = {t.name for t in targets}
+        assert names == {"pod-ns1", "pod-ns2"}
+        namespaces = {t.namespace for t in targets}
+        assert namespaces == {"ns1", "ns2"}
+
+    def test_sdk_discovers_pods_multi_context(self):
+        pod1 = _make_mock_k8s_pod(name="pod-dev", namespace="ai-guardian")
+        pod2 = _make_mock_k8s_pod(
+            name="pod-staging", namespace="ai-guardian", pod_ip="10.0.1.5"
+        )
+
+        call_count = {"n": 0}
+
+        def mock_core_v1_api(api_client):
+            api = mock.MagicMock()
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                api.list_namespaced_pod.return_value.items = [pod1]
+            else:
+                api.list_namespaced_pod.return_value.items = [pod2]
+            api.list_namespaced_service.return_value.items = []
+            return api
+
+        all_contexts = [{"name": "dev"}, {"name": "staging"}]
+        active_ctx = {"name": "dev"}
+
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "contexts": ["dev", "staging"],
+                            "namespaces": ["ai-guardian"],
+                        },
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                all_contexts,
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.side_effect = mock_core_v1_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 2
+        contexts = {t.context for t in targets}
+        assert contexts == {"dev", "staging"}
+
+    def test_sdk_service_nodeport_connectivity(self):
+        pod = _make_mock_k8s_pod()
+        svc = _make_mock_k8s_service(svc_type="NodePort", node_port=30152)
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = [svc]
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].host == "127.0.0.1"
+        assert targets[0].port == 30152
+
+    def test_sdk_service_clusterip_connectivity(self):
+        pod = _make_mock_k8s_pod()
+        svc = _make_mock_k8s_service(svc_type="ClusterIP", cluster_ip="10.96.0.10")
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = [svc]
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].host == "10.96.0.10"
+        assert targets[0].port == 63152
+
+    def test_sdk_no_service_uses_pod_ip(self):
+        pod = _make_mock_k8s_pod(pod_ip="10.0.0.99")
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].host == "10.0.0.99"
+        assert targets[0].port == 63152
+
+    def test_sdk_graceful_on_api_error(self):
+        mock_exc = type("ApiException", (Exception,), {"status": 403})
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.side_effect = mock_exc()
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch(
+                    "ai_guardian.daemon.discovery.K8sApiException",
+                    mock_exc,
+                ),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert targets == []
+
+    def test_sdk_auth_token_from_pod(self):
+        pod = _make_mock_k8s_pod()
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, m_stream):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            m_stream.return_value = "test-token-abc123\n"
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].auth_token == "test-token-abc123"
+
+    def test_sdk_custom_label_selector(self):
+        pod = _make_mock_k8s_pod(labels={"app": "custom-guardian", "env": "prod"})
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "namespaces": ["prod"],
+                            "label_selector": "app=custom-guardian",
+                        },
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        mock_api.list_namespaced_pod.assert_called_once_with(
+            namespace="prod",
+            label_selector="app=custom-guardian",
+        )
+        assert len(targets) == 1
+
+    def test_sdk_all_namespaces_when_none_configured(self):
+        pod = _make_mock_k8s_pod()
+
+        mock_api = mock.MagicMock()
+        mock_api.list_pod_for_all_namespaces.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(config={"daemon": {"tray": {"kubernetes": {}}}})
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        mock_api.list_pod_for_all_namespaces.assert_called_once()
+        assert len(targets) == 1
+
+    def test_sdk_loadbalancer_connectivity(self):
+        pod = _make_mock_k8s_pod()
+        svc = _make_mock_k8s_service(svc_type="LoadBalancer", lb_ip="203.0.113.10")
+
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = [svc]
+
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespaces": ["ai-guardian"]},
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = (
+                [active_ctx],
+                active_ctx,
+            )
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                targets = d.discover_kubernetes()
+
+        assert len(targets) == 1
+        assert targets[0].host == "203.0.113.10"
+        assert targets[0].port == 63152
 
 
 class TestDiscoverManual:
