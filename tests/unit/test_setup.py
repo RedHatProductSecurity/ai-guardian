@@ -1167,6 +1167,26 @@ class TestCodexSetup:
         assert hooks["PreToolUse"][0]["hooks"][0]["timeout"] == 300
         assert hooks["PostToolUse"][0]["hooks"][0]["timeout"] == 60
 
+    def test_codex_hooks_include_session_end_and_post_compact(self):
+        """Verify Codex config includes SessionEnd and PostCompact hooks."""
+        hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        assert "SessionEnd" in hooks
+        assert "PostCompact" in hooks
+        assert hooks["SessionEnd"][0]["hooks"][0]["command"] == "ai-guardian"
+        assert hooks["PostCompact"][0]["hooks"][0]["command"] == "ai-guardian"
+
+    def test_codex_has_five_hook_events(self):
+        """Verify Codex installs all 5 hook events."""
+        hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        expected = {
+            "UserPromptSubmit",
+            "PreToolUse",
+            "PostToolUse",
+            "SessionEnd",
+            "PostCompact",
+        }
+        assert set(hooks.keys()) == expected
+
     def test_merge_hooks_codex_preserves_other_hooks(self, tmp_path):
         """Test that merging Codex hooks preserves existing non-ai-guardian hooks."""
         setup = IDESetup()

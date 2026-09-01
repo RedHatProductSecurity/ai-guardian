@@ -28,7 +28,7 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
+| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
