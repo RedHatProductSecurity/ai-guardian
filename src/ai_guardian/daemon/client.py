@@ -13,6 +13,8 @@ import shlex
 import socket
 import subprocess
 import time
+from typing import Optional, Tuple
+from urllib.parse import urlparse
 
 from ai_guardian.daemon import get_pid_path, get_socket_path, is_pid_alive
 from ai_guardian.daemon.protocol import (
@@ -33,12 +35,119 @@ from ai_guardian.daemon.protocol import (
 logger = logging.getLogger(__name__)
 
 
+def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
+    """Parse AI_GUARDIAN_DAEMON_URL env var for remote daemon connectivity.
+
+    Returns:
+        (scheme, host, port, auth_token) or None if env var is not set.
+        Only http:// scheme is supported.
+    """
+    url = os.environ.get("AI_GUARDIAN_DAEMON_URL")
+    if not url:
+        return None
+
+    parsed = urlparse(url)
+    if parsed.scheme != "http":
+        logger.warning(
+            "Unsupported daemon URL scheme: %s (only http:// supported)", parsed.scheme
+        )
+        return None
+
+    host = parsed.hostname or "127.0.0.1"
+    from ai_guardian.daemon import DEFAULT_REST_PORT
+
+    port = parsed.port or DEFAULT_REST_PORT
+
+    auth_token = None
+    if parsed.username:
+        auth_token = parsed.username
+    elif os.environ.get("AI_GUARDIAN_AUTH_TOKEN"):
+        auth_token = os.environ["AI_GUARDIAN_AUTH_TOKEN"]
+    else:
+        try:
+            from ai_guardian.daemon import get_auth_token_path
+
+            token_path = get_auth_token_path()
+            if token_path.exists():
+                token = token_path.read_text(encoding="utf-8").strip()
+                if token:
+                    auth_token = token
+        except Exception:
+            pass
+
+    return (parsed.scheme, host, port, auth_token)
+
+
+def _send_remote(path, data, timeout=5.0):
+    """Send a request to the remote daemon via HTTP REST API.
+
+    Args:
+        path: REST API path (e.g., "/api/hook")
+        data: Request body dict (JSON-serialized)
+        timeout: HTTP request timeout in seconds
+
+    Returns:
+        dict or None: Response data, or None on failure
+    """
+    remote = _get_remote_url()
+    if not remote:
+        return None
+
+    scheme, host, port, auth_token = remote
+    url = f"{scheme}://{host}:{port}{path}"
+
+    try:
+        from urllib.request import Request, urlopen
+
+        payload = json.dumps(data).encode("utf-8")
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+        if auth_token:
+            req.add_header("Authorization", f"Bearer {auth_token}")
+
+        with urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+    except Exception as e:
+        logger.debug("Remote daemon request to %s failed: %s", path, e)
+        return None
+
+
+def _is_daemon_running_remote():
+    """Check if a remote daemon is reachable via /api/health.
+
+    Returns:
+        bool: True if remote daemon responds with status ok
+    """
+    remote = _get_remote_url()
+    if not remote:
+        return False
+
+    scheme, host, port, _token = remote
+    url = f"{scheme}://{host}:{port}/api/health"
+
+    try:
+        from urllib.request import Request, urlopen
+
+        req = Request(url, method="GET")
+        with urlopen(req, timeout=2.0) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("status") == "ok"
+    except Exception:
+        return False
+
+
 def is_daemon_running():
     """Check if the daemon is running by testing PID file and socket connectivity.
+
+    When AI_GUARDIAN_DAEMON_URL is set, checks the remote daemon via HTTP
+    instead of local PID file and socket.
 
     Returns:
         bool: True if daemon is running and responsive
     """
+    if _get_remote_url():
+        return _is_daemon_running_remote()
+
     pid_path = get_pid_path()
     if not pid_path.exists():
         return False
@@ -72,6 +181,8 @@ def is_daemon_running():
 def send_hook_request(hook_data, timeout=2.0):
     """Send hook data to daemon and get response.
 
+    When AI_GUARDIAN_DAEMON_URL is set, forwards via HTTP POST to /api/hook.
+
     Args:
         hook_data: Parsed JSON hook data from IDE
         timeout: Connection + response timeout in seconds
@@ -79,6 +190,10 @@ def send_hook_request(hook_data, timeout=2.0):
     Returns:
         dict or None: Response with 'output' and 'exit_code', or None on failure
     """
+    if _get_remote_url():
+        data = {**hook_data, "_daemon_cwd": os.getcwd()}
+        return _send_remote("/api/hook", data, timeout=timeout)
+
     try:
         sock = _connect(timeout)
         if sock is None:
@@ -106,6 +221,8 @@ def send_hook_request(hook_data, timeout=2.0):
 def send_sdk_check(check_type, data, timeout=5.0):
     """Send an SDK security check to the daemon.
 
+    When AI_GUARDIAN_DAEMON_URL is set, forwards via HTTP POST to /api/check.
+
     Args:
         check_type: "content", "file", "command", "sanitize", or "violations"
         data: Check-specific parameters
@@ -114,6 +231,10 @@ def send_sdk_check(check_type, data, timeout=5.0):
     Returns:
         dict or None: Response with check results, or None on failure
     """
+    if _get_remote_url():
+        payload = {"check_type": check_type, **data}
+        return _send_remote("/api/check", payload, timeout=timeout)
+
     try:
         sock = _connect(timeout)
         if sock is None:
@@ -414,10 +535,16 @@ def start_daemon_background():
     """Start daemon as a background process for lazy start in auto mode.
 
     Respects the stop-requested marker written by ``daemon stop``.
+    Skips auto-start when AI_GUARDIAN_DAEMON_URL is set (remote daemon
+    is managed externally).
 
     Returns:
         bool: True if daemon started successfully
     """
+    if _get_remote_url():
+        logger.debug("Remote daemon URL configured, skipping auto-start")
+        return False
+
     try:
         # Honour explicit stop — don't auto-restart (#775)
         from ai_guardian.daemon import get_state_dir

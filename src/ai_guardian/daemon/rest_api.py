@@ -200,6 +200,11 @@ class _RestHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/reload":
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "config_reloaded"})
+        elif self.path == "/api/hook":
+            body = self._read_body(max_size=self._MAX_CONTENT_SIZE)
+            if body is None:
+                return
+            self._handle_hook(body)
         elif self.path == "/api/ml-detect":
             body = self._read_body()
             if body is None:
@@ -734,6 +739,81 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     _MAX_BODY_SIZE = 64 * 1024
     _MAX_CONTENT_SIZE = 1024 * 1024
+
+    def _handle_hook(self, body):
+        """Handle POST /api/hook — process hook request via REST API.
+
+        Accepts the same JSON payload that the socket protocol's hook
+        handler receives.  Replicates the processing logic from
+        DaemonServer._handle_hook_request (server.py).
+        """
+        import time as _time
+
+        t0 = _time.monotonic()
+        state = self.server.daemon_state
+        cwd = body.pop("_daemon_cwd", None)
+
+        try:
+            state.check_project_config(cwd)
+        except Exception:
+            pass
+
+        if state.paused or (cwd and state.is_dir_paused(cwd)):
+            from ai_guardian import inject_security_only
+
+            result = inject_security_only(body, daemon_state=state)
+            if result is None:
+                result = {"output": "{}", "exit_code": 0}
+            self._send_json(result)
+            return
+
+        state.record_activity()
+
+        if cwd:
+            from ai_guardian.config.utils import (
+                set_project_dir_override,
+                clear_project_dir_override,
+            )
+
+            set_project_dir_override(cwd)
+
+        try:
+            state.get_config()
+
+            from ai_guardian import process_hook_data
+
+            result = process_hook_data(body, daemon_state=state)
+        except Exception:
+            logger.exception("Hook processing failed")
+            self._send_error(500, "Hook processing failed")
+            return
+        finally:
+            if cwd:
+                from ai_guardian.config.utils import clear_project_dir_override
+
+                clear_project_dir_override()
+
+        exit_code = result.get("exit_code", 0)
+        violation_type = result.get("_violation_type")
+        if exit_code != 0 or result.get("_blocked"):
+            state.record_blocked(violation_type=violation_type)
+            session_key = body.get("session_id") or body.get("transcript_path")
+            if session_key:
+                state.mark_security_reinject(session_key)
+        elif result.get("_warning"):
+            state.record_warning()
+        elif result.get("_log_only"):
+            for _ in range(result["_log_only"]):
+                state.record_log_only()
+
+        result.pop("_blocked", None)
+        result.pop("_warning", None)
+        result.pop("_log_only", None)
+        result.pop("_violation_type", None)
+
+        elapsed = (_time.monotonic() - t0) * 1000
+        logger.debug("Hook request processed in %.1fms", elapsed)
+        self._send_json(result)
 
     def _handle_check(self, body):
         """Handle POST /api/check — content security scanning."""

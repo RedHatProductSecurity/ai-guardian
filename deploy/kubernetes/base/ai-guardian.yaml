@@ -45,6 +45,12 @@ spec:
           env:
             - name: AI_GUARDIAN_REST_HOST
               value: "0.0.0.0"
+            - name: AI_GUARDIAN_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: ai-guardian-auth
+                  key: auth-token
+                  optional: true
           volumeMounts:
             - name: aiconfig
               mountPath: /sandbox/.config/ai-guardian
@@ -57,13 +63,13 @@ spec:
               memory: 512Mi
           readinessProbe:
             httpGet:
-              path: /api/status
+              path: /api/health
               port: 63152
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /api/status
+              path: /api/health
               port: 63152
             initialDelaySeconds: 15
             periodSeconds: 30
