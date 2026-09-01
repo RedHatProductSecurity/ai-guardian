@@ -134,6 +134,7 @@ from ai_guardian.config.loaders import (  # noqa: F401
     _load_transcript_scanning_config,
     _load_annotations_config,
     _load_security_instructions_config,
+    _load_update_checking_config,
     _get_on_scan_error_action,
 )
 

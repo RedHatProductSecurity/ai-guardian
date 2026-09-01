@@ -1202,6 +1202,20 @@
     "resource_attributes": {}
   },
 
+  "update_checking": {
+    "_comment_update_checking": "Version update checking and self-upgrade notification (NEW in v1.19.0, Issue #2155). Checks PyPI for new releases. Disable for air-gapped environments.",
+    "enabled": true,
+    "check_interval_seconds": 300,
+    "_comment_check_interval": "How often the tray checks PyPI for new versions (seconds). CLI always checks live.",
+    "include_prerelease": false,
+    "notify": true,
+    "_comment_notify": "Show OS desktop notification when a new version is available.",
+    "auto_check_on_doctor": true,
+    "_comment_auto_check_on_doctor": "Include version currency in 'ai-guardian doctor' checks (cache-only, no network call).",
+    "cache_ttl_days": 7,
+    "_comment_cache_ttl_days": "Days before cached PyPI version info is discarded. Prevents stale 'update available' in air-gapped environments."
+  },
+
   "sdk": {
     "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper",
     "_comment_scanning": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",

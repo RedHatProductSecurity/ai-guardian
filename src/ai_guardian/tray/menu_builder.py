@@ -900,6 +900,11 @@ class TrayMenuBuilder:
                     and self._tray._health._is_upgrade_available(self._tray._targets[0])
                 ),
             ),
+            pystray.MenuItem(
+                lambda _: self._tray._health._self_upgrade_label(),
+                self._tray._health._on_self_upgrade,
+                visible=lambda _: self._tray._health._is_self_upgrade_available(),
+            ),
         ]
 
     def _build_multi_daemon_menu_items(self):

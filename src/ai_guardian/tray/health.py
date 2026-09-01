@@ -29,6 +29,8 @@ class TrayHealthMonitor:
         self._pypi_latest = None
         self._pypi_last_check = 0.0
         self._upgrade_in_progress = set()
+        self._self_upgrade_in_progress = False
+        self._upgrade_notified_version = None
 
     def _check_config_error_notification(self):
         """Show OS notification once when a config error is detected."""
@@ -339,3 +341,106 @@ class TrayHealthMonitor:
                 ).start()
 
         return action
+
+    # --- Self-upgrade (local installation → latest PyPI) ---
+
+    def _is_self_upgrade_available(self):
+        """Return True if PyPI has a newer version than the local install."""
+        if self._self_upgrade_in_progress:
+            return False
+        if not self._pypi_latest:
+            return False
+        try:
+            from ai_guardian import __version__
+
+            if "-dev" in __version__ or "dev" in __version__.lower():
+                return False
+            from ai_guardian.update_checker import is_upgrade_available
+
+            return is_upgrade_available(__version__, self._pypi_latest)
+        except (ImportError, Exception):
+            return False
+
+    def _self_upgrade_label(self):
+        """Dynamic label for the self-upgrade menu item."""
+        if self._self_upgrade_in_progress:
+            return "Upgrading…"
+        return f"Upgrade to v{self._pypi_latest}" if self._pypi_latest else "Upgrade"
+
+    def _do_self_upgrade(self):
+        """Run self-upgrade in a background thread, then re-exec tray."""
+        import os
+        import sys
+
+        self._self_upgrade_in_progress = True
+        self._tray._dispatch_to_main(self._tray._refresh_menu)
+
+        try:
+            from ai_guardian.tray.plugins import send_notification
+            from ai_guardian.update_checker import perform_full_upgrade
+
+            result = perform_full_upgrade(force=True, restart_daemon=True)
+
+            if result.success:
+                send_notification(
+                    "AI Guardian Updated",
+                    f"Upgraded to v{result.new_version or self._pypi_latest}. "
+                    "Restarting tray…",
+                )
+                import time
+
+                time.sleep(1)
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+            elif result.permission_error:
+                send_notification(
+                    "Upgrade Failed — Permission Denied",
+                    result.output,
+                )
+            else:
+                send_notification(
+                    "Upgrade Failed",
+                    result.output[:200],
+                )
+        except Exception as exc:
+            logger.warning("Self-upgrade failed: %s", exc)
+        finally:
+            self._self_upgrade_in_progress = False
+            self._tray._dispatch_to_main(self._tray._refresh_menu)
+
+    def _on_self_upgrade(self, _icon, _item):
+        """Click handler for self-upgrade menu item."""
+        threading.Thread(
+            target=self._do_self_upgrade,
+            daemon=True,
+            name="self-upgrade",
+        ).start()
+
+    def _check_self_upgrade_notification(self):
+        """Send one-time OS notification when a new version is detected."""
+        if not self._is_self_upgrade_available():
+            return
+        if self._pypi_latest == self._upgrade_notified_version:
+            return
+
+        try:
+            from ai_guardian.config.loaders import _load_update_checking_config
+
+            cfg = _load_update_checking_config()
+            if isinstance(cfg, tuple):
+                cfg = cfg[0]
+            if not cfg.get("notify", True):
+                return
+        except Exception:
+            pass
+
+        self._upgrade_notified_version = self._pypi_latest
+        threading.Thread(
+            target=tray_notifications.show_notification,
+            args=(
+                "AI Guardian Update Available",
+                f"v{self._pypi_latest} is available. "
+                "Click Upgrade in the tray menu.",
+            ),
+            daemon=True,
+            name="upgrade-notify",
+        ).start()

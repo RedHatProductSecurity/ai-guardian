@@ -920,6 +920,53 @@ def main():
             help="Run canary payload tests against each scanner to verify detection",
         )
 
+        # Check-update subcommand (Issue #2155)
+        check_update_parser = subparsers.add_parser(
+            "check-update", help="Check if a newer version is available on PyPI"
+        )
+        check_update_parser.add_argument(
+            "--json", action="store_true", help="Output result as JSON"
+        )
+        check_update_parser.add_argument(
+            "--include-prerelease",
+            action="store_true",
+            help="Include pre-release versions",
+        )
+
+        # Upgrade subcommand (Issue #2155)
+        upgrade_parser = subparsers.add_parser(
+            "upgrade", help="Upgrade ai-guardian to the latest version"
+        )
+        upgrade_parser.add_argument(
+            "--version",
+            type=str,
+            default=None,
+            help="Specific version to install (default: latest stable)",
+        )
+        upgrade_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show the upgrade command without executing",
+        )
+        upgrade_parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Proceed even if daemon sessions are active",
+        )
+        upgrade_parser.add_argument(
+            "--no-restart",
+            action="store_true",
+            help="Skip daemon restart after upgrade",
+        )
+        upgrade_parser.add_argument(
+            "--include-prerelease",
+            action="store_true",
+            help="Allow upgrading to pre-release versions",
+        )
+        upgrade_parser.add_argument(
+            "--json", action="store_true", help="Output result as JSON"
+        )
+
         # Daemon subcommand
         daemon_parser = subparsers.add_parser(
             "daemon", help="Manage the background daemon service"
@@ -1370,7 +1417,15 @@ def main():
         args = parser.parse_args()
 
         # Auto-start daemon for CLI commands (Issue #680)
-        _no_autostart = {"daemon", "mcp-server", "tray", "setup", "dummy-agent"}
+        _no_autostart = {
+            "daemon",
+            "mcp-server",
+            "tray",
+            "setup",
+            "dummy-agent",
+            "check-update",
+            "upgrade",
+        }
         if args.command and args.command not in _no_autostart:
             _ensure_daemon_started()
 
@@ -1871,6 +1926,127 @@ def main():
                 import traceback
 
                 traceback.print_exc()
+                return 1
+
+        # Handle check-update command (Issue #2155)
+        if args.command == "check-update":
+            try:
+                from ai_guardian.update_checker import (
+                    UpdateCheckCache,
+                    detect_install_method,
+                    get_latest_version,
+                    is_upgrade_available,
+                )
+
+                include_pre = getattr(args, "include_prerelease", False)
+                latest = get_latest_version(include_prerelease=include_pre)
+                method = detect_install_method()
+                upgrade = is_upgrade_available(__version__, latest)
+
+                import time as _time
+
+                cache = UpdateCheckCache(
+                    latest_version=latest,
+                    checked_at=_time.time(),
+                    install_method=method,
+                )
+                cache.save()
+
+                if getattr(args, "json", False):
+                    print(
+                        json.dumps(
+                            {
+                                "current_version": __version__,
+                                "latest_version": latest,
+                                "upgrade_available": upgrade,
+                                "install_method": method,
+                            },
+                            indent=2,
+                        )
+                    )
+                else:
+                    print(f"Current version: {__version__}")
+                    print(f"Latest version:  {latest or 'unknown'}")
+                    print(f"Install method:  {method}")
+                    if upgrade:
+                        print("\nUpgrade available! Run: ai-guardian upgrade")
+                    else:
+                        print("\nYou are up to date.")
+                return 0
+            except Exception as e:
+                print(f"Error checking for updates: {e}", file=sys.stderr)
+                return 1
+
+        # Handle upgrade command (Issue #2155)
+        if args.command == "upgrade":
+            try:
+                from ai_guardian.update_checker import (
+                    build_upgrade_command,
+                    detect_install_method,
+                    get_latest_version,
+                    is_upgrade_available,
+                    perform_full_upgrade,
+                )
+
+                include_pre = getattr(args, "include_prerelease", False)
+                target_version = getattr(args, "version", None)
+
+                if not target_version:
+                    latest = get_latest_version(include_prerelease=include_pre)
+                    if not is_upgrade_available(__version__, latest):
+                        msg = f"Already at latest version ({__version__})."
+                        if getattr(args, "json", False):
+                            print(json.dumps({"success": True, "message": msg}))
+                        else:
+                            print(msg)
+                        return 0
+                    target_version = latest
+
+                if getattr(args, "dry_run", False):
+                    method = detect_install_method()
+                    cmd = build_upgrade_command(method, version=target_version)
+                    if getattr(args, "json", False):
+                        print(
+                            json.dumps(
+                                {
+                                    "command": cmd,
+                                    "install_method": method,
+                                    "dry_run": True,
+                                }
+                            )
+                        )
+                    else:
+                        print(f"Would run: {' '.join(cmd)}")
+                    return 0
+
+                restart = not getattr(args, "no_restart", False)
+                force = getattr(args, "force", False)
+                result = perform_full_upgrade(
+                    version=target_version,
+                    force=force,
+                    restart_daemon=restart,
+                )
+
+                if getattr(args, "json", False):
+                    print(
+                        json.dumps(
+                            {
+                                "success": result.success,
+                                "new_version": result.new_version,
+                                "output": result.output,
+                                "command": result.command,
+                                "permission_error": result.permission_error,
+                            }
+                        )
+                    )
+                else:
+                    if result.success:
+                        print(f"Upgraded to {result.new_version or target_version}")
+                    else:
+                        print(f"Upgrade failed: {result.output}")
+                return 0 if result.success else 1
+            except Exception as e:
+                print(f"Error during upgrade: {e}", file=sys.stderr)
                 return 1
 
         if args.command == "daemon":

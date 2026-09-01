@@ -98,6 +98,7 @@ class Doctor:
         report = DoctorReport(version=__version__)
         checks = [
             self.check_python_version,
+            self.check_version_currency,
             self.check_config_file,
             self.check_project_config,
             self.check_config_overlay,
@@ -2104,6 +2105,66 @@ class Doctor:
             message=f"Daemon REST API running on port {rest_port}",
         )
 
+    def check_version_currency(self) -> CheckResult:
+        """Check if the installed version is current (uses cached PyPI data only)."""
+        from ai_guardian import __version__
+
+        self._ensure_config()
+        update_cfg = (self._config or {}).get("update_checking", {})
+
+        if not update_cfg.get("auto_check_on_doctor", True):
+            return CheckResult(
+                name="version_currency",
+                status=CheckStatus.SKIP,
+                message="Update checking disabled in config",
+            )
+
+        try:
+            from ai_guardian.update_checker import (
+                UpdateCheckCache,
+                is_upgrade_available,
+            )
+
+            cache = UpdateCheckCache.load()
+        except Exception:
+            return CheckResult(
+                name="version_currency",
+                status=CheckStatus.SKIP,
+                message=f"v{__version__} (no cached version data)",
+                fix_hint="Run: ai-guardian check-update",
+            )
+
+        if cache is None or cache.latest_version is None:
+            return CheckResult(
+                name="version_currency",
+                status=CheckStatus.SKIP,
+                message=f"v{__version__} (no cached version data)",
+                fix_hint="Run: ai-guardian check-update",
+            )
+
+        cache_ttl_days = update_cfg.get("cache_ttl_days", 7)
+        if cache.is_stale(cache_ttl_days * 86400):
+            return CheckResult(
+                name="version_currency",
+                status=CheckStatus.SKIP,
+                message=f"v{__version__} (cached data expired)",
+                fix_hint="Run: ai-guardian check-update",
+            )
+
+        if is_upgrade_available(__version__, cache.latest_version):
+            return CheckResult(
+                name="version_currency",
+                status=CheckStatus.WARN,
+                message=f"v{__version__} (v{cache.latest_version} available)",
+                fix_hint="Run: ai-guardian upgrade",
+            )
+
+        return CheckResult(
+            name="version_currency",
+            status=CheckStatus.PASS,
+            message=f"v{__version__} (latest)",
+        )
+
 
 # --- Output formatters ---
 
@@ -2156,6 +2217,8 @@ _CHECK_DISPLAY_NAMES = {
     "ml_detection": "ML detection",
     "ast_scanner": "AST scanning",
     "bandit_scanner": "Bandit (code security)",
+    "daemon_rest_port": "Daemon REST port",
+    "version_currency": "Version currency",
 }
 
 
