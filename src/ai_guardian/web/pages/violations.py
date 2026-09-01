@@ -571,10 +571,14 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                 if isinstance(blocked_data, dict)
                                 else None
                             )
-                            if (
+                            if is_temp_path(v_file_path):
+                                if v_line_number:
+                                    ui.label("Temp file — use config editor").classes(
+                                        "text-xs text-grey-6"
+                                    )
+                            elif (
                                 v_line_number
                                 and get_comment_prefix(v_file_path) is not None
-                                and not is_temp_path(v_file_path)
                             ):
 
                                 def on_suppress_source(viol=violation):
@@ -585,10 +589,6 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                     icon="code",
                                     on_click=on_suppress_source,
                                 ).props("color=warning dense size=sm")
-                            elif v_line_number:
-                                ui.label("Temp file — use config editor").classes(
-                                    "text-xs text-grey-6"
-                                )
 
                             def on_ignore_file(viol=violation):
                                 _show_ignore_file_flow(viol)

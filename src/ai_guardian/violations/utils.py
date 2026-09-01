@@ -1,7 +1,7 @@
 """Utilities for violation detection and analysis."""
 
-import tempfile
 import os
+import tempfile
 
 
 def is_temp_path(path: str) -> bool:
@@ -17,10 +17,22 @@ def is_temp_path(path: str) -> bool:
         return False
 
     temp_dirs = [
-        "/tmp",
-        "/var/tmp",
-        tempfile.gettempdir(),
-        os.path.expandvars("%TEMP%"),
-        os.path.expandvars("%TMP%"),
+        d
+        for d in (
+            "/tmp",
+            "/var/tmp",
+            tempfile.gettempdir(),
+            os.environ.get("TEMP"),
+            os.environ.get("TMP"),
+        )
+        if d
     ]
-    return any(path.startswith(td) for td in temp_dirs)
+
+    normalized = os.path.normpath(path)
+    for temp_dir in temp_dirs:
+        normalized_temp_dir = os.path.normpath(temp_dir)
+        if normalized == normalized_temp_dir or normalized.startswith(
+            normalized_temp_dir + os.sep
+        ):
+            return True
+    return False

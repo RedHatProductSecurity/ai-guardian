@@ -265,24 +265,22 @@ class ViolationDetailsModal(ModalScreen):
                     yield Button("Copy Snippet", id="copy-snippet", variant="success")
                 vtype = self.violation.get("violation_type", "")
                 if vtype in _ALLOWLIST_TYPES:
-                    blocked = self.violation.get("blocked", {})
-                    file_path = blocked.get("file_path", "")
-                    if is_temp_path(file_path):
-                        yield Static(
-                            "[dim]Temp file — use config allowlist[/dim]",
-                            id="temp-file-hint",
-                        )
-                    else:
-                        yield Button(
-                            "Always Allow...", id="always-allow", variant="warning"
-                        )
+                    yield Button(
+                        "Always Allow...", id="always-allow", variant="warning"
+                    )
                 blocked = self.violation.get("blocked", {})
                 if isinstance(blocked, dict) and blocked.get("file_path"):
                     file_path = blocked["file_path"]
                     line_number = blocked.get("line_number")
                     from ai_guardian.tui.source_annotator import get_comment_prefix
 
-                    if line_number and get_comment_prefix(file_path) is not None:
+                    if is_temp_path(file_path):
+                        if line_number:
+                            yield Static(
+                                "[dim]Temp file — use config allowlist[/dim]",
+                                id="temp-file-hint",
+                            )
+                    elif line_number and get_comment_prefix(file_path) is not None:
                         yield Button(
                             "Suppress in Source...",
                             id="suppress-source",
