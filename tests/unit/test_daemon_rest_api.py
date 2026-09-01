@@ -757,3 +757,149 @@ class TestAuthTokenGeneration:
 
         assert len(token) > 20
         assert token_path.read_text().strip() == token
+
+
+class _HookMockDaemonState(MockDaemonState):
+    """Extended mock with methods needed by _handle_hook."""
+
+    def __init__(self):
+        super().__init__()
+        self._blocked_count = 0
+        self._warning_count = 0
+        self._log_only_count = 0
+        self._activity_recorded = False
+        self._dir_paused = set()
+
+    @property
+    def paused(self):
+        return self._paused
+
+    def check_project_config(self, cwd):
+        pass
+
+    def record_activity(self):
+        self._activity_recorded = True
+
+    def is_dir_paused(self, directory):
+        return directory in self._dir_paused
+
+    def record_blocked(self, violation_type=None):
+        self._blocked_count += 1
+
+    def record_warning(self):
+        self._warning_count += 1
+
+    def record_log_only(self):
+        self._log_only_count += 1
+
+    def mark_security_reinject(self, session_key):
+        pass
+
+
+class TestHookEndpoint:
+    """Tests for POST /api/hook endpoint (#2146)."""
+
+    @pytest.fixture
+    def hook_api(self):
+        state = _HookMockDaemonState()
+        api = DaemonRestAPI(state=state, host="127.0.0.1", port=0)
+        port = api.start()
+        yield api, port, state
+        api.stop()
+
+    @pytest.fixture
+    def authed_hook_api(self):
+        state = _HookMockDaemonState()
+        api = DaemonRestAPI(
+            state=state, host="127.0.0.1", port=0, auth_token="hook-secret"
+        )
+        port = api.start()
+        yield api, port, state
+        api.stop()
+
+    def test_hook_returns_result(self, hook_api):
+        api, port, state = hook_api
+        url = f"http://127.0.0.1:{port}/api/hook"
+        hook_data = {"hook_event_name": "PreToolUse", "tool_name": "Bash"}
+        payload = json.dumps(hook_data).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with mock.patch(
+            "ai_guardian.process_hook_data",
+            return_value={"output": "{}", "exit_code": 0},
+        ):
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert "exit_code" in data
+        assert data["exit_code"] == 0
+
+    def test_hook_extracts_cwd(self, hook_api):
+        api, port, state = hook_api
+        url = f"http://127.0.0.1:{port}/api/hook"
+        hook_data = {
+            "hook_event_name": "PreToolUse",
+            "_daemon_cwd": "/tmp/project",
+        }
+        payload = json.dumps(hook_data).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        captured_data = {}
+
+        def mock_process(data, daemon_state=None):
+            captured_data.update(data)
+            return {"output": "{}", "exit_code": 0}
+
+        with mock.patch("ai_guardian.process_hook_data", side_effect=mock_process):
+            with urlopen(req, timeout=5) as resp:
+                json.loads(resp.read())
+
+        assert "_daemon_cwd" not in captured_data
+
+    def test_hook_paused_returns_passthrough(self, hook_api):
+        api, port, state = hook_api
+        state._paused = True
+        url = f"http://127.0.0.1:{port}/api/hook"
+        hook_data = {"hook_event_name": "PreToolUse"}
+        payload = json.dumps(hook_data).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with mock.patch(
+            "ai_guardian.inject_security_only",
+            return_value=None,
+        ):
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["exit_code"] == 0
+
+    def test_hook_requires_auth(self, authed_hook_api):
+        api, port, state = authed_hook_api
+        url = f"http://127.0.0.1:{port}/api/hook"
+        payload = json.dumps({"hook_event_name": "PreToolUse"}).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 401
+
+    def test_hook_with_valid_auth(self, authed_hook_api):
+        api, port, state = authed_hook_api
+        url = f"http://127.0.0.1:{port}/api/hook"
+        payload = json.dumps({"hook_event_name": "PreToolUse"}).encode()
+        req = Request(url, data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", "Bearer hook-secret")
+
+        with mock.patch(
+            "ai_guardian.process_hook_data",
+            return_value={"output": "{}", "exit_code": 0},
+        ):
+            with urlopen(req, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["exit_code"] == 0
