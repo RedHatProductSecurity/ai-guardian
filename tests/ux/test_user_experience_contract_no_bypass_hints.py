@@ -150,7 +150,7 @@ class TestAnnotationHintNotInHookPath(unittest.TestCase):
         from ai_guardian.hook_processing import _annotation_hint
 
         msg = "Secret detected"
-        result = _annotation_hint(msg, "/tmp/test.py", None)
+        result = _annotation_hint(msg, "/home/user/project/test.py", None)
         assert "ai-guardian:allow" in result, (
             "_annotation_hint function should still work — "
             "this test verifies the function exists but is no longer called in hooks"

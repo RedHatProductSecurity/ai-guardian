@@ -588,5 +588,30 @@ class TestAllowlistLineNumberZeroFallback(unittest.TestCase):
         self.assertTrue(has_secrets, "No secret value + no line should still block")
 
 
+class TestBuildFalsePositiveMsgTempFile(unittest.TestCase):
+    """Tests for _build_false_positive_msg()'s temp-file handling."""
+
+    def test_temp_file_suggests_config_allowlist(self):
+        from ai_guardian.scanners.secret_scanning import _build_false_positive_msg
+
+        msg = _build_false_positive_msg(
+            {"file": "/tmp/hook_input.txt", "line_number": 1}, for_secret=True
+        )
+
+        self.assertIn("temporary file", msg)
+        self.assertIn("secret_scanning.allowlist_patterns", msg)
+        self.assertNotIn("ai-guardian:allow", msg)
+
+    def test_regular_file_suggests_inline_annotation(self):
+        from ai_guardian.scanners.secret_scanning import _build_false_positive_msg
+
+        msg = _build_false_positive_msg(
+            {"file": "/home/user/project/config.py", "line_number": 1},
+            for_secret=True,
+        )
+
+        self.assertIn("ai-guardian:allow", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

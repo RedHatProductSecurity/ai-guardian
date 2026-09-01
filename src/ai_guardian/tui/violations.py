@@ -20,6 +20,7 @@ from textual import events
 
 from ai_guardian.violations.logger import ViolationLogger
 from ai_guardian.violations.guidance import get_resolution_instructions
+from ai_guardian.violations.utils import is_temp_path
 from ai_guardian.tui.widgets import format_local_time
 from ai_guardian.tui.pattern_editor import (
     config_section_for_violation,
@@ -273,7 +274,13 @@ class ViolationDetailsModal(ModalScreen):
                     line_number = blocked.get("line_number")
                     from ai_guardian.tui.source_annotator import get_comment_prefix
 
-                    if line_number and get_comment_prefix(file_path) is not None:
+                    if is_temp_path(file_path):
+                        if line_number:
+                            yield Static(
+                                "[dim]Temp file — use config allowlist[/dim]",
+                                id="temp-file-hint",
+                            )
+                    elif line_number and get_comment_prefix(file_path) is not None:
                         yield Button(
                             "Suppress in Source...",
                             id="suppress-source",

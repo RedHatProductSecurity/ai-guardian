@@ -13,6 +13,7 @@ from ai_guardian.web.components.local_time import (
 from ai_guardian.constants import HookEvent, VIOLATION_FILTER_TYPES
 from ai_guardian.violations.guidance import get_resolution_instructions
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.violations.utils import is_temp_path
 
 FILTER_TABS = [("All", None, "Show all violation types")] + list(VIOLATION_FILTER_TYPES)
 
@@ -570,7 +571,12 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                 if isinstance(blocked_data, dict)
                                 else None
                             )
-                            if (
+                            if is_temp_path(v_file_path):
+                                if v_line_number:
+                                    ui.label("Temp file — use config editor").classes(
+                                        "text-xs text-grey-6"
+                                    )
+                            elif (
                                 v_line_number
                                 and get_comment_prefix(v_file_path) is not None
                             ):

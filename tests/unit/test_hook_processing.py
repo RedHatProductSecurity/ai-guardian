@@ -758,3 +758,31 @@ class TestInjectSecurityOnly(TestCase):
         parsed = json.loads(result["output"])
         assert "SECURITY RULES" in parsed.get("systemMessage", "")
         assert result["exit_code"] == 0
+
+
+class TestAnnotationHintTempFile(TestCase):
+    """Tests for _annotation_hint()'s temp-file handling."""
+
+    def test_drops_hint_for_temp_file(self):
+        from ai_guardian.hook_processing import _annotation_hint
+
+        result = _annotation_hint("Secret detected", file_path="/tmp/hook_input.txt")
+
+        assert result == "Secret detected"
+
+    def test_appends_hint_for_regular_file(self):
+        from ai_guardian.hook_processing import _annotation_hint
+
+        result = _annotation_hint(
+            "Secret detected", file_path="/home/user/project/config.py"
+        )
+
+        assert result != "Secret detected"
+        assert "Secret detected" in result
+
+    def test_returns_message_unchanged_without_file_path(self):
+        from ai_guardian.hook_processing import _annotation_hint
+
+        result = _annotation_hint("Secret detected", file_path=None)
+
+        assert result == "Secret detected"

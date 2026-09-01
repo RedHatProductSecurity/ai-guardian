@@ -11,12 +11,20 @@ IMPORTANT — self-protection rule (see AGENTS.md):
 import json
 from typing import Tuple
 
+from ai_guardian.violations.utils import is_temp_path
+
 
 def _type_placeholders(types: list) -> list:
     """Build per-type regex placeholder strings from a list of type names."""
     if not types:
         return ["<regex>"]
     return [f"<regex-for-{t}>" for t in types]
+
+
+def _temp_file_notice(section: str, key: str) -> str:
+    """Build the instructions text for a violation detected in a temp file."""
+    verb = "pattern" if key == "allowlist_patterns" else "file"
+    return f"Detection in temporary file. Add {verb} to {section}.{key}:"
 
 
 def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
@@ -43,6 +51,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add this rule to permissions.rules in ai-guardian.json:", snippet
 
     if vtype == "prompt_injection":
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return _temp_file_notice("prompt_injection", "allowlist_patterns"), ""
         pattern = blocked.get("pattern", "<pattern>")
         snippet = json.dumps(
             {"prompt_injection": {"allowlist_patterns": [pattern]}}, indent=2
@@ -50,6 +61,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add this pattern to prompt_injection.allowlist_patterns:", snippet
 
     if vtype == "jailbreak_detected":
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return _temp_file_notice("prompt_injection", "allowlist_patterns"), ""
         pattern = blocked.get("pattern", blocked.get("matched_text", "<pattern>"))
         snippet = json.dumps(
             {"prompt_injection": {"allowlist_patterns": [pattern]}}, indent=2
@@ -57,11 +71,19 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add this pattern to prompt_injection.allowlist_patterns:", snippet
 
     if vtype == "secret_detected":
-        secret_type = blocked.get("rule_id", blocked.get("secret_type", "unknown"))
         file_path = blocked.get("file_path")
+        secret_type = blocked.get("rule_id", blocked.get("secret_type", "unknown"))
         placeholder = (
             f"<regex-for-{secret_type}>" if secret_type != "unknown" else "<regex>"
         )
+        if is_temp_path(file_path):
+            snippet = json.dumps(
+                {"secret_scanning": {"allowlist_patterns": [placeholder]}}, indent=2
+            )
+            return (
+                _temp_file_notice("secret_scanning", "allowlist_patterns"),
+                snippet,
+            )
         from ai_guardian.scanners.secret_types import get_secret_type_display
 
         instructions = (
@@ -89,13 +111,15 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return instructions, snippet
 
     if vtype == "pii_detected":
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return _temp_file_notice("scan_pii", "allowlist_patterns"), ""
         pii_types = blocked.get("pii_types", [])
         placeholders = _type_placeholders(pii_types)
         cfg = {
             "scan_pii": {
                 "allowlist_patterns": placeholders,
-                "ignore_files": [file_path],
+                "ignore_files": [file_path or "<file>"],
             }
         }
         snippet = json.dumps(cfg, indent=2)
@@ -130,9 +154,12 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return "Add domain to ssrf_protection.additional_allowed_domains:", snippet
 
     if vtype == "config_file_exfil":
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return _temp_file_notice("config_file_scanning", "ignore_files"), ""
         snippet = json.dumps(
-            {"config_file_scanning": {"ignore_files": [file_path]}}, indent=2
+            {"config_file_scanning": {"ignore_files": [file_path or "<file>"]}},
+            indent=2,
         )
         return "Add file to config_file_scanning.ignore_files:", snippet
 
@@ -165,9 +192,11 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         return instructions, snippet
 
     if vtype in ("image_secret_detected", "image_pii_detected"):
-        file_path = blocked.get("file_path", "<file>")
+        file_path = blocked.get("file_path")
+        if is_temp_path(file_path):
+            return _temp_file_notice("image_scanning", "ignore_files"), ""
         snippet = json.dumps(
-            {"image_scanning": {"ignore_files": [file_path]}}, indent=2
+            {"image_scanning": {"ignore_files": [file_path or "<file>"]}}, indent=2
         )
         return "Add file to image_scanning.ignore_files:", snippet
 
