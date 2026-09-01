@@ -659,10 +659,34 @@ class IDESetup:
             if "version" not in existing_config:
                 existing_config["version"] = 1
 
-            # Merge all Cursor hooks
+            # Merge all Cursor hooks, preserving other extensions' hooks
             for hook_name in CURSOR_HOOK_EVENTS:
-                if hook_name in ai_guardian_hooks:
-                    existing_config["hooks"][hook_name] = ai_guardian_hooks[hook_name]
+                if hook_name not in ai_guardian_hooks:
+                    continue
+                if hook_name not in existing_config["hooks"]:
+                    existing_config["hooks"][hook_name] = []
+
+                hook_list = existing_config["hooks"][hook_name]
+                other_hooks = [
+                    h
+                    for h in hook_list
+                    if not (
+                        isinstance(h, dict)
+                        and _is_ai_guardian_command(h.get("command", ""))
+                    )
+                ]
+                ag_hook = ai_guardian_hooks[hook_name][0]
+                if other_hooks:
+                    hook_names = [
+                        h.get("command", "unknown")
+                        for h in other_hooks
+                        if isinstance(h, dict)
+                    ]
+                    warnings.append(
+                        f"⚠️  {hook_name}: Found other hooks [{', '.join(hook_names)}]. "
+                        f"ai-guardian has been placed first to ensure warnings display correctly."
+                    )
+                existing_config["hooks"][hook_name] = [ag_hook] + other_hooks
 
             return existing_config, warnings
 
