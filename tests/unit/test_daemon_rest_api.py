@@ -277,13 +277,13 @@ class TestViolationsEndpoint:
                 data = json.loads(resp.read())
         assert data["count"] == 1
         v = data["violations"][0]
-        assert v["type"] == "secret_detected"
+        assert v["violation_type"] == "secret_detected"
         assert v["severity"] == "high"
-        assert v["tool"] == "Write"
-        assert v["file"] == "config.py"
-        assert v["line"] == 42
-        assert v["action"] == "blocked"
-        assert v["suggestion"] == "Remove the secret"
+        assert v["blocked"] is True
+        assert v["context"]["tool"] == "Write"
+        assert v["context"]["file"] == "config.py"
+        assert v["context"]["line"] == 42
+        assert v["suggestion"]["text"] == "Remove the secret"
 
     def test_get_violations_with_type_filter(self, rest_api):
         api, port, state = rest_api

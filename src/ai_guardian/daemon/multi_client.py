@@ -770,28 +770,7 @@ class MultiDaemonClient:
 
         vl = ViolationLogger()
         entries = vl.get_recent_violations(limit=limit, violation_type=violation_type)
-        violations = []
-        for entry in entries:
-            ctx = entry.get("context", {})
-            v = {
-                "timestamp": entry.get("timestamp", ""),
-                "type": entry.get("violation_type", ""),
-                "severity": entry.get("severity", ""),
-                "tool": ctx.get("tool", ""),
-                "file": ctx.get("file", ""),
-                "action": "blocked" if entry.get("blocked") else "logged",
-                "suggestion": "",
-            }
-            sug = entry.get("suggestion")
-            if isinstance(sug, dict):
-                v["suggestion"] = sug.get("text", "")
-            elif isinstance(sug, str):
-                v["suggestion"] = sug
-            line = ctx.get("line")
-            if line is not None:
-                v["line"] = line
-            violations.append(v)
-        return {"violations": violations, "count": len(violations)}
+        return {"violations": entries, "count": len(entries)}
 
     def get_violation_context(
         self,
