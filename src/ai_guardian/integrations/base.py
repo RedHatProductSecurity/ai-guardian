@@ -28,6 +28,27 @@ def _is_timeout_error(exc: Exception) -> bool:
     return "Timeout" in type_name or "DeadlineExceeded" in type_name
 
 
+def _is_transient_error(exc: Exception) -> bool:
+    """Check if an exception is a transient API error worth retrying.
+
+    Covers timeouts, rate limits (429), overloaded (529), server errors
+    (500/502/503), and connection failures across providers.
+    """
+    if _is_timeout_error(exc):
+        return True
+    type_name = type(exc).__name__
+    if "RateLimit" in type_name:
+        return True
+    if "Overloaded" in type_name:
+        return True
+    if "Connection" in type_name and "Error" in type_name:
+        return True
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and status in (500, 502, 503, 529):
+        return True
+    return False
+
+
 def resolve_default_api_timeout(client: Any) -> int:
     """Return default API timeout based on provider type."""
     provider = getattr(client, "_ai_guardian_provider", None)
@@ -123,6 +144,8 @@ class TurnEvent:
             return f"[input] {self.messages_count} messages{c}"
         if self.type == "timeout":
             return f"[timeout] {self.text}"
+        if self.type == "retry":
+            return f"[retry] {self.text}"
         return f"[{self.type}]"
 
     def to_dict(self) -> Dict[str, Any]:
