@@ -25,6 +25,22 @@ def test_crashed_trace_is_displayed_as_interrupted():
     assert _display_stop_reason("error") == "error"
 
 
+def test_session_timestamps_use_browser_local_time():
+    """Session lists and details convert UTC timestamps in the browser."""
+    from ai_guardian.web.pages.traces import (
+        _render_run_group_card,
+        _render_trace_card,
+        _render_trace_list,
+        create_trace_detail_page,
+    )
+
+    assert "local_time_label" in inspect.getsource(_render_run_group_card)
+    assert "local_time_label" in inspect.getsource(_render_trace_card)
+    assert "inject_local_time_js" in inspect.getsource(_render_trace_list)
+    assert "local_time_label" in inspect.getsource(create_trace_detail_page)
+    assert "inject_local_time_js" in inspect.getsource(create_trace_detail_page)
+
+
 def test_tracing_settings_write_top_level_config():
     """The web UI must not write the deprecated SDK trace_viewer location."""
     from ai_guardian.web.pages.tracing_settings import create_tracing_settings_page
