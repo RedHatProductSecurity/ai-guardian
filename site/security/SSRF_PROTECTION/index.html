@@ -1,0 +1,4021 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/security/SSRF_PROTECTION/">
+      
+      
+        <link rel="prev" href="../CONTEXT_POISONING/">
+      
+      
+        <link rel="next" href="../IMAGE_SCANNING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>SSRF Protection - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ssrf-protection" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              SSRF Protection
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#important-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Important Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="⚠️ Important Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-can-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It CAN Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-cannot-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It CANNOT Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-limitations-exist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why These Limitations Exist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-comprehensive-ssrf-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Comprehensive SSRF Protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bottom-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bottom Line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-protections-immutable-pattern-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Protections (Immutable - Pattern Matching)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Protections (Immutable - Pattern Matching)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#private-ip-ranges-rfc-1918-loopback-link-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private IP Ranges (RFC 1918 + Loopback + Link-local)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-metadata-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cloud Metadata Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dangerous-url-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dangerous URL Schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enabled-boolean-default-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enabled (boolean, default: true)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-string-default-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        action (string, default: "block")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additional_blocked_ips-array-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        additional_blocked_ips (array, default: [])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additional_blocked_domains-array-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        additional_blocked_domains (array, default: [])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allowed_domains-array-default-new-in-v150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        allowed_domains (array, default: []) - NEW in v1.5.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow_localhost-boolean-default-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        allow_localhost (boolean, default: false)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-aws-metadata-endpoint-attack-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: AWS Metadata Endpoint Attack (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-private-network-scanning-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Private Network Scanning (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-file-access-via-file-url-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: File Access via file:// URL (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-public-aws-service-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Public AWS Service (ALLOWED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-5-local-development-allowed-with-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 5: Local Development (ALLOWED with config)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#not-blocked-legitimate-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NOT Blocked (Legitimate Use)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blocked-security-threats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocked (Security Threats)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legitimate-aws-access-vs-attacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legitimate AWS Access vs Attacks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legitimate AWS Access vs Attacks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#public-aws-services-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public AWS Services (ALLOWED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata-endpoints-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata Endpoints (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comprehensive-ssrf-protection-with-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive SSRF Protection with OpenShell
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comprehensive SSRF Protection with OpenShell">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why OpenShell?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defense-in-depth-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defense in Depth Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use OpenShell
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#learn-more" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learn More
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edge-cases-and-faqs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edge Cases and FAQs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Edge Cases and FAQs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-disable-ssrf-protection-for-specific-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can I disable SSRF protection for specific commands?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-about-dns-rebinding-attacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: What about DNS rebinding attacks?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-allow-specific-private-ips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can I allow specific private IPs?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-about-ipv6-metadata-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: What about IPv6 metadata endpoints?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Performance impact?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-attackers-bypass-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can attackers bypass this?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#credits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#important-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Important Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="⚠️ Important Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-can-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It CAN Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-cannot-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It CANNOT Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-these-limitations-exist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why These Limitations Exist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-comprehensive-ssrf-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Comprehensive SSRF Protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bottom-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bottom Line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#core-protections-immutable-pattern-matching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Protections (Immutable - Pattern Matching)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Protections (Immutable - Pattern Matching)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#private-ip-ranges-rfc-1918-loopback-link-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private IP Ranges (RFC 1918 + Loopback + Link-local)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-metadata-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cloud Metadata Endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dangerous-url-schemes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dangerous URL Schemes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#full-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Full Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#enabled-boolean-default-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        enabled (boolean, default: true)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-string-default-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        action (string, default: "block")
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additional_blocked_ips-array-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        additional_blocked_ips (array, default: [])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#additional_blocked_domains-array-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        additional_blocked_domains (array, default: [])
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allowed_domains-array-default-new-in-v150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        allowed_domains (array, default: []) - NEW in v1.5.0
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow_localhost-boolean-default-false" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        allow_localhost (boolean, default: false)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-aws-metadata-endpoint-attack-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: AWS Metadata Endpoint Attack (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-private-network-scanning-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Private Network Scanning (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-file-access-via-file-url-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: File Access via file:// URL (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-public-aws-service-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: Public AWS Service (ALLOWED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-5-local-development-allowed-with-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 5: Local Development (ALLOWED with config)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#not-blocked-legitimate-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NOT Blocked (Legitimate Use)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#blocked-security-threats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Blocked (Security Threats)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#legitimate-aws-access-vs-attacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legitimate AWS Access vs Attacks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Legitimate AWS Access vs Attacks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#public-aws-services-allowed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Public AWS Services (ALLOWED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#metadata-endpoints-blocked" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata Endpoints (BLOCKED)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#comprehensive-ssrf-protection-with-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comprehensive SSRF Protection with OpenShell
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Comprehensive SSRF Protection with OpenShell">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why OpenShell?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture-comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defense-in-depth-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defense in Depth Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#when-to-use-openshell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When to Use OpenShell
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#learn-more" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learn More
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#edge-cases-and-faqs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Edge Cases and FAQs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Edge Cases and FAQs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-disable-ssrf-protection-for-specific-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can I disable SSRF protection for specific commands?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-about-dns-rebinding-attacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: What about DNS rebinding attacks?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-i-allow-specific-private-ips" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can I allow specific private IPs?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-what-about-ipv6-metadata-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: What about IPv6 metadata endpoints?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Performance impact?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#q-can-attackers-bypass-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Q: Can attackers bypass this?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#credits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credits
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ssrf-protection">SSRF Protection<a class="headerlink" href="#ssrf-protection" title="Permanent link">&para;</a></h1>
+<p>Server-Side Request Forgery (SSRF) protection prevents AI agents from accessing private networks, cloud metadata endpoints, and dangerous URL schemes.</p>
+<h2 id="important-limitations">⚠️ Important Limitations<a class="headerlink" href="#important-limitations" title="Permanent link">&para;</a></h2>
+<p>ai-guardian's SSRF protection is <strong>pattern-based filtering</strong>, not comprehensive network security.</p>
+<h3 id="what-it-can-protect-against">What It CAN Protect Against<a class="headerlink" href="#what-it-can-protect-against" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Bash commands with explicit URLs</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>curl<span class="w"> </span>http://169.254.169.254/metadata<span class="w">  </span><span class="c1"># ❌ BLOCKED</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>wget<span class="w"> </span>http://192.168.1.1/admin<span class="w">         </span><span class="c1"># ❌ BLOCKED</span>
+</code></pre></div></p>
+<p>✅ <strong>Tool parameters containing private IPs</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">WebFetch</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="s2">&quot;http://169.254.169.254&quot;</span><span class="p">)</span>      <span class="c1"># ❌ BLOCKED</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">mcp__custom__fetch</span><span class="p">(</span><span class="n">url</span><span class="o">=</span><span class="s2">&quot;http://internal&quot;</span><span class="p">)</span>  <span class="c1"># ❌ BLOCKED</span>
+</code></pre></div></p>
+<h3 id="what-it-cannot-protect-against">What It CANNOT Protect Against<a class="headerlink" href="#what-it-cannot-protect-against" title="Permanent link">&para;</a></h3>
+<p>❌ <strong>MCP server internal calls</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># ai-guardian sees: source=&quot;web&quot;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># But MCP server internally calls: http://169.254.169.254</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">mcp__notebooklm__research_start</span><span class="p">(</span><span class="n">source</span><span class="o">=</span><span class="s2">&quot;web&quot;</span><span class="p">)</span>  <span class="c1"># ✅ ALLOWED (can&#39;t see internal call)</span>
+</code></pre></div></p>
+<p>❌ <strong>Other undetectable scenarios</strong>:
+- Dynamic URL construction inside tools
+- HTTP redirects after tool execution starts
+- IDE's own network requests
+- Binary protocol inspection</p>
+<h3 id="why-these-limitations-exist">Why These Limitations Exist<a class="headerlink" href="#why-these-limitations-exist" title="Permanent link">&para;</a></h3>
+<p>ai-guardian is <strong>hook-based</strong>, not a network proxy:
+- Hooks fire <strong>before</strong> tool execution (PreToolUse)
+- We see command strings and tool parameters
+- We do NOT see runtime network traffic
+- MCP servers execute <strong>after</strong> the hook approves them</p>
+<p><strong>Architecture</strong>: ai-guardian cannot intercept network calls - it can only inspect text strings.</p>
+<h3 id="for-comprehensive-ssrf-protection">For Comprehensive SSRF Protection<a class="headerlink" href="#for-comprehensive-ssrf-protection" title="Permanent link">&para;</a></h3>
+<p>ai-guardian provides <strong>pattern-based filtering only</strong>. For complete protection:</p>
+<p><strong>1. Network-level controls</strong> (REQUIRED):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Firewall rules blocking metadata endpoints</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>sudo<span class="w"> </span>iptables<span class="w"> </span>-A<span class="w"> </span>OUTPUT<span class="w"> </span>-d<span class="w"> </span><span class="m">169</span>.254.169.254<span class="w"> </span>-j<span class="w"> </span>REJECT
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>sudo<span class="w"> </span>iptables<span class="w"> </span>-A<span class="w"> </span>OUTPUT<span class="w"> </span>-d<span class="w"> </span><span class="m">10</span>.0.0.0/8<span class="w"> </span>-j<span class="w"> </span>REJECT
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Cloud provider network policies</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="c1"># AWS: VPC egress rules</span>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a><span class="c1"># GCP: Firewall rules</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a><span class="c1"># Azure: Network Security Groups</span>
+</code></pre></div></p>
+<p><strong>2. MCP server sandboxing</strong> (RECOMMENDED):
+- Run MCP servers in Docker containers with network policies
+- Use VMs with restricted network access
+- Only install MCP servers from trusted sources</p>
+<p><strong>3. Supply chain verification</strong> (PLANNED):
+- Verify MCP server signatures
+- Code review before installation
+- Allowlist trusted publishers only</p>
+<h3 id="bottom-line">Bottom Line<a class="headerlink" href="#bottom-line" title="Permanent link">&para;</a></h3>
+<blockquote>
+<p>ai-guardian catches obvious SSRF attempts in command strings but cannot replace network-level security. Think of it as a "basic syntax check" that prevents copy-paste mistakes, not comprehensive network protection.</p>
+</blockquote>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>SSRF attacks allow attackers to make the AI agent send requests to unintended locations:
+- <strong>Credential theft</strong>: Access cloud metadata endpoints to steal AWS/GCP/Azure credentials
+- <strong>Internal network scanning</strong>: Probe private network services
+- <strong>Local file access</strong>: Read local files via file:// URLs
+- <strong>Firewall bypass</strong>: Access internal services from outside the network</p>
+<p>AI Guardian's SSRF protection blocks these attacks by checking all Bash commands and tool parameters for dangerous URLs before execution.</p>
+<p><strong>Note</strong>: This is pattern-based filtering. See <a href="#️-important-limitations">Important Limitations</a> above for what it can and cannot protect against.</p>
+<h2 id="core-protections-immutable-pattern-matching">Core Protections (Immutable - Pattern Matching)<a class="headerlink" href="#core-protections-immutable-pattern-matching" title="Permanent link">&para;</a></h2>
+<p>These protections <strong>CANNOT be disabled</strong> via configuration:</p>
+<h3 id="private-ip-ranges-rfc-1918-loopback-link-local">Private IP Ranges (RFC 1918 + Loopback + Link-local)<a class="headerlink" href="#private-ip-ranges-rfc-1918-loopback-link-local" title="Permanent link">&para;</a></h3>
+<p><strong>IPv4:</strong>
+- <code>10.0.0.0/8</code> - Private network (Class A)
+- <code>172.16.0.0/12</code> - Private network (Class B)
+- <code>192.168.0.0/16</code> - Private network (Class C)
+- <code>127.0.0.0/8</code> - Loopback (localhost)
+- <code>169.254.0.0/16</code> - Link-local (AWS/Azure metadata)</p>
+<p><strong>IPv6:</strong>
+- <code>::1/128</code> - Loopback
+- <code>fc00::/7</code> - Unique local addresses (private network)
+- <code>fe80::/10</code> - Link-local addresses</p>
+<h3 id="cloud-metadata-endpoints">Cloud Metadata Endpoints<a class="headerlink" href="#cloud-metadata-endpoints" title="Permanent link">&para;</a></h3>
+<p><strong>AWS:</strong>
+- <code>169.254.169.254</code> - IPv4 metadata endpoint
+- <code>fd00:ec2::254</code> - IPv6 metadata endpoint
+- <code>instance-data</code> - Instance metadata service</p>
+<p><strong>Google Cloud Platform:</strong>
+- <code>metadata.google.internal</code> - Primary metadata endpoint
+- <code>metadata.goog</code> - Alternative metadata endpoint</p>
+<p><strong>Azure:</strong>
+- <code>169.254.169.254</code> - Shared with AWS (same IP range)</p>
+<h3 id="dangerous-url-schemes">Dangerous URL Schemes<a class="headerlink" href="#dangerous-url-schemes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>file://</code> - Local filesystem access</li>
+<li><code>gopher://</code> - Legacy protocol (attack vector)</li>
+<li><code>ftp://</code> - File transfer protocol</li>
+<li><code>ftps://</code> - Secure FTP</li>
+<li><code>data://</code> - Data URLs (can encode arbitrary content)</li>
+<li><code>dict://</code> - DICT protocol</li>
+<li><code>ldap://</code> - LDAP protocol</li>
+<li><code>ldaps://</code> - Secure LDAP</li>
+</ul>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permanent link">&para;</a></h3>
+<p>Default configuration (<code>~/.config/ai-guardian/ai-guardian.json</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="full-configuration">Full Configuration<a class="headerlink" href="#full-configuration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_ips&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">      </span><span class="s2">&quot;203.0.113.0/24&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">      </span><span class="s2">&quot;198.51.100.0/24&quot;</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">      </span><span class="s2">&quot;internal.example.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">      </span><span class="s2">&quot;admin.local&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">      </span><span class="s2">&quot;*.corp.internal&quot;</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">    </span><span class="nt">&quot;allowed_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">      </span><span class="s2">&quot;api.corp.internal&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">      </span><span class="s2">&quot;public.staging.example.com&quot;</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="nt">&quot;allow_localhost&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">&para;</a></h3>
+<h4 id="enabled-boolean-default-true"><code>enabled</code> (boolean, default: true)<a class="headerlink" href="#enabled-boolean-default-true" title="Permanent link">&para;</a></h4>
+<p>Enable or disable SSRF protection entirely.</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="p">{</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Time-based enabling</strong> (NEW in v1.5.0):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">&quot;value&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">&quot;valid_until&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-12-31T23:59:59Z&quot;</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="p">}</span>
+</code></pre></div></p>
+<h4 id="action-string-default-block"><code>action</code> (string, default: "block")<a class="headerlink" href="#action-string-default-block" title="Permanent link">&para;</a></h4>
+<p>Action to take when SSRF is detected:
+- <code>"block"</code> - Prevent execution and show error message (recommended)
+- <code>"warn"</code> - Log violation, show warning to user, but allow execution
+- <code>"log-only"</code> - Log violation silently without user warning, allow execution</p>
+<p><strong>Block mode (default, recommended):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Warn mode (for testing/debugging):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Log-only mode (for monitoring without blocking):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;log-only&quot;</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<h4 id="additional_blocked_ips-array-default"><code>additional_blocked_ips</code> (array, default: [])<a class="headerlink" href="#additional_blocked_ips-array-default" title="Permanent link">&para;</a></h4>
+<p>Additional IP addresses or CIDR ranges to block beyond core protections.</p>
+<p><strong>Supports:</strong>
+- Single IPv4 addresses: <code>"203.0.113.5"</code>
+- IPv4 CIDR ranges: <code>"203.0.113.0/24"</code>
+- Single IPv6 addresses: <code>"2001:db8::1"</code>
+- IPv6 CIDR ranges: <code>"2001:db8::/32"</code></p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_ips&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="s2">&quot;203.0.113.0/24&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="s2">&quot;198.51.100.0/24&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">      </span><span class="s2">&quot;2001:db8::/32&quot;</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="p">}</span>
+</code></pre></div></p>
+<h4 id="additional_blocked_domains-array-default"><code>additional_blocked_domains</code> (array, default: [])<a class="headerlink" href="#additional_blocked_domains-array-default" title="Permanent link">&para;</a></h4>
+<p>Additional domain names to block beyond core protections.</p>
+<p><strong>Supports:</strong>
+- <strong>Exact domain</strong>: <code>"internal.example.com"</code> - Blocks <code>internal.example.com</code> exactly
+- <strong>Subdomain matching</strong>: <code>"internal.example.com"</code> - Also blocks <code>api.internal.example.com</code>, <code>db.internal.example.com</code>
+- <strong>Wildcard patterns</strong> (NEW in v1.5.0): Use <code>*</code> and <code>?</code> for flexible pattern matching</p>
+<p><strong>Wildcard Pattern Syntax:</strong>
+- <code>*</code> - Match zero or more characters (within a domain component)
+- <code>?</code> - Match exactly one character
+- Case-insensitive matching</p>
+<p><strong>Wildcard Pattern Examples:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">      </span><span class="c1">// Exact domain + subdomain matching (traditional)</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">      </span><span class="s2">&quot;internal.example.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">      </span><span class="c1">// Wildcard patterns (NEW in v1.5.0)</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">      </span><span class="s2">&quot;*.internal.com&quot;</span><span class="p">,</span><span class="w">      </span><span class="c1">// Block all .internal.com domains (api.internal.com, db.internal.com)</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">      </span><span class="s2">&quot;admin.*&quot;</span><span class="p">,</span><span class="w">             </span><span class="c1">// Block admin.* with any suffix (admin.example.com, admin.local)</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">      </span><span class="s2">&quot;*.corp.*&quot;</span><span class="p">,</span><span class="w">            </span><span class="c1">// Block all .corp. domains (api.corp.internal, db.corp.example.com)</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">      </span><span class="s2">&quot;metadata.*&quot;</span><span class="p">,</span><span class="w">          </span><span class="c1">// Block all metadata.* endpoints (metadata.aws.com, metadata.google.internal)</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">      </span><span class="s2">&quot;*.local&quot;</span><span class="p">,</span><span class="w">             </span><span class="c1">// Block all .local domains (test.local, dev.local)</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">      </span><span class="s2">&quot;test?.example.com&quot;</span><span class="w">    </span><span class="c1">// Block test1.example.com, test2.example.com, testa.example.com</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Use Cases for Wildcard Patterns:</strong></p>
+<ol>
+<li>
+<p><strong>Block entire TLDs</strong>: <code>*.internal</code>, <code>*.local</code>, <code>*.corp</code>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.internal&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;*.local&quot;</span><span class="p">]</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Block subdomains</strong>: <code>*.admin.example.com</code>, <code>*.staging.*</code>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.admin.example.com&quot;</span><span class="p">]</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Block naming patterns</strong>: <code>metadata.*</code>, <code>admin.*</code>, <code>internal.*</code>
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;metadata.*&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;admin.*&quot;</span><span class="p">]</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Enterprise policies</strong>: Block all internal domains with single pattern
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.corp.internal&quot;</span><span class="p">]</span>
+</code></pre></div></p>
+</li>
+</ol>
+<p><strong>Pattern Matching Behavior:</strong></p>
+<ul>
+<li><code>*.internal.com</code> matches:</li>
+<li>✅ <code>api.internal.com</code></li>
+<li>✅ <code>db.internal.com</code></li>
+<li>✅ <code>cache.internal.com</code></li>
+<li>❌ <code>example.com</code></li>
+<li>
+<p>❌ <code>internal.com</code> (no prefix)</p>
+</li>
+<li>
+<p><code>admin.*</code> matches:</p>
+</li>
+<li>✅ <code>admin.example.com</code></li>
+<li>✅ <code>admin.corp.internal</code></li>
+<li>✅ <code>admin.local</code></li>
+<li>
+<p>❌ <code>api.example.com</code></p>
+</li>
+<li>
+<p><code>*.corp.*</code> matches:</p>
+</li>
+<li>✅ <code>api.corp.internal</code></li>
+<li>✅ <code>db.corp.example.com</code></li>
+<li>❌ <code>corp.internal</code> (no prefix)</li>
+<li>❌ <code>api.example.com</code></li>
+</ul>
+<p><strong>Traditional Example (exact + subdomain matching):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="p">{</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">      </span><span class="s2">&quot;internal.example.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">      </span><span class="s2">&quot;admin.local&quot;</span><span class="p">,</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">      </span><span class="s2">&quot;corp.internal&quot;</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a><span class="p">}</span>
+</code></pre></div></p>
+<h4 id="allowed_domains-array-default-new-in-v150"><code>allowed_domains</code> (array, default: []) - NEW in v1.5.0<a class="headerlink" href="#allowed_domains-array-default-new-in-v150" title="Permanent link">&para;</a></h4>
+<p><strong>Issue #252</strong>: Domain allow-list to override <code>additional_blocked_domains</code> blocks while maintaining core protections.</p>
+<p><strong>Evaluation order (deny-first approach)</strong>:
+1. ✅ Check immutable core protections (metadata endpoints, dangerous schemes, private IPs)
+2. ❌ Check deny-list (<code>additional_blocked_domains</code>)
+3. ✅ Check allow-list (<code>allowed_domains</code>) - can override step 2, <strong>NOT step 1</strong></p>
+<p><strong>Supports:</strong>
+- Exact domain: <code>"api.corp.internal"</code>
+- Subdomain matching: Allows <code>v1.api.corp.internal</code> if <code>api.corp.internal</code> is allowed</p>
+<p><strong>Use cases:</strong>
+1. <strong>Internal APIs</strong>: Allow specific internal APIs while blocking other internal domains
+2. <strong>Development servers</strong>: Allow specific dev/staging servers without allowing all localhost
+3. <strong>Partner services</strong>: Allow specific partner domains on restricted networks
+4. <strong>Granular control</strong>: Override broad domain blocks with specific exceptions</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">&quot;additional_blocked_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">      </span><span class="s2">&quot;api.corp.internal&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="s2">&quot;admin.corp.internal&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">      </span><span class="s2">&quot;secret.corp.internal&quot;</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">    </span><span class="nt">&quot;allowed_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">      </span><span class="s2">&quot;api.corp.internal&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">      </span><span class="s2">&quot;public.corp.internal&quot;</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-18-13" name="__codelineno-18-13" href="#__codelineno-18-13"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Result:</strong>
+- ✅ <code>http://api.corp.internal</code> - ALLOWED (in allow-list, overrides deny-list)
+- ✅ <code>http://public.corp.internal</code> - ALLOWED (in allow-list)
+- ✅ <code>http://v1.api.corp.internal</code> - ALLOWED (subdomain of allowed domain)
+- ❌ <code>http://admin.corp.internal</code> - BLOCKED (in deny-list, not in allow-list)
+- ❌ <code>http://secret.corp.internal</code> - BLOCKED (in deny-list, not in allow-list)</p>
+<p><strong>⚠️ CRITICAL LIMITATION - Cannot Override Immutable Protections:</strong></p>
+<p>The allow-list <strong>CANNOT</strong> override these immutable core protections:
+- ❌ <strong>Cloud metadata endpoints</strong>: <code>169.254.169.254</code>, <code>metadata.google.internal</code>, <code>metadata.goog</code>, <code>fd00:ec2::254</code>
+- ❌ <strong>Private IP ranges</strong>: <code>10.0.0.0/8</code>, <code>172.16.0.0/12</code>, <code>192.168.0.0/16</code>, <code>127.0.0.0/8</code>, <code>169.254.0.0/16</code>
+- ❌ <strong>IPv6 private</strong>: <code>::1</code>, <code>fc00::/7</code>, <code>fe80::/10</code>
+- ❌ <strong>Dangerous schemes</strong>: <code>file://</code>, <code>gopher://</code>, <code>ftp://</code>, <code>data://</code>, <code>dict://</code>, <code>ldap://</code></p>
+<p><strong>Example - Immutable protections cannot be overridden:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">&quot;allowed_domains&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">      </span><span class="s2">&quot;metadata.google.internal&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// ❌ Will NOT work - still blocked</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">      </span><span class="s2">&quot;169.254.169.254&quot;</span><span class="w">              </span><span class="c1">// ❌ Will NOT work - still blocked</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Security best practices:</strong>
+- Use allow-lists sparingly and only for known-safe domains
+- Document the business reason for each allowed domain
+- Review allow-lists regularly and remove unused entries
+- Prefer network-level controls for critical infrastructure
+- Test in staging before deploying to production</p>
+<h4 id="allow_localhost-boolean-default-false"><code>allow_localhost</code> (boolean, default: false)<a class="headerlink" href="#allow_localhost-boolean-default-false" title="Permanent link">&para;</a></h4>
+<p>Allow access to localhost (127.0.0.1, ::1) for local development.</p>
+<p><strong>Use case</strong>: Local development servers, testing environments.</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">&quot;allow_localhost&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Security warning</strong>: Only enable <code>allow_localhost</code> in development environments, never in production.</p>
+<h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h2>
+<h3 id="example-1-aws-metadata-endpoint-attack-blocked">Example 1: AWS Metadata Endpoint Attack (BLOCKED)<a class="headerlink" href="#example-1-aws-metadata-endpoint-attack-blocked" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Attacker attempts to steal AWS credentials</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>curl<span class="w"> </span>http://169.254.169.254/latest/meta-data/iam/security-credentials/
+</code></pre></div>
+<p><strong>AI Guardian blocks this with:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>🚨 BLOCKED BY POLICY
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>🚨 SSRF ATTACK DETECTED
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>Detected threat:
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>  • Reason: private IP address &#39;169.254.169.254&#39;
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>  • URL: http://169.254.169.254/latest/meta-data/iam/security-credentials/
+</code></pre></div></p>
+<h3 id="example-2-private-network-scanning-blocked">Example 2: Private Network Scanning (BLOCKED)<a class="headerlink" href="#example-2-private-network-scanning-blocked" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Attacker attempts to scan internal network</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>curl<span class="w"> </span>http://192.168.1.1/admin
+</code></pre></div>
+<p><strong>AI Guardian blocks this with:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>🚨 BLOCKED BY POLICY
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>🚨 SSRF ATTACK DETECTED
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>Detected threat:
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>  • Reason: private IP address &#39;192.168.1.1&#39;
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>  • URL: http://192.168.1.1/admin
+</code></pre></div></p>
+<h3 id="example-3-file-access-via-file-url-blocked">Example 3: File Access via file:// URL (BLOCKED)<a class="headerlink" href="#example-3-file-access-via-file-url-blocked" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Attacker attempts to read /etc/passwd</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>curl<span class="w"> </span>file:///etc/passwd
+</code></pre></div>
+<p><strong>AI Guardian blocks this with:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>🚨 BLOCKED BY POLICY
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>🚨 SSRF ATTACK DETECTED
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>Detected threat:
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>  • Reason: dangerous URL scheme &#39;file://&#39;
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>  • URL: file:///etc/passwd
+</code></pre></div></p>
+<h3 id="example-4-public-aws-service-allowed">Example 4: Public AWS Service (ALLOWED)<a class="headerlink" href="#example-4-public-aws-service-allowed" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Legitimate access to public S3 bucket</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>curl<span class="w"> </span>https://s3.amazonaws.com/my-bucket/file.txt
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># Legitimate AWS CLI command</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>aws<span class="w"> </span>s3<span class="w"> </span>ls<span class="w"> </span>s3://my-bucket/
+</code></pre></div>
+<p><strong>AI Guardian allows these</strong> - public AWS services are NOT blocked.</p>
+<h3 id="example-5-local-development-allowed-with-config">Example 5: Local Development (ALLOWED with config)<a class="headerlink" href="#example-5-local-development-allowed-with-config" title="Permanent link">&para;</a></h3>
+<p>With <code>allow_localhost: true</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Access local development server</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>curl<span class="w"> </span>http://localhost:3000/api/users
+</code></pre></div>
+<p><strong>AI Guardian allows this</strong> when <code>allow_localhost</code> is enabled.</p>
+<p>Without <code>allow_localhost</code> (default), this would be blocked.</p>
+<h2 id="false-positives">False Positives<a class="headerlink" href="#false-positives" title="Permanent link">&para;</a></h2>
+<p>SSRF protection is designed to minimize false positives:</p>
+<h3 id="not-blocked-legitimate-use">NOT Blocked (Legitimate Use)<a class="headerlink" href="#not-blocked-legitimate-use" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Public IP addresses:</strong>
+- <code>curl http://8.8.8.8</code> (Google DNS)
+- <code>curl https://1.1.1.1</code> (Cloudflare DNS)</p>
+<p>✅ <strong>Public AWS services:</strong>
+- <code>curl https://s3.amazonaws.com/bucket/file.txt</code>
+- <code>aws ec2 describe-instances</code>
+- <code>aws s3 ls</code></p>
+<p>✅ <strong>HTTPS URLs to public domains:</strong>
+- <code>curl https://api.github.com/repos</code>
+- <code>wget https://releases.ubuntu.com/22.04/ubuntu-22.04.3-desktop-amd64.iso</code></p>
+<p>✅ <strong>Commands without URLs:</strong>
+- <code>ls -la /var/log</code>
+- <code>grep "error" /tmp/app.log</code>
+- <code>find . -name "*.py"</code></p>
+<h3 id="blocked-security-threats">Blocked (Security Threats)<a class="headerlink" href="#blocked-security-threats" title="Permanent link">&para;</a></h3>
+<p>❌ <strong>Private network access:</strong>
+- <code>curl http://10.0.0.1</code>
+- <code>wget http://192.168.1.1/admin</code></p>
+<p>❌ <strong>Metadata endpoints:</strong>
+- <code>curl http://169.254.169.254/latest/meta-data/</code>
+- <code>curl http://metadata.google.internal/</code></p>
+<p>❌ <strong>Dangerous schemes:</strong>
+- <code>curl file:///etc/passwd</code>
+- <code>curl gopher://internal.server</code></p>
+<p>❌ <strong>Localhost (by default):</strong>
+- <code>curl http://localhost:8080</code>
+- <code>wget http://127.0.0.1:3000</code></p>
+<h2 id="legitimate-aws-access-vs-attacks">Legitimate AWS Access vs Attacks<a class="headerlink" href="#legitimate-aws-access-vs-attacks" title="Permanent link">&para;</a></h2>
+<p><strong>Key distinction</strong>: IP address vs domain name</p>
+<h3 id="public-aws-services-allowed">Public AWS Services (ALLOWED)<a class="headerlink" href="#public-aws-services-allowed" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># ✅ Public S3 endpoint (domain name, resolves to public IP)</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>curl<span class="w"> </span>https://s3.amazonaws.com/my-bucket/file.txt
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># ✅ AWS CLI (uses public AWS APIs)</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>aws<span class="w"> </span>ec2<span class="w"> </span>describe-instances
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>aws<span class="w"> </span>s3<span class="w"> </span>ls<span class="w"> </span>s3://my-bucket/
+</code></pre></div>
+<h3 id="metadata-endpoints-blocked">Metadata Endpoints (BLOCKED)<a class="headerlink" href="#metadata-endpoints-blocked" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="c1"># ❌ AWS metadata endpoint (private IP, credential theft)</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a>curl<span class="w"> </span>http://169.254.169.254/latest/meta-data/
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="c1"># ❌ Direct access to instance metadata</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>curl<span class="w"> </span>http://169.254.169.254/latest/user-data
+</code></pre></div>
+<p><strong>Why the difference?</strong>
+- Public AWS services use public domain names (s3.amazonaws.com) that resolve to public IPs
+- Metadata endpoints use private IP address (169.254.169.254) for instance-local access only
+- Legitimate AWS usage never requires accessing 169.254.169.254 from Bash commands</p>
+<h2 id="comprehensive-ssrf-protection-with-openshell">Comprehensive SSRF Protection with OpenShell<a class="headerlink" href="#comprehensive-ssrf-protection-with-openshell" title="Permanent link">&para;</a></h2>
+<p>For production deployments, ai-guardian's pattern-based SSRF detection should be complemented with <strong>runtime sandboxing</strong> using <a href="https://github.com/NVIDIA/OpenShell">OpenShell</a>.</p>
+<h3 id="why-openshell">Why OpenShell?<a class="headerlink" href="#why-openshell" title="Permanent link">&para;</a></h3>
+<p>OpenShell provides <strong>real network isolation</strong> via policy-driven sandboxing:
+- Intercepts ALL outbound network calls (not just command strings)
+- Policy engine operates from application layer to kernel
+- Hot-reloadable policies without container restarts
+- Works with Claude Code, GitHub Copilot, and other AI agents</p>
+<h3 id="architecture-comparison">Architecture Comparison<a class="headerlink" href="#architecture-comparison" title="Permanent link">&para;</a></h3>
+<p><strong>ai-guardian</strong> (Hook-Based):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a>User → PreToolUse Hook → Pattern Match → Block if dangerous URL
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a>       ↓
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>       Tool Executes → ❌ Cannot see internal network calls
+</code></pre></div></p>
+<p><strong>OpenShell</strong> (Runtime Sandbox):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>User → Tool Executes → Network Call → Policy Engine → Block if violates policy
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>                                      ↑
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>                                      Intercepts at kernel level
+</code></pre></div></p>
+<h3 id="example-policy">Example Policy<a class="headerlink" href="#example-policy" title="Permanent link">&para;</a></h3>
+<p>OpenShell uses declarative YAML for network policies:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="c1"># openshell-policy.yaml</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="nt">network</span><span class="p">:</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">  </span><span class="nt">outbound</span><span class="p">:</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">    </span><span class="c1"># Block metadata endpoints</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;169.254.169.254&quot;</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a>
+<a id="__codelineno-33-8" name="__codelineno-33-8" href="#__codelineno-33-8"></a><span class="w">    </span><span class="c1"># Block private IPs</span>
+<a id="__codelineno-33-9" name="__codelineno-33-9" href="#__codelineno-33-9"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+<a id="__codelineno-33-10" name="__codelineno-33-10" href="#__codelineno-33-10"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;10.0.0.0/8&quot;</span>
+<a id="__codelineno-33-11" name="__codelineno-33-11" href="#__codelineno-33-11"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+<a id="__codelineno-33-12" name="__codelineno-33-12" href="#__codelineno-33-12"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;172.16.0.0/12&quot;</span>
+<a id="__codelineno-33-13" name="__codelineno-33-13" href="#__codelineno-33-13"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+<a id="__codelineno-33-14" name="__codelineno-33-14" href="#__codelineno-33-14"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;192.168.0.0/16&quot;</span>
+<a id="__codelineno-33-15" name="__codelineno-33-15" href="#__codelineno-33-15"></a>
+<a id="__codelineno-33-16" name="__codelineno-33-16" href="#__codelineno-33-16"></a><span class="w">    </span><span class="c1"># Allow specific public APIs</span>
+<a id="__codelineno-33-17" name="__codelineno-33-17" href="#__codelineno-33-17"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow</span>
+<a id="__codelineno-33-18" name="__codelineno-33-18" href="#__codelineno-33-18"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;api.github.com&quot;</span>
+<a id="__codelineno-33-19" name="__codelineno-33-19" href="#__codelineno-33-19"></a><span class="w">      </span><span class="nt">methods</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">GET</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">POST</span><span class="p p-Indicator">]</span>
+<a id="__codelineno-33-20" name="__codelineno-33-20" href="#__codelineno-33-20"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">allow</span>
+<a id="__codelineno-33-21" name="__codelineno-33-21" href="#__codelineno-33-21"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;*.googleapis.com&quot;</span>
+<a id="__codelineno-33-22" name="__codelineno-33-22" href="#__codelineno-33-22"></a>
+<a id="__codelineno-33-23" name="__codelineno-33-23" href="#__codelineno-33-23"></a><span class="w">    </span><span class="c1"># Default deny</span>
+<a id="__codelineno-33-24" name="__codelineno-33-24" href="#__codelineno-33-24"></a><span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">action</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">deny</span>
+<a id="__codelineno-33-25" name="__codelineno-33-25" href="#__codelineno-33-25"></a><span class="w">      </span><span class="nt">destination</span><span class="p">:</span><span class="w"> </span><span class="s">&quot;*&quot;</span>
+</code></pre></div>
+<h3 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="c1"># Install OpenShell</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>docker<span class="w"> </span>pull<span class="w"> </span>ghcr.io/nvidia/openshell:latest
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="c1"># Run agent in OpenShell sandbox</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a>openshell<span class="w"> </span>run<span class="w"> </span>--policy<span class="w"> </span>openshell-policy.yaml<span class="w"> </span>--<span class="w"> </span>claude-code
+</code></pre></div>
+<h3 id="defense-in-depth-strategy">Defense in Depth Strategy<a class="headerlink" href="#defense-in-depth-strategy" title="Permanent link">&para;</a></h3>
+<p><strong>Layer 1: ai-guardian</strong> (IDE hooks)
+- Catches obvious mistakes in Bash commands
+- Fast, lightweight pattern matching
+- Educational value</p>
+<p><strong>Layer 2: OpenShell</strong> (Runtime sandbox)
+- Comprehensive network isolation
+- Policy-driven enforcement
+- Catches everything ai-guardian misses</p>
+<p><strong>Layer 3: Infrastructure</strong> (Network controls)
+- Firewall egress rules
+- VPC/subnet isolation
+- Cloud provider network policies</p>
+<h3 id="when-to-use-openshell">When to Use OpenShell<a class="headerlink" href="#when-to-use-openshell" title="Permanent link">&para;</a></h3>
+<p><strong>Required for</strong>:
+- ✅ Production agent deployments
+- ✅ Zero-trust environments
+- ✅ Compliance requirements (SOC 2, HIPAA)
+- ✅ Multi-tenant systems</p>
+<p><strong>Optional for</strong>:
+- ⚠️ Local development (overhead acceptable)
+- ⚠️ High-security development teams
+- ⚠️ Testing untrusted MCP servers</p>
+<h3 id="learn-more">Learn More<a class="headerlink" href="#learn-more" title="Permanent link">&para;</a></h3>
+<ul>
+<li><a href="https://github.com/NVIDIA/OpenShell">OpenShell GitHub</a></li>
+<li><a href="https://nvidia.github.io/OpenShell/">OpenShell Documentation</a></li>
+<li>Compatible with: Claude Code, GitHub Copilot, OpenCode</li>
+</ul>
+<hr />
+<h2 id="edge-cases-and-faqs">Edge Cases and FAQs<a class="headerlink" href="#edge-cases-and-faqs" title="Permanent link">&para;</a></h2>
+<h3 id="q-can-i-disable-ssrf-protection-for-specific-commands">Q: Can I disable SSRF protection for specific commands?<a class="headerlink" href="#q-can-i-disable-ssrf-protection-for-specific-commands" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Not currently. SSRF protection applies to all Bash commands. Use action modes instead:
+- <code>"action": "warn"</code> - Shows warning but allows execution
+- <code>"action": "log-only"</code> - Logs but doesn't notify user</p>
+<h3 id="q-what-about-dns-rebinding-attacks">Q: What about DNS rebinding attacks?<a class="headerlink" href="#q-what-about-dns-rebinding-attacks" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> AI Guardian does NOT perform DNS resolution (by design). This avoids:
+- Performance overhead
+- Network dependencies
+- TOCTOU (Time-of-Check-Time-of-Use) issues</p>
+<p>This means a public domain that resolves to a private IP would bypass protection. This is a known limitation. For complete protection, combine with:
+- Network egress filtering
+- DNS filtering
+- Runtime monitoring</p>
+<h3 id="q-can-i-allow-specific-private-ips">Q: Can I allow specific private IPs?<a class="headerlink" href="#q-can-i-allow-specific-private-ips" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Core protections cannot be disabled. However, you can use action modes:
+- Set <code>"allow_localhost": true</code> to allow localhost specifically
+- Set <code>"action": "warn"</code> globally and approve on a case-by-case basis</p>
+<h3 id="q-what-about-ipv6-metadata-endpoints">Q: What about IPv6 metadata endpoints?<a class="headerlink" href="#q-what-about-ipv6-metadata-endpoints" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> Fully supported. AI Guardian blocks:
+- <code>fd00:ec2::254</code> (AWS IPv6 metadata)
+- All IPv6 private ranges (fc00::/7, fe80::/10)
+- IPv6 loopback (::1)</p>
+<h3 id="q-performance-impact">Q: Performance impact?<a class="headerlink" href="#q-performance-impact" title="Permanent link">&para;</a></h3>
+<p><strong>A:</strong> &lt;1ms overhead per Bash command. URL extraction and IP validation are highly optimized.</p>
+<h3 id="q-can-attackers-bypass-this">Q: Can attackers bypass this?<a class="headerlink" href="#q-can-attackers-bypass-this" title="Permanent link">&para;</a></h3>
+<p><strong>Known bypass vectors:</strong>
+- DNS rebinding (domain resolves to private IP)
+- URL redirects (server redirects to metadata endpoint)
+- URL shorteners (obscure destination)</p>
+<p><strong>Mitigations:</strong>
+- AI Guardian blocks direct access (first line of defense)
+- Combine with network egress filtering (second line)
+- Use runtime monitoring (third line)</p>
+<h2 id="credits">Credits<a class="headerlink" href="#credits" title="Permanent link">&para;</a></h2>
+<p>SSRF protection inspired by:
+- <strong>Hermes Security Framework</strong>: https://github.com/fullsend-ai/experiments/tree/main/hermes-security-patterns
+- Validated against real-world SSRF attack payloads from Hermes testing</p>
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../README.md">README.md</a> - Main documentation</li>
+<li><a href="../../CHANGELOG.md">CHANGELOG.md</a> - Version history</li>
+<li><a href="../../TOOL_POLICY/">Tool Policy</a> - Permission system</li>
+<li><a href="../PROMPT_INJECTION/">Prompt Injection</a> - Prompt injection detection</li>
+</ul>
+<h2 id="security-notes">Security Notes<a class="headerlink" href="#security-notes" title="Permanent link">&para;</a></h2>
+<p><strong>Defense in Depth</strong>: SSRF protection is ONE layer of security. Combine with:
+- ✅ Network egress filtering
+- ✅ DNS filtering
+- ✅ Runtime monitoring
+- ✅ Principle of least privilege
+- ✅ Code review</p>
+<p><strong>Pattern-Based Filtering Limitations</strong>:
+- Hook-based: Only inspects command strings and tool parameters
+- Cannot see MCP server internal network calls
+- Cannot intercept runtime network traffic
+- Does not perform DNS resolution (by design)
+- Cannot detect URL redirects during execution
+- Cannot detect DNS rebinding attacks
+- Cannot detect dynamic URL construction inside tools</p>
+<p><strong>What This Means</strong>:
+- ai-guardian catches obvious SSRF attempts in command strings
+- It does NOT provide comprehensive network security
+- For production deployments, use network-level controls and runtime sandboxing (see OpenShell above)</p>
+<p><strong>Fail-Closed</strong>: SSRF protection fails closed on errors - if URL parsing fails, the command is blocked.</p>
+<p><strong>No Warranty</strong>: This software is provided "AS IS" under the Apache 2.0 License.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

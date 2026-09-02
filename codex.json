@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "ai-guardian": {
+      "args": [
+        "mcp-server"
+      ],
+      "command": "/Users/dvernier/.local/bin/ai-guardian"
+    }
+  }
+}

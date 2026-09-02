@@ -1,0 +1,3737 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/">
+      
+      
+        <link rel="prev" href="documentation/">
+      
+      
+        <link rel="next" href="DEVELOPER_GUIDE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Home - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ai-guardian" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#security-disclaimer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Disclaimer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Configure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Open the Console
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-line-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Line Install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-setup-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Setup Does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-tray" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon &amp; Tray
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-behavior-no-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Behavior (No Configuration File)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-locations-precedence-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Locations (Precedence Order)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup Command
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Dependencies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional Dependencies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-install-by-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Install by Platform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAQ
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acknowledgments
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="." class="md-nav__link md-nav__link--active">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link md-nav__link--active" for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#security-disclaimer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Disclaimer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Configure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-open-the-console" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Open the Console
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer Install
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation Options
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Installation Options">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#one-line-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One-Line Install
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-setup-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Setup Does
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-tray" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon &amp; Tray
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#security-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Profiles
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#default-behavior-no-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Default Behavior (No Configuration File)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-locations-precedence-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Locations (Precedence Order)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup-command" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup Command
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional Dependencies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optional Dependencies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-install-by-platform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Install by Platform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#contributing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Contributing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAQ
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#license" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        License
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Acknowledgments
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ai-guardian">AI Guardian<a class="headerlink" href="#ai-guardian" title="Permanent link">&para;</a></h1>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+</p>
+
+<blockquote>
+<p>AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets</p>
+</blockquote>
+<p><a href="https://opensource.org/licenses/Apache-2.0"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" /></a>
+<a href="https://www.python.org/downloads/"><img alt="Python 3.9+" src="https://img.shields.io/badge/python-3.9+-blue.svg" /></a>
+<a href="https://pypi.org/project/ai-guardian/"><img alt="PyPI version" src="https://badge.fury.io/py/ai-guardian.svg" /></a></p>
+<p>AI Guardian provides comprehensive protection for AI IDE interactions through multiple security layers.</p>
+<h2 id="security-disclaimer">Security Disclaimer<a class="headerlink" href="#security-disclaimer" title="Permanent link">&para;</a></h2>
+<p><strong>AI Guardian is not a silver bullet</strong> and cannot guarantee detection of all security threats.</p>
+<ul>
+<li><strong>Prompt injection detection</strong> may miss novel or obfuscated attacks</li>
+<li><strong>Secret scanning</strong> depends on scanner patterns and may miss custom secret formats</li>
+<li><strong>Attackers evolve continuously</strong> — new bypass techniques emerge constantly</li>
+<li><strong>Fail-open by design</strong> — prioritizes availability over security (errors allow operations)</li>
+</ul>
+<p><strong>Use AI Guardian as ONE layer in a defense-in-depth security strategy, not as your only protection.</strong></p>
+<p>Combine with:
+- Code review processes
+- CI/CD security scanning
+- Network security (firewalls, egress rules)
+- Secret management (Vault, AWS Secrets Manager)</p>
+<p>See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md">Security Design</a> for limitations and architecture.</p>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<h3 id="1-install">1. Install<a class="headerlink" href="#1-install" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>ai-guardian<span class="w">        </span><span class="c1"># recommended</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="c1"># or: pip install ai-guardian</span>
+</code></pre></div>
+<h3 id="2-configure">2. Configure<a class="headerlink" href="#2-configure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w"> </span>--create-config<span class="w"> </span>--install-scanner
+</code></pre></div>
+<h3 id="3-start">3. Start<a class="headerlink" href="#3-start" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w"> </span>-b<span class="w">        </span><span class="c1"># background daemon (faster hook processing)</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b<span class="w">          </span><span class="c1"># system tray (optional — manage daemons visually)</span>
+</code></pre></div>
+<h3 id="4-open-the-console">4. Open the Console<a class="headerlink" href="#4-open-the-console" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>ai-guardian<span class="w"> </span>console<span class="w"> </span>--web<span class="w">                </span><span class="c1"># web console (recommended, Python 3.10+)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>ai-guardian<span class="w"> </span>console<span class="w"> </span><span class="o">(</span>or<span class="w"> </span>ai-guardian<span class="w"> </span>tui<span class="o">)</span><span class="w"> </span><span class="c1"># terminal console (all Python versions)</span>
+</code></pre></div>
+<p>Manage settings, view violations, and scan projects. See <a href="docs/CONSOLE.md">docs/CONSOLE.md</a>.</p>
+<p>Done. Open your IDE and start coding — ai-guardian protects automatically.</p>
+<blockquote>
+<p><strong>MCP servers and Skills are blocked by default.</strong> Built-in tools (Bash, Read, Write, Edit) are allowed and scanned by hooks, but MCP servers and Skills require explicit allow rules. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#default-security-posture">Tool Policy</a> for why and how to allow them.</p>
+</blockquote>
+<h2 id="developer-install">Developer Install<a class="headerlink" href="#developer-install" title="Permanent link">&para;</a></h2>
+<p>For contributors cloning the repo:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>git<span class="w"> </span>clone<span class="w"> </span>https://github.com/RedHatProductSecurity/ai-guardian.git
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="nb">cd</span><span class="w"> </span>ai-guardian
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>uv<span class="w"> </span>venv
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="nb">source</span><span class="w"> </span>.venv/bin/activate<span class="w">          </span><span class="c1"># Windows: .venv\Scripts\activate</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>uv<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-e<span class="w"> </span>.<span class="o">[</span>dev<span class="o">]</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Run tests</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>uv<span class="w"> </span>run<span class="w"> </span>--extra<span class="w"> </span>dev<span class="w"> </span>python<span class="w"> </span>-m<span class="w"> </span>pytest<span class="w"> </span>tests/test_&lt;module&gt;.py<span class="w"> </span>-v
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="c1"># Run linters</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a>black<span class="w"> </span>--target-version<span class="w"> </span>py39<span class="w"> </span>src/ai_guardian/<span class="w"> </span>tests/
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a>ruff<span class="w"> </span>check<span class="w"> </span>src/ai_guardian/<span class="w"> </span>tests/<span class="w"> </span>--fix
+</code></pre></div>
+<p>See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> and <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/AGENTS.md">AGENTS.md</a> for full development guidelines.</p>
+<blockquote>
+<p><strong>Warning:</strong> The <code>main</code> branch contains unreleased development code. Always install stable releases from PyPI (<code>uv tool install ai-guardian</code> or <code>pip install ai-guardian</code>). Do not <code>git clone</code> + <code>pip install -e .</code> for production use.</p>
+</blockquote>
+<h2 id="installation-options">Installation Options<a class="headerlink" href="#installation-options" title="Permanent link">&para;</a></h2>
+<h3 id="one-line-install">One-Line Install<a class="headerlink" href="#one-line-install" title="Permanent link">&para;</a></h3>
+<p>Creates config, installs scanner, and sets up hooks automatically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Linux / macOS (auto-detects uv → venv → pip)</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash<span class="w"> </span>-s<span class="w"> </span>--<span class="w"> </span>--ide<span class="w"> </span>claude
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># Force a specific install method</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash<span class="w"> </span>-s<span class="w"> </span>--<span class="w"> </span>--uv<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w">    </span><span class="c1"># uv tool install (fastest)</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash<span class="w"> </span>-s<span class="w"> </span>--<span class="w"> </span>--venv<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w">  </span><span class="c1"># venv + pip</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash<span class="w"> </span>-s<span class="w"> </span>--<span class="w"> </span>--pip<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w">   </span><span class="c1"># bare pip</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="c1"># Windows (PowerShell)</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>irm<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1<span class="w"> </span><span class="p">|</span><span class="w"> </span>iex
+</code></pre></div>
+<h3 id="container">Container<a class="headerlink" href="#container" title="Permanent link">&para;</a></h3>
+<p>A pre-built container image is published to <a href="https://quay.io/redhatproductsecurity/ai-guardian">quay.io/redhatproductsecurity/ai-guardian</a> with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Recommended — run.sh handles auth, port mapping, and ToS consent</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/container/run.sh<span class="w"> </span>-o<span class="w"> </span>run.sh
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>chmod<span class="w"> </span>+x<span class="w"> </span>run.sh
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>sk-ant-...<span class="w"> </span><span class="nv">ACCEPT_PROPRIETARY_TOS</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="w">    </span>./run.sh<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w"> </span>--repo<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Or manually with podman/docker</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>podman<span class="w"> </span>pull<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:latest
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>podman<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>-p<span class="w"> </span><span class="m">63152</span>:63152<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="w">    </span>-v<span class="w"> </span><span class="k">$(</span><span class="nb">pwd</span><span class="k">)</span>:/workspace:z<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="w">    </span>-e<span class="w"> </span><span class="nv">AI_GUARDIAN_IDE</span><span class="o">=</span>claude<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a><span class="w">    </span>-e<span class="w"> </span><span class="nv">ANTHROPIC_API_KEY</span><span class="o">=</span>sk-ant-...<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="w">    </span>-e<span class="w"> </span><span class="nv">ACCEPT_PROPRIETARY_TOS</span><span class="o">=</span><span class="nb">true</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-6-14" name="__codelineno-6-14" href="#__codelineno-6-14"></a><span class="w">    </span>quay.io/redhatproductsecurity/ai-guardian:latest
+</code></pre></div>
+<p><code>ACCEPT_PROPRIETARY_TOS=true</code> accepts the <a href="https://www.anthropic.com/legal/consumer-terms">Claude Code Terms of Service</a> and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="c1"># Pinned release</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>podman<span class="w"> </span>pull<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:v1.16.0
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>podman<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>-p<span class="w"> </span><span class="m">63152</span>:63152<span class="w"> </span>-e<span class="w"> </span><span class="nv">AI_GUARDIAN_IDE</span><span class="o">=</span>claude<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:v1.16.0
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="c1"># Or build from source</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>podman<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>ai-guardian<span class="w"> </span>container/
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>podman<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>-p<span class="w"> </span><span class="m">63152</span>:63152<span class="w"> </span>-e<span class="w"> </span><span class="nv">AI_GUARDIAN_IDE</span><span class="o">=</span>claude<span class="w"> </span>ai-guardian
+</code></pre></div>
+<p>See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md">container/README.md</a> for IDE selection, Vertex AI auth, and multi-arch details.</p>
+<h3 id="what-setup-does">What Setup Does<a class="headerlink" href="#what-setup-does" title="Permanent link">&para;</a></h3>
+<p>The <code>setup</code> command:
+- Installs a scanner engine (gitleaks)
+- Creates <code>ai-guardian.json</code> config with secure defaults
+- Installs IDE hooks (PreToolUse, PostToolUse, UserPromptSubmit)
+- Sets up the MCP security advisor for AI-aware protection</p>
+<h3 id="daemon-tray">Daemon &amp; Tray<a class="headerlink" href="#daemon-tray" title="Permanent link">&para;</a></h3>
+<p>The daemon provides faster hook processing. The tray discovers and manages daemons across local, Podman/Docker containers, and Kubernetes pods:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w"> </span>-b<span class="w">       </span><span class="c1"># Start headless daemon (background: -b)</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b<span class="w">         </span><span class="c1"># Start system tray in background</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>stop<span class="w">             </span><span class="c1"># Stop the tray</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>--install<span class="w"> </span>--autostart<span class="w">  </span><span class="c1"># Add desktop shortcut + launch on login</span>
+</code></pre></div>
+<p>The tray auto-discovers running daemons and shows per-daemon submenus with Statistics, Console, Pause/Resume, and Start/Stop controls. On first launch, the tray will offer to create a desktop shortcut automatically. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md">Multi-Daemon Tray</a> for full documentation.</p>
+<blockquote>
+<p><strong>Linux + Podman</strong>: Container discovery requires the Podman socket to be active and <code>DOCKER_HOST</code> set:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>systemctl<span class="w"> </span>--user<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>podman.socket
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DOCKER_HOST</span><span class="o">=</span>unix://<span class="k">$(</span>podman<span class="w"> </span>info<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Host.RemoteSocket.Path}}&#39;</span><span class="k">)</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b
+</code></pre></div>
+macOS with Podman Desktop sets <code>DOCKER_HOST</code> automatically. See <a href="docs/MULTI_DAEMON_TRAY.md#linux-podman">Multi-Daemon Tray</a> for details.</p>
+<p><strong>Breaking change in v1.8.0</strong>: <code>daemon start</code> no longer launches the tray automatically. Run <code>ai-guardian tray start -b</code> separately, or use <code>ai-guardian tray --install --autostart</code> for a permanent desktop shortcut with login startup.</p>
+</blockquote>
+<h3 id="security-profiles">Security Profiles<a class="headerlink" href="#security-profiles" title="Permanent link">&para;</a></h3>
+<p>Choose a profile that matches your environment:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@minimal<span class="w"> </span>--install-scanner
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@strict<span class="w"> </span>--install-scanner
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Secrets</th>
+<th>PII</th>
+<th>Prompt Injection</th>
+<th>SSRF</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>@minimal</td>
+<td>block</td>
+<td>warn</td>
+<td>low</td>
+<td>warn</td>
+</tr>
+<tr>
+<td>@standard (default)</td>
+<td>block</td>
+<td>block</td>
+<td>medium</td>
+<td>block</td>
+</tr>
+<tr>
+<td>@strict</td>
+<td>block</td>
+<td>block</td>
+<td>high</td>
+<td>block</td>
+</tr>
+<tr>
+<td>@moderator</td>
+<td>ask</td>
+<td>ask</td>
+<td>medium</td>
+<td>ask</td>
+</tr>
+</tbody>
+</table>
+<h2 id="features">Features<a class="headerlink" href="#features" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Description</th>
+<th>Docs</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secret Scanning</td>
+<td>Multi-layered detection of API keys, tokens, passwords</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md">docs/security/SECRET_SCANNING.md</a></td>
+</tr>
+<tr>
+<td>PII Detection</td>
+<td>Detect personally identifiable information</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md">docs/security/SECRET_SCANNING.md</a></td>
+</tr>
+<tr>
+<td>Prompt Injection</td>
+<td>Language-aware detection with tree-sitter AST parsing and configurable sensitivity</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md">docs/security/PROMPT_INJECTION.md</a></td>
+</tr>
+<tr>
+<td>Image Scanning</td>
+<td>OCR-based secret and PII detection in screenshots and images</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md">docs/security/IMAGE_SCANNING.md</a></td>
+</tr>
+<tr>
+<td>Unicode Attack Detection</td>
+<td>Zero-width chars, bidi override, homoglyphs</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md">docs/security/UNICODE_ATTACKS.md</a></td>
+</tr>
+<tr>
+<td>SSRF Protection</td>
+<td>Block private IPs, cloud metadata, dangerous schemes</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md">docs/security/SSRF_PROTECTION.md</a></td>
+</tr>
+<tr>
+<td>Config File Scanning</td>
+<td>Detect exfiltration of sensitive config files</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md">docs/security/CREDENTIAL_EXFILTRATION.md</a></td>
+</tr>
+<tr>
+<td>Directory Blocking</td>
+<td><code>.ai-read-deny</code> markers + config-based rules</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md">docs/security/DIRECTORY_RULES.md</a></td>
+</tr>
+<tr>
+<td>Tool Permissions</td>
+<td>Allow/deny lists for Skills, MCP, Bash, Write</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md">docs/TOOL_POLICY.md</a></td>
+</tr>
+<tr>
+<td>Violation Logging</td>
+<td>JSON audit trail of all blocked operations</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md">docs/VIOLATION_LOGGING.md</a></td>
+</tr>
+<tr>
+<td>Sanitize Command</td>
+<td>Clean sensitive data from files</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md">docs/security/SECRET_REDACTION.md</a></td>
+</tr>
+<tr>
+<td>Interactive Console</td>
+<td>TUI for managing configuration visually</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md">docs/CONSOLE.md</a></td>
+</tr>
+<tr>
+<td>Scanner Management</td>
+<td>Install and manage 8 scanner engines (including built-in toml-patterns)</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md">docs/SCANNER_INSTALLATION.md</a></td>
+</tr>
+<tr>
+<td>Pre-commit Hook</td>
+<td>Scan staged files for secrets before commit</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md">docs/PRE_COMMIT.md</a></td>
+</tr>
+<tr>
+<td>Inline Annotations</td>
+<td>Suppress false positives with <code>ai-guardian:allow</code> and block annotations</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md">docs/ANNOTATIONS.md</a></td>
+</tr>
+<tr>
+<td>Self-Protection</td>
+<td>Prevents AI from disabling its own security controls</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md">docs/SECURITY_DESIGN.md</a></td>
+</tr>
+<tr>
+<td>MCP Security Advisor</td>
+<td>Read-only security tools for AI agents (proactive checks)</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md">docs/MCP_SERVER.md</a></td>
+</tr>
+<tr>
+<td>MCP Security Scanning</td>
+<td>Audit MCP server configs and source code for supply chain risks</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning">docs/MCP_SERVER.md</a></td>
+</tr>
+<tr>
+<td>Project Config Overlay</td>
+<td>Per-repo config with immutable fields and global-only section protection</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Multi-Daemon Tray</td>
+<td>Discover and manage daemons across local, Podman/Docker, and Kubernetes</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md">docs/MULTI_DAEMON_TRAY.md</a></td>
+</tr>
+<tr>
+<td>Desktop Shortcut &amp; Autostart</td>
+<td>Install tray as desktop app with optional login startup</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts">docs/MULTI_DAEMON_TRAY.md</a></td>
+</tr>
+<tr>
+<td>Tray Plugins</td>
+<td>Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins">docs/MULTI_DAEMON_TRAY.md</a></td>
+</tr>
+<tr>
+<td>TOML Pattern Engine</td>
+<td>Built-in Python scanner with 425 pre-compiled patterns, no binary required</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md">docs/TOML_PATTERNS.md</a></td>
+</tr>
+<tr>
+<td>Multi-Agent Support</td>
+<td>Hook adapters for 14 AI coding agents with normalized input/output</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md">docs/AGENT_SUPPORT.md</a></td>
+</tr>
+<tr>
+<td>Container Image</td>
+<td>UBI-based image with all headless IDEs and scanners, published to quay.io</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md">container/README.md</a></td>
+</tr>
+<tr>
+<td>Supply Chain Scanning</td>
+<td>Detect malicious patterns in agent hooks, MCP configs, and plugin files</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Context Poisoning Detection</td>
+<td>Detect persistent instruction injection in conversation context (OWASP LLM03)</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md">docs/security/CONTEXT_POISONING.md</a></td>
+</tr>
+<tr>
+<td>Security SDK &amp; REST API</td>
+<td>Programmatic security checking for Python agents and multi-language support</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md">docs/SDK.md</a></td>
+</tr>
+<tr>
+<td>Secret Liveness Validation</td>
+<td>Verify detected secrets are still active via provider APIs</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Hook Latency Metrics</td>
+<td>Per-hook timing with console dashboard for performance analysis</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking">docs/HOOKS.md</a></td>
+</tr>
+<tr>
+<td>OTEL Observability</td>
+<td>OpenTelemetry trace export for SDK agent runs and interactive sessions</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md">docs/OBSERVABILITY.md</a></td>
+</tr>
+<tr>
+<td>Canary Token Detection</td>
+<td>Detect user-registered tripwire values in AI output to catch data exfiltration</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Offensive Language Scanner</td>
+<td>Detect profanity, slurs, and non-inclusive terminology in code and comments</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Exfiltration Behavior Detection</td>
+<td>Detect bash commands that steal credentials via curl, base64, SSH key exfil</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md">docs/security/CREDENTIAL_EXFILTRATION.md</a></td>
+</tr>
+<tr>
+<td>Code Security Scanning</td>
+<td>Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection)</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md">docs/SCANNER_INSTALLATION.md</a></td>
+</tr>
+<tr>
+<td>Dummy Agent</td>
+<td>LLM-free hook testing via interactive REPL with YAML scenario files</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md">docs/AGENT_SUPPORT.md</a></td>
+</tr>
+<tr>
+<td>Kubernetes Deployment</td>
+<td>Kustomize manifests for Kind, OpenShift, and production deployments</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md">docs/kubernetes.md</a></td>
+</tr>
+<tr>
+<td>Security Instructions</td>
+<td>Configurable agent context injection rules via TUI and web console</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Transcript Scanning</td>
+<td>Scan IDE conversation transcripts for secrets/PII across 7+ IDEs</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability">docs/AGENT_SUPPORT.md</a></td>
+</tr>
+<tr>
+<td>LeakTK Listen Mode</td>
+<td>Event-driven scanning with 40x latency reduction vs polling</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md">docs/SCANNER_INSTALLATION.md</a></td>
+</tr>
+<tr>
+<td>Zero-Config Onboarding</td>
+<td><code>init --scan</code> scans the project and generates a tuned config</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a></td>
+</tr>
+<tr>
+<td>Language-Aware FP Suppression</td>
+<td>Tree-sitter AST parsing reduces false positives in code</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md">docs/security/PROMPT_INJECTION.md</a></td>
+</tr>
+<tr>
+<td>ML Prompt Injection Setup</td>
+<td>One-command <code>ai-guardian ml setup</code> installs model + dependencies</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md">docs/security/PROMPT_INJECTION.md</a></td>
+</tr>
+<tr>
+<td>Crush IDE Support</td>
+<td>Hook adapter for Charmbracelet Crush with MCP advisory</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md">docs/AGENT_SUPPORT.md</a></td>
+</tr>
+<tr>
+<td>Event-Driven Tray Updates</td>
+<td>Tray refreshes on daemon state changes instead of polling</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md">docs/MULTI_DAEMON_TRAY.md</a></td>
+</tr>
+<tr>
+<td>Scan &amp; Configure UI</td>
+<td>Web console workflow to scan a project and generate config</td>
+<td><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md">docs/CONSOLE.md</a></td>
+</tr>
+</tbody>
+</table>
+<h2 id="default-behavior-no-configuration-file">Default Behavior (No Configuration File)<a class="headerlink" href="#default-behavior-no-configuration-file" title="Permanent link">&para;</a></h2>
+<p>ai-guardian provides protection <strong>immediately</strong> with zero configuration:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secret scanning</td>
+<td>Enabled</td>
+<td>Built-in <code>toml-patterns</code> scanner works without external tools</td>
+</tr>
+<tr>
+<td>Prompt injection detection</td>
+<td>Enabled</td>
+<td>Heuristic detector</td>
+</tr>
+<tr>
+<td>Config file scanning</td>
+<td>Enabled</td>
+<td>Detects exfiltration patterns</td>
+</tr>
+<tr>
+<td>SSRF protection</td>
+<td>Enabled</td>
+<td>Blocks private IPs, metadata endpoints</td>
+</tr>
+<tr>
+<td>Immutable file protection</td>
+<td>Enabled</td>
+<td>Cannot be disabled</td>
+</tr>
+<tr>
+<td><code>.ai-read-deny</code> markers</td>
+<td>Enabled</td>
+<td>Always respected</td>
+</tr>
+<tr>
+<td>Violation logging</td>
+<td>Enabled</td>
+<td>Logs to <code>~/.local/state/ai-guardian/violations.jsonl</code></td>
+</tr>
+<tr>
+<td>Built-in tool permissions</td>
+<td>Allowed</td>
+<td>Bash, Read, Write, Edit — protected by hooks</td>
+</tr>
+<tr>
+<td>MCP server permissions</td>
+<td><strong>Blocked</strong></td>
+<td>Require explicit allow rules (third-party code)</td>
+</tr>
+<tr>
+<td>Skill permissions</td>
+<td><strong>Blocked</strong></td>
+<td>Require explicit allow rules (can override AI behavior)</td>
+</tr>
+<tr>
+<td>Directory rules</td>
+<td>Allow all</td>
+<td>Configure <code>directory_rules</code> to restrict</td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Config file: <code>~/.config/ai-guardian/ai-guardian.json</code> (or <code>$XDG_CONFIG_HOME/ai-guardian/</code>)</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w">                          </span><span class="c1"># Secure defaults (Skills/MCP blocked)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--permissive<span class="w">              </span><span class="c1"># Permissive (all tools allowed)</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@minimal<span class="w">        </span><span class="c1"># Personal projects, low friction</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@strict<span class="w">         </span><span class="c1"># Enterprise SOC2/compliance</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@moderator<span class="w">      </span><span class="c1"># Human-in-the-loop, ask on every finding</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--list-profiles<span class="w">                           </span><span class="c1"># List available profiles</span>
+</code></pre></div>
+<ul>
+<li><strong>Example config</strong>: <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/ai-guardian-example.json">ai-guardian-example.json</a></li>
+<li><strong>JSON Schema</strong>: <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/ai-guardian-config.schema.json">ai-guardian-config.schema.json</a> (IDE autocomplete + runtime validation)</li>
+<li><strong>Ignore file schema</strong>: <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json">aiguardignore.schema.json</a> (VS Code Taplo validation for <code>.aiguardignore.toml</code>)</li>
+<li><strong>Full reference</strong>: <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a></li>
+</ul>
+<h3 id="configuration-locations-precedence-order">Configuration Locations (Precedence Order)<a class="headerlink" href="#configuration-locations-precedence-order" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>User config</strong>: <code>~/.config/ai-guardian/ai-guardian.json</code> (base)</li>
+<li><strong>Project config</strong>: <code>.ai-guardian/ai-guardian.json</code> (merged on top of user config, see <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180">docs</a>)</li>
+<li><strong>Remote configs</strong> (highest, permissions only): Fetched from URLs in <code>remote_configs</code></li>
+<li><strong>Defaults</strong>: Built-in defaults when no config exists</li>
+</ol>
+<h2 id="setup-command">Setup Command<a class="headerlink" href="#setup-command" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>ai-guardian<span class="w"> </span>setup<span class="w">                    </span><span class="c1"># Auto-detect IDE</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w">       </span><span class="c1"># Claude Code</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>cursor<span class="w">       </span><span class="c1"># Cursor IDE</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>copilot<span class="w">      </span><span class="c1"># GitHub Copilot</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--dry-run<span class="w">          </span><span class="c1"># Preview changes</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w">       </span><span class="c1"># MCP security advisor installed by default</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--remote-config-url<span class="w"> </span>https://example.com/policy.json
+</code></pre></div>
+<p>Run <code>ai-guardian setup</code> after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use <code>--no-mcp</code> to skip. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md">docs/MCP_SERVER.md</a> for details and <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a> for other setup options.</p>
+<h2 id="action-modes">Action Modes<a class="headerlink" href="#action-modes" title="Permanent link">&para;</a></h2>
+<p>Each security policy supports three enforcement levels:</p>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Execution</th>
+<th>User Warning</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>block</code></td>
+<td>Blocked</td>
+<td>Error shown</td>
+<td><strong>Enforce</strong> policy (default)</td>
+</tr>
+<tr>
+<td><code>warn</code></td>
+<td>Allowed</td>
+<td>Warning shown</td>
+<td><strong>Educate</strong> during rollout</td>
+</tr>
+<tr>
+<td><code>log-only</code></td>
+<td>Allowed</td>
+<td>Silent</td>
+<td><strong>Monitor</strong> silently</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">docs/CONFIGURATION.md</a> for per-feature action mode configuration.</p>
+<h2 id="integration">Integration<a class="headerlink" href="#integration" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Setup Command</th>
+<th>Hooks</th>
+<th>MCP</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td><code>--ide claude</code></td>
+<td>Full</td>
+<td>Full</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td><code>--ide cursor</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td><code>--ide copilot</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>OpenAI Codex</td>
+<td><code>--ide codex</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td><code>--ide windsurf</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td><code>--ide gemini</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td><code>--ide cline</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Kiro (AWS)</td>
+<td><code>--ide kiro</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Augment Code</td>
+<td><code>--ide augment</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>AiderDesk</td>
+<td><code>--ide aiderdesk</code></td>
+<td>Extension</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>OpenClaw</td>
+<td><code>--ide openclaw</code></td>
+<td>Plugin</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td><code>--ide opencode</code></td>
+<td>Plugin</td>
+<td>N/A</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Crush (Charmbracelet)</td>
+<td><code>--ide crush</code></td>
+<td>Partial</td>
+<td>Full</td>
+<td>Complete</td>
+</tr>
+<tr>
+<td>Junie (JetBrains)</td>
+<td><code>--ide junie</code></td>
+<td>N/A</td>
+<td>Full</td>
+<td>MCP-only</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md">GitHub Copilot Setup</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md">Aider Setup</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_ENGINE_SUPPORT.md">Multi-Engine Support</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md">Hook Ordering</a></li>
+</ul>
+<h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>User prompt / Tool use
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>       |
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>  [MCP Advisor] -----&gt; AI checks proactively (optional)
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>       |
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>  [AI Guardian Hook] -- Enforcement (mandatory)
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>       |
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>  MCP/Skill check --&gt; Not allowed? --&gt; BLOCK
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>       |
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>  Directory check --&gt; .ai-read-deny? --&gt; BLOCK
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>       |
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>  Prompt injection --&gt; Detected? -----&gt; BLOCK
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>       |
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>  Secret scan ------&gt; Found? --------&gt; BLOCK
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>       |
+<a id="__codelineno-13-15" name="__codelineno-13-15" href="#__codelineno-13-15"></a>  ALLOW --&gt; Send to AI / Execute tool
+</code></pre></div>
+<p>The MCP advisor lets the AI check <em>before</em> acting (advisory). Hooks enforce <em>during</em> execution (mandatory). PostToolUse hooks scan tool outputs using the same pipeline. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md">docs/MCP_SERVER.md</a> for the MCP server and <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md">docs/SECURITY_DESIGN.md</a> for full architecture.</p>
+<h2 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AI_GUARDIAN_CONFIG_DIR</code></td>
+<td>Custom config directory</td>
+<td><code>~/.config/ai-guardian</code></td>
+</tr>
+<tr>
+<td><code>AI_GUARDIAN_STATE_DIR</code></td>
+<td>State directory (logs, violations)</td>
+<td><code>~/.local/state/ai-guardian</code></td>
+</tr>
+<tr>
+<td><code>AI_GUARDIAN_CACHE_DIR</code></td>
+<td>Cache directory (patterns)</td>
+<td><code>~/.cache/ai-guardian</code></td>
+</tr>
+<tr>
+<td><code>AI_GUARDIAN_IDE_TYPE</code></td>
+<td>Override IDE auto-detection</td>
+<td>Auto-detect</td>
+</tr>
+<tr>
+<td><code>AI_GUARDIAN_PATTERN_TOKEN</code></td>
+<td>Default pattern server auth token (all sections)</td>
+<td>None</td>
+</tr>
+</tbody>
+</table>
+<p>Each detection feature (<code>secret_scanning</code>, <code>secret_redaction</code>, <code>ssrf_protection</code>, <code>config_file_scanning</code>) can use its own pattern server with independent auth via <code>token_env</code> or <code>token_file</code>. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers">docs/PATTERN_SERVER.md</a>.</p>
+<h2 id="requirements">Requirements<a class="headerlink" href="#requirements" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Python 3.9+</strong> (3.10+ highly recommended — several features including AST-aware scanning, MCP server, and web console require Python 3.10+)</li>
+<li><strong>Windows</strong>: Python 3.10, 3.13, and 3.14 are tested; other versions may work but are not CI-verified</li>
+<li><strong>Scanner engine</strong>: gitleaks, betterleaks, leaktk, trufflehog, detect-secrets, secretlint, or gitguardian</li>
+<li><strong>GNOME Linux</strong>: AppIndicator extension for system tray icon (<a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md#getting-started">setup steps</a>)</li>
+</ul>
+<p>See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md">docs/SCANNER_INSTALLATION.md</a> for installation instructions.</p>
+<h2 id="optional-dependencies">Optional Dependencies<a class="headerlink" href="#optional-dependencies" title="Permanent link">&para;</a></h2>
+<p>ai-guardian works out of the box with built-in Python-native scanners, NiceGUI/Textual fallback dialogs, and heuristic prompt injection detection. These optional packages enable extra functionality:</p>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>What it enables</th>
+<th>Install</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>tkinter</strong></td>
+<td>Native popup dialogs for ask mode (strongly recommended)</td>
+<td><code>install.sh --tkinter</code>, or see below</td>
+</tr>
+<tr>
+<td><strong>PyGObject (gi)</strong></td>
+<td>System tray on Linux</td>
+<td><code>install.sh --gobject</code>, or: <code>dnf install python3-gobject</code> / <code>apt install python3-gi</code></td>
+</tr>
+<tr>
+<td><strong>gitleaks</strong></td>
+<td>Additional secret scanner engine</td>
+<td><code>ai-guardian scanner install gitleaks</code></td>
+</tr>
+<tr>
+<td><strong>betterleaks</strong></td>
+<td>Additional secret scanner engine</td>
+<td><code>ai-guardian scanner install betterleaks</code></td>
+</tr>
+<tr>
+<td><strong>trufflehog</strong></td>
+<td>Additional secret scanner engine (AGPL, subprocess)</td>
+<td><code>ai-guardian scanner install trufflehog</code></td>
+</tr>
+<tr>
+<td><strong>ML model</strong></td>
+<td>ML-based prompt injection detection</td>
+<td><code>ai-guardian ml setup</code> (or <code>ml download</code> for model only)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="tkinter-install-by-platform">tkinter Install by Platform<a class="headerlink" href="#tkinter-install-by-platform" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Platform</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Fedora/RHEL</td>
+<td><code>sudo dnf install python3-tkinter</code></td>
+</tr>
+<tr>
+<td>Debian/Ubuntu</td>
+<td><code>sudo apt install python3-tk</code></td>
+</tr>
+<tr>
+<td>macOS (system Python)</td>
+<td>Included</td>
+</tr>
+<tr>
+<td>macOS (pyenv/Homebrew)</td>
+<td><code>brew install tcl-tk</code>, then rebuild Python</td>
+</tr>
+<tr>
+<td>uv</td>
+<td>Not available — NiceGUI browser form used automatically</td>
+</tr>
+</tbody>
+</table>
+<h2 id="contributing">Contributing<a class="headerlink" href="#contributing" title="Permanent link">&para;</a></h2>
+<p>We welcome contributions! See <a href="#developer-install">Developer Install</a> for setup and <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/CONTRIBUTING.md">CONTRIBUTING.md</a> for complete guidelines.</p>
+<ul>
+<li><strong>Bug reports &amp; feature requests</strong> -- use <a href="https://github.com/RedHatProductSecurity/ai-guardian/discussions">GitHub Discussions</a></li>
+<li><strong>Code contributions</strong> -- fork + PR (not affected by interaction limits)</li>
+</ul>
+<h2 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h2>
+<p>Full documentation is available in the <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/">docs/</a> folder:</p>
+<ul>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md">Configuration Guide</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/">Security Documentation</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md">Console Guide</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md">Tool Policy</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md">Scanner Installation</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md">Security Design</a></li>
+<li><a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/README.md">All Documentation</a></li>
+</ul>
+<h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
+<p><strong>Q: Why no prompt injection examples in the docs?</strong>
+Publishing attack patterns makes them easier to misuse and would cause ai-guardian to block its own documentation. Use <code>test:</code> prefixed strings for testing. See OWASP LLM Top 10 for research.</p>
+<p><strong>Q: What's <code>permissions</code> vs <code>permissions_directories</code> vs <code>directory_rules</code>?</strong>
+<code>permissions</code> = which <strong>tools</strong> can run. <code>permissions_directories</code> = auto-discover tool permissions from repos. <code>directory_rules</code> = which <strong>paths</strong> can be accessed. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md">docs/TOOL_POLICY.md</a> and <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md">docs/security/DIRECTORY_RULES.md</a>.</p>
+<p><strong>Q: How are multiple rules evaluated?</strong>
+Both <code>permissions.rules</code> and <code>directory_rules</code> use <strong>last-match-wins</strong>: rules are checked in array order and the last matching rule determines the outcome. Place broad deny rules first, then specific allow rules after. Common mistake: putting an allow rule before a deny-all — the deny-all wins because it comes last. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md#rule-evaluation-order-last-match-wins">docs/TOOL_POLICY.md</a>.</p>
+<h2 id="license">License<a class="headerlink" href="#license" title="Permanent link">&para;</a></h2>
+<p>Apache 2.0 - see <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/LICENSE">LICENSE</a> file for details.</p>
+<h2 id="acknowledgments">Acknowledgments<a class="headerlink" href="#acknowledgments" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://github.com/gitleaks/gitleaks">Gitleaks</a> - Secret detection engine</li>
+<li><a href="https://claude.ai/code">Claude Code</a> - AI-powered IDE</li>
+<li><a href="https://cursor.sh">Cursor</a> - AI code editor</li>
+<li><a href="https://github.com/leaktk/patterns">LeakTK</a> - Community secret detection patterns</li>
+<li><a href="https://github.com/fullsend-ai/experiments/tree/main/hermes-security-patterns">Hermes Security Patterns</a> - Security research</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": ".", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

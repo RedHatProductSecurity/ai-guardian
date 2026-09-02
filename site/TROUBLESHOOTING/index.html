@@ -1,0 +1,3388 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/TROUBLESHOOTING/">
+      
+      
+        <link rel="prev" href="../SCANNER_INSTALLATION/">
+      
+      
+        <link rel="next" href="../security/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Troubleshooting - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#troubleshooting-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Troubleshooting
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#general-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-startup-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Startup Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Daemon Startup Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stale-lock-file-blocking-daemon-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stale Lock File Blocking Daemon Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#another-daemon-is-starting-when-no-daemon-is-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Another Daemon Is Starting" When No Daemon Is Running
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-daemon-processes-in-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Daemon Processes in Containers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zombie-processes-preventing-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zombie Processes Preventing Restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-recovery-with-daemon-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Recovery with daemon reset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-display-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Display Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Display Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tray-showing-container-name-instead-of-config-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Showing Container Name Instead of Config Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-name-field-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Name Field Location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-started-before-config-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Started Before Config Is Written
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-plugin-popup-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Plugin Popup Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Plugin Popup Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tray-quick-actions-open-browser-instead-of-native-dialog-uv-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Quick Actions Open Browser Instead of Native Dialog (uv install)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-not-available-on-python-314-uv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Not Available on Python 3.14 (uv)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-crashes-with-sigabrt-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Crashes with SIGABRT on macOS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tcl-cant-find-inittcl-from-tray-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tcl Can't Find init.tcl from Tray Daemon
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-specific-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container-Specific Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Container-Specific Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-entrypoint-starting-daemon-before-config-is-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Entrypoint Starting Daemon Before Config Is Ready
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port-conflicts-when-multiple-daemons-bind-to-the-same-port" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port Conflicts When Multiple Daemons Bind to the Same Port
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-auto-start-races-from-concurrent-hook-invocations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Auto-Start Races from Concurrent Hook Invocations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#general-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="General Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#daemon-auto-start-failures-fail-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Auto-Start Failures (Fail-Open)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port-already-in-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port Already in Use
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-reload-not-picking-up-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Reload Not Picking Up Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-verify-the-daemon-is-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Verify the Daemon Is Working
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-idle-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Idle Timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cursor-double-popups-hooks-firing-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cursor: Double Popups / Hooks Firing Twice
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-claude-code-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Claude Code Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Claude Code Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secretpii-redaction-bypassed-in-bash-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret/PII Redaction Bypassed in Bash Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imagebinary-file-reads-not-scanned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image/Binary File Reads Not Scanned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skill-tool-calls-bypass-all-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skill Tool Calls Bypass All Hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-tool-result-transform-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No Tool Result Transform Hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-locations-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Locations Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#general-diagnostics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Diagnostics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#daemon-startup-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Startup Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Daemon Startup Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#stale-lock-file-blocking-daemon-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stale Lock File Blocking Daemon Start
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#another-daemon-is-starting-when-no-daemon-is-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Another Daemon Is Starting" When No Daemon Is Running
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#multiple-daemon-processes-in-containers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multiple Daemon Processes in Containers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zombie-processes-preventing-restart" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zombie Processes Preventing Restart
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quick-recovery-with-daemon-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Recovery with daemon reset
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-display-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Display Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Display Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tray-showing-container-name-instead-of-config-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Showing Container Name Instead of Config Name
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-name-field-location" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Name Field Location
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-started-before-config-is-written" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Started Before Config Is Written
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-plugin-popup-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Plugin Popup Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Plugin Popup Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tray-quick-actions-open-browser-instead-of-native-dialog-uv-install" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Quick Actions Open Browser Instead of Native Dialog (uv install)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-not-available-on-python-314-uv" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Not Available on Python 3.14 (uv)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tkinter-crashes-with-sigabrt-on-macos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tkinter Crashes with SIGABRT on macOS
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tcl-cant-find-inittcl-from-tray-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tcl Can't Find init.tcl from Tray Daemon
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#container-specific-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container-Specific Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Container-Specific Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-entrypoint-starting-daemon-before-config-is-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Entrypoint Starting Daemon Before Config Is Ready
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port-conflicts-when-multiple-daemons-bind-to-the-same-port" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port Conflicts When Multiple Daemons Bind to the Same Port
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-auto-start-races-from-concurrent-hook-invocations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Auto-Start Races from Concurrent Hook Invocations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#general-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        General Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="General Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#daemon-auto-start-failures-fail-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Auto-Start Failures (Fail-Open)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#port-already-in-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Port Already in Use
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-reload-not-picking-up-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Reload Not Picking Up Changes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-verify-the-daemon-is-working" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Verify the Daemon Is Working
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#daemon-idle-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Daemon Idle Timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cursor-double-popups-hooks-firing-twice" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cursor: Double Popups / Hooks Firing Twice
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-claude-code-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Claude Code Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Claude Code Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secretpii-redaction-bypassed-in-bash-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret/PII Redaction Bypassed in Bash Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imagebinary-file-reads-not-scanned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image/Binary File Reads Not Scanned
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skill-tool-calls-bypass-all-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skill Tool Calls Bypass All Hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-tool-result-transform-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No Tool Result Transform Hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-locations-quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Locations Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="troubleshooting-guide">Troubleshooting Guide<a class="headerlink" href="#troubleshooting-guide" title="Permanent link">&para;</a></h1>
+<p>Common issues with the AI Guardian daemon, system tray, and container deployments.</p>
+<h2 id="general-diagnostics">General Diagnostics<a class="headerlink" href="#general-diagnostics" title="Permanent link">&para;</a></h2>
+<p>Run <code>ai-guardian doctor</code> for a comprehensive health check covering config validation, scanner availability, hook installation, permissions, unknown config keys, and more. Use <code>--json</code> for machine-readable output.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ai-guardian<span class="w"> </span>doctor
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ai-guardian<span class="w"> </span>doctor<span class="w"> </span>--json
+</code></pre></div>
+<h2 id="daemon-startup-issues">Daemon Startup Issues<a class="headerlink" href="#daemon-startup-issues" title="Permanent link">&para;</a></h2>
+<h3 id="stale-lock-file-blocking-daemon-start">Stale Lock File Blocking Daemon Start<a class="headerlink" href="#stale-lock-file-blocking-daemon-start" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> <code>ai-guardian daemon start</code> fails with:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Another daemon is starting (pid 12345). Stop it first with: ai-guardian daemon stop
+</code></pre></div>
+...but no daemon process is actually running.</p>
+<p><strong>Cause:</strong> A previous daemon crashed or was killed without cleaning up its lock file at <code>~/.local/state/ai-guardian/daemon.pid.lock</code>.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Verify no daemon is running</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>ps<span class="w"> </span>aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>ai-guardian
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># Remove the stale lock file</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>rm<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid.lock
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="c1"># Start the daemon</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<blockquote>
+<p><strong>Note:</strong> The state directory location depends on your environment. If <code>XDG_STATE_HOME</code> is set, the lock file is at <code>$XDG_STATE_HOME/ai-guardian/daemon.pid.lock</code>. You can also override it with <code>AI_GUARDIAN_STATE_DIR</code>.</p>
+</blockquote>
+<h3 id="another-daemon-is-starting-when-no-daemon-is-running">"Another Daemon Is Starting" When No Daemon Is Running<a class="headerlink" href="#another-daemon-is-starting-when-no-daemon-is-running" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The error message references a PID that no longer exists.</p>
+<p><strong>Cause:</strong> The daemon uses atomic file creation (<code>O_CREAT|O_EXCL</code>) for its lock file to prevent concurrent starts. If the process that created the lock exited abnormally, the lock persists.</p>
+<p><strong>Fix:</strong> The daemon has built-in stale detection that checks if the PID in the lock file is alive. If detection fails (e.g., on some container runtimes where <code>/proc</code> is restricted):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Force remove the lock</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>rm<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid.lock
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>rm<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="c1"># Restart</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<h3 id="multiple-daemon-processes-in-containers">Multiple Daemon Processes in Containers<a class="headerlink" href="#multiple-daemon-processes-in-containers" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> <code>ps</code> shows multiple <code>ai-guardian daemon</code> processes running inside a container.</p>
+<p><strong>Cause:</strong> Race condition at container boot when multiple hook invocations trigger auto-start simultaneously. Although the lock file prevents most races, fast concurrent starts can slip through before the lock is written.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Stop all daemon processes</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="c1"># If stop doesn&#39;t catch all processes</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>pkill<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;ai-guardian daemon&quot;</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="c1"># Start a single daemon</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<p><strong>Prevention:</strong> In container entrypoints, start the daemon explicitly before any hook invocations:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="ch">#!/bin/bash</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="c1"># Start daemon first, then run your workload</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="c1"># ... rest of entrypoint</span>
+</code></pre></div></p>
+<h3 id="zombie-processes-preventing-restart">Zombie Processes Preventing Restart<a class="headerlink" href="#zombie-processes-preventing-restart" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> <code>ps</code> shows daemon processes in <code>Z</code> (defunct/zombie) state, and new starts fail.</p>
+<p><strong>Cause:</strong> The parent process did not reap the child. Common in containers with init process issues.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># Check for zombie processes</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>ps<span class="w"> </span>aux<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;Z.*ai-guardian&#39;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="c1"># The zombie&#39;s parent must reap it, or kill the parent</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="nb">kill</span><span class="w"> </span>&lt;parent-pid&gt;
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="c1"># Remove lock files</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>rm<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid.lock
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>rm<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a><span class="c1"># Start fresh</span>
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<p><strong>Prevention:</strong> Use a proper init system in containers (e.g., <code>tini</code> or <code>--init</code> flag with Docker/Podman):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>podman<span class="w"> </span>run<span class="w"> </span>--init<span class="w"> </span>your-image
+</code></pre></div></p>
+<h3 id="quick-recovery-with-daemon-reset">Quick Recovery with <code>daemon reset</code><a class="headerlink" href="#quick-recovery-with-daemon-reset" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The daemon is in a broken state — orphaned process, stale PID file, hung socket — and normal <code>daemon stop</code> doesn't help.</p>
+<p><strong>Fix:</strong> Use the <code>reset</code> command for clean recovery:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>reset
+</code></pre></div></p>
+<p>This will:
+1. Find the daemon process from the PID file
+2. Send SIGTERM, wait up to 3 seconds, then SIGKILL if needed
+3. Remove all daemon state files (<code>daemon.pid</code>, <code>daemon.pid.lock</code>, <code>daemon.sock</code>)
+4. Clear the <code>daemon.stop-requested</code> marker so auto-start works again</p>
+<p>The reset command does <strong>not</strong> touch: tray process, console, MCP server, configuration, or log files.</p>
+<p><strong>Safe to run at any time</strong> — if no daemon is running and no state files exist, it reports "No daemon state to reset" and exits cleanly.</p>
+<p><strong>After reset:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w"> </span>-b
+</code></pre></div></p>
+<hr />
+<h2 id="tray-display-issues">Tray Display Issues<a class="headerlink" href="#tray-display-issues" title="Permanent link">&para;</a></h2>
+<h3 id="tray-showing-container-name-instead-of-config-name">Tray Showing Container Name Instead of Config Name<a class="headerlink" href="#tray-showing-container-name-instead-of-config-name" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The system tray shows the container hostname (e.g., <code>a1b2c3d4e5f6</code>) instead of a meaningful name.</p>
+<p><strong>Cause:</strong> The daemon reads its display name from the config file's top-level <code>name</code> field, falling back to <code>socket.gethostname()</code>. If the daemon starts before the config file is written, it caches the hostname.</p>
+<p><strong>Fix:</strong>
+1. Set the <code>name</code> field in your <code>ai-guardian.json</code> config:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-project&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">&quot;rest_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">63152</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">}</span>
+</code></pre></div>
+2. Restart the daemon to pick up the new name:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<h3 id="config-name-field-location">Config Name Field Location<a class="headerlink" href="#config-name-field-location" title="Permanent link">&para;</a></h3>
+<p>The daemon name is read from the <strong>top-level</strong> <code>name</code> field in <code>ai-guardian.json</code>, not from <code>daemon.name</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-project-name&quot;</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="p">}</span>
+</code></pre></div>
+<p>The config file is located at <code>~/.config/ai-guardian/ai-guardian.json</code> by default (or <code>$XDG_CONFIG_HOME/ai-guardian/ai-guardian.json</code>).</p>
+<h3 id="daemon-started-before-config-is-written">Daemon Started Before Config Is Written<a class="headerlink" href="#daemon-started-before-config-is-written" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The daemon displays the hostname because it started before the config file existed.</p>
+<p><strong>Cause:</strong> Auto-start triggers during hook processing can start the daemon before <code>ai-guardian setup --create-config</code> has run.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="c1"># Create config first</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="c1"># Edit the config to set your preferred name</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="c1"># Then restart the daemon</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<hr />
+<h2 id="tray-plugin-popup-issues">Tray Plugin Popup Issues<a class="headerlink" href="#tray-plugin-popup-issues" title="Permanent link">&para;</a></h2>
+<h3 id="tray-quick-actions-open-browser-instead-of-native-dialog-uv-install">Tray Quick Actions Open Browser Instead of Native Dialog (uv install)<a class="headerlink" href="#tray-quick-actions-open-browser-instead-of-native-dialog-uv-install" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Tray plugin parameter popups open a NiceGUI browser form instead of a native tkinter dialog, even on a system where tkinter should be available.</p>
+<p><strong>Cause:</strong> When ai-guardian is installed via <code>uv tool install</code>, the Python runtime is python-build-standalone which may have an incomplete Tcl/Tk installation. Earlier versions of ai-guardian used an overly strict tkinter check (<code>package require Tk</code>) that failed on uv's Python even when tkinter itself worked fine. This was fixed in <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/1037">#1037</a>.</p>
+<p><strong>Fix:</strong> Upgrade to ai-guardian v1.11.0 or later:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>upgrade<span class="w"> </span>ai-guardian
+</code></pre></div></p>
+<p><strong>Workaround:</strong> The NiceGUI browser form is functionally identical — it opens in your default browser instead of a native window. No data or functionality is lost.</p>
+<p><strong>Verify tkinter works in your environment:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># For uv tool installs:</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="k">$(</span>uv<span class="w"> </span>tool<span class="w"> </span>dir<span class="k">)</span>/ai-guardian/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import tkinter; root = tkinter.Tk(); root.destroy(); print(&#39;OK&#39;)&quot;</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># For pip/venv installs:</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import tkinter; root = tkinter.Tk(); root.destroy(); print(&#39;OK&#39;)&quot;</span>
+</code></pre></div></p>
+<p><strong>Force a specific popup backend:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="nv">AI_GUARDIAN_NO_TKINTER</span><span class="o">=</span><span class="m">1</span><span class="w">    </span><span class="c1"># skip tkinter, use NiceGUI or Textual</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="nv">AI_GUARDIAN_NO_NICEGUI</span><span class="o">=</span><span class="m">1</span><span class="w">    </span><span class="c1"># skip NiceGUI, use Textual</span>
+</code></pre></div></p>
+<h3 id="tkinter-not-available-on-python-314-uv">tkinter Not Available on Python 3.14 (uv)<a class="headerlink" href="#tkinter-not-available-on-python-314-uv" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> <code>import tkinter</code> fails with Python 3.14 installed via uv.</p>
+<p><strong>Cause:</strong> uv uses python-build-standalone binaries which may not include Tcl/Tk libraries for newer Python versions. This is a <a href="https://github.com/astral-sh/uv/issues/7036">known upstream issue</a>.</p>
+<p><strong>Workaround:</strong> Use Python 3.12 or 3.13 for full tkinter/tray support:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>uv<span class="w"> </span>tool<span class="w"> </span>install<span class="w"> </span>ai-guardian<span class="w"> </span>--python<span class="w"> </span><span class="m">3</span>.13
+</code></pre></div></p>
+<p>Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this automatically.</p>
+<h3 id="tkinter-crashes-with-sigabrt-on-macos">tkinter Crashes with SIGABRT on macOS<a class="headerlink" href="#tkinter-crashes-with-sigabrt-on-macos" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The tray popup crashes immediately with a <code>SIGABRT</code> or <code>NSInvalidArgumentException</code> on macOS.</p>
+<p><strong>Cause:</strong> On macOS, if PyObjC's <code>NSApplication.sharedApplication()</code> is initialized before <code>tkinter.Tk()</code>, the Objective-C runtime creates an NSApplication wrapper that lacks Tk's <code>macOSVersion</code> category method. When tkinter later tries to call this method, the process aborts.</p>
+<p><strong>Fix:</strong> This was fixed in <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/1037">#1037</a>. Upgrade to v1.11.0 or later.</p>
+<p><strong>Workaround:</strong> Skip tkinter and use the NiceGUI fallback:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AI_GUARDIAN_NO_TKINTER</span><span class="o">=</span><span class="m">1</span>
+</code></pre></div></p>
+<h3 id="tcl-cant-find-inittcl-from-tray-daemon">Tcl Can't Find init.tcl from Tray Daemon<a class="headerlink" href="#tcl-cant-find-inittcl-from-tray-daemon" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> tkinter works from the CLI but fails when launched from the tray daemon subprocess with an error like <code>can't find a usable init.tcl</code>.</p>
+<p><strong>Cause:</strong> uv's venv uses symlinks to the python-build-standalone install. When the tray daemon resolves the Python executable, Tcl searches for <code>init.tcl</code> relative to the symlink rather than the real Python install path.</p>
+<p><strong>Fix:</strong> Fixed in <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/1037">#1037</a> — ai-guardian now resolves the real Python path and sets <code>TCL_LIBRARY</code> to the correct location. Upgrade to v1.11.0 or later.</p>
+<hr />
+<h2 id="container-specific-issues">Container-Specific Issues<a class="headerlink" href="#container-specific-issues" title="Permanent link">&para;</a></h2>
+<h3 id="container-entrypoint-starting-daemon-before-config-is-ready">Container Entrypoint Starting Daemon Before Config Is Ready<a class="headerlink" href="#container-entrypoint-starting-daemon-before-config-is-ready" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> The daemon starts with default settings because the config file hasn't been mounted or generated yet.</p>
+<p><strong>Cause:</strong> The entrypoint script starts the daemon before volume mounts are available or before config generation completes.</p>
+<p><strong>Fix:</strong> Order your entrypoint to ensure config exists first:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="ch">#!/bin/bash</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="c1"># 1. Wait for config to be available</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="k">while</span><span class="w"> </span><span class="o">[</span><span class="w"> </span>!<span class="w"> </span>-f<span class="w"> </span>/path/to/ai-guardian.json<span class="w"> </span><span class="o">]</span><span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">  </span>sleep<span class="w"> </span><span class="m">1</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="k">done</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="c1"># 2. Start daemon</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="c1"># 3. Continue with workload</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="nb">exec</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$@</span><span class="s2">&quot;</span>
+</code></pre></div></p>
+<h3 id="port-conflicts-when-multiple-daemons-bind-to-the-same-port">Port Conflicts When Multiple Daemons Bind to the Same Port<a class="headerlink" href="#port-conflicts-when-multiple-daemons-bind-to-the-same-port" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Daemon fails to start, or the REST API is unavailable. Log shows:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>REST API failed to start: [Errno 98] Address already in use
+</code></pre></div></p>
+<p><strong>Cause:</strong> Multiple daemons (or a daemon restart) are trying to bind to the same port. The default port is <code>63152</code>.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Check what&#39;s using the port</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>lsof<span class="w"> </span>-i<span class="w"> </span>:63152
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="c1"># or</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a>ss<span class="w"> </span>-tlnp<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="m">63152</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a><span class="c1"># Stop the conflicting process</span>
+<a id="__codelineno-21-7" name="__codelineno-21-7" href="#__codelineno-21-7"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-21-8" name="__codelineno-21-8" href="#__codelineno-21-8"></a>
+<a id="__codelineno-21-9" name="__codelineno-21-9" href="#__codelineno-21-9"></a><span class="c1"># Or configure a different port in ai-guardian.json</span>
+</code></pre></div></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="p">{</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="w">    </span><span class="nt">&quot;rest_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">63153</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="p">}</span>
+</code></pre></div>
+<blockquote>
+<p><strong>Note:</strong> In containers, the daemon automatically binds to <code>0.0.0.0</code> instead of <code>127.0.0.1</code> (detected via <code>/.dockerenv</code> or <code>/run/.containerenv</code>).</p>
+</blockquote>
+<h3 id="daemon-auto-start-races-from-concurrent-hook-invocations">Daemon Auto-Start Races from Concurrent Hook Invocations<a class="headerlink" href="#daemon-auto-start-races-from-concurrent-hook-invocations" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Multiple hook invocations in quick succession each try to start a daemon, causing lock contention or multiple processes.</p>
+<p><strong>Cause:</strong> When the daemon is not running, each <code>ai-guardian</code> CLI invocation attempts auto-start. With concurrent IDE operations (e.g., opening multiple files), several processes race to start the daemon.</p>
+<p><strong>Fix:</strong> The daemon uses atomic lock file creation to prevent most races, but if issues persist:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># Stop everything</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>pkill<span class="w"> </span>-f<span class="w"> </span><span class="s2">&quot;ai-guardian daemon&quot;</span><span class="w"> </span><span class="m">2</span>&gt;/dev/null
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a><span class="c1"># Clean up</span>
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>rm<span class="w"> </span>-f<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid.lock
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>rm<span class="w"> </span>-f<span class="w"> </span>~/.local/state/ai-guardian/daemon.pid
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a><span class="c1"># Start manually</span>
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<hr />
+<h2 id="general-issues">General Issues<a class="headerlink" href="#general-issues" title="Permanent link">&para;</a></h2>
+<h3 id="daemon-auto-start-failures-fail-open">Daemon Auto-Start Failures (Fail-Open)<a class="headerlink" href="#daemon-auto-start-failures-fail-open" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> AI Guardian hooks run but are slower than expected, and logs show fallback messages.</p>
+<p><strong>Cause:</strong> When the daemon fails to start or respond, the CLI falls back to "direct mode" — processing hooks inline without the daemon. This is by design (fail-open) to avoid blocking the IDE.</p>
+<p><strong>Log messages indicating direct mode:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>Daemon returned no response, falling back to direct
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>Daemon unavailable, falling back to direct
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>Daemon client error, falling back to direct: &lt;error&gt;
+</code></pre></div></p>
+<p><strong>Fix:</strong> Start the daemon manually to restore fast hook processing:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<p>If the daemon keeps failing, check:
+- Lock file issues (see above)
+- Port conflicts (see above)
+- Config file errors: <code>ai-guardian setup --validate</code></p>
+<h3 id="port-already-in-use">Port Already in Use<a class="headerlink" href="#port-already-in-use" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Daemon starts but the REST API is not available.</p>
+<p><strong>Cause:</strong> Another process (or a previous daemon instance) is using port <code>63152</code>.</p>
+<p><strong>Fix:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Find what&#39;s using the port</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>lsof<span class="w"> </span>-i<span class="w"> </span>:63152
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Kill the conflicting process or change the port</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># Start with a clean slate</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<p>To change the default port permanently:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="p">{</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="w">    </span><span class="nt">&quot;rest_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">63200</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="config-reload-not-picking-up-changes">Config Reload Not Picking Up Changes<a class="headerlink" href="#config-reload-not-picking-up-changes" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> You edited <code>ai-guardian.json</code> but the daemon behavior hasn't changed.</p>
+<p><strong>Cause:</strong> The daemon detects config changes via file modification time (mtime) on each hook request, with a SHA256 checksum verification every 60 seconds. Some edge cases where changes may not be detected:
+- NFS or network filesystems with clock skew
+- File replaced atomically (same mtime as previous version)
+- Editing inside the daemon's 60-second checksum window</p>
+<p><strong>Fix:</strong> Restart the daemon to force a config reload:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>stop
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start
+</code></pre></div></p>
+<p>Or trigger a reload via the REST API:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:63152/api/reload
+</code></pre></div></p>
+<h3 id="how-to-verify-the-daemon-is-working">How to Verify the Daemon Is Working<a class="headerlink" href="#how-to-verify-the-daemon-is-working" title="Permanent link">&para;</a></h3>
+<p>Use the status endpoint to confirm the daemon is running and responsive:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>curl<span class="w"> </span>http://127.0.0.1:63152/api/status
+</code></pre></div>
+<p><strong>Expected response:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="p">{</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="w">  </span><span class="nt">&quot;running&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a><span class="w">  </span><span class="nt">&quot;paused&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="w">  </span><span class="nt">&quot;uptime_seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3600</span><span class="p">,</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="w">  </span><span class="nt">&quot;version&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1.9.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-project&quot;</span>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Other useful commands:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="c1"># Check daemon process</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>status
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="c1"># View detailed stats</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a>curl<span class="w"> </span>http://127.0.0.1:63152/api/stats
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="c1"># Health check (lightweight)</span>
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a>curl<span class="w"> </span>http://127.0.0.1:63152/api/health
+</code></pre></div></p>
+<blockquote>
+<p><strong>Note:</strong> If you configured a custom <code>rest_port</code> or <code>auth_token</code>, adjust the curl commands accordingly. With auth enabled:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer YOUR_TOKEN&quot;</span><span class="w"> </span>http://127.0.0.1:63152/api/status
+</code></pre></div></p>
+</blockquote>
+<h3 id="daemon-idle-timeout">Daemon Idle Timeout<a class="headerlink" href="#daemon-idle-timeout" title="Permanent link">&para;</a></h3>
+<p>The daemon automatically shuts down after 30 minutes of inactivity by default. This is configurable:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="p">{</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">    </span><span class="nt">&quot;idle_timeout_minutes&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="p">}</span>
+</code></pre></div>
+<p>Set to <code>0</code> to disable idle shutdown.</p>
+<hr />
+<h2 id="cursor-double-popups-hooks-firing-twice">Cursor: Double Popups / Hooks Firing Twice<a class="headerlink" href="#cursor-double-popups-hooks-firing-twice" title="Permanent link">&para;</a></h2>
+<p><strong>Symptom:</strong> When both Claude Code and Cursor are installed, ai-guardian popups
+appear twice for the same event.</p>
+<p><strong>Cause:</strong> Cursor has an "Include third-party extensions" toggle (in Cursor
+Settings &gt; General) that imports and executes hooks from <code>~/.claude/settings.json</code>.
+When this is enabled, both Claude Code's hooks and Cursor's own hooks
+(<code>~/.cursor/hooks.json</code>) fire for the same event.</p>
+<p><strong>Fix:</strong> Disable "Include third-party extensions" in Cursor settings. This ensures
+each IDE uses only its own hook configuration:</p>
+<ul>
+<li>Claude Code: <code>~/.claude/settings.json</code></li>
+<li>Cursor: <code>~/.cursor/hooks.json</code></li>
+</ul>
+<p>Alternatively, uninstall ai-guardian hooks from one IDE:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Keep only Claude Code hooks</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>claude<span class="w"> </span>--uninstall-ide<span class="w"> </span>cursor
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="c1"># Keep only Cursor hooks</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>cursor<span class="w"> </span>--uninstall-ide<span class="w"> </span>claude
+</code></pre></div></p>
+<hr />
+<h2 id="known-claude-code-limitations">Known Claude Code Limitations<a class="headerlink" href="#known-claude-code-limitations" title="Permanent link">&para;</a></h2>
+<p>These are open upstream issues in the Claude Code runtime that affect ai-guardian's security enforcement. They are not bugs in ai-guardian — they are limitations in the hook system that ai-guardian cannot work around.</p>
+<p>For per-violation-type impact details, see <a href="../AGENT_SUPPORT/#known-limitations">AGENT_SUPPORT.md — Known Limitations</a>.</p>
+<h3 id="secretpii-redaction-bypassed-in-bash-output">Secret/PII Redaction Bypassed in Bash Output<a class="headerlink" href="#secretpii-redaction-bypassed-in-bash-output" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> ai-guardian detects a secret or PII in Bash output and redacts it, but the model still sees the original unredacted text.</p>
+<p><strong>Cause:</strong> Claude Code ignores the <code>updatedToolOutput</code> field returned by <code>PostToolUse</code> hooks for Bash tool results.</p>
+<p><strong>Workaround:</strong> Use <code>block</code> action mode for secrets and PII instead of <code>warn</code> or <code>log-only</code>. This prevents the tool call entirely rather than relying on post-execution redaction.</p>
+<p><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/64326">anthropics/claude-code#64326</a></p>
+<h3 id="imagebinary-file-reads-not-scanned">Image/Binary File Reads Not Scanned<a class="headerlink" href="#imagebinary-file-reads-not-scanned" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> ai-guardian does not detect secrets or PII in image files read by Claude Code.</p>
+<p><strong>Cause:</strong> Claude Code does not fire <code>PreToolUse</code> hooks (or does not include scannable content) when reading image/binary files.</p>
+<p><strong>Workaround:</strong> Use directory rules to block access to directories containing sensitive images. There is no way to scan image content inline.</p>
+<p><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/62639">anthropics/claude-code#62639</a></p>
+<h3 id="skill-tool-calls-bypass-all-hooks">Skill Tool Calls Bypass All Hooks<a class="headerlink" href="#skill-tool-calls-bypass-all-hooks" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> Tool calls made within a skill (slash command) are not checked by ai-guardian — no permission enforcement, no directory blocking, no SSRF protection.</p>
+<p><strong>Cause:</strong> Claude Code does not fire <code>PreToolUse</code> hooks for tool calls originating from skill invocations.</p>
+<p><strong>Workaround:</strong> Audit installed skills and limit skill access to trusted sources. There is no hook-based enforcement for skill tool calls.</p>
+<p><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/66446">anthropics/claude-code#66446</a></p>
+<h3 id="no-tool-result-transform-hook">No Tool Result Transform Hook<a class="headerlink" href="#no-tool-result-transform-hook" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom:</strong> ai-guardian cannot sanitize or transform tool output before the model processes it.</p>
+<p><strong>Cause:</strong> Claude Code does not provide a hook event for modifying tool results. The <code>PostToolUse</code> hook can inspect but not reliably transform output.</p>
+<p><strong>Workaround:</strong> ai-guardian strips detection patterns from its own warn/log-only messages (<a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/1327">#1327</a>), but cannot sanitize arbitrary tool output.</p>
+<p><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/18653">anthropics/claude-code#18653</a></p>
+<hr />
+<h2 id="file-locations-quick-reference">File Locations Quick Reference<a class="headerlink" href="#file-locations-quick-reference" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Default Path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config</td>
+<td><code>~/.config/ai-guardian/ai-guardian.json</code></td>
+<td>Main configuration</td>
+</tr>
+<tr>
+<td>PID file</td>
+<td><code>~/.local/state/ai-guardian/daemon.pid</code></td>
+<td>Running daemon PID and port</td>
+</tr>
+<tr>
+<td>Lock file</td>
+<td><code>~/.local/state/ai-guardian/daemon.pid.lock</code></td>
+<td>Startup lock (prevents concurrent starts)</td>
+</tr>
+<tr>
+<td>Tray lock</td>
+<td><code>~/.local/state/ai-guardian/tray.lock</code></td>
+<td>Tray instance lock</td>
+</tr>
+<tr>
+<td>Socket</td>
+<td><code>~/.local/state/ai-guardian/daemon.sock</code></td>
+<td>Unix domain socket (alternative to REST)</td>
+</tr>
+<tr>
+<td>Violations</td>
+<td><code>~/.local/state/ai-guardian/violations.json</code></td>
+<td>Security violation audit log</td>
+</tr>
+</tbody>
+</table>
+<p>Paths are governed by XDG conventions and can be overridden with environment variables:
+- <code>AI_GUARDIAN_CONFIG_DIR</code> or <code>XDG_CONFIG_HOME</code>
+- <code>AI_GUARDIAN_STATE_DIR</code> or <code>XDG_STATE_HOME</code></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
