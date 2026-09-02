@@ -7,6 +7,25 @@ import pytest
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
 
+class TestSessionDetailHeader:
+    def test_includes_known_model(self):
+        from ai_guardian.web.pages.ide_sessions import _format_session_header
+
+        assert _format_session_header("Fix session title", "gpt-5") == (
+            "Fix session title (gpt-5)"
+        )
+
+    def test_omits_parentheses_for_unknown_model(self):
+        from ai_guardian.web.pages.ide_sessions import _format_session_header
+
+        assert _format_session_header("Fix session title", "") == "Fix session title"
+
+    def test_untitled_session_has_no_empty_parentheses(self):
+        from ai_guardian.web.pages.ide_sessions import _format_session_header
+
+        assert _format_session_header("", "") == "Untitled"
+
+
 class TestWebAutoRefreshInterval:
     """Verify _get_auto_refresh_interval helper exists and works."""
 

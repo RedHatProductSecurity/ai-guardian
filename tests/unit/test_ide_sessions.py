@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ai_guardian.sessions.adapters import ClaudeSessionAdapter
+from ai_guardian.sessions.adapters import ClaudeSessionAdapter, CodexSessionAdapter
 from ai_guardian.sessions.discovery import (
     SUPPORTED_IDES,
     discover_sessions,
@@ -221,6 +221,76 @@ class TestClaudeSessionTitlePriority:
             assert title_steps[0]["content"] == "my-agent"
         finally:
             Path(path).unlink()
+
+
+class TestCodexReadSessionMeta:
+    @staticmethod
+    def _write_session(path, *payloads):
+        path.write_text(
+            "".join(
+                json.dumps({"type": "response_item", "payload": payload}) + "\n"
+                for payload in payloads
+            ),
+            encoding="utf-8",
+        )
+
+    def test_skips_injected_instructions_list_content(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "# AGENTS.md instructions for /workspace\n<INSTRUCTIONS>",
+                    }
+                ],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": "Fix the session title"}],
+            },
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Fix the session title"
+        assert meta["message_count"] == 2
+
+    def test_skips_injected_instructions_string_content(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {"role": "user", "content": "  # Project instructions\nInjected"},
+            {"role": "user", "content": "Show the actual query"},
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Show the actual query"
+
+    def test_keeps_normal_markdown_heading(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {"role": "user", "content": "# Fix login failures"},
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "# Fix login failures"
+
+    def test_has_empty_title_when_only_injected_instructions(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {"role": "user", "content": "# AGENTS.md instructions\nInjected"},
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == ""
 
 
 class TestDiscoverSessions:

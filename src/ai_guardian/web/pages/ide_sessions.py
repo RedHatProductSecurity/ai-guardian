@@ -20,6 +20,12 @@ from ai_guardian.web.components.step_render import (
 )
 
 
+def _format_session_header(title: str, model: str) -> str:
+    """Format a session title without empty model parentheses."""
+    display_title = title or "Untitled"
+    return f"{display_title} ({model})" if model else display_title
+
+
 def create_ide_sessions_page(service, daemon_name: str):
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/ide-sessions")
     create_header(daemon_name, drawer=sidebar)
@@ -561,9 +567,9 @@ def create_ide_session_detail_page(service, daemon_name: str):
             summary = await run.io_bound(read_session_summary, session)
             detail_steps = await run.io_bound(read_session_detail, session)
 
-            title = summary.get("title", "") or "Untitled"
-            model = summary.get("model", "") or ""
-            header_label.text = f"{title} ({model})"
+            header_label.text = _format_session_header(
+                summary.get("title", ""), summary.get("model", "")
+            )
 
             summary_container.clear()
             with summary_container:

@@ -922,6 +922,14 @@ class CodexSessionAdapter(SessionAdapter):
         return steps
 
     @staticmethod
+    def _is_injected_instructions(text: str) -> bool:
+        """Return whether text is heading-style injected session instructions."""
+        normalized = text.lstrip().lower()
+        return normalized.startswith("#") and (
+            "agents.md" in normalized or "instructions" in normalized
+        )
+
+    @staticmethod
     def _read_session_meta(path: Path) -> Dict:
         meta: Dict = {
             "title": "",
@@ -959,10 +967,17 @@ class CodexSessionAdapter(SessionAdapter):
                                 if isinstance(content, list):
                                     for c in content:
                                         if isinstance(c, dict) and c.get("text"):
-                                            meta["title"] = c["text"][:80]
-                                            break
+                                            text = c["text"]
+                                            if not CodexSessionAdapter._is_injected_instructions(
+                                                text
+                                            ):
+                                                meta["title"] = text[:80]
+                                                break
                                 elif isinstance(content, str):
-                                    meta["title"] = content[:80]
+                                    if not CodexSessionAdapter._is_injected_instructions(
+                                        content
+                                    ):
+                                        meta["title"] = content[:80]
         except OSError:
             pass
 
