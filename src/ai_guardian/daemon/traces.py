@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import time
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -31,6 +32,166 @@ _MODEL_PRICING = {
     "claude-opus-4-6": (15.00, 75.00),
     "claude-fable-5": (3.00, 15.00),
 }
+
+
+class HookTraceWriter:
+    """Accumulate one IDE hook session in the GuardedAgent trace format."""
+
+    def __init__(
+        self,
+        session_id: str,
+        *,
+        adapter_name: Optional[str] = None,
+        project_name: Optional[str] = None,
+        trace_dir: Optional[str] = None,
+        run_id: Optional[str] = None,
+    ) -> None:
+        from ai_guardian.config.utils import get_sdk_trace_dir
+
+        self.session_id = session_id
+        self.adapter_name = adapter_name or "IDE"
+        self.project_name = project_name or ""
+        self.run_id = run_id
+        self.started_at = datetime.now(timezone.utc)
+        self._turn = 0
+        self._trace: List[Dict[str, Any]] = []
+        self._model = ""
+        self._agent_name = ""
+        directory = trace_dir or str(get_sdk_trace_dir())
+        timestamp = self.started_at.strftime("%Y%m%d-%H%M%S")
+        fallback_name = self.project_name or self.adapter_name
+        safe_name = re.sub(r"[^a-zA-Z0-9_.-]+", "-", fallback_name).strip("-.")
+        safe_name = safe_name or "ide-session"
+        self.filepath = os.path.join(
+            directory, f"{safe_name}_{timestamp}_{uuid.uuid4().hex[:8]}.json"
+        )
+
+    def record(self, hook_data: Dict[str, Any], normalized, result: Dict) -> None:
+        """Append a normalized hook event and persist the in-progress trace."""
+        self._update_metadata(hook_data)
+        event = normalized.event
+        event_value = getattr(event, "value", str(event)).lower()
+        steps: List[Dict[str, Any]] = []
+
+        if event_value == "prompt":
+            self._turn += 1
+            steps.append({"type": "prompt", "text": normalized.prompt_text or ""})
+        elif event_value in ("pretooluse", "beforereadfile"):
+            steps.append(
+                {
+                    "type": "tool_call",
+                    "name": normalized.tool_name or "unknown",
+                    "input": normalized.tool_input or {},
+                }
+            )
+        elif event_value == "posttooluse":
+            steps.append(
+                {
+                    "type": "tool_result",
+                    "name": normalized.tool_name or "unknown",
+                    "content": normalized.tool_response,
+                }
+            )
+
+        if event_value in ("prompt", "pretooluse", "beforereadfile", "posttooluse"):
+            violations = []
+            violation_type = result.get("_violation_type")
+            if violation_type:
+                violations.append(
+                    {
+                        "type": violation_type,
+                        "action": "block" if result.get("_blocked") else "warn",
+                    }
+                )
+            steps.append(
+                {
+                    "type": "scan",
+                    "scanned": event_value,
+                    "violations": violations,
+                }
+            )
+
+        # Never persist content that the hook identified as unsafe.  Clean content
+        # has already passed the same scanners that protect the IDE interaction.
+        if result.get("_violation_type"):
+            placeholder = f"[redacted: {result['_violation_type']}]"
+            for step in steps:
+                if step.get("type") == "prompt":
+                    step["text"] = placeholder
+                elif step.get("type") == "tool_call":
+                    step["input"] = placeholder
+                elif step.get("type") == "tool_result":
+                    step["content"] = placeholder
+
+        if steps:
+            if self._turn == 0:
+                self._turn = 1
+            if not self._trace or self._trace[-1]["turn"] != self._turn:
+                self._trace.append({"turn": self._turn, "steps": []})
+            turn_steps = self._trace[-1]["steps"]
+            for step in steps:
+                step["step"] = len(turn_steps)
+                turn_steps.append(step)
+        self._write(stop_reason="in_progress")
+
+    def finalize(self, token_usage: Optional[Dict[str, Any]] = None) -> None:
+        """Finish the trace document when the IDE session ends."""
+        self._write(stop_reason="session_end", token_usage=token_usage, final=True)
+
+    def _update_metadata(self, hook_data: Dict[str, Any]) -> None:
+        self._model = (
+            hook_data.get("model") or hook_data.get("model_name") or self._model
+        )
+        self._agent_name = (
+            hook_data.get("session_name")
+            or hook_data.get("session_title")
+            or hook_data.get("title")
+            or hook_data.get("task_description")
+            or hook_data.get("workspace_name")
+            or self._agent_name
+        )
+
+    def _document(
+        self,
+        stop_reason: str,
+        token_usage: Optional[Dict[str, Any]] = None,
+        final: bool = False,
+    ) -> Dict[str, Any]:
+        agent_name = self._agent_name or self.project_name
+        if not agent_name:
+            agent_name = f"{self.adapter_name} {self.started_at:%Y-%m-%d %H:%M:%S}"
+        doc: Dict[str, Any] = {
+            "agent_name": agent_name,
+            "session_id": self.session_id,
+            "model": self._model,
+            "started_at": self.started_at.isoformat(),
+            "stop_reason": stop_reason,
+            "usage": token_usage or {},
+            "project_name": self.project_name,
+            "source": "hook",
+            "adapter": self.adapter_name,
+            "trace": self._trace,
+        }
+        if self.run_id:
+            doc["run_id"] = self.run_id
+        if final:
+            doc["ended_at"] = datetime.now(timezone.utc).isoformat()
+        return doc
+
+    def _write(
+        self,
+        *,
+        stop_reason: str,
+        token_usage: Optional[Dict[str, Any]] = None,
+        final: bool = False,
+    ) -> None:
+        doc = self._document(stop_reason, token_usage, final)
+        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
+        temporary_path = self.filepath + ".tmp"
+        with open(temporary_path, "w", encoding="utf-8") as fh:
+            json.dump(doc, fh, indent=2, default=str)
+        os.replace(temporary_path, self.filepath)
+        write_trace_meta(self.filepath, doc)
 
 
 def _meta_path(filepath: str) -> str:

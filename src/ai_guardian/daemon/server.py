@@ -478,7 +478,7 @@ class DaemonServer:
         return result if result is not None else {"output": "{}", "exit_code": 0}
 
     def _handle_paused_otel(self, hook_data, cwd):
-        """Track OTEL session lifecycle while daemon is paused (#2034)."""
+        """Track session observability while daemon is paused (#2034, #2190)."""
         session_id = hook_data.get("session_id")
         if not session_id:
             return
@@ -511,18 +511,17 @@ class DaemonServer:
                     adapter_name=adapter_name,
                     token_usage=token_usage,
                 )
-                return
-
-            emitter = self.state.get_otel_emitter(session_id)
-            if not emitter:
+                self.state.finalize_hook_trace(session_id, token_usage=token_usage)
                 return
 
             adapter_name = None
             project_name = None
+            adapter = None
             try:
                 from ai_guardian.hook_processing import detect_adapter
 
-                adapter_name = detect_adapter(hook_data).name
+                adapter = detect_adapter(hook_data)
+                adapter_name = adapter.name
             except Exception:
                 pass
             try:
@@ -532,6 +531,18 @@ class DaemonServer:
                     project_name = get_project_name(cwd)
             except Exception:
                 pass
+            if adapter is not None:
+                normalized = adapter.normalize_input(hook_data)
+                self.state.record_hook_trace_event(
+                    hook_data,
+                    normalized,
+                    {"output": None, "exit_code": 0},
+                    adapter=adapter,
+                )
+
+            emitter = self.state.get_otel_emitter(session_id)
+            if not emitter:
+                return
             emitter.record_session_start(
                 adapter_name=adapter_name,
                 project_name=project_name,
