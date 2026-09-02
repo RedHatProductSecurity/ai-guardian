@@ -1,10 +1,18 @@
 """Contract tests for the automated release script."""
 
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RELEASE_SCRIPT = REPO_ROOT / "scripts" / "release.sh"
+
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="release.sh requires a native Bash environment",
+)
 
 
 def test_release_script_has_valid_bash_syntax():
