@@ -96,6 +96,12 @@ class TestWebListPageAutoRefresh:
         source = inspect.getsource(create_ide_sessions_page)
         assert 'auto_timer.get("paused")' in source
 
+    def test_list_controls_do_not_overlap_global_header(self):
+        from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
+
+        source = inspect.getsource(create_ide_sessions_page)
+        assert "position: sticky" not in source
+
 
 class TestWebDetailPageAutoRefresh:
     """Verify detail page has auto-refresh timer with pause support."""
@@ -141,6 +147,14 @@ class TestWebDetailPageAutoRefresh:
 
         source = inspect.getsource(create_ide_session_detail_page)
         assert 'auto_timer.get("paused")' in source
+
+    def test_detail_controls_do_not_overlap_global_header(self):
+        from ai_guardian.web.pages.ide_sessions import (
+            create_ide_session_detail_page,
+        )
+
+        source = inspect.getsource(create_ide_session_detail_page)
+        assert "position: sticky" not in source
 
 
 class TestWebTracesPageAutoRefresh:
