@@ -837,7 +837,12 @@ def _get_turn_type(steps):
         if any(s.get("type") == "tool_call" for s in steps):
             return "tool_use"
         return "response"
-    if "input" in types:
+    # Hook traces do not contain model response events, but their tool calls
+    # are still the primary activity for the turn.  Classify them before the
+    # prompt/input fallback so the Sessions page does not call them scan-only.
+    if "tool_call" in types:
+        return "tool_use"
+    if "input" in types or "prompt" in types:
         return "user"
     return "scan_only"
 
@@ -857,6 +862,10 @@ def _get_turn_prompt_preview(steps):
             text = step.get("text", "")
             if text:
                 return _truncate(text, 120)
+
+    for step in steps:
+        if step.get("type") == "prompt":
+            return _truncate(step.get("text", ""), 120)
 
     for step in steps:
         if step.get("type") == "tool_call":
@@ -898,12 +907,18 @@ def _render_step_violation_badge(
     badge.on("click.stop", _scroll_to_step)
 
 
+def _get_tool_result_output(step):
+    """Return output from either the SDK or legacy hook trace schema."""
+    return step.get("output", step.get("content", ""))
+
+
 def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
     step_type = step.get("type", "")
     step_num = step.get("step", 0)
     icon_map = {
         "system": ("settings", "text-blue"),
         "input": ("input", "text-grey-6"),
+        "prompt": ("person", "text-blue"),
         "response": ("chat", "text-green"),
         "tool_call": ("build", "text-orange"),
         "tool_result": ("output", "text-orange"),
@@ -931,6 +946,15 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
                     sys_prompt = step.get("system_prompt", "")
                     if sys_prompt:
                         _render_text_block(f"System: {sys_prompt}")
+                elif step_type == "prompt":
+                    text = step.get("text", "")
+                    ui.label(f"Step {step_num}: user prompt").classes(
+                        "text-xs font-bold"
+                    )
+                    if text:
+                        if len(text) > 200 or text.count("\n") > 5:
+                            render_view_button("User Prompt", text, dialog_host)
+                        _render_text_block(text)
                 elif step_type == "response":
                     text = step.get("text", "")
                     signal = step.get("model_signal", "")
@@ -972,7 +996,10 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
                     _render_text_block(inp_text)
                 elif step_type == "tool_result":
                     name = step.get("name", "")
-                    output = step.get("output", "")
+                    # Hook traces originally used ``content`` while SDK traces
+                    # use ``output``.  Read both so existing trace files remain
+                    # fully visible after the unified Sessions rollout.
+                    output = _get_tool_result_output(step)
                     ui.label(f"Step {step_num}: tool_result {name}").classes(
                         "text-xs font-bold"
                     )
