@@ -88,6 +88,8 @@ class HookTraceWriter:
         self.project_name = project_name or ""
         self.run_id = run_id
         self.started_at = datetime.now(timezone.utc)
+        self.last_recorded_at = self.started_at
+        self._last_activity = time.monotonic()
         self._turn = 0
         self._trace: List[Dict[str, Any]] = []
         self._model = ""
@@ -103,6 +105,8 @@ class HookTraceWriter:
 
     def record(self, hook_data: Dict[str, Any], normalized, result: Dict) -> None:
         """Append a normalized hook event and persist the in-progress trace."""
+        self.last_recorded_at = datetime.now(timezone.utc)
+        self._last_activity = time.monotonic()
         self._update_metadata(hook_data)
         event = normalized.event
         event_value = getattr(event, "value", str(event)).lower()
@@ -173,6 +177,21 @@ class HookTraceWriter:
         """Finish the trace document when the IDE session ends."""
         self._write(stop_reason="session_end", token_usage=token_usage, final=True)
 
+    def is_stale(self, now: Optional[float] = None) -> bool:
+        """Return whether no hook event has arrived within the stale threshold."""
+        current = time.monotonic() if now is None else now
+        return (current - self._last_activity) > _STALE_THRESHOLD_SECONDS
+
+    def finalize_stale(self) -> None:
+        """Finish an abandoned hook trace using its last recorded activity."""
+        usage = compute_token_summary(self._trace, {}, self._model)["total_tokens"]
+        self._write(
+            stop_reason="timeout",
+            token_usage=usage,
+            final=True,
+            ended_at=self.last_recorded_at,
+        )
+
     def _update_metadata(self, hook_data: Dict[str, Any]) -> None:
         self._model = (
             hook_data.get("model") or hook_data.get("model_name") or self._model
@@ -191,6 +210,7 @@ class HookTraceWriter:
         stop_reason: str,
         token_usage: Optional[Dict[str, Any]] = None,
         final: bool = False,
+        ended_at: Optional[datetime] = None,
     ) -> Dict[str, Any]:
         agent_name = self._agent_name or self.project_name
         if not agent_name:
@@ -203,7 +223,7 @@ class HookTraceWriter:
         if self.run_id:
             extras["run_id"] = self.run_id
         if final:
-            extras["ended_at"] = datetime.now(timezone.utc).isoformat()
+            extras["ended_at"] = (ended_at or datetime.now(timezone.utc)).isoformat()
         return build_trace_doc(
             agent_name=agent_name,
             model=self._model,
@@ -221,8 +241,9 @@ class HookTraceWriter:
         stop_reason: str,
         token_usage: Optional[Dict[str, Any]] = None,
         final: bool = False,
+        ended_at: Optional[datetime] = None,
     ) -> None:
-        doc = self._document(stop_reason, token_usage, final)
+        doc = self._document(stop_reason, token_usage, final, ended_at)
         write_trace_file(self.filepath, doc)
 
 
@@ -280,21 +301,40 @@ def _count_violations(trace: list) -> int:
     return count
 
 
-def _mark_trace_crashed(filepath: str) -> None:
-    """Rewrite a stale in-progress trace file to stop_reason='crashed'."""
+def _finalize_stale_trace(filepath: str) -> Optional[Dict[str, Any]]:
+    """Persist timeout metadata and computed usage for an abandoned trace."""
     try:
+        mtime = os.path.getmtime(filepath)
         with open(filepath, "r", encoding="utf-8") as fh:
             doc = json.load(fh)
         if doc.get("stop_reason") != "in_progress":
-            return
-        doc["stop_reason"] = "crashed"
-        mtime = os.path.getmtime(filepath)
-        doc["ended_at"] = datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
-        with open(filepath, "w", encoding="utf-8") as fh:
-            json.dump(doc, fh, indent=2, default=str)
-        write_trace_meta(filepath, doc)
+            return doc
+        trace = doc.get("trace") or []
+        usage = compute_token_summary(
+            trace, doc.get("usage") or {}, doc.get("model", "")
+        )
+        doc["usage"] = usage["total_tokens"]
+        doc["stop_reason"] = "timeout"
+        doc["ended_at"] = (
+            _last_step_timestamp(trace)
+            or datetime.fromtimestamp(mtime, tz=timezone.utc).isoformat()
+        )
+        write_trace_file(filepath, doc)
+        os.utime(filepath, (mtime, mtime))
+        return doc
     except Exception:
-        logger.debug("Failed to mark trace as crashed: %s", filepath)
+        logger.debug("Failed to finalize stale trace: %s", filepath, exc_info=True)
+        return None
+
+
+def _last_step_timestamp(trace: List[Dict[str, Any]]) -> Optional[str]:
+    """Return the timestamp of the last recorded step, when available."""
+    for turn in reversed(trace):
+        for step in reversed(turn.get("steps") or []):
+            timestamp = step.get("recorded_at")
+            if timestamp:
+                return timestamp
+    return None
 
 
 def resolve_trace_dirs() -> List[str]:
@@ -402,8 +442,10 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
 
     if stop_reason == "in_progress" and file_mtime:
         if (time.time() - file_mtime) > _STALE_THRESHOLD_SECONDS:
-            _mark_trace_crashed(filepath)
-            stop_reason = "crashed"
+            finalized = _finalize_stale_trace(filepath)
+            if finalized:
+                stop_reason = "timeout"
+                usage = finalized.get("usage") or {}
 
     summary = {
         "filename": filename,
@@ -520,9 +562,12 @@ def read_trace_detail(
         try:
             file_mtime = os.path.getmtime(filepath)
             if (time.time() - file_mtime) > _STALE_THRESHOLD_SECONDS:
-                _mark_trace_crashed(filepath)
-                stop_reason = "crashed"
-                doc["stop_reason"] = "crashed"
+                finalized = _finalize_stale_trace(filepath)
+                if finalized:
+                    doc = finalized
+                    usage = doc.get("usage") or {}
+                    trace = doc.get("trace") or []
+                    stop_reason = "timeout"
         except OSError:
             pass
 

@@ -255,6 +255,7 @@ class DaemonState:
                 logger.debug(f"Cleaned up {len(expired)} expired hook contexts")
         self._cleanup_stale_project_configs()
         self.cleanup_expired_prompts()
+        self.cleanup_stale_hook_traces()
 
     def cleanup_session_contexts(self, session_id):
         """Remove all hook contexts for a specific session.
@@ -376,6 +377,29 @@ class DaemonState:
                 writer.finalize(token_usage=token_usage)
             except Exception:
                 logger.warning("Failed to finalize hook trace", exc_info=True)
+
+    def cleanup_stale_hook_traces(self):
+        """Finalize and discard hook writers abandoned without SessionEnd."""
+        now = time.monotonic()
+        with self._lock:
+            stale = [
+                (session_id, writer)
+                for session_id, writer in self._hook_trace_writers.items()
+                if writer.is_stale(now)
+            ]
+            for session_id, _writer in stale:
+                self._hook_trace_writers.pop(session_id, None)
+
+        for session_id, writer in stale:
+            try:
+                writer.finalize_stale()
+            except Exception:
+                logger.warning(
+                    "Failed to finalize stale hook trace for session %s",
+                    session_id,
+                    exc_info=True,
+                )
+        return len(stale)
 
     _OTEL_DISABLED = object()
 
