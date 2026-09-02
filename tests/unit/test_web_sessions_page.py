@@ -34,3 +34,11 @@ def test_tracing_settings_write_top_level_config():
     assert "trace_viewer" not in source
     assert "auto_refresh_interval_seconds" in source
     assert "trace_cache_retention_days" in source
+
+
+def test_tracing_settings_number_labels_have_room_to_render():
+    """Numeric settings stay wide enough to show their complete labels."""
+    from ai_guardian.web.pages.tracing_settings import create_tracing_settings_page
+
+    source = inspect.getsource(create_tracing_settings_page)
+    assert source.count('.classes("w-full max-w-md")') == 2

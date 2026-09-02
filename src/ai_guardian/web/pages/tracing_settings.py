@@ -20,14 +20,14 @@ def create_tracing_settings_page(service, daemon_name: str):
         enabled = ui.switch("Record SDK and hook traces")
         refresh = ui.number(
             "Auto-refresh interval (seconds)", value=5, min=1, max=300, step=1
-        )
+        ).classes("w-full max-w-md")
         retention = ui.number(
             "Remote trace cache retention (days)",
             value=90,
             min=1,
             max=3650,
             step=1,
-        )
+        ).classes("w-full max-w-md")
         ui.label(
             "Disabling recording does not affect security scanning, OTEL export, "
             "or existing traces."
