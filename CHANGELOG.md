@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unified hook session traces**: Persist IDE hook sessions in the GuardedAgent JSON trace format, including prompts, tool calls, scan outcomes, session metadata, and `AI_GUARDIAN_RUN_ID` correlation for combined SDK and IDE pipeline views (#2190)
+
 - **secrets**: Add credential detection for six AI service providers — Cartesia, LlamaCloud, Voyage AI, fal.ai, Mem0, and Retell AI. Prefix-only detection for distinctive formats (sk_car_, llx-); keyword-context detection for generic shapes (Voyage, fal.ai, Mem0, Retell). Adapted from [Betterleaks](https://github.com/betterleaks/betterleaks) rules (MIT) (#2185)
 
 ## [1.17.1] - 2026-08-26

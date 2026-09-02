@@ -84,6 +84,7 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
 
     try:
         if daemon_state:
+            daemon_state.finalize_hook_trace(session_id, token_usage=token_usage)
             daemon_state.flush_otel_emitter(
                 session_id,
                 adapter_name=(adapter.name if adapter else None),

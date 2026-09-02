@@ -1768,7 +1768,7 @@ def inject_security_only(hook_data, daemon_state=None):
         return None
 
 
-def process_hook_data(hook_data, daemon_state=None):
+def _process_hook_data(hook_data, daemon_state=None):
     """
     Process parsed hook data and return response.
 
@@ -2800,6 +2800,23 @@ def process_hook_data(hook_data, daemon_state=None):
                 daemon_state.record_ask_dialog(_latency_timer.ask_wait_total_ms)
             except Exception:
                 pass  # intentionally silent — metrics recording best-effort
+
+
+def process_hook_data(hook_data, daemon_state=None):
+    """Process one hook event and append it to the unified session trace."""
+    result = _process_hook_data(hook_data, daemon_state=daemon_state)
+    if daemon_state is None:
+        return result
+    try:
+        adapter = detect_adapter(hook_data)
+        normalized = adapter.normalize_input(hook_data)
+        if normalized.event != HookEvent.SESSION_END:
+            daemon_state.record_hook_trace_event(
+                hook_data, normalized, result, adapter=adapter
+            )
+    except Exception:
+        logger.warning("Hook trace recording failed", exc_info=True)
+    return result
 
 
 def process_hook_input():

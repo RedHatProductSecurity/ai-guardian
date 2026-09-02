@@ -160,6 +160,9 @@ class DaemonState:
         self._otel_emitters = {}  # session_id -> HookOtelEmitter
         self._session_open_counts = {}  # session_id -> int (#2037)
 
+        # Unified SDK-format traces for IDE hook sessions (#2190)
+        self._hook_trace_writers = {}  # session_id -> HookTraceWriter
+
         # State change observers (#650) — push notifications to subscribers
         self._state_observers = []
         self._state_observers_lock = threading.Lock()
@@ -304,6 +307,41 @@ class DaemonState:
         self._schedule_persist()
 
     # --- OTEL hook emitters (#1998) ---
+
+    def record_hook_trace_event(self, hook_data, normalized, result, adapter=None):
+        """Record an IDE hook event in the shared SDK trace format."""
+        session_id = normalized.session_id or hook_data.get("session_id")
+        if not session_id:
+            return
+        try:
+            from ai_guardian.daemon.traces import HookTraceWriter
+
+            with self._lock:
+                writer = self._hook_trace_writers.get(session_id)
+                if writer is None:
+                    cwd = normalized.working_dir or hook_data.get("cwd") or ""
+                    writer = HookTraceWriter(
+                        session_id,
+                        adapter_name=adapter.name if adapter else None,
+                        project_name=(Path(cwd).name if cwd else None),
+                        run_id=os.environ.get("AI_GUARDIAN_RUN_ID") or None,
+                    )
+                    self._hook_trace_writers[session_id] = writer
+                writer.record(hook_data, normalized, result)
+        except Exception:
+            logger.warning("Failed to record hook trace event", exc_info=True)
+
+    def finalize_hook_trace(self, session_id, token_usage=None):
+        """Finalize and remove a hook trace writer for a completed session."""
+        if not session_id:
+            return
+        with self._lock:
+            writer = self._hook_trace_writers.pop(session_id, None)
+        if writer is not None:
+            try:
+                writer.finalize(token_usage=token_usage)
+            except Exception:
+                logger.warning("Failed to finalize hook trace", exc_info=True)
 
     _OTEL_DISABLED = object()
 

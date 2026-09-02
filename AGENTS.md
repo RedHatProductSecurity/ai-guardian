@@ -77,44 +77,41 @@ EOF
 
 **Note**: Tests are only required when making code changes. Documentation-only changes do not require running tests.
 
-**Run only tests related to your changes** — GitHub Actions runs the full suite on every PR across Python 3.9-3.14 and Windows.
+**Run only related unit tests locally.** Do not run the full suite, integration
+tests, UX tests, container scenarios, or other unrelated tests. GitHub Actions
+runs all remaining validation on every PR across Python 3.9-3.14 and Windows.
 
 #### Which Tests to Run
 
 1. **Changed method → run its test file directly**
    ```bash
-   uv run --extra dev python -m pytest tests/test_<module>.py -v
+   uv run --extra dev python -m pytest tests/unit/test_<module>.py -v
    ```
 
 2. **Callers of changed method → run tests that reference it**
    ```bash
-   grep -rl '<method_name>' tests/ | xargs uv run --extra dev python -m pytest -v
+   grep -rl '<method_name>' tests/unit/ | xargs uv run --extra dev python -m pytest -v
    ```
 
-3. **Full suite → only before PR submission or when touching shared modules** (`constants.py`, `config/loaders.py`, `__init__.py`)
-   ```bash
-   uv run --extra dev python -m pytest
-   ```
+3. **Shared modules → run only directly related unit test files.** CI/CD runs
+   the full matrix and all non-unit suites.
 
 Using [uv](https://docs.astral.sh/uv/) (recommended):
 
 ```bash
 # Run tests related to your changes
-uv run --extra dev python -m pytest tests/test_<related>.py -v
+uv run --extra dev python -m pytest tests/unit/test_<related>.py -v
 
 # Run tests matching a keyword
-uv run --extra dev python -m pytest -k "test_something" -v
-
-# Run full suite only if needed (CI does this automatically)
-uv run --extra dev python -m pytest
+uv run --extra dev python -m pytest tests/unit/ -k "test_something" -v
 ```
 
 Or using pip:
 
 ```bash
 pip install ai-guardian[dev]
-pytest tests/test_<related>.py -v
-pytest -k "test_something" -v
+pytest tests/unit/test_<related>.py -v
+pytest tests/unit/ -k "test_something" -v
 ```
 
 #### Test Structure
@@ -217,33 +214,15 @@ def test_user_experience_feature_name(self, mock_pattern_config, mock_scan_confi
 
 ### Hook Regression Testing (dummy-agent)
 
-Before submitting PRs that touch hook processing (`hook_processing.py`), scanner logic, or the dummy-agent, run the bundled hook scenarios against the test container image.
+Hook regression scenarios run in CI/CD. Do not build the test container or run
+dummy-agent scenarios locally as part of routine agent validation. Locally, run
+only the related tests under `tests/unit/`.
 
-**When to run:**
+**What CI/CD covers:**
 
 - Changes to `src/ai_guardian/hook_processing.py`
 - Changes to any scanner (`secret_scanning`, `ssrf_protector`, `tool_policy`, etc.)
 - Changes to `src/ai_guardian/dummy_agent.py` or any hook adapter
-
-**How to run:**
-
-```bash
-# Build the base image
-podman build -t ai-guardian container/
-
-# Build the test image on top
-podman build -f container/Dockerfile.test -t ai-guardian-test container/
-
-# Run all bundled scenarios (CI mode — exits non-zero on any failure)
-podman run --rm ai-guardian-test /sandbox/run-scenarios.sh
-
-# Run a specific scenario
-podman run --rm ai-guardian-test \
-  ai-guardian dummy-agent --script /sandbox/scenarios/basic-secret.yaml
-
-# Interactive REPL for manual exploration
-podman run -it ai-guardian-test ai-guardian dummy-agent
-```
 
 **Bundled scenarios:**
 
@@ -514,8 +493,8 @@ Before submitting a PR:
 
 **For code changes:**
 1. Run `/simplify` on changed files — catch dead code, duplicates, over-abstraction
-2. Run all tests: `pytest`
-3. Check test coverage: `pytest --cov=ai_guardian`
+2. Run only related unit tests under `tests/unit/`
+3. Check coverage only for those related unit tests when needed
 4. Run linters: `black`, `ruff check`, `pylint` (required — CI will block if they fail)
 5. Update CHANGELOG.md if making notable changes
 
@@ -815,9 +794,9 @@ gh pr view <PR-NUMBER>
 # Minor/patch updates - quick review and merge
 gh pr merge <PR-NUMBER> --squash
 
-# Major updates - test locally first
+# Major updates - run related unit tests locally first
 gh pr checkout <PR-NUMBER>
-pytest
+pytest tests/unit/test_<related>.py
 gh pr merge <PR-NUMBER> --squash
 ```
 
@@ -858,9 +837,8 @@ gh pr merge <PR-NUMBER> --squash
    # Install new version
    ai-guardian scanner install gitleaks --version <NEW_VERSION>
    
-   # Run tests
-   pytest tests/
-   pytest tests/integration/
+   # Run related unit tests; CI/CD runs integration and full-suite coverage
+   pytest tests/unit/test_<related>.py
    
    # Verify scanner works
    gitleaks version
@@ -925,9 +903,9 @@ grep "uses:" .github/workflows/*.yml
 
 **Update Python packages**:
 ```bash
-# Test with new version
+# Test with new version using related unit tests
 pip install <package>==<NEW_VERSION>
-pytest
+pytest tests/unit/test_<related>.py
 
 # If tests pass, update pyproject.toml
 # Then update CHANGELOG.md and commit
@@ -957,7 +935,7 @@ cat versions.json | jq
 
 **Scanner Version Updates**:
 - ✅ Test new versions locally before updating `pyproject.toml`
-- ✅ Run full test suite (`pytest` + `pytest tests/integration/`)
+- ✅ Run related unit tests locally; rely on CI/CD for the full and integration suites
 - ✅ Update CHANGELOG.md with version changes
 - ✅ Prioritize security fixes (update ASAP)
 - ✅ Review scanner changelog for breaking changes
@@ -1325,7 +1303,7 @@ The skill automates steps 2-6 below and provides guidance for step 7.
 2. Create release branch: `git checkout -b release-X.Y`
 3. Update version in `pyproject.toml` and `src/ai_guardian/__init__.py`
 4. Update `CHANGELOG.md` (move Unreleased to version section)
-5. Run full test suite
+5. Run related unit tests; CI/CD runs the full suite
 6. Commit changes
 7. Create and push tag: `git tag -a vX.Y.Z -m "Release X.Y.Z"`
 8. GitHub Actions handles the rest automatically
@@ -1427,8 +1405,8 @@ git checkout -b security/hermes-pattern-update
 
 # 3. Implement improvements (e.g., update prompt_injection.py patterns)
 # 4. Add test cases in tests/
-# 5. Run full test suite
-pytest
+# 5. Run related unit tests; CI/CD runs all other tests
+pytest tests/unit/test_<related>.py
 
 # 6. Commit with attribution
 git commit -m "security: enhance prompt injection detection based on Hermes research
