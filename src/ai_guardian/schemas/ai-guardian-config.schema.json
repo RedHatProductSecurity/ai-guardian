@@ -1953,6 +1953,9 @@
     "support": {
       "$ref": "#/definitions/support"
     },
+    "tracing": {
+      "$ref": "#/definitions/tracing"
+    },
     "sdk": {
       "$ref": "#/definitions/sdk"
     }
@@ -2859,6 +2862,32 @@
         }
       }
     },
+    "tracing": {
+      "type": "object",
+      "description": "Unified SDK and hook trace recording, viewer refresh, and cache retention settings.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Record new SDK and hook traces. Existing traces remain available when disabled.",
+          "default": true
+        },
+        "auto_refresh_interval_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Polling interval in seconds for auto-refresh of active Sessions and IDE Conversations.",
+          "default": 5
+        },
+        "trace_cache_retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650,
+          "description": "Days to retain cached remote daemon traces before automatic cleanup.",
+          "default": 90
+        }
+      }
+    },
     "sdk": {
       "type": "object",
       "description": "SDK configuration for programmatic security checking (GuardedAgent, guarded() wrapper, monitor()). Controls scanning behavior, agent profiles, and client profiles.",
@@ -2931,9 +2960,14 @@
         },
         "trace_viewer": {
           "type": "object",
-          "description": "Console trace viewer settings. Traces are stored in the XDG state directory (~/.local/state/ai-guardian/sdk/traces/).",
+          "description": "Deprecated compatibility location for tracing settings. Use the top-level tracing section. Scheduled for removal in 2.x (#2194).",
           "additionalProperties": false,
           "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Deprecated compatibility setting for tracing.enabled.",
+              "default": true
+            },
             "auto_refresh_interval_seconds": {
               "type": "integer",
               "minimum": 1,

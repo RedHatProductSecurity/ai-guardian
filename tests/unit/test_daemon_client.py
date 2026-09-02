@@ -145,6 +145,37 @@ class TestSendHookRequest:
             server.close()
             thread.join(timeout=3)
 
+    def test_injects_run_id_from_hook_environment(self, short_state_dir, monkeypatch):
+        """send_hook_request forwards the invoking agent's correlation ID."""
+        from pathlib import Path
+
+        monkeypatch.setenv("AI_GUARDIAN_RUN_ID", "agent-run")
+        sock_path = Path(short_state_dir) / "daemon.sock"
+        server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        server.bind(str(sock_path))
+        server.listen(1)
+        received_data = {}
+
+        def mock_server():
+            conn, _ = server.accept()
+            try:
+                request = decode_message(conn, timeout=2.0)
+                received_data.update(request["data"])
+                conn.sendall(
+                    encode_message(make_response({"output": None, "exit_code": 0}))
+                )
+            finally:
+                conn.close()
+
+        thread = threading.Thread(target=mock_server, daemon=True)
+        thread.start()
+        try:
+            send_hook_request({"prompt": "test"}, timeout=2.0)
+            assert received_data["_ai_guardian_run_id"] == "agent-run"
+        finally:
+            server.close()
+            thread.join(timeout=3)
+
     def test_does_not_mutate_caller_dict(self, short_state_dir):
         """send_hook_request should not add _daemon_cwd to caller's dict."""
         from pathlib import Path

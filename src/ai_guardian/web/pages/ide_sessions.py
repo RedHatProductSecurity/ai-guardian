@@ -447,15 +447,13 @@ def _format_size(size_bytes):
 
 def _get_auto_refresh_interval(service, daemon_name):
     try:
+        from ai_guardian.config.loaders import resolve_tracing_config
+
         target = service.get_target_by_name(daemon_name)
         if not target:
             return 5
         cfg = service.get_daemon_config(target) or {}
-        return (
-            cfg.get("sdk", {})
-            .get("trace_viewer", {})
-            .get("auto_refresh_interval_seconds", 5)
-        )
+        return resolve_tracing_config(cfg)["auto_refresh_interval_seconds"]
     except Exception:
         return 5
 

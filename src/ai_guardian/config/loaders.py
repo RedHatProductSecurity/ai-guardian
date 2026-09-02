@@ -950,6 +950,43 @@ def _load_otel_config() -> Dict[str, Any]:
     return otel
 
 
+_TRACING_DEFAULTS = {
+    "enabled": True,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90,
+}
+
+
+def resolve_tracing_config(config: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Resolve unified tracing settings with the legacy SDK fallback.
+
+    Top-level ``tracing`` values override ``sdk.trace_viewer`` values. Missing
+    values use backward-compatible defaults.
+    """
+    resolved = dict(_TRACING_DEFAULTS)
+    if not isinstance(config, dict):
+        return resolved
+
+    sdk = config.get("sdk")
+    if isinstance(sdk, dict):
+        legacy = sdk.get("trace_viewer")
+        if isinstance(legacy, dict):
+            resolved.update(legacy)
+
+    tracing = config.get("tracing")
+    if isinstance(tracing, dict):
+        resolved.update(tracing)
+    return resolved
+
+
+def _load_tracing_config() -> Dict[str, Any]:
+    """Load unified tracing settings from merged configuration."""
+    config, error_msg = _load_config_file()
+    if error_msg:
+        return dict(_TRACING_DEFAULTS)
+    return resolve_tracing_config(config)
+
+
 def _sdk_secret_redaction_enabled(config: Optional[Dict[str, Any]] = None) -> bool:
     """Check whether secret redaction is enabled for SDK context.
 

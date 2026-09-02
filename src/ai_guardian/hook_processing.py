@@ -2833,6 +2833,9 @@ def process_hook_input():
     try:
         stdin_content = sys.stdin.read()
         hook_data = json.loads(stdin_content)
+        run_id = os.environ.get("AI_GUARDIAN_RUN_ID")
+        if run_id:
+            hook_data["_ai_guardian_run_id"] = run_id
         result = process_hook_data(hook_data)
 
         # Mark session for security re-injection after blocks (#584)

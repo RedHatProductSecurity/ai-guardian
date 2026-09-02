@@ -54,8 +54,27 @@ The web console binds to `127.0.0.1` (localhost only) for security.
 - **Permission Rules** — View and manage tool permission rules *(NEW in v1.11.0)*
 - **Context Poisoning** — Context poisoning detection settings with regex tester *(NEW in v1.11.0)*
 - **Logs** — Daemon log viewer
+- **Sessions** — Unified security-focused SDK and hook trace view, grouped by `run_id`
+- **Tracing Settings** — Enable or disable SDK and hook trace recording, and configure refresh and remote-cache retention
+- **IDE Conversations** — Raw IDE-specific conversation replay for debugging
 - **Scan Configure** — Scan a project to detect false positives and auto-generate suppression config *(NEW in v1.15.0)*
 - **Daemon Detail** — Single daemon stats, controls (pause/resume/reload), recent violations
+
+To correlate an SDK run with a hook-based IDE session, provide the SDK
+`RunContext.run_id` as the hook event's `run_id`. If the IDE cannot provide that
+field, set the same value as `AI_GUARDIAN_RUN_ID` when starting the non-SDK
+agent. Matching values appear as one run on **Sessions**. The daemon persists
+the `session_id` binding across restarts; sessions without a matching value
+remain separate.
+
+Both consoles save these controls in the top-level `tracing` configuration.
+Values from the deprecated `sdk.trace_viewer` section are still displayed when
+no top-level override exists, but new edits do not modify the deprecated section.
+
+An **Interrupted** Sessions status means the recording remained in progress
+without receiving a `SessionEnd` event, such as after a daemon restart. It does
+not necessarily mean the agent crashed. The stored/API `stop_reason` remains
+`crashed` for backward compatibility.
 
 ### System Tray Integration
 

@@ -1096,14 +1096,9 @@ class DaemonTray:
     def _read_trace_cache_retention(self) -> int:
         """Read trace_cache_retention_days from config."""
         try:
-            from ai_guardian.config.loaders import _load_config_file
+            from ai_guardian.config.loaders import _load_tracing_config
 
-            cfg = _load_config_file()
-            return (
-                cfg.get("sdk", {})
-                .get("trace_viewer", {})
-                .get("trace_cache_retention_days", 90)
-            )
+            return _load_tracing_config()["trace_cache_retention_days"]
         except Exception:
             return 90
 

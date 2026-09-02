@@ -1216,6 +1216,13 @@
     "_comment_cache_ttl_days": "Days before cached PyPI version info is discarded. Prevents stale 'update available' in air-gapped environments."
   },
 
+  "tracing": {
+    "_comment": "Unified SDK and hook trace recording and Sessions viewer settings.",
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  },
+
   "sdk": {
     "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper",
     "_comment_scanning": "Global enable/disable for all SDK scanning. When false, SDK skips all input/output scanning.",

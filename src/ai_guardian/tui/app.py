@@ -165,9 +165,10 @@ NAV_GROUPS = [
     (
         "AI Sessions",
         [
-            ("IDE Sessions", "panel-ide-sessions"),
-            ("SDK Traces", "panel-traces"),
+            ("Sessions", "panel-traces"),
+            ("Tracing Settings", "panel-tracing-settings"),
             ("OTEL Export", "panel-otel-settings"),
+            ("IDE Conversations", "panel-ide-sessions"),
         ],
     ),
     (
@@ -818,26 +819,41 @@ HELP_DOCS = {
         "  - Clear log display"
     ),
     "panel-traces": (
-        "[bold]Trace Viewer[/bold]\n\n"
-        "View conversation traces from GuardedAgent runs.\n\n"
+        "[bold]Sessions[/bold]\n\n"
+        "View unified SDK and hook security traces. To correlate a non-SDK "
+        "agent with an SDK run, provide the RunContext run_id in its hook "
+        "event or AI_GUARDIAN_RUN_ID environment.\n\n"
         "[bold]Features:[/bold]\n"
         "  - List all trace files with agent name, model, status\n"
         "  - Active conversations marked with green indicator\n"
+        "  - Interrupted means recording ended without a SessionEnd event\n"
         "  - Per-turn token breakdown and violation highlights\n\n"
         "[bold]Trace location:[/bold]\n"
         "  ~/.local/state/ai-guardian/sdk/traces/\n\n"
         "[bold]Keyboard shortcuts:[/bold]\n"
         "  [bold]r[/bold]  Refresh trace list"
     ),
+    "panel-tracing-settings": (
+        "[bold]Tracing Settings[/bold]\n\n"
+        "Configure unified SDK and hook trace recording.\n\n"
+        "[bold]Settings:[/bold]\n"
+        "  [bold]Record SDK and hook traces[/bold] — Enable or disable "
+        "new trace persistence\n"
+        "  [bold]Auto-refresh interval[/bold] — Refresh frequency for "
+        "the Sessions view\n"
+        "  [bold]Remote trace cache retention[/bold] — Days to retain "
+        "downloaded traces\n\n"
+        "Disabling recording does not affect security scanning, OTEL "
+        "export, or existing traces."
+    ),
     "AI Sessions": (
         "[bold]AI Sessions[/bold]\n\n"
-        "Browse and inspect conversations from IDE coding agents.\n\n"
+        "Inspect unified security sessions or raw IDE conversations.\n\n"
         "[bold]Sections:[/bold]\n"
-        "  [bold]IDE Sessions[/bold] — Multi-IDE conversation browser "
-        "(Claude, Cursor, Copilot, etc.)\n"
-        "  [bold]SDK Traces[/bold] — Conversation traces from "
-        "GuardedAgent runs\n"
-        "  [bold]OTEL Export[/bold] — Send traces to Grafana/Jaeger"
+        "  [bold]Sessions[/bold] — Unified SDK and hook security traces\n"
+        "  [bold]Tracing Settings[/bold] — Recording, refresh, and retention\n"
+        "  [bold]OTEL Export[/bold] — Send traces to Grafana/Jaeger\n"
+        "  [bold]IDE Conversations[/bold] — Raw multi-IDE conversation replay"
     ),
     "panel-ide-sessions": (
         "[bold]IDE Sessions[/bold]\n\n"
@@ -1752,6 +1768,10 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.traces import TracesContent
 
                     yield TracesContent()
+                with Container(id="panel-tracing-settings"):
+                    from ai_guardian.tui.tracing_settings import TracingSettingsContent
+
+                    yield TracingSettingsContent()
 
                 with Container(id="panel-otel-settings"):
                     from ai_guardian.tui.otel_settings import OtelSettingsContent

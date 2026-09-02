@@ -21,14 +21,21 @@ from ai_guardian.web.components.step_render import (
 )
 
 
+def _display_stop_reason(stop_reason: str) -> str:
+    """Use a neutral UI label for traces that were not finalized."""
+    return "interrupted" if stop_reason == "crashed" else stop_reason
+
+
 def create_traces_page(service, daemon_name: str):
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/traces")
     create_header(daemon_name, drawer=sidebar)
 
     with ui.column().classes("flex-grow p-6 gap-4"):
-        ui.label("Trace Viewer").classes("text-2xl font-bold")
+        ui.label("Sessions").classes("text-2xl font-bold")
         ui.label(
-            "Conversation traces from GuardedAgent runs across all discovered daemons."
+            "Unified SDK and hook security traces across all discovered daemons. "
+            "Non-SDK agents provide the SDK run_id in hook events or "
+            "AI_GUARDIAN_RUN_ID for correlation."
         ).classes("text-xs text-grey-6")
 
         try:
@@ -364,7 +371,7 @@ def create_trace_detail_page(service, daemon_name: str):
             detail_state["result"] = result
             agent_name = result.get("agent_name", "")
             model = result.get("model", "")
-            stop_reason = result.get("stop_reason", "")
+            stop_reason = _display_stop_reason(result.get("stop_reason", ""))
             is_active = result.get("is_active", False)
 
             header_label.text = f"{agent_name} ({model})"
@@ -374,10 +381,12 @@ def create_trace_detail_page(service, daemon_name: str):
                 with ui.row().classes("items-center gap-2"):
                     if is_active:
                         ui.badge("ACTIVE", color="green").classes("text-xs")
-                    elif stop_reason in ("error", "crashed"):
+                    elif stop_reason == "error":
                         ui.badge(stop_reason.upper(), color="red").classes("text-xs")
                     elif stop_reason == "interrupted":
-                        ui.badge("INTERRUPTED", color="orange").classes("text-xs")
+                        ui.badge("INTERRUPTED", color="orange").classes(
+                            "text-xs"
+                        ).tooltip("Recording ended without a SessionEnd event")
                     else:
                         ui.badge(stop_reason or "done", color="grey").classes("text-xs")
                     started = (result.get("started_at") or "")[:19]
@@ -434,12 +443,10 @@ def create_trace_detail_page(service, daemon_name: str):
 
 def _get_auto_refresh_interval(service, target):
     try:
+        from ai_guardian.config.loaders import resolve_tracing_config
+
         cfg = service.get_daemon_config(target) or {}
-        return (
-            cfg.get("sdk", {})
-            .get("trace_viewer", {})
-            .get("auto_refresh_interval_seconds", 5)
-        )
+        return resolve_tracing_config(cfg)["auto_refresh_interval_seconds"]
     except Exception:
         return 5
 
@@ -565,7 +572,7 @@ def _render_trace_card(trace, daemon_name):
     agent_name = trace.get("agent_name", "unknown")
     model = trace.get("model", "")
     is_active = trace.get("is_active", False)
-    stop_reason = trace.get("stop_reason", "")
+    stop_reason = _display_stop_reason(trace.get("stop_reason", ""))
     started_at = (trace.get("started_at") or "")[:19]
     total_turns = trace.get("total_turns", 0)
     violation_count = trace.get("violation_count", 0)
@@ -592,7 +599,7 @@ def _render_trace_card(trace, daemon_name):
         with ui.row().classes("items-center gap-2 w-full"):
             if is_active:
                 ui.icon("fiber_manual_record").classes("text-green text-xs")
-            elif stop_reason in ("error", "crashed"):
+            elif stop_reason == "error":
                 ui.icon("error_outline").classes("text-red text-xs")
             elif stop_reason == "interrupted":
                 ui.icon("pan_tool").classes("text-orange text-xs")
@@ -611,10 +618,12 @@ def _render_trace_card(trace, daemon_name):
 
             if is_active:
                 ui.badge("ACTIVE", color="green").classes("text-xs")
-            elif stop_reason in ("error", "crashed"):
+            elif stop_reason == "error":
                 ui.badge(stop_reason.upper(), color="red").classes("text-xs")
             elif stop_reason == "interrupted":
-                ui.badge("INTERRUPTED", color="orange").classes("text-xs")
+                ui.badge("INTERRUPTED", color="orange").classes("text-xs").tooltip(
+                    "Recording ended without a SessionEnd event"
+                )
             else:
                 ui.badge(stop_reason or "done", color="grey").classes("text-xs")
 

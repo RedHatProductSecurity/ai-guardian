@@ -2306,6 +2306,13 @@ def main():
         if _cli_ide and "_ide_type" not in hook_data:
             hook_data["_ide_type"] = _cli_ide
 
+        # Capture correlation context in the short-lived hook process. The daemon
+        # may have started before this agent and therefore cannot reliably read
+        # the agent's environment itself.
+        _cli_run_id = os.environ.get("AI_GUARDIAN_RUN_ID")
+        if _cli_run_id:
+            hook_data["_ai_guardian_run_id"] = _cli_run_id
+
         running = is_daemon_running()
         if not running and not _is_stop_requested():
             logger.info("Daemon not running, starting...")

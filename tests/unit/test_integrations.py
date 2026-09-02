@@ -8942,6 +8942,29 @@ class TestGuardedAgentTraceDir:
         defaults.update(kwargs)
         return GuardedAgent(**defaults), mock_client
 
+    @patch(
+        "ai_guardian.config.loaders._load_tracing_config",
+        return_value={"enabled": False},
+    )
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_trace_persistence_can_be_disabled(
+        self, mock_monitor, _mock_tracing, tmp_path
+    ):
+        mock_session = MagicMock()
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+        response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Hello!")], stop_reason="end_turn"
+        )
+        trace_dir = tmp_path / "traces"
+        agent, client = self._make_agent(trace_dir=str(trace_dir))
+        client.messages.create.return_value = response
+
+        result = agent.run("Hi")
+
+        assert result["trace"]
+        assert not trace_dir.exists()
+
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_trace_written_to_disk(self, mock_monitor, tmp_path):
         mock_session = MagicMock()

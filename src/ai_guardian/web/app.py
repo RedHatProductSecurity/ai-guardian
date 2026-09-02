@@ -554,6 +554,14 @@ class WebConsole:
 
             create_traces_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/tracing-settings")
+        def tracing_settings_page(daemon_name: str):
+            from ai_guardian.web.pages.tracing_settings import (
+                create_tracing_settings_page,
+            )
+
+            create_tracing_settings_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/trace-detail")
         def trace_detail_page(daemon_name: str):
             from ai_guardian.web.pages.traces import create_trace_detail_page

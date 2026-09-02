@@ -113,6 +113,30 @@ def test_empty_config_is_valid(schema):
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_top_level_tracing_config(schema):
+    """Unified tracing settings are accepted at the top level."""
+    validate(
+        instance={
+            "tracing": {
+                "enabled": False,
+                "auto_refresh_interval_seconds": 10,
+                "trace_cache_retention_days": 30,
+            }
+        },
+        schema=schema,
+    )
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_legacy_sdk_trace_viewer_config_remains_valid(schema):
+    """The deprecated location remains schema-compatible through 1.x."""
+    validate(
+        instance={"sdk": {"trace_viewer": {"enabled": False}}},
+        schema=schema,
+    )
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_permission_rule_structure(schema):
     """Test that permission rules validate correctly."""
     config = {

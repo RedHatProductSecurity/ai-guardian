@@ -364,6 +364,12 @@
     "auto_check_on_doctor": true,
     "cache_ttl_days": 7
   },
+  "_comment_tracing": "Unified SDK and hook trace recording and Sessions viewer settings.",
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  },
   "_comment_sdk": "SDK configuration for GuardedAgent and guarded() wrapper. Controls scanning, secret redaction, provider selection, and agent profiles.",
   "sdk": {
     "scanning": true,

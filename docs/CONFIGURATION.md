@@ -2,6 +2,26 @@
 
 AI Guardian uses a flexible configuration system with multiple sources and cascading priority rules.
 
+## Tracing
+
+Unified SDK and hook trace recording is configured at the top level:
+
+```json
+{
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  }
+}
+```
+
+`enabled` defaults to `true`. Setting it to `false` stops new trace recording
+but does not disable security scanning, violation logging, OTEL export, or
+browsing existing traces. The deprecated `sdk.trace_viewer` location remains a
+1.x compatibility fallback; top-level `tracing` values take precedence. It is
+scheduled for removal in 2.x (#2194).
+
 ## Configuration Files
 
 AI Guardian loads configuration from multiple sources in a specific priority order:

@@ -128,6 +128,28 @@ Claude Code exposes the conversation transcript to hooks via `UserPromptSubmit` 
 
 Transcript scanning uses a polymorphic `TranscriptAdapter` interface (`scanners/transcript/base.py`). Each IDE format has its own adapter that implements `can_scan()` and `scan_incremental()`.
 
+### Correlating Hook Sessions with SDK Runs
+
+The **Sessions** console page can group hook-based IDE activity with SDK traces.
+SDK agents use the `run_id` from `RunContext`. A hook event may provide the same
+value directly in its `run_id` field. Otherwise, a non-SDK agent can start with
+the matching value in `AI_GUARDIAN_RUN_ID`:
+
+```bash
+export AI_GUARDIAN_RUN_ID="pipeline-123"
+my-ide-agent
+```
+
+Use one stable, unique value for each logical pipeline. Sessions with matching
+values are shown as one run; an unset or different value remains separate. The
+**IDE Conversations** page remains the raw, IDE-specific conversation replay.
+
+The daemon persists the resolved value by `session_id`, so later events and
+daemon restarts retain the same correlation. Precedence is explicit hook-event
+`run_id`, persisted session binding, hook-process `AI_GUARDIAN_RUN_ID`, then the
+daemon environment as a legacy fallback. GUI IDEs that do not inherit shell
+environment should provide `run_id` in their hook events when supported.
+
 | Agent | Format | Default Path |
 |-------|--------|-------------|
 | Claude Code | JSONL | Provided by IDE in hook data |

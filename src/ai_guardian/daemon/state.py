@@ -147,6 +147,7 @@ class DaemonState:
         # Session persistence (#592)
         self._sessions_file = sessions_file or self._default_sessions_path()
         self._session_last_activity = {}  # session_key -> unix timestamp
+        self._session_run_ids = {}  # session_id -> run_id
         self._sessions_dirty = False
         self._debounce_timer = None
 
@@ -310,12 +311,17 @@ class DaemonState:
 
     def record_hook_trace_event(self, hook_data, normalized, result, adapter=None):
         """Record an IDE hook event in the shared SDK trace format."""
+        from ai_guardian.config.loaders import resolve_tracing_config
+
+        if not resolve_tracing_config(self.get_config()).get("enabled", True):
+            return
         session_id = normalized.session_id or hook_data.get("session_id")
         if not session_id:
             return
         try:
             from ai_guardian.daemon.traces import HookTraceWriter
 
+            run_id = self._resolve_hook_run_id(session_id, hook_data)
             with self._lock:
                 writer = self._hook_trace_writers.get(session_id)
                 if writer is None:
@@ -324,12 +330,40 @@ class DaemonState:
                         session_id,
                         adapter_name=adapter.name if adapter else None,
                         project_name=(Path(cwd).name if cwd else None),
-                        run_id=os.environ.get("AI_GUARDIAN_RUN_ID") or None,
+                        run_id=run_id,
                     )
                     self._hook_trace_writers[session_id] = writer
+                elif run_id and writer.run_id != run_id:
+                    writer.run_id = run_id
                 writer.record(hook_data, normalized, result)
         except Exception:
             logger.warning("Failed to record hook trace event", exc_info=True)
+
+    def _resolve_hook_run_id(self, session_id, hook_data):
+        """Resolve and persist a hook session's run ID by precedence."""
+        explicit_run_id = hook_data.get("run_id")
+        if not isinstance(explicit_run_id, str) or not explicit_run_id:
+            explicit_run_id = None
+        forwarded_run_id = hook_data.get("_ai_guardian_run_id")
+        if not isinstance(forwarded_run_id, str) or not forwarded_run_id:
+            forwarded_run_id = None
+        daemon_run_id = os.environ.get("AI_GUARDIAN_RUN_ID")
+        with self._lock:
+            persisted_run_id = self._session_run_ids.get(session_id)
+            run_id = (
+                explicit_run_id
+                or persisted_run_id
+                or forwarded_run_id
+                or daemon_run_id
+                or None
+            )
+            changed = bool(run_id and persisted_run_id != run_id)
+            if changed:
+                self._session_run_ids[session_id] = run_id
+                self._session_last_activity[session_id] = time.time()
+        if changed:
+            self._schedule_persist()
+        return run_id
 
     def finalize_hook_trace(self, session_id, token_usage=None):
         """Finalize and remove a hook trace writer for a completed session."""
@@ -1563,6 +1597,9 @@ class DaemonState:
                     self._security_injected_sessions.add(key)
                 if entry.get("security_reinject", False):
                     self._security_reinject_sessions.add(key)
+                run_id = entry.get("run_id")
+                if run_id:
+                    self._session_run_ids[key] = run_id
                 self._session_last_activity[key] = last_activity
 
             loaded = len(self._security_injected_sessions)
@@ -1611,16 +1648,24 @@ class DaemonState:
         """Build serializable session dict (must be called with lock held)."""
         now = time.time()
         sessions = {}
-        all_keys = self._security_injected_sessions | self._security_reinject_sessions
+        all_keys = (
+            self._security_injected_sessions
+            | self._security_reinject_sessions
+            | self._session_run_ids.keys()
+        )
         for key in all_keys:
             last_activity = self._session_last_activity.get(key, now)
             if now - last_activity > SESSION_TTL:
                 continue
-            sessions[key] = {
+            entry = {
                 "security_injected": key in self._security_injected_sessions,
                 "security_reinject": key in self._security_reinject_sessions,
                 "last_activity": last_activity,
             }
+            run_id = self._session_run_ids.get(key)
+            if run_id:
+                entry["run_id"] = run_id
+            sessions[key] = entry
         return {"sessions": sessions, "version": 1}
 
     def _write_sessions_file(self, data):
