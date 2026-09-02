@@ -599,6 +599,30 @@ agent = GuardedAgent(model="claude-sonnet-5", name="fixer", context=ctx)
 agent.run("Fix the issues found")
 ```
 
+### Correlating SDK and Hook-Based Agents
+
+`RunContext` propagates its `run_id` automatically for SDK operations. A
+hook-based IDE can include the same value as `run_id` in its hook events. When
+the IDE cannot supply that field, start the non-SDK agent with
+`AI_GUARDIAN_RUN_ID` in its environment:
+
+```bash
+export AI_GUARDIAN_RUN_ID="pipeline-123"
+my-ide-agent
+```
+
+The SDK and hook traces are grouped into one run on the **Sessions** page when
+their IDs match. Keep the value stable for the lifetime of one logical pipeline
+and use a new unique value for the next pipeline. Hook sessions without the
+event field or environment variable are still recorded, but they cannot be
+correlated with the SDK run.
+
+The daemon binds the first resolved run ID to the IDE `session_id` and persists
+that binding across daemon restarts. Resolution order is: an explicit `run_id`
+in the hook event, the persisted session binding, `AI_GUARDIAN_RUN_ID` forwarded
+by the hook process, then the daemon environment as a compatibility fallback.
+An explicit event value can update an existing binding.
+
 ### RunContext Fields
 
 | Field | Type | Purpose |
@@ -613,6 +637,7 @@ agent.run("Fix the issues found")
 - **OTEL**: `ai_guardian.run_id` as span attribute — query Grafana by run_id
 - **violations.jsonl**: `run_id` in the context dict
 - **Trace meta**: `run_id` in `.meta.json` sidecar files
+- **Hook sessions**: supplied by hook-event `run_id` or `AI_GUARDIAN_RUN_ID`
 
 ### Concurrency Detection
 
@@ -1391,15 +1416,22 @@ The SDK uses `hostname` as the daemon name for traces pushed this way.
 
 ```json
 {
-  "sdk": {
-    "trace_viewer": {
-      "trace_cache_retention_days": 90
-    }
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
   }
 }
 ```
 
-Default: 90 days. Manual pruning: `ai-guardian trace prune <YYYY-MM-DD> [--dry-run] [--include-local]`.
+Tracing is enabled by default. Disabling it stops new SDK and hook trace files
+without affecting security scanning, violation logging, OTEL export, or existing
+trace browsing. Cache retention defaults to 90 days. Manual pruning:
+`ai-guardian trace prune <YYYY-MM-DD> [--dry-run] [--include-local]`.
+
+The deprecated `sdk.trace_viewer` location remains readable during 1.x. Values
+under top-level `tracing` take precedence and the compatibility path is
+scheduled for removal in 2.x (#2194).
 
 #### OTEL Custom Metadata
 

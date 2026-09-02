@@ -175,14 +175,13 @@ class IDESessionsContent(Container):
 
     def _get_refresh_interval(self) -> float:
         try:
-            from ai_guardian.config.loaders import get_config
+            from ai_guardian.config.loaders import (
+                get_config,
+                resolve_tracing_config,
+            )
 
             cfg = get_config()
-            return (
-                cfg.get("sdk", {})
-                .get("trace_viewer", {})
-                .get("auto_refresh_interval_seconds", 5)
-            )
+            return resolve_tracing_config(cfg)["auto_refresh_interval_seconds"]
         except Exception:
             return 5
 

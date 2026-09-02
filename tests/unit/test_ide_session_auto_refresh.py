@@ -36,6 +36,21 @@ class TestWebAutoRefreshInterval:
 
         assert _get_auto_refresh_interval(FakeService(), "test") == 10
 
+    def test_top_level_config_overrides_legacy_value(self):
+        from ai_guardian.web.pages.ide_sessions import _get_auto_refresh_interval
+
+        class FakeService:
+            def get_target_by_name(self, name):
+                return "target"
+
+            def get_daemon_config(self, target):
+                return {
+                    "tracing": {"auto_refresh_interval_seconds": 20},
+                    "sdk": {"trace_viewer": {"auto_refresh_interval_seconds": 10}},
+                }
+
+        assert _get_auto_refresh_interval(FakeService(), "test") == 20
+
     def test_returns_default_on_exception(self):
         from ai_guardian.web.pages.ide_sessions import _get_auto_refresh_interval
 

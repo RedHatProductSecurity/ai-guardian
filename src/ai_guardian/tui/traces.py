@@ -54,8 +54,9 @@ class TracesContent(Container):
 
     def compose(self) -> ComposeResult:
         yield Static(
-            "[bold]Trace Viewer[/bold]\n"
-            "[dim]Conversation traces from GuardedAgent runs.[/dim]",
+            "[bold]Sessions[/bold]\n"
+            "[dim]Unified SDK and hook security traces. Non-SDK agents provide "
+            "the SDK run_id in hook events or AI_GUARDIAN_RUN_ID.[/dim]",
             id="traces-header",
         )
         with Horizontal():
@@ -334,19 +335,20 @@ def _format_trace_label(t):
     turns = t.get("total_turns", 0)
     started = (t.get("started_at") or "")[:19]
     stop = t.get("stop_reason", "")
+    display_stop = "interrupted" if stop == "crashed" else stop
 
     if t.get("is_active"):
         active_marker = "[green]●[/green] "
         status = "[green]ACTIVE[/green]"
-    elif stop in ("error", "crashed"):
+    elif display_stop == "error":
         active_marker = "[red]✕[/red] "
-        status = f"[red]{stop.upper()}[/red]"
-    elif stop == "interrupted":
+        status = "[red]ERROR[/red]"
+    elif display_stop == "interrupted":
         active_marker = "[yellow]⚡[/yellow] "
         status = "[yellow]INTERRUPTED[/yellow]"
     else:
         active_marker = "[dim]○[/dim] "
-        status = f"[dim]{stop}[/dim]"
+        status = f"[dim]{display_stop}[/dim]"
 
     tokens = t.get("total_tokens", {})
     total_input = tokens.get("input_tokens", 0)

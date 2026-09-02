@@ -6,6 +6,7 @@ hook event routing, and response formatting.
 """
 
 import json
+import os
 from io import StringIO
 from unittest import TestCase
 from unittest.mock import patch
@@ -32,6 +33,21 @@ class HookInputParsingTests(TestCase):
 
         assert result is not None
         assert "exit_code" in result
+
+    @patch("ai_guardian.hook_processing.process_hook_data")
+    def test_process_hook_input_propagates_run_id(self, mock_process):
+        """Direct hook processing captures correlation from its environment."""
+        mock_process.return_value = {"output": None, "exit_code": 0}
+        hook_data = {"hook_event_name": "UserPromptSubmit", "prompt": "hello"}
+
+        with (
+            patch.dict(os.environ, {"AI_GUARDIAN_RUN_ID": "agent-run"}),
+            patch("sys.stdin", StringIO(json.dumps(hook_data))),
+        ):
+            ai_guardian.process_hook_input()
+
+        forwarded = mock_process.call_args.args[0]
+        assert forwarded["_ai_guardian_run_id"] == "agent-run"
 
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")

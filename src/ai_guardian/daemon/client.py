@@ -190,8 +190,12 @@ def send_hook_request(hook_data, timeout=2.0):
     Returns:
         dict or None: Response with 'output' and 'exit_code', or None on failure
     """
+    data = {**hook_data, "_daemon_cwd": os.getcwd()}
+    run_id = os.environ.get("AI_GUARDIAN_RUN_ID")
+    if run_id:
+        data["_ai_guardian_run_id"] = run_id
+
     if _get_remote_url():
-        data = {**hook_data, "_daemon_cwd": os.getcwd()}
         return _send_remote("/api/hook", data, timeout=timeout)
 
     try:
@@ -200,8 +204,7 @@ def send_hook_request(hook_data, timeout=2.0):
             return None
 
         try:
-            hook_data = {**hook_data, "_daemon_cwd": os.getcwd()}
-            request = make_hook_request(hook_data)
+            request = make_hook_request(data)
             sock.sendall(encode_message(request))
             response = decode_message(sock, timeout=timeout)
 

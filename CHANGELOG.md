@@ -73,6 +73,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Console agent activity navigation**: Rename SDK Traces to Sessions and IDE Sessions to IDE Conversations, prioritizing the unified security view in the TUI and web console navigation (#2191)
+  - Add top-level `tracing` configuration for recording, viewer refresh, and cache retention, with default-enabled recording and deprecated `sdk.trace_viewer` fallback
+  - Document how non-SDK agents use `AI_GUARDIAN_RUN_ID` to correlate hook sessions with SDK `RunContext` runs
+  - Propagate `AI_GUARDIAN_RUN_ID` from each hook process so correlation does not depend on the daemon's startup environment
+  - Persist `session_id` to `run_id` bindings across daemon restarts and prefer explicit hook-event `run_id` values
+  - Display stale, unfinalized trace recordings as Interrupted instead of Crashed while preserving the stored status for compatibility
+
 - **AgentResponse for provider-agnostic normalized responses** — all provider strategies now return a unified `AgentResponse` dataclass instead of provider-specific response objects. Standardizes access to `content`, `tool_calls`, `stop_reason`, and `usage` across Anthropic, OpenAI, and Gemini providers (#2128)
 
 - **Structured logging throughout agent lifecycle** — replaced silent `except: pass` patterns with proper `logging.warning()` and `logging.debug()` calls. All SDK exceptions now log context before re-raising or swallowing (#2133)

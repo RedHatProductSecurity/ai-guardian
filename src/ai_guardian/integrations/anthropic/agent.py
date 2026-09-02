@@ -389,7 +389,11 @@ class GuardedAgent:
         self._name = name
         self._otel_metadata_fn = otel_metadata_fn
         self._target_dir = target_dir
-        if trace_dir is not None:
+        from ai_guardian.config.loaders import _load_tracing_config
+
+        if not _load_tracing_config().get("enabled", True):
+            self._trace_dir = None
+        elif trace_dir is not None:
             self._trace_dir = trace_dir
         else:
             from ai_guardian.config.utils import get_sdk_trace_dir

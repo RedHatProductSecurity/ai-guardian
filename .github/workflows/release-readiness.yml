@@ -361,6 +361,24 @@ jobs:
           print('Doctor validation: OK')
           "
 
+      - name: Verify unified tracing configuration
+        run: |
+          export XDG_CONFIG_HOME=$(mktemp -d)
+          ai-guardian setup --create-config
+          python -c "
+          import json, os
+          from ai_guardian.config.loaders import resolve_tracing_config
+          path = os.path.join(os.environ['XDG_CONFIG_HOME'], 'ai-guardian', 'ai-guardian.json')
+          config = json.load(open(path))
+          assert config['tracing']['enabled'] is True
+          assert resolve_tracing_config(config)['trace_cache_retention_days'] == 90
+          legacy = {'sdk': {'trace_viewer': {'enabled': False}}}
+          assert resolve_tracing_config(legacy)['enabled'] is False
+          mixed = {**legacy, 'tracing': {'enabled': True}}
+          assert resolve_tracing_config(mixed)['enabled'] is True
+          print('Unified tracing config: OK')
+          "
+
       - name: Test old permissions list migration
         run: |
           export XDG_CONFIG_HOME=$(mktemp -d)

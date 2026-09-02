@@ -40,6 +40,17 @@ class TestNavGroups:
                 assert isinstance(label, str) and label
                 assert isinstance(suffix, str)
 
+    def test_ai_sessions_prioritizes_security_sessions(self):
+        from ai_guardian.web.components.header import NAV_GROUPS
+
+        groups = dict(NAV_GROUPS)
+        assert groups["AI Sessions"] == [
+            ("Sessions", "/traces"),
+            ("Tracing Settings", "/tracing-settings"),
+            ("OTEL Export", "/otel-settings"),
+            ("IDE Conversations", "/ide-sessions"),
+        ]
+
 
 class TestSearchIndex:
     """Verify _build_search_index produces correct entries."""
@@ -202,7 +213,7 @@ class TestNavGroupsConsistency:
         from ai_guardian.web.components.header import NAV_GROUPS
 
         total = sum(len(items) for _, items in NAV_GROUPS)
-        assert total == 53
+        assert total == 54
 
     def test_first_item_is_dashboard(self):
         from ai_guardian.web.components.header import NAV_GROUPS
