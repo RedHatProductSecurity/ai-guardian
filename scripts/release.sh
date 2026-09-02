@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fully automated release script for AI Guardian.
-# No AI agent required — just gh CLI, python3, git, and sed.
+# No AI agent required — just gh CLI, python3, git, sed, curl, and git-cliff.
 #
 # Usage:
 #   scripts/release.sh minor              # minor release (1.16.0 -> 1.17.0)
@@ -96,6 +96,7 @@ command -v gh >/dev/null 2>&1        || die "gh CLI not found (brew install gh)"
 command -v python3 >/dev/null 2>&1   || die "python3 not found"
 command -v git >/dev/null 2>&1       || die "git not found"
 command -v sed >/dev/null 2>&1       || die "sed not found"
+command -v curl >/dev/null 2>&1      || die "curl not found"
 command -v git-cliff >/dev/null 2>&1 || die "git-cliff not found (brew install git-cliff)"
 
 if ! $DRY_RUN; then
@@ -425,6 +426,7 @@ if $DRY_RUN; then
     echo "[dry-run] gh run watch (build-container workflow)"
     echo "[dry-run] pip install --dry-run ai-guardian==${NEW_VERSION}"
     echo "[dry-run] docker manifest inspect quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}"
+    echo "[dry-run] Verify https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 else
     info "Waiting for publish workflow..."
     sleep 10
@@ -452,6 +454,23 @@ else
         info "Container: quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION} available"
     else
         warn "Container verification failed — image may not be available yet"
+    fi
+
+    info "Waiting for versioned documentation..."
+    DOCS_URL="https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
+    DOCS_AVAILABLE=false
+    for _attempt in {1..18}; do
+        if curl --fail --silent --location --max-time 10 --output /dev/null "$DOCS_URL"; then
+            DOCS_AVAILABLE=true
+            break
+        fi
+        sleep 10
+    done
+    if $DOCS_AVAILABLE; then
+        info "Read the Docs: ${DOCS_URL} available"
+    else
+        warn "Read the Docs verification timed out: ${DOCS_URL}"
+        warn "Check the Read the Docs build and SemVer tag activation rule"
     fi
 fi
 
@@ -507,5 +526,8 @@ echo "  Tag: ${TAG_NAME}"
 echo "  PyPI: https://pypi.org/project/ai-guardian/${NEW_VERSION}/"
 echo "  GitHub: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/${TAG_NAME}"
 echo "  Container: quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}"
+echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
+echo "  Docs (stable): https://ai-guardian.readthedocs.io/en/stable/"
+echo "  Docs (latest): https://ai-guardian.readthedocs.io/en/latest/"
 echo ""
 info "Done!"

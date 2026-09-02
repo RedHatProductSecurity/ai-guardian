@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Published documentation site**: Added MkDocs Material and Read the Docs configuration, searchable navigation, Mermaid support, generated SDK API reference, and release-time verification of versioned documentation.
+  - Documentation dependencies: `mkdocs-material` (MIT) and `mkdocstrings` (ISC).
+
 ### Fixed
 
 - **Web console header**: Keep the hamburger menu and header quicklinks interactive on IDE Conversations pages by removing overlapping sticky control layers (#2193)
