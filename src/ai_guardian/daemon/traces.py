@@ -170,7 +170,6 @@ class HookTraceWriter:
             turn_steps = self._trace[-1]["steps"]
             for step in steps:
                 step["step"] = len(turn_steps)
-                step["recorded_at"] = self.last_recorded_at.isoformat()
                 turn_steps.append(step)
         self._write(stop_reason="in_progress")
 
