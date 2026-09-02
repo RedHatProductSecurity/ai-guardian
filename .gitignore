@@ -26,6 +26,7 @@ codex.json
 .pytest_cache/
 .coverage
 htmlcov/
+site/
 
 # Temporary
 *.tmp

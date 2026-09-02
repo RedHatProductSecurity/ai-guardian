@@ -2,6 +2,17 @@
 
 This directory contains detailed documentation for AI Guardian. The main [README.md](../README.md) provides a quick overview; these docs cover configuration, features, and architecture in depth.
 
+The documentation is published on [Read the Docs](https://ai-guardian.readthedocs.io/).
+
+## Build the documentation locally
+
+```bash
+python -m pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+Run `mkdocs build` before submitting documentation changes. The generated `site/` directory is not committed.
+
 ## Getting Started
 
 | Document | Description |
@@ -18,7 +29,7 @@ This directory contains detailed documentation for AI Guardian. The main [README
 
 | Document | Description |
 |----------|-------------|
-| [Security Overview](security/) | Index of all security feature documentation |
+| [Security Overview](security/README.md) | Index of all security feature documentation |
 | [Secret Scanning](security/SECRET_SCANNING.md) | Secret detection, pattern server, false positives |
 | [Prompt Injection](security/PROMPT_INJECTION.md) | Heuristic detection, sensitivity, allowlists |
 | [SSRF Protection](security/SSRF_PROTECTION.md) | Private IP blocking, metadata endpoints, limitations |
@@ -79,4 +90,3 @@ This directory contains detailed documentation for AI Guardian. The main [README
 | [Agent Instructions](../AGENTS.md) | Development guidelines, testing, CI/CD |
 | [Releasing](../RELEASING.md) | Release process and version management |
 | [Changelog](../CHANGELOG.md) | Version history |
-

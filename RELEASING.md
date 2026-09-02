@@ -14,9 +14,19 @@ scripts/release.sh --dry-run minor    # preview without executing
 scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 ```
 
-The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
+The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
 
-**Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `git-cliff` (`brew install git-cliff`).
+**Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
+
+### One-time Read the Docs setup
+
+The release script pushes semantic version tags but does not manage Read the Docs project settings. Configure this once in **Read the Docs → Admin → Automation Rules**:
+
+1. Match: **SemVer versions**
+2. Version type: **Tag**
+3. Action: **Activate version**
+
+The GitHub integration then builds each `vX.Y.Z` tag automatically. Read the Docs maps the greatest stable semantic version to `/en/stable/`, while `/en/latest/` continues to track `main`. The release script waits for and verifies the exact `/en/vX.Y.Z/` URL after pushing the production tag.
 
 ## Table of Contents
 
@@ -314,6 +324,8 @@ git push origin v1.0.0
 1. **Publish Package** — builds and publishes to PyPI, creates a GitHub Release
 2. **Build Container Image** — builds and pushes `quay.io/redhatproductsecurity/ai-guardian:<version>`
 
+The Read the Docs GitHub integration also builds the activated version tag. This requires the one-time SemVer tag activation rule described above.
+
 Note: `:latest` tracks the main branch (updated on every merge), not releases.
 
 #### 7. Verify GitHub Actions Workflows
@@ -330,6 +342,7 @@ After pushing the tag:
    podman pull quay.io/redhatproductsecurity/ai-guardian:<version>
    podman run -it quay.io/redhatproductsecurity/ai-guardian:<version> ai-guardian --version
    ```
+7. Verify the versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`
 
 If the workflow fails, you may need to:
 - Fix the issue
@@ -644,6 +657,7 @@ Use this checklist for each release:
 - [ ] Verify package published to PyPI
 - [ ] Verify GitHub Release created
 - [ ] Test installation from PyPI: `uv tool install ai-guardian` (or `pip install ai-guardian`)
+- [ ] Verify versioned documentation published on Read the Docs
 
 ### Post-Release
 - [ ] Merge release branch back to `main`
