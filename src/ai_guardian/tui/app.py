@@ -833,6 +833,19 @@ HELP_DOCS = {
         "[bold]Keyboard shortcuts:[/bold]\n"
         "  [bold]r[/bold]  Refresh trace list"
     ),
+    "panel-tracing-settings": (
+        "[bold]Tracing Settings[/bold]\n\n"
+        "Configure unified SDK and hook trace recording.\n\n"
+        "[bold]Settings:[/bold]\n"
+        "  [bold]Record SDK and hook traces[/bold] — Enable or disable "
+        "new trace persistence\n"
+        "  [bold]Auto-refresh interval[/bold] — Refresh frequency for "
+        "the Sessions view\n"
+        "  [bold]Remote trace cache retention[/bold] — Days to retain "
+        "downloaded traces\n\n"
+        "Disabling recording does not affect security scanning, OTEL "
+        "export, or existing traces."
+    ),
     "AI Sessions": (
         "[bold]AI Sessions[/bold]\n\n"
         "Inspect unified security sessions or raw IDE conversations.\n\n"
