@@ -48,11 +48,7 @@ def create_ide_sessions_page(service, daemon_name: str):
 
         auto_timer = {"ref": None, "paused": False}
 
-        with (
-            ui.row()
-            .classes("items-end gap-4 w-full")
-            .style("position: sticky; top: 0; z-index: 10; background: #121212")
-        ):
+        with ui.row().classes("items-end gap-4 w-full"):
             ide_options = _get_ide_options()
             ide_select = ui.select(
                 options=ide_options,
@@ -96,11 +92,7 @@ def create_ide_sessions_page(service, daemon_name: str):
             create_sort_toggle(state, "ide_sessions_sort_newest", _reload_sessions)
             create_pause_toggle(auto_timer)
 
-        with (
-            ui.row()
-            .classes("items-center gap-2 w-full")
-            .style("position: sticky; top: 48px; z-index: 9; background: #121212")
-        ):
+        with ui.row().classes("items-center gap-2 w-full"):
 
             async def _prev_page():
                 if state["page"] > 1:
@@ -527,11 +519,7 @@ def create_ide_session_detail_page(service, daemon_name: str):
 
         auto_timer = {"ref": None, "paused": False}
 
-        with (
-            ui.row()
-            .classes("items-center gap-2 w-full")
-            .style("position: sticky; top: 0; z-index: 10; background: #121212")
-        ):
+        with ui.row().classes("items-center gap-2 w-full"):
             ui.label("Conversation").classes("text-lg font-bold")
 
             async def _reload_detail():
