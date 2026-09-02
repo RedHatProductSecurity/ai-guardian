@@ -276,6 +276,10 @@ def write_trace_meta(filepath: str, doc: Dict[str, Any]) -> None:
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
     }
+    for field in ("session_id", "source", "adapter", "ended_at"):
+        value = doc.get(field)
+        if value:
+            meta[field] = value
     run_id = doc.get("run_id")
     if run_id:
         meta["run_id"] = run_id
@@ -404,12 +408,14 @@ def list_traces(
                 if summary is None:
                     continue
 
-                if agent_name and summary.get("agent_name") != agent_name:
-                    continue
-
                 seen_paths.add(rel_path)
                 summaries.append(summary)
 
+    summaries = _group_hook_trace_summaries(summaries)
+    if agent_name:
+        summaries = [
+            summary for summary in summaries if summary.get("agent_name") == agent_name
+        ]
     summaries.sort(key=lambda t: t.get("started_at", ""), reverse=True)
     if limit is not None and limit > 0:
         summaries = summaries[:limit]
@@ -427,6 +433,13 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
 
     if meta is None:
         meta = _parse_full_trace_for_summary(filepath, filename)
+    elif "session_id" not in meta:
+        # Sidecars written before session-fragment support lack correlation data.
+        full_meta = _parse_full_trace_for_summary(filepath, filename)
+        if full_meta:
+            for field in ("session_id", "source", "adapter", "ended_at"):
+                if full_meta.get(field):
+                    meta[field] = full_meta[field]
 
     if meta is None:
         return None
@@ -446,6 +459,8 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
             if finalized:
                 stop_reason = "timeout"
                 usage = finalized.get("usage") or {}
+                if finalized.get("ended_at"):
+                    meta["ended_at"] = finalized["ended_at"]
 
     summary = {
         "filename": filename,
@@ -465,6 +480,9 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
         "violation_count": meta.get("violation_count", 0),
         "file_mtime": file_mtime,
     }
+    for field in ("session_id", "source", "adapter", "ended_at"):
+        if meta.get(field):
+            summary[field] = meta[field]
     run_id = meta.get("run_id")
     if run_id:
         summary["run_id"] = run_id
@@ -510,6 +528,9 @@ def _parse_full_trace_for_summary(
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
     }
+    for field in ("session_id", "source", "adapter", "ended_at"):
+        if doc.get(field):
+            meta[field] = doc[field]
     run_id = doc.get("run_id")
     if run_id:
         meta["run_id"] = run_id
@@ -552,6 +573,13 @@ def read_trace_detail(
     if not isinstance(doc, dict) or "agent_name" not in doc:
         return None
 
+    if doc.get("source") == "hook" and doc.get("session_id"):
+        fragments = _read_hook_trace_fragments(
+            trace_dirs, doc["session_id"], selected_filepath=filepath
+        )
+        if len(fragments) > 1:
+            doc = _merge_hook_trace_documents(fragments)
+
     usage = doc.get("usage") or {}
     trace = doc.get("trace") or []
     model = doc.get("model", "")
@@ -572,7 +600,16 @@ def read_trace_detail(
             pass
 
     computed = compute_token_summary(trace, usage, model)
-    computed["duration_seconds"] = _compute_duration(started_at, stop_reason, filepath)
+    if doc.get("fragment_count", 1) > 1:
+        computed["duration_seconds"] = _merged_duration_seconds(
+            started_at,
+            doc.get("ended_at", ""),
+            stop_reason == "in_progress",
+        )
+    else:
+        computed["duration_seconds"] = _compute_duration(
+            started_at, stop_reason, filepath
+        )
 
     violations = []
     for turn_obj in trace:
@@ -596,6 +633,158 @@ def read_trace_detail(
     doc["is_active"] = stop_reason == "in_progress"
     doc["computed"] = computed
     return doc
+
+
+def _group_hook_trace_summaries(
+    summaries: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Collapse hook trace file summaries into logical IDE sessions."""
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    standalone: List[Dict[str, Any]] = []
+    for summary in summaries:
+        session_id = summary.get("session_id")
+        if summary.get("source") == "hook" and session_id:
+            groups.setdefault(session_id, []).append(summary)
+        else:
+            standalone.append(summary)
+
+    result = list(standalone)
+    for session_id, members in groups.items():
+        if len(members) == 1:
+            members[0]["fragment_count"] = 1
+            result.append(members[0])
+            continue
+
+        members.sort(key=lambda item: item.get("started_at", ""))
+        latest = members[-1]
+        merged = dict(latest)
+        merged["filename"] = members[0]["filename"]
+        merged["started_at"] = members[0].get("started_at", "")
+        merged["ended_at"] = max(
+            (member.get("ended_at", "") for member in members), default=""
+        )
+        merged["total_turns"] = sum(member.get("total_turns", 0) for member in members)
+        merged["violation_count"] = sum(
+            member.get("violation_count", 0) for member in members
+        )
+        merged["total_tokens"] = _sum_usage(
+            member.get("total_tokens") or {} for member in members
+        )
+        merged["is_active"] = any(member.get("is_active", False) for member in members)
+        if merged["is_active"]:
+            merged["stop_reason"] = "in_progress"
+        merged["fragment_count"] = len(members)
+        merged["fragment_filenames"] = [member["filename"] for member in members]
+        merged["duration_seconds"] = _merged_duration_seconds(
+            merged.get("started_at", ""),
+            merged.get("ended_at", ""),
+            merged["is_active"],
+        )
+        result.append(merged)
+    return result
+
+
+def _sum_usage(usages) -> Dict[str, Any]:
+    """Sum the standard token counters across trace fragments."""
+    usage_list = list(usages)
+    fields = (
+        "input_tokens",
+        "output_tokens",
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+    )
+    return {field: sum(usage.get(field, 0) for usage in usage_list) for field in fields}
+
+
+def _merged_duration_seconds(started_at: str, ended_at: str, active: bool) -> float:
+    """Compute a logical session span from fragment boundaries."""
+    if not started_at:
+        return 0.0
+    try:
+        start = datetime.fromisoformat(started_at)
+        end = (
+            datetime.now(timezone.utc)
+            if active or not ended_at
+            else datetime.fromisoformat(ended_at)
+        )
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        return max(0.0, (end - start).total_seconds())
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _read_hook_trace_fragments(
+    trace_dirs: List[str], session_id: str, *, selected_filepath: str
+) -> List[Dict[str, Any]]:
+    """Read all hook trace documents matching a selected trace's session."""
+    selected_dir = next(
+        (
+            directory
+            for directory in trace_dirs
+            if selected_filepath.startswith(directory + os.sep)
+        ),
+        os.path.dirname(selected_filepath),
+    )
+    fragments = []
+    for dirpath, _dirnames, filenames in os.walk(selected_dir):
+        for entry in filenames:
+            if not entry.endswith(".json") or entry.endswith(".meta.json"):
+                continue
+            candidate = os.path.join(dirpath, entry)
+            try:
+                with open(candidate, "r", encoding="utf-8") as fh:
+                    candidate_doc = json.load(fh)
+            except (OSError, json.JSONDecodeError):
+                continue
+            if (
+                isinstance(candidate_doc, dict)
+                and candidate_doc.get("source") == "hook"
+                and candidate_doc.get("session_id") == session_id
+            ):
+                fragments.append(candidate_doc)
+    return fragments
+
+
+def _merge_hook_trace_documents(
+    fragments: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Merge chronologically ordered hook fragments into one trace document."""
+    fragments.sort(key=lambda item: item.get("started_at", ""))
+    merged = dict(fragments[0])
+    trace = []
+    next_turn = 1
+    for fragment in fragments:
+        for turn in fragment.get("trace") or []:
+            merged_turn = dict(turn)
+            merged_turn["turn"] = next_turn
+            trace.append(merged_turn)
+            next_turn += 1
+    merged["trace"] = trace
+    merged["usage"] = _sum_usage(fragment.get("usage") or {} for fragment in fragments)
+    merged["started_at"] = fragments[0].get("started_at", "")
+    merged["ended_at"] = max(
+        (fragment.get("ended_at", "") for fragment in fragments), default=""
+    )
+    latest = fragments[-1]
+    merged["stop_reason"] = latest.get("stop_reason")
+    if any(fragment.get("stop_reason") == "in_progress" for fragment in fragments):
+        merged["stop_reason"] = "in_progress"
+    for field in ("agent_name", "model", "project_name", "adapter", "run_id"):
+        value = next(
+            (
+                fragment.get(field)
+                for fragment in reversed(fragments)
+                if fragment.get(field)
+            ),
+            None,
+        )
+        if value is not None:
+            merged[field] = value
+    merged["fragment_count"] = len(fragments)
+    return merged
 
 
 def compute_token_summary(trace: list, usage: dict, model: str) -> Dict[str, Any]:
