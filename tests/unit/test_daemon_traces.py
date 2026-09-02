@@ -3,6 +3,8 @@
 import json
 import os
 import time
+from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
@@ -10,6 +12,7 @@ from ai_guardian.daemon.traces import (
     _STALE_THRESHOLD_SECONDS,
     _mark_trace_crashed,
     _meta_path,
+    build_trace_doc,
     compute_token_summary,
     estimate_cost,
     group_traces_by_run,
@@ -17,6 +20,7 @@ from ai_guardian.daemon.traces import (
     pushed_trace_to_summary,
     read_trace_detail,
     validate_filename,
+    write_trace_file,
     write_trace_meta,
 )
 
@@ -80,6 +84,64 @@ def _sample_trace_doc(
         },
         "trace": trace,
     }
+
+
+class TestSharedTraceHelpers:
+    def test_build_trace_doc_includes_common_fields_and_extras(self):
+        trace = [{"turn": 1, "steps": []}]
+
+        doc = build_trace_doc(
+            agent_name="test-agent",
+            model="test-model",
+            started_at="2026-09-02T12:00:00+00:00",
+            stop_reason="end_turn",
+            usage=None,
+            project_name="my-project",
+            trace=trace,
+            ended_at="2026-09-02T12:01:00+00:00",
+            run_id="run-123",
+        )
+
+        assert doc == {
+            "agent_name": "test-agent",
+            "model": "test-model",
+            "started_at": "2026-09-02T12:00:00+00:00",
+            "stop_reason": "end_turn",
+            "usage": {},
+            "project_name": "my-project",
+            "trace": trace,
+            "ended_at": "2026-09-02T12:01:00+00:00",
+            "run_id": "run-123",
+        }
+
+    def test_write_trace_file_atomically_writes_trace_and_meta(self, tmp_path):
+        filepath = tmp_path / "nested" / "trace.json"
+        doc = _sample_trace_doc()
+        doc["serialized_at"] = datetime(2026, 9, 2, tzinfo=timezone.utc)
+
+        with patch("ai_guardian.daemon.traces.os.replace", wraps=os.replace) as replace:
+            write_trace_file(str(filepath), doc)
+
+        replace.assert_called_once_with(str(filepath) + ".tmp", str(filepath))
+        assert not (tmp_path / "nested" / "trace.json.tmp").exists()
+        with open(filepath, "r", encoding="utf-8") as fh:
+            written = json.load(fh)
+        assert written["agent_name"] == "test-agent"
+        assert written["serialized_at"] == "2026-09-02 00:00:00+00:00"
+
+        with open(_meta_path(str(filepath)), "r", encoding="utf-8") as fh:
+            meta = json.load(fh)
+        assert meta["agent_name"] == "test-agent"
+        assert meta["total_turns"] == 2
+
+    def test_write_trace_file_replaces_existing_file(self, tmp_path):
+        filepath = tmp_path / "trace.json"
+        filepath.write_text("stale", encoding="utf-8")
+
+        write_trace_file(str(filepath), _sample_trace_doc(agent_name="replacement"))
+
+        with open(filepath, "r", encoding="utf-8") as fh:
+            assert json.load(fh)["agent_name"] == "replacement"
 
 
 class TestValidateFilename:
