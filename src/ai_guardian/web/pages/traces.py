@@ -8,6 +8,10 @@ import urllib.parse
 from nicegui import run, ui
 
 from ai_guardian.web.components.header import create_header, create_sidebar
+from ai_guardian.web.components.local_time import (
+    inject_local_time_js,
+    local_time_label,
+)
 from ai_guardian.web.components.content_viewer import render_view_button
 from ai_guardian.web.components.step_render import (
     compute_context_tokens,
@@ -389,8 +393,8 @@ def create_trace_detail_page(service, daemon_name: str):
                         ).tooltip("Recording ended without a SessionEnd event")
                     else:
                         ui.badge(stop_reason or "done", color="grey").classes("text-xs")
-                    started = (result.get("started_at") or "")[:19]
-                    ui.label(f"Started: {started}").classes("text-xs text-grey-6")
+                    ui.label("Started:").classes("text-xs text-grey-6")
+                    local_time_label(result.get("started_at") or "")
 
                 computed = result.get("computed", {})
                 total_turns = len(result.get("trace", []))
@@ -415,6 +419,8 @@ def create_trace_detail_page(service, daemon_name: str):
                         daemon_name,
                         dialog_host=dialog_host,
                     )
+
+            inject_local_time_js()
 
             await ui.run_javascript(
                 "(() => {"
@@ -499,6 +505,8 @@ def _render_trace_list(items, container, daemon_name, expanded_runs=None):
             else:
                 _render_trace_card(item, daemon_name)
 
+    inject_local_time_js()
+
 
 def _render_run_group_card(group, daemon_name, expanded_runs=None):
     """Render a collapsible run group card with aggregate stats."""
@@ -507,7 +515,7 @@ def _render_run_group_card(group, daemon_name, expanded_runs=None):
     total_duration = group.get("total_duration", 0)
     total_violations = group.get("total_violations", 0)
     is_active = group.get("is_active", False)
-    started_at = (group.get("started_at") or "")[:19]
+    started_at = group.get("started_at") or ""
     child_traces = group.get("traces", [])
 
     daemon_sources = sorted(
@@ -545,7 +553,7 @@ def _render_run_group_card(group, daemon_name, expanded_runs=None):
                     color="red",
                 ).classes("text-xs")
 
-            ui.label(started_at).classes("text-xs text-grey-6")
+            local_time_label(started_at)
 
         exp = ui.expansion("Traces", value=is_open).classes("w-full").props("dense")
 
@@ -573,7 +581,7 @@ def _render_trace_card(trace, daemon_name):
     model = trace.get("model", "")
     is_active = trace.get("is_active", False)
     stop_reason = _display_stop_reason(trace.get("stop_reason", ""))
-    started_at = (trace.get("started_at") or "")[:19]
+    started_at = trace.get("started_at") or ""
     total_turns = trace.get("total_turns", 0)
     violation_count = trace.get("violation_count", 0)
     filename = trace.get("filename", "")
@@ -635,7 +643,7 @@ def _render_trace_card(trace, daemon_name):
 
         with ui.grid(columns=4).classes("gap-1 mt-1"):
             ui.label("Started:").classes("text-xs text-grey-6")
-            ui.label(started_at).classes("text-xs")
+            local_time_label(started_at)
             ui.label("Turns:").classes("text-xs text-grey-6")
             ui.label(str(total_turns)).classes("text-xs")
             if context_tok:
