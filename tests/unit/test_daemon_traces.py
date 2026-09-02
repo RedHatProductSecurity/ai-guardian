@@ -174,6 +174,67 @@ class TestValidateFilename:
 
 
 class TestListTraces:
+    def test_merges_hook_fragments_by_session_before_limit(self, trace_dir):
+        first = _sample_trace_doc(agent_name="session")
+        first.update(
+            source="hook",
+            session_id="same-session",
+            started_at="2026-08-13T10:00:00+00:00",
+            ended_at="2026-08-13T10:05:00+00:00",
+        )
+        second = _sample_trace_doc(agent_name="session", turns=1)
+        second.update(
+            source="hook",
+            session_id="same-session",
+            started_at="2026-08-13T10:06:00+00:00",
+            ended_at="2026-08-13T10:10:00+00:00",
+        )
+        second["usage"] = {"input_tokens": 7, "output_tokens": 3}
+        write_trace_file(
+            str(trace_dir / "session_20260813-100000_a1b2c3d4.json"), first
+        )
+        write_trace_file(
+            str(trace_dir / "session_20260813-100600_b2c3d4e5.json"), second
+        )
+
+        result = list_traces(str(trace_dir), limit=1)
+
+        assert len(result) == 1
+        assert result[0]["session_id"] == "same-session"
+        assert result[0]["fragment_count"] == 2
+        assert result[0]["total_turns"] == 3
+        assert result[0]["started_at"] == "2026-08-13T10:00:00+00:00"
+        assert result[0]["ended_at"] == "2026-08-13T10:10:00+00:00"
+        assert result[0]["total_tokens"]["input_tokens"] == 207
+        assert result[0]["total_tokens"]["output_tokens"] == 103
+
+    def test_merges_existing_fragments_with_legacy_sidecars(self, trace_dir):
+        filenames = (
+            "session_20260813-100000_a1b2c3d4.json",
+            "session_20260813-100100_b2c3d4e5.json",
+        )
+        for filename in filenames:
+            doc = _sample_trace_doc(turns=1)
+            doc.update(source="hook", session_id="legacy-session")
+            filepath = _write_trace(trace_dir, filename, doc)
+            legacy_meta = {
+                "agent_name": doc["agent_name"],
+                "model": doc["model"],
+                "started_at": doc["started_at"],
+                "stop_reason": doc["stop_reason"],
+                "usage": doc["usage"],
+                "total_turns": 1,
+                "violation_count": 0,
+            }
+            with open(_meta_path(str(filepath)), "w", encoding="utf-8") as fh:
+                json.dump(legacy_meta, fh)
+
+        result = list_traces(str(trace_dir))
+
+        assert len(result) == 1
+        assert result[0]["session_id"] == "legacy-session"
+        assert result[0]["fragment_count"] == 2
+
     def test_empty_directory(self, trace_dir):
         result = list_traces(str(trace_dir))
         assert result == []
@@ -311,6 +372,39 @@ class TestListTraces:
 
 
 class TestReadTraceDetail:
+    def test_merges_hook_fragment_turns_usage_and_boundaries(self, trace_dir):
+        first = _sample_trace_doc(agent_name="session", turns=2)
+        first.update(
+            source="hook",
+            session_id="same-session",
+            started_at="2026-08-13T10:00:00+00:00",
+            ended_at="2026-08-13T10:05:00+00:00",
+        )
+        second = _sample_trace_doc(agent_name="renamed", turns=1)
+        second.update(
+            source="hook",
+            session_id="same-session",
+            started_at="2026-08-13T10:06:00+00:00",
+            ended_at="2026-08-13T10:10:00+00:00",
+            stop_reason="session_end",
+        )
+        second["usage"] = {"input_tokens": 7, "output_tokens": 3}
+        first_name = "session_20260813-100000_a1b2c3d4.json"
+        write_trace_file(str(trace_dir / first_name), first)
+        write_trace_file(
+            str(trace_dir / "session_20260813-100600_b2c3d4e5.json"), second
+        )
+
+        result = read_trace_detail(str(trace_dir), first_name)
+
+        assert result["fragment_count"] == 2
+        assert [turn["turn"] for turn in result["trace"]] == [1, 2, 3]
+        assert result["agent_name"] == "renamed"
+        assert result["started_at"] == "2026-08-13T10:00:00+00:00"
+        assert result["ended_at"] == "2026-08-13T10:10:00+00:00"
+        assert result["computed"]["total_tokens"]["input_tokens"] == 207
+        assert result["computed"]["total_tokens"]["output_tokens"] == 103
+
     def test_reads_full_trace(self, trace_dir):
         doc = _sample_trace_doc()
         _write_trace(trace_dir, "test-agent_20260813-103000_a1b2c3d4.json", doc)

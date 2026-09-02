@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Merged hook trace sessions**: Group trace fragments sharing a `session_id` into one Sessions entry and detail view, with combined turns, token usage, time boundaries, and visible fragment counts (#2208)
+
 - **IDE Conversations filters**: Add a searchable IDE dropdown with an "All" option for browsing conversations across every supported IDE (#2207)
 
 - **Published documentation site**: Added MkDocs Material and Read the Docs configuration, searchable navigation, Mermaid support, generated SDK API reference, and release-time verification of versioned documentation.

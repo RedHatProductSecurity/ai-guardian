@@ -393,6 +393,11 @@ def create_trace_detail_page(service, daemon_name: str):
                         ).tooltip("Recording ended without a SessionEnd event")
                     else:
                         ui.badge(stop_reason or "done", color="grey").classes("text-xs")
+                    fragment_count = result.get("fragment_count", 1)
+                    if fragment_count > 1:
+                        ui.badge(
+                            f"{fragment_count} fragments", color="blue-grey"
+                        ).classes("text-xs")
                     ui.label("Started:").classes("text-xs text-grey-6")
                     local_time_label(result.get("started_at") or "")
 
@@ -586,6 +591,7 @@ def _render_trace_card(trace, daemon_name):
     violation_count = trace.get("violation_count", 0)
     filename = trace.get("filename", "")
     daemon_source = trace.get("daemon_source", "")
+    fragment_count = trace.get("fragment_count", 1)
 
     tokens = trace.get("total_tokens", {})
     total_input = tokens.get("input_tokens", 0)
@@ -640,6 +646,10 @@ def _render_trace_card(trace, daemon_name):
                     f"{violation_count} violation{'s' if violation_count != 1 else ''}",
                     color="red",
                 ).classes("text-xs")
+            if fragment_count > 1:
+                ui.badge(f"{fragment_count} fragments", color="blue-grey").classes(
+                    "text-xs"
+                )
 
         with ui.grid(columns=4).classes("gap-1 mt-1"):
             ui.label("Started:").classes("text-xs text-grey-6")
