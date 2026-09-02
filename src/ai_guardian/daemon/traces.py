@@ -34,6 +34,41 @@ _MODEL_PRICING = {
 }
 
 
+def build_trace_doc(
+    *,
+    agent_name: str,
+    model: str,
+    started_at: str,
+    stop_reason: Optional[str],
+    usage: Optional[Dict[str, Any]],
+    project_name: Optional[str],
+    trace: List[Dict[str, Any]],
+    **extras: Any,
+) -> Dict[str, Any]:
+    """Build a trace document from fields shared by SDK and hook traces."""
+    doc = {
+        "agent_name": agent_name,
+        "model": model,
+        "started_at": started_at,
+        "stop_reason": stop_reason,
+        "usage": usage or {},
+        "project_name": project_name,
+        "trace": trace,
+    }
+    doc.update(extras)
+    return doc
+
+
+def write_trace_file(filepath: str, doc: Dict[str, Any]) -> None:
+    """Atomically write a trace document and its metadata sidecar."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    temporary_path = filepath + ".tmp"
+    with open(temporary_path, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, indent=2, default=str)
+    os.replace(temporary_path, filepath)
+    write_trace_meta(filepath, doc)
+
+
 class HookTraceWriter:
     """Accumulate one IDE hook session in the GuardedAgent trace format."""
 
@@ -160,23 +195,25 @@ class HookTraceWriter:
         agent_name = self._agent_name or self.project_name
         if not agent_name:
             agent_name = f"{self.adapter_name} {self.started_at:%Y-%m-%d %H:%M:%S}"
-        doc: Dict[str, Any] = {
-            "agent_name": agent_name,
+        extras: Dict[str, Any] = {
             "session_id": self.session_id,
-            "model": self._model,
-            "started_at": self.started_at.isoformat(),
-            "stop_reason": stop_reason,
-            "usage": token_usage or {},
-            "project_name": self.project_name,
             "source": "hook",
             "adapter": self.adapter_name,
-            "trace": self._trace,
         }
         if self.run_id:
-            doc["run_id"] = self.run_id
+            extras["run_id"] = self.run_id
         if final:
-            doc["ended_at"] = datetime.now(timezone.utc).isoformat()
-        return doc
+            extras["ended_at"] = datetime.now(timezone.utc).isoformat()
+        return build_trace_doc(
+            agent_name=agent_name,
+            model=self._model,
+            started_at=self.started_at.isoformat(),
+            stop_reason=stop_reason,
+            usage=token_usage,
+            project_name=self.project_name,
+            trace=self._trace,
+            **extras,
+        )
 
     def _write(
         self,
@@ -186,12 +223,7 @@ class HookTraceWriter:
         final: bool = False,
     ) -> None:
         doc = self._document(stop_reason, token_usage, final)
-        os.makedirs(os.path.dirname(self.filepath), exist_ok=True)
-        temporary_path = self.filepath + ".tmp"
-        with open(temporary_path, "w", encoding="utf-8") as fh:
-            json.dump(doc, fh, indent=2, default=str)
-        os.replace(temporary_path, self.filepath)
-        write_trace_meta(self.filepath, doc)
+        write_trace_file(self.filepath, doc)
 
 
 def _meta_path(filepath: str) -> str:

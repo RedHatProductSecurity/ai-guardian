@@ -859,8 +859,6 @@ class GuardedAgent:
             if filepath is None:
                 filepath = self._resolve_trace_filepath(started_at)
 
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
             sanitized_trace = self._sanitize_trace(result.get("trace", []), session)
 
             ended_at = datetime.now(timezone.utc)
@@ -868,37 +866,35 @@ class GuardedAgent:
             from ai_guardian.config.utils import get_project_name
 
             project_name = get_project_name(self._cwd)
-            trace_doc = {
-                "agent_name": agent_name,
-                "model": self._model,
-                "started_at": started_at.isoformat(),
+            extras = {
                 "ended_at": ended_at.isoformat(),
-                "stop_reason": result.get("stop_reason"),
-                "usage": result.get("usage"),
                 "max_tokens": self._max_tokens,
-                "project_name": project_name,
-                "trace": sanitized_trace,
             }
             if trace_id:
-                trace_doc["trace_id"] = trace_id
+                extras["trace_id"] = trace_id
             if self._run_context is not None:
-                trace_doc["run_id"] = self._run_context.run_id
+                extras["run_id"] = self._run_context.run_id
                 if self._run_sequence is not None:
-                    trace_doc["run_sequence"] = self._run_sequence
+                    extras["run_sequence"] = self._run_sequence
                 if self._run_context.metadata:
-                    trace_doc["run_metadata"] = self._run_context.metadata
+                    extras["run_metadata"] = self._run_context.metadata
                 if self._run_context.parent_trace_id:
-                    trace_doc["parent_trace_id"] = self._run_context.parent_trace_id
+                    extras["parent_trace_id"] = self._run_context.parent_trace_id
             if run_start_mono is not None:
-                trace_doc["duration_ms"] = int(
-                    (time.monotonic() - run_start_mono) * 1000
-                )
-            with open(filepath, "w", encoding="utf-8") as fh:
-                json.dump(trace_doc, fh, indent=2, default=str)
+                extras["duration_ms"] = int((time.monotonic() - run_start_mono) * 1000)
+            from ai_guardian.daemon.traces import build_trace_doc, write_trace_file
 
-            from ai_guardian.daemon.traces import write_trace_meta
-
-            write_trace_meta(filepath, trace_doc)
+            trace_doc = build_trace_doc(
+                agent_name=agent_name,
+                model=self._model,
+                started_at=started_at.isoformat(),
+                stop_reason=result.get("stop_reason"),
+                usage=result.get("usage"),
+                project_name=project_name,
+                trace=sanitized_trace,
+                **extras,
+            )
+            write_trace_file(filepath, trace_doc)
             logger.debug("Trace written to %s", filepath)
             import sys
 
