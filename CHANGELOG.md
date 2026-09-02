@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **IDE Conversations filters**: Add a searchable IDE dropdown with an "All" option for browsing conversations across every supported IDE (#2207)
+
 - **Published documentation site**: Added MkDocs Material and Read the Docs configuration, searchable navigation, Mermaid support, generated SDK API reference, and release-time verification of versioned documentation.
   - Documentation dependencies: `mkdocs-material` (MIT) and `mkdocstrings` (ISC).
 
