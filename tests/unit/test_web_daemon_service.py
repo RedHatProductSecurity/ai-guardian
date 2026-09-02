@@ -145,3 +145,139 @@ class TestDaemonServiceControl:
         mock_target.runtime = "container"
         service._client._rest_request.return_value = {"status": "reloaded"}
         assert service.reload_daemon(mock_target) is True
+
+
+class TestGetAllDaemonTraces:
+    @mock.patch(
+        "ai_guardian.web.services.daemon_service.list_cached_remote_traces",
+        return_value=[],
+        create=True,
+    )
+    def test_aggregates_local_traces(self, _mock_cache, service):
+        t1 = mock.MagicMock()
+        t1.name = "daemon-a"
+        t1.runtime = "local"
+        t2 = mock.MagicMock()
+        t2.name = "daemon-b"
+        t2.runtime = "local"
+        service._targets = [t1, t2]
+
+        service._client.get_traces.side_effect = [
+            {
+                "traces": [
+                    {"agent_name": "triage", "started_at": "2026-01-01T10:00:00"},
+                ]
+            },
+            {
+                "traces": [
+                    {"agent_name": "fixer", "started_at": "2026-01-01T11:00:00"},
+                ]
+            },
+        ]
+        result = service.get_all_daemon_traces()
+        traces = result["traces"]
+        assert len(traces) == 2
+        assert traces[0]["daemon_source"] == "daemon-b"
+        assert traces[1]["daemon_source"] == "daemon-a"
+
+    @mock.patch(
+        "ai_guardian.web.services.daemon_service.list_cached_remote_traces",
+        return_value=[],
+        create=True,
+    )
+    def test_tags_each_trace_with_daemon_source(self, _mock_cache, service):
+        t1 = mock.MagicMock()
+        t1.name = "local"
+        t1.runtime = "local"
+        service._targets = [t1]
+        service._client.get_traces.return_value = {
+            "traces": [
+                {"agent_name": "a", "started_at": "2026-01-01T10:00:00"},
+            ]
+        }
+        result = service.get_all_daemon_traces()
+        assert result["traces"][0]["daemon_source"] == "local"
+
+    @mock.patch(
+        "ai_guardian.web.services.daemon_service.list_cached_remote_traces",
+        return_value=[],
+        create=True,
+    )
+    def test_handles_daemon_failure(self, _mock_cache, service):
+        t1 = mock.MagicMock()
+        t1.name = "good"
+        t1.runtime = "local"
+        t2 = mock.MagicMock()
+        t2.name = "bad"
+        t2.runtime = "local"
+        service._targets = [t1, t2]
+
+        service._client.get_traces.side_effect = [
+            {"traces": [{"agent_name": "a", "started_at": "2026-01-01T10:00:00"}]},
+            Exception("connection refused"),
+        ]
+        result = service.get_all_daemon_traces()
+        assert len(result["traces"]) == 1
+        assert result["traces"][0]["daemon_source"] == "good"
+
+    @mock.patch(
+        "ai_guardian.web.services.daemon_service.list_cached_remote_traces",
+        return_value=[],
+        create=True,
+    )
+    def test_empty_when_no_targets(self, _mock_cache, service):
+        service._targets = []
+        result = service.get_all_daemon_traces()
+        assert result["traces"] == []
+        assert result["total_count"] == 0
+
+    @mock.patch(
+        "ai_guardian.web.services.daemon_service.list_cached_remote_traces",
+        return_value=[],
+        create=True,
+    )
+    def test_respects_limit(self, _mock_cache, service):
+        t1 = mock.MagicMock()
+        t1.name = "d1"
+        t1.runtime = "local"
+        service._targets = [t1]
+        service._client.get_traces.return_value = {
+            "traces": [
+                {"agent_name": f"a{i}", "started_at": f"2026-01-01T{10+i:02d}:00:00"}
+                for i in range(5)
+            ]
+        }
+        result = service.get_all_daemon_traces(limit=3)
+        assert len(result["traces"]) == 3
+
+    def test_reads_remote_from_cache(self, service):
+        """Remote targets are read from cache, not queried live."""
+        local = mock.MagicMock()
+        local.name = "local-daemon"
+        local.runtime = "local"
+        remote = mock.MagicMock()
+        remote.name = "container-1"
+        remote.runtime = "container"
+        service._targets = [local, remote]
+
+        service._client.get_traces.return_value = {
+            "traces": [
+                {"agent_name": "local-agent", "started_at": "2026-01-01T10:00:00"},
+            ]
+        }
+
+        cached_remote = [
+            {
+                "agent_name": "remote-agent",
+                "started_at": "2026-01-01T11:00:00",
+                "daemon_source": "container-1",
+            },
+        ]
+        with mock.patch(
+            "ai_guardian.daemon.trace_sync.list_cached_remote_traces",
+            return_value=cached_remote,
+        ):
+            result = service.get_all_daemon_traces()
+            traces = result["traces"]
+            assert len(traces) == 2
+            assert service._client.get_traces.call_count == 1

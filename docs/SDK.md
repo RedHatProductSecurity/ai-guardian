@@ -1364,6 +1364,43 @@ Behavior:
 - Errors writing the trace are logged but don't fail the agent
 - Explicit relative paths resolve against `cwd`
 
+#### Cross-Daemon Trace Aggregation
+
+When running pipelines across multiple machines (e.g., triage on machine A, remediation on machine B), each daemon stores traces locally. The system tray aggregates traces from all discovered daemons into a unified view, persisting them locally so they survive container/pod restarts.
+
+**How it works:**
+
+1. **Push-on-write**: When the SDK pushes a trace to its local daemon, the daemon forwards it to the registered tray's local daemon via `POST /api/traces/remote`. The tray daemon persists it to `~/.local/state/ai-guardian/sdk/traces/_remote/<daemon-name>/`.
+
+2. **Catch-up pull**: When the tray discovers a new remote daemon, it pulls all existing traces in the background.
+
+3. **Web console reads from cache**: The Trace Viewer page reads local traces directly and remote traces from the `_remote/` cache — no live REST queries to remote daemons.
+
+Traces are grouped by `run_id` across daemons (via `RunContext`), ordered by `run_sequence`, and each trace shows a daemon source badge.
+
+**Direct-mode SDK on containers**: When the SDK runs in direct mode (no local daemon), set `AI_GUARDIAN_TRACE_ENDPOINT` to push traces directly to the tray's daemon:
+
+```bash
+# In docker-compose or k8s spec
+AI_GUARDIAN_TRACE_ENDPOINT=host.docker.internal:63152
+```
+
+The SDK uses `hostname` as the daemon name for traces pushed this way.
+
+**Cache retention**: Cached remote traces are automatically cleaned up based on file age. Configure in `ai-guardian.json`:
+
+```json
+{
+  "sdk": {
+    "trace_viewer": {
+      "trace_cache_retention_days": 90
+    }
+  }
+}
+```
+
+Default: 90 days. Manual pruning: `ai-guardian trace prune <YYYY-MM-DD> [--dry-run] [--include-local]`.
+
 #### OTEL Custom Metadata
 
 For full OTEL configuration (endpoint, headers, resource attributes, span hierarchy) see the [Observability Guide](OBSERVABILITY.md).

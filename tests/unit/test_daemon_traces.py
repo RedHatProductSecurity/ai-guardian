@@ -738,5 +738,48 @@ class TestGroupTracesByRun:
         assert result[0].get("type") == "run_group"
         assert result[1]["agent_name"] == "early"
 
+    def test_cross_daemon_grouping(self):
+        """Traces from different daemons sharing run_id group together."""
+        traces = [
+            {
+                "agent_name": "triage-verifier",
+                "run_id": "pipeline/AAP-90154",
+                "run_sequence": 1,
+                "started_at": "2026-01-01T10:00:00",
+                "duration_seconds": 30.0,
+                "violation_count": 0,
+                "daemon_source": "daemon-A",
+            },
+            {
+                "agent_name": "remediation-planner",
+                "run_id": "pipeline/AAP-90154",
+                "run_sequence": 2,
+                "started_at": "2026-01-01T10:00:30",
+                "duration_seconds": 60.0,
+                "violation_count": 0,
+                "daemon_source": "daemon-B",
+            },
+            {
+                "agent_name": "remediation-implementer",
+                "run_id": "pipeline/AAP-90154",
+                "run_sequence": 3,
+                "started_at": "2026-01-01T10:01:30",
+                "duration_seconds": 45.0,
+                "violation_count": 1,
+                "daemon_source": "daemon-B",
+            },
+        ]
+        result = group_traces_by_run(traces)
+        assert len(result) == 1
+        group = result[0]
+        assert group["type"] == "run_group"
+        assert group["agent_count"] == 3
+        assert group["total_violations"] == 1
+        assert group["total_duration"] == 135.0
+        sources = {t["daemon_source"] for t in group["traces"]}
+        assert sources == {"daemon-A", "daemon-B"}
+        assert group["traces"][0]["run_sequence"] == 1
+        assert group["traces"][2]["run_sequence"] == 3
+
     def test_empty_list(self):
         assert group_traces_by_run([]) == []

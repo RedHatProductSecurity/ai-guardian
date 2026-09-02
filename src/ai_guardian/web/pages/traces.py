@@ -27,9 +27,9 @@ def create_traces_page(service, daemon_name: str):
 
     with ui.column().classes("flex-grow p-6 gap-4"):
         ui.label("Trace Viewer").classes("text-2xl font-bold")
-        ui.label("Conversation traces from GuardedAgent runs.").classes(
-            "text-xs text-grey-6"
-        )
+        ui.label(
+            "Conversation traces from GuardedAgent runs across all discovered daemons."
+        ).classes("text-xs text-grey-6")
 
         try:
             from nicegui import app as _app
@@ -58,6 +58,12 @@ def create_traces_page(service, daemon_name: str):
                 options={"": "All Agents"},
                 value="",
                 label="Agent",
+            ).classes("w-48")
+
+            daemon_select = ui.select(
+                options={"": "All Daemons"},
+                value="",
+                label="Daemon",
             ).classes("w-48")
 
             top_input = (
@@ -115,17 +121,11 @@ def create_traces_page(service, daemon_name: str):
                 if ui.context.client.is_deleted:
                     return
                 await run.io_bound(service.refresh_targets)
-                target = service.get_target_by_name(daemon_name)
-                if not target:
-                    cards_container.clear()
-                    with cards_container:
-                        ui.label("Daemon not available.").classes("text-grey-6")
-                    return
 
                 agent_filter = agent_select.value or None
                 limit = int(top_input.value or 1000)
                 result = await run.io_bound(
-                    service.get_daemon_traces, target, agent_filter, None, limit
+                    service.get_all_daemon_traces, agent_filter, limit
                 )
 
                 traces = (result or {}).get("traces", [])
@@ -133,11 +133,19 @@ def create_traces_page(service, daemon_name: str):
                 pattern = filter_input.value.strip() if filter_input.value else None
                 if pattern:
                     traces = _filter_traces(traces, pattern)
+
+                daemon_filter = daemon_select.value or None
+                if daemon_filter:
+                    traces = [
+                        t for t in traces if t.get("daemon_source") == daemon_filter
+                    ]
+
                 traces.sort(
                     key=lambda t: t.get("started_at", ""),
                     reverse=state["newest_first"],
                 )
                 _populate_agent_filter(traces, agent_select)
+                _populate_daemon_filter(traces, daemon_select)
 
                 from ai_guardian.daemon.traces import group_traces_by_run
 
@@ -158,13 +166,21 @@ def create_traces_page(service, daemon_name: str):
 
                 prev_btn.set_enabled(page > 1)
                 next_btn.set_enabled(page < total_pages)
-                parts = [f"Page {page} of {total_pages} ({total_matches} matches)"]
+                daemon_count = len(service.targets)
+                parts = [
+                    f"Page {page} of {total_pages}"
+                    f" ({total_matches} matches from {daemon_count} daemon"
+                    f"{'s' if daemon_count != 1 else ''})"
+                ]
                 if total_on_disk > len((result or {}).get("traces", [])):
                     parts.append(f" — showing top {limit} of {total_on_disk}")
                 page_label.set_text("".join(parts))
 
                 if auto_timer["ref"] is None and not auto_timer.get("paused"):
-                    interval = _get_auto_refresh_interval(service, target)
+                    target = service.get_target_by_name(daemon_name)
+                    interval = (
+                        _get_auto_refresh_interval(service, target) if target else 5
+                    )
                     auto_timer["ref"] = ui.timer(interval, load_traces)
             except Exception as exc:
                 cards_container.clear()
@@ -179,6 +195,7 @@ def create_traces_page(service, daemon_name: str):
 
         filter_input.on_value_change(lambda _: _on_filter_change())
         top_input.on_value_change(lambda _: _on_filter_change())
+        daemon_select.on_value_change(lambda _: _on_filter_change())
 
         ui.timer(0.1, load_traces, once=True)
 
@@ -190,6 +207,7 @@ def create_trace_detail_page(service, daemon_name: str):
 
     params = dict(ui.context.client.request.query_params)
     filename = params.get("file", "")
+    source_daemon = params.get("daemon", daemon_name)
 
     with ui.column().classes("flex-grow p-6 gap-4"):
         with ui.row().classes("items-center gap-2"):
@@ -210,6 +228,10 @@ def create_trace_detail_page(service, daemon_name: str):
                     ui.notify("Copied", position="bottom", type="positive"),
                 ),
             ).props("dense flat size=xs color=grey-7").tooltip("Copy filename")
+            if source_daemon:
+                ui.badge(f"daemon: {source_daemon}", color="blue-grey").classes(
+                    "text-xs"
+                )
 
         try:
             from nicegui import app as _app
@@ -320,20 +342,23 @@ def create_trace_detail_page(service, daemon_name: str):
             if ui.context.client.is_deleted:
                 return
             await run.io_bound(service.refresh_targets)
-            target = service.get_target_by_name(daemon_name)
-            if not target:
-                header_label.text = "Daemon not available"
-                return
 
             result = await run.io_bound(
-                service.get_daemon_trace_detail, target, filename, None
+                service.get_daemon_trace_detail_hybrid,
+                source_daemon,
+                daemon_name,
+                filename,
             )
             if not result or result.get("error"):
                 header_label.text = "Trace not found"
                 with turns_container:
                     turns_container.clear()
-                    err = (result or {}).get("error", "Failed to load trace")
-                    ui.label(err).classes("text-red")
+                    err = (result or {}).get("error", "")
+                    msg = err or (
+                        "Trace unavailable — source daemon offline"
+                        " and trace not cached."
+                    )
+                    ui.label(msg).classes("text-red")
                 return
 
             detail_state["result"] = result
@@ -393,7 +418,14 @@ def create_trace_detail_page(service, daemon_name: str):
             )
 
             if auto_timer["ref"] is None and not auto_timer.get("paused"):
-                interval = _get_auto_refresh_interval(service, target)
+                detail_target = service.get_target_by_name(
+                    source_daemon
+                ) or service.get_target_by_name(daemon_name)
+                interval = (
+                    _get_auto_refresh_interval(service, detail_target)
+                    if detail_target
+                    else 5
+                )
                 auto_timer["ref"] = ui.timer(interval, load_detail)
 
         detail_state["load_fn"] = load_detail
@@ -431,6 +463,21 @@ def _populate_agent_filter(traces, agent_select):
     agent_select.update()
 
 
+def _populate_daemon_filter(traces, daemon_select):
+    """Populate daemon filter dropdown from trace daemon_source values."""
+    names = sorted(
+        {t.get("daemon_source", "") for t in traces if t.get("daemon_source")}
+    )
+    options = {"": "All Daemons"}
+    for name in names:
+        options[name] = name
+    current = daemon_select.value
+    daemon_select.options = options
+    if current not in options:
+        daemon_select.value = ""
+    daemon_select.update()
+
+
 def _render_trace_list(items, container, daemon_name, expanded_runs=None):
     container.clear()
     if not items:
@@ -456,6 +503,10 @@ def _render_run_group_card(group, daemon_name, expanded_runs=None):
     started_at = (group.get("started_at") or "")[:19]
     child_traces = group.get("traces", [])
 
+    daemon_sources = sorted(
+        {t.get("daemon_source", "") for t in child_traces if t.get("daemon_source")}
+    )
+
     duration_str = _format_duration(total_duration)
 
     is_open = expanded_runs is not None and run_id in expanded_runs
@@ -474,6 +525,9 @@ def _render_run_group_card(group, daemon_name, expanded_runs=None):
                 "text-xs text-grey-5"
             )
             ui.label(duration_str).classes("text-xs text-grey-5")
+
+            for ds in daemon_sources:
+                ui.badge(ds, color="blue-grey").classes("text-xs")
 
             if is_active:
                 ui.badge("ACTIVE", color="green").classes("text-xs")
@@ -516,6 +570,7 @@ def _render_trace_card(trace, daemon_name):
     total_turns = trace.get("total_turns", 0)
     violation_count = trace.get("violation_count", 0)
     filename = trace.get("filename", "")
+    daemon_source = trace.get("daemon_source", "")
 
     tokens = trace.get("total_tokens", {})
     total_input = tokens.get("input_tokens", 0)
@@ -526,7 +581,11 @@ def _render_trace_card(trace, daemon_name):
     duration = trace.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
 
-    detail_params = f"?file={urllib.parse.quote(filename, safe='/')}"
+    source_daemon = daemon_source or daemon_name
+    detail_params = (
+        f"?file={urllib.parse.quote(filename, safe='/')}"
+        f"&daemon={urllib.parse.quote(source_daemon, safe='')}"
+    )
     detail_url = f"/{daemon_name}/trace-detail{detail_params}"
 
     with ui.card().classes("w-full"):
@@ -544,6 +603,11 @@ def _render_trace_card(trace, daemon_name):
                 "font-bold text-sm text-blue-4 hover:text-blue-3"
             ).style("text-decoration: underline dotted; text-underline-offset: 3px")
             ui.label(f"({model})").classes("text-xs text-grey-6")
+
+            if daemon_source:
+                ui.badge(daemon_source, color="blue-grey").classes("text-xs").tooltip(
+                    "Source daemon"
+                )
 
             if is_active:
                 ui.badge("ACTIVE", color="green").classes("text-xs")

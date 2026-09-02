@@ -682,7 +682,35 @@ def handle_trace_command(args, parser) -> int:
         return _export_single(args)
     if trace_cmd == "export-dir":
         return _export_dir(args)
+    if trace_cmd == "prune":
+        return _prune_traces(args)
     parser.print_help()
+    return 0
+
+
+def _prune_traces(args) -> int:
+    """Handle ``ai-guardian trace prune <date>``."""
+    import sys
+
+    from ai_guardian.daemon.trace_sync import prune_cache_before_date
+
+    dry_run = getattr(args, "dry_run", False)
+    include_local = getattr(args, "include_local", False)
+
+    deleted = prune_cache_before_date(
+        args.date, include_local=include_local, dry_run=dry_run
+    )
+    if deleted == 0 and not dry_run:
+        from datetime import datetime, timezone
+
+        try:
+            datetime.fromisoformat(args.date).replace(tzinfo=timezone.utc)
+        except ValueError:
+            print(f"Error: invalid date format: {args.date}", file=sys.stderr)
+            return 1
+
+    action = "Would delete" if dry_run else "Deleted"
+    print(f"{action} {deleted} trace(s)")
     return 0
 
 
