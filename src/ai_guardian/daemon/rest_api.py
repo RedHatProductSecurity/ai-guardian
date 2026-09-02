@@ -284,6 +284,11 @@ class _RestHandler(BaseHTTPRequestHandler):
             if body is None:
                 return
             self._handle_push_trace(body)
+        elif self.path == "/api/traces/remote":
+            body = self._read_body(max_size=self._MAX_CONTENT_SIZE)
+            if body is None:
+                return
+            self._handle_push_trace_remote(body)
         elif self.path == "/api/tray-plugins":
             body = self._read_body()
             if body is None:
@@ -1332,6 +1337,86 @@ class _RestHandler(BaseHTTPRequestHandler):
             return
         self.server.daemon_state.store_pushed_trace(filename, trace_doc)
         self._send_json({"status": "stored", "filename": filename})
+        self._forward_trace_to_tray(filename, trace_doc)
+
+    def _forward_trace_to_tray(self, filename, trace_doc):
+        """Forward a pushed trace to the registered tray's local daemon."""
+        if not self.server.daemon_state.is_tray_registered():
+            return
+        import threading
+
+        threading.Thread(
+            target=self._do_forward_trace,
+            args=(filename, trace_doc),
+            daemon=True,
+            name="trace-forward",
+        ).start()
+
+    def _do_forward_trace(self, filename, trace_doc):
+        """Background: send trace to tray daemon via POST /api/traces/remote."""
+        try:
+            import json
+            from urllib.error import URLError
+            from urllib.request import Request, urlopen
+
+            tray = self.server.daemon_state._registered_tray
+            if not tray:
+                return
+            host = tray["host"]
+            port = tray["port"]
+            if not port:
+                return
+
+            daemon_name = getattr(self.server, "_name", None) or "unknown"
+            payload = json.dumps(
+                {
+                    "daemon_name": daemon_name,
+                    "filename": filename,
+                    "trace_doc": trace_doc,
+                },
+                default=str,
+            ).encode("utf-8")
+
+            url = f"http://{host}:{port}/api/traces/remote"
+            req = Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlopen(req, timeout=10) as resp:
+                resp.read()
+        except (URLError, OSError, Exception):
+            logger.debug("Failed to forward trace to tray", exc_info=True)
+
+    def _handle_push_trace_remote(self, body):
+        """Handle POST /api/traces/remote — receive forwarded trace from remote daemon."""
+        daemon_name = body.get("daemon_name")
+        filename = body.get("filename")
+        trace_doc = body.get("trace_doc")
+        if not daemon_name or not filename or not trace_doc:
+            self._send_error(400, "daemon_name, filename and trace_doc are required")
+            return
+
+        from ai_guardian.daemon.traces import validate_filename
+
+        if not validate_filename(filename):
+            self._send_error(400, "Invalid filename format")
+            return
+
+        from ai_guardian.daemon.trace_sync import persist_trace
+
+        result = persist_trace(daemon_name, filename, trace_doc)
+        if result:
+            self._send_json(
+                {
+                    "status": "persisted",
+                    "daemon_name": daemon_name,
+                    "filename": filename,
+                }
+            )
+        else:
+            self._send_error(500, "Failed to persist trace")
 
     def _read_body(self, max_size=None):
         limit = max_size or self._MAX_BODY_SIZE

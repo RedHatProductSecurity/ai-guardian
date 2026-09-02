@@ -321,6 +321,9 @@ class DaemonTray:
             set()
         )  # remote running but registration failed
 
+        # Remote trace cache (#2188)
+        self._trace_catchup_done: set = set()
+
     def start(self):
         """Start tray icon in a background thread.
 
@@ -1056,6 +1059,53 @@ class DaemonTray:
         for t in targets:
             logger.info(f"  {t.name} ({t.runtime}) status={t.status} port={t.port}")
         self._register_tray_with_remotes()
+        self._catchup_remote_traces()
+
+    def _catchup_remote_traces(self):
+        """Catch-up pull for newly discovered remote daemons (#2188)."""
+        if not self._multi_client:
+            return
+        for target in self._targets:
+            if (
+                target.runtime in ("container", "kubernetes", "manual")
+                and target.status == "running"
+                and target.name not in self._trace_catchup_done
+            ):
+                self._trace_catchup_done.add(target.name)
+                threading.Thread(
+                    target=self._do_catchup_pull,
+                    args=(target,),
+                    daemon=True,
+                    name=f"trace-catchup-{target.name}",
+                ).start()
+
+    def _do_catchup_pull(self, target):
+        """Background thread: pull existing traces from a remote daemon."""
+        try:
+            from ai_guardian.daemon.trace_sync import (
+                catchup_pull,
+                cleanup_stale_cache,
+            )
+
+            catchup_pull(self._multi_client, target)
+            retention = self._read_trace_cache_retention()
+            cleanup_stale_cache(retention)
+        except Exception:
+            logger.debug("Trace catch-up failed for %s", target.name, exc_info=True)
+
+    def _read_trace_cache_retention(self) -> int:
+        """Read trace_cache_retention_days from config."""
+        try:
+            from ai_guardian.config.loaders import _load_config_file
+
+            cfg = _load_config_file()
+            return (
+                cfg.get("sdk", {})
+                .get("trace_viewer", {})
+                .get("trace_cache_retention_days", 90)
+            )
+        except Exception:
+            return 90
 
     def _auto_select_target(self):
         """Auto-select the best running daemon target.
@@ -1101,7 +1151,8 @@ class DaemonTray:
             ):
                 tray_host = self._resolve_tray_host(target)
                 try:
-                    ok = self._multi_client.register_tray(target, tray_host, 0)
+                    local_port = self._get_local_daemon_port()
+                    ok = self._multi_client.register_tray(target, tray_host, local_port)
                     if ok:
                         registered.add(target.name)
                         logger.info(
@@ -1130,6 +1181,22 @@ class DaemonTray:
         if target.runtime == "container":
             return "host.docker.internal"
         return "127.0.0.1"
+
+    @staticmethod
+    def _get_local_daemon_port() -> int:
+        """Read the local daemon's REST port from the PID file."""
+        try:
+            import json as _json
+
+            from ai_guardian.daemon import DEFAULT_REST_PORT, get_pid_path
+
+            pid_path = get_pid_path()
+            if pid_path.exists():
+                pid_info = _json.loads(pid_path.read_text())
+                return int(pid_info.get("rest_port", DEFAULT_REST_PORT))
+            return DEFAULT_REST_PORT
+        except Exception:
+            return 0
 
     def _start_prompt_poll(self):
         """Start background thread that fast-polls remote daemons for pending ask prompts."""

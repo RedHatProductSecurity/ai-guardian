@@ -2940,6 +2940,13 @@
               "maximum": 300,
               "description": "Polling interval in seconds for auto-refresh of active conversations in the web console.",
               "default": 5
+            },
+            "trace_cache_retention_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650,
+              "description": "Days to retain cached remote daemon traces before automatic cleanup.",
+              "default": 90
             }
           }
         }

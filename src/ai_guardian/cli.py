@@ -1318,6 +1318,24 @@ def main():
             help="service.name resource attribute (default: ai-guardian)",
         )
 
+        trace_prune_parser = trace_sub.add_parser(
+            "prune", help="Delete cached traces older than a given date"
+        )
+        trace_prune_parser.add_argument(
+            "date",
+            help="ISO date (YYYY-MM-DD). Prune traces with started_at before this date.",
+        )
+        trace_prune_parser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Show what would be deleted without actually deleting",
+        )
+        trace_prune_parser.add_argument(
+            "--include-local",
+            action="store_true",
+            help="Also prune local traces, not just remote cache",
+        )
+
         # Engine test subcommand (Issue #542)
         engine_test_parser = subparsers.add_parser(
             "engine-test", help="Test strings against scanner engines"

@@ -183,6 +183,43 @@ class DaemonService:
         except Exception:
             return None
 
+    def get_all_daemon_traces(
+        self,
+        agent_name: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> dict:
+        """Fetch traces from local daemons and cached remote traces.
+
+        Local targets are queried directly (instant). Remote traces are
+        read from the tray-synced cache on disk.
+        """
+        all_traces: list = []
+
+        for target in self._targets:
+            if target.runtime == "local":
+                try:
+                    result = self._client.get_traces(
+                        target, agent_name=agent_name, limit=limit
+                    )
+                    for t in (result or {}).get("traces", []):
+                        t["daemon_source"] = target.name
+                        all_traces.append(t)
+                except Exception:
+                    logger.debug("Failed to fetch local traces from %s", target.name)
+
+        try:
+            from ai_guardian.daemon.trace_sync import list_cached_remote_traces
+
+            cached = list_cached_remote_traces(agent_name=agent_name)
+            all_traces.extend(cached)
+        except Exception:
+            logger.debug("Failed to read cached remote traces")
+
+        all_traces.sort(key=lambda t: t.get("started_at", ""), reverse=True)
+        if limit is not None and limit > 0:
+            all_traces = all_traces[:limit]
+        return {"traces": all_traces, "total_count": len(all_traces)}
+
     def get_daemon_trace_detail(
         self,
         target: DaemonTarget,
@@ -193,6 +230,40 @@ class DaemonService:
             return self._client.get_trace_detail(target, filename, directory=directory)
         except Exception:
             return None
+
+    def get_daemon_trace_detail_hybrid(
+        self,
+        source_daemon: str,
+        local_daemon: str,
+        filename: str,
+    ) -> Optional[dict]:
+        """Fetch trace detail: cache-first for remote, direct for local."""
+        if source_daemon == local_daemon:
+            target = self.get_target_by_name(local_daemon)
+            if target:
+                return self.get_daemon_trace_detail(target, filename)
+            return None
+
+        from ai_guardian.daemon.trace_sync import (
+            persist_trace,
+            read_cached_remote_trace,
+        )
+
+        cached = read_cached_remote_trace(source_daemon, filename)
+        if cached:
+            return cached
+
+        target = self.get_target_by_name(source_daemon)
+        if target:
+            try:
+                result = self.get_daemon_trace_detail(target, filename)
+                if result:
+                    persist_trace(source_daemon, filename, result)
+                    return result
+            except Exception:
+                pass
+
+        return None
 
     def pause_daemon(self, target: DaemonTarget, minutes: int) -> bool:
         try:
