@@ -50,11 +50,15 @@ def create_ide_sessions_page(service, daemon_name: str):
 
         with ui.row().classes("items-end gap-4 w-full"):
             ide_options = _get_ide_options()
-            ide_select = ui.select(
-                options=ide_options,
-                value="claude",
-                label="IDE",
-            ).classes("w-48")
+            ide_select = (
+                ui.select(
+                    options=ide_options,
+                    value="claude",
+                    label="IDE",
+                )
+                .classes("w-48")
+                .props("use-input")
+            )
 
             project_select = ui.select(
                 options={"": "All Projects"},
@@ -122,15 +126,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                 pass
 
             ide = ide_select.value
-            if not ide:
-                return
-
             state["ide"] = ide
 
-            from ai_guardian.sessions.discovery import discover_sessions
-
             limit = int(top_input.value or 1000)
-            all_sessions = await run.io_bound(discover_sessions, ide, None, limit)
+            all_sessions = await run.io_bound(_discover_sessions, ide, limit)
             state["sessions"] = all_sessions
 
             _populate_project_dropdown(all_sessions, project_select)
@@ -179,15 +178,14 @@ def create_ide_sessions_page(service, daemon_name: str):
         state["load_fn"] = load_sessions
 
         async def _on_ide_change(e):
-            if e.value:
-                try:
-                    from nicegui import app as _app
+            try:
+                from nicegui import app as _app
 
-                    _app.storage.user["ide_sessions_ide"] = e.value
-                except Exception:
-                    pass
-                state["page"] = 1
-                await load_sessions()
+                _app.storage.user["ide_sessions_ide"] = e.value
+            except Exception:
+                pass
+            state["page"] = 1
+            await load_sessions()
 
         async def _on_filter_change():
             state["page"] = 1
@@ -207,7 +205,7 @@ def create_ide_sessions_page(service, daemon_name: str):
             except Exception:
                 pass
 
-            if saved_ide and saved_ide in _get_ide_options():
+            if saved_ide is not None and saved_ide in _get_ide_options():
                 ide_select.value = saved_ide
             else:
                 from ai_guardian.sessions.discovery import get_default_ide
@@ -232,12 +230,26 @@ def _get_ide_options():
     try:
         from ai_guardian.sessions.discovery import get_supported_ides
 
-        options = {}
+        options = {"": "All"}
         for ide in get_supported_ides():
             options[ide] = ide.title()
         return options
     except Exception:
-        return {"claude": "Claude"}
+        return {"": "All", "claude": "Claude"}
+
+
+def _discover_sessions(ide, limit):
+    """Discover sessions for one IDE, or combine sessions from every IDE."""
+    from ai_guardian.sessions.discovery import discover_sessions, get_supported_ides
+
+    if ide:
+        return discover_sessions(ide, None, limit)
+
+    sessions = []
+    for supported_ide in get_supported_ides():
+        sessions.extend(discover_sessions(supported_ide, None, limit))
+    sessions.sort(key=lambda session: session.get("modified", 0), reverse=True)
+    return sessions[:limit]
 
 
 def _populate_project_dropdown(sessions, project_select):
@@ -338,7 +350,7 @@ def _render_session_list(sessions, container, daemon_name, ide):
 
     with container:
         for s in sessions:
-            _render_session_card(s, daemon_name, ide)
+            _render_session_card(s, daemon_name, s.get("ide", ide))
 
 
 def _render_session_card(session, daemon_name, ide):
