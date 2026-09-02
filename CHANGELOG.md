@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Codex conversation titles**: Ignore injected AGENTS.md instruction messages when choosing session titles and omit empty model parentheses from detail headers (#2205)
 - **Web console header**: Keep the hamburger menu and header quicklinks interactive on IDE Conversations pages by removing overlapping sticky control layers (#2193)
 
 ### Added
