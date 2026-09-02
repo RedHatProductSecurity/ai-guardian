@@ -1,6 +1,7 @@
 """Tests for unified hook session traces (#2190)."""
 
 import json
+import time
 from unittest.mock import patch
 
 from ai_guardian.constants import HookEvent
@@ -213,3 +214,57 @@ def test_hook_trace_recording_can_be_disabled(tmp_path):
 
     assert state._hook_trace_writers == {}
     assert not list(tmp_path.glob("*.meta.json"))
+
+
+def test_daemon_periodically_finalizes_stale_hook_writer(tmp_path):
+    state = DaemonState(
+        sessions_file=tmp_path / "sessions.json",
+        pause_file=tmp_path / "pause.json",
+    )
+
+    with patch("ai_guardian.config.utils.get_sdk_trace_dir", return_value=tmp_path):
+        state.record_hook_trace_event(
+            {},
+            _normalized(HookEvent.PROMPT, prompt_text="hello"),
+            {"exit_code": 0},
+        )
+        writer = state._hook_trace_writers["session-123"]
+        writer._last_activity = time.monotonic() - 301
+        expected_ended_at = writer.last_recorded_at.isoformat()
+
+        assert state.cleanup_stale_hook_traces() == 1
+
+    assert state._hook_trace_writers == {}
+    trace_file = next(
+        path
+        for path in tmp_path.glob("*.json")
+        if path.name != "sessions.json" and not path.name.endswith(".meta.json")
+    )
+    doc = json.loads(trace_file.read_text())
+    assert doc["stop_reason"] == "timeout"
+    assert doc["ended_at"] == expected_ended_at
+    assert doc["usage"] == {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
+
+
+def test_normal_session_end_flow_remains_unchanged(tmp_path):
+    writer = HookTraceWriter(
+        "session-123", project_name="my-project", trace_dir=str(tmp_path)
+    )
+    writer.record(
+        {},
+        _normalized(HookEvent.PROMPT, prompt_text="hello"),
+        {"exit_code": 0},
+    )
+    writer.finalize({"input_tokens": 7, "output_tokens": 3})
+
+    trace_file = next(
+        path for path in tmp_path.glob("*.json") if not path.name.endswith(".meta.json")
+    )
+    doc = json.loads(trace_file.read_text())
+    assert doc["stop_reason"] == "session_end"
+    assert doc["usage"] == {"input_tokens": 7, "output_tokens": 3}
