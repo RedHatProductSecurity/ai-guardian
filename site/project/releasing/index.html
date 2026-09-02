@@ -1,0 +1,2950 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/project/releasing/">
+      
+      
+        <link rel="prev" href="../contributing/">
+      
+      
+        <link rel="next" href="../changelog/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Releasing - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#releasing" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Releasing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="releasing">Releasing<a class="headerlink" href="#releasing" title="Permanent link">&para;</a></h1>
+<h1 id="release-management-process">Release Management Process<a class="headerlink" href="#release-management-process" title="Permanent link">&para;</a></h1>
+<p>This document describes the release management process for AI Guardian.</p>
+<h2 id="automated-release-script-recommended">Automated Release Script (Recommended)<a class="headerlink" href="#automated-release-script-recommended" title="Permanent link">&para;</a></h2>
+<p>The fastest way to create a release — no AI agent required:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>scripts/release.sh<span class="w"> </span>minor<span class="w">              </span><span class="c1"># minor release (1.16.0 -&gt; 1.17.0)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>scripts/release.sh<span class="w"> </span>patch<span class="w">              </span><span class="c1"># patch release (1.17.0 -&gt; 1.17.1)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>scripts/release.sh<span class="w"> </span>major<span class="w">              </span><span class="c1"># major release (1.0.0 -&gt; 2.0.0)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>scripts/release.sh<span class="w"> </span>--dry-run<span class="w"> </span>minor<span class="w">    </span><span class="c1"># preview without executing</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>scripts/release.sh<span class="w"> </span>--skip-cursor<span class="w"> </span>patch<span class="w"> </span><span class="c1"># skip Cursor hook verification</span>
+</code></pre></div>
+<p>The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.</p>
+<p><strong>Requirements</strong>: <code>gh</code> CLI (authenticated), <code>python3</code>, <code>git</code>, <code>sed</code>, <code>git-cliff</code> (<code>brew install git-cliff</code>).</p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#automated-release-script-recommended">Automated Release Script</a></li>
+<li><a href="#release-authorization-policy">Release Authorization Policy</a></li>
+<li><a href="#version-numbering">Version Numbering</a></li>
+<li><a href="#branch-strategy">Branch Strategy</a></li>
+<li><a href="#release-workflow">Release Workflow</a></li>
+<li><a href="#patch--hotfix-workflow">Patch / Hotfix Workflow</a></li>
+<li><a href="#release-checklist">Release Checklist</a></li>
+<li><a href="#version-infrastructure">Version Infrastructure</a></li>
+<li><a href="#testing-releases-with-testpypi">Testing Releases with TestPyPI</a></li>
+</ul>
+<h2 id="release-authorization-policy">Release Authorization Policy<a class="headerlink" href="#release-authorization-policy" title="Permanent link">&para;</a></h2>
+<p><strong>IMPORTANT:</strong> Only repository maintainers can create release tags that trigger PyPI publication.</p>
+<h3 id="repository-access-model">Repository Access Model<a class="headerlink" href="#repository-access-model" title="Permanent link">&para;</a></h3>
+<p>This repository uses a <strong>fork-based workflow</strong>:</p>
+<ul>
+<li><strong>Maintainers</strong> (@itdove): Have Write/Admin access</li>
+<li>Can push to branches</li>
+<li>Can create and push tags</li>
+<li>Can create releases</li>
+<li>
+<p>Handle all PyPI publications</p>
+</li>
+<li>
+<p><strong>Contributors</strong>: Must use forks (no direct access)</p>
+</li>
+<li>Cannot push tags</li>
+<li>Cannot push to branches</li>
+<li>All contributions via pull requests from forks</li>
+<li>See <a href="CONTRIBUTING.md">CONTRIBUTING.md</a> for workflow details</li>
+</ul>
+<h3 id="why-fork-based-workflow">Why Fork-Based Workflow?<a class="headerlink" href="#why-fork-based-workflow" title="Permanent link">&para;</a></h3>
+<p><strong>Technical Enforcement</strong>: Since GitHub free accounts don't support tag protection rules, the fork-based workflow provides:</p>
+<ol>
+<li>✅ <strong>Prevents unauthorized tag creation</strong> - Only maintainers have push access</li>
+<li>✅ <strong>Standard open source practice</strong> - Common workflow for OSS projects</li>
+<li>✅ <strong>Code review required</strong> - All changes go through PRs</li>
+<li>✅ <strong>Release control</strong> - Maintainers control all PyPI publications</li>
+</ol>
+<h3 id="authorized-release-managers">Authorized Release Managers<a class="headerlink" href="#authorized-release-managers" title="Permanent link">&para;</a></h3>
+<p>Currently authorized to create release tags:</p>
+<ul>
+<li><strong>@itdove</strong> (Repository Owner)</li>
+</ul>
+<h3 id="for-contributors">For Contributors<a class="headerlink" href="#for-contributors" title="Permanent link">&para;</a></h3>
+<p><strong>You CANNOT create release tags.</strong> Instead:</p>
+<ol>
+<li>✅ <strong>Fork the repository</strong> (see <a href="CONTRIBUTING.md">CONTRIBUTING.md</a>)</li>
+<li>✅ <strong>Submit pull requests</strong> with features/fixes</li>
+<li>✅ <strong>Update CHANGELOG.md</strong> in your PR under <code>[Unreleased]</code> section</li>
+<li>✅ <strong>Maintainers handle releases</strong> - they will create tags and publish</li>
+</ol>
+<p><strong>DO NOT attempt to:</strong>
+- ❌ Create version tags (v1.2.0, etc.)
+- ❌ Push tags to the main repository
+- ❌ Modify version numbers in pyproject.toml or <strong>init</strong>.py</p>
+<h3 id="test-releases-testpypi">Test Releases (TestPyPI)<a class="headerlink" href="#test-releases-testpypi" title="Permanent link">&para;</a></h3>
+<p><strong>Maintainers only</strong> can create test tags for TestPyPI validation:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Use the /release skill</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>/release<span class="w"> </span><span class="nb">test</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># Or manually</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v1.2.0-test1<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Test release&quot;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.2.0-test1
+</code></pre></div>
+<p>Contributors can test locally but cannot push test tags to the repository.</p>
+<h3 id="automation-tools">Automation Tools<a class="headerlink" href="#automation-tools" title="Permanent link">&para;</a></h3>
+<p>Use <code>scripts/release.sh</code> for fully automated releases (no AI agent required):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>scripts/release.sh<span class="w"> </span>minor<span class="w">   </span><span class="c1"># Create minor version release</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>scripts/release.sh<span class="w"> </span>patch<span class="w">   </span><span class="c1"># Create patch version release</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>scripts/release.sh<span class="w"> </span>major<span class="w">   </span><span class="c1"># Create major version release</span>
+</code></pre></div>
+<p>The <code>/release</code> skill is also available for AI-assisted releases via Claude Code.</p>
+<p><strong>Note</strong>: Only maintainers should push release tags.</p>
+<h3 id="tag-monitoring">Tag Monitoring<a class="headerlink" href="#tag-monitoring" title="Permanent link">&para;</a></h3>
+<p>The <code>tag-monitor.yml</code> workflow provides additional security:</p>
+<ul>
+<li>Logs all tag creation events</li>
+<li>Verifies authorization for production tags</li>
+<li>Creates security issues for unauthorized attempts</li>
+<li>Provides audit trail</li>
+</ul>
+<p><strong>Protected via CODEOWNERS</strong>:
+- <code>.github/workflows/publish.yml</code> - Production PyPI publishing
+- <code>.github/workflows/publish-test.yml</code> - TestPyPI publishing<br />
+- <code>.github/workflows/tag-monitor.yml</code> - Tag creation monitoring
+- <code>RELEASING.md</code> - This file</p>
+<p>Changes to these files require maintainer approval.</p>
+<h2 id="version-numbering">Version Numbering<a class="headerlink" href="#version-numbering" title="Permanent link">&para;</a></h2>
+<p>We follow <a href="https://semver.org/">Semantic Versioning</a> (MAJOR.MINOR.PATCH):</p>
+<ul>
+<li><strong>MAJOR</strong>: Breaking changes (incompatible API changes)</li>
+<li><strong>MINOR</strong>: New features (backward compatible)</li>
+<li><strong>PATCH</strong>: Bug fixes (backward compatible)</li>
+<li><strong>Development</strong>: X.Y.Z-dev (on main branch)</li>
+</ul>
+<p>Examples:
+- <code>1.0.0</code> - First stable release
+- <code>1.1.0</code> - Added new features
+- <code>1.1.1</code> - Bug fixes only
+- <code>1.2.0-dev</code> - Development version on main branch</p>
+<h2 id="branch-strategy">Branch Strategy<a class="headerlink" href="#branch-strategy" title="Permanent link">&para;</a></h2>
+<h3 id="main-branches">Main Branches<a class="headerlink" href="#main-branches" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>main</strong>: Active development branch (latest features, version X.Y.0-dev)</li>
+<li><strong>release-X.Y</strong>: Release branches (e.g., release-1.0, release-1.1)</li>
+<li><strong>hotfix-X.Y.Z</strong>: Hotfix branches for critical fixes to released versions</li>
+</ul>
+<h3 id="tags">Tags<a class="headerlink" href="#tags" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>vX.Y.Z</strong>: Git tags for each release (e.g., v1.0.0, v1.0.1, v1.1.0)</li>
+</ul>
+<h3 id="branch-lifecycle">Branch Lifecycle<a class="headerlink" href="#branch-lifecycle" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>main (v1.1.0-dev)
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  |
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  |--- release-1.0 (created from main when ready for v1.0.0)
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>  |      |
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>  |      |--- v1.0.0 (tagged after testing)
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>  |      |
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>  |      |--- cherry-pick fix from main (preferred for patch releases)
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>  |      |     |
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>  |      |     |--- v1.0.1 (tagged on release-1.0)
+<a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a>  |      |
+<a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a>  |      |--- (if release-1.0 deleted) hotfix-1.0.2 (created from v1.0.1 tag)
+<a id="__codelineno-3-12" name="__codelineno-3-12" href="#__codelineno-3-12"></a>  |             |
+<a id="__codelineno-3-13" name="__codelineno-3-13" href="#__codelineno-3-13"></a>  |             |--- v1.0.2 (tagged after fix)
+<a id="__codelineno-3-14" name="__codelineno-3-14" href="#__codelineno-3-14"></a>  |
+<a id="__codelineno-3-15" name="__codelineno-3-15" href="#__codelineno-3-15"></a>  |--- release-1.1 (created from main when ready for v1.1.0)
+<a id="__codelineno-3-16" name="__codelineno-3-16" href="#__codelineno-3-16"></a>         |
+<a id="__codelineno-3-17" name="__codelineno-3-17" href="#__codelineno-3-17"></a>         |--- v1.1.0 (tagged after testing)
+</code></pre></div>
+<h2 id="release-workflow">Release Workflow<a class="headerlink" href="#release-workflow" title="Permanent link">&para;</a></h2>
+<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
+<ol>
+<li>All features for the release are merged to <code>main</code></li>
+<li>All tests pass on <code>main</code></li>
+<li>CHANGELOG.md is up-to-date in the Unreleased section</li>
+<li>GitHub issues for the release are complete</li>
+</ol>
+<h3 id="cursor-hook-compatibility-verification">Cursor Hook Compatibility Verification<a class="headerlink" href="#cursor-hook-compatibility-verification" title="Permanent link">&para;</a></h3>
+<p>Before creating the release branch, verify that Cursor still supports hooks via <code>~/.cursor/hooks.json</code>. The <code>/release</code> skill automates this check as a mandatory gate.</p>
+<p>If running manually:
+1. Run: <code>python .claude/skills/release/release_helper.py cursor-verify-setup</code>
+2. Perform manual Cursor test (see instructions printed by setup)
+3. Run: <code>python .claude/skills/release/release_helper.py cursor-verify-analyze</code>
+4. Run: <code>python .claude/skills/release/release_helper.py cursor-verify-cleanup</code></p>
+<p>If any hook event fails, investigate before proceeding with the release.</p>
+<h3 id="step-by-step-release-process">Step-by-Step Release Process<a class="headerlink" href="#step-by-step-release-process" title="Permanent link">&para;</a></h3>
+<h4 id="1-create-release-branch">1. Create Release Branch<a class="headerlink" href="#1-create-release-branch" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="c1"># Ensure main is up-to-date</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>main
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="c1"># Create release branch (e.g., release-1.0)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>release-1.0<span class="w"> </span>main
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="c1"># Push release branch</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a>git<span class="w"> </span>push<span class="w"> </span>-u<span class="w"> </span>origin<span class="w"> </span>release-1.0
+</code></pre></div>
+<h4 id="2-update-version-numbers">2. Update Version Numbers<a class="headerlink" href="#2-update-version-numbers" title="Permanent link">&para;</a></h4>
+<p>Update version in <strong>pyproject.toml</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">[project]</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;ai-guardian&quot;</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span><span class="w">  </span><span class="c1"># Remove -dev suffix</span>
+</code></pre></div></p>
+<p>Update version in <strong>src/ai_guardian/<strong>init</strong>.py</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>  <span class="c1"># Remove -dev suffix</span>
+</code></pre></div></p>
+<p>Commit the version bump:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>git<span class="w"> </span>add<span class="w"> </span>pyproject.toml
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="s">chore: bump version to 1.0.0 for release</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="s">Prepare for v1.0.0 release:</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="s">- Update version in pyproject.toml</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="s">EOF</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div></p>
+<h4 id="3-update-changelogmd">3. Update CHANGELOG.md<a class="headerlink" href="#3-update-changelogmd" title="Permanent link">&para;</a></h4>
+<p>Move Unreleased section entries to a new version section:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="gu">## [1.0.0] - 2025-01-15</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="gu">### Added</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="k">-</span><span class="w"> </span>Initial stable release
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="k">-</span><span class="w"> </span>[List of features added]
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="gu">### Changed</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="k">-</span><span class="w"> </span>[List of changes]
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="gu">### Fixed</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="k">-</span><span class="w"> </span>[List of bug fixes]
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a>[<span class="nl">1.0.0</span>]: <span class="na">https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.0</span>
+</code></pre></div>
+<p>Commit the changelog:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>git<span class="w"> </span>add<span class="w"> </span>CHANGELOG.md
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="s">docs: update CHANGELOG.md for v1.0.0 release</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="s">Move unreleased items to v1.0.0 section with release date.</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="s">EOF</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div></p>
+<h4 id="4-run-tests-and-final-validation">4. Run Tests and Final Validation<a class="headerlink" href="#4-run-tests-and-final-validation" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="c1"># Run full test suite (if tests exist)</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>pytest
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="c1"># Verify version command</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import tomllib; print(tomllib.load(open(&#39;pyproject.toml&#39;, &#39;rb&#39;))[&#39;project&#39;][&#39;version&#39;])&quot;</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="c1"># Test installation in clean environment</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>/tmp/test-ai-guardian-install
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="nb">source</span><span class="w"> </span>/tmp/test-ai-guardian-install/bin/activate
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a>pip<span class="w"> </span>install<span class="w"> </span>.
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>ai-guardian<span class="w"> </span>--help
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a>deactivate
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a>rm<span class="w"> </span>-rf<span class="w"> </span>/tmp/test-ai-guardian-install
+</code></pre></div>
+<h4 id="5-push-release-branch">5. Push Release Branch<a class="headerlink" href="#5-push-release-branch" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="c1"># Push the release branch with version bump and changelog</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>release-1.0
+</code></pre></div>
+<h4 id="6-create-git-tag">6. Create Git Tag<a class="headerlink" href="#6-create-git-tag" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="c1"># Create annotated tag</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v1.0.0<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Release version 1.0.0</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="s2">See CHANGELOG.md for details.</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="s2">&quot;</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># Push tag to remote - this triggers the GitHub Actions publish workflow</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.0.0
+</code></pre></div>
+<p><strong>Important:</strong> Pushing the tag will automatically trigger two GitHub Actions workflows:
+1. <strong>Publish Package</strong> — builds and publishes to PyPI, creates a GitHub Release
+2. <strong>Build Container Image</strong> — builds and pushes <code>quay.io/redhatproductsecurity/ai-guardian:&lt;version&gt;</code></p>
+<p>Note: <code>:latest</code> tracks the main branch (updated on every merge), not releases.</p>
+<h4 id="7-verify-github-actions-workflows">7. Verify GitHub Actions Workflows<a class="headerlink" href="#7-verify-github-actions-workflows" title="Permanent link">&para;</a></h4>
+<p>After pushing the tag:</p>
+<ol>
+<li>Go to GitHub Actions: https://github.com/RedHatProductSecurity/ai-guardian/actions</li>
+<li>Check the "Publish Package" workflow run — verify it completes successfully</li>
+<li>Check the "Build Container Image" workflow run — verify it completes successfully</li>
+<li>Check PyPI: https://pypi.org/project/ai-guardian/</li>
+<li>Check GitHub Releases: https://github.com/RedHatProductSecurity/ai-guardian/releases</li>
+<li>Verify the versioned container image on quay.io:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>podman<span class="w"> </span>pull<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:&lt;version&gt;
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>podman<span class="w"> </span>run<span class="w"> </span>-it<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:&lt;version&gt;<span class="w"> </span>ai-guardian<span class="w"> </span>--version
+</code></pre></div></li>
+</ol>
+<p>If the workflow fails, you may need to:
+- Fix the issue
+- Delete the tag: <code>git tag -d v1.0.0 &amp;&amp; git push origin :refs/tags/v1.0.0</code>
+- Increment the patch version and try again</p>
+<h4 id="8-update-install-urls-in-readmemd">8. Update Install URLs in README.md<a class="headerlink" href="#8-update-install-urls-in-readmemd" title="Permanent link">&para;</a></h4>
+<p>The <code>README.md</code> contains <code>curl</code> install commands that reference a specific git ref for <code>install.sh</code> and <code>install.ps1</code>. These URLs must point to the correct ref depending on the branch:</p>
+<ul>
+<li><strong>Release branches</strong> (<code>release-X.Y</code>): URLs point to the <strong>release tag</strong> (e.g., <code>v1.11.1</code>) so users install the exact released version</li>
+<li><strong>Main branch</strong>: URLs point to <strong><code>main</code></strong> since there is no PyPI release for the dev version — developers browsing main get the latest install script</li>
+</ul>
+<p><strong>On the release branch</strong> (already done during the release):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># Replace all occurrences of the old version tag with the new one</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># e.g., v1.11.0 → v1.11.1</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>sed<span class="w"> </span>-i<span class="w"> </span><span class="s1">&#39;&#39;</span><span class="w"> </span><span class="s1">&#39;s/v1.0.0/v1.1.0/g&#39;</span><span class="w"> </span>README.md<span class="w">  </span><span class="c1"># macOS</span>
+</code></pre></div></p>
+<p><strong>On main</strong> (during merge-back):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="c1"># Ensure main&#39;s README points to main, not a version tag</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="c1"># This should already be the case if main was set up correctly</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>grep<span class="w"> </span><span class="s1">&#39;raw.githubusercontent.com&#39;</span><span class="w"> </span>README.md
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="c1"># Should show: .../main/install.sh and .../main/install.ps1</span>
+</code></pre></div></p>
+<p><strong>Why this convention?</strong>
+- Release branches serve stable users who want a known-good version
+- Main serves developers who want the latest code
+- There is no PyPI package for dev versions, so a version tag URL on main would be misleading</p>
+<h4 id="9-merge-back-to-main-and-bump-dev-version">9. Merge Back to Main and Bump Dev Version<a class="headerlink" href="#9-merge-back-to-main-and-bump-dev-version" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="c1"># Switch to main</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># Cherry-pick CHANGELOG update (NOT full merge — avoids version conflicts)</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="c1"># For patch releases where main already has all the code changes:</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;changelog-commit-sha&gt;<span class="w">  </span><span class="c1"># Or manually add the version section</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># For minor/major releases, merge the release branch:</span>
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>git<span class="w"> </span>merge<span class="w"> </span>release-1.0<span class="w"> </span>--no-ff<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Merge release-1.0 into main&quot;</span>
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>
+<a id="__codelineno-16-11" name="__codelineno-16-11" href="#__codelineno-16-11"></a><span class="c1"># Bump version to next dev cycle in pyproject.toml</span>
+<a id="__codelineno-16-12" name="__codelineno-16-12" href="#__codelineno-16-12"></a><span class="c1"># Update version to &quot;1.1.0-dev&quot;</span>
+</code></pre></div>
+<p>Edit pyproject.toml:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.1.0-dev&quot;</span>
+</code></pre></div></p>
+<p>Commit and push:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>git<span class="w"> </span>add<span class="w"> </span>pyproject.toml
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="s">chore: bump version to 1.1.0-dev</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="s">Begin development cycle for v1.1.0.</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="s">EOF</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="k">)</span><span class="s2">&quot;</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="c1"># Push to remote</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+</code></pre></div></p>
+<h2 id="patch-hotfix-workflow">Patch / Hotfix Workflow<a class="headerlink" href="#patch-hotfix-workflow" title="Permanent link">&para;</a></h2>
+<h3 id="when-to-use">When to Use<a class="headerlink" href="#when-to-use" title="Permanent link">&para;</a></h3>
+<p>Use patch releases for:
+- Critical bugs in production releases
+- Security vulnerabilities
+- Data corruption issues
+- Severe performance problems</p>
+<p><strong>Do NOT use patch releases for</strong>:
+- Minor bugs (wait for next minor release)
+- New features
+- Refactoring</p>
+<h3 id="which-approach-to-use">Which Approach to Use<a class="headerlink" href="#which-approach-to-use" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Situation</th>
+<th>Approach</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Minor release branch (<code>release-x.y</code>) still exists</td>
+<td><strong>Preferred:</strong> Apply fix on <code>release-x.y</code> directly</td>
+</tr>
+<tr>
+<td>Minor release branch deleted</td>
+<td>Create <code>hotfix-x.y.z</code> from last release tag</td>
+</tr>
+<tr>
+<td>Emergency fix, no time to cherry-pick</td>
+<td>Create <code>hotfix-x.y.z</code> from last release tag</td>
+</tr>
+</tbody>
+</table>
+<h3 id="preferred-patch-on-existing-release-branch">Preferred: Patch on Existing Release Branch<a class="headerlink" href="#preferred-patch-on-existing-release-branch" title="Permanent link">&para;</a></h3>
+<p>When the <code>release-x.y</code> branch still exists, apply the patch fix there directly instead of creating a separate hotfix branch.</p>
+<h4 id="1-switch-to-the-release-branch">1. Switch to the Release Branch<a class="headerlink" href="#1-switch-to-the-release-branch" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>git<span class="w"> </span>checkout<span class="w"> </span>release-1.0
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>release-1.0
+</code></pre></div>
+<h4 id="2-apply-the-fix">2. Apply the Fix<a class="headerlink" href="#2-apply-the-fix" title="Permanent link">&para;</a></h4>
+<p>Cherry-pick the fix from main, or make the fix directly on the release branch:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Option A: Cherry-pick from main (preferred when fix already merged to main)</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;commit-sha-of-the-fix&gt;
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Option B: Make the fix directly on the release branch</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="c1"># Make your fixes, write tests</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>pytest
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>git<span class="w"> </span>add<span class="w"> </span>&lt;files&gt;
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="s">fix: critical bug in permission validation</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="s">Fixes timeout issue when validating MCP permissions.</span>
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a><span class="s">Fixes: #123</span>
+<a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a>
+<a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="s">EOF</span>
+<a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h4 id="3-update-version-numbers">3. Update Version Numbers<a class="headerlink" href="#3-update-version-numbers" title="Permanent link">&para;</a></h4>
+<p>Update to patch version in <strong>pyproject.toml</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.1&quot;</span>
+</code></pre></div></p>
+<p>Update to patch version in <strong>src/ai_guardian/<strong>init</strong>.py</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.0.1&quot;</span>
+</code></pre></div></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>git<span class="w"> </span>add<span class="w"> </span>pyproject.toml<span class="w"> </span>src/ai_guardian/__init__.py
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: bump version to 1.0.1&quot;</span>
+</code></pre></div>
+<h4 id="4-update-changelogmd">4. Update CHANGELOG.md<a class="headerlink" href="#4-update-changelogmd" title="Permanent link">&para;</a></h4>
+<p>Add a new section for the patch:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="gu">## [1.0.1] - 2025-01-20</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="gu">### Fixed</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="k">-</span><span class="w"> </span>Critical timeout issue in permission validation (#123)
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>[<span class="nl">1.0.1</span>]: <span class="na">https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.1</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>git<span class="w"> </span>add<span class="w"> </span>CHANGELOG.md
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;docs: update CHANGELOG for v1.0.1&quot;</span>
+</code></pre></div>
+<h4 id="5-tag-and-release">5. Tag and Release<a class="headerlink" href="#5-tag-and-release" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="c1"># Create tag on the release branch</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v1.0.1<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Patch release 1.0.1</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="s2">Critical fix for permission validation timeout.</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="s2">&quot;</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="c1"># Push release branch and tag</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>release-1.0
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.0.1
+</code></pre></div>
+<p>The GitHub Actions workflow will automatically publish to PyPI and create a release.</p>
+<h4 id="6-cherry-pick-to-main">6. Cherry-pick to Main<a class="headerlink" href="#6-cherry-pick-to-main" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># Cherry-pick the fix to main (if not already there)</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;commit-sha-of-the-fix&gt;<span class="w">  </span><span class="c1"># Only the fix commit, not version bumps</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+</code></pre></div>
+<h3 id="fallback-hotfix-branch-from-tag">Fallback: Hotfix Branch from Tag<a class="headerlink" href="#fallback-hotfix-branch-from-tag" title="Permanent link">&para;</a></h3>
+<p>When the <code>release-x.y</code> branch has been deleted or in emergencies, create a hotfix branch from the last release tag.</p>
+<h4 id="1-create-hotfix-branch">1. Create Hotfix Branch<a class="headerlink" href="#1-create-hotfix-branch" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Create hotfix branch from the release tag</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>hotfix-1.0.1<span class="w"> </span>v1.0.0
+</code></pre></div>
+<h4 id="2-fix-the-bug">2. Fix the Bug<a class="headerlink" href="#2-fix-the-bug" title="Permanent link">&para;</a></h4>
+<p>Make the necessary code changes to fix the critical bug.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Make your fixes</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="c1"># Write tests to verify the fix</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>pytest
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="c1"># Commit the fix</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a>git<span class="w"> </span>add<span class="w"> </span>&lt;files&gt;
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="s">fix: critical bug in permission validation</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="s">Fixes timeout issue when validating MCP permissions.</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="s">Fixes: #123</span>
+<a id="__codelineno-29-13" name="__codelineno-29-13" href="#__codelineno-29-13"></a>
+<a id="__codelineno-29-14" name="__codelineno-29-14" href="#__codelineno-29-14"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-29-15" name="__codelineno-29-15" href="#__codelineno-29-15"></a><span class="s">EOF</span>
+<a id="__codelineno-29-16" name="__codelineno-29-16" href="#__codelineno-29-16"></a><span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h4 id="3-update-version-numbers_1">3. Update Version Numbers<a class="headerlink" href="#3-update-version-numbers_1" title="Permanent link">&para;</a></h4>
+<p>Update to patch version in <strong>pyproject.toml</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.1&quot;</span>
+</code></pre></div></p>
+<p>Update to patch version in <strong>src/ai_guardian/<strong>init</strong>.py</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.0.1&quot;</span>
+</code></pre></div></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a>git<span class="w"> </span>add<span class="w"> </span>pyproject.toml<span class="w"> </span>src/ai_guardian/__init__.py
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;chore: bump version to 1.0.1&quot;</span>
+</code></pre></div>
+<h4 id="4-update-changelogmd_1">4. Update CHANGELOG.md<a class="headerlink" href="#4-update-changelogmd_1" title="Permanent link">&para;</a></h4>
+<p>Add a new section for the hotfix:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="gu">## [1.0.1] - 2025-01-20</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="gu">### Fixed</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="k">-</span><span class="w"> </span>Critical timeout issue in permission validation (#123)
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a>[<span class="nl">1.0.1</span>]: <span class="na">https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.0.1</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a>git<span class="w"> </span>add<span class="w"> </span>CHANGELOG.md
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;docs: update CHANGELOG for v1.0.1 hotfix&quot;</span>
+</code></pre></div>
+<h4 id="5-tag-and-release_1">5. Tag and Release<a class="headerlink" href="#5-tag-and-release_1" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="c1"># Create tag</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v1.0.1<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Hotfix release 1.0.1</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="s2">Critical fix for permission validation timeout.</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="s2">&quot;</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="c1"># Push hotfix branch and tag</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>hotfix-1.0.1
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.0.1
+</code></pre></div>
+<p>The GitHub Actions workflow will automatically publish to PyPI and create a release.</p>
+<h4 id="6-merge-back-and-clean-up">6. Merge Back and Clean Up<a class="headerlink" href="#6-merge-back-and-clean-up" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="c1"># Cherry-pick the fix to main (NOT merge the version bumps)</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>git<span class="w"> </span>cherry-pick<span class="w"> </span>&lt;commit-sha-of-the-fix&gt;<span class="w">  </span><span class="c1"># Only the fix commit, not version bumps</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>main
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="c1"># Delete hotfix branch</span>
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>git<span class="w"> </span>branch<span class="w"> </span>-d<span class="w"> </span>hotfix-1.0.1
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>--delete<span class="w"> </span>hotfix-1.0.1
+</code></pre></div>
+<h2 id="release-checklist">Release Checklist<a class="headerlink" href="#release-checklist" title="Permanent link">&para;</a></h2>
+<p>Use this checklist for each release:</p>
+<h3 id="pre-release">Pre-Release<a class="headerlink" href="#pre-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] All planned features merged to <code>main</code></li>
+<li>[ ] All tests pass (<code>pytest</code>)</li>
+<li>[ ] CHANGELOG.md updated with all changes</li>
+<li>[ ] Version bump PR reviewed and approved</li>
+<li>[ ] GitHub issues marked as complete</li>
+<li>[ ] Cursor hook compatibility verified (<code>/release</code> automates this)</li>
+</ul>
+<h3 id="release-branch">Release Branch<a class="headerlink" href="#release-branch" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Create release branch (<code>release-X.Y</code>)</li>
+<li>[ ] Update version in <code>pyproject.toml</code> (remove <code>-dev</code>)</li>
+<li>[ ] Update CHANGELOG.md (move Unreleased to version section)</li>
+<li>[ ] Run full test suite</li>
+<li>[ ] Test installation in clean environment</li>
+<li>[ ] Push release branch</li>
+<li>[ ] Create and push git tag (<code>vX.Y.Z</code>)</li>
+</ul>
+<h3 id="github-actions-release">GitHub Actions &amp; Release<a class="headerlink" href="#github-actions-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Verify GitHub Actions workflow completes successfully</li>
+<li>[ ] Verify package published to PyPI</li>
+<li>[ ] Verify GitHub Release created</li>
+<li>[ ] Test installation from PyPI: <code>uv tool install ai-guardian</code> (or <code>pip install ai-guardian</code>)</li>
+</ul>
+<h3 id="post-release">Post-Release<a class="headerlink" href="#post-release" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Merge release branch back to <code>main</code></li>
+<li>[ ] Bump version to next dev cycle (<code>X.Y+1.0-dev</code>)</li>
+<li>[ ] Announce release (if applicable)</li>
+</ul>
+<h3 id="patch-hotfix-if-needed">Patch / Hotfix (if needed)<a class="headerlink" href="#patch-hotfix-if-needed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[ ] Check if <code>release-x.y</code> branch exists (preferred) or create <code>hotfix-x.y.z</code> from tag (fallback)</li>
+<li>[ ] Apply fix (cherry-pick from main or fix directly)</li>
+<li>[ ] Update version to patch level</li>
+<li>[ ] Update CHANGELOG.md</li>
+<li>[ ] Create and push tag</li>
+<li>[ ] Verify GitHub Actions completes</li>
+<li>[ ] Cherry-pick fix to <code>main</code> (if not already there)</li>
+<li>[ ] (Hotfix branch only) Delete hotfix branch after merge</li>
+</ul>
+<h2 id="version-infrastructure">Version Infrastructure<a class="headerlink" href="#version-infrastructure" title="Permanent link">&para;</a></h2>
+<h3 id="version-storage">Version Storage<a class="headerlink" href="#version-storage" title="Permanent link">&para;</a></h3>
+<p>Version number is stored in two locations that must be kept in sync:</p>
+<ol>
+<li>
+<p><strong>pyproject.toml</strong> - Package metadata
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="k">[project]</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.0.0&quot;</span>
+</code></pre></div></p>
+</li>
+<li>
+<p><strong>src/ai_guardian/<strong>init</strong>.py</strong> - Runtime version
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.0.0&quot;</span>
+</code></pre></div></p>
+</li>
+</ol>
+<p><strong>Important:</strong> Always update both files when bumping versions.</p>
+<p>This uses the modern Python packaging standard (PEP 621) with hatchling as the build backend.</p>
+<h3 id="version-display">Version Display<a class="headerlink" href="#version-display" title="Permanent link">&para;</a></h3>
+<p>Users can check the version using:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>ai-guardian<span class="w"> </span>--version
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="c1"># Output: ai-guardian 1.0.0</span>
+</code></pre></div></p>
+<h3 id="development-versions">Development Versions<a class="headerlink" href="#development-versions" title="Permanent link">&para;</a></h3>
+<p>Development versions on <code>main</code> branch always have the <code>-dev</code> suffix:
+- <code>1.0.0-dev</code> - Developing towards v1.0.0
+- <code>1.1.0-dev</code> - Developing towards v1.1.0</p>
+<p>This helps distinguish development builds from stable releases.</p>
+<h2 id="github-actions-cicd">GitHub Actions CI/CD<a class="headerlink" href="#github-actions-cicd" title="Permanent link">&para;</a></h2>
+<h3 id="workflows">Workflows<a class="headerlink" href="#workflows" title="Permanent link">&para;</a></h3>
+<p>The repository includes four GitHub Actions workflows:</p>
+<ol>
+<li><strong>test.yml</strong> - Runs tests on Python 3.9, 3.10, 3.11, 3.12</li>
+<li>Triggered on: push to main, pull requests</li>
+<li>
+<p>Includes coverage reporting</p>
+</li>
+<li>
+<p><strong>lint.yml</strong> - Runs code quality checks (pylint, black, ruff)</p>
+</li>
+<li>
+<p>Triggered on: pull requests</p>
+</li>
+<li>
+<p><strong>publish-test.yml</strong> - Publishes to TestPyPI for testing (see <a href="#testing-releases-with-testpypi">Testing Releases with TestPyPI</a>)</p>
+</li>
+<li>Triggered on: test tags (v<em>-test</em>), manual workflow dispatch</li>
+<li>
+<p>Requires: TestPyPI trusted publishing configured</p>
+</li>
+<li>
+<p><strong>publish.yml</strong> - Publishes to PyPI and creates GitHub Release</p>
+</li>
+<li>Triggered on: version tags (v*)</li>
+<li>Requires: PyPI trusted publishing configured</li>
+</ol>
+<h3 id="setting-up-pypi-trusted-publishing">Setting Up PyPI Trusted Publishing<a class="headerlink" href="#setting-up-pypi-trusted-publishing" title="Permanent link">&para;</a></h3>
+<p>To enable automatic PyPI publishing:</p>
+<ol>
+<li>Go to PyPI project settings: https://pypi.org/manage/project/ai-guardian/settings/</li>
+<li>Navigate to "Publishing" section</li>
+<li>Add a new publisher:</li>
+<li><strong>PyPI Project Name</strong>: ai-guardian</li>
+<li><strong>Owner</strong>: itdove (your GitHub org/user)</li>
+<li><strong>Repository</strong>: ai-guardian</li>
+<li><strong>Workflow</strong>: publish.yml</li>
+<li><strong>Environment</strong>: (leave blank)</li>
+</ol>
+<p>This allows GitHub Actions to publish without storing API tokens.</p>
+<h3 id="setting-up-testpypi-trusted-publishing">Setting Up TestPyPI Trusted Publishing<a class="headerlink" href="#setting-up-testpypi-trusted-publishing" title="Permanent link">&para;</a></h3>
+<p>To enable automatic TestPyPI publishing for testing (recommended):</p>
+<ol>
+<li>Create TestPyPI account: https://test.pypi.org/account/register/</li>
+<li>Verify your email address</li>
+<li>Go to TestPyPI publishing settings: https://test.pypi.org/manage/account/publishing/</li>
+<li>Click "Add a new pending publisher"</li>
+<li>Configure publisher:</li>
+<li><strong>PyPI Project Name</strong>: ai-guardian</li>
+<li><strong>Owner</strong>: itdove (your GitHub org/user)</li>
+<li><strong>Repository</strong>: ai-guardian</li>
+<li><strong>Workflow</strong>: publish-test.yml</li>
+<li><strong>Environment</strong>: testpypi</li>
+<li>Create GitHub environment at https://github.com/RedHatProductSecurity/ai-guardian/settings/environments:</li>
+<li>Name: <code>testpypi</code></li>
+<li>(Optional) Add protection rules</li>
+</ol>
+<p>See <a href="#testing-releases-with-testpypi">Testing Releases with TestPyPI</a> for detailed usage instructions.</p>
+<h2 id="testing-releases-with-testpypi">Testing Releases with TestPyPI<a class="headerlink" href="#testing-releases-with-testpypi" title="Permanent link">&para;</a></h2>
+<p>Before publishing to production PyPI, you can test the entire release process using TestPyPI.</p>
+<h3 id="why-testpypi">Why TestPyPI?<a class="headerlink" href="#why-testpypi" title="Permanent link">&para;</a></h3>
+<p><strong>Benefits:</strong>
+- ✅ Test the entire release process without touching production
+- ✅ Verify PyPI Trusted Publishing configuration works
+- ✅ Catch packaging/metadata issues early
+- ✅ Safe experimentation with workflow changes
+- ✅ Standard best practice for Python projects</p>
+<h3 id="prerequisites_1">Prerequisites<a class="headerlink" href="#prerequisites_1" title="Permanent link">&para;</a></h3>
+<h4 id="1-testpypi-account">1. TestPyPI Account<a class="headerlink" href="#1-testpypi-account" title="Permanent link">&para;</a></h4>
+<p>Create an account at https://test.pypi.org/account/register/ and verify your email.</p>
+<h4 id="2-configure-trusted-publishing-on-testpypi">2. Configure Trusted Publishing on TestPyPI<a class="headerlink" href="#2-configure-trusted-publishing-on-testpypi" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Go to https://test.pypi.org/manage/account/publishing/</li>
+<li>Click "Add a new pending publisher"</li>
+<li>Configure publisher settings:</li>
+<li><strong>PyPI Project Name</strong>: <code>ai-guardian</code></li>
+<li><strong>Owner</strong>: <code>itdove</code></li>
+<li><strong>Repository name</strong>: <code>ai-guardian</code></li>
+<li><strong>Workflow name</strong>: <code>publish-test.yml</code></li>
+<li><strong>Environment name</strong>: <code>testpypi</code></li>
+<li>Save configuration</li>
+</ol>
+<h4 id="3-create-github-environment">3. Create GitHub Environment<a class="headerlink" href="#3-create-github-environment" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Go to https://github.com/RedHatProductSecurity/ai-guardian/settings/environments</li>
+<li>Click "New environment"</li>
+<li>Name: <code>testpypi</code></li>
+<li>(Optional) Add protection rules:</li>
+<li>Required reviewers: yourself</li>
+<li>Deployment branches: only <code>release-*</code> branches</li>
+<li>Save environment</li>
+</ol>
+<h3 id="testing-a-release">Testing a Release<a class="headerlink" href="#testing-a-release" title="Permanent link">&para;</a></h3>
+<h4 id="step-1-create-test-release-branch">Step 1: Create Test Release Branch<a class="headerlink" href="#step-1-create-test-release-branch" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="c1"># Update main branch</span>
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>git<span class="w"> </span>checkout<span class="w"> </span>main
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>git<span class="w"> </span>pull<span class="w"> </span>origin<span class="w"> </span>main
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a><span class="c1"># Create test release branch</span>
+<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>git<span class="w"> </span>checkout<span class="w"> </span>-b<span class="w"> </span>release-1.2-test<span class="w"> </span>main
+</code></pre></div>
+<h4 id="step-2-update-version-to-test-version">Step 2: Update Version to Test Version<a class="headerlink" href="#step-2-update-version-to-test-version" title="Permanent link">&para;</a></h4>
+<p>Update version in <strong>pyproject.toml</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="k">[project]</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="n">version</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;1.2.0-test1&quot;</span><span class="w">  </span><span class="c1"># Add -test suffix</span>
+</code></pre></div></p>
+<p>Update version in <strong>src/ai_guardian/<strong>init</strong>.py</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="n">__version__</span> <span class="o">=</span> <span class="s2">&quot;1.2.0-test1&quot;</span>  <span class="c1"># Add -test suffix</span>
+</code></pre></div></p>
+<p>Commit changes:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>git<span class="w"> </span>add<span class="w"> </span>pyproject.toml<span class="w"> </span>src/ai_guardian/__init__.py
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a>git<span class="w"> </span>commit<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>cat<span class="w"> </span><span class="s">&lt;&lt;&#39;EOF&#39;</span>
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="s">chore: bump version to 1.2.0-test1 for TestPyPI</span>
+<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a>
+<a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="s">Prepare test release for TestPyPI to verify release process.</span>
+<a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a>
+<a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="s">Co-Authored-By: Claude Sonnet 4.5 &lt;noreply@anthropic.com&gt;</span>
+<a id="__codelineno-43-8" name="__codelineno-43-8" href="#__codelineno-43-8"></a><span class="s">EOF</span>
+<a id="__codelineno-43-9" name="__codelineno-43-9" href="#__codelineno-43-9"></a><span class="k">)</span><span class="s2">&quot;</span>
+</code></pre></div></p>
+<h4 id="step-3-create-and-push-test-tag">Step 3: Create and Push Test Tag<a class="headerlink" href="#step-3-create-and-push-test-tag" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="c1"># Create test tag</span>
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>git<span class="w"> </span>tag<span class="w"> </span>-a<span class="w"> </span>v1.2.0-test1<span class="w"> </span>-m<span class="w"> </span><span class="s2">&quot;Test release for TestPyPI</span>
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>
+<a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="s2">Testing release process before production release.</span>
+<a id="__codelineno-44-5" name="__codelineno-44-5" href="#__codelineno-44-5"></a><span class="s2">&quot;</span>
+<a id="__codelineno-44-6" name="__codelineno-44-6" href="#__codelineno-44-6"></a>
+<a id="__codelineno-44-7" name="__codelineno-44-7" href="#__codelineno-44-7"></a><span class="c1"># Push tag to trigger workflow</span>
+<a id="__codelineno-44-8" name="__codelineno-44-8" href="#__codelineno-44-8"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>v1.2.0-test1
+</code></pre></div>
+<p><strong>Note:</strong> The tag MUST match the pattern <code>v*-test*</code> to trigger the TestPyPI workflow.</p>
+<h4 id="step-4-monitor-github-actions">Step 4: Monitor GitHub Actions<a class="headerlink" href="#step-4-monitor-github-actions" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Go to https://github.com/RedHatProductSecurity/ai-guardian/actions</li>
+<li>Check the "Publish to TestPyPI" workflow run</li>
+<li>Verify it completes successfully</li>
+</ol>
+<h4 id="step-5-verify-testpypi-publication">Step 5: Verify TestPyPI Publication<a class="headerlink" href="#step-5-verify-testpypi-publication" title="Permanent link">&para;</a></h4>
+<ol>
+<li>Check TestPyPI: https://test.pypi.org/project/ai-guardian/</li>
+<li>Verify the test version appears (e.g., 1.2.0-test1)</li>
+</ol>
+<h4 id="step-6-test-installation-from-testpypi">Step 6: Test Installation from TestPyPI<a class="headerlink" href="#step-6-test-installation-from-testpypi" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="c1"># Create clean test environment</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>python<span class="w"> </span>-m<span class="w"> </span>venv<span class="w"> </span>/tmp/test-ai-guardian-testpypi
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="nb">source</span><span class="w"> </span>/tmp/test-ai-guardian-testpypi/bin/activate
+<a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a>
+<a id="__codelineno-45-5" name="__codelineno-45-5" href="#__codelineno-45-5"></a><span class="c1"># Install from TestPyPI</span>
+<a id="__codelineno-45-6" name="__codelineno-45-6" href="#__codelineno-45-6"></a><span class="c1"># Note: --extra-index-url allows installing dependencies from production PyPI</span>
+<a id="__codelineno-45-7" name="__codelineno-45-7" href="#__codelineno-45-7"></a>pip<span class="w"> </span>install<span class="w"> </span>--index-url<span class="w"> </span>https://test.pypi.org/simple/<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-8" name="__codelineno-45-8" href="#__codelineno-45-8"></a><span class="w">  </span>--extra-index-url<span class="w"> </span>https://pypi.org/simple/<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-9" name="__codelineno-45-9" href="#__codelineno-45-9"></a><span class="w">  </span>ai-guardian<span class="o">==</span><span class="m">1</span>.2.0-test1
+<a id="__codelineno-45-10" name="__codelineno-45-10" href="#__codelineno-45-10"></a>
+<a id="__codelineno-45-11" name="__codelineno-45-11" href="#__codelineno-45-11"></a><span class="c1"># Test the package</span>
+<a id="__codelineno-45-12" name="__codelineno-45-12" href="#__codelineno-45-12"></a>ai-guardian<span class="w"> </span>--version
+<a id="__codelineno-45-13" name="__codelineno-45-13" href="#__codelineno-45-13"></a>ai-guardian<span class="w"> </span>--help
+<a id="__codelineno-45-14" name="__codelineno-45-14" href="#__codelineno-45-14"></a>
+<a id="__codelineno-45-15" name="__codelineno-45-15" href="#__codelineno-45-15"></a><span class="c1"># Clean up</span>
+<a id="__codelineno-45-16" name="__codelineno-45-16" href="#__codelineno-45-16"></a>deactivate
+<a id="__codelineno-45-17" name="__codelineno-45-17" href="#__codelineno-45-17"></a>rm<span class="w"> </span>-rf<span class="w"> </span>/tmp/test-ai-guardian-testpypi
+</code></pre></div>
+<h4 id="step-7-proceed-with-production-release-if-successful">Step 7: Proceed with Production Release (if successful)<a class="headerlink" href="#step-7-proceed-with-production-release-if-successful" title="Permanent link">&para;</a></h4>
+<p>If the TestPyPI release works correctly:</p>
+<ol>
+<li>
+<p>Delete test tag and branch:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>git<span class="w"> </span>tag<span class="w"> </span>-d<span class="w"> </span>v1.2.0-test1
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>git<span class="w"> </span>push<span class="w"> </span>origin<span class="w"> </span>:refs/tags/v1.2.0-test1
+<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>git<span class="w"> </span>branch<span class="w"> </span>-D<span class="w"> </span>release-1.2-test
+</code></pre></div></p>
+</li>
+<li>
+<p>Follow the normal <a href="#release-workflow">Release Workflow</a> to create production release</p>
+</li>
+</ol>
+<h3 id="tag-naming-convention">Tag Naming Convention<a class="headerlink" href="#tag-naming-convention" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>TestPyPI:</strong> <code>v1.2.0-test</code>, <code>v1.2.0-test1</code>, <code>v1.2.0-test2</code></li>
+<li>Pattern: <code>v*-test*</code> triggers TestPyPI workflow</li>
+<li>
+<p>Use sequential numbers for multiple test attempts</p>
+</li>
+<li>
+<p><strong>Production PyPI:</strong> <code>v1.2.0</code>, <code>v1.2.1</code>, <code>v1.3.0</code></p>
+</li>
+<li>Pattern: <code>v*</code> (without <code>-test</code> suffix) triggers production workflow</li>
+<li>Only create after TestPyPI validation succeeds</li>
+</ul>
+<h3 id="manual-workflow-trigger">Manual Workflow Trigger<a class="headerlink" href="#manual-workflow-trigger" title="Permanent link">&para;</a></h3>
+<p>You can also trigger the TestPyPI workflow manually without creating a tag:</p>
+<ol>
+<li>Go to https://github.com/RedHatProductSecurity/ai-guardian/actions/workflows/publish-test.yml</li>
+<li>Click "Run workflow"</li>
+<li>Select the branch you want to test</li>
+<li>Click "Run workflow" button</li>
+</ol>
+<p>This is useful for testing workflow changes without creating tags.</p>
+<h3 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h3>
+<p><strong>Workflow fails with authentication error:</strong>
+- Verify TestPyPI Trusted Publishing is configured correctly
+- Check that the GitHub environment <code>testpypi</code> exists
+- Ensure workflow name matches: <code>publish-test.yml</code></p>
+<p><strong>Package upload fails:</strong>
+- Verify version number is unique (TestPyPI doesn't allow re-uploading same version)
+- Increment test number (e.g., <code>v1.2.0-test2</code>)</p>
+<p><strong>Installation from TestPyPI fails:</strong>
+- TestPyPI may not have all dependencies
+- Use <code>--extra-index-url https://pypi.org/simple/</code> to fetch dependencies from production PyPI</p>
+<h2 id="manual-pypi-publishing">Manual PyPI Publishing<a class="headerlink" href="#manual-pypi-publishing" title="Permanent link">&para;</a></h2>
+<p>If you need to publish manually (without GitHub Actions):</p>
+<h3 id="1-install-build-tools">1. Install Build Tools<a class="headerlink" href="#1-install-build-tools" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a>pip<span class="w"> </span>install<span class="w"> </span>--upgrade<span class="w"> </span>build<span class="w"> </span>twine
+</code></pre></div>
+<h3 id="2-build-distribution-packages">2. Build Distribution Packages<a class="headerlink" href="#2-build-distribution-packages" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="c1"># Clean previous builds</span>
+<a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a>rm<span class="w"> </span>-rf<span class="w"> </span>dist/<span class="w"> </span>build/<span class="w"> </span>*.egg-info
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>
+<a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a><span class="c1"># Build packages</span>
+<a id="__codelineno-48-5" name="__codelineno-48-5" href="#__codelineno-48-5"></a>python<span class="w"> </span>-m<span class="w"> </span>build
+</code></pre></div>
+<h3 id="3-test-on-testpypi-optional">3. Test on TestPyPI (Optional)<a class="headerlink" href="#3-test-on-testpypi-optional" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a><span class="c1"># Upload to TestPyPI</span>
+<a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>python<span class="w"> </span>-m<span class="w"> </span>twine<span class="w"> </span>upload<span class="w"> </span>--repository<span class="w"> </span>testpypi<span class="w"> </span>dist/*
+<a id="__codelineno-49-3" name="__codelineno-49-3" href="#__codelineno-49-3"></a>
+<a id="__codelineno-49-4" name="__codelineno-49-4" href="#__codelineno-49-4"></a><span class="c1"># Test installation</span>
+<a id="__codelineno-49-5" name="__codelineno-49-5" href="#__codelineno-49-5"></a>pip<span class="w"> </span>install<span class="w"> </span>--index-url<span class="w"> </span>https://test.pypi.org/simple/<span class="w"> </span>--extra-index-url<span class="w"> </span>https://pypi.org/simple<span class="w"> </span>ai-guardian
+</code></pre></div>
+<h3 id="4-publish-to-production-pypi">4. Publish to Production PyPI<a class="headerlink" href="#4-publish-to-production-pypi" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>python<span class="w"> </span>-m<span class="w"> </span>twine<span class="w"> </span>upload<span class="w"> </span>dist/*
+</code></pre></div>
+<p><strong>Note:</strong> You'll need PyPI credentials configured in <code>~/.pypirc</code> or via <code>TWINE_USERNAME</code> and <code>TWINE_PASSWORD</code> environment variables. See <a href="https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/">PyPI publishing docs</a> for details.</p>
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="https://semver.org/">Semantic Versioning</a></li>
+<li><a href="https://keepachangelog.com/">Keep a Changelog</a></li>
+<li><a href="https://packaging.python.org/">Python Packaging User Guide</a></li>
+<li><a href="https://peps.python.org/pep-0621/">PEP 621 - Storing project metadata in pyproject.toml</a></li>
+<li><a href="https://hatch.pypa.io/latest/">Hatchling Build Backend</a></li>
+<li><a href="https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries">GitHub Actions - Publishing to PyPI</a></li>
+<li><a href="https://docs.pypi.org/trusted-publishers/">PyPI Trusted Publishing</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

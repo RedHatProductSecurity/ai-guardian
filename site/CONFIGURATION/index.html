@@ -1,0 +1,3816 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/CONFIGURATION/">
+      
+      
+        <link rel="prev" href="../DEVELOPER_GUIDE/">
+      
+      
+        <link rel="next" href="../COOKBOOK/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Files
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-user-configuration-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. User Configuration (Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-project-level-config-overlay-new-in-v180" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project-Level Config Overlay (NEW in v1.8.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-legacy-local-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Legacy Local Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-level-aiguardignoretoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project-level .aiguardignore.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-remote-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Remote Configurations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Profiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#moderator-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @moderator Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-config-url-cascading-priority-security-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote Config URL Cascading Priority (Security Feature)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remote Config URL Cascading Priority (Security Feature)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-cascading-priority-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Cascading Priority Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-cascading-priority-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Cascading Priority Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-enterprise-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Enterprise Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-development-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Development Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-environment-variable-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Environment Variable Override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-merge-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Merge Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immutability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Immutability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#section-level-immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section-Level Immutability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matcher-level-immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matcher-Level Immutability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-enterprises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Enterprises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Users
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-key-typos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Key Typos
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#my-remote-urls-are-ignored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        My Remote URLs Are Ignored
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-do-i-know-which-config-is-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Do I Know Which Config Is Active?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enterprise-policy-is-too-restrictive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enterprise Policy Is Too Restrictive
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-config-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Config Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-config-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote Config Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#immutability-bypass-prevention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immutability Bypass Prevention
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supply-chain-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply Chain Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-poisoning-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Poisoning Detection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-scanner-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Scanner Filtering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-liveness-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret Liveness Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#latency-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Latency Tracking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-config-generation-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Config Generation (v1.15.0+)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Project Config Generation (v1.15.0+)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#init-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init-project --scan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-overlay-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Overlay System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-rule-file-type-skipping-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Rule File Type Skipping (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#tracing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tracing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Files
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration Files">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-user-configuration-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. User Configuration (Default)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-project-level-config-overlay-new-in-v180" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project-Level Config Overlay (NEW in v1.8.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-legacy-local-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Legacy Local Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#project-level-aiguardignoretoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project-level .aiguardignore.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-remote-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Remote Configurations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Profiles
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Profiles">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#moderator-profile" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @moderator Profile
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remote-config-url-cascading-priority-security-feature" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote Config URL Cascading Priority (Security Feature)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remote Config URL Cascading Priority (Security Feature)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-cascading-priority-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Cascading Priority Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#why-cascading-priority-matters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Cascading Priority Matters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-enterprise-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Enterprise Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-development-environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Development Environment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-environment-variable-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example: Environment Variable Override
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-merge-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Merge Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immutability
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Immutability">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#section-level-immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Section-Level Immutability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#matcher-level-immutability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Matcher-Level Immutability
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-enterprises" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Enterprises
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-users" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Users
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-key-typos" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config Key Typos
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#my-remote-urls-are-ignored" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        My Remote URLs Are Ignored
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-do-i-know-which-config-is-active" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Do I Know Which Config Is Active?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enterprise-policy-is-too-restrictive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enterprise Policy Is Too Restrictive
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#system-config-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Config Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-config-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote Config Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#immutability-bypass-prevention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Immutability Bypass Prevention
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supply-chain-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supply Chain Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-poisoning-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Poisoning Detection
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-scanner-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Scanner Filtering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-liveness-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret Liveness Validation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#latency-tracking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Latency Tracking
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#project-config-generation-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Project Config Generation (v1.15.0+)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Project Config Generation (v1.15.0+)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#init-project-scan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init-project --scan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-overlay-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Overlay System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-rule-file-type-skipping-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Rule File Type Skipping (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-guide">Configuration Guide<a class="headerlink" href="#configuration-guide" title="Permanent link">&para;</a></h1>
+<p>AI Guardian uses a flexible configuration system with multiple sources and cascading priority rules.</p>
+<h2 id="tracing">Tracing<a class="headerlink" href="#tracing" title="Permanent link">&para;</a></h2>
+<p>Unified SDK and hook trace recording is configured at the top level:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="p">{</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="w">  </span><span class="nt">&quot;tracing&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="w">    </span><span class="nt">&quot;auto_refresh_interval_seconds&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="w">    </span><span class="nt">&quot;trace_cache_retention_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">90</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="p">}</span>
+</code></pre></div>
+<p><code>enabled</code> defaults to <code>true</code>. Setting it to <code>false</code> stops new trace recording
+but does not disable security scanning, violation logging, OTEL export, or
+browsing existing traces. The deprecated <code>sdk.trace_viewer</code> location remains a
+1.x compatibility fallback; top-level <code>tracing</code> values take precedence. It is
+scheduled for removal in 2.x (#2194).</p>
+<h2 id="configuration-files">Configuration Files<a class="headerlink" href="#configuration-files" title="Permanent link">&para;</a></h2>
+<p>AI Guardian loads configuration from multiple sources in a specific priority order:</p>
+<h3 id="1-user-configuration-default">1. User Configuration (Default)<a class="headerlink" href="#1-user-configuration-default" title="Permanent link">&para;</a></h3>
+<p><strong>Location</strong>: <code>~/.config/ai-guardian/ai-guardian.json</code></p>
+<p>This is where most users configure AI Guardian. It contains:
+- Tool/Skill permission rules
+- Secret scanning settings
+- Prompt injection detection
+- SSRF protection rules
+- Remote config URLs (user-defined)</p>
+<h3 id="2-project-level-config-overlay-new-in-v180">2. Project-Level Config Overlay (NEW in v1.8.0)<a class="headerlink" href="#2-project-level-config-overlay-new-in-v180" title="Permanent link">&para;</a></h3>
+<p><strong>Location</strong>: <code>.ai-guardian/ai-guardian.json</code> in the repository root</p>
+<p>A project-level config that merges on top of the global config. Discovered via git root, then CWD. Commit the <code>.ai-guardian/</code> directory to version control so the whole team shares the same scanning rules.</p>
+<p><strong>Discovery order</strong>:
+1. <code>AI_GUARDIAN_PROJECT_CONFIG</code> env var (explicit override)
+2. Git repo root / <code>.ai-guardian/ai-guardian.json</code>
+3. CWD / <code>.ai-guardian/ai-guardian.json</code></p>
+<p><strong>What can be overridden</strong>: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.</p>
+<p><strong>Global-only sections</strong> (cannot be overridden): <code>daemon</code>, <code>mcp_server</code>, <code>support</code>, <code>security_instructions</code>, <code>on_scan_error</code>, <code>remote_configs</code>.</p>
+<p><strong>Immutable fields</strong>: Add <code>immutable</code> to sections in the global config to lock fields from project override:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;prompt_injection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="nt">&quot;immutable&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;enabled&quot;</span><span class="p">],</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="p">}</span>
+</code></pre></div>
+<p>Projects cannot override <code>enabled</code> but can change <code>action</code>.</p>
+<p><strong>Self-protection</strong>: The agent is blocked from reading this file (same protection as the global config).</p>
+<h3 id="3-legacy-local-configuration">3. Legacy Local Configuration<a class="headerlink" href="#3-legacy-local-configuration" title="Permanent link">&para;</a></h3>
+<p><strong>Location</strong>: <code>.ai-guardian.json</code> (in project directory, hidden file)</p>
+<p>Legacy project-specific overrides. Used only when no global config exists. For new setups, use the project-level overlay above instead.</p>
+<h3 id="project-level-aiguardignoretoml">Project-level .aiguardignore.toml<a class="headerlink" href="#project-level-aiguardignoretoml" title="Permanent link">&para;</a></h3>
+<p><strong>Location</strong>: <code>.aiguardignore.toml</code> in the project root (next to <code>.gitleaks.toml</code>)</p>
+<p>A TOML file for declaring which files to skip during scanning, using a structure consistent with <code>.gitleaks.toml</code>. Unlike the JSON config's <code>ignore_files</code>, this file is designed to be committed to version control so the whole team shares the same ignore rules.</p>
+<p><strong>Format</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="c1"># Global allowlist — applies to ALL scanners</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="k">[allowlist]</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">        </span><span class="s2">&quot;tests/fixtures/**&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">        </span><span class="s2">&quot;tests/unit/test_ai_guardian.py&quot;</span><span class="p">,</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># Per-scanner allowlists</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="k">[secret_scanning.allowlist]</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="w">    </span><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/integration/test_scanner.py&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="k">[scan_pii.allowlist]</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="w">    </span><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests/unit/test_pii_detection.py&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="k">[prompt_injection.allowlist]</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="w">    </span><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;docs/security-patterns.md&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="k">[config_file_scanning.allowlist]</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="w">    </span><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;examples/*.json&quot;</span><span class="p">]</span>
+</code></pre></div>
+<p><strong>Behavior</strong>:
+- Global <code>[allowlist]</code> paths are merged into every scanner's <code>ignore_files</code>
+- Per-scanner paths only apply to that scanner
+- Paths from <code>.aiguardignore.toml</code> are <strong>additive</strong> with JSON config <code>ignore_files</code> (both apply)
+- Cached by mtime — no performance cost for unchanged files
+- Paths with <code>..</code> are blocked for security</p>
+<p><strong>Relationship to <code>.gitleaks.toml</code></strong>: <code>.aiguardignore.toml</code> skips entire files across all scanners. <code>.gitleaks.toml</code> filters individual secret findings (regex, stopwords, per-rule allowlists). They are complementary.</p>
+<p><strong>VS Code / Taplo validation</strong>: A <a href="https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/aiguardignore.schema.json">JSON schema</a> is available for autocompletion and validation. New files created by AI Guardian include a <code>#:schema</code> header that Taplo detects automatically. For existing files, add to <code>.vscode/settings.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;evenBetterToml.schema.associations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">&quot;.aiguardignore.toml&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/src/ai_guardian/schemas/aiguardignore.schema.json&quot;</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="3-remote-configurations">3. Remote Configurations<a class="headerlink" href="#3-remote-configurations" title="Permanent link">&para;</a></h3>
+<p><strong>Location</strong>: Fetched from URLs defined in <code>remote_configs</code></p>
+<p>Remote configurations enable centralized policy management. Enterprises can deploy security policies that users automatically receive.</p>
+<h2 id="security-profiles">Security Profiles<a class="headerlink" href="#security-profiles" title="Permanent link">&para;</a></h2>
+<p>Built-in profiles let you apply a complete security posture in one command:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@minimal<span class="w">        </span><span class="c1"># Personal projects, low friction</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@standard<span class="w">       </span><span class="c1"># Team development (default)</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@strict<span class="w">         </span><span class="c1"># Enterprise SOC2/compliance</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--create-config<span class="w"> </span>--profile<span class="w"> </span>@moderator<span class="w">      </span><span class="c1"># Human-in-the-loop review</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--list-profiles<span class="w">                           </span><span class="c1"># List all available profiles</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Profile</th>
+<th>Secrets</th>
+<th>PII</th>
+<th>Prompt Injection</th>
+<th>SSRF</th>
+<th>Use case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>@minimal</code></td>
+<td>block</td>
+<td>warn</td>
+<td>low</td>
+<td>warn</td>
+<td>Personal projects, low friction</td>
+</tr>
+<tr>
+<td><code>@standard</code> (default)</td>
+<td>block</td>
+<td>block</td>
+<td>medium</td>
+<td>block</td>
+<td>Team development</td>
+</tr>
+<tr>
+<td><code>@strict</code></td>
+<td>block</td>
+<td>block</td>
+<td>high</td>
+<td>block</td>
+<td>Enterprise SOC2/compliance</td>
+</tr>
+<tr>
+<td><code>@moderator</code></td>
+<td>ask</td>
+<td>ask</td>
+<td>medium</td>
+<td>ask</td>
+<td>Human review, training, onboarding</td>
+</tr>
+</tbody>
+</table>
+<h3 id="moderator-profile">@moderator Profile<a class="headerlink" href="#moderator-profile" title="Permanent link">&para;</a></h3>
+<p>The <code>@moderator</code> profile sets every scanner action to <code>ask</code>, routing each finding through an interactive dialog where the user decides allow or block. It is designed for:</p>
+<ul>
+<li><strong>New users</strong> learning what ai-guardian catches — see every finding, decide case by case</li>
+<li><strong>Teams evaluating</strong> detection accuracy before committing to block/allow policies</li>
+<li><strong>Compliance review</strong> where each finding needs explicit human sign-off</li>
+<li><strong>Training and onboarding</strong> — understand the tool's coverage interactively</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> <code>ask</code> mode requires the daemon tray for the interactive dialog. Without daemon mode, findings fall back to the <code>on_scan_error</code> behavior (<code>allow</code> by default). Run <code>ai-guardian daemon start</code> before using this profile for the full moderator experience.</p>
+</blockquote>
+<h2 id="remote-config-url-cascading-priority-security-feature">Remote Config URL Cascading Priority (Security Feature)<a class="headerlink" href="#remote-config-url-cascading-priority-security-feature" title="Permanent link">&para;</a></h2>
+<p><strong>⚠️ IMPORTANT</strong>: Remote config URLs use <strong>cascading priority</strong> to prevent users from bypassing enterprise policies.</p>
+<h3 id="how-cascading-priority-works">How Cascading Priority Works<a class="headerlink" href="#how-cascading-priority-works" title="Permanent link">&para;</a></h3>
+<p>AI Guardian checks remote config sources in order and <strong>stops at the first one found</strong>:</p>
+<ol>
+<li><strong>System Config</strong> (Highest Priority)</li>
+<li><strong>Linux/macOS</strong>: <code>/etc/ai-guardian/remote-configs.json</code></li>
+<li><strong>Windows</strong>: <code>C:\ProgramData\ai-guardian\remote-configs.json</code></li>
+<li><strong>Requires</strong>: Root/Administrator access to create</li>
+<li>
+<p><strong>Effect</strong>: If exists, user/local remote URLs are <strong>completely ignored</strong></p>
+</li>
+<li>
+<p><strong>Environment Variable</strong></p>
+</li>
+<li><code>AI_GUARDIAN_REMOTE_CONFIG_URLS</code> (comma-separated URLs)</li>
+<li>
+<p><strong>Effect</strong>: If set, user/local remote URLs are <strong>completely ignored</strong></p>
+</li>
+<li>
+<p><strong>User Config</strong></p>
+</li>
+<li><code>~/.config/ai-guardian/ai-guardian.json</code> → <code>remote_configs.urls</code></li>
+<li>
+<p><strong>Effect</strong>: If present, local config remote URLs are <strong>ignored</strong></p>
+</li>
+<li>
+<p><strong>Local Config</strong> (Lowest Priority)</p>
+</li>
+<li><code>~/.ai-guardian.json</code> → <code>remote_configs.urls</code></li>
+<li><strong>Effect</strong>: Only used if no higher priority source exists</li>
+</ol>
+<h3 id="why-cascading-priority-matters">Why Cascading Priority Matters<a class="headerlink" href="#why-cascading-priority-matters" title="Permanent link">&para;</a></h3>
+<p><strong>Without Cascading (Vulnerable)</strong>:
+- Enterprise deploys remote policy: <code>https://company.com/policy.json</code>
+- User adds their own URL: <code>https://attacker.com/bypass.json</code>
+- Both load → User can override enterprise security settings ❌</p>
+<p><strong>With Cascading (Secure)</strong>:
+- Enterprise deploys system config: <code>/etc/ai-guardian/remote-configs.json</code>
+- User tries to add their own URL → <strong>Ignored completely</strong> ✅
+- Only enterprise URLs load → Security enforced</p>
+<h3 id="example-enterprise-deployment">Example: Enterprise Deployment<a class="headerlink" href="#example-enterprise-deployment" title="Permanent link">&para;</a></h3>
+<p><strong>Step 1: Create system config</strong> (requires root):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="c1"># Linux/macOS</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>sudo<span class="w"> </span>mkdir<span class="w"> </span>-p<span class="w"> </span>/etc/ai-guardian
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>sudo<span class="w"> </span>tee<span class="w"> </span>/etc/ai-guardian/remote-configs.json<span class="w"> </span>&gt;<span class="w"> </span>/dev/null<span class="w"> </span><span class="s">&lt;&lt;EOF</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="s">{</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="s">  &quot;urls&quot;: [</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="s">    &quot;https://security.company.com/ai-guardian/policy.json&quot;</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="s">  ]</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="s">}</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="s">EOF</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a>sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">644</span><span class="w"> </span>/etc/ai-guardian/remote-configs.json
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c"># Windows (requires Administrator)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="nb">New-Item</span> <span class="n">-ItemType</span> <span class="n">Directory</span> <span class="n">-Force</span> <span class="n">-Path</span> <span class="s2">&quot;C:\ProgramData\ai-guardian&quot;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="nb">Set-Content</span> <span class="n">-Path</span> <span class="s2">&quot;C:\ProgramData\ai-guardian\remote-configs.json&quot;</span> <span class="n">-Value</span> <span class="sh">@&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="sh">{</span>
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a><span class="sh">  &quot;urls&quot;: [</span>
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="sh">    &quot;https://security.company.com/ai-guardian/policy.json&quot;</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a><span class="sh">  ]</span>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="sh">}</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a><span class="sh">&quot;@</span>
+</code></pre></div>
+<p><strong>Step 2: Deploy remote policy</strong>:</p>
+<p>Host <code>https://security.company.com/ai-guardian/policy.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">    </span><span class="nt">&quot;rules&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Skill&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">        </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;allow&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">        </span><span class="nt">&quot;patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;company-approved-*&quot;</span><span class="p">],</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">        </span><span class="nt">&quot;immutable&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a><span class="w">    </span><span class="nt">&quot;immutable&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-7-17" name="__codelineno-7-17" href="#__codelineno-7-17"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Step 3: Users are protected</strong>:</p>
+<p>Users who try to add their own remote URLs in <code>~/.config/ai-guardian/ai-guardian.json</code> will find them <strong>completely ignored</strong> because the system config takes priority.</p>
+<h3 id="example-development-environment">Example: Development Environment<a class="headerlink" href="#example-development-environment" title="Permanent link">&para;</a></h3>
+<p><strong>Without System Config</strong> (flexible):</p>
+<p>Developers can configure their own remote URLs:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;remote_configs&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">&quot;urls&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span><span class="s2">&quot;https://dev-patterns.company.com/ai-guardian.json&quot;</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="example-environment-variable-override">Example: Environment Variable Override<a class="headerlink" href="#example-environment-variable-override" title="Permanent link">&para;</a></h3>
+<p>Useful for CI/CD or temporary policy changes:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># Override remote config for this session</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AI_GUARDIAN_REMOTE_CONFIG_URLS</span><span class="o">=</span><span class="s2">&quot;https://ci.company.com/policy.json&quot;</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>ai-guardian<span class="w"> </span>validate
+</code></pre></div>
+<h2 id="configuration-merge-order">Configuration Merge Order<a class="headerlink" href="#configuration-merge-order" title="Permanent link">&para;</a></h2>
+<p>Configurations are merged in this order (later sources override earlier ones):</p>
+<ol>
+<li><strong>Built-in defaults</strong> (in ai_guardian/setup/config.py)</li>
+<li><strong>Remote configs</strong> (from cascading priority URLs)</li>
+<li><strong>User config</strong> (<code>~/.config/ai-guardian/ai-guardian.json</code>)</li>
+<li><strong>Local config</strong> (<code>~/.ai-guardian.json</code>)</li>
+</ol>
+<p><strong>Exception</strong>: Fields marked with <code>"immutable": true</code> in remote configs <strong>cannot be overridden</strong> by user/local configs.</p>
+<h2 id="immutability">Immutability<a class="headerlink" href="#immutability" title="Permanent link">&para;</a></h2>
+<p>Remote configurations can mark sections or matchers as immutable:</p>
+<h3 id="section-level-immutability">Section-Level Immutability<a class="headerlink" href="#section-level-immutability" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;ssrf_protection&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">&quot;immutable&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">}</span>
+</code></pre></div>
+<p>Users cannot override ANY settings in the <code>ssrf_protection</code> section.</p>
+<h3 id="matcher-level-immutability">Matcher-Level Immutability<a class="headerlink" href="#matcher-level-immutability" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">&quot;rules&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Skill&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">        </span><span class="nt">&quot;mode&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;allow&quot;</span><span class="p">,</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">        </span><span class="nt">&quot;patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;approved-*&quot;</span><span class="p">],</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="w">        </span><span class="nt">&quot;immutable&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-11-9" name="__codelineno-11-9" href="#__codelineno-11-9"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-11-10" name="__codelineno-11-10" href="#__codelineno-11-10"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-11-11" name="__codelineno-11-11" href="#__codelineno-11-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-11-12" name="__codelineno-11-12" href="#__codelineno-11-12"></a><span class="p">}</span>
+</code></pre></div>
+<p>Users cannot add/modify Skill permission rules.</p>
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="for-enterprises">For Enterprises<a class="headerlink" href="#for-enterprises" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Start with Recommendations</strong></li>
+<li>Deploy remote configs without system config first</li>
+<li>Monitor adoption via logging</li>
+<li>
+<p>Move to system config after 80%+ adoption</p>
+</li>
+<li>
+<p><strong>Use Immutability Sparingly</strong></p>
+</li>
+<li>Only mark critical security settings as immutable</li>
+<li>
+<p>Allow teams flexibility for non-security settings</p>
+</li>
+<li>
+<p><strong>Provide Multiple Profiles</strong></p>
+</li>
+<li>Production: Strict security, immutable</li>
+<li>
+<p>Development: Relaxed security, overridable</p>
+</li>
+<li>
+<p><strong>Document Policies</strong></p>
+</li>
+<li>Explain WHY settings are immutable</li>
+<li>Provide contact info for exceptions</li>
+</ol>
+<h3 id="for-users">For Users<a class="headerlink" href="#for-users" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Check System Config First</strong></li>
+<li>Look for <code>/etc/ai-guardian/remote-configs.json</code> (Linux/macOS)</li>
+<li>
+<p>If exists, your remote URLs are ignored</p>
+</li>
+<li>
+<p><strong>Use User Config for Personal Settings</strong></p>
+</li>
+<li><code>~/.config/ai-guardian/ai-guardian.json</code> for personal preferences</li>
+<li>
+<p>Won't override enterprise policies</p>
+</li>
+<li>
+<p><strong>Use Local Config for Project Settings</strong></p>
+</li>
+<li><code>~/.ai-guardian.json</code> for project-specific rules</li>
+<li>Lowest priority, easily overridden</li>
+</ol>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="config-key-typos">Config Key Typos<a class="headerlink" href="#config-key-typos" title="Permanent link">&para;</a></h3>
+<p>Run <code>ai-guardian doctor</code> to detect unknown or misspelled config keys. The <code>unknown_config_keys</code> check validates all root and nested keys against the JSON schema and suggests corrections via fuzzy matching (e.g., <code>"secrt_scanning"</code> → did you mean <code>"secret_scanning"</code>?).</p>
+<h3 id="my-remote-urls-are-ignored">My Remote URLs Are Ignored<a class="headerlink" href="#my-remote-urls-are-ignored" title="Permanent link">&para;</a></h3>
+<p><strong>Symptom</strong>: URLs in user/local config not loading</p>
+<p><strong>Check</strong>:
+1. Does <code>/etc/ai-guardian/remote-configs.json</code> exist? (Linux/macOS)
+2. Is <code>AI_GUARDIAN_REMOTE_CONFIG_URLS</code> set?
+3. Do you have remote URLs in a higher priority config?</p>
+<p><strong>Solution</strong>: Remove higher priority sources or contact your administrator.</p>
+<h3 id="how-do-i-know-which-config-is-active">How Do I Know Which Config Is Active?<a class="headerlink" href="#how-do-i-know-which-config-is-active" title="Permanent link">&para;</a></h3>
+<p>Enable debug logging:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AI_GUARDIAN_LOG_LEVEL</span><span class="o">=</span>DEBUG
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a>ai-guardian<span class="w"> </span>validate
+</code></pre></div>
+<p>Look for log messages like:
+- <code>Using 2 enterprise remote URLs (system config)</code>
+- <code>Using remote URLs from environment variable</code>
+- <code>Using 1 remote URLs from user config</code></p>
+<h3 id="enterprise-policy-is-too-restrictive">Enterprise Policy Is Too Restrictive<a class="headerlink" href="#enterprise-policy-is-too-restrictive" title="Permanent link">&para;</a></h3>
+<p><strong>Do NOT</strong>:
+- Try to bypass with local URLs (won't work)
+- Modify system config (requires root, against policy)</p>
+<p><strong>Do</strong>:
+- Contact your security team
+- Request policy exception
+- Propose policy changes</p>
+<h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h2>
+<h3 id="system-config-security">System Config Security<a class="headerlink" href="#system-config-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Requires root/admin to modify → Prevents user tampering</li>
+<li>Should be managed via configuration management (Ansible, Puppet, etc.)</li>
+<li>Changes require root access → Audit trail in system logs</li>
+</ul>
+<h3 id="remote-config-security">Remote Config Security<a class="headerlink" href="#remote-config-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Use HTTPS URLs (required for security)</li>
+<li>Implement authentication via <code>token_env</code> for private repos</li>
+<li>Validate remote configs are from trusted sources</li>
+<li>Monitor remote config changes via violation logs</li>
+</ul>
+<h3 id="immutability-bypass-prevention">Immutability Bypass Prevention<a class="headerlink" href="#immutability-bypass-prevention" title="Permanent link">&para;</a></h3>
+<p>The cascading priority system (Issue #255) prevents users from:
+- Adding attacker-controlled remote URLs
+- Overriding immutable security settings
+- Bypassing enterprise policies</p>
+<p>This is a critical security feature.</p>
+<h2 id="supply-chain-scanning">Supply Chain Scanning<a class="headerlink" href="#supply-chain-scanning" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.11.0</strong> — Detects malicious patterns in agent configuration files.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">  </span><span class="nt">&quot;supply_chain&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;block&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">&quot;scan_hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">    </span><span class="nt">&quot;scan_mcp_configs&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">    </span><span class="nt">&quot;scan_plugins&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="nt">&quot;allowlist_paths&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td>Enable supply chain threat detection</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td><code>"block"</code></td>
+<td><code>block</code> / <code>warn</code> / <code>log-only</code></td>
+</tr>
+<tr>
+<td><code>scan_hooks</code></td>
+<td><code>true</code></td>
+<td>Scan hooks.json and settings.json for Claude, Cursor, Copilot, Codex, Windsurf, Gemini, Augment</td>
+</tr>
+<tr>
+<td><code>scan_mcp_configs</code></td>
+<td><code>true</code></td>
+<td>Scan MCP server command configs for suspicious patterns</td>
+</tr>
+<tr>
+<td><code>scan_plugins</code></td>
+<td><code>true</code></td>
+<td>Scan OpenCode plugins and AiderDesk extensions for dangerous APIs</td>
+</tr>
+<tr>
+<td><code>allowlist_paths</code></td>
+<td><code>[]</code></td>
+<td>File paths to skip (supports <code>~</code> expansion and globs). AI Guardian's own plugin files are always skipped.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Detection categories</strong>: download-and-execute, obfuscation, env hijacking, network exfiltration, MCP suspicious commands, config key hijacking, reverse shells, plugin dangerous APIs.</p>
+<h2 id="context-poisoning-detection">Context Poisoning Detection<a class="headerlink" href="#context-poisoning-detection" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.11.0</strong> (OWASP LLM03) — Detects attempts to inject persistent malicious instructions into conversation context.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">  </span><span class="nt">&quot;context_poisoning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">    </span><span class="nt">&quot;sensitivity&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;medium&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">    </span><span class="nt">&quot;allowlist_patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">    </span><span class="nt">&quot;custom_patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td>Enable context poisoning detection</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td><code>"warn"</code></td>
+<td><code>block</code> / <code>warn</code> / <code>log-only</code>. Default is <code>warn</code> due to higher false positive risk.</td>
+</tr>
+<tr>
+<td><code>sensitivity</code></td>
+<td><code>"medium"</code></td>
+<td><code>low</code> (dangerous combinations only) / <code>medium</code> (balanced) / <code>high</code> (any persistence keyword)</td>
+</tr>
+<tr>
+<td><code>allowlist_patterns</code></td>
+<td><code>[]</code></td>
+<td>Regex patterns to ignore false positives</td>
+</tr>
+<tr>
+<td><code>custom_patterns</code></td>
+<td><code>[]</code></td>
+<td>Additional persistence patterns beyond the 13 built-in defaults</td>
+</tr>
+</tbody>
+</table>
+<h2 id="per-scanner-filtering">Per-Scanner Filtering<a class="headerlink" href="#per-scanner-filtering" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.12.0</strong> — Exclude specific tools or file patterns from individual scanners.</p>
+<p>Available on: <code>secret_scanning</code>, <code>prompt_injection</code>, <code>scan_pii</code>, <code>context_poisoning</code>, <code>config_scanner</code>, <code>supply_chain</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="p">{</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">&quot;ignore_tools&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Read&quot;</span><span class="p">],</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="w">    </span><span class="nt">&quot;ignore_files&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;*.test.py&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;docs/*.md&quot;</span><span class="p">]</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ignore_tools</code></td>
+<td><code>[]</code></td>
+<td>Tool names to skip when scanning (glob patterns supported)</td>
+</tr>
+<tr>
+<td><code>ignore_files</code></td>
+<td><code>[]</code></td>
+<td>File path patterns to skip for this scanner (glob patterns supported)</td>
+</tr>
+</tbody>
+</table>
+<p>These are per-scanner overrides. For project-wide file exclusions shared via version control, see <a href="#project-level-aiguardignoretoml">.aiguardignore.toml</a> above.</p>
+<h2 id="secret-liveness-validation">Secret Liveness Validation<a class="headerlink" href="#secret-liveness-validation" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.11.0</strong> — After detecting a secret, optionally check if it is still active by calling provider APIs.</p>
+<p>Configure within the <code>secret_scanning</code> section:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p">{</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">&quot;validate_secrets&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">&quot;validation_timeout_ms&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3000</span><span class="p">,</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">&quot;on_inactive&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>validate_secrets</code></td>
+<td><code>false</code></td>
+<td>Enable liveness validation. Must be explicitly opted in — sends detected secrets to provider APIs.</td>
+</tr>
+<tr>
+<td><code>validation_timeout_ms</code></td>
+<td><code>3000</code></td>
+<td>Timeout per validation request in milliseconds</td>
+</tr>
+<tr>
+<td><code>on_inactive</code></td>
+<td><code>"warn"</code></td>
+<td>Action for inactive (revoked/expired) secrets: <code>warn</code> (log warning, don't block) or <code>allow</code> (silently skip). Verified-active and unverified secrets always block.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Built-in validators</strong>: github-personal-token, openai-api-key, anthropic-api-key, slack-token, gitlab-personal-token, npm-token.</p>
+<h2 id="latency-tracking">Latency Tracking<a class="headerlink" href="#latency-tracking" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.11.0</strong> — Records per-hook and per-check timing for performance analysis.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="p">{</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">  </span><span class="nt">&quot;latency_tracking&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">    </span><span class="nt">&quot;max_entries&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">5000</span><span class="p">,</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">    </span><span class="nt">&quot;retention_days&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">30</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>false</code></td>
+<td>Enable hook latency tracking</td>
+</tr>
+<tr>
+<td><code>max_entries</code></td>
+<td><code>5000</code></td>
+<td>Maximum entries in <code>latency.jsonl</code></td>
+</tr>
+<tr>
+<td><code>retention_days</code></td>
+<td><code>30</code></td>
+<td>Auto-prune entries older than this</td>
+</tr>
+</tbody>
+</table>
+<p>View with: <code>ai-guardian metrics --latency</code>. Data stored in <code>~/.local/state/ai-guardian/latency.jsonl</code>.</p>
+<h2 id="project-config-generation-v1150">Project Config Generation (v1.15.0+)<a class="headerlink" href="#project-config-generation-v1150" title="Permanent link">&para;</a></h2>
+<h3 id="init-project-scan">init-project --scan<a class="headerlink" href="#init-project-scan" title="Permanent link">&para;</a></h3>
+<p>Auto-generate a project-level config by scanning your codebase for false positives:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>ai-guardian<span class="w"> </span>init-project<span class="w"> </span>--scan
+</code></pre></div>
+<p>This analyzes your project files, identifies likely false positives, and generates an <code>.ai-guardian/ai-guardian.json</code> with appropriate <code>allowlist_patterns</code>, <code>ignore_files</code>, and <code>stopwords</code> entries. Use the <code>--threshold</code> flag to control how aggressively patterns are suppressed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>ai-guardian<span class="w"> </span>init-project<span class="w"> </span>--scan<span class="w"> </span>--threshold<span class="w"> </span><span class="m">3</span><span class="w">    </span><span class="c1"># Only suppress patterns seen 3+ times</span>
+</code></pre></div>
+<p>Lower thresholds produce more permissive configs; higher thresholds are more conservative.</p>
+<h3 id="language-overlay-system">Language Overlay System<a class="headerlink" href="#language-overlay-system" title="Permanent link">&para;</a></h3>
+<p>AI Guardian auto-detects your project's primary language (Python, Go, JavaScript, etc.) and injects language-specific false positive suppressions. For example, Go projects automatically suppress common Go test patterns, and Python projects suppress Django/Flask placeholder patterns.</p>
+<p>Language detection runs during <code>init-project --scan</code> and during normal scanning when a project config is present. The overlays are additive — they extend your existing config without replacing user-defined rules.</p>
+<h2 id="per-rule-file-type-skipping-v1150">Per-Rule File Type Skipping (v1.15.0+)<a class="headerlink" href="#per-rule-file-type-skipping-v1150" title="Permanent link">&para;</a></h2>
+<p>Individual TOML pattern rules can declare <code>skip_file_types</code> to exclude specific file extensions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">&quot;engines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;toml-patterns&quot;</span><span class="p">]</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">}</span>
+</code></pre></div>
+<p>The <code>skip_file_types</code> field is set per-rule in TOML pattern files (not in <code>ai-guardian.json</code>). See <a href="../TOML_PATTERNS/">TOML_PATTERNS.md</a> for the rule field reference.</p>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../MCP_SERVER/">MCP Security Advisor</a></li>
+<li><a href="../security/SSRF_PROTECTION/">SSRF Protection</a></li>
+<li><a href="../security/SECRET_SCANNING/">Secret Scanning</a></li>
+<li><a href="../PERMISSIONS_COMPARISON/">Permissions System</a></li>
+<li><a href="../HOOKS/">Hook Configuration</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

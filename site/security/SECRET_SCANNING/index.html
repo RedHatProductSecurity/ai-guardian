@@ -1,0 +1,4932 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/security/SECRET_SCANNING/">
+      
+      
+        <link rel="prev" href="../">
+      
+      
+        <link rel="next" href="../SECRET_REDACTION/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Secret Scanning - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#secret-scanning-configuration-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Secret Scanning
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../.." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zero-install-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Install Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scanner-engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner Engines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scanner Engines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-scanners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Scanners
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#leaktk-listen-mode-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LeakTK Listen Mode (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detection-techniques-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Techniques (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanner-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-secret-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Secret Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#individual-developer-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Individual Developer (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enterprise-with-custom-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enterprise with Custom Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gradual-rollout-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradual Rollout / Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-leaktk-pattern-server-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. LeakTK Pattern Server (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-project-specific-gitleakstoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project-Specific .gitleaks.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-gitleaks-defaults-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Gitleaks Defaults (Fallback)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#leaktk-pattern-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LeakTK Pattern Versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-custom-pattern-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: Custom Pattern Server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAQ
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gitleaksignore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .gitleaksignore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allowlist-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allowlist Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inline-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inline Annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommended-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-server-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Server Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-controls_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-enabledisable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Enable/Disable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-priority-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Priority Order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-secret_scanning-and-pattern_server-work-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How secret_scanning and pattern_server Work Together
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How secret_scanning and pattern_server Work Together">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-pattern-server-with-enterprise-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Pattern Server with Enterprise Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-no-pattern-server-default-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: No Pattern Server, Default Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#important-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Important Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Important Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-provides-patterns-not-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Provides Patterns, Not Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-completeness-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Completeness Warning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Unavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-redaction-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret Redaction Security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Secret Redaction Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Layers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Layers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layer-1-gitleaks-redact-flag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1: Gitleaks --redact Flag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-2-never-display-or-log-secret-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2: Never Display or Log Secret Values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-3-error-messages-show-only-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3: Error Messages Show Only Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-4-logs-only-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 4: Logs Only Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-5-sanitized-gitleaks-stderr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 5: Sanitized Gitleaks stderr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-6-violation-log-excludes-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 6: Violation Log Excludes Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-7-known-limitation-userpromptsubmit-terminal-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 7: KNOWN LIMITATION - UserPromptSubmit Terminal Display
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-8-secure-file-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 8: Secure File Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary-what-isisnt-exposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary: What Is/Isn't Exposed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#best-practices-for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices for Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secret-scanning-doesnt-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret scanning doesn't work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-not-being-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern server not being used
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secrets-not-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets not detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secret_scanning-the-scanner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        secret_scanning - The Scanner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern_server-the-pattern-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pattern_server - The Pattern Source
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#they-work-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        They Work Together
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_DAEMON_TRAY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Table of Contents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zero-install-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zero-Install Scanning
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scanner-engines" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner Engines
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scanner Engines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#supported-scanners" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Scanners
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#leaktk-listen-mode-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LeakTK Listen Mode (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#detection-techniques-v1150" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Detection Techniques (v1.15.0+)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#advanced-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scanner-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scanner Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Messages
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-secret-scanning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Secret Scanning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-controls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#common-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Configurations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Configurations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#individual-developer-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Individual Developer (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#enterprise-with-custom-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Enterprise with Custom Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gradual-rollout-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gradual Rollout / Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-leaktk-pattern-server-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. LeakTK Pattern Server (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-project-specific-gitleakstoml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Project-Specific .gitleaks.toml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-gitleaks-defaults-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Gitleaks Defaults (Fallback)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#leaktk-pattern-versions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LeakTK Pattern Versions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-custom-pattern-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: Custom Pattern Server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Workflow
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#faq" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAQ
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#false-positives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        False Positives
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="False Positives">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#quick-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Reference
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gitleaksignore" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .gitleaksignore
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allowlist-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allowlist Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#inline-annotations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inline Annotations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#recommended-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-server-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Integration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Pattern Server Integration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overview_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-it-controls_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What It Controls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-to-enabledisable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How to Enable/Disable
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-priority-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Priority Order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#how-secret_scanning-and-pattern_server-work-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How secret_scanning and pattern_server Work Together
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="How secret_scanning and pattern_server Work Together">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#example-1-pattern-server-with-enterprise-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 1: Pattern Server with Enterprise Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#example-2-no-pattern-server-default-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example 2: No Pattern Server, Default Patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#important-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Important Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Important Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-provides-patterns-not-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Provides Patterns, Not Policy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-completeness-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Completeness Warning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-unavailable" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern Server Unavailable
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#secret-redaction-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret Redaction Security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Secret Redaction Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#security-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Layers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Layers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#layer-1-gitleaks-redact-flag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 1: Gitleaks --redact Flag
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-2-never-display-or-log-secret-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 2: Never Display or Log Secret Values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-3-error-messages-show-only-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 3: Error Messages Show Only Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-4-logs-only-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 4: Logs Only Metadata
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-5-sanitized-gitleaks-stderr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 5: Sanitized Gitleaks stderr
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-6-violation-log-excludes-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 6: Violation Log Excludes Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-7-known-limitation-userpromptsubmit-terminal-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 7: KNOWN LIMITATION - UserPromptSubmit Terminal Display
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#layer-8-secure-file-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layer 8: Secure File Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#summary-what-isisnt-exposed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary: What Is/Isn't Exposed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#best-practices-for-developers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices for Developers
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secret-scanning-doesnt-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secret scanning doesn't work
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern-server-not-being-used" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern server not being used
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#secrets-not-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Secrets not detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#secret_scanning-the-scanner" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        secret_scanning - The Scanner
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pattern_server-the-pattern-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        pattern_server - The Pattern Source
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#they-work-together" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        They Work Together
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#related-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Related Documentation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="secret-scanning-configuration-guide">Secret Scanning Configuration Guide<a class="headerlink" href="#secret-scanning-configuration-guide" title="Permanent link">&para;</a></h1>
+<p>This guide explains how AI Guardian's secret scanning works, including configuration options, pattern server integration, and security measures for secret redaction.</p>
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="#overview">Overview</a></li>
+<li><a href="#scanner-engines">Scanner Engines</a></li>
+<li><a href="#configuration">Configuration</a></li>
+<li><a href="#pattern-server-integration">Pattern Server Integration</a></li>
+<li><a href="#secret-redaction-security">Secret Redaction Security</a></li>
+<li><a href="#false-positives">False Positives</a></li>
+<li><a href="#troubleshooting">Troubleshooting</a></li>
+</ul>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>AI Guardian provides comprehensive secret scanning to prevent sensitive information from being exposed through AI interactions. The scanning system has two main components:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Purpose</th>
+<th>Controls</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong><code>secret_scanning</code></strong></td>
+<td>Enable/disable secret scanning</td>
+<td>Whether to scan for secrets at all (always blocks when found)</td>
+</tr>
+<tr>
+<td><strong><code>pattern_server</code></strong></td>
+<td>Customize detection patterns</td>
+<td><strong>Which patterns</strong> to use when scanning (enterprise patterns vs defaults)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Think of it like this:</strong>
+- <code>secret_scanning</code> = "Should I scan?" (always blocks secrets when found)
+- <code>pattern_server</code> = "What secrets should I look for?"</p>
+<hr />
+<h2 id="zero-install-scanning">Zero-Install Scanning<a class="headerlink" href="#zero-install-scanning" title="Permanent link">&para;</a></h2>
+<p><strong>No external scanner required.</strong> ai-guardian ships with a built-in <code>toml-patterns</code> engine — a pure Python scanner with 267+ pre-compiled regex patterns covering all major secret types (AWS keys, GitHub tokens, Slack tokens, private keys, and more). It requires no binary installation and works immediately after <code>pip install ai-guardian</code>.</p>
+<p>External scanners (gitleaks, betterleaks, leaktk) are <strong>optional</strong>. They are tried after <code>toml-patterns</code> in the default engine list and gracefully skipped when not installed. Install them only if you want additional pattern coverage or faster scanning on large repos.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Default engine order: [&quot;toml-patterns&quot;, &quot;gitleaks&quot;]
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                           ↑
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                     Always available — no install needed
+</code></pre></div>
+<hr />
+<h2 id="scanner-engines">Scanner Engines<a class="headerlink" href="#scanner-engines" title="Permanent link">&para;</a></h2>
+<p><strong>NEW in v1.4.0:</strong> AI Guardian now supports multiple scanner engines with automatic fallback.</p>
+<h3 id="supported-scanners">Supported Scanners<a class="headerlink" href="#supported-scanners" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Scanner</th>
+<th>Speed</th>
+<th>Pattern Management</th>
+<th>Output Format</th>
+<th>Installation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Gitleaks</strong></td>
+<td>Standard</td>
+<td>Manual config</td>
+<td>JSON</td>
+<td><code>brew install gitleaks</code></td>
+</tr>
+<tr>
+<td><strong>BetterLeaks</strong></td>
+<td>20-40% faster</td>
+<td>Manual config</td>
+<td>JSON (same as Gitleaks)</td>
+<td><code>brew install betterleaks</code></td>
+</tr>
+<tr>
+<td><strong>LeakTK</strong></td>
+<td>Fast (listen mode)</td>
+<td>Auto-managed</td>
+<td>JSON (custom)</td>
+<td><code>brew install leaktk/tap/leaktk</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<p><strong>Default (Gitleaks):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="w">    </span><span class="c1">// Defaults to gitleaks if not specified</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Recommended (BetterLeaks with Gitleaks fallback):</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="p">{</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="w">    </span><span class="nt">&quot;engines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;betterleaks&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;gitleaks&quot;</span><span class="p">]</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Behavior:</strong>
+- Tries BetterLeaks first (if installed)
+- Falls back to Gitleaks if BetterLeaks not found
+- Works on any system (automatic detection)</p>
+<p><strong>Three-Scanner Fallback:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="p">{</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="w">    </span><span class="nt">&quot;engines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;leaktk&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;betterleaks&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;gitleaks&quot;</span><span class="p">]</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="leaktk-listen-mode-v1150">LeakTK Listen Mode (v1.15.0+)<a class="headerlink" href="#leaktk-listen-mode-v1150" title="Permanent link">&para;</a></h3>
+<p>When the ai-guardian daemon is running and LeakTK (v0.3.3+) is installed, secret scanning uses LeakTK's <code>listen</code> mode — a persistent process that stays alive between scans. This eliminates subprocess spawn overhead, reducing per-scan latency from ~200ms to ~5ms.</p>
+<ul>
+<li><strong>Automatic:</strong> No configuration needed. The daemon detects LeakTK and uses listen mode transparently.</li>
+<li><strong>Fallback:</strong> If listen mode fails or the daemon is not running (CLI mode), scanning falls back to the standard subprocess path.</li>
+<li><strong>Config changes:</strong> The listen process restarts automatically when <code>ai-guardian.json</code> is modified, picking up new allowlists and settings.</li>
+<li><strong>Pattern refresh:</strong> LeakTK manages pattern updates internally (default: every 12 hours).</li>
+</ul>
+<h3 id="detection-techniques-v1150">Detection Techniques (v1.15.0+)<a class="headerlink" href="#detection-techniques-v1150" title="Permanent link">&para;</a></h3>
+<p><strong>Prefix-based token detection</strong> — TOML rules can declare <code>token_prefixes</code> for fast prefix matching, separate from keyword-based pre-filtering. This enables detection of tokens with known prefixes (e.g., <code>sk-or-</code>, <code>hvs.</code>, <code>AIza</code>) without running the full regex against all content. See <a href="../../TOML_PATTERNS/">TOML_PATTERNS.md</a> for field documentation.</p>
+<p><strong>Credentials in git remote URLs</strong> — AI Guardian detects credentials embedded in git remote URLs (e.g., <code>https://user:token@github.com/org/repo</code>). This pattern catches a common source of credential leaks where tokens are hardcoded into remote URLs instead of using credential helpers. The detection runs automatically as part of the secret scanning pipeline.</p>
+<h3 id="advanced-configuration">Advanced Configuration<a class="headerlink" href="#advanced-configuration" title="Permanent link">&para;</a></h3>
+<p><strong>Custom Binary Path:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="p">{</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">    </span><span class="nt">&quot;engines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a><span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;betterleaks&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-7" name="__codelineno-4-7" href="#__codelineno-4-7"></a><span class="w">        </span><span class="nt">&quot;binary&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/opt/betterleaks/bin/betterleaks&quot;</span><span class="p">,</span>
+<a id="__codelineno-4-8" name="__codelineno-4-8" href="#__codelineno-4-8"></a><span class="w">        </span><span class="nt">&quot;extra_flags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;--regex-engine=re2&quot;</span><span class="p">]</span>
+<a id="__codelineno-4-9" name="__codelineno-4-9" href="#__codelineno-4-9"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-4-10" name="__codelineno-4-10" href="#__codelineno-4-10"></a><span class="w">      </span><span class="s2">&quot;gitleaks&quot;</span>
+<a id="__codelineno-4-11" name="__codelineno-4-11" href="#__codelineno-4-11"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-4-12" name="__codelineno-4-12" href="#__codelineno-4-12"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-4-13" name="__codelineno-4-13" href="#__codelineno-4-13"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Custom Scanner:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="p">{</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">    </span><span class="nt">&quot;engines&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">      </span><span class="p">{</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">        </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;custom&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">        </span><span class="nt">&quot;binary&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-scanner&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">        </span><span class="nt">&quot;command_template&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">          </span><span class="s2">&quot;{binary}&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;scan&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">          </span><span class="s2">&quot;--input&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;{source_file}&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">          </span><span class="s2">&quot;--output&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;{report_file}&quot;</span><span class="p">,</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">          </span><span class="s2">&quot;--format&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;json&quot;</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">        </span><span class="p">],</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">        </span><span class="nt">&quot;success_exit_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">0</span><span class="p">,</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">        </span><span class="nt">&quot;secrets_found_exit_code&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">        </span><span class="nt">&quot;output_format&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gitleaks-compatible&quot;</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="scanner-selection">Scanner Selection<a class="headerlink" href="#scanner-selection" title="Permanent link">&para;</a></h3>
+<p>AI Guardian automatically selects the first available scanner from your <code>engines</code> list:</p>
+<ol>
+<li><strong>Defaults to toml-patterns:</strong> If no <code>engines</code> configured, uses <code>["toml-patterns", "gitleaks"]</code> — <code>toml-patterns</code> is always available (pure Python, no binary)</li>
+<li><strong>Checks availability:</strong> Tries each scanner binary in order</li>
+<li><strong>Selects first found:</strong> Uses the first scanner that exists in PATH</li>
+<li><strong>Falls back gracefully:</strong> If an external scanner is not installed, the next engine in the list is tried; <code>toml-patterns</code> always provides a working fallback</li>
+</ol>
+<p><strong>Example:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="c1"># With config: &quot;engines&quot;: [&quot;betterleaks&quot;, &quot;gitleaks&quot;]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="c1"># If betterleaks installed:</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>$<span class="w"> </span>which<span class="w"> </span>betterleaks
+<a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>/usr/local/bin/betterleaks
+<a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a><span class="c1"># → Uses betterleaks</span>
+<a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>
+<a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a><span class="c1"># If betterleaks NOT installed:</span>
+<a id="__codelineno-6-9" name="__codelineno-6-9" href="#__codelineno-6-9"></a>$<span class="w"> </span>which<span class="w"> </span>betterleaks
+<a id="__codelineno-6-10" name="__codelineno-6-10" href="#__codelineno-6-10"></a><span class="c1"># (not found)</span>
+<a id="__codelineno-6-11" name="__codelineno-6-11" href="#__codelineno-6-11"></a>$<span class="w"> </span>which<span class="w"> </span>gitleaks
+<a id="__codelineno-6-12" name="__codelineno-6-12" href="#__codelineno-6-12"></a>/usr/local/bin/gitleaks
+<a id="__codelineno-6-13" name="__codelineno-6-13" href="#__codelineno-6-13"></a><span class="c1"># → Uses gitleaks (fallback)</span>
+</code></pre></div></p>
+<h3 id="error-messages">Error Messages<a class="headerlink" href="#error-messages" title="Permanent link">&para;</a></h3>
+<p>Error messages now show which scanner detected the secret:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>======================================================================
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>🚨 BLOCKED BY POLICY
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>🔒 SECRET DETECTED
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a>======================================================================
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a>Betterleaks has detected sensitive information in your prompt/file.
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a>Secret Type: aws-access-token
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a>Location: config.py, line 5
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a>Total findings: 1
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a>
+<a id="__codelineno-7-12" name="__codelineno-7-12" href="#__codelineno-7-12"></a>Detection Source:
+<a id="__codelineno-7-13" name="__codelineno-7-13" href="#__codelineno-7-13"></a>  Scanner: betterleaks
+<a id="__codelineno-7-14" name="__codelineno-7-14" href="#__codelineno-7-14"></a>  Patterns: Built-in Defaults (100+ rules)
+<a id="__codelineno-7-15" name="__codelineno-7-15" href="#__codelineno-7-15"></a>
+<a id="__codelineno-7-16" name="__codelineno-7-16" href="#__codelineno-7-16"></a>This operation has been blocked for security.
+</code></pre></div>
+<hr />
+<h2 id="configuration_1">Configuration<a class="headerlink" href="#configuration_1" title="Permanent link">&para;</a></h2>
+<h3 id="basic-secret-scanning">Basic Secret Scanning<a class="headerlink" href="#basic-secret-scanning" title="Permanent link">&para;</a></h3>
+<p><strong>Location:</strong> <code>~/.config/ai-guardian/ai-guardian.json</code></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w">           </span><span class="c1">// ← Turn scanning ON/OFF (always blocks when secrets found)</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">&quot;ignore_files&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w">           </span><span class="c1">// ← Files to skip</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="s2">&quot;**/tests/fixtures/**&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="s2">&quot;**/.env.example&quot;</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="p">],</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">    </span><span class="nt">&quot;ignore_tools&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span><span class="w">         </span><span class="c1">// ← Tools to skip (rarely needed)</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">         </span><span class="c1">// ← NEW in v1.7.0: Nested here!</span>
+<a id="__codelineno-8-10" name="__codelineno-8-10" href="#__codelineno-8-10"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.security.redhat.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-11" name="__codelineno-8-11" href="#__codelineno-8-11"></a><span class="w">      </span><span class="nt">&quot;auth&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}</span>
+<a id="__codelineno-8-12" name="__codelineno-8-12" href="#__codelineno-8-12"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-8-13" name="__codelineno-8-13" href="#__codelineno-8-13"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-8-14" name="__codelineno-8-14" href="#__codelineno-8-14"></a><span class="p">}</span>
+</code></pre></div>
+<h3 id="what-it-controls">What It Controls<a class="headerlink" href="#what-it-controls" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Global enable/disable</strong> - Turn secret scanning on or off (always blocks when enabled)
+✅ <strong>Ignore patterns</strong> - Skip specific files or tools<br />
+✅ <strong>Scanner selection</strong> - Which engine(s) to use (Gitleaks, BetterLeaks, LeakTK, or custom)</p>
+<p><strong>Note:</strong> Secret scanning <strong>always blocks</strong> when secrets are detected. There is no action mode for secret scanning — unlike other features (prompt injection, SSRF, etc.), secrets are always blocked for security reasons.</p>
+<h3 id="common-configurations">Common Configurations<a class="headerlink" href="#common-configurations" title="Permanent link">&para;</a></h3>
+<h4 id="individual-developer-recommended">Individual Developer (Recommended)<a class="headerlink" href="#individual-developer-recommended" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="p">{</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li>Uses Gitleaks default patterns (comprehensive)</li>
+<li>Blocks on secret detection</li>
+<li>No external dependencies</li>
+</ul>
+<h4 id="enterprise-with-custom-patterns">Enterprise with Custom Patterns<a class="headerlink" href="#enterprise-with-custom-patterns" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.company.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">      </span><span class="nt">&quot;auth&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">        </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">        </span><span class="nt">&quot;token_file&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;~/.config/company/pattern-token&quot;</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">      </span><span class="nt">&quot;cache&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="nt">&quot;refresh_interval_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li>Fetches organization-specific patterns</li>
+<li>Caches patterns locally (refresh every 12h)</li>
+<li>Falls back to defaults if server unavailable</li>
+</ul>
+<h4 id="gradual-rollout-testing">Gradual Rollout / Testing<a class="headerlink" href="#gradual-rollout-testing" title="Permanent link">&para;</a></h4>
+<p>To test secret scanning patterns before full deployment, enable scanning on a subset of projects first, or use <code>ignore_files</code> to exclude known false positives while monitoring violations in the Console.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="p">{</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.company.com&quot;</span>
+<a id="__codelineno-11-6" name="__codelineno-11-6" href="#__codelineno-11-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-11-7" name="__codelineno-11-7" href="#__codelineno-11-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-11-8" name="__codelineno-11-8" href="#__codelineno-11-8"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li>Monitor violations in Console to identify false positives</li>
+<li>Adjust <code>ignore_files</code> patterns as needed</li>
+</ul>
+<hr />
+<h2 id="pattern-sources">Pattern Sources<a class="headerlink" href="#pattern-sources" title="Permanent link">&para;</a></h2>
+<p>AI Guardian supports multiple pattern sources for secret detection:</p>
+<h3 id="1-leaktk-pattern-server-recommended">1. LeakTK Pattern Server (Recommended)<a class="headerlink" href="#1-leaktk-pattern-server-recommended" title="Permanent link">&para;</a></h3>
+<p><strong>What is LeakTK?</strong></p>
+<p><a href="https://github.com/leaktk/patterns">LeakTK</a> is a community-maintained, open-source collection of secret detection patterns. It provides regularly updated gitleaks patterns for detecting API keys, tokens, passwords, and other credentials.</p>
+<p><strong>Why use LeakTK?</strong></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>LeakTK Patterns</th>
+<th>Gitleaks Defaults</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rules</td>
+<td>104+ rules</td>
+<td>100+ rules</td>
+</tr>
+<tr>
+<td>Updates</td>
+<td>Community-maintained</td>
+<td>Gitleaks releases</td>
+</tr>
+<tr>
+<td>Cost</td>
+<td>Free, no auth</td>
+<td>Free</td>
+</tr>
+<tr>
+<td>Customization</td>
+<td>Fork and customize</td>
+<td>Requires local file</td>
+</tr>
+<tr>
+<td>Pattern Quality</td>
+<td>Peer-reviewed</td>
+<td>Official</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Configuration:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://raw.githubusercontent.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">      </span><span class="nt">&quot;patterns_endpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/leaktk/patterns/main/target/patterns/gitleaks/8.27.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">      </span><span class="nt">&quot;cache&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">        </span><span class="nt">&quot;refresh_interval_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">        </span><span class="nt">&quot;expire_after_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">168</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>url</code>: GitHub raw content URL (no authentication needed)</li>
+<li><code>patterns_endpoint</code>: Path to gitleaks pattern file</li>
+<li>Use <code>main</code> branch for latest patterns</li>
+<li>Or pin to specific version: <code>/leaktk/patterns/v1.0.0/target/patterns/gitleaks/8.27.0</code></li>
+<li><code>cache.refresh_interval_hours</code>: How often to check for updates (default: 12)</li>
+<li><code>cache.expire_after_hours</code>: When to consider cache stale (default: 168 = 7 days)</li>
+</ul>
+<p><strong>Cache Location:</strong></p>
+<p>Patterns are cached at: <code>~/.cache/ai-guardian/leaktk-patterns.toml</code></p>
+<p><strong>Troubleshooting:</strong></p>
+<p>Check logs for pattern server activity:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>tail<span class="w"> </span>-50<span class="w"> </span>~/.config/ai-guardian/ai-guardian.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-i<span class="w"> </span><span class="s2">&quot;pattern&quot;</span>
+</code></pre></div></p>
+<p>Expected log entries:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>INFO: Using pattern server config: ~/.cache/ai-guardian/leaktk-patterns.toml
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>INFO: Pattern server cache is fresh (last updated: 2026-04-20 10:30:00)
+</code></pre></div></p>
+<p>If you see warnings:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>WARNING: Pattern server configured at https://raw.githubusercontent.com but patterns unavailable
+</code></pre></div></p>
+<p><strong>Possible causes:</strong>
+- Network connectivity issues
+- GitHub raw content temporarily unavailable
+- Invalid patterns_endpoint path</p>
+<p><strong>Fallback behavior:</strong> AI Guardian automatically falls back to gitleaks defaults if pattern server is unavailable.</p>
+<h3 id="2-project-specific-gitleakstoml">2. Project-Specific .gitleaks.toml<a class="headerlink" href="#2-project-specific-gitleakstoml" title="Permanent link">&para;</a></h3>
+<p>Create a <code>.gitleaks.toml</code> in your project root for custom patterns:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">title</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Custom Project Patterns&quot;</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="k">[[rules]]</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;custom-api-key&quot;</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Custom API Key&quot;</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="n">regex</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;&#39;&#39;my-api-key-[a-z0-9]{32}&#39;&#39;&#39;</span>
+</code></pre></div>
+<p><strong>Priority:</strong> If both pattern server and <code>.gitleaks.toml</code> exist, pattern server takes priority.</p>
+<h3 id="3-gitleaks-defaults-fallback">3. Gitleaks Defaults (Fallback)<a class="headerlink" href="#3-gitleaks-defaults-fallback" title="Permanent link">&para;</a></h3>
+<p>If no pattern server or project config, AI Guardian uses gitleaks built-in patterns (100+ rules).</p>
+<p><strong>Priority order:</strong>
+1. Pattern server (if configured and reachable)
+2. Project <code>.gitleaks.toml</code> (if exists)
+3. Gitleaks defaults (always available)</p>
+<h2 id="leaktk-pattern-versions">LeakTK Pattern Versions<a class="headerlink" href="#leaktk-pattern-versions" title="Permanent link">&para;</a></h2>
+<p>LeakTK provides patterns for different gitleaks versions:</p>
+<table>
+<thead>
+<tr>
+<th>Gitleaks Version</th>
+<th>Endpoint Path</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8.27.0</td>
+<td><code>/leaktk/patterns/main/target/patterns/gitleaks/8.27.0</code></td>
+</tr>
+<tr>
+<td>8.26.0</td>
+<td><code>/leaktk/patterns/main/target/patterns/gitleaks/8.26.0</code></td>
+</tr>
+<tr>
+<td>8.25.0</td>
+<td><code>/leaktk/patterns/main/target/patterns/gitleaks/8.25.0</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Check your gitleaks version:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>gitleaks<span class="w"> </span>version
+</code></pre></div></p>
+<p><strong>Use matching LeakTK pattern version</strong> for best compatibility.</p>
+<h2 id="advanced-custom-pattern-server">Advanced: Custom Pattern Server<a class="headerlink" href="#advanced-custom-pattern-server" title="Permanent link">&para;</a></h2>
+<p>You can host your own pattern server:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="p">{</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.mycompany.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">      </span><span class="nt">&quot;patterns_endpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/patterns/gitleaks/latest.toml&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="w">      </span><span class="nt">&quot;auth&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="w">        </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span>
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="w">        </span><span class="nt">&quot;token_file&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;~/.config/ai-guardian/pattern-server-token&quot;</span>
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-18-11" name="__codelineno-18-11" href="#__codelineno-18-11"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-18-12" name="__codelineno-18-12" href="#__codelineno-18-12"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Requirements:</strong>
+- Serve gitleaks-compatible <code>.toml</code> patterns
+- HTTPS endpoint
+- Optional: Token-based authentication</p>
+<h2 id="example-workflow">Example Workflow<a class="headerlink" href="#example-workflow" title="Permanent link">&para;</a></h2>
+<p><strong>1. Start with LeakTK patterns:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://raw.githubusercontent.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="w">      </span><span class="nt">&quot;patterns_endpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/leaktk/patterns/main/target/patterns/gitleaks/8.27.0&quot;</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>2. Add project-specific allowlists:</strong></p>
+<p>Create <code>.gitleaks.toml</code> in your project:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Use LeakTK patterns via pattern server</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># This file only adds allowlists</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="k">[allowlist]</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="n">description</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;Allow test fixtures&quot;</span>
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="n">paths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="w">    </span><span class="s1">&#39;&#39;&#39;tests/fixtures/.*&#39;&#39;&#39;</span><span class="p">,</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="w">    </span><span class="s1">&#39;&#39;&#39;examples/.*&#39;&#39;&#39;</span>
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="p">]</span>
+</code></pre></div></p>
+<p><strong>Note:</strong> Project <code>.gitleaks.toml</code> is ignored when pattern server is configured. To use both:
+- Download LeakTK patterns manually
+- Add to project <code>.gitleaks.toml</code>
+- Remove pattern server config</p>
+<p><strong>3. Verify configuration:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Test detection</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{&quot;prompt&quot;: &quot;github_pat=ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx&quot;}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ai-guardian
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># Check which patterns are active</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>tail<span class="w"> </span>~/.config/ai-guardian/ai-guardian.log<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s2">&quot;pattern&quot;</span>
+</code></pre></div></p>
+<h2 id="faq">FAQ<a class="headerlink" href="#faq" title="Permanent link">&para;</a></h2>
+<p><strong>Q: Can I use LeakTK patterns without internet access?</strong></p>
+<p>A: Yes. Download patterns once, then AI Guardian uses the cache:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="c1"># First run (requires internet)</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{&quot;prompt&quot;: &quot;test&quot;}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ai-guardian
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="c1"># Subsequent runs use cache (works offline for 7 days)</span>
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="nb">echo</span><span class="w"> </span><span class="s1">&#39;{&quot;prompt&quot;: &quot;test&quot;}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>ai-guardian
+</code></pre></div></p>
+<p><strong>Q: How do I update to the latest LeakTK patterns?</strong></p>
+<p>A: Either:
+1. Wait for auto-refresh (default: 12 hours)
+2. Delete cache to force immediate refresh:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>rm<span class="w"> </span>~/.cache/ai-guardian/leaktk-patterns.toml
+</code></pre></div></p>
+<p><strong>Q: Can I use LeakTK patterns AND project .gitleaks.toml?</strong></p>
+<p>A: Pattern server takes priority. If you need both:
+1. Download LeakTK patterns: <code>curl -o .gitleaks.toml https://raw.githubusercontent.com/leaktk/patterns/main/target/patterns/gitleaks/8.27.0</code>
+2. Add your custom rules to <code>.gitleaks.toml</code>
+3. Remove pattern server config</p>
+<p><strong>Q: What if GitHub raw content is blocked by my firewall?</strong></p>
+<p>A: Host patterns yourself:
+1. Download LeakTK patterns
+2. Host on internal server
+3. Update config:
+   <div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="p">{</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="w">  </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="w">    </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://internal-patterns.company.com&quot;</span><span class="p">,</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="w">    </span><span class="nt">&quot;patterns_endpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/gitleaks/8.27.0.toml&quot;</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Q: How do I know if LeakTK patterns are being used?</strong></p>
+<p>A: Check error messages (Issue #153):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>Detection Source:
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>  Scanner: gitleaks
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>  Patterns: LeakTK Pattern Server
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a>  URL: https://raw.githubusercontent.com
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>  Endpoint: /leaktk/patterns/main/target/patterns/gitleaks/8.27.0
+</code></pre></div></p>
+<h2 id="false-positives">False Positives<a class="headerlink" href="#false-positives" title="Permanent link">&para;</a></h2>
+<p>When secret scanning flags a value that is not a real secret, you have several options to suppress it. The right choice depends on whether the false positive is a one-off finding, a recurring pattern, or an entire file.</p>
+<h3 id="quick-reference">Quick Reference<a class="headerlink" href="#quick-reference" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Best For</th>
+<th>Scope</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.gitleaksignore</code></td>
+<td>One specific finding by fingerprint</td>
+<td>Gitleaks only</td>
+</tr>
+<tr>
+<td><code>allowlist_patterns</code></td>
+<td>Recurring patterns (test keys, placeholders)</td>
+<td>All scanners</td>
+</tr>
+<tr>
+<td><code>ignore_files</code></td>
+<td>Entire files or directories</td>
+<td>All scanners</td>
+</tr>
+<tr>
+<td><code>.aiguardignore.toml</code></td>
+<td>Project-level file ignores (shared via VCS)</td>
+<td>All scanners</td>
+</tr>
+<tr>
+<td><code>.gitleaks.toml</code> <code>[allowlist]</code></td>
+<td>Gitleaks-specific path/regex rules</td>
+<td>Gitleaks only</td>
+</tr>
+<tr>
+<td>Inline annotations</td>
+<td>Single lines in source code</td>
+<td>All scanners</td>
+</tr>
+</tbody>
+</table>
+<h3 id="gitleaksignore">.gitleaksignore<a class="headerlink" href="#gitleaksignore" title="Permanent link">&para;</a></h3>
+<p>Create a <code>.gitleaksignore</code> file at your project root to ignore specific findings by fingerprint hash:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a># .gitleaksignore — one fingerprint per line
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a># Get fingerprints from gitleaks output or ai-guardian violation logs
+<a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a>
+<a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a>a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2
+<a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a>f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5d4c3b2a1f6e5
+<a id="__codelineno-26-6" name="__codelineno-26-6" href="#__codelineno-26-6"></a>
+<a id="__codelineno-26-7" name="__codelineno-26-7" href="#__codelineno-26-7"></a># Comments start with #
+<a id="__codelineno-26-8" name="__codelineno-26-8" href="#__codelineno-26-8"></a># Blank lines are ignored
+</code></pre></div>
+<p><strong>Finding fingerprints:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># From gitleaks output</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>gitleaks<span class="w"> </span>detect<span class="w"> </span>--source<span class="w"> </span>.<span class="w"> </span>--verbose<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Fingerprint
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># From ai-guardian violation logs</span>
+<a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>ai-guardian<span class="w"> </span>violations<span class="w"> </span>--type<span class="w"> </span>secret_detected<span class="w"> </span>--limit<span class="w"> </span><span class="m">10</span>
+</code></pre></div>
+<p><strong>Limitations:</strong> <code>.gitleaksignore</code> only works with the Gitleaks engine. For BetterLeaks or LeakTK, use <code>allowlist_patterns</code> or <code>ignore_files</code>.</p>
+<h3 id="allowlist-patterns">Allowlist Patterns<a class="headerlink" href="#allowlist-patterns" title="Permanent link">&para;</a></h3>
+<p>Suppress recurring false positives across all scanners with regex patterns in <code>ai-guardian.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="p">{</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">    </span><span class="nt">&quot;allowlist_patterns&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="w">      </span><span class="s2">&quot;YOUR_TOKEN_HERE&quot;</span><span class="p">,</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="w">      </span><span class="s2">&quot;EXAMPLE_API_KEY&quot;</span><span class="p">,</span>
+<a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">      </span><span class="s2">&quot;pk_test_[A-Za-z0-9]{24,}&quot;</span><span class="p">,</span>
+<a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="w">      </span><span class="s2">&quot;\\$\\{[A-Z_]+\\}&quot;</span><span class="p">,</span>
+<a id="__codelineno-28-8" name="__codelineno-28-8" href="#__codelineno-28-8"></a><span class="w">      </span><span class="s2">&quot;&lt;your-.*-here&gt;&quot;</span>
+<a id="__codelineno-28-9" name="__codelineno-28-9" href="#__codelineno-28-9"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-28-10" name="__codelineno-28-10" href="#__codelineno-28-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-28-11" name="__codelineno-28-11" href="#__codelineno-28-11"></a><span class="p">}</span>
+</code></pre></div>
+<p>Common scenarios:
+- <strong>Placeholder values</strong>: <code>"YOUR_TOKEN_HERE"</code>, <code>"REPLACE_ME"</code>, <code>"changeme"</code>
+- <strong>Environment variable references</strong>: <code>"\\$\\{[A-Z_]+\\}"</code>, <code>"\\$[A-Z_]+"</code>
+- <strong>Test/public keys</strong>: <code>"pk_test_[A-Za-z0-9]{24,}"</code>
+- <strong>Template placeholders</strong>: <code>"&lt;your-.*-here&gt;"</code>
+- <strong>Masked values</strong>: <code>"x{8,}"</code></p>
+<p>Supports time-limited patterns — see <a href="../../COOKBOOK/#how-do-i-add-a-time-limited-allowlist-pattern">COOKBOOK.md</a>.</p>
+<h3 id="inline-annotations">Inline Annotations<a class="headerlink" href="#inline-annotations" title="Permanent link">&para;</a></h3>
+<p>Suppress a single line with an inline comment:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="n">API_KEY</span> <span class="o">=</span> <span class="s2">&quot;pk_test_example123456789012&quot;</span>  <span class="c1"># ai-guardian:allow</span>
+</code></pre></div>
+<p><strong>Built-in aliases</strong> (work out of the box):</p>
+<table>
+<thead>
+<tr>
+<th>Alias</th>
+<th>Suppresses</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ai-guardian:allow</code></td>
+<td>Secrets + PII</td>
+</tr>
+<tr>
+<td><code>gitleaks:allow</code></td>
+<td>Secrets only</td>
+</tr>
+</tbody>
+</table>
+<p>These are the only aliases available by default. To use other keywords (e.g., <code>notsecret</code>, <code>nosec</code>), configure them in <code>ai-guardian.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="p">{</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="w">  </span><span class="nt">&quot;annotations&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="nt">&quot;inline_allow&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;nosec&quot;</span><span class="p">],</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span><span class="nt">&quot;inline_allow_secrets&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;notsecret&quot;</span><span class="p">]</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><code>inline_allow</code> — adds custom aliases suppressing secrets + PII (extends built-in <code>ai-guardian:allow</code>)</li>
+<li><code>inline_allow_secrets</code> — adds custom aliases suppressing secrets only (extends built-in <code>gitleaks:allow</code>)</li>
+</ul>
+<p>Custom aliases are additive — built-in aliases always remain active.</p>
+<p>Block annotations use <code>ai-guardian:begin-allow</code> / <code>ai-guardian:end-allow</code> (also configurable via <code>block_begin</code> / <code>block_end</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># ai-guardian:begin-allow</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">TEST_DATA</span> <span class="o">=</span> <span class="p">{</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>    <span class="s2">&quot;token&quot;</span><span class="p">:</span> <span class="s2">&quot;ghp_faketoken1234567890123456789012345&quot;</span><span class="p">,</span>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a>    <span class="s2">&quot;key&quot;</span><span class="p">:</span> <span class="s2">&quot;AKIAIOSFODNN7EXAMPLE&quot;</span><span class="p">,</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="p">}</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a><span class="c1"># ai-guardian:end-allow</span>
+</code></pre></div>
+<p>See <a href="../../ANNOTATIONS/">Annotations</a> for the full configuration reference.</p>
+<h3 id="recommended-workflow">Recommended Workflow<a class="headerlink" href="#recommended-workflow" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Investigate</strong> — check <code>ai-guardian violations</code> to confirm the finding is a false positive</li>
+<li><strong>Choose scope</strong> — use the quick reference table above to pick the narrowest suppression</li>
+<li><strong>Apply</strong> — add the suppression rule</li>
+<li><strong>Verify</strong> — re-run scanning to confirm the false positive is suppressed</li>
+<li><strong>Commit</strong> — check <code>.gitleaksignore</code> and <code>.aiguardignore.toml</code> into version control so the team benefits</li>
+</ol>
+<p>For detailed examples and common false-positive scenarios, see <a href="../../COOKBOOK/#handling-false-positives">COOKBOOK.md — Handling False Positives</a>.</p>
+<h2 id="pattern-server-integration">Pattern Server Integration<a class="headerlink" href="#pattern-server-integration" title="Permanent link">&para;</a></h2>
+<h3 id="overview_1">Overview<a class="headerlink" href="#overview_1" title="Permanent link">&para;</a></h3>
+<p><strong>Purpose:</strong> Fetch custom secret detection patterns from an enterprise pattern server instead of using Gitleaks default patterns or LeakTK.</p>
+<p><strong>Location:</strong> <code>~/.config/ai-guardian/ai-guardian.json</code></p>
+<p><strong>NEW in v1.7.0:</strong> Nested under <code>secret_scanning</code> (was at root level)</p>
+<h3 id="configuration_2">Configuration<a class="headerlink" href="#configuration_2" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="p">{</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">         </span><span class="c1">// ← Nested under secret_scanning (v1.7.0+)</span>
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.security.redhat.com&quot;</span><span class="p">,</span><span class="w">  </span><span class="c1">// ← Presence = enabled!</span>
+<a id="__codelineno-32-6" name="__codelineno-32-6" href="#__codelineno-32-6"></a><span class="w">      </span><span class="nt">&quot;patterns_endpoint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/patterns/gitleaks/8.27.0&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-7" name="__codelineno-32-7" href="#__codelineno-32-7"></a><span class="w">      </span><span class="nt">&quot;auth&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-32-8" name="__codelineno-32-8" href="#__codelineno-32-8"></a><span class="w">        </span><span class="nt">&quot;method&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bearer&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-9" name="__codelineno-32-9" href="#__codelineno-32-9"></a><span class="w">        </span><span class="nt">&quot;token_env&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;AI_GUARDIAN_PATTERN_TOKEN&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-10" name="__codelineno-32-10" href="#__codelineno-32-10"></a><span class="w">        </span><span class="nt">&quot;token_file&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;~/.config/rh-gitleaks/auth.jwt&quot;</span>
+<a id="__codelineno-32-11" name="__codelineno-32-11" href="#__codelineno-32-11"></a><span class="w">      </span><span class="p">},</span>
+<a id="__codelineno-32-12" name="__codelineno-32-12" href="#__codelineno-32-12"></a><span class="w">      </span><span class="nt">&quot;cache&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-32-13" name="__codelineno-32-13" href="#__codelineno-32-13"></a><span class="w">        </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;~/.cache/ai-guardian/patterns.toml&quot;</span><span class="p">,</span>
+<a id="__codelineno-32-14" name="__codelineno-32-14" href="#__codelineno-32-14"></a><span class="w">        </span><span class="nt">&quot;refresh_interval_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">12</span><span class="p">,</span>
+<a id="__codelineno-32-15" name="__codelineno-32-15" href="#__codelineno-32-15"></a><span class="w">        </span><span class="nt">&quot;expire_after_hours&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">168</span>
+<a id="__codelineno-32-16" name="__codelineno-32-16" href="#__codelineno-32-16"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-32-17" name="__codelineno-32-17" href="#__codelineno-32-17"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-32-18" name="__codelineno-32-18" href="#__codelineno-32-18"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-32-19" name="__codelineno-32-19" href="#__codelineno-32-19"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Simplified in v1.7.0:</strong>
+- ✅ <strong>No <code>enabled</code> field needed</strong> - presence of section = enabled
+- ✅ <strong>Logical nesting</strong> - pattern_server clearly part of secret scanning
+- ✅ <strong>Easier to understand</strong> - all secret scanning config in one place</p>
+<h3 id="what-it-controls_1">What It Controls<a class="headerlink" href="#what-it-controls_1" title="Permanent link">&para;</a></h3>
+<p>✅ <strong>Pattern source</strong> - Where to get detection patterns<br />
+✅ <strong>Enterprise patterns</strong> - Organization-specific secret types<br />
+✅ <strong>Pattern caching</strong> - Local cache with refresh intervals<br />
+✅ <strong>Authentication</strong> - Token-based access to pattern server</p>
+<h3 id="how-to-enabledisable">How to Enable/Disable<a class="headerlink" href="#how-to-enabledisable" title="Permanent link">&para;</a></h3>
+<p><strong>Enable pattern server</strong> (v1.7.0+ simplified):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="p">{</span>
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.company.com&quot;</span><span class="w">  </span><span class="c1">// ← Presence = enabled</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-33-6" name="__codelineno-33-6" href="#__codelineno-33-6"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-33-7" name="__codelineno-33-7" href="#__codelineno-33-7"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Disable pattern server:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="p">{</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">  </span><span class="c1">// ← Explicit disable</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Or simply don't configure it:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="p">{</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="w">    </span><span class="c1">// No pattern_server = use defaults</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="p">}</span>
+</code></pre></div></p>
+<h3 id="pattern-priority-order">Pattern Priority Order<a class="headerlink" href="#pattern-priority-order" title="Permanent link">&para;</a></h3>
+<p>When scanning for secrets, AI Guardian uses patterns in this priority:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a>1. Pattern Server (if configured and available)
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>   - Enterprise/organization-specific patterns
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a>   - Cached for 7 days if server becomes unavailable
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a>   ↓
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a>2. Scanner Engines (first available from engines list)
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a>   - Example: [&quot;betterleaks&quot;, &quot;gitleaks&quot;, &quot;leaktk&quot;]
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a>   - Tries each scanner in order until one is found
+<a id="__codelineno-36-8" name="__codelineno-36-8" href="#__codelineno-36-8"></a>   - Automatically uses .gitleaks.toml if scanner supports it
+<a id="__codelineno-36-9" name="__codelineno-36-9" href="#__codelineno-36-9"></a>   ↓
+<a id="__codelineno-36-10" name="__codelineno-36-10" href="#__codelineno-36-10"></a>3. BLOCK if no scanner is available
+</code></pre></div>
+<p><strong>Key Changes:</strong>
+- ✅ Always falls back to scanner engines when pattern server fails
+- ✅ Scanner engines automatically detect and use <code>.gitleaks.toml</code> if present
+- ✅ No configuration needed - fallback is automatic
+- ✅ Clear logging at each fallback step</p>
+<p><strong>Example Scenarios:</strong></p>
+<p><strong>Scenario 1: Pattern server available</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="c1"># Your setup</span>
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a>~/.config/ai-guardian/ai-guardian.json<span class="w">  </span><span class="c1"># pattern_server configured</span>
+<a id="__codelineno-37-3" name="__codelineno-37-3" href="#__codelineno-37-3"></a>/your/project/.gitleaks.toml<span class="w">            </span><span class="c1"># exists</span>
+<a id="__codelineno-37-4" name="__codelineno-37-4" href="#__codelineno-37-4"></a>
+<a id="__codelineno-37-5" name="__codelineno-37-5" href="#__codelineno-37-5"></a><span class="c1"># Result: Uses Pattern Server patterns</span>
+<a id="__codelineno-37-6" name="__codelineno-37-6" href="#__codelineno-37-6"></a><span class="c1"># .gitleaks.toml is IGNORED (pattern server takes priority)</span>
+</code></pre></div></p>
+<p><strong>Scenario 2: Pattern server down, gitleaks installed</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="c1"># Your setup</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a>~/.config/ai-guardian/ai-guardian.json<span class="w">  </span><span class="c1"># pattern_server configured</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>/your/project/.gitleaks.toml<span class="w">            </span><span class="c1"># exists</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a>$<span class="w"> </span>which<span class="w"> </span>gitleaks
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a>/usr/local/bin/gitleaks
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="c1"># Result:</span>
+<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="c1"># 1. Pattern server unavailable (logged warning)</span>
+<a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="c1"># 2. Falls back to gitleaks scanner</span>
+<a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="c1"># 3. Gitleaks automatically uses .gitleaks.toml (if present)</span>
+<a id="__codelineno-38-11" name="__codelineno-38-11" href="#__codelineno-38-11"></a><span class="c1"># 4. Or uses built-in patterns (if .gitleaks.toml not found)</span>
+</code></pre></div></p>
+<p><strong>Scenario 3: No pattern server, has .gitleaks.toml</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="c1"># Your setup</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a>~/.config/ai-guardian/ai-guardian.json<span class="w">  </span><span class="c1"># no pattern_server</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a>/your/project/.gitleaks.toml<span class="w">            </span><span class="c1"># exists</span>
+<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a>
+<a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="c1"># Result:</span>
+<a id="__codelineno-39-6" name="__codelineno-39-6" href="#__codelineno-39-6"></a><span class="c1"># 1. Uses gitleaks scanner (no pattern server configured)</span>
+<a id="__codelineno-39-7" name="__codelineno-39-7" href="#__codelineno-39-7"></a><span class="c1"># 2. Gitleaks automatically detects and uses .gitleaks.toml</span>
+</code></pre></div></p>
+<h3 id="pattern-server-workflow">Pattern Server Workflow<a class="headerlink" href="#pattern-server-workflow" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>User triggers scan (prompt, file read, tool output)
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>    ↓
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a>secret_scanning.enabled == true?
+<a id="__codelineno-40-4" name="__codelineno-40-4" href="#__codelineno-40-4"></a>    YES ↓
+<a id="__codelineno-40-5" name="__codelineno-40-5" href="#__codelineno-40-5"></a>        ↓
+<a id="__codelineno-40-6" name="__codelineno-40-6" href="#__codelineno-40-6"></a>    pattern_server configured?
+<a id="__codelineno-40-7" name="__codelineno-40-7" href="#__codelineno-40-7"></a>        YES ↓
+<a id="__codelineno-40-8" name="__codelineno-40-8" href="#__codelineno-40-8"></a>            ↓
+<a id="__codelineno-40-9" name="__codelineno-40-9" href="#__codelineno-40-9"></a>        Fetch patterns from server → Cache locally
+<a id="__codelineno-40-10" name="__codelineno-40-10" href="#__codelineno-40-10"></a>            ↓
+<a id="__codelineno-40-11" name="__codelineno-40-11" href="#__codelineno-40-11"></a>        Use server patterns for scanning
+<a id="__codelineno-40-12" name="__codelineno-40-12" href="#__codelineno-40-12"></a>            ↓
+<a id="__codelineno-40-13" name="__codelineno-40-13" href="#__codelineno-40-13"></a>        Find secret → BLOCKED (secrets always block)
+<a id="__codelineno-40-14" name="__codelineno-40-14" href="#__codelineno-40-14"></a>
+<a id="__codelineno-40-15" name="__codelineno-40-15" href="#__codelineno-40-15"></a>        NO ↓
+<a id="__codelineno-40-16" name="__codelineno-40-16" href="#__codelineno-40-16"></a>            ↓
+<a id="__codelineno-40-17" name="__codelineno-40-17" href="#__codelineno-40-17"></a>        Use .gitleaks.toml or defaults
+<a id="__codelineno-40-18" name="__codelineno-40-18" href="#__codelineno-40-18"></a>            ↓
+<a id="__codelineno-40-19" name="__codelineno-40-19" href="#__codelineno-40-19"></a>        Find secret → BLOCKED (secrets always block)
+</code></pre></div>
+<h3 id="how-secret_scanning-and-pattern_server-work-together">How secret_scanning and pattern_server Work Together<a class="headerlink" href="#how-secret_scanning-and-pattern_server-work-together" title="Permanent link">&para;</a></h3>
+<h4 id="example-1-pattern-server-with-enterprise-patterns">Example 1: Pattern Server with Enterprise Patterns<a class="headerlink" href="#example-1-pattern-server-with-enterprise-patterns" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="p">{</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w">  </span><span class="c1">// ← Controls WHICH secrets to look for</span>
+<a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.security.redhat.com&quot;</span>
+<a id="__codelineno-41-6" name="__codelineno-41-6" href="#__codelineno-41-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-41-7" name="__codelineno-41-7" href="#__codelineno-41-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-41-8" name="__codelineno-41-8" href="#__codelineno-41-8"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Behavior:</strong>
+1. User pastes content with AWS key
+2. ai-guardian fetches patterns from Red Hat pattern server
+3. Pattern server includes AWS key pattern
+4. Secret detected → <strong>BLOCKED</strong> (secrets always block)
+5. Error shown to user</p>
+<h4 id="example-2-no-pattern-server-default-patterns">Example 2: No Pattern Server, Default Patterns<a class="headerlink" href="#example-2-no-pattern-server-default-patterns" title="Permanent link">&para;</a></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="p">{</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Behavior:</strong>
+1. User pastes content with AWS key
+2. ai-guardian uses Gitleaks built-in patterns (no pattern server)
+3. Built-in patterns include AWS key detection
+4. Secret detected → <strong>BLOCKED</strong> (secrets always block)</p>
+<h3 id="important-notes">Important Notes<a class="headerlink" href="#important-notes" title="Permanent link">&para;</a></h3>
+<h4 id="pattern-server-provides-patterns-not-policy">Pattern Server Provides Patterns, Not Policy<a class="headerlink" href="#pattern-server-provides-patterns-not-policy" title="Permanent link">&para;</a></h4>
+<p>⚠️ <strong>Note:</strong> Pattern server only provides detection patterns, not policy decisions. Secret scanning always blocks when secrets are detected.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="p">{</span>
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="w">  </span><span class="nt">&quot;secret_scanning&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="w">    </span><span class="nt">&quot;enabled&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="w">    </span><span class="nt">&quot;pattern_server&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://patterns.company.com&quot;</span>
+<a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-43-7" name="__codelineno-43-7" href="#__codelineno-43-7"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-43-8" name="__codelineno-43-8" href="#__codelineno-43-8"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Why?</strong> Pattern server provides WHICH secrets to detect. When a secret is detected, it is always blocked — there is no configurable action mode for secret scanning.</p>
+<h4 id="pattern-completeness-warning">Pattern Completeness Warning<a class="headerlink" href="#pattern-completeness-warning" title="Permanent link">&para;</a></h4>
+<p>If pattern server returns fewer than 50 rules, you'll see:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>WARNING: Pattern server returned only 12 rules. 
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>Standard Gitleaks has 100+ rules.
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>Your pattern server may be missing common secret types (AWS keys, RSA keys, etc.).
+<a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a>Ensure your pattern server includes both organization-specific AND default Gitleaks patterns.
+</code></pre></div>
+<p><strong>What to do:</strong>
+1. Check if pattern server includes default Gitleaks patterns
+2. Contact pattern server administrator
+3. Temporarily disable pattern server to use defaults</p>
+<h4 id="pattern-server-unavailable">Pattern Server Unavailable<a class="headerlink" href="#pattern-server-unavailable" title="Permanent link">&para;</a></h4>
+<p>If pattern server fails:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>WARNING: Pattern server configured at https://patterns.company.com but patterns unavailable.
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>Falling back to project config or gitleaks defaults.
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>Common causes: missing/invalid auth token, network error, server down.
+<a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a>Check token at ~/.config/company/token or see ~/.config/ai-guardian/ai-guardian.log
+</code></pre></div></p>
+<p><strong>Behavior:</strong>
+- Falls back to project <code>.gitleaks.toml</code> (if exists)
+- Otherwise uses Gitleaks defaults
+- Scanning continues (fail-safe)</p>
+<hr />
+<h2 id="secret-redaction-security">Secret Redaction Security<a class="headerlink" href="#secret-redaction-security" title="Permanent link">&para;</a></h2>
+<p>AI Guardian implements <strong>defense-in-depth</strong> for secret value redaction to ensure that actual secret values are <strong>never</strong> exposed in error messages, logs, or temporary files.</p>
+<h3 id="security-layers">Security Layers<a class="headerlink" href="#security-layers" title="Permanent link">&para;</a></h3>
+<h4 id="layer-1-gitleaks-redact-flag">Layer 1: Gitleaks <code>--redact</code> Flag<a class="headerlink" href="#layer-1-gitleaks-redact-flag" title="Permanent link">&para;</a></h4>
+<p><strong>Location</strong>: <code>src/ai_guardian/__init__.py:1537</code></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="n">cmd</span> <span class="o">=</span> <span class="p">[</span>
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a>    <span class="s1">&#39;gitleaks&#39;</span><span class="p">,</span>
+<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a>    <span class="s1">&#39;detect&#39;</span><span class="p">,</span>
+<a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a>    <span class="s1">&#39;--no-git&#39;</span><span class="p">,</span>
+<a id="__codelineno-46-5" name="__codelineno-46-5" href="#__codelineno-46-5"></a>    <span class="s1">&#39;--verbose&#39;</span><span class="p">,</span>
+<a id="__codelineno-46-6" name="__codelineno-46-6" href="#__codelineno-46-6"></a>    <span class="s1">&#39;--redact&#39;</span><span class="p">,</span>        <span class="c1"># Defense-in-depth: redact Match/Secret fields in JSON</span>
+<a id="__codelineno-46-7" name="__codelineno-46-7" href="#__codelineno-46-7"></a>    <span class="s1">&#39;--report-format&#39;</span><span class="p">,</span> <span class="s1">&#39;json&#39;</span><span class="p">,</span>
+<a id="__codelineno-46-8" name="__codelineno-46-8" href="#__codelineno-46-8"></a>    <span class="s1">&#39;--report-path&#39;</span><span class="p">,</span> <span class="n">report_file</span><span class="p">,</span>
+<a id="__codelineno-46-9" name="__codelineno-46-9" href="#__codelineno-46-9"></a>    <span class="s1">&#39;--source&#39;</span><span class="p">,</span> <span class="n">tmp_file_path</span><span class="p">,</span>
+<a id="__codelineno-46-10" name="__codelineno-46-10" href="#__codelineno-46-10"></a><span class="p">]</span>
+</code></pre></div>
+<p><strong>What it does</strong>:
+- Gitleaks replaces all secret values with <code>"REDACTED"</code> in its JSON output
+- Both <code>Match</code> and <code>Secret</code> fields show <code>"REDACTED"</code> instead of actual values
+- Prevents secrets from appearing in Gitleaks stdout/stderr</p>
+<p><strong>Important Note</strong>:
+- ai-guardian <strong>never extracts</strong> the <code>Match</code> or <code>Secret</code> fields
+- The <code>--redact</code> flag is <strong>defense-in-depth</strong> to safeguard against future code changes
+- Even without <code>--redact</code>, current implementation wouldn't leak secrets
+- We keep it as an extra security layer</p>
+<p><strong>Verification</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="c1"># Gitleaks JSON output with --redact:</span>
+<a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="p">{</span>
+<a id="__codelineno-47-3" name="__codelineno-47-3" href="#__codelineno-47-3"></a>  <span class="s2">&quot;RuleID&quot;</span><span class="p">:</span> <span class="s2">&quot;slack-bot-token&quot;</span><span class="p">,</span>
+<a id="__codelineno-47-4" name="__codelineno-47-4" href="#__codelineno-47-4"></a>  <span class="s2">&quot;Match&quot;</span><span class="p">:</span> <span class="s2">&quot;REDACTED&quot;</span><span class="p">,</span>      <span class="c1"># ← Not the actual token (we don&#39;t use this field)</span>
+<a id="__codelineno-47-5" name="__codelineno-47-5" href="#__codelineno-47-5"></a>  <span class="s2">&quot;Secret&quot;</span><span class="p">:</span> <span class="s2">&quot;REDACTED&quot;</span><span class="p">,</span>     <span class="c1"># ← Not the actual secret (we don&#39;t use this field)</span>
+<a id="__codelineno-47-6" name="__codelineno-47-6" href="#__codelineno-47-6"></a>  <span class="s2">&quot;File&quot;</span><span class="p">:</span> <span class="s2">&quot;test.py&quot;</span><span class="p">,</span>        <span class="c1"># ← We extract this</span>
+<a id="__codelineno-47-7" name="__codelineno-47-7" href="#__codelineno-47-7"></a>  <span class="s2">&quot;StartLine&quot;</span><span class="p">:</span> <span class="mi">2</span>            <span class="c1"># ← We extract this</span>
+<a id="__codelineno-47-8" name="__codelineno-47-8" href="#__codelineno-47-8"></a><span class="p">}</span>
+</code></pre></div></p>
+<h4 id="layer-2-never-display-or-log-secret-values">Layer 2: Never Display or Log Secret Values<a class="headerlink" href="#layer-2-never-display-or-log-secret-values" title="Permanent link">&para;</a></h4>
+<p><strong>What we extract</strong> (safe metadata only):
+- ✅ Rule ID (e.g., "slack-bot-token") - secret type, not value
+- ✅ File path - where the secret was found
+- ✅ Line numbers - location in file
+- ✅ Total findings count - how many secrets</p>
+<p><strong>What we DON'T extract</strong> (fields that contain secret values):
+- ❌ <code>Match</code> field - contains "REDACTED" (or actual secret without --redact flag)
+- ❌ <code>Secret</code> field - contains "REDACTED" (or actual secret without --redact flag)
+- ❌ Any actual secret value - we only use metadata for error messages</p>
+<h4 id="layer-3-error-messages-show-only-metadata">Layer 3: Error Messages Show Only Metadata<a class="headerlink" href="#layer-3-error-messages-show-only-metadata" title="Permanent link">&para;</a></h4>
+<p><strong>Example error message</strong> (user sees):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a>======================================================================
+<a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a>🚨 BLOCKED BY POLICY
+<a id="__codelineno-48-3" name="__codelineno-48-3" href="#__codelineno-48-3"></a>🔒 SECRET DETECTED
+<a id="__codelineno-48-4" name="__codelineno-48-4" href="#__codelineno-48-4"></a>======================================================================
+<a id="__codelineno-48-5" name="__codelineno-48-5" href="#__codelineno-48-5"></a>
+<a id="__codelineno-48-6" name="__codelineno-48-6" href="#__codelineno-48-6"></a>Gitleaks has detected sensitive information in your prompt/file.
+<a id="__codelineno-48-7" name="__codelineno-48-7" href="#__codelineno-48-7"></a>
+<a id="__codelineno-48-8" name="__codelineno-48-8" href="#__codelineno-48-8"></a>Secret Type: slack-bot-token
+<a id="__codelineno-48-9" name="__codelineno-48-9" href="#__codelineno-48-9"></a>Location: test.py, line 2
+<a id="__codelineno-48-10" name="__codelineno-48-10" href="#__codelineno-48-10"></a>Total findings: 1
+<a id="__codelineno-48-11" name="__codelineno-48-11" href="#__codelineno-48-11"></a>
+<a id="__codelineno-48-12" name="__codelineno-48-12" href="#__codelineno-48-12"></a>This operation has been blocked for security.
+<a id="__codelineno-48-13" name="__codelineno-48-13" href="#__codelineno-48-13"></a>Please remove the sensitive information and try again.
+</code></pre></div></p>
+<p><strong>Note</strong>: No actual secret value is shown!</p>
+<h4 id="layer-4-logs-only-metadata">Layer 4: Logs Only Metadata<a class="headerlink" href="#layer-4-logs-only-metadata" title="Permanent link">&para;</a></h4>
+<p><strong>Log output examples</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>2026-04-18 16:30:15 - ai_guardian - ERROR - Secret detected: slack-bot-token
+<a id="__codelineno-49-2" name="__codelineno-49-2" href="#__codelineno-49-2"></a>2026-04-18 16:30:15 - ai_guardian - WARNING - Secret detected (log mode): aws-access-token - execution allowed
+</code></pre></div></p>
+<p><strong>Note</strong>: Only rule_id logged, never the actual secret!</p>
+<h4 id="layer-5-sanitized-gitleaks-stderr">Layer 5: Sanitized Gitleaks stderr<a class="headerlink" href="#layer-5-sanitized-gitleaks-stderr" title="Permanent link">&para;</a></h4>
+<p><strong>What's logged</strong>:
+- ✅ Length of stderr (for debugging)
+- ✅ First line only, truncated to 200 chars
+- ✅ Only logged at DEBUG level</p>
+<p><strong>What's NOT logged</strong>:
+- ❌ Full Gitleaks stderr (could contain sensitive info in edge cases)</p>
+<h4 id="layer-6-violation-log-excludes-secrets">Layer 6: Violation Log Excludes Secrets<a class="headerlink" href="#layer-6-violation-log-excludes-secrets" title="Permanent link">&para;</a></h4>
+<p><strong>Violation log entry</strong> (JSONL):
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a><span class="p">{</span>
+<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="w">  </span><span class="nt">&quot;timestamp&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;2026-04-18T16:30:15Z&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="w">  </span><span class="nt">&quot;violation_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;secret_detected&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="w">  </span><span class="nt">&quot;blocked&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-50-5" name="__codelineno-50-5" href="#__codelineno-50-5"></a><span class="w">    </span><span class="nt">&quot;file_path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;test.py&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-6" name="__codelineno-50-6" href="#__codelineno-50-6"></a><span class="w">    </span><span class="nt">&quot;source&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;file&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-7" name="__codelineno-50-7" href="#__codelineno-50-7"></a><span class="w">    </span><span class="nt">&quot;secret_type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;slack-bot-token&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-8" name="__codelineno-50-8" href="#__codelineno-50-8"></a><span class="w">    </span><span class="nt">&quot;reason&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Gitleaks detected sensitive information&quot;</span><span class="p">,</span>
+<a id="__codelineno-50-9" name="__codelineno-50-9" href="#__codelineno-50-9"></a><span class="w">    </span><span class="nt">&quot;line_number&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">2</span><span class="p">,</span>
+<a id="__codelineno-50-10" name="__codelineno-50-10" href="#__codelineno-50-10"></a><span class="w">    </span><span class="nt">&quot;total_findings&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span>
+<a id="__codelineno-50-11" name="__codelineno-50-11" href="#__codelineno-50-11"></a><span class="w">  </span><span class="p">},</span>
+<a id="__codelineno-50-12" name="__codelineno-50-12" href="#__codelineno-50-12"></a><span class="w">  </span><span class="nt">&quot;context&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="err">...</span><span class="p">}</span>
+<a id="__codelineno-50-13" name="__codelineno-50-13" href="#__codelineno-50-13"></a><span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Note</strong>: No actual secret value in violation log!</p>
+<h4 id="layer-7-known-limitation-userpromptsubmit-terminal-display">Layer 7: KNOWN LIMITATION - UserPromptSubmit Terminal Display<a class="headerlink" href="#layer-7-known-limitation-userpromptsubmit-terminal-display" title="Permanent link">&para;</a></h4>
+<p><strong>THE LIMITATION (Claude Code Behavior)</strong>:</p>
+<p>When ai-guardian blocks prompts containing secrets using <code>decision: "block"</code> in JSON response, Claude Code displays the original prompt in the terminal error message.</p>
+<p><strong>What IS protected:</strong>
+- ✅ Secret does NOT reach Claude's API (hook blocks before submission)
+- ✅ Secret does NOT appear in conversation history/session
+- ✅ Secret does NOT get sent to Anthropic servers
+- ✅ Only metadata in our error message (type, file, line)</p>
+<p><strong>What is NOT protected:</strong>
+- ❌ Secret visible in user's terminal when blocking occurs
+- This is the trade-off for blocking secrets from reaching Claude</p>
+<p><strong>Why we accept this limitation:</strong>
+- Preventing secrets from reaching Claude's API is MORE IMPORTANT than hiding from terminal
+- The terminal leak is local only (user's screen)
+- The alternative (allowing secrets to Claude) is worse
+- This is a Claude Code design decision we cannot work around</p>
+<p><strong>IMPACT</strong>:
+- ❌ Secrets in direct prompts ARE LEAKED when blocked
+- ✅ Secrets in tool outputs (PostToolUse) are NOT leaked (uses JSON)
+- ✅ Secrets in file reads (PreToolUse) are NOT leaked (different flow)</p>
+<p><strong>WORKAROUNDS</strong>:
+1. <strong>Rely on other detection layers</strong>:
+   - PreToolUse hook scans files before reading (blocks file path, not content)
+   - PostToolUse hook scans tool outputs (uses JSON, no leak)</p>
+<ol>
+<li><strong>User education</strong>:</li>
+<li>Don't paste secrets directly in prompts</li>
+<li>Use environment variables, config files, or secure vaults</li>
+</ol>
+<h4 id="layer-8-secure-file-cleanup">Layer 8: Secure File Cleanup<a class="headerlink" href="#layer-8-secure-file-cleanup" title="Permanent link">&para;</a></h4>
+<p><strong>Content File (Scanned File)</strong>:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a><span class="c1"># Secure cleanup: overwrite file before deletion</span>
+<a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a><span class="k">if</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">tmp_file_path</span><span class="p">):</span>
+<a id="__codelineno-51-3" name="__codelineno-51-3" href="#__codelineno-51-3"></a>    <span class="c1"># Make file writable</span>
+<a id="__codelineno-51-4" name="__codelineno-51-4" href="#__codelineno-51-4"></a>    <span class="n">os</span><span class="o">.</span><span class="n">chmod</span><span class="p">(</span><span class="n">tmp_file_path</span><span class="p">,</span> <span class="mo">0o600</span><span class="p">)</span>
+<a id="__codelineno-51-5" name="__codelineno-51-5" href="#__codelineno-51-5"></a>
+<a id="__codelineno-51-6" name="__codelineno-51-6" href="#__codelineno-51-6"></a>    <span class="c1"># Overwrite with zeros to prevent recovery</span>
+<a id="__codelineno-51-7" name="__codelineno-51-7" href="#__codelineno-51-7"></a>    <span class="n">file_size</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">tmp_file_path</span><span class="p">)</span>
+<a id="__codelineno-51-8" name="__codelineno-51-8" href="#__codelineno-51-8"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">tmp_file_path</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-51-9" name="__codelineno-51-9" href="#__codelineno-51-9"></a>        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x00</span><span class="s1">&#39;</span> <span class="o">*</span> <span class="n">file_size</span><span class="p">)</span>
+<a id="__codelineno-51-10" name="__codelineno-51-10" href="#__codelineno-51-10"></a>        <span class="n">f</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+<a id="__codelineno-51-11" name="__codelineno-51-11" href="#__codelineno-51-11"></a>        <span class="n">os</span><span class="o">.</span><span class="n">fsync</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">fileno</span><span class="p">())</span>
+<a id="__codelineno-51-12" name="__codelineno-51-12" href="#__codelineno-51-12"></a>
+<a id="__codelineno-51-13" name="__codelineno-51-13" href="#__codelineno-51-13"></a>    <span class="c1"># Delete the file</span>
+<a id="__codelineno-51-14" name="__codelineno-51-14" href="#__codelineno-51-14"></a>    <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">tmp_file_path</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Report File (Gitleaks JSON Output)</strong> - Now securely cleaned up:
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a><span class="c1"># Securely clean up report file (contains Gitleaks findings)</span>
+<a id="__codelineno-52-2" name="__codelineno-52-2" href="#__codelineno-52-2"></a><span class="c1"># Even though --redact is used, we securely overwrite as defense in depth</span>
+<a id="__codelineno-52-3" name="__codelineno-52-3" href="#__codelineno-52-3"></a><span class="k">if</span> <span class="n">report_file</span> <span class="ow">and</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">exists</span><span class="p">(</span><span class="n">report_file</span><span class="p">):</span>
+<a id="__codelineno-52-4" name="__codelineno-52-4" href="#__codelineno-52-4"></a>    <span class="c1"># Overwrite with zeros before deletion</span>
+<a id="__codelineno-52-5" name="__codelineno-52-5" href="#__codelineno-52-5"></a>    <span class="n">file_size</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">getsize</span><span class="p">(</span><span class="n">report_file</span><span class="p">)</span>
+<a id="__codelineno-52-6" name="__codelineno-52-6" href="#__codelineno-52-6"></a>    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">report_file</span><span class="p">,</span> <span class="s1">&#39;wb&#39;</span><span class="p">)</span> <span class="k">as</span> <span class="n">f</span><span class="p">:</span>
+<a id="__codelineno-52-7" name="__codelineno-52-7" href="#__codelineno-52-7"></a>        <span class="n">f</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;</span><span class="se">\x00</span><span class="s1">&#39;</span> <span class="o">*</span> <span class="n">file_size</span><span class="p">)</span>
+<a id="__codelineno-52-8" name="__codelineno-52-8" href="#__codelineno-52-8"></a>        <span class="n">f</span><span class="o">.</span><span class="n">flush</span><span class="p">()</span>
+<a id="__codelineno-52-9" name="__codelineno-52-9" href="#__codelineno-52-9"></a>        <span class="n">os</span><span class="o">.</span><span class="n">fsync</span><span class="p">(</span><span class="n">f</span><span class="o">.</span><span class="n">fileno</span><span class="p">())</span>
+<a id="__codelineno-52-10" name="__codelineno-52-10" href="#__codelineno-52-10"></a>
+<a id="__codelineno-52-11" name="__codelineno-52-11" href="#__codelineno-52-11"></a>    <span class="c1"># Delete the file</span>
+<a id="__codelineno-52-12" name="__codelineno-52-12" href="#__codelineno-52-12"></a>    <span class="n">os</span><span class="o">.</span><span class="n">unlink</span><span class="p">(</span><span class="n">report_file</span><span class="p">)</span>
+</code></pre></div></p>
+<p><strong>Why this matters</strong>:
+- Even though Gitleaks redacts secrets, defense in depth requires secure cleanup
+- Prevents forensic recovery of temporary files
+- Both content and report files are overwritten with zeros before deletion
+- Uses <code>os.fsync()</code> to ensure writes are committed to disk</p>
+<h3 id="summary-what-isisnt-exposed">Summary: What Is/Isn't Exposed<a class="headerlink" href="#summary-what-isisnt-exposed" title="Permanent link">&para;</a></h3>
+<p><strong>Secret values are NEVER exposed in</strong>:
+- ❌ Error messages shown to users
+- ❌ Log files (<code>~/.config/ai-guardian/ai-guardian.log</code>)
+- ❌ Violation logs (<code>~/.config/ai-guardian/violations.jsonl</code>)
+- ❌ Gitleaks stdout/stderr output
+- ❌ Gitleaks JSON report (shows "REDACTED")
+- ❌ Temporary files (securely overwritten before deletion)</p>
+<p><strong>What IS exposed</strong> (safe metadata):
+- ✅ Secret type (e.g., "slack-bot-token", "aws-access-key")
+- ✅ File path where secret was found
+- ✅ Line number(s) in file
+- ✅ Total count of secrets found</p>
+<p><strong>Defense-in-depth layers</strong>:
+1. Gitleaks <code>--redact</code> flag
+2. Don't extract secret values from Gitleaks output
+3. Error messages show only metadata
+4. Logs show only rule IDs
+5. Sanitized stderr logging
+6. Violation logs exclude secrets
+7. Secure file cleanup (overwrite + delete)</p>
+<h3 id="best-practices-for-developers">Best Practices for Developers<a class="headerlink" href="#best-practices-for-developers" title="Permanent link">&para;</a></h3>
+<p>When modifying secret scanning code:</p>
+<ol>
+<li><strong>Never log <code>first_finding.get('Match')</code> or <code>first_finding.get('Secret')</code></strong></li>
+<li>
+<p>These fields contain "REDACTED" but should never be logged anyway</p>
+</li>
+<li>
+<p><strong>Never include <code>result.stdout</code> or <code>result.stderr</code> in user-facing messages</strong></p>
+</li>
+<li>
+<p>Only use for internal debugging, with sanitization</p>
+</li>
+<li>
+<p><strong>Always use secure cleanup for temporary files containing secrets</strong></p>
+</li>
+<li>Overwrite with zeros before deletion</li>
+<li>
+<p>Use <code>os.fsync()</code> to ensure write is committed</p>
+</li>
+<li>
+<p><strong>Test with real secrets to verify redaction</strong></p>
+</li>
+<li>Use actual secret formats (Slack tokens, AWS keys, etc.)</li>
+<li>
+<p>Verify secrets don't appear in output, logs, or files</p>
+</li>
+<li>
+<p><strong>Document any new fields extracted from Gitleaks output</strong></p>
+</li>
+<li>Ensure they don't contain secret values</li>
+<li>Update this document with security analysis</li>
+</ol>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="secret-scanning-doesnt-work">Secret scanning doesn't work<a class="headerlink" href="#secret-scanning-doesnt-work" title="Permanent link">&para;</a></h3>
+<p><strong>Check:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="c1"># 1. Is secret_scanning enabled?</span>
+<a id="__codelineno-53-2" name="__codelineno-53-2" href="#__codelineno-53-2"></a>cat<span class="w"> </span>~/.config/ai-guardian/ai-guardian.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.secret_scanning.enabled
+<a id="__codelineno-53-3" name="__codelineno-53-3" href="#__codelineno-53-3"></a>
+<a id="__codelineno-53-4" name="__codelineno-53-4" href="#__codelineno-53-4"></a><span class="c1"># 2. Check which scanner engines are active (toml-patterns is built-in, no install needed)</span>
+<a id="__codelineno-53-5" name="__codelineno-53-5" href="#__codelineno-53-5"></a>ai-guardian<span class="w"> </span>scanner<span class="w"> </span>list
+<a id="__codelineno-53-6" name="__codelineno-53-6" href="#__codelineno-53-6"></a>
+<a id="__codelineno-53-7" name="__codelineno-53-7" href="#__codelineno-53-7"></a><span class="c1"># 3. Check logs</span>
+<a id="__codelineno-53-8" name="__codelineno-53-8" href="#__codelineno-53-8"></a>tail<span class="w"> </span>-f<span class="w"> </span>~/.config/ai-guardian/ai-guardian.log
+</code></pre></div></p>
+<p><strong>Note:</strong> <code>toml-patterns</code> is always available and requires no external binary. If secret scanning reports no engines, ensure ai-guardian itself is installed correctly.</p>
+<h3 id="pattern-server-not-being-used">Pattern server not being used<a class="headerlink" href="#pattern-server-not-being-used" title="Permanent link">&para;</a></h3>
+<p><strong>Check:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="c1"># 1. Is pattern_server configured?</span>
+<a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a>cat<span class="w"> </span>~/.config/ai-guardian/ai-guardian.json<span class="w"> </span><span class="p">|</span><span class="w"> </span>jq<span class="w"> </span>.secret_scanning.pattern_server
+<a id="__codelineno-54-3" name="__codelineno-54-3" href="#__codelineno-54-3"></a>
+<a id="__codelineno-54-4" name="__codelineno-54-4" href="#__codelineno-54-4"></a><span class="c1"># 2. Check authentication</span>
+<a id="__codelineno-54-5" name="__codelineno-54-5" href="#__codelineno-54-5"></a>cat<span class="w"> </span>~/.config/rh-gitleaks/auth.jwt<span class="w">  </span><span class="c1"># Your token file</span>
+<a id="__codelineno-54-6" name="__codelineno-54-6" href="#__codelineno-54-6"></a>
+<a id="__codelineno-54-7" name="__codelineno-54-7" href="#__codelineno-54-7"></a><span class="c1"># 3. Test pattern server manually</span>
+<a id="__codelineno-54-8" name="__codelineno-54-8" href="#__codelineno-54-8"></a>curl<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;Authorization: Bearer </span><span class="k">$(</span>cat<span class="w"> </span>~/.config/rh-gitleaks/auth.jwt<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-54-9" name="__codelineno-54-9" href="#__codelineno-54-9"></a><span class="w">  </span>https://patterns.security.redhat.com/patterns/gitleaks/8.27.0
+<a id="__codelineno-54-10" name="__codelineno-54-10" href="#__codelineno-54-10"></a>
+<a id="__codelineno-54-11" name="__codelineno-54-11" href="#__codelineno-54-11"></a><span class="c1"># 4. Check cache</span>
+<a id="__codelineno-54-12" name="__codelineno-54-12" href="#__codelineno-54-12"></a>ls<span class="w"> </span>-la<span class="w"> </span>~/.cache/ai-guardian/patterns.toml
+<a id="__codelineno-54-13" name="__codelineno-54-13" href="#__codelineno-54-13"></a>cat<span class="w"> </span>~/.cache/ai-guardian/patterns.toml<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-20
+</code></pre></div></p>
+<h3 id="secrets-not-detected">Secrets not detected<a class="headerlink" href="#secrets-not-detected" title="Permanent link">&para;</a></h3>
+<p><strong>Possible causes:</strong>
+1. Pattern server missing default patterns
+2. Custom <code>.gitleaks.toml</code> doesn't include pattern
+3. Secret format not recognized by Gitleaks</p>
+<p><strong>Test manually:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a><span class="c1"># Test with default Gitleaks patterns</span>
+<a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>gitleaks<span class="w"> </span>detect<span class="w"> </span>--no-git<span class="w"> </span>-v
+<a id="__codelineno-55-3" name="__codelineno-55-3" href="#__codelineno-55-3"></a>
+<a id="__codelineno-55-4" name="__codelineno-55-4" href="#__codelineno-55-4"></a><span class="c1"># Test with your pattern server patterns</span>
+<a id="__codelineno-55-5" name="__codelineno-55-5" href="#__codelineno-55-5"></a>gitleaks<span class="w"> </span>detect<span class="w"> </span>--no-git<span class="w"> </span>-v<span class="w"> </span>--config<span class="w"> </span>~/.cache/ai-guardian/patterns.toml
+</code></pre></div></p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<h3 id="secret_scanning-the-scanner"><code>secret_scanning</code> - The Scanner<a class="headerlink" href="#secret_scanning-the-scanner" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Enable/disable scanning</li>
+<li><strong>Controls:</strong> ON/OFF switch (always blocks when secrets found)</li>
+<li><strong>Scope:</strong> Global across all hooks and files</li>
+<li><strong>Action:</strong> Always blocks (no configurable action mode)</li>
+</ul>
+<h3 id="pattern_server-the-pattern-source"><code>pattern_server</code> - The Pattern Source<a class="headerlink" href="#pattern_server-the-pattern-source" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Purpose:</strong> Customize which secrets to detect</li>
+<li><strong>Controls:</strong> Where patterns come from (enterprise vs defaults)</li>
+<li><strong>Scope:</strong> Pattern definitions only</li>
+</ul>
+<h3 id="they-work-together">They Work Together<a class="headerlink" href="#they-work-together" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>secret_scanning.enabled → Should we scan?
+<a id="__codelineno-56-2" name="__codelineno-56-2" href="#__codelineno-56-2"></a>    ↓ YES
+<a id="__codelineno-56-3" name="__codelineno-56-3" href="#__codelineno-56-3"></a>pattern_server configured? → Which patterns?
+<a id="__codelineno-56-4" name="__codelineno-56-4" href="#__codelineno-56-4"></a>    ↓ YES
+<a id="__codelineno-56-5" name="__codelineno-56-5" href="#__codelineno-56-5"></a>Fetch patterns from server
+<a id="__codelineno-56-6" name="__codelineno-56-6" href="#__codelineno-56-6"></a>    ↓
+<a id="__codelineno-56-7" name="__codelineno-56-7" href="#__codelineno-56-7"></a>Scan content with those patterns
+<a id="__codelineno-56-8" name="__codelineno-56-8" href="#__codelineno-56-8"></a>    ↓
+<a id="__codelineno-56-9" name="__codelineno-56-9" href="#__codelineno-56-9"></a>Secret found?
+<a id="__codelineno-56-10" name="__codelineno-56-10" href="#__codelineno-56-10"></a>    ↓ YES
+<a id="__codelineno-56-11" name="__codelineno-56-11" href="#__codelineno-56-11"></a>BLOCKED (secrets always block)
+</code></pre></div>
+<hr />
+<h2 id="related-documentation">Related Documentation<a class="headerlink" href="#related-documentation" title="Permanent link">&para;</a></h2>
+<ul>
+<li><a href="HOOKS.md">HOOKS.md</a> - Why log mode doesn't show messages</li>
+<li><a href="CONSOLE.md">CONSOLE.md</a> - Using the Console to view violations</li>
+<li><a href="../README.md">README.md</a> - Configuration examples</li>
+<li><a href="../../CHANGELOG.md">CHANGELOG.md</a> - Feature history</li>
+<li><a href="https://github.com/gitleaks/gitleaks#redaction">Gitleaks --redact</a></li>
+<li><a href="https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html">OWASP Secret Management</a></li>
+</ul>
+<hr />
+<p><strong>Last Updated:</strong> 2026-04-19<br />
+<strong>Version:</strong> 1.4.0-dev</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,124 @@
+site_name: AI Guardian
+site_description: Security guardrails for AI coding agents and IDE integrations
+site_url: https://ai-guardian.readthedocs.io/
+repo_url: https://github.com/RedHatProductSecurity/ai-guardian
+repo_name: RedHatProductSecurity/ai-guardian
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_style: google
+            show_root_heading: true
+            show_source: false
+            members_order: source
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      base_path:
+        - .
+        - docs
+      check_paths: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - tables
+  - toc:
+      permalink: true
+
+exclude_docs: |
+  /README.md
+  notebooklm-export.md
+
+validation:
+  links:
+    not_found: ignore
+    anchors: ignore
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Documentation: documentation.md
+      - Quick Start: index.md
+      - Developer Install: DEVELOPER_GUIDE.md
+      - Configuration: CONFIGURATION.md
+      - Configuration Cookbook: COOKBOOK.md
+      - Scanner Installation: SCANNER_INSTALLATION.md
+      - Troubleshooting: TROUBLESHOOTING.md
+  - Security Features:
+      - Overview: security/README.md
+      - Secret Scanning: security/SECRET_SCANNING.md
+      - Secret Redaction: security/SECRET_REDACTION.md
+      - Prompt Injection: security/PROMPT_INJECTION.md
+      - Context Poisoning: security/CONTEXT_POISONING.md
+      - SSRF Protection: security/SSRF_PROTECTION.md
+      - PII and Image Scanning: security/IMAGE_SCANNING.md
+      - Credential Exfiltration: security/CREDENTIAL_EXFILTRATION.md
+      - Directory Rules: security/DIRECTORY_RULES.md
+      - Unicode Attacks: security/UNICODE_ATTACKS.md
+      - Security Design: SECURITY_DESIGN.md
+      - Inline Annotations: ANNOTATIONS.md
+  - SDK:
+      - Guide: SDK.md
+      - GuardedAgent: api/guarded-agent.md
+      - API Reference: api/sdk.md
+      - Scanning Pipeline: api/scanning.md
+      - Observability / OTEL: OBSERVABILITY.md
+  - Console:
+      - TUI and Web Console: CONSOLE.md
+      - IDE Sessions and Agent Support: AGENT_SUPPORT.md
+      - Hooks: HOOKS.md
+      - MCP Security Advisor: MCP_SERVER.md
+      - Multi-Daemon Tray: MULTI_DAEMON_TRAY.md
+  - IDE Integrations:
+      - GitHub Copilot: GITHUB_COPILOT.md
+      - Aider: AIDER.md
+      - AiderDesk: AIDERDESK.md
+      - Pre-commit: PRE_COMMIT.md
+  - Operations:
+      - Kubernetes: kubernetes.md
+      - Container: project/container.md
+      - Pattern Server: PATTERN_SERVER.md
+      - Multi-Engine Support: MULTI_ENGINE_SUPPORT.md
+      - ML Engine Support: ML_ENGINE_SUPPORT.md
+      - Violation Logging: VIOLATION_LOGGING.md
+  - Reference:
+      - Tool Policy: TOOL_POLICY.md
+      - Permissions Comparison: PERMISSIONS_COMPARISON.md
+      - TOML Patterns: TOML_PATTERNS.md
+      - Contributing: project/contributing.md
+      - Releasing: project/releasing.md
+      - Changelog: project/changelog.md

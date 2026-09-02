@@ -1,0 +1,3853 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Security guardrails for AI coding agents and IDE integrations">
+      
+      
+      
+        <link rel="canonical" href="https://ai-guardian.readthedocs.io/MULTI_DAEMON_TRAY/">
+      
+      
+        <link rel="prev" href="../MCP_SERVER/">
+      
+      
+        <link rel="next" href="../GITHUB_COPILOT/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Multi-Daemon Tray - AI Guardian</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#multi-daemon-tray-client" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="AI Guardian" class="md-header__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            AI Guardian
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Multi-Daemon Tray
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="AI Guardian" class="md-nav__button md-logo" aria-label="AI Guardian" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    AI Guardian
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/RedHatProductSecurity/ai-guardian" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    RedHatProductSecurity/ai-guardian
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href=".." class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_2" id="__nav_2_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Getting Started
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../documentation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Documentation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../DEVELOPER_GUIDE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Install
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONFIGURATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../COOKBOOK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration Cookbook
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SCANNER_INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanner Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TROUBLESHOOTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Troubleshooting
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../security/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Features
+  
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_3" id="__nav_3_label" tabindex="">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Security Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SECRET_REDACTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Secret Redaction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/PROMPT_INJECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prompt Injection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CONTEXT_POISONING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Context Poisoning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/SSRF_PROTECTION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SSRF Protection
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/IMAGE_SCANNING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PII and Image Scanning
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/CREDENTIAL_EXFILTRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credential Exfiltration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/DIRECTORY_RULES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Directory Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security/UNICODE_ATTACKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Unicode Attacks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SECURITY_DESIGN/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Security Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ANNOTATIONS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Inline Annotations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    SDK
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    SDK
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SDK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/guarded-agent/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GuardedAgent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../api/scanning/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scanning Pipeline
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../OBSERVABILITY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability / OTEL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Console
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Console
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONSOLE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TUI and Web Console
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AGENT_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Sessions and Agent Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../HOOKS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MCP_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MCP Security Advisor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Daemon Tray
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#instance-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instance Name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-menu-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Menu Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stale-code-indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stale-Code Indicator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Discovery Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linux-podman-container-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: Podman Container Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bind-address" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bind Address
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Routing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Plugins
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a Plugin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#command-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interactive-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interactive Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#platform-aware-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform-Aware Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-on-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run on Target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-discovery-via-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Discovery via REST API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-based-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tag-Based Filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-v17x" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration from v1.7.x
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ask-dialog-forwarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ask Dialog Forwarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ask Dialog Forwarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-daemon-host-has-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local daemon (host has display)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-daemon-container-kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote daemon (container / Kubernetes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-tray-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No tray registered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#platform-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-ask-dialog-forwarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Ask Dialog Forwarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Ask Dialog Forwarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-a-dummy-agent-scenario-preferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A — dummy-agent scenario (preferred)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-direct-rest-api-workaround-quick-smoke-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B — direct REST API (workaround / quick smoke test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-variant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Variant
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IDE Integrations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    IDE Integrations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../GITHUB_COPILOT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GitHub Copilot
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Aider
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../AIDERDESK/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    AiderDesk
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PRE_COMMIT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pre-commit
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operations
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Operations
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kubernetes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kubernetes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/container/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Container
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PATTERN_SERVER/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Pattern Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MULTI_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ML_ENGINE_SUPPORT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ML Engine Support
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../VIOLATION_LOGGING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Violation Logging
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_8" id="__nav_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOOL_POLICY/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tool Policy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../PERMISSIONS_COMPARISON/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Permissions Comparison
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TOML_PATTERNS/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    TOML Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/releasing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Releasing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../project/changelog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Changelog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#instance-name" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Instance Name
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-menu-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Menu Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#stale-code-indicator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Stale-Code Indicator
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#discovery-methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discovery Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Discovery Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#container-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linux-podman-container-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linux: Podman Container Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-discovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Discovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#manual-targets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Targets
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#bind-address" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bind Address
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#action-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Action Routing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI Reference
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tray-plugins" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tray Plugins
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tray Plugins">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-a-plugin" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating a Plugin
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#command-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command Types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interactive-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interactive Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#platform-aware-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform-Aware Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#target-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Target Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#run-on-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run on Target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-discovery-via-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Discovery via REST API
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tag-based-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tag-Based Filtering
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plugin-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plugin Limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#migration-from-v17x" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migration from v1.7.x
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ask-dialog-forwarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ask Dialog Forwarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ask Dialog Forwarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#local-daemon-host-has-display" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local daemon (host has display)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#remote-daemon-container-kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remote daemon (container / Kubernetes)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-tray-registered" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No tray registered
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#platform-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Platform notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-ask-dialog-forwarding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Ask Dialog Forwarding
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Ask Dialog Forwarding">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-a-dummy-agent-scenario-preferred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A — dummy-agent scenario (preferred)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-direct-rest-api-workaround-quick-smoke-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B — direct REST API (workaround / quick smoke test)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#known-limitations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Known Limitations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes-variant" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes Variant
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="multi-daemon-tray-client">Multi-Daemon Tray Client<a class="headerlink" href="#multi-daemon-tray-client" title="Permanent link">&para;</a></h1>
+<p>The system tray client discovers and manages AI Guardian daemons across multiple environments.</p>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">          </span><span class="c1"># Start local daemon (headless)</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w">            </span><span class="c1"># Start tray (discovers all daemons)</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b<span class="w">         </span><span class="c1"># Start tray in background</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>stop<span class="w">             </span><span class="c1"># Stop the tray</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>restart<span class="w">          </span><span class="c1"># Restart the tray</span>
+</code></pre></div>
+<blockquote>
+<p><strong>Note</strong>: The daemon runs headless. The tray is always a separate process.</p>
+</blockquote>
+<h2 id="instance-name">Instance Name<a class="headerlink" href="#instance-name" title="Permanent link">&para;</a></h2>
+<p>Set a human-friendly name in your config to identify this ai-guardian instance:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="p">{</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-workstation&quot;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="p">}</span>
+</code></pre></div>
+<p>The name appears in the Console banner, tray menu, REST API, and MCP.</p>
+<p>If not set, defaults to <code>hostname</code>. For containers, the priority is:</p>
+<ol>
+<li>Container label <code>ai-guardian.name</code> (set at run time)</li>
+<li>Config <code>name</code> field (from <code>ai-guardian.json</code>)</li>
+<li>Container name (from <code>podman ps</code>)</li>
+<li>Hostname</li>
+</ol>
+<h2 id="tray-menu-structure">Tray Menu Structure<a class="headerlink" href="#tray-menu-structure" title="Permanent link">&para;</a></h2>
+<p>Each discovered daemon appears as a top-level menu item with its own submenu:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>● local                         &gt;
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>  Statistics                    &gt;
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>  Console
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>  Violations
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>  Metrics
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>  Mode: auto                    &gt;
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>  MCP Proactive: low            &gt;
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>  Pause...                      &gt;
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>  Resume
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>  Stop daemon
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>  Restart daemon
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>○ my-container (container)      &gt;
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>  Console
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>  Violations
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a>  Metrics
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a>  Mode: auto                    &gt;
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a>  MCP Proactive: low            &gt;
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a>  Start daemon
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a>─────────────
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a>Restart
+<a id="__codelineno-2-21" name="__codelineno-2-21" href="#__codelineno-2-21"></a>Quit
+</code></pre></div>
+<ul>
+<li><strong>●</strong> Running daemon — full submenu with Statistics, Pause/Resume, Stop/Restart</li>
+<li><strong>○</strong> Stopped daemon — limited submenu with Console, Mode, Start daemon</li>
+<li><strong>⚠●</strong> Running daemon with stale code detected — shows orange dot; local daemons show a <strong>Restart daemon (stale code)</strong> item; remote/container/Kubernetes daemons show a <strong>Rebuild image</strong> hint instead</li>
+</ul>
+<h2 id="stale-code-indicator">Stale-Code Indicator<a class="headerlink" href="#stale-code-indicator" title="Permanent link">&para;</a></h2>
+<p>When the ai-guardian source code on disk is newer than the running daemon binary, the tray shows a warning indicator next to the daemon name:</p>
+<ul>
+<li><strong>Local daemons</strong>: orange dot + <code>Restart daemon (stale code)</code> menu item. Clicking it restarts the daemon and polls until it comes back online (up to 10 seconds), then refreshes the menu.</li>
+<li><strong>Container / Kubernetes daemons</strong>: orange dot + <code>Rebuild image (stale code)</code> hint. Remote daemons cannot be restarted from the tray — you must rebuild the container image and redeploy.</li>
+</ul>
+<p>Stale-code detection compares the installed package version against the timestamp of the source tree using the daemon's <code>/api/status</code> endpoint. This replaces the old dev-mode auto-restart behavior removed in v1.13.0.</p>
+<h2 id="discovery-methods">Discovery Methods<a class="headerlink" href="#discovery-methods" title="Permanent link">&para;</a></h2>
+<p>The tray discovers daemons using four methods:</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Discovery</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local</td>
+<td>PID file + socket ping</td>
+<td>Check <code>~/.local/state/ai-guardian/daemon.pid</code></td>
+</tr>
+<tr>
+<td>Podman/Docker</td>
+<td><code>podman ps</code> / <code>docker ps</code></td>
+<td>Label filter + port filter (cascading)</td>
+</tr>
+<tr>
+<td>Kubernetes</td>
+<td><code>kubectl get pods</code></td>
+<td>Label selector + user filter</td>
+</tr>
+<tr>
+<td>Manual</td>
+<td>Config file</td>
+<td><code>~/.config/ai-guardian/tray-targets.json</code></td>
+</tr>
+</tbody>
+</table>
+<p>Discovery runs on-demand when the tray icon is clicked (~1 second to refresh).</p>
+<h3 id="container-discovery">Container Discovery<a class="headerlink" href="#container-discovery" title="Permanent link">&para;</a></h3>
+<p>Containers are discovered using two cascading filters:</p>
+<ol>
+<li><strong>Label filter</strong> (primary): Containers with <code>ai-guardian.daemon=true</code> label</li>
+<li><strong>Port filter</strong> (fallback): Containers with a port mapping to the REST port (default 63152)</li>
+</ol>
+<p>Run a container daemon:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>podman<span class="w"> </span>run<span class="w"> </span>-l<span class="w"> </span>ai-guardian.daemon<span class="o">=</span><span class="nb">true</span><span class="w"> </span>-p<span class="w"> </span>:63152<span class="w"> </span>your-image
+</code></pre></div>
+<p>Optional labels:
+- <code>ai-guardian.name=my-sandbox</code> — display name in tray (defaults to container name)
+- <code>ai-guardian.rest-port=8080</code> — custom REST port (defaults to 63152)</p>
+<h3 id="linux-podman-container-discovery">Linux: Podman Container Discovery<a class="headerlink" href="#linux-podman-container-discovery" title="Permanent link">&para;</a></h3>
+<p>On Linux, the tray uses the Docker SDK to communicate with Podman. For discovery
+to work, the rootless Podman socket service must be active.</p>
+<p><strong>Enable the Podman socket</strong> (once, as a user service):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>systemctl<span class="w"> </span>--user<span class="w"> </span><span class="nb">enable</span><span class="w"> </span>--now<span class="w"> </span>podman.socket
+</code></pre></div>
+<p>After enabling the socket, restart the tray — it will find the socket at the
+standard XDG path (<code>$XDG_RUNTIME_DIR/podman/podman.sock</code>) automatically.</p>
+<p><strong>If containers still do not appear</strong>, the socket may be at a non-standard path.
+Find it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>podman<span class="w"> </span>info<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Host.RemoteSocket.Path}}&#39;</span>
+</code></pre></div>
+<p>Export <code>DOCKER_HOST</code> before starting the tray:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DOCKER_HOST</span><span class="o">=</span>unix://<span class="k">$(</span>podman<span class="w"> </span>info<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Host.RemoteSocket.Path}}&#39;</span><span class="k">)</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start
+</code></pre></div>
+<p>To make this permanent, add the export to your shell profile (<code>~/.bashrc</code>,
+<code>~/.zshrc</code>, etc.) or to a systemd user service that starts the tray.</p>
+<blockquote>
+<p><strong>macOS with Podman Desktop:</strong> <code>DOCKER_HOST</code> is set automatically — no manual
+setup needed.</p>
+</blockquote>
+<h3 id="kubernetes-discovery">Kubernetes Discovery<a class="headerlink" href="#kubernetes-discovery" title="Permanent link">&para;</a></h3>
+<p>Disabled by default. Enable in config:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="p">{</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">    </span><span class="nt">&quot;tray&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="w">      </span><span class="nt">&quot;discover_kubernetes&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="w">      </span><span class="nt">&quot;kubernetes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="w">        </span><span class="nt">&quot;namespace&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ai-sdlc&quot;</span><span class="p">,</span>
+<a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="w">        </span><span class="nt">&quot;label_selector&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;app=ai-guardian&quot;</span>
+<a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-7-9" name="__codelineno-7-9" href="#__codelineno-7-9"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-7-10" name="__codelineno-7-10" href="#__codelineno-7-10"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-7-11" name="__codelineno-7-11" href="#__codelineno-7-11"></a><span class="p">}</span>
+</code></pre></div>
+<p>Pods are filtered by the current user (<code>user=$USER</code> label added automatically).</p>
+<h3 id="manual-targets">Manual Targets<a class="headerlink" href="#manual-targets" title="Permanent link">&para;</a></h3>
+<p>Create <code>~/.config/ai-guardian/tray-targets.json</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="p">{</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="nt">&quot;daemons&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="p">{</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">      </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;central-server&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="w">      </span><span class="nt">&quot;url&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://guardian.company.com:63152&quot;</span><span class="p">,</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a><span class="w">      </span><span class="nt">&quot;token&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;your-auth-token&quot;</span>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="w">  </span><span class="p">]</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="p">}</span>
+</code></pre></div>
+<p>Use <code>--no-discover</code> to skip auto-discovery and only load manual targets:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>--no-discover
+</code></pre></div>
+<h2 id="rest-api">REST API<a class="headerlink" href="#rest-api" title="Permanent link">&para;</a></h2>
+<p>Each daemon exposes a REST API for tray communication:</p>
+<table>
+<thead>
+<tr>
+<th>Endpoint</th>
+<th>Method</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/api/health</code></td>
+<td>GET</td>
+<td>Health check</td>
+</tr>
+<tr>
+<td><code>/api/status</code></td>
+<td>GET</td>
+<td>Daemon status (name, version, paused, menu_tags)</td>
+</tr>
+<tr>
+<td><code>/api/stats</code></td>
+<td>GET</td>
+<td>Full stats (requests, blocked, violations, menu_tags)</td>
+</tr>
+<tr>
+<td><code>/api/pause</code></td>
+<td>POST</td>
+<td>Pause scanning (<code>{"minutes": 15}</code>)</td>
+</tr>
+<tr>
+<td><code>/api/resume</code></td>
+<td>POST</td>
+<td>Resume scanning</td>
+</tr>
+</tbody>
+</table>
+<h3 id="bind-address">Bind Address<a class="headerlink" href="#bind-address" title="Permanent link">&para;</a></h3>
+<p>The REST API bind address is determined automatically:</p>
+<ul>
+<li><strong>Host machine</strong>: <code>127.0.0.1</code> (localhost only, secure default)</li>
+<li><strong>Inside containers</strong>: <code>0.0.0.0</code> (auto-detected via <code>/.dockerenv</code> or <code>/run/.containerenv</code>)</li>
+<li><strong>Override</strong>: Set <code>daemon.rest_host</code> in config</li>
+</ul>
+<p>The REST port is configurable via <code>daemon.rest_port</code> (default 63152, 0 = OS-assigned).</p>
+<h2 id="configuration-reference">Configuration Reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="p">{</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;my-workstation&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a><span class="w">  </span><span class="nt">&quot;daemon&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">    </span><span class="nt">&quot;rest_port&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">63152</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">    </span><span class="nt">&quot;rest_host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;127.0.0.1&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">    </span><span class="nt">&quot;tray&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a><span class="w">      </span><span class="nt">&quot;discover_containers&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="w">      </span><span class="nt">&quot;discover_kubernetes&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="w">      </span><span class="nt">&quot;kubernetes&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">        </span><span class="nt">&quot;namespace&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ai-sdlc&quot;</span><span class="p">,</span>
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a><span class="w">        </span><span class="nt">&quot;label_selector&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;app=ai-guardian&quot;</span>
+<a id="__codelineno-10-12" name="__codelineno-10-12" href="#__codelineno-10-12"></a><span class="w">      </span><span class="p">}</span>
+<a id="__codelineno-10-13" name="__codelineno-10-13" href="#__codelineno-10-13"></a><span class="w">    </span><span class="p">}</span>
+<a id="__codelineno-10-14" name="__codelineno-10-14" href="#__codelineno-10-14"></a><span class="w">  </span><span class="p">}</span>
+<a id="__codelineno-10-15" name="__codelineno-10-15" href="#__codelineno-10-15"></a><span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>hostname</td>
+<td>Instance name shown in tray, Console, REST API, MCP</td>
+</tr>
+<tr>
+<td><code>daemon.rest_port</code></td>
+<td><code>63152</code></td>
+<td>REST API port (0 = OS-assigned)</td>
+</tr>
+<tr>
+<td><code>daemon.rest_host</code></td>
+<td><code>127.0.0.1</code></td>
+<td>REST API bind address. Auto-set to <code>0.0.0.0</code> inside containers</td>
+</tr>
+<tr>
+<td><code>daemon.tray.discover_containers</code></td>
+<td><code>true</code></td>
+<td>Enable Podman/Docker container discovery (scans all available engines)</td>
+</tr>
+<tr>
+<td><code>daemon.tray.discover_kubernetes</code></td>
+<td><code>false</code></td>
+<td>Enable Kubernetes pod discovery</td>
+</tr>
+</tbody>
+</table>
+<h2 id="action-routing">Action Routing<a class="headerlink" href="#action-routing" title="Permanent link">&para;</a></h2>
+<p>Each daemon's submenu routes actions to the correct transport:</p>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Local</th>
+<th>Container</th>
+<th>Kubernetes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Statistics</td>
+<td>Unix socket</td>
+<td>REST API</td>
+<td>REST API</td>
+</tr>
+<tr>
+<td>Console</td>
+<td>New terminal</td>
+<td><code>podman exec -it</code></td>
+<td><code>kubectl exec -it</code></td>
+</tr>
+<tr>
+<td>Pause/Resume</td>
+<td>Unix socket</td>
+<td>REST API</td>
+<td>REST API</td>
+</tr>
+<tr>
+<td>Start/Stop/Restart</td>
+<td>Subprocess</td>
+<td><code>podman exec</code></td>
+<td><code>kubectl exec</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>In-progress guard</strong>: Restart actions are protected against double-clicks. Once a restart is triggered, the menu item is disabled and the tray polls the daemon until it responds again (up to 10 seconds) before re-enabling the item.</p>
+</blockquote>
+<h2 id="cli-reference">CLI Reference<a class="headerlink" href="#cli-reference" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w">              </span><span class="c1"># Start tray (foreground)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b<span class="w">           </span><span class="c1"># Start tray (background)</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>--no-discover<span class="w">  </span><span class="c1"># Manual targets only</span>
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>stop<span class="w">               </span><span class="c1"># Stop running tray</span>
+<a id="__codelineno-11-5" name="__codelineno-11-5" href="#__codelineno-11-5"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>restart<span class="w">            </span><span class="c1"># Restart tray</span>
+</code></pre></div>
+<h2 id="tray-plugins">Tray Plugins<a class="headerlink" href="#tray-plugins" title="Permanent link">&para;</a></h2>
+<p>Plugins add custom menu items to the tray. Each daemon loads plugins from its own <code>tray-plugins/</code> directory and serves them via the REST API. The tray fetches and displays them automatically.</p>
+<h3 id="creating-a-plugin">Creating a Plugin<a class="headerlink" href="#creating-a-plugin" title="Permanent link">&para;</a></h3>
+<p>Create a JSON file in <code>~/.config/ai-guardian/tray-plugins/</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="p">{</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;My Tools&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="w">    </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a><span class="w">            </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Say Hello&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;echo &#39;Hello {tray.name}!&#39;&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-8" name="__codelineno-12-8" href="#__codelineno-12-8"></a><span class="w">            </span><span class="nt">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-12-9" name="__codelineno-12-9" href="#__codelineno-12-9"></a><span class="w">                </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;name&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;hint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Your name&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;World&quot;</span><span class="p">}</span>
+<a id="__codelineno-12-10" name="__codelineno-12-10" href="#__codelineno-12-10"></a><span class="w">            </span><span class="p">]</span>
+<a id="__codelineno-12-11" name="__codelineno-12-11" href="#__codelineno-12-11"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-12-12" name="__codelineno-12-12" href="#__codelineno-12-12"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-12-13" name="__codelineno-12-13" href="#__codelineno-12-13"></a><span class="w">            </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Pod Count&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-14" name="__codelineno-12-14" href="#__codelineno-12-14"></a><span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;kubectl get pods --no-headers | wc -l&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-15" name="__codelineno-12-15" href="#__codelineno-12-15"></a><span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;notification&quot;</span>
+<a id="__codelineno-12-16" name="__codelineno-12-16" href="#__codelineno-12-16"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-12-17" name="__codelineno-12-17" href="#__codelineno-12-17"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-12-18" name="__codelineno-12-18" href="#__codelineno-12-18"></a><span class="w">            </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Copy Pod IP&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-19" name="__codelineno-12-19" href="#__codelineno-12-19"></a><span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;kubectl get svc my-app -o jsonpath=&#39;{.spec.clusterIP}&#39;&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-20" name="__codelineno-12-20" href="#__codelineno-12-20"></a><span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;clipboard&quot;</span>
+<a id="__codelineno-12-21" name="__codelineno-12-21" href="#__codelineno-12-21"></a><span class="w">        </span><span class="p">},</span>
+<a id="__codelineno-12-22" name="__codelineno-12-22" href="#__codelineno-12-22"></a><span class="w">        </span><span class="p">{</span>
+<a id="__codelineno-12-23" name="__codelineno-12-23" href="#__codelineno-12-23"></a><span class="w">            </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Rebuild&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-24" name="__codelineno-12-24" href="#__codelineno-12-24"></a><span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;make build&quot;</span><span class="p">,</span>
+<a id="__codelineno-12-25" name="__codelineno-12-25" href="#__codelineno-12-25"></a><span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;background&quot;</span>
+<a id="__codelineno-12-26" name="__codelineno-12-26" href="#__codelineno-12-26"></a><span class="w">        </span><span class="p">}</span>
+<a id="__codelineno-12-27" name="__codelineno-12-27" href="#__codelineno-12-27"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-12-28" name="__codelineno-12-28" href="#__codelineno-12-28"></a><span class="p">}</span>
+</code></pre></div>
+<p>Each <code>.json</code> file in the directory becomes a submenu in the tray.</p>
+<h3 id="command-types">Command Types<a class="headerlink" href="#command-types" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>terminal</code></td>
+<td>Opens a new terminal window and runs the command</td>
+</tr>
+<tr>
+<td><code>background</code></td>
+<td>Runs silently with no visible output</td>
+</tr>
+<tr>
+<td><code>notification</code></td>
+<td>Runs silently, shows stdout as a system notification</td>
+</tr>
+<tr>
+<td><code>clipboard</code></td>
+<td>Runs silently, copies stdout to the system clipboard</td>
+</tr>
+<tr>
+<td><code>modal</code></td>
+<td>Runs silently, shows output in a native OS dialog with OK button</td>
+</tr>
+</tbody>
+</table>
+<h3 id="interactive-parameters">Interactive Parameters<a class="headerlink" href="#interactive-parameters" title="Permanent link">&para;</a></h3>
+<p>Items with <code>params</code> show a form before executing. The user fills in values, then the placeholders <code>{tray.name}</code> in the command are substituted.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>Yes</td>
+<td>Matches <code>{tray.name}</code> placeholder in command</td>
+</tr>
+<tr>
+<td><code>hint</code></td>
+<td>No</td>
+<td>Help text shown as label/placeholder</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>No</td>
+<td>Pre-filled value</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td>No</td>
+<td>List of allowed values — renders as dropdown</td>
+</tr>
+</tbody>
+</table>
+<p>Example with a dropdown:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="p">{</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="w">    </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Deploy Branch&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="w">    </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;make deploy BRANCH={tray.branch} ENV={tray.environment}&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span><span class="p">,</span>
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a><span class="w">    </span><span class="nt">&quot;params&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a><span class="w">        </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;branch&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;hint&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Git branch&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;main&quot;</span><span class="p">},</span>
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a><span class="w">        </span><span class="p">{</span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;environment&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;dev&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;options&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;dev&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;staging&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;prod&quot;</span><span class="p">]}</span>
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a><span class="p">}</span>
+</code></pre></div>
+<p>Items without <code>params</code> execute immediately on click.</p>
+<h3 id="platform-aware-commands">Platform-Aware Commands<a class="headerlink" href="#platform-aware-commands" title="Permanent link">&para;</a></h3>
+<p>Commands can vary by platform using a command map instead of a string:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="p">{</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="w">    </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Open Shell&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="w">    </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="w">        </span><span class="nt">&quot;darwin&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;open -a Terminal&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="w">        </span><span class="nt">&quot;linux&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;gnome-terminal&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="w">        </span><span class="nt">&quot;windows&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;cmd.exe /k&quot;</span><span class="p">,</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="w">        </span><span class="nt">&quot;default&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;bash&quot;</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="w">    </span><span class="p">},</span>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="p">}</span>
+</code></pre></div>
+<p>Platform keys match <code>platform.system().lower()</code>: <code>darwin</code>, <code>linux</code>, <code>windows</code>. The <code>default</code> key is the fallback. If no key matches and no default is set, the menu item is hidden on that platform.</p>
+<h3 id="target-variables">Target Variables<a class="headerlink" href="#target-variables" title="Permanent link">&para;</a></h3>
+<p>Plugin commands can reference the daemon's target context using built-in variables. These are automatically substituted from the <code>DaemonTarget</code> before execution:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Source</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{container_id}</code></td>
+<td><code>target.container_id</code></td>
+<td><code>a1b2c3d4e5f6</code></td>
+</tr>
+<tr>
+<td><code>{container_engine}</code></td>
+<td><code>target.container_engine</code></td>
+<td><code>podman</code></td>
+</tr>
+<tr>
+<td><code>{host}</code></td>
+<td><code>target.host</code></td>
+<td><code>127.0.0.1</code></td>
+</tr>
+<tr>
+<td><code>{port}</code></td>
+<td><code>target.port</code></td>
+<td><code>63152</code></td>
+</tr>
+<tr>
+<td><code>{name}</code></td>
+<td><code>target.name</code></td>
+<td><code>carbonite-dev</code></td>
+</tr>
+<tr>
+<td><code>{pod_name}</code></td>
+<td><code>target.pod_name</code></td>
+<td><code>guardian-pod-1</code></td>
+</tr>
+<tr>
+<td><code>{namespace}</code></td>
+<td><code>target.namespace</code></td>
+<td><code>ai-guardian</code></td>
+</tr>
+</tbody>
+</table>
+<p>Example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="p">{</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">    </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Container Logs&quot;</span><span class="p">,</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">    </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{container_engine} logs --tail 50 {container_id}&quot;</span><span class="p">,</span>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a><span class="p">}</span>
+</code></pre></div>
+<p>Target variables use bare <code>{name}</code> syntax (no prefix), while user parameters use <code>{tray.name}</code>. Both can coexist in the same command. If a target field is <code>null</code>, the placeholder is replaced with an empty string.</p>
+<h3 id="run-on-target">Run on Target<a class="headerlink" href="#run-on-target" title="Permanent link">&para;</a></h3>
+<p>When <code>run_on_target</code> is <code>true</code>, the tray automatically wraps the command for the daemon's runtime:</p>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Wrapping</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Container</td>
+<td><code>&lt;engine&gt; exec [-it] &lt;container_id&gt; &lt;command&gt;</code></td>
+</tr>
+<tr>
+<td>Kubernetes</td>
+<td><code>oc exec [-it] &lt;pod&gt; -n &lt;namespace&gt; -- &lt;command&gt;</code> (falls back to <code>kubectl</code> if <code>oc</code> is not installed)</td>
+</tr>
+<tr>
+<td>Local</td>
+<td>No wrapping — runs as-is</td>
+</tr>
+</tbody>
+</table>
+<p>The plugin author writes the command as if running locally inside the target. The tray handles routing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="p">{</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="w">    </span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Doctor&quot;</span><span class="p">,</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="w">    </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ai-guardian doctor&quot;</span><span class="p">,</span>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="w">    </span><span class="nt">&quot;run_on_target&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="w">    </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="p">}</span>
+</code></pre></div>
+<p>For container targets, this becomes: <code>podman exec -it a1b2c3d4e5f6 ai-guardian doctor</code></p>
+<p>Both features can coexist:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="p">{</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="w">        </span><span class="p">{</span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Doctor&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;ai-guardian doctor&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;run_on_target&quot;</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span><span class="p">},</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="w">        </span><span class="p">{</span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Logs&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{container_engine} logs --tail 50 {container_id}&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terminal&quot;</span><span class="p">},</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="w">        </span><span class="p">{</span><span class="nt">&quot;label&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Restart&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;{container_engine} restart {container_id}&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;notification&quot;</span><span class="p">}</span>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="w">    </span><span class="p">]</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="p">}</span>
+</code></pre></div>
+<ul>
+<li><strong>Doctor</strong>: runs inside the container (automatic wrapping via <code>run_on_target</code>)</li>
+<li><strong>Logs</strong>: runs on host, references the container (target variable substitution)</li>
+<li><strong>Restart</strong>: runs on host, references the container (target variable substitution)</li>
+</ul>
+<h3 id="plugin-discovery-via-rest-api">Plugin Discovery via REST API<a class="headerlink" href="#plugin-discovery-via-rest-api" title="Permanent link">&para;</a></h3>
+<p>The tray does not read plugin files directly. Each daemon serves its plugins via:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>GET /api/tray-plugins
+</code></pre></div>
+<p>This means plugins work uniformly across all daemon types:</p>
+<table>
+<thead>
+<tr>
+<th>Daemon</th>
+<th>Plugin location</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Local</td>
+<td><code>~/.config/ai-guardian/tray-plugins/</code></td>
+</tr>
+<tr>
+<td>Container</td>
+<td><code>/home/user/.config/ai-guardian/tray-plugins/</code> inside the container</td>
+</tr>
+<tr>
+<td>Remote</td>
+<td><code>~/.config/ai-guardian/tray-plugins/</code> on the remote host</td>
+</tr>
+</tbody>
+</table>
+<p>The tray receives real-time updates from each daemon via SSE (Server-Sent Events) push notifications. Violations, stats changes, and pause/resume state changes are pushed to the tray instantly — no polling delay. Tray plugins are refreshed alongside these event-driven updates. If SSE is unavailable (e.g., older daemon version or network interruption), the tray falls back to polling every 10 seconds. Local plugins load even when the daemon is stopped.</p>
+<h3 id="tag-based-filtering">Tag-Based Filtering<a class="headerlink" href="#tag-based-filtering" title="Permanent link">&para;</a></h3>
+<p>By default, all plugins appear on all daemons. Use tags to filter plugins to specific daemons.</p>
+<p><strong>Daemon config</strong> (<code>ai-guardian.json</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="p">{</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;carbonite-dev&quot;</span><span class="p">,</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="w">    </span><span class="nt">&quot;menu_tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;carbonite&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;container&quot;</span><span class="p">]</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Plugin JSON</strong> (<code>tray-plugins/carbonite.json</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="p">{</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">    </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Carbonite&quot;</span><span class="p">,</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="w">    </span><span class="nt">&quot;tags&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;carbonite&quot;</span><span class="p">],</span>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="w">    </span><span class="nt">&quot;items&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">]</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a><span class="p">}</span>
+</code></pre></div>
+<p><strong>Matching rules:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Plugin <code>tags</code></th>
+<th>Daemon <code>menu_tags</code></th>
+<th>Shown?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(none/empty)</td>
+<td>(none/empty)</td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>(none/empty)</td>
+<td><code>["carbonite"]</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>["carbonite"]</code></td>
+<td><code>["carbonite", "container"]</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td><code>["carbonite"]</code></td>
+<td><code>["staging"]</code></td>
+<td>No</td>
+</tr>
+<tr>
+<td><code>["carbonite"]</code></td>
+<td>(none/empty)</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Untagged plugins always show on all daemons</li>
+<li>Tagged plugins only show on daemons with at least one matching <code>menu_tags</code> entry</li>
+<li>Both sides support multiple tags (N-to-N relationship)</li>
+<li>Tag matching is exact string match</li>
+</ul>
+<h3 id="plugin-limits">Plugin Limits<a class="headerlink" href="#plugin-limits" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Up to 8 plugins per daemon</li>
+<li>Up to 12 items per plugin</li>
+<li>These are pre-allocated pystray slots (macOS requires fixed menu structure)</li>
+</ul>
+<h2 id="migration-from-v17x">Migration from v1.7.x<a class="headerlink" href="#migration-from-v17x" title="Permanent link">&para;</a></h2>
+<p>In v1.7.x, <code>ai-guardian daemon start</code> launched both the daemon and the system tray. In v1.8.0+, these are separate:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># Before (v1.7.x)</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">          </span><span class="c1"># Started daemon + tray</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># After (v1.8.0+)</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>ai-guardian<span class="w"> </span>daemon<span class="w"> </span>start<span class="w">          </span><span class="c1"># Headless daemon only</span>
+<a id="__codelineno-21-6" name="__codelineno-21-6" href="#__codelineno-21-6"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w">            </span><span class="c1"># Separate tray process</span>
+</code></pre></div>
+<p>To restore the old behavior, add both commands to your startup/login items.</p>
+<h2 id="ask-dialog-forwarding">Ask Dialog Forwarding<a class="headerlink" href="#ask-dialog-forwarding" title="Permanent link">&para;</a></h2>
+<p>When <code>action=ask</code> is triggered on a <strong>headless or container daemon</strong>, there is
+no display available to show the dialog. The host tray bridges this gap by
+acting as a display proxy: it receives the prompt, shows the full dialog on
+the host, and sends the user's decision back to the daemon.</p>
+<h3 id="local-daemon-host-has-display">Local daemon (host has display)<a class="headerlink" href="#local-daemon-host-has-display" title="Permanent link">&para;</a></h3>
+<p>The hook runs inside the daemon process. The daemon calls its own REST API to
+delegate dialog rendering to a subprocess, which shows the native UI.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>┌─────────────────── host ──────────────────────────┐
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>│                                                    │
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>│  Hook (daemon process)                             │
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>│    └─ show_ask_dialog()                            │
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>│         ├─ _show_via_tray_forwarding()  → None     │
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>│         │    (local tray not registered            │
+<a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a>│         │     with local daemon)                   │
+<a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a>│         ├─ _is_headless_env()  → False             │
+<a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a>│         └─ _show_via_daemon()                      │
+<a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a>│              └─ POST /api/prompt  ──────────────┐  │
+<a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a>│                                                 │  │
+<a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a>│              ┌──── daemon REST ─────────────────┘  │
+<a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a>│              │  _handle_prompt()                   │
+<a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>│              │    └─ _show_via_subprocess()         │
+<a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a>│              │         └─ ai-guardian prompt        │
+<a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a>│              │              --mode ask              │
+<a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a>│              │              └─ tkinter / NiceGUI    │
+<a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a>│              │              └─ user responds        │
+<a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a>│              │         └─ AskResult                 │
+<a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a>│              └─ HTTP response                       │
+<a id="__codelineno-22-21" name="__codelineno-22-21" href="#__codelineno-22-21"></a>│         └─ decision applied to hook                │
+<a id="__codelineno-22-22" name="__codelineno-22-22" href="#__codelineno-22-22"></a>└────────────────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="remote-daemon-container-kubernetes">Remote daemon (container / Kubernetes)<a class="headerlink" href="#remote-daemon-container-kubernetes" title="Permanent link">&para;</a></h3>
+<p>The hook runs inside the container. Because the container has no display, it
+queues the prompt and waits. The host tray polls for pending prompts, shows
+the dialog on the host machine, and POSTs the decision back.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>┌──── container ─────────────────────────┐   ┌──── host ──────────────────────────────┐
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>│                                        │   │                                        │
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>│  Hook                                  │   │  Tray                                  │
+<a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a>│    └─ show_ask_dialog()                │   │    └─ every ~30s:                      │
+<a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>│         └─ _show_via_tray_forwarding() │   │         POST /api/register-tray ──────&gt;│
+<a id="__codelineno-23-6" name="__codelineno-23-6" href="#__codelineno-23-6"></a>│              └─ is_tray_registered()   │   │              (sets is_tray_registered) │
+<a id="__codelineno-23-7" name="__codelineno-23-7" href="#__codelineno-23-7"></a>│                    → True              │   │                                        │
+<a id="__codelineno-23-8" name="__codelineno-23-8" href="#__codelineno-23-8"></a>│              └─ queue_prompt()         │   │    └─ every 2.5s:                      │
+<a id="__codelineno-23-9" name="__codelineno-23-9" href="#__codelineno-23-9"></a>│              └─ decision_event.wait() &lt;│───│─        GET /api/pending-prompts       │
+<a id="__codelineno-23-10" name="__codelineno-23-10" href="#__codelineno-23-10"></a>│                                        │   │         └─ _handle_remote_prompt()     │
+<a id="__codelineno-23-11" name="__codelineno-23-11" href="#__codelineno-23-11"></a>│                                        │   │              └─ _show_via_subprocess() │
+<a id="__codelineno-23-12" name="__codelineno-23-12" href="#__codelineno-23-12"></a>│                                        │   │                   (NiceGUI on macOS,   │
+<a id="__codelineno-23-13" name="__codelineno-23-13" href="#__codelineno-23-13"></a>│                                        │   │                    auto on Linux)       │
+<a id="__codelineno-23-14" name="__codelineno-23-14" href="#__codelineno-23-14"></a>│                                        │   │              └─ user responds           │
+<a id="__codelineno-23-15" name="__codelineno-23-15" href="#__codelineno-23-15"></a>│              └─ resolve_prompt()  &lt;────│───│─        POST /api/prompt-decision      │
+<a id="__codelineno-23-16" name="__codelineno-23-16" href="#__codelineno-23-16"></a>│              └─ decision_event.set()   │   │                                        │
+<a id="__codelineno-23-17" name="__codelineno-23-17" href="#__codelineno-23-17"></a>│         └─ AskResult returned          │   │                                        │
+<a id="__codelineno-23-18" name="__codelineno-23-18" href="#__codelineno-23-18"></a>│    └─ decision applied to hook         │   │                                        │
+<a id="__codelineno-23-19" name="__codelineno-23-19" href="#__codelineno-23-19"></a>└────────────────────────────────────────┘   └────────────────────────────────────────┘
+</code></pre></div>
+<h3 id="no-tray-registered">No tray registered<a class="headerlink" href="#no-tray-registered" title="Permanent link">&para;</a></h3>
+<p>If no tray has registered with the daemon (tray not running, or remote daemon
+not yet discovered), <code>_show_via_tray_forwarding()</code> returns <code>None</code> immediately.
+On a headless host (Linux + no <code>DISPLAY</code>), the hook falls through to the
+configured <code>fallback_action</code> (default: <code>block</code>) with zero delay.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>show_ask_dialog()
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>  └─ _show_via_tray_forwarding()  → None  (is_tray_registered = False)
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>  └─ _is_headless_env()           → True
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>  └─ fallback_action applied immediately  (no blocking)
+</code></pre></div>
+<h3 id="platform-notes">Platform notes<a class="headerlink" href="#platform-notes" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Host OS</th>
+<th>Dialog shown by tray</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>macOS 14+</td>
+<td>NiceGUI browser tab (tkinter suppressed — pystray is NSAccessory, cannot steal focus)</td>
+</tr>
+<tr>
+<td>Linux KDE/GNOME</td>
+<td>tkinter / NiceGUI / Textual per <code>preferred_ui</code> config</td>
+</tr>
+<tr>
+<td>macOS &lt; 14</td>
+<td>tkinter / NiceGUI / Textual per <code>preferred_ui</code> config</td>
+</tr>
+</tbody>
+</table>
+<p>The full dialog is shown in all cases: Allow Once, Allow Always (with pattern
+editor), Suppress in Source, Ignore File, and Block. Pattern saving and source
+annotations are applied by the <strong>triggering daemon</strong> (not the host), so they
+land in the correct config files and source tree.</p>
+<h2 id="testing-ask-dialog-forwarding">Testing Ask Dialog Forwarding<a class="headerlink" href="#testing-ask-dialog-forwarding" title="Permanent link">&para;</a></h2>
+<p>End-to-end test procedure for verifying that ask dialogs generated inside a
+container or remote daemon appear on the host tray.</p>
+<h3 id="prerequisites">Prerequisites<a class="headerlink" href="#prerequisites" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Start the container daemon:</strong></li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="c1"># Using the bundled run script (sets ai-guardian.daemon=true label automatically)</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a>./container/run.sh
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># Or manually with Podman/Docker</span>
+<a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a>podman<span class="w"> </span>run<span class="w"> </span>-l<span class="w"> </span>ai-guardian.daemon<span class="o">=</span><span class="nb">true</span><span class="w"> </span>-p<span class="w"> </span><span class="m">63152</span>:63152<span class="w"> </span>quay.io/redhatproductsecurity/ai-guardian:latest
+</code></pre></div>
+<ol>
+<li><strong>On Linux — export the Podman socket</strong> so the tray can discover the container (#1436):</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">DOCKER_HOST</span><span class="o">=</span>unix://<span class="k">$(</span>podman<span class="w"> </span>info<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Host.RemoteSocket.Path}}&#39;</span><span class="k">)</span>
+</code></pre></div>
+<blockquote>
+<p><strong>macOS with Podman Desktop:</strong> <code>DOCKER_HOST</code> is set automatically — skip this step.</p>
+</blockquote>
+<ol>
+<li><strong>Start the host tray:</strong></li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>ai-guardian<span class="w"> </span>tray<span class="w"> </span>start<span class="w"> </span>-b
+</code></pre></div>
+<p>The container daemon should appear in the tray menu within ~10 seconds. Confirm
+   the container is listed with a running indicator (●) before proceeding.</p>
+<h3 id="option-a-dummy-agent-scenario-preferred">Option A — dummy-agent scenario (preferred)<a class="headerlink" href="#option-a-dummy-agent-scenario-preferred" title="Permanent link">&para;</a></h3>
+<p>Requires the <code>action: ask</code> pattern to be configured in the container's
+<code>ai-guardian.json</code> (e.g., <code>prompt_injection.action: ask</code>).</p>
+<p>Inside the container:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>ai-guardian<span class="w"> </span>dummy-agent<span class="w"> </span>--script<span class="w"> </span>scenarios/ask-dialog.yaml
+</code></pre></div>
+<p>The scenario fires hook events through the full pipeline (UserPromptSubmit →
+PreToolUse → PostToolUse) with content that triggers the ask mode. The daemon
+queues the prompt, the tray polls <code>/api/pending-prompts</code>, and the dialog
+appears on the host.</p>
+<p><strong>Expected result:</strong> Ask dialog appears on the host machine with <strong>Allow Once</strong>,
+<strong>Allow Always</strong>, <strong>Suppress in Source</strong>, <strong>Ignore File</strong>, and <strong>Block</strong> options.</p>
+<h3 id="option-b-direct-rest-api-workaround-quick-smoke-test">Option B — direct REST API (workaround / quick smoke test)<a class="headerlink" href="#option-b-direct-rest-api-workaround-quick-smoke-test" title="Permanent link">&para;</a></h3>
+<p>If dummy-agent is unavailable or you want a quick confirmation without
+configuring ask mode, POST directly to the container daemon's REST API:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># Inside the container</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>curl<span class="w"> </span>-s<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>http://127.0.0.1:63152/api/prompt<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span>-H<span class="w"> </span><span class="s2">&quot;Content-Type: application/json&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="s1">    &quot;mode&quot;: &quot;ask&quot;,</span>
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="s1">    &quot;violation&quot;: {</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="s1">      &quot;violation_type&quot;: &quot;secret_detected&quot;,</span>
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="s1">      &quot;summary&quot;: &quot;AWS Access Key detected&quot;,</span>
+<a id="__codelineno-29-9" name="__codelineno-29-9" href="#__codelineno-29-9"></a><span class="s1">      &quot;matched_text&quot;: &quot;AKIAI&lt;YOUR_ACCESS_KEY_ID&gt;&quot;,</span>
+<a id="__codelineno-29-10" name="__codelineno-29-10" href="#__codelineno-29-10"></a><span class="s1">      &quot;config_section&quot;: &quot;secret_scanning&quot;</span>
+<a id="__codelineno-29-11" name="__codelineno-29-11" href="#__codelineno-29-11"></a><span class="s1">    }</span>
+<a id="__codelineno-29-12" name="__codelineno-29-12" href="#__codelineno-29-12"></a><span class="s1">  }&#39;</span>
+</code></pre></div>
+<p><strong>Expected result:</strong> Ask dialog appears on the host. The <code>curl</code> call blocks until
+the user responds, then returns <code>{"decision": "allow_once"}</code> (or similar).</p>
+<p><strong>Confirmed working on:</strong> Linux and macOS. ✅</p>
+<h3 id="known-limitations">Known Limitations<a class="headerlink" href="#known-limitations" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Hook pipeline does not trigger ask via synthetic payloads.</strong> Hand-crafted
+  hook payloads fired from the shell (e.g., via <code>ai-guardian hook</code>) do not reach
+  the ask path because:</li>
+<li><code>PreToolUse</code> with a secret in <code>tool_input</code> → blocked by tool permission
+    policy before secret scan runs</li>
+<li><code>PostToolUse</code> with a secret in <code>tool_response</code> → uses <code>secret_redaction</code>
+    (action=warn), not <code>secret_scanning</code> (always blocks)</li>
+<li><code>UserPromptSubmit</code> with a secret in transcript → transcript scanning always
+    warns, never asks</li>
+</ul>
+<p>Use <strong>Option A</strong> (dummy-agent scenario) or <strong>Option B</strong> (direct REST) to bypass
+  these limitations.</p>
+<ul>
+<li><strong>Timeout (#1445):</strong> The default hook timeout is 30 seconds, which may expire
+  before the user responds to the dialog. If the ask dialog appears but the
+  hook times out before a decision is made, increase
+  <code>daemon.hook_timeout_seconds</code> in the container's config, or use Option B
+  (REST has no hook timeout).</li>
+</ul>
+<h3 id="kubernetes-variant">Kubernetes Variant<a class="headerlink" href="#kubernetes-variant" title="Permanent link">&para;</a></h3>
+<p>Same procedure applies with <code>kubectl port-forward</code> in place of a direct port
+mapping:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a>kubectl<span class="w"> </span>port-forward<span class="w"> </span>pod/&lt;guardian-pod&gt;<span class="w"> </span><span class="m">63152</span>:63152
+</code></pre></div>
+<p>Then run Option B from any machine with access to <code>localhost:63152</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.indexes", "navigation.sections", "navigation.top", "search.highlight", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
