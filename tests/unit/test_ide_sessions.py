@@ -2,13 +2,18 @@
 
 import json
 import os
+import sqlite3
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
-from ai_guardian.sessions.adapters import ClaudeSessionAdapter, CodexSessionAdapter
+from ai_guardian.sessions.adapters import (
+    ClaudeSessionAdapter,
+    CodexSessionAdapter,
+    OpenCodeSessionAdapter,
+)
 from ai_guardian.sessions.discovery import (
     SUPPORTED_IDES,
     discover_sessions,
@@ -27,7 +32,7 @@ class TestGetSupportedIdes:
     def test_returns_list(self):
         result = get_supported_ides()
         assert isinstance(result, list)
-        assert len(result) == 8
+        assert len(result) == 9
 
     def test_claude_is_first(self):
         assert get_supported_ides()[0] == "claude"
@@ -36,6 +41,9 @@ class TestGetSupportedIdes:
         ides = get_supported_ides()
         for expected in ["claude", "cursor", "copilot", "codex", "windsurf", "kiro"]:
             assert expected in ides
+
+    def test_opencode_is_present(self):
+        assert "opencode" in get_supported_ides()
 
 
 class TestGetDefaultIde:
@@ -291,6 +299,160 @@ class TestCodexReadSessionMeta:
         meta = CodexSessionAdapter._read_session_meta(path)
 
         assert meta["title"] == ""
+
+
+class TestOpenCodeSessionAdapter:
+    @staticmethod
+    def _create_db(path):
+        conn = sqlite3.connect(path)
+        conn.executescript("""
+            CREATE TABLE session (
+                id TEXT PRIMARY KEY, project_id TEXT NOT NULL,
+                directory TEXT NOT NULL, title TEXT NOT NULL,
+                version TEXT NOT NULL, slug TEXT NOT NULL,
+                time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL
+            );
+            CREATE TABLE message (
+                id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+                time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL,
+                data TEXT NOT NULL
+            );
+            CREATE TABLE part (
+                id TEXT PRIMARY KEY, message_id TEXT NOT NULL,
+                session_id TEXT NOT NULL, time_created INTEGER NOT NULL,
+                time_updated INTEGER NOT NULL, data TEXT NOT NULL
+            );
+            """)
+        conn.execute(
+            "INSERT INTO session VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                "ses_1",
+                "proj_1",
+                "/tmp/project",
+                "Build a feature",
+                "1.0",
+                "build-feature",
+                1_700_000_000_000,
+                1_700_000_003_000,
+            ),
+        )
+        conn.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+            (
+                "msg_user",
+                "ses_1",
+                1_700_000_001_000,
+                1_700_000_001_000,
+                json.dumps({"role": "user"}),
+            ),
+        )
+        conn.execute(
+            "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+            (
+                "msg_assistant",
+                "ses_1",
+                1_700_000_002_000,
+                1_700_000_002_000,
+                json.dumps(
+                    {
+                        "role": "assistant",
+                        "modelID": "test-model",
+                        "tokens": {"input": 12, "output": 7},
+                    }
+                ),
+            ),
+        )
+        parts = [
+            (
+                "part_user",
+                "msg_user",
+                {"type": "text", "text": "Please build it"},
+                1_700_000_001_000,
+            ),
+            (
+                "part_text",
+                "msg_assistant",
+                {"type": "text", "text": "Working on it"},
+                1_700_000_002_000,
+            ),
+            (
+                "part_tool",
+                "msg_assistant",
+                {
+                    "type": "tool",
+                    "tool": "write",
+                    "callID": "call_1",
+                    "state": {"input": {"path": "example.py"}, "output": "done"},
+                },
+                1_700_000_003_000,
+            ),
+        ]
+        for part_id, message_id, data, timestamp in parts:
+            conn.execute(
+                "INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)",
+                (part_id, message_id, "ses_1", timestamp, timestamp, json.dumps(data)),
+            )
+        conn.commit()
+        conn.close()
+
+    def test_discovers_session_metadata(self, tmp_path):
+        db_path = tmp_path / "opencode.db"
+        self._create_db(db_path)
+        adapter = OpenCodeSessionAdapter()
+
+        with patch.object(adapter, "resolve_session_dir", return_value=tmp_path):
+            sessions = adapter.discover()
+
+        assert len(sessions) == 1
+        assert sessions[0]["title"] == "Build a feature"
+        assert sessions[0]["model"] == "test-model"
+        assert sessions[0]["message_count"] == 2
+        assert sessions[0]["token_usage"] == {
+            "input_tokens": 12,
+            "output_tokens": 7,
+        }
+
+    def test_filters_sessions_by_project(self, tmp_path):
+        db_path = tmp_path / "opencode.db"
+        self._create_db(db_path)
+        adapter = OpenCodeSessionAdapter()
+
+        with patch.object(adapter, "resolve_session_dir", return_value=tmp_path):
+            assert len(adapter.discover(project_path="/tmp/project")) == 1
+            assert adapter.discover(project_path="/tmp/other") == []
+
+    def test_reads_conversation_detail(self, tmp_path):
+        db_path = tmp_path / "opencode.db"
+        self._create_db(db_path)
+        adapter = OpenCodeSessionAdapter()
+
+        steps = adapter.read_detail({"file_path": str(db_path), "session_id": "ses_1"})
+
+        assert [step["type"] for step in steps] == [
+            "user",
+            "assistant",
+            "tool_use",
+            "tool_result",
+        ]
+        assert steps[0]["content"] == "Please build it"
+        assert steps[1]["model"] == "test-model"
+        assert steps[2]["tool_input"] == {"path": "example.py"}
+        assert steps[3]["content"] == "done"
+        assert steps[0]["timestamp"].endswith("Z")
+
+    def test_enriches_detail_page_summary(self, tmp_path):
+        db_path = tmp_path / "opencode.db"
+        self._create_db(db_path)
+
+        summary = OpenCodeSessionAdapter().read_summary(
+            {"file_path": str(db_path), "session_id": "ses_1"}
+        )
+
+        assert summary["title"] == "Build a feature"
+        assert summary["model"] == "test-model"
+        assert summary["user_messages"] == 1
+        assert summary["assistant_messages"] == 1
+        assert summary["first_timestamp"] < summary["last_timestamp"]
 
 
 class TestDiscoverSessions:
