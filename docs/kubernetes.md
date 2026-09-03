@@ -64,6 +64,20 @@ kubectl get pods -l app=ai-guardian
 kubectl logs -l app=ai-guardian -f
 ```
 
+All daemon pods must also carry an ownership label. Use a unique owner value
+for each user or tenant when sharing a namespace:
+
+```yaml
+metadata:
+  labels:
+    app: ai-guardian
+    ai-guardian.owner: my-user
+```
+
+Configure the tray with the same owner value. Discovery adds this selector to
+every Kubernetes API or `kubectl` query, so credentials are only requested from
+pods owned by that configured identity.
+
 Wait for the pod readiness probe to pass (checks `GET /api/status` on port 63152).
 
 ### 4. Reach the REST API

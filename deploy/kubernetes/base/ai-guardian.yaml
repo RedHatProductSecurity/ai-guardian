@@ -4,15 +4,18 @@ metadata:
   name: ai-guardian
   labels:
     app: ai-guardian
+    ai-guardian.owner: system
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: ai-guardian
+      ai-guardian.owner: system
   template:
     metadata:
       labels:
         app: ai-guardian
+        ai-guardian.owner: system
     spec:
       securityContext:
         runAsUser: 1000
@@ -88,6 +91,7 @@ spec:
   type: ClusterIP
   selector:
     app: ai-guardian
+    ai-guardian.owner: system
   ports:
     - name: rest
       port: 63152

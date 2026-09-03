@@ -149,14 +149,24 @@ Disabled by default. Enable in config:
       "discover_kubernetes": true,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   }
 }
 ```
 
-Pods are filtered by the current user (`user=$USER` label added automatically).
+Pods are always filtered by an ownership label. The default contract is
+`ai-guardian.owner=$USER`; set `AI_GUARDIAN_K8S_OWNER` or configure an explicit
+`ownership.value` when the cluster owner identity differs from the local
+username. Every daemon deployment must set the same ownership label. This
+prevents discovery and token reads from crossing user boundaries in shared
+namespaces. The ownership selector is added to `label_selector` and cannot be
+removed by setting a broader base selector.
 
 ### Manual Targets
 
@@ -215,7 +225,11 @@ The REST port is configurable via `daemon.rest_port` (default 63152, 0 = OS-assi
       "discover_kubernetes": false,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   }
