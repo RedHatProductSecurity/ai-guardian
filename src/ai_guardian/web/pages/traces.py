@@ -4,6 +4,7 @@ import fnmatch
 import json
 import tempfile
 import urllib.parse
+from datetime import date, datetime, timedelta, timezone
 
 from nicegui import run, ui
 
@@ -50,7 +51,12 @@ def create_traces_page(service, daemon_name: str):
             saved_sort = True
 
         PAGE_SIZE = 50
-        state = {"load_fn": None, "newest_first": saved_sort, "page": 1}
+        state = {
+            "load_fn": None,
+            "newest_first": saved_sort,
+            "page": 1,
+            "day": date.today(),
+        }
         expanded_runs: set = set()
 
         auto_timer = {"ref": None, "paused": False}
@@ -108,6 +114,35 @@ def create_traces_page(service, daemon_name: str):
             .style("position: sticky; top: 48px; z-index: 9; background: #121212")
         ):
 
+            async def _previous_day():
+                state["day"] -= timedelta(days=1)
+                state["page"] = 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            async def _next_day():
+                if state["day"] < date.today():
+                    state["day"] += timedelta(days=1)
+                    state["page"] = 1
+                    fn = state["load_fn"]
+                    if fn:
+                        await fn()
+
+            async def _today():
+                state["day"] = date.today()
+                state["page"] = 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            previous_day_btn = ui.button("◀ Day", on_click=_previous_day).props(
+                "dense outline"
+            )
+            day_label = ui.label().classes("text-sm font-bold")
+            next_day_btn = ui.button("Day ▶", on_click=_next_day).props("dense outline")
+            ui.button("Today", on_click=_today).props("dense flat")
+
             async def _prev_page():
                 if state["page"] > 1:
                     state["page"] -= 1
@@ -161,6 +196,12 @@ def create_traces_page(service, daemon_name: str):
                 from ai_guardian.daemon.traces import group_traces_by_run
 
                 grouped = group_traces_by_run(traces)
+                selected_day = state["day"]
+                grouped = [
+                    group
+                    for group in grouped
+                    if _trace_local_day(group.get("started_at")) == selected_day
+                ]
                 if not state["newest_first"]:
                     grouped.sort(key=lambda t: t.get("started_at", ""))
 
@@ -175,6 +216,9 @@ def create_traces_page(service, daemon_name: str):
                     page_items, cards_container, daemon_name, expanded_runs
                 )
 
+                day_label.set_text(_format_day_label(selected_day))
+                next_day_btn.set_enabled(selected_day < date.today())
+                previous_day_btn.set_enabled(True)
                 prev_btn.set_enabled(page > 1)
                 next_btn.set_enabled(page < total_pages)
                 daemon_count = len(service.targets)
@@ -467,6 +511,29 @@ def _filter_traces(traces, pattern):
     if not pattern.startswith("*"):
         pattern = f"*{pattern}*"
     return [t for t in traces if fnmatch.fnmatch(t.get("filename", ""), pattern)]
+
+
+def _trace_local_day(started_at):
+    """Return the local calendar day for a trace's ISO timestamp."""
+    if not started_at or not isinstance(started_at, str):
+        return None
+    try:
+        timestamp = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+        if timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        return timestamp.astimezone().date()
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _format_day_label(selected_day):
+    """Format the selected day for the Sessions navigator."""
+    today = date.today()
+    if selected_day == today:
+        return "Today"
+    if selected_day == today - timedelta(days=1):
+        return "Yesterday"
+    return selected_day.strftime("%a, %b %d, %Y").replace(" 0", " ")
 
 
 def _populate_agent_filter(traces, agent_select):

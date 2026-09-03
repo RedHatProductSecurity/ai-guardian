@@ -121,6 +121,15 @@ class TestWebListPageAutoRefresh:
         source = inspect.getsource(create_ide_sessions_page)
         assert "position: sticky" not in source
 
+    def test_list_page_has_day_navigation(self):
+        from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
+
+        source = inspect.getsource(create_ide_sessions_page)
+        assert '"day": date.today()' in source
+        assert "_previous_day" in source
+        assert "_next_day" in source
+        assert "_format_day_label" in source
+
 
 class TestWebDetailPageAutoRefresh:
     """Verify detail page has auto-refresh timer with pause support."""

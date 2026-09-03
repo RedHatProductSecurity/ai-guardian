@@ -1,7 +1,7 @@
 """IDE Sessions page — multi-IDE conversation browser."""
 
 import urllib.parse
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from nicegui import run, ui
 
@@ -50,6 +50,7 @@ def create_ide_sessions_page(service, daemon_name: str):
             "load_fn": None,
             "newest_first": saved_sort,
             "page": 1,
+            "day": date.today(),
         }
 
         auto_timer = {"ref": None, "paused": False}
@@ -104,6 +105,35 @@ def create_ide_sessions_page(service, daemon_name: str):
 
         with ui.row().classes("items-center gap-2 w-full"):
 
+            async def _previous_day():
+                state["day"] -= timedelta(days=1)
+                state["page"] = 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            async def _next_day():
+                if state["day"] < date.today():
+                    state["day"] += timedelta(days=1)
+                    state["page"] = 1
+                    fn = state["load_fn"]
+                    if fn:
+                        await fn()
+
+            async def _today():
+                state["day"] = date.today()
+                state["page"] = 1
+                fn = state["load_fn"]
+                if fn:
+                    await fn()
+
+            previous_day_btn = ui.button("◀ Day", on_click=_previous_day).props(
+                "dense outline"
+            )
+            day_label = ui.label().classes("text-sm font-bold")
+            next_day_btn = ui.button("Day ▶", on_click=_next_day).props("dense outline")
+            ui.button("Today", on_click=_today).props("dense flat")
+
             async def _prev_page():
                 if state["page"] > 1:
                     state["page"] -= 1
@@ -145,6 +175,13 @@ def create_ide_sessions_page(service, daemon_name: str):
             if proj_filter:
                 sessions = [s for s in sessions if s.get("project_path") == proj_filter]
 
+            selected_day = state["day"]
+            sessions = [
+                s
+                for s in sessions
+                if _session_local_day(s.get("modified")) == selected_day
+            ]
+
             search = (search_input.value or "").strip().lower()
             if search:
                 sessions = [
@@ -161,6 +198,10 @@ def create_ide_sessions_page(service, daemon_name: str):
                 reverse=state["newest_first"],
             )
             _render_stats(sessions, stats_row, ide)
+
+            day_label.set_text(_format_day_label(selected_day))
+            next_day_btn.set_enabled(selected_day < date.today())
+            previous_day_btn.set_enabled(True)
 
             total_matches = len(sessions)
             total_pages = max(1, -(-total_matches // PAGE_SIZE))
@@ -279,6 +320,26 @@ def _shorten_path(path):
     if len(parts) <= 3:
         return path
     return f".../{'/'.join(parts[-2:])}"
+
+
+def _session_local_day(modified):
+    """Return the local calendar day for a session timestamp."""
+    if not modified:
+        return None
+    try:
+        return datetime.fromtimestamp(float(modified)).date()
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
+def _format_day_label(selected_day):
+    """Format the selected day for the session navigator."""
+    today = date.today()
+    if selected_day == today:
+        return "Today"
+    if selected_day == today - timedelta(days=1):
+        return "Yesterday"
+    return selected_day.strftime("%a, %b %d, %Y").replace(" 0", " ")
 
 
 def _render_stats(sessions, container, ide):

@@ -69,3 +69,28 @@ def test_discover_sessions_for_all_ides_combines_and_limits_by_recency():
         call("claude", None, 2),
         call("cursor", None, 2),
     ]
+
+
+def test_session_local_day_uses_local_timezone():
+    from datetime import datetime
+
+    from ai_guardian.web.pages.ide_sessions import _session_local_day
+
+    timestamp = datetime(2025, 6, 15, 13, 45).timestamp()
+    assert _session_local_day(timestamp) == datetime.fromtimestamp(timestamp).date()
+
+
+def test_session_local_day_handles_missing_or_invalid_timestamps():
+    from ai_guardian.web.pages.ide_sessions import _session_local_day
+
+    assert _session_local_day(None) is None
+    assert _session_local_day("not-a-timestamp") is None
+
+
+def test_format_day_label_identifies_today_and_yesterday():
+    from datetime import date, timedelta
+
+    from ai_guardian.web.pages.ide_sessions import _format_day_label
+
+    assert _format_day_label(date.today()) == "Today"
+    assert _format_day_label(date.today() - timedelta(days=1)) == "Yesterday"
