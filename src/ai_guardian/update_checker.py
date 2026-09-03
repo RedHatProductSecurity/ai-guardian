@@ -313,15 +313,49 @@ def perform_full_upgrade(
 
     result = run_self_upgrade(version=version)
 
-    if result.success and restart_daemon:
-        if not _restart_daemon():
-            result.success = False
-            result.output = (
-                result.output.rstrip()
-                + "\nPackage upgraded, but the daemon failed to restart."
-            )
+    if result.success:
+        if restart_daemon:
+            if not _restart_daemon():
+                result.success = False
+                result.output = (
+                    result.output.rstrip()
+                    + "\nPackage upgraded, but the daemon failed to restart."
+                )
+        if result.success:
+            _verify_local_ide_hooks()
 
     return result
+
+
+def _verify_local_ide_hooks() -> dict:
+    """Verify installed local IDE hooks after an upgrade.
+
+    Verification is read-only.  The tray/CLI notification flow is responsible
+    for obtaining consent before calling setup to reconcile a drifted adapter.
+    """
+    try:
+        from ai_guardian.setup.hooks import IDESetup
+
+        setup = IDESetup()
+        results = {
+            ide_type: setup.verify_hooks_for_ide(ide_type)
+            for ide_type in setup.list_detected_ides()
+        }
+        for ide_type, status in results.items():
+            if not status["healthy"]:
+                logger.info(
+                    "IDE hooks need attention after upgrade: %s (%s)",
+                    ide_type,
+                    ", ".join(
+                        name
+                        for name, event_status in status["events"].items()
+                        if event_status != "healthy"
+                    ),
+                )
+        return results
+    except Exception as exc:
+        logger.warning("Unable to verify IDE hooks after upgrade: %s", exc)
+        return {}
 
 
 def _get_active_session_count() -> int:

@@ -178,7 +178,7 @@ class TestIDESetup:
         assert len(session_start) >= 1
 
     def test_setup_ide_hooks_already_configured(self, tmp_path):
-        """Test setup when hooks already configured without force."""
+        """Test setup repairs a partial configuration without force."""
         setup = IDESetup()
 
         config_file = tmp_path / "settings.json"
@@ -199,7 +199,7 @@ class TestIDESetup:
                     "name": "Claude Code",
                     "config_path": str(config_file),
                     "config_dir_env_var": None,  # Disable env var for test
-                    "hooks": {},
+                    "hooks": IDESetup.IDE_CONFIGS["claude"]["hooks"],
                 }
             },
         ):
@@ -207,8 +207,10 @@ class TestIDESetup:
                 "claude", dry_run=False, force=False
             )
 
-            assert success is False
-            assert "already configured" in message
+            assert success is True
+            assert "already configured" not in message
+            updated = json.loads(config_file.read_text())
+            assert "UserPromptSubmit" in updated["hooks"]
 
     def test_setup_ide_hooks_invalid_json(self, tmp_path):
         """Test setup with invalid JSON in existing config."""
@@ -606,8 +608,8 @@ class TestIDESetup:
         config_file.write_text(json.dumps(hooks))
         with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
             configured, detail = setup.check_hooks_for_ide("claude")
-        assert configured is True
-        assert "configured" in detail
+        assert configured is False
+        assert "UserPromptSubmit" in detail
 
     def test_check_hooks_for_ide_not_configured(self, tmp_path):
         setup = IDESetup()
@@ -772,6 +774,42 @@ class TestIDESetupParametrized:
         config_file.write_text(json.dumps(self._NOT_CONFIGURED_CONFIGS[ide_name]))
         assert setup.check_hooks_configured(config_file, ide_name) is False
 
+    def test_verify_hooks_detects_partial_and_changed_events(self, tmp_path):
+        setup = IDESetup()
+        config_file = tmp_path / "hooks.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "beforeSubmitPrompt": [{"command": "ai-guardian --ide cursor"}],
+                        "preToolUse": [{"command": "ai-guardian --ide claude"}],
+                    }
+                }
+            )
+        )
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide("cursor")
+        assert result["events"]["beforeSubmitPrompt"] == "healthy"
+        assert result["events"]["beforeReadFile"] == "missing"
+        assert result["healthy"] is False
+
+    def test_verify_hooks_reports_obsolete_owned_event(self, tmp_path):
+        setup = IDESetup()
+        config_file = tmp_path / "hooks.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "beforeSubmitPrompt": [{"command": "ai-guardian --ide cursor"}],
+                        "removedEvent": [{"command": "ai-guardian --ide cursor"}],
+                    }
+                }
+            )
+        )
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide("cursor")
+        assert "removedEvent" in result["obsolete"]
+
     # ── check_hooks_configured (script-based IDEs) ───────────────────────
 
     @pytest.mark.parametrize("ide_name", ["cline", "kiro"], ids=["cline", "kiro"])
@@ -917,7 +955,7 @@ class TestIDESetupParametrized:
         ids=["codex"],
     )
     def test_setup_ide_hooks_json_already_configured(self, tmp_path, ide_name):
-        """Setup returns failure when hooks already configured without force."""
+        """Setup repairs a partial hook set without force."""
         setup = IDESetup()
         config_file = tmp_path / "config.json"
         config_file.write_text(json.dumps(self._CONFIGURED_CONFIGS[ide_name]))
@@ -928,8 +966,8 @@ class TestIDESetupParametrized:
                 ide_name, dry_run=False, force=False
             )
 
-        assert success is False
-        assert "already configured" in message
+        assert success is True
+        assert "already configured" not in message
 
     # ── merge_hooks new (basic IDEs) ─────────────────────────────────────
 
