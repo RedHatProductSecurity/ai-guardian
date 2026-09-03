@@ -299,6 +299,62 @@ class TestDaemonSessionTracking:
             assert key in lookup, f"{key} not consulted before re-inject marking"
 
 
+class TestCliGuards:
+    def test_hook_event_alone_falls_through_to_hook_mode(self):
+        # --hook-event without --ide must not exit early: returning before
+        # stdin is read would silently pass the tool call unscanned.
+        import inspect
+
+        from ai_guardian import cli
+
+        source = inspect.getsource(cli)
+        marker = source.index("fall through to hook mode")
+        guard = source[marker : marker + 700]
+        assert 'getattr(args, "ide", None) or _cli_hook_event' in guard
+
+    def test_policy_arg_lookup_is_case_insensitive(self):
+        checker = ToolPolicyChecker()
+        name, tool_input = checker._extract_tool_info(
+            {
+                "conversationId": "c",
+                "toolCall": {"name": "run_command", "args": {"commandLine": "ls -la"}},
+            }
+        )
+        assert name == "Bash"
+        assert tool_input["command"] == "ls -la"
+
+    def test_content_scan_path_lookup_is_case_insensitive(self):
+        # Third layer: if this misses while the adapter and policy succeed,
+        # the file content scan is skipped silently instead of failing.
+        from ai_guardian.hook_processing import extract_file_content_from_tool
+
+        result = extract_file_content_from_tool(
+            {
+                "conversationId": "c",
+                "workspacePaths": ["/tmp"],
+                "toolCall": {
+                    "name": "view_file",
+                    "args": {"absolutePath": "/etc/hosts"},
+                },
+            }
+        )
+        assert result[2] == "/etc/hosts"
+
+    def test_policy_path_lookup_is_case_insensitive(self):
+        checker = ToolPolicyChecker()
+        name, tool_input = checker._extract_tool_info(
+            {
+                "conversationId": "c",
+                "toolCall": {
+                    "name": "view_file",
+                    "args": {"absolutePath": "/etc/passwd"},
+                },
+            }
+        )
+        assert name == "Read"
+        assert tool_input["file_path"] == "/etc/passwd"
+
+
 class TestMcpNaming:
     def test_call_mcp_tool_keeps_mcp_prefix(self):
         n = AntigravityAdapter().normalize_input(

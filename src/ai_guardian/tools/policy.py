@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Set, Union
 
 from ai_guardian.constants import (
+    ANTIGRAVITY_FILE_ARG_KEYS,
     AUGMENT_TOOL_MAP,
     canonical_ide,
     HookEvent,
@@ -762,11 +763,16 @@ class ToolPolicyChecker:
                 tool_name = tool_call.get("name")
                 args = tool_call.get("args")
                 tool_input = dict(args) if isinstance(args, dict) else {}
-                command = tool_input.get("CommandLine")
+                # Match the adapter's case-insensitive lookup so both layers
+                # agree on the command and path regardless of argument casing.
+                _lowered = {
+                    k.lower(): v for k, v in tool_input.items() if isinstance(k, str)
+                }
+                command = _lowered.get("commandline")
                 if isinstance(command, str) and "command" not in tool_input:
                     tool_input["command"] = command
-                for _key in ("TargetFile", "AbsolutePath", "FilePath", "Path"):
-                    _value = tool_input.get(_key)
+                for _key in ANTIGRAVITY_FILE_ARG_KEYS:
+                    _value = _lowered.get(_key.lower())
                     if isinstance(_value, str) and _value:
                         tool_input.setdefault("file_path", _value)
                         break

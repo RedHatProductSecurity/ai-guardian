@@ -1171,8 +1171,12 @@ def extract_file_content_from_tool(hook_data):
         if not file_path and isinstance(hook_data.get("toolCall"), dict):
             args = hook_data["toolCall"].get("args")
             if isinstance(args, dict):
+                # Case-insensitive, matching the adapter and policy layers.
+                # If this lookup misses while they succeed, the file content
+                # scan is skipped silently rather than failing loudly.
+                lowered = {k.lower(): v for k, v in args.items() if isinstance(k, str)}
                 for key in ANTIGRAVITY_FILE_ARG_KEYS:
-                    value = args.get(key)
+                    value = lowered.get(key.lower())
                     if isinstance(value, str) and value:
                         file_path = value
                         break

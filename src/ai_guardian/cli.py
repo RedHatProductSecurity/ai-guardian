@@ -2274,11 +2274,16 @@ def main():
                 traceback.print_exc()
                 return 1
 
-        # If --ide specified but no subcommand, set env var and fall through to hook mode
-        if not args.command and getattr(args, "ide", None):
-            os.environ["AI_GUARDIAN_IDE_TYPE"] = _canonical_ide(args.ide)
-            if getattr(args, "hook_event", None):
-                os.environ["AI_GUARDIAN_HOOK_EVENT"] = args.hook_event
+        # If --ide or --hook-event is given without a subcommand, set the env
+        # vars and fall through to hook mode.  --hook-event must be enough on
+        # its own: falling through to the "return 0" below would exit cleanly
+        # without reading stdin, silently passing the tool call unscanned.
+        _cli_hook_event = getattr(args, "hook_event", None)
+        if not args.command and (getattr(args, "ide", None) or _cli_hook_event):
+            if getattr(args, "ide", None):
+                os.environ["AI_GUARDIAN_IDE_TYPE"] = _canonical_ide(args.ide)
+            if _cli_hook_event:
+                os.environ["AI_GUARDIAN_HOOK_EVENT"] = _cli_hook_event
         elif not args.command:
             # No subcommand, no --ide — version was already handled
             return 0
