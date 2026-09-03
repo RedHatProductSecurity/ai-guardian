@@ -1625,9 +1625,71 @@ class TestDiscoverKubernetesSDK:
 
         mock_api.list_namespaced_pod.assert_called_once_with(
             namespace="prod",
-            label_selector="app=custom-guardian",
+            label_selector="app=custom-guardian,ai-guardian.owner=dvernier",
         )
         assert len(targets) == 1
+
+    def test_sdk_ownership_scope_is_added_to_custom_selector(self):
+        pod = _make_mock_k8s_pod(
+            labels={"app": "guardian", "ai-guardian.owner": "alice"}
+        )
+        mock_api = mock.MagicMock()
+        mock_api.list_namespaced_pod.return_value.items = [pod]
+        mock_api.list_namespaced_service.return_value.items = []
+        active_ctx = {"name": "default"}
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "namespaces": ["shared"],
+                            "label_selector": "app=guardian",
+                            "ownership": {"value": "alice"},
+                        }
+                    }
+                }
+            }
+        )
+        with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
+            m_cfg.list_kube_config_contexts.return_value = ([active_ctx], active_ctx)
+            m_cfg.new_client_from_config.return_value = mock.MagicMock()
+            m_cli.CoreV1Api.return_value = mock_api
+            with (
+                mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", True),
+                mock.patch.object(d, "_sdk_k8s_auth_token", return_value=None),
+                mock.patch.object(d, "_probe_daemon", return_value=None),
+            ):
+                assert len(d.discover_kubernetes()) == 1
+
+        mock_api.list_namespaced_pod.assert_called_once_with(
+            namespace="shared",
+            label_selector="app=guardian,ai-guardian.owner=alice",
+        )
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    @mock.patch.dict(os.environ, {"USER": "alice"}, clear=True)
+    def test_kubectl_scope_prevents_cross_user_pod_queries(self):
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {"namespace": "shared"},
+                    }
+                }
+            }
+        )
+        with (
+            mock.patch("shutil.which", return_value="/usr/bin/kubectl"),
+            mock.patch("subprocess.run") as mock_run,
+        ):
+            mock_run.return_value = mock.MagicMock(
+                returncode=0, stdout=json.dumps({"items": []}), stderr=""
+            )
+            d.discover_kubernetes()
+
+        assert mock_run.call_args_list[0].args[0][4] == (
+            "ai-guardian.daemon=true,ai-guardian.owner=alice"
+        )
 
     def test_sdk_all_namespaces_when_none_configured(self):
         pod = _make_mock_k8s_pod()

@@ -1117,7 +1117,11 @@
       "discover_kubernetes": false,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   },

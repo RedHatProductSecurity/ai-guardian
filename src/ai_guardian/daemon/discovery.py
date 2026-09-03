@@ -34,6 +34,13 @@ except ImportError:
     HAS_K8S_SDK = False
 
 _CONTAINER_ID_RE = re.compile(r"^[a-fA-F0-9]{12,64}$")
+_K8S_LABEL_KEY_RE = re.compile(
+    r"^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/)?"
+    r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$"
+)
+_K8S_LABEL_VALUE_RE = re.compile(
+    r"^(?:[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?)?$"
+)
 
 DOCKER_SOCKET = "/var/run/docker.sock"
 PODMAN_ROOTFUL_SOCKET = "/run/podman/podman.sock"
@@ -596,6 +603,19 @@ class DaemonDiscovery:
         k8s_cfg = tray_cfg.get("kubernetes", {})
 
         label_selector = k8s_cfg.get("label_selector", "ai-guardian.daemon=true")
+        ownership = k8s_cfg.get("ownership", {})
+        owner_label = ownership.get("label", "ai-guardian.owner")
+        owner_value = (
+            ownership.get("value")
+            or os.environ.get("AI_GUARDIAN_K8S_OWNER")
+            or os.environ.get("USER")
+        )
+        if not self._valid_k8s_label(owner_label, owner_value):
+            logger.warning(
+                "Kubernetes discovery requires a valid ownership label and owner value"
+            )
+            return []
+        label_selector = f"{label_selector},{owner_label}={owner_value}"
         rest_port = daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
 
         namespaces = k8s_cfg.get("namespaces")
@@ -609,6 +629,16 @@ class DaemonDiscovery:
                 k8s_cfg, namespaces, label_selector, rest_port
             )
         return self._discover_kubernetes_kubectl(namespaces, label_selector, rest_port)
+
+    @staticmethod
+    def _valid_k8s_label(label: str, value: Optional[str]) -> bool:
+        """Validate ownership metadata before sending it to the K8s API."""
+        return bool(
+            isinstance(label, str)
+            and isinstance(value, str)
+            and _K8S_LABEL_KEY_RE.fullmatch(label)
+            and _K8S_LABEL_VALUE_RE.fullmatch(value)
+        )
 
     def _discover_kubernetes_sdk(
         self,

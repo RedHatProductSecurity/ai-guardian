@@ -2310,7 +2310,37 @@
                 "label_selector": {
                   "type": "string",
                   "default": "app=ai-guardian",
-                  "description": "Label selector for daemon pods. User label is added automatically."
+                  "description": "Base label selector for daemon pods. The ownership selector is added automatically."
+                },
+                "namespaces": {
+                  "type": "array",
+                  "items": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+                  "minItems": 1,
+                  "description": "Kubernetes namespaces to search. Overrides namespace when provided."
+                },
+                "contexts": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1},
+                  "minItems": 1,
+                  "description": "Kubeconfig contexts to search. Defaults to the active context."
+                },
+                "ownership": {
+                  "type": "object",
+                  "description": "Ownership scope for daemon pods.",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "default": "ai-guardian.owner",
+                      "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/)?[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$"
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$",
+                      "description": "Owner identity. Defaults to AI_GUARDIAN_K8S_OWNER or the current user."
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
