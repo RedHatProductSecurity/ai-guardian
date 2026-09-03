@@ -6,6 +6,94 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+TITLE_MAX_LENGTH = 80
+
+
+def normalize_title(value) -> str:
+    """Return a compact, display-safe title candidate."""
+    if not isinstance(value, str):
+        return ""
+    return " ".join(value.split())
+
+
+def truncate_title(value: str, max_length: int = TITLE_MAX_LENGTH) -> str:
+    """Truncate a title to a bounded length, preserving an ellipsis."""
+    if max_length <= 0:
+        return ""
+    if len(value) <= max_length:
+        return value
+    if max_length <= 3:
+        return value[:max_length]
+    return value[: max_length - 3].rstrip() + "..."
+
+
+def is_bootstrap_text(value) -> bool:
+    """Return whether text is injected setup content, not a user title."""
+    normalized = normalize_title(value).lower()
+    if not normalized:
+        return True
+
+    if any(
+        marker in normalized
+        for marker in (
+            "<environment_context",
+            "<system_instructions",
+            "<instructions>",
+            "</instructions>",
+        )
+    ):
+        return True
+
+    heading = normalized.lstrip("# ")
+    if heading.startswith("environment context"):
+        return True
+    if normalized.startswith("agent instructions"):
+        return True
+    if normalized.startswith("agents.md instructions"):
+        return True
+    if normalized.startswith("system instructions"):
+        return True
+    if normalized.startswith("#") and (
+        "agents.md" in normalized or "instructions" in normalized
+    ):
+        return True
+    return False
+
+
+def _title_candidates(value):
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return value
+    return []
+
+
+def resolve_session_title(
+    explicit=None,
+    user=None,
+    assistant=None,
+    fallback=None,
+    max_length: int = TITLE_MAX_LENGTH,
+) -> str:
+    """Resolve a session title from candidates in stable priority order.
+
+    Explicit titles are trusted.  User, assistant, and fallback candidates
+    are normalized and filtered so setup content cannot become a title.
+    """
+    for candidate in _title_candidates(explicit):
+        title = normalize_title(candidate)
+        if title:
+            return truncate_title(title, max_length)
+
+    for candidates in (user, assistant, fallback):
+        for candidate in _title_candidates(candidates):
+            if is_bootstrap_text(candidate):
+                continue
+            title = normalize_title(candidate)
+            if title:
+                return truncate_title(title, max_length)
+    return ""
+
 
 class StepCollector(list):
     """Collect only one bounded page while an adapter parses a session.
@@ -23,6 +111,12 @@ class StepCollector(list):
         self.limit = limit if limit is None or limit > 0 else 1
         self.total_count = 0
         self._tail = offset < 0
+        self._title_candidates = {
+            "explicit": [],
+            "user": [],
+            "assistant": [],
+            "fallback": [],
+        }
         self.summary = {
             "title": "",
             "model": "",
@@ -73,6 +167,29 @@ class StepCollector(list):
         elif self.offset <= self.total_count < self.offset + self.limit:
             super().append(step)
         self.total_count += 1
+
+    def add_title_candidate(self, value, category: str = "user", refresh: bool = True):
+        """Add a candidate and optionally refresh the resolved title."""
+        if category not in self._title_candidates:
+            category = "user"
+        if not self._title_candidates[category]:
+            if category == "explicit":
+                usable = bool(normalize_title(value))
+            else:
+                usable = not is_bootstrap_text(value)
+            if usable:
+                self._title_candidates[category].append(value)
+        if refresh:
+            self.resolve_title()
+
+    def resolve_title(self):
+        """Refresh the resolved title from the collected candidates."""
+        self.summary["title"] = resolve_session_title(
+            explicit=self._title_candidates["explicit"],
+            user=self._title_candidates["user"],
+            assistant=self._title_candidates["assistant"],
+            fallback=self._title_candidates["fallback"],
+        )
 
     @property
     def page_offset(self) -> int:

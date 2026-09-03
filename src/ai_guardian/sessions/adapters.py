@@ -11,7 +11,10 @@ from ai_guardian.sessions.base import (
     SessionAdapter,
     StepCollector,
     extract_tool_result_content,
+    is_bootstrap_text,
     iter_json_array_file,
+    normalize_title,
+    resolve_session_title,
     truncate,
 )
 
@@ -854,11 +857,18 @@ class CodexSessionAdapter(SessionAdapter):
 
     def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
-        if not file_path or file_path.endswith(".zst"):
+        if not file_path:
             return []
 
         steps = StepCollector(offset, limit)
         tool_names = {}
+        cwd = session.get("project_path", "") or ""
+        timestamp = session.get("first_timestamp", "") or ""
+        if file_path.endswith(".zst"):
+            for fallback in self._fallback_title_candidates(cwd, timestamp, file_path):
+                steps.add_title_candidate(fallback, "fallback")
+            return steps
+
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -869,14 +879,29 @@ class CodexSessionAdapter(SessionAdapter):
                         d = json.loads(line)
                     except (json.JSONDecodeError, ValueError):
                         continue
+                    if not isinstance(d, dict):
+                        continue
 
                     rtype = d.get("type", "")
+                    self._add_title_candidates(d, steps)
                     payload = d.get("payload", {})
+                    if not isinstance(payload, dict):
+                        continue
+                    event_timestamp = d.get("timestamp", "") or payload.get(
+                        "timestamp", ""
+                    )
+                    if event_timestamp and not timestamp:
+                        timestamp = event_timestamp
 
                     if rtype == "session_meta":
                         cwd = payload.get("cwd", "")
                         if cwd:
-                            steps.append({"type": "system", "content": f"cwd: {cwd}"})
+                            steps.append(
+                                {
+                                    "type": "system",
+                                    "content": f"cwd: {cwd}",
+                                }
+                            )
                     elif rtype == "response_item":
                         payload_type = payload.get("type", "")
                         if payload_type == "custom_tool_call":
@@ -919,13 +944,15 @@ class CodexSessionAdapter(SessionAdapter):
                         content = payload.get("content", [])
                         if isinstance(content, str):
                             content = [{"type": "text", "text": content}]
+                        elif isinstance(content, dict):
+                            content = [content]
 
                         for part in content if isinstance(content, list) else []:
                             if not isinstance(part, dict):
                                 continue
                             ptype = part.get("type", "")
 
-                            if ptype in ("input_text", "text"):
+                            if ptype in ("input_text", "output_text", "text"):
                                 text = part.get("text", "")
                                 if text:
                                     steps.append(
@@ -963,19 +990,169 @@ class CodexSessionAdapter(SessionAdapter):
                             elif ptype == "reasoning":
                                 text = part.get("text", "")
                                 if text:
-                                    steps.append({"type": "thinking", "content": text})
+                                    steps.append(
+                                        {
+                                            "type": "thinking",
+                                            "content": text,
+                                        }
+                                    )
         except OSError:
             pass
 
+        for fallback in self._fallback_title_candidates(cwd, timestamp, file_path):
+            steps.add_title_candidate(fallback, "fallback", refresh=False)
+        steps.resolve_title()
         return steps
+
+    def read_summary(self, session):
+        """Read Codex metadata using the same title resolver as detail pages."""
+        file_path = session.get("file_path", "")
+        if not file_path:
+            return dict(session)
+
+        meta = self._read_session_meta(Path(file_path))
+        result = dict(session)
+        for key in (
+            "title",
+            "model",
+            "cwd",
+            "message_count",
+            "token_usage",
+            "first_timestamp",
+            "last_timestamp",
+        ):
+            if meta.get(key) not in (None, "", 0, {}):
+                result[key] = meta[key]
+        if not result.get("project_path") and meta.get("cwd"):
+            result["project_path"] = meta["cwd"]
+        return result
 
     @staticmethod
     def _is_injected_instructions(text: str) -> bool:
-        """Return whether text is heading-style injected session instructions."""
-        normalized = text.lstrip().lower()
-        return normalized.startswith("#") and (
-            "agents.md" in normalized or "instructions" in normalized
-        )
+        """Return whether text is injected setup content."""
+        return is_bootstrap_text(text)
+
+    @staticmethod
+    def _extract_title_candidates(record):
+        """Extract title candidates from one Codex rollout record."""
+        candidates = {"explicit": [], "user": [], "assistant": []}
+        if not isinstance(record, dict):
+            return candidates
+
+        payload = record.get("payload", {})
+        sources = [record]
+        if isinstance(payload, dict):
+            sources.append(payload)
+        for source in sources:
+            for key in ("title", "session_title", "sessionTitle", "customTitle"):
+                if key in source:
+                    candidates["explicit"].append(source.get(key))
+
+        if not isinstance(payload, dict):
+            return candidates
+
+        role = payload.get("role", "")
+        if role == "user":
+            category = "user"
+        elif role in ("assistant", "model", "task"):
+            category = "assistant"
+        else:
+            category = ""
+
+        if category:
+            candidates[category].extend(
+                CodexSessionAdapter._text_values(payload.get("content", ""))
+            )
+
+            for key in ("task", "description", "message", "summary"):
+                if payload.get(key):
+                    candidates["assistant"].extend(
+                        CodexSessionAdapter._text_values(payload[key])
+                    )
+
+        if payload.get("type") in ("task", "assistant"):
+            for key in ("text", "task", "description", "message", "summary"):
+                if payload.get(key):
+                    candidates["assistant"].extend(
+                        CodexSessionAdapter._text_values(payload[key])
+                    )
+        return candidates
+
+    @staticmethod
+    def _add_title_candidates(record, collector):
+        """Add explicit, user, and assistant candidates to a collector."""
+        for category, candidates in CodexSessionAdapter._extract_title_candidates(
+            record
+        ).items():
+            for candidate in candidates:
+                collector.add_title_candidate(candidate, category, refresh=False)
+
+    @staticmethod
+    def _text_values(content):
+        """Yield text values from Codex's string or block content forms."""
+        if isinstance(content, str):
+            return [content]
+        if isinstance(content, dict):
+            values = []
+            for key in ("text", "value", "content"):
+                value = content.get(key)
+                if isinstance(value, str):
+                    values.append(value)
+                elif isinstance(value, (dict, list)):
+                    values.extend(CodexSessionAdapter._text_values(value))
+            return values
+        if isinstance(content, list):
+            values = []
+            for part in content:
+                if isinstance(part, dict):
+                    values.extend(CodexSessionAdapter._text_values(part))
+                elif isinstance(part, str):
+                    values.append(part)
+            return values
+        return []
+
+    @staticmethod
+    def _store_title_candidate(candidates, category, value):
+        """Retain the first usable candidate in a metadata category."""
+        if candidates[category]:
+            return
+        if category == "explicit":
+            usable = bool(normalize_title(value))
+        else:
+            usable = not is_bootstrap_text(value)
+        if usable:
+            candidates[category].append(value)
+
+    @staticmethod
+    def _fallback_title_candidates(cwd, timestamp, file_path):
+        """Build deterministic titles for sessions without meaningful text."""
+        project = ""
+        if isinstance(cwd, str) and cwd.strip():
+            project = Path(cwd.strip().rstrip("/\\")).name
+
+        formatted_timestamp = ""
+        if isinstance(timestamp, str) and timestamp.strip():
+            try:
+                parsed = datetime.fromisoformat(
+                    timestamp.strip().replace("Z", "+00:00")
+                )
+                formatted_timestamp = parsed.strftime("%Y-%m-%d %H:%M")
+            except ValueError:
+                formatted_timestamp = timestamp.strip()[:16]
+
+        if project and formatted_timestamp:
+            return [f"Codex: {project} ({formatted_timestamp})", f"Codex: {project}"]
+        if project:
+            return [f"Codex: {project}"]
+        if formatted_timestamp:
+            return [f"Codex session ({formatted_timestamp})"]
+
+        session_id = Path(file_path).name
+        if session_id.endswith(".jsonl"):
+            session_id = session_id[: -len(".jsonl")]
+        if session_id.endswith(".zst"):
+            session_id = session_id[: -len(".zst")]
+        return [f"Codex session ({session_id})"] if session_id else ["Codex session"]
 
     @staticmethod
     def _read_session_meta(path: Path) -> Dict:
@@ -985,11 +1162,21 @@ class CodexSessionAdapter(SessionAdapter):
             "cwd": "",
             "message_count": 0,
             "token_usage": {},
+            "first_timestamp": "",
+            "last_timestamp": "",
         }
         if str(path).endswith(".zst"):
+            meta["title"] = CodexSessionAdapter._fallback_title_candidates(
+                "", "", str(path)
+            )[0]
             return meta
 
         msg_count = 0
+        title_candidates = {
+            "explicit": [],
+            "user": [],
+            "assistant": [],
+        }
         try:
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -1000,36 +1187,49 @@ class CodexSessionAdapter(SessionAdapter):
                         d = json.loads(line)
                     except (json.JSONDecodeError, ValueError):
                         continue
+                    if not isinstance(d, dict):
+                        continue
 
                     rtype = d.get("type", "")
+                    for (
+                        category,
+                        candidates,
+                    ) in CodexSessionAdapter._extract_title_candidates(d).items():
+                        for candidate in candidates:
+                            CodexSessionAdapter._store_title_candidate(
+                                title_candidates, category, candidate
+                            )
+                    payload = d.get("payload", {})
+                    if not isinstance(payload, dict):
+                        continue
+                    event_timestamp = d.get("timestamp", "") or payload.get(
+                        "timestamp", ""
+                    )
+                    if event_timestamp:
+                        if not meta["first_timestamp"]:
+                            meta["first_timestamp"] = event_timestamp
+                        meta["last_timestamp"] = event_timestamp
+
                     if rtype == "session_meta":
-                        payload = d.get("payload", {})
                         meta["cwd"] = payload.get("cwd", "")
                         meta["model"] = payload.get("model", "")
                     elif rtype == "response_item":
-                        payload = d.get("payload", {})
-                        if payload.get("role") in ("user", "assistant"):
-                            msg_count += 1
-                            if not meta["title"] and payload.get("role") == "user":
-                                content = payload.get("content", [])
-                                if isinstance(content, list):
-                                    for c in content:
-                                        if isinstance(c, dict) and c.get("text"):
-                                            text = c["text"]
-                                            if not CodexSessionAdapter._is_injected_instructions(
-                                                text
-                                            ):
-                                                meta["title"] = text[:80]
-                                                break
-                                elif isinstance(content, str):
-                                    if not CodexSessionAdapter._is_injected_instructions(
-                                        content
-                                    ):
-                                        meta["title"] = content[:80]
+                        role = payload.get("role", "")
+                        if role in ("user", "assistant", "model", "task"):
+                            if role in ("user", "assistant"):
+                                msg_count += 1
         except OSError:
             pass
 
         meta["message_count"] = msg_count
+        meta["title"] = resolve_session_title(
+            explicit=title_candidates["explicit"],
+            user=title_candidates["user"],
+            assistant=title_candidates["assistant"],
+            fallback=CodexSessionAdapter._fallback_title_candidates(
+                meta["cwd"], meta["first_timestamp"], str(path)
+            ),
+        )
         return meta
 
 

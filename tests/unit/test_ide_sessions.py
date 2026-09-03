@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 
-from ai_guardian.sessions.base import StepCollector
+from ai_guardian.sessions.base import StepCollector, resolve_session_title
 from ai_guardian.sessions.adapters import (
     ClaudeSessionAdapter,
     ClineSessionAdapter,
@@ -295,6 +295,28 @@ class TestSessionDetailPages:
             f"message-{index}" for index in range(10, 15)
         ]
 
+    def test_resolves_title_candidates_in_priority_order(self):
+        assert (
+            resolve_session_title(
+                explicit=[""],
+                user=["# AGENTS.md instructions", "Fix the session title"],
+                assistant=["Assistant fallback"],
+                fallback=["Stable fallback"],
+            )
+            == "Fix the session title"
+        )
+
+    def test_resolves_explicit_title_before_message_candidates(self):
+        assert (
+            resolve_session_title(
+                explicit="Named session",
+                user="User prompt",
+                assistant="Assistant description",
+                fallback="Stable fallback",
+            )
+            == "Named session"
+        )
+
 
 class TestCodexReadSessionMeta:
     @staticmethod
@@ -331,6 +353,148 @@ class TestCodexReadSessionMeta:
         assert meta["title"] == "Fix the session title"
         assert meta["message_count"] == 2
 
+    def test_skips_multiple_bootstrap_blocks_in_one_user_record(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "# AGENTS.md instructions for /workspace",
+                    },
+                    {
+                        "type": "input_text",
+                        "text": "<environment_context>\n<cwd>/workspace</cwd>",
+                    },
+                    {"type": "input_text", "text": "Fix the session title"},
+                ],
+            },
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Fix the session title"
+
+    def test_uses_assistant_description_for_promptless_session(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "output_text",
+                        "text": "Implement the requested change and verify the tests.",
+                    }
+                ],
+            },
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Implement the requested change and verify the tests."
+
+    def test_uses_explicit_title_before_prompt(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        path.write_text(
+            "".join(
+                [
+                    json.dumps(
+                        {
+                            "type": "session_meta",
+                            "payload": {"title": "Named rollout"},
+                        }
+                    ),
+                    "\n",
+                    json.dumps(
+                        {
+                            "type": "response_item",
+                            "payload": {
+                                "role": "user",
+                                "content": "Use a different title",
+                            },
+                        }
+                    ),
+                    "\n",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Named rollout"
+
+    def test_uses_stable_project_and_timestamp_fallback(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        path.write_text(
+            json.dumps(
+                {
+                    "timestamp": "2026-09-03T15:04:03Z",
+                    "type": "session_meta",
+                    "payload": {"cwd": "/workspace/sample-project"},
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert meta["title"] == "Codex: sample-project (2026-09-03 15:04)"
+
+    def test_handles_malformed_and_mixed_records(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        path.write_text(
+            "[]\n"
+            + json.dumps({"type": "response_item", "payload": []})
+            + "\n"
+            + "not json\n"
+            + json.dumps(
+                {
+                    "type": "response_item",
+                    "payload": {
+                        "role": "user",
+                        "content": [None, {"type": "input_text", "text": "Recover"}],
+                    },
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+        steps = CodexSessionAdapter().read_detail({"file_path": str(path)})
+
+        assert meta["title"] == "Recover"
+        assert meta["message_count"] == 1
+        assert steps.summary["title"] == "Recover"
+
+    def test_keeps_explicit_title_when_payload_is_malformed(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        path.write_text(
+            json.dumps({"title": "Named rollout", "payload": []}) + "\n",
+            encoding="utf-8",
+        )
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+        steps = CodexSessionAdapter().read_detail({"file_path": str(path)})
+
+        assert meta["title"] == "Named rollout"
+        assert steps.summary["title"] == "Named rollout"
+
+    def test_truncates_resolved_title_for_display(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        long_prompt = "Fix " + "the session title " * 20
+        self._write_session(path, {"role": "user", "content": long_prompt})
+
+        meta = CodexSessionAdapter._read_session_meta(path)
+
+        assert len(meta["title"]) == 80
+        assert meta["title"].endswith("...")
+
     def test_skips_injected_instructions_string_content(self, tmp_path):
         path = tmp_path / "session.jsonl"
         self._write_session(
@@ -354,7 +518,7 @@ class TestCodexReadSessionMeta:
 
         assert meta["title"] == "# Fix login failures"
 
-    def test_has_empty_title_when_only_injected_instructions(self, tmp_path):
+    def test_uses_fallback_title_when_only_injected_instructions(self, tmp_path):
         path = tmp_path / "session.jsonl"
         self._write_session(
             path,
@@ -363,7 +527,51 @@ class TestCodexReadSessionMeta:
 
         meta = CodexSessionAdapter._read_session_meta(path)
 
-        assert meta["title"] == ""
+        assert meta["title"].startswith("Codex session (")
+
+    def test_discovery_and_detail_page_share_resolved_title(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        path.write_text(
+            "".join(
+                [
+                    json.dumps(
+                        {
+                            "timestamp": "2026-09-03T15:04:03Z",
+                            "type": "session_meta",
+                            "payload": {"cwd": "/workspace/sample-project"},
+                        }
+                    ),
+                    "\n",
+                    json.dumps(
+                        {
+                            "timestamp": "2026-09-03T15:04:04Z",
+                            "type": "response_item",
+                            "payload": {
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "input_text",
+                                        "text": "<environment_context>ignored</environment_context>",
+                                    },
+                                    {"type": "input_text", "text": "Build the feature"},
+                                ],
+                            },
+                        }
+                    ),
+                    "\n",
+                ]
+            ),
+            encoding="utf-8",
+        )
+        adapter = CodexSessionAdapter()
+
+        with patch.object(adapter, "resolve_session_dir", return_value=tmp_path):
+            discovered = adapter.discover()
+
+        page = read_session_detail_page(discovered[0], limit=50)
+
+        assert discovered[0]["title"] == "Build the feature"
+        assert page["summary"]["title"] == discovered[0]["title"]
 
     def test_reads_current_custom_tool_call_records(self, tmp_path):
         path = tmp_path / "session.jsonl"
