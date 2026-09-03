@@ -1604,6 +1604,7 @@ class TestDiscoverKubernetesSDK:
                         "kubernetes": {
                             "namespaces": ["prod"],
                             "label_selector": "app=custom-guardian",
+                            "ownership": {"value": "testuser"},
                         },
                     }
                 }
@@ -1625,7 +1626,7 @@ class TestDiscoverKubernetesSDK:
 
         mock_api.list_namespaced_pod.assert_called_once_with(
             namespace="prod",
-            label_selector="app=custom-guardian,ai-guardian.owner=dvernier",
+            label_selector="app=custom-guardian,ai-guardian.owner=testuser",
         )
         assert len(targets) == 1
 
