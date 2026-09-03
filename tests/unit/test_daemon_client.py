@@ -618,14 +618,27 @@ class TestSendRemote:
             def get_config(self):
                 return {}
 
+            def register_tray(self, host, port, auth_token=None):
+                self.registered = (host, port, auth_token)
+
         state = _MinState()
-        api = DaemonRestAPI(state=state, host="127.0.0.1", port=0)
+        api = DaemonRestAPI(
+            state=state, host="127.0.0.1", port=0, auth_token="test-token"
+        )
         port = api.start()
         try:
             monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", f"http://127.0.0.1:{port}")
-            result = _send_remote("/api/health", {}, timeout=5.0)
-            # /api/health is GET only, POST will 404 — test with a GET-based approach
-            # Instead, test _is_daemon_running_remote which uses GET /api/health
+            monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "test-token")
+            result = _send_remote(
+                "/api/register-tray",
+                {"host": "127.0.0.1", "port": 63152},
+                timeout=5.0,
+            )
+            assert result == {
+                "status": "registered",
+                "host": "127.0.0.1",
+                "port": 63152,
+            }
             assert _is_daemon_running_remote() is True
         finally:
             api.stop()
