@@ -29,6 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Antigravity CLI (`agy`) support** — new `--ide antigravity` (alias `--ide agy`) target with a hook adapter, `~/.gemini/config/hooks.json` + `mcp_config.json` setup, and tool-name mapping onto canonical names. Antigravity has no "no opinion" PreToolUse decision (an absent decision denies the call), so a clean check returns `ask`, deferring to Antigravity's own permission prompt without widening existing permissions. Its PreToolUse and PostToolUse payloads are near-identical, so generated hook commands declare `--hook-event`, stamped into the hook data to survive daemon forwarding. MCP calls arrive as `call_mcp_tool` and are rebuilt as `mcp__{server}__{tool}` so MCP restriction and `mcp__*` rules keep applying. PostToolUse fires but carries no tool output, so post-tool redaction is not available on Antigravity
+
 - **Unified hook session traces**: Persist IDE hook sessions in the GuardedAgent JSON trace format, including prompts, tool calls, scan outcomes, session metadata, and `AI_GUARDIAN_RUN_ID` correlation for combined SDK and IDE pipeline views (#2190)
 
 - **secrets**: Add credential detection for six AI service providers — Cartesia, LlamaCloud, Voyage AI, fal.ai, Mem0, and Retell AI. Prefix-only detection for distinctive formats (sk_car_, llx-); keyword-context detection for generic shapes (Voyage, fal.ai, Mem0, Retell). Adapted from [Betterleaks](https://github.com/betterleaks/betterleaks) rules (MIT) (#2185)

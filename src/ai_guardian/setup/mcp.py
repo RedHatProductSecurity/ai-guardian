@@ -43,6 +43,11 @@ _MCP_IDE_CONFIGS = {
         "config_key": "mcpServers",
         "skill_dir": ".gemini/skills",
     },
+    "antigravity": {
+        "config_file": "~/.gemini/config/mcp_config.json",
+        "config_key": "mcpServers",
+        "skill_dir": ".agents/skills",
+    },
     "cline": {
         "config_file": "~/.cline/mcp_settings.json",
         "config_key": "mcpServers",

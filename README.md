@@ -326,6 +326,7 @@ See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | Complete |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | Complete |
 | OpenCode | `--ide opencode` | Plugin | N/A | Complete |
+| Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | Complete |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | Complete |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | MCP-only |
 
