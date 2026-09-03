@@ -1732,7 +1732,11 @@ class TestDiscoverKubernetesSDK:
         mock_api.list_namespaced_service.return_value.items = []
 
         active_ctx = {"name": "default"}
-        d = DaemonDiscovery(config={"daemon": {"tray": {"kubernetes": {}}}})
+        d = DaemonDiscovery(
+            config={
+                "daemon": {"tray": {"kubernetes": {"ownership": {"value": "testuser"}}}}
+            }
+        )
         with _k8s_sdk_mocks() as (m_cfg, m_cli, _, _):
             m_cfg.list_kube_config_contexts.return_value = (
                 [active_ctx],
@@ -1749,7 +1753,7 @@ class TestDiscoverKubernetesSDK:
 
         mock_api.list_namespaced_pod.assert_called_once_with(
             namespace="ai-sdlc",
-            label_selector="app=ai-guardian,ai-guardian.owner=dvernier",
+            label_selector="app=ai-guardian,ai-guardian.owner=testuser",
         )
         assert len(targets) == 1
 
