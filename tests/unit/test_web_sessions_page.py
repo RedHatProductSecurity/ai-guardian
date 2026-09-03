@@ -58,3 +58,33 @@ def test_tracing_settings_number_labels_have_room_to_render():
 
     source = inspect.getsource(create_tracing_settings_page)
     assert source.count('.classes("w-full max-w-md")') == 2
+
+
+def test_sessions_page_has_day_navigation():
+    """The unified Sessions page supports browsing one local day at a time."""
+    from ai_guardian.web.pages.traces import create_traces_page
+
+    source = inspect.getsource(create_traces_page)
+    assert '"day": date.today()' in source
+    assert "_previous_day" in source
+    assert "_next_day" in source
+    assert "_format_day_label" in source
+
+
+def test_trace_local_day_converts_utc_timestamp_to_local_date():
+    from datetime import datetime, timezone
+
+    from ai_guardian.web.pages.traces import _trace_local_day
+
+    timestamp = datetime(2025, 6, 15, 23, 45, tzinfo=timezone.utc).isoformat()
+    assert (
+        _trace_local_day(timestamp)
+        == datetime.fromisoformat(timestamp).astimezone().date()
+    )
+
+
+def test_trace_local_day_handles_invalid_timestamp():
+    from ai_guardian.web.pages.traces import _trace_local_day
+
+    assert _trace_local_day(None) is None
+    assert _trace_local_day("not-a-timestamp") is None
