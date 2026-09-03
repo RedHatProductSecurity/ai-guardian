@@ -1,9 +1,160 @@
 """SessionAdapter base class for IDE session discovery and reading."""
 
+import json
 import os
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional
+
+
+class StepCollector(list):
+    """Collect only one bounded page while an adapter parses a session.
+
+    Adapters intentionally keep their format-specific parsing logic, but all
+    of them append normalized steps to the same list.  Limiting storage here
+    keeps page reads from retaining an entire transcript in memory while still
+    allowing the parser to count steps and support arbitrary page offsets.
+    ``offset=-1`` keeps the final page for newest-first views.
+    """
+
+    def __init__(self, offset: int = 0, limit: Optional[int] = None):
+        super().__init__()
+        self.offset = max(0, offset)
+        self.limit = limit if limit is None or limit > 0 else 1
+        self.total_count = 0
+        self._tail = offset < 0
+        self.summary = {
+            "title": "",
+            "model": "",
+            "message_count": 0,
+            "user_messages": 0,
+            "assistant_messages": 0,
+            "first_timestamp": "",
+            "last_timestamp": "",
+            "token_usage": {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            },
+        }
+
+    def append(self, step):
+        step_type = step.get("type") if isinstance(step, dict) else None
+        if step_type == "user":
+            self.summary["user_messages"] += 1
+        elif step_type == "assistant":
+            self.summary["assistant_messages"] += 1
+        if step_type in ("user", "assistant"):
+            self.summary["message_count"] += 1
+
+        timestamp = step.get("timestamp", "") if isinstance(step, dict) else ""
+        if timestamp:
+            if not self.summary["first_timestamp"]:
+                self.summary["first_timestamp"] = timestamp
+            self.summary["last_timestamp"] = timestamp
+
+        if isinstance(step, dict):
+            if not self.summary["title"] and step_type == "title":
+                self.summary["title"] = step.get("content", "")
+            if not self.summary["model"] and step.get("model"):
+                self.summary["model"] = step["model"]
+            usage = step.get("usage", {})
+            if isinstance(usage, dict):
+                for key in self.summary["token_usage"]:
+                    self.summary["token_usage"][key] += usage.get(key, 0) or 0
+
+        if self._tail:
+            super().append(step)
+            if self.limit is not None and len(self) > self.limit:
+                del self[0]
+        elif self.limit is None:
+            super().append(step)
+        elif self.offset <= self.total_count < self.offset + self.limit:
+            super().append(step)
+        self.total_count += 1
+
+    @property
+    def page_offset(self) -> int:
+        """Return the actual offset represented by this page."""
+        if self._tail:
+            return max(0, self.total_count - len(self))
+        return self.offset
+
+
+def iter_json_array_file(path: Path, chunk_size: int = 64 * 1024):
+    """Yield values from a top-level JSON array without loading the array.
+
+    A session can contain a very large JSON array (notably Cline and Gemini
+    exports).  The standard ``json.load`` API materializes every record before
+    the adapter can apply its page bound, so this small decoder keeps only the
+    current record and the parser buffer in memory.
+    """
+    decoder = json.JSONDecoder()
+    with open(path, "r", encoding="utf-8") as stream:
+        buffer = stream.read(chunk_size)
+        position = 0
+        eof = not buffer
+
+        def ensure_data():
+            nonlocal buffer, eof
+            if eof:
+                return
+            chunk = stream.read(chunk_size)
+            if chunk:
+                buffer += chunk
+            else:
+                eof = True
+
+        def skip_whitespace():
+            nonlocal position
+            while True:
+                while position >= len(buffer) and not eof:
+                    ensure_data()
+                while position < len(buffer) and buffer[position].isspace():
+                    position += 1
+                if position < len(buffer) or eof:
+                    return
+
+        while True:
+            skip_whitespace()
+            if position >= len(buffer):
+                raise ValueError("Expected a JSON array")
+            if buffer[position] != "[":
+                raise ValueError("Expected a JSON array")
+            position += 1
+            break
+
+        while True:
+            skip_whitespace()
+            if position >= len(buffer):
+                raise ValueError("Unterminated JSON array")
+            if buffer[position] == "]":
+                return
+
+            while True:
+                try:
+                    value, end = decoder.raw_decode(buffer, position)
+                    break
+                except json.JSONDecodeError:
+                    if eof:
+                        raise
+                    ensure_data()
+
+            yield value
+            position = end
+            skip_whitespace()
+            if position >= len(buffer):
+                raise ValueError("Unterminated JSON array")
+            if buffer[position] == ",":
+                position += 1
+                if position > chunk_size:
+                    buffer = buffer[position:]
+                    position = 0
+                continue
+            if buffer[position] == "]":
+                return
+            raise ValueError("Expected a comma or array terminator")
 
 
 class SessionAdapter:
@@ -49,9 +200,26 @@ class SessionAdapter:
         """Discover sessions for this IDE. Override in subclass."""
         return []
 
-    def read_detail(self, session: Dict) -> List[Dict]:
+    def read_detail(
+        self,
+        session: Dict,
+        offset: int = 0,
+        limit: Optional[int] = None,
+    ) -> List[Dict]:
         """Read full structured conversation steps. Override in subclass."""
         return []
+
+    def read_detail_page(
+        self, session: Dict, offset: int = 0, limit: int = 50
+    ) -> StepCollector:
+        """Read one bounded page of structured conversation steps.
+
+        Adapters use ``StepCollector`` so the existing format parsers can be
+        shared by full reads and page reads.  The parser may still scan the
+        source to determine the total step count, but only the requested page
+        remains attached to the returned result.
+        """
+        return self.read_detail(session, offset=offset, limit=limit)
 
     def read_summary(self, session: Dict) -> Dict:
         """Read enriched summary with timestamps and message counts."""

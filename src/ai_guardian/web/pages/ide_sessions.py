@@ -1,5 +1,7 @@
 """IDE Sessions page — multi-IDE conversation browser."""
 
+import json
+import os
 import urllib.parse
 from datetime import date, datetime, timedelta
 
@@ -18,6 +20,8 @@ from ai_guardian.web.components.step_render import (
     render_violation_badge,
     render_violation_summary,
 )
+
+MAX_SESSION_DISCOVERY = 1000
 
 
 def _format_session_header(title: str, model: str) -> str:
@@ -79,7 +83,7 @@ def create_ide_sessions_page(service, daemon_name: str):
             ).classes("flex-grow")
 
             top_input = (
-                ui.number(label="Top", value=1000, min=10, max=10000, step=100)
+                ui.number(label="Top", value=1000, min=10, max=1000, step=100)
                 .classes("w-24")
                 .props("dense")
             )
@@ -289,6 +293,7 @@ def _discover_sessions(ide, limit):
     """Discover sessions for one IDE, or combine sessions from every IDE."""
     from ai_guardian.sessions.discovery import discover_sessions, get_supported_ides
 
+    limit = max(1, min(int(limit), MAX_SESSION_DISCOVERY))
     if ide:
         return discover_sessions(ide, None, limit)
 
@@ -448,8 +453,25 @@ def _render_session_card(session, daemon_name, ide):
     size_str = _format_size(size_bytes) if size_bytes else ""
 
     file_path = session.get("file_path", "")
+    summary = {
+        key: session[key]
+        for key in (
+            "title",
+            "model",
+            "message_count",
+            "token_usage",
+            "modified",
+            "size_bytes",
+        )
+        if key in session
+    }
     detail_params = urllib.parse.urlencode(
-        {"file": file_path, "session": session_id, "ide": ide}
+        {
+            "file": file_path,
+            "session": session_id,
+            "ide": ide,
+            "summary": json.dumps(summary, default=str),
+        }
     )
     detail_url = f"/{daemon_name}/ide-session-detail?{detail_params}"
 
@@ -529,6 +551,26 @@ def _get_auto_refresh_interval(service, daemon_name):
         return 5
 
 
+def _session_file_signature(file_path):
+    """Return a cheap change marker without reading a session file."""
+    try:
+        stat = os.stat(file_path)
+    except OSError:
+        return None
+    return stat.st_mtime_ns, stat.st_size
+
+
+def _parse_session_summary(value):
+    """Parse summary metadata passed from the session list, if present."""
+    if not value:
+        return None
+    try:
+        summary = json.loads(value)
+    except (TypeError, ValueError):
+        return None
+    return summary if isinstance(summary, dict) else None
+
+
 async def _load_session_violations(service, daemon_name, session_id):
     """Load violations correlated with a session by session_id.
 
@@ -591,7 +633,17 @@ def create_ide_session_detail_page(service, daemon_name: str):
         except Exception:
             saved_sort = False
 
-        detail_state = {"newest_first": saved_sort, "load_fn": None}
+        detail_state = {
+            "newest_first": saved_sort,
+            "load_fn": None,
+            "page": 1,
+            "page_size": 50,
+            "total": 0,
+            "file_signature": None,
+            "summary": _parse_session_summary(params.get("summary")),
+            "loading": False,
+            "loaded": False,
+        }
 
         summary_container = ui.column().classes("w-full")
         violations_container = ui.column().classes("w-full")
@@ -602,19 +654,42 @@ def create_ide_session_detail_page(service, daemon_name: str):
             ui.label("Conversation").classes("text-lg font-bold")
 
             async def _reload_detail():
+                detail_state["page"] = 1
                 fn = detail_state["load_fn"]
                 if fn:
-                    await fn()
+                    await fn(force=True)
 
             create_sort_toggle(
                 detail_state, "ide_session_detail_sort_newest", _reload_detail
             )
             create_pause_toggle(auto_timer)
 
+            async def _previous_page():
+                if detail_state["page"] > 1:
+                    detail_state["page"] -= 1
+                    await load_detail(force=True)
+
+            async def _next_page():
+                total_pages = max(
+                    1,
+                    -(-detail_state["total"] // detail_state["page_size"]),
+                )
+                if detail_state["page"] < total_pages:
+                    detail_state["page"] += 1
+                    await load_detail(force=True)
+
+            previous_page_btn = ui.button("◀ Prev", on_click=_previous_page).props(
+                "dense outline"
+            )
+            page_label = ui.label("").classes("text-xs text-grey-5")
+            next_page_btn = ui.button("Next ▶", on_click=_next_page).props(
+                "dense outline"
+            )
+
         steps_container = ui.column().classes("w-full gap-1")
         dialog_host = ui.element("div")
 
-        async def load_detail():
+        async def load_detail(force=False):
             try:
                 if ui.context.client.is_deleted:
                     return
@@ -625,10 +700,20 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 header_label.text = "No session file specified"
                 return
 
+            if detail_state["loading"]:
+                return
+
+            file_signature = await run.io_bound(_session_file_signature, file_path)
+            if (
+                not force
+                and detail_state["file_signature"] == file_signature
+                and detail_state["loaded"]
+            ):
+                return
+
             from ai_guardian.sessions.reader import (
                 match_violations_to_steps,
-                read_session_detail,
-                read_session_summary,
+                read_session_detail_page,
             )
 
             session = {
@@ -637,54 +722,107 @@ def create_ide_session_detail_page(service, daemon_name: str):
                 "session_id": session_id,
             }
 
-            summary = await run.io_bound(read_session_summary, session)
-            detail_steps = await run.io_bound(read_session_detail, session)
+            detail_state["loading"] = True
+            try:
+                total_pages = max(
+                    1,
+                    -(-detail_state["total"] // detail_state["page_size"]),
+                )
+                if detail_state["total"]:
+                    detail_state["page"] = max(
+                        1, min(detail_state["page"], total_pages)
+                    )
 
-            header_label.text = _format_session_header(
-                summary.get("title", ""), summary.get("model", "")
-            )
-
-            summary_container.clear()
-            with summary_container:
-                _render_session_summary(summary)
-
-            violations_container.clear()
-            session_violations = await _load_session_violations(
-                service, daemon_name, session_id
-            )
-            if session_violations:
-                with violations_container:
-                    render_violation_summary(session_violations, daemon_name)
-
-            violations_by_step = match_violations_to_steps(
-                detail_steps, session_violations
-            )
-
-            if detail_state["newest_first"]:
-                n = len(detail_steps)
-                detail_steps = list(reversed(detail_steps))
-                reversed_map = {}
-                for orig_idx, viols in violations_by_step.items():
-                    reversed_map[n - 1 - orig_idx] = viols
-                violations_by_step = reversed_map
-
-            steps_container.clear()
-            with steps_container:
-                if not detail_steps:
-                    ui.label("No conversation data found.").classes("text-grey-6")
-                else:
-                    for i, step in enumerate(detail_steps):
-                        _render_step(
-                            step,
-                            i,
-                            violations_by_step.get(i, []),
-                            daemon_name,
-                            dialog_host=dialog_host,
+                page = detail_state["page"]
+                if detail_state["newest_first"]:
+                    offset = (
+                        -1
+                        if page == 1
+                        else max(
+                            0,
+                            detail_state["total"] - page * detail_state["page_size"],
                         )
+                    )
+                else:
+                    offset = (page - 1) * detail_state["page_size"]
 
-            if auto_timer["ref"] is None and not auto_timer.get("paused"):
-                interval = _get_auto_refresh_interval(service, daemon_name)
-                auto_timer["ref"] = ui.timer(interval, load_detail)
+                page_result = await run.io_bound(
+                    read_session_detail_page,
+                    session,
+                    offset,
+                    detail_state["page_size"],
+                )
+                detail_state["total"] = page_result["total"]
+                total_pages = max(
+                    1,
+                    -(-detail_state["total"] // detail_state["page_size"]),
+                )
+                detail_state["page"] = max(1, min(detail_state["page"], total_pages))
+                detail_steps = page_result["steps"]
+
+                summary = dict(page_result.get("summary", session))
+                if detail_state["summary"]:
+                    for key, value in detail_state["summary"].items():
+                        if value not in (None, "", 0, {}):
+                            summary[key] = value
+                detail_state["summary"] = summary
+
+                header_label.text = _format_session_header(
+                    summary.get("title", ""), summary.get("model", "")
+                )
+
+                summary_container.clear()
+                with summary_container:
+                    _render_session_summary(summary)
+
+                violations_container.clear()
+                session_violations = await _load_session_violations(
+                    service, daemon_name, session_id
+                )
+                if session_violations:
+                    with violations_container:
+                        render_violation_summary(session_violations, daemon_name)
+
+                violations_by_step = match_violations_to_steps(
+                    detail_steps, session_violations
+                )
+
+                if detail_state["newest_first"]:
+                    n = len(detail_steps)
+                    detail_steps = list(reversed(detail_steps))
+                    reversed_map = {}
+                    for orig_idx, viols in violations_by_step.items():
+                        reversed_map[n - 1 - orig_idx] = viols
+                    violations_by_step = reversed_map
+
+                steps_container.clear()
+                with steps_container:
+                    if not detail_steps:
+                        ui.label("No conversation data found.").classes("text-grey-6")
+                    else:
+                        for i, step in enumerate(detail_steps):
+                            _render_step(
+                                step,
+                                i,
+                                violations_by_step.get(i, []),
+                                daemon_name,
+                                dialog_host=dialog_host,
+                            )
+
+                detail_state["file_signature"] = file_signature
+                detail_state["loaded"] = True
+                page_label.set_text(
+                    f"Page {detail_state['page']} of {total_pages} "
+                    f"({detail_state['total']} steps)"
+                )
+                previous_page_btn.set_enabled(detail_state["page"] > 1)
+                next_page_btn.set_enabled(detail_state["page"] < total_pages)
+
+                if auto_timer["ref"] is None and not auto_timer.get("paused"):
+                    interval = _get_auto_refresh_interval(service, daemon_name)
+                    auto_timer["ref"] = ui.timer(interval, load_detail)
+            finally:
+                detail_state["loading"] = False
 
         detail_state["load_fn"] = load_detail
         ui.timer(0.1, load_detail, once=True)

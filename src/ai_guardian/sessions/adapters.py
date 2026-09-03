@@ -9,7 +9,9 @@ from typing import Dict, List, Optional
 
 from ai_guardian.sessions.base import (
     SessionAdapter,
+    StepCollector,
     extract_tool_result_content,
+    iter_json_array_file,
     truncate,
 )
 
@@ -91,12 +93,12 @@ class ClaudeSessionAdapter(SessionAdapter):
         sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -518,13 +520,13 @@ class CursorSessionAdapter(SessionAdapter):
 
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         session_id = session.get("session_id", "")
         if not file_path or not session_id:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             import sqlite3
 
@@ -630,12 +632,12 @@ class CopilotSessionAdapter(SessionAdapter):
         sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             with open(file_path, "r", encoding="utf-8-sig") as f:
                 for line in f:
@@ -850,12 +852,12 @@ class CodexSessionAdapter(SessionAdapter):
         sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path or file_path.endswith(".zst"):
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         tool_names = {}
         try:
             with open(file_path, "r", encoding="utf-8") as f:
@@ -1084,25 +1086,34 @@ class GeminiSessionAdapter(SessionAdapter):
 
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             if file_path.endswith(".jsonl"):
-                with open(file_path, "r", encoding="utf-8") as f:
-                    records = [json.loads(line) for line in f if line.strip()]
+
+                def _records():
+                    with open(file_path, "r", encoding="utf-8") as stream:
+                        for line in stream:
+                            if line.strip():
+                                yield json.loads(line)
+
+                records = _records()
             else:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, list):
-                    records = data
-                elif isinstance(data, dict):
-                    records = data.get("messages", data.get("turns", [data]))
+                with open(file_path, "r", encoding="utf-8") as stream:
+                    first_char = stream.read(4096).lstrip()[:1]
+                if first_char == "[":
+                    records = iter_json_array_file(file_path)
                 else:
-                    records = []
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    if isinstance(data, dict):
+                        records = data.get("messages", data.get("turns", [data]))
+                    else:
+                        records = data if isinstance(data, list) else []
 
             for record in records:
                 if not isinstance(record, dict):
@@ -1153,7 +1164,7 @@ class GeminiSessionAdapter(SessionAdapter):
                     if thought:
                         steps.append({"type": "thinking", "content": thought})
 
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError, ValueError):
             pass
 
         return steps
@@ -1224,7 +1235,7 @@ class ClineSessionAdapter(SessionAdapter):
         sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
         return sessions[:limit]
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         task_dir = session.get("file_path", "")
         if not task_dir:
             return []
@@ -1233,13 +1244,9 @@ class ClineSessionAdapter(SessionAdapter):
         if not api_hist.exists():
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
-            with open(api_hist, "r", encoding="utf-8") as f:
-                messages = json.load(f)
-
-            if not isinstance(messages, list):
-                return []
+            messages = iter_json_array_file(api_hist)
 
             for msg in messages:
                 if not isinstance(msg, dict):
@@ -1293,7 +1300,7 @@ class ClineSessionAdapter(SessionAdapter):
                         steps.append(
                             {"type": "thinking", "content": part.get("thinking", "")}
                         )
-        except (OSError, json.JSONDecodeError):
+        except (OSError, json.JSONDecodeError, ValueError):
             pass
 
         return steps
@@ -1367,12 +1374,12 @@ class WindsurfSessionAdapter(SessionAdapter):
     def discover(self, project_path=None, limit=100):
         return self._discover_generic_jsonl(project_path, limit)
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -1435,12 +1442,12 @@ class KiroSessionAdapter(SessionAdapter):
     def discover(self, project_path=None, limit=100):
         return self._discover_generic_jsonl(project_path, limit)
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         if not file_path:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -1570,13 +1577,13 @@ class OpenCodeSessionAdapter(SessionAdapter):
                 result[key] = meta[key]
         return result
 
-    def read_detail(self, session):
+    def read_detail(self, session, offset=0, limit=None):
         file_path = session.get("file_path", "")
         session_id = session.get("session_id", "")
         if not file_path or not session_id:
             return []
 
-        steps = []
+        steps = StepCollector(offset, limit)
         try:
             with sqlite3.connect(f"file:{file_path}?mode=ro", uri=True) as conn:
                 rows = conn.execute(
@@ -1585,56 +1592,62 @@ class OpenCodeSessionAdapter(SessionAdapter):
                     "WHERE m.session_id = ? "
                     "ORDER BY m.time_created ASC, p.time_created ASC, p.id ASC",
                     (session_id,),
-                ).fetchall()
+                )
 
-            for message_data, message_created, part_id, part_data, part_created in rows:
-                message = self._load_json_object(message_data)
-                part = self._load_json_object(part_data)
-                if not part:
-                    continue
+                for (
+                    message_data,
+                    message_created,
+                    part_id,
+                    part_data,
+                    part_created,
+                ) in rows:
+                    message = self._load_json_object(message_data)
+                    part = self._load_json_object(part_data)
+                    if not part:
+                        continue
 
-                role = message.get("role", "")
-                timestamp = self._format_timestamp(part_created or message_created)
-                part_type = part.get("type", "")
-                if part_type == "text" and part.get("text"):
-                    steps.append(
-                        {
-                            "type": "user" if role == "user" else "assistant",
-                            "content": part["text"],
-                            "timestamp": timestamp,
-                            "model": self._model_name(message),
-                        }
-                    )
-                elif part_type == "reasoning" and part.get("text"):
-                    steps.append(
-                        {
-                            "type": "thinking",
-                            "content": part["text"],
-                            "timestamp": timestamp,
-                        }
-                    )
-                elif part_type == "tool":
-                    state = self._load_json_object(part.get("state"))
-                    tool_id = part.get("callID", part_id or "")
-                    steps.append(
-                        {
-                            "type": "tool_use",
-                            "tool_name": part.get("tool", ""),
-                            "tool_input": state.get("input", {}),
-                            "tool_id": tool_id,
-                            "timestamp": timestamp,
-                        }
-                    )
-                    if state.get("output") not in (None, ""):
+                    role = message.get("role", "")
+                    timestamp = self._format_timestamp(part_created or message_created)
+                    part_type = part.get("type", "")
+                    if part_type == "text" and part.get("text"):
                         steps.append(
                             {
-                                "type": "tool_result",
+                                "type": "user" if role == "user" else "assistant",
+                                "content": part["text"],
+                                "timestamp": timestamp,
+                                "model": self._model_name(message),
+                            }
+                        )
+                    elif part_type == "reasoning" and part.get("text"):
+                        steps.append(
+                            {
+                                "type": "thinking",
+                                "content": part["text"],
+                                "timestamp": timestamp,
+                            }
+                        )
+                    elif part_type == "tool":
+                        state = self._load_json_object(part.get("state"))
+                        tool_id = part.get("callID", part_id or "")
+                        steps.append(
+                            {
+                                "type": "tool_use",
                                 "tool_name": part.get("tool", ""),
-                                "content": str(state["output"]),
+                                "tool_input": state.get("input", {}),
                                 "tool_id": tool_id,
                                 "timestamp": timestamp,
                             }
                         )
+                        if state.get("output") not in (None, ""):
+                            steps.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_name": part.get("tool", ""),
+                                    "content": str(state["output"]),
+                                    "tool_id": tool_id,
+                                    "timestamp": timestamp,
+                                }
+                            )
         except sqlite3.Error as exc:
             logger.debug("Failed to read OpenCode session detail: %s", exc)
 

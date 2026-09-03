@@ -6,7 +6,11 @@ import pytest
 
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
-from ai_guardian.web.components.step_render import render_text_block
+from ai_guardian.web.components.step_render import (
+    MAX_INLINE_CONTENT_CHARS,
+    render_content_block,
+    render_text_block,
+)
 
 
 def _chainable_element():
@@ -60,3 +64,20 @@ def test_highlighted_content_preserves_scroll_limit():
     style = code_element.style.call_args.args[0]
     assert "max-height: 400px" in style
     assert "overflow-y: auto" in style
+
+
+def test_oversized_content_uses_bounded_inline_preview():
+    html_element = _chainable_element()
+    content = "x" * (MAX_INLINE_CONTENT_CHARS + 100)
+
+    with (
+        patch("ai_guardian.web.components.step_render.ui") as mock_ui,
+        patch("ai_guardian.web.components.content_viewer.render_view_button") as view,
+    ):
+        mock_ui.html.return_value = html_element
+        render_content_block(content, step_label="Tool Result")
+
+    rendered_html = mock_ui.html.call_args.args[0]
+    assert "x" * MAX_INLINE_CONTENT_CHARS in rendered_html
+    assert "Content truncated in the conversation view" in rendered_html
+    view.assert_called_once()

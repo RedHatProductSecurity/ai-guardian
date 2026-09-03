@@ -9,8 +9,10 @@ from unittest.mock import patch
 
 import pytest
 
+from ai_guardian.sessions.base import StepCollector
 from ai_guardian.sessions.adapters import (
     ClaudeSessionAdapter,
+    ClineSessionAdapter,
     CodexSessionAdapter,
     OpenCodeSessionAdapter,
 )
@@ -23,6 +25,7 @@ from ai_guardian.sessions.discovery import (
 from ai_guardian.sessions.reader import (
     match_violations_to_steps,
     read_session_detail,
+    read_session_detail_page,
     read_session_messages,
     read_session_summary,
 )
@@ -229,6 +232,68 @@ class TestClaudeSessionTitlePriority:
             assert title_steps[0]["content"] == "my-agent"
         finally:
             Path(path).unlink()
+
+
+class TestSessionDetailPages:
+    def test_collector_keeps_only_requested_page_and_counts_all_steps(self):
+        collector = StepCollector(offset=3, limit=2)
+        for index in range(10):
+            collector.append({"index": index})
+
+        assert collector == [{"index": 3}, {"index": 4}]
+        assert collector.total_count == 10
+        assert collector.page_offset == 3
+
+    def test_reader_returns_bounded_page_and_tail_page(self, tmp_path):
+        path = tmp_path / "large-session.jsonl"
+        path.write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "type": "user",
+                        "timestamp": f"2026-01-01T00:{index:02d}:00Z",
+                        "message": {"content": f"message-{index}"},
+                    }
+                )
+                + "\n"
+                for index in range(120)
+            )
+        )
+
+        session = {"ide": "claude", "file_path": str(path)}
+        page = read_session_detail_page(session, offset=50, limit=10)
+        tail = read_session_detail_page(session, offset=-1, limit=10)
+
+        assert page["total"] == 120
+        assert page["offset"] == 50
+        assert page["summary"]["user_messages"] == 120
+        assert page["summary"]["message_count"] == 120
+        assert [step["content"] for step in page["steps"]] == [
+            f"message-{index}" for index in range(50, 60)
+        ]
+        assert tail["offset"] == 110
+        assert [step["content"] for step in tail["steps"]] == [
+            f"message-{index}" for index in range(110, 120)
+        ]
+        assert tail["has_more"] is False
+
+    def test_cline_json_array_detail_is_pageable(self, tmp_path):
+        task_dir = tmp_path / "task-1"
+        task_dir.mkdir()
+        (task_dir / "api_conversation_history.json").write_text(
+            json.dumps(
+                [{"role": "user", "content": f"message-{index}"} for index in range(30)]
+            )
+        )
+
+        page = ClineSessionAdapter().read_detail(
+            {"file_path": str(task_dir)}, offset=10, limit=5
+        )
+
+        assert page.total_count == 30
+        assert [step["content"] for step in page] == [
+            f"message-{index}" for index in range(10, 15)
+        ]
 
 
 class TestCodexReadSessionMeta:
@@ -508,6 +573,14 @@ class TestOpenCodeSessionAdapter:
         assert steps[1]["model"] == "test-model"
         assert steps[2]["tool_input"] == {"path": "example.py"}
         assert steps[3]["content"] == "done"
+
+        page = adapter.read_detail(
+            {"file_path": str(db_path), "session_id": "ses_1"},
+            offset=2,
+            limit=1,
+        )
+        assert page.total_count == 4
+        assert [step["type"] for step in page] == ["tool_use"]
         assert steps[0]["timestamp"].endswith("Z")
 
     def test_enriches_detail_page_summary(self, tmp_path):
