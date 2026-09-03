@@ -607,7 +607,7 @@ class TestIDESetup:
         }
         config_file.write_text(json.dumps(hooks))
         with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
-            configured, detail = setup.check_hooks_for_ide("claude")
+            configured, detail = setup.check_hooks_for_ide("claude", integrity=True)
         assert configured is False
         assert "UserPromptSubmit" in detail
 

@@ -93,7 +93,7 @@ def notify_ide_setup_needed(runtime="local"):
         unconfigured = [
             ide_type
             for ide_type in setup.list_detected_ides()
-            if not setup.check_hooks_for_ide(ide_type)[0]
+            if not setup.check_hooks_for_ide(ide_type, integrity=True)[0]
         ]
         if not unconfigured:
             return

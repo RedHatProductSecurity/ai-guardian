@@ -377,7 +377,7 @@ class TrayHealthMonitor:
             setup = IDESetup()
             unconfigured = []
             for ide_type in setup.list_detected_ides():
-                configured, _ = setup.check_hooks_for_ide(ide_type)
+                configured, _ = setup.check_hooks_for_ide(ide_type, integrity=True)
                 if not configured:
                     unconfigured.append(ide_type)
             return unconfigured
@@ -402,8 +402,10 @@ class TrayHealthMonitor:
 
         names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
         attention = {}
+        statuses = {}
         for ide_type in unconfigured:
             status = IDESetup().verify_hooks_for_ide(ide_type)
+            statuses[ide_type] = status
             events = [
                 f"{event} ({event_status})"
                 for event, event_status in status["events"].items()
@@ -422,8 +424,7 @@ class TrayHealthMonitor:
             try:
                 if len(names) == 1:
                     message = (
-                        f"{names[0]} has incomplete AI Guardian hooks.\n"
-                        f"Needs attention: {attention.get(unconfigured[0], 'unknown')}\n\n"
+                        f"{names[0]} was detected but is not protected by AI Guardian.\n\n"
                         "Set up its security hooks now?"
                     )
                 else:
@@ -448,7 +449,18 @@ class TrayHealthMonitor:
                     from ai_guardian.setup import setup_hooks
 
                     for ide_type in unconfigured:
-                        setup_hooks(ide_type=ide_type, interactive=False, force=True)
+                        needs_force = bool(statuses[ide_type]["obsolete"]) or any(
+                            status == "changed"
+                            for status in statuses[ide_type]["events"].values()
+                        )
+                        if needs_force:
+                            setup_hooks(
+                                ide_type=ide_type,
+                                interactive=False,
+                                force=True,
+                            )
+                        else:
+                            setup_hooks(ide_type=ide_type, interactive=False)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:

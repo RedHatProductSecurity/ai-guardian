@@ -417,7 +417,9 @@ class IDESetup:
             return False
         return not ide_config.get("mcp_only", False)
 
-    def check_hooks_for_ide(self, ide_type: str) -> Tuple[bool, str]:
+    def check_hooks_for_ide(
+        self, ide_type: str, integrity: bool = False
+    ) -> Tuple[bool, str]:
         """Check if hooks are configured for a specific IDE.
 
         Returns (configured: bool, detail: str).
@@ -436,6 +438,10 @@ class IDESetup:
             return False, f"{ide_name}: no config path"
 
         config_path = Path(config_path_str).expanduser()
+        if not integrity:
+            if self.check_hooks_configured(config_path, ide_type):
+                return True, f"{ide_name}: configured"
+            return False, f"{ide_name}: not configured"
         verification = self.verify_hooks_for_ide(ide_type)
         if verification["healthy"]:
             return True, f"{ide_name}: configured"
@@ -480,7 +486,11 @@ class IDESetup:
                 )
                 if isinstance(entry, dict) and entry.get("event")
             }
-        return {str(name): "event" for name in hooks if isinstance(name, str)}
+        return {
+            str(name): "event"
+            for name in hooks
+            if isinstance(name, str) and name != "version"
+        }
 
     @staticmethod
     def _contains_owned_command(value: Any) -> bool:
@@ -1657,7 +1667,11 @@ class IDESetup:
             # Check if hooks already configured
             if not force:
                 if self.expected_hook_manifest(ide_type):
-                    already_configured = self.verify_hooks_for_ide(ide_type)["healthy"]
+                    verification = self.verify_hooks_for_ide(ide_type)
+                    already_configured = verification["healthy"] or not any(
+                        status == "missing"
+                        for status in verification["events"].values()
+                    )
                 else:
                     already_configured = self.check_hooks_configured(
                         config_path, ide_type
