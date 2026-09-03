@@ -300,6 +300,76 @@ class TestCodexReadSessionMeta:
 
         assert meta["title"] == ""
 
+    def test_reads_current_custom_tool_call_records(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {
+                "type": "custom_tool_call",
+                "status": "completed",
+                "call_id": "call_123",
+                "name": "shell",
+                "input": '{"command":"pwd"}',
+            },
+            {
+                "type": "custom_tool_call_output",
+                "call_id": "call_123",
+                "output": " /workspace\n",
+            },
+        )
+
+        steps = CodexSessionAdapter().read_detail({"file_path": str(path)})
+
+        assert steps == [
+            {
+                "type": "tool_use",
+                "tool_name": "shell",
+                "tool_input": {"command": "pwd"},
+                "tool_id": "call_123",
+            },
+            {
+                "type": "tool_result",
+                "tool_name": "shell",
+                "content": " /workspace\n",
+                "tool_id": "call_123",
+            },
+        ]
+
+    def test_keeps_legacy_function_call_records(self, tmp_path):
+        path = tmp_path / "session.jsonl"
+        self._write_session(
+            path,
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "function_call",
+                        "call_id": "legacy_123",
+                        "name": "shell",
+                        "arguments": {"command": "pwd"},
+                    }
+                ],
+            },
+            {
+                "role": "tool",
+                "content": [
+                    {
+                        "type": "function_call_output",
+                        "call_id": "legacy_123",
+                        "output": "done",
+                    }
+                ],
+            },
+        )
+
+        steps = CodexSessionAdapter().read_detail({"file_path": str(path)})
+
+        assert steps[0]["type"] == "tool_use"
+        assert steps[0]["tool_id"] == "legacy_123"
+        assert steps[1]["type"] == "tool_result"
+        assert steps[1]["tool_name"] == "shell"
+        assert steps[1]["tool_id"] == "legacy_123"
+
 
 class TestOpenCodeSessionAdapter:
     @staticmethod
