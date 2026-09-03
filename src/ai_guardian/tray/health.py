@@ -32,6 +32,7 @@ class TrayHealthMonitor:
         self._self_upgrade_in_progress = False
         self._upgrade_notified_version = None
         self._upgrade_prompt_in_progress = False
+        self._ide_setup_prompt_in_progress = False
 
     def _check_config_error_notification(self):
         """Show OS notification once when a config error is detected."""
@@ -367,6 +368,83 @@ class TrayHealthMonitor:
         return self._tray._standalone or any(
             target.runtime == "local" for target in self._tray._targets
         )
+
+    def _get_unconfigured_ides(self):
+        """Return installed IDEs that do not yet use ai-guardian hooks."""
+        try:
+            from ai_guardian.setup.hooks import IDESetup
+
+            setup = IDESetup()
+            unconfigured = []
+            for ide_type in setup.list_detected_ides():
+                configured, _ = setup.check_hooks_for_ide(ide_type)
+                if not configured:
+                    unconfigured.append(ide_type)
+            return unconfigured
+        except Exception as exc:
+            logger.warning("Unable to check IDE setup status: %s", exc)
+            return []
+
+    def _check_ide_setup_notification(self):
+        """Prompt local-daemon users to configure detected IDE integrations."""
+        if not self._has_local_daemon() or self._ide_setup_prompt_in_progress:
+            return
+
+        unconfigured = self._get_unconfigured_ides()
+        if not unconfigured:
+            return
+
+        from ai_guardian.setup.hooks import IDESetup
+        from ai_guardian.tray.proactive_prompt import (
+            ProactivePromptDialog,
+            ProactivePromptState,
+        )
+
+        names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+        prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
+        state = ProactivePromptState()
+        if not state.available(prompt_key):
+            return
+
+        self._ide_setup_prompt_in_progress = True
+
+        def _show_prompt():
+            try:
+                if len(names) == 1:
+                    message = (
+                        f"{names[0]} was detected but is not protected by AI Guardian.\n\n"
+                        "Set up its security hooks now?"
+                    )
+                else:
+                    message = (
+                        "These IDEs were detected but are not protected by AI Guardian:\n"
+                        + "\n".join(f"• {name}" for name in names)
+                        + "\n\nSet up their security hooks now?"
+                    )
+                dialog = ProactivePromptDialog(
+                    title="Set Up AI Guardian",
+                    message=message,
+                    action_label="Set Up Now",
+                    dismiss_label="Don't Ask Again",
+                    snooze_options=("1h", "6h", "1d", "1w"),
+                )
+                result = dialog.show(tray_safe=True)
+                state.record(prompt_key, result)
+                if result == "action":
+                    from ai_guardian.setup import setup_hooks
+
+                    for ide_type in unconfigured:
+                        setup_hooks(ide_type=ide_type, interactive=False)
+            except Exception as exc:
+                logger.warning("IDE setup prompt failed: %s", exc)
+            finally:
+                self._ide_setup_prompt_in_progress = False
+
+        threading.Thread(
+            target=_show_prompt,
+            daemon=True,
+            name="ide-setup-prompt",
+        ).start()
 
     def _self_upgrade_label(self):
         """Dynamic label for the self-upgrade menu item."""

@@ -12,6 +12,7 @@ from ai_guardian.daemon.auto_setup import (
     _is_first_run,
     _start_tray_background,
     auto_setup_tray,
+    notify_ide_setup_needed,
 )
 
 
@@ -379,6 +380,53 @@ class TestAutoSetupTray:
             auto_setup_tray()
         desktop.install_shortcut.assert_called_once()
         desktop.install_autostart.assert_called_once()
+
+
+class TestNotifyIdeSetupNeeded:
+    def _setup(self):
+        setup = mock.MagicMock()
+        setup.list_detected_ides.return_value = ["cursor"]
+        setup.check_hooks_for_ide.return_value = (False, "Cursor IDE: not configured")
+        setup.IDE_CONFIGS = {"cursor": {"name": "Cursor IDE"}}
+        return setup
+
+    def test_prints_notice_for_tty(self, capsys):
+        with (
+            mock.patch("ai_guardian.setup.hooks.IDESetup", return_value=self._setup()),
+            mock.patch(
+                "ai_guardian.daemon.auto_setup.sys.stdin.isatty", return_value=True
+            ),
+        ):
+            notify_ide_setup_needed()
+
+        assert "Cursor IDE" in capsys.readouterr().err
+
+    def test_logs_notice_without_tty(self, caplog):
+        with (
+            mock.patch("ai_guardian.setup.hooks.IDESetup", return_value=self._setup()),
+            mock.patch(
+                "ai_guardian.daemon.auto_setup.sys.stdin.isatty", return_value=False
+            ),
+            caplog.at_level("INFO"),
+        ):
+            notify_ide_setup_needed()
+
+        assert "IDE setup needed" in caplog.text
+
+    def test_silent_when_all_detected_ides_configured(self, capsys):
+        setup = self._setup()
+        setup.check_hooks_for_ide.return_value = (True, "Cursor IDE: configured")
+        with mock.patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
+            notify_ide_setup_needed()
+
+        assert capsys.readouterr().err == ""
+
+    def test_skips_non_local_runtime(self, capsys):
+        with mock.patch("ai_guardian.setup.hooks.IDESetup") as setup_class:
+            notify_ide_setup_needed(runtime="container")
+
+        setup_class.assert_not_called()
+        assert capsys.readouterr().err == ""
 
     def test_starts_tray_when_not_running(self, monkeypatch):
         for v in [

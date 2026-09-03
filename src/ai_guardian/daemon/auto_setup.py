@@ -4,6 +4,7 @@ import logging
 import os
 import platform
 import subprocess
+import sys
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +80,40 @@ def _start_tray_background():
 
     subprocess.Popen(cmd, **kwargs)
     return True
+
+
+def notify_ide_setup_needed(runtime="local"):
+    """Notify CLI users when detected IDE hooks are not configured."""
+    if runtime != "local":
+        return
+    try:
+        from ai_guardian.setup.hooks import IDESetup
+
+        setup = IDESetup()
+        unconfigured = [
+            ide_type
+            for ide_type in setup.list_detected_ides()
+            if not setup.check_hooks_for_ide(ide_type)[0]
+        ]
+        if not unconfigured:
+            return
+
+        names = [setup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+        if sys.stdin.isatty():
+            logger.info("IDE setup needed: %s", ", ".join(names))
+            print(
+                "AI Guardian: detected "
+                + ", ".join(names)
+                + ". Run `ai-guardian setup` to enable protection.",
+                file=sys.stderr,
+            )
+        else:
+            logger.info(
+                "IDE setup needed for %s; run `ai-guardian setup` to enable protection",
+                ", ".join(names),
+            )
+    except Exception as exc:
+        logger.warning("Unable to notify about IDE setup: %s", exc)
 
 
 def auto_setup_tray():

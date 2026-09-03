@@ -116,7 +116,7 @@ class ProactivePromptDialog:
         self.dismiss_label = dismiss_label
         self.snooze_options = tuple(snooze_options or SNOOZE_OPTIONS)
 
-    def show(self) -> str:
+    def show(self, tray_safe: bool = False) -> str:
         preferred = get_preferred_ui()
         tiers = (
             ["tkinter", "nicegui", "textual"] if preferred == "auto" else [preferred]
@@ -124,6 +124,8 @@ class ProactivePromptDialog:
         for tier in tiers:
             try:
                 if tier == "tkinter" and _tkinter_available():
+                    if tray_safe:
+                        return self._show_tkinter_subprocess()
                     return self._show_tkinter()
                 if tier == "nicegui" and _nicegui_available():
                     return self._show_nicegui()
@@ -132,6 +134,42 @@ class ProactivePromptDialog:
             except Exception as exc:
                 logger.debug("Proactive %s prompt unavailable: %s", tier, exc)
         logger.info("%s: %s", self.title, self.message)
+        return "dismiss"
+
+    def _show_tkinter_subprocess(self) -> str:
+        """Show Tkinter dialog outside tray process (macOS pystray safety)."""
+        import subprocess
+        import sys
+
+        payload = json.dumps(
+            {
+                "title": self.title,
+                "message": self.message,
+                "action_label": self.action_label,
+                "dismiss_label": self.dismiss_label,
+                "snooze_options": self.snooze_options,
+            }
+        )
+        child = (
+            "import json, sys; "
+            "from ai_guardian.tray.proactive_prompt import ProactivePromptDialog; "
+            "p=json.loads(sys.argv[1]); "
+            "d=ProactivePromptDialog(p['title'], p['message'], "
+            "p['action_label'], p['dismiss_label'], p['snooze_options']); "
+            "print(d._show_tkinter())"
+        )
+        try:
+            result = subprocess.run(
+                [sys.executable, "-c", child, payload],
+                capture_output=True,
+                text=True,
+                timeout=3600,
+                check=False,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip().splitlines()[-1]
+        except (OSError, IndexError, subprocess.TimeoutExpired) as exc:
+            logger.warning("Tkinter proactive prompt failed: %s", exc)
         return "dismiss"
 
     def _show_tkinter(self) -> str:
