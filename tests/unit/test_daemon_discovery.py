@@ -1629,11 +1629,11 @@ class TestDiscoverKubernetesSDK:
         )
         assert len(targets) == 1
 
-    def test_sdk_all_namespaces_when_none_configured(self):
+    def test_sdk_uses_default_namespace_when_none_configured(self):
         pod = _make_mock_k8s_pod()
 
         mock_api = mock.MagicMock()
-        mock_api.list_pod_for_all_namespaces.return_value.items = [pod]
+        mock_api.list_namespaced_pod.return_value.items = [pod]
         mock_api.list_namespaced_service.return_value.items = []
 
         active_ctx = {"name": "default"}
@@ -1652,7 +1652,9 @@ class TestDiscoverKubernetesSDK:
             ):
                 targets = d.discover_kubernetes()
 
-        mock_api.list_pod_for_all_namespaces.assert_called_once()
+        mock_api.list_namespaced_pod.assert_called_once_with(
+            namespace="ai-sdlc", label_selector="app=ai-guardian"
+        )
         assert len(targets) == 1
 
     def test_sdk_loadbalancer_connectivity(self):

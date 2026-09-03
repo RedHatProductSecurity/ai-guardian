@@ -595,14 +595,13 @@ class DaemonDiscovery:
         tray_cfg = daemon_cfg.get("tray", {})
         k8s_cfg = tray_cfg.get("kubernetes", {})
 
-        label_selector = k8s_cfg.get("label_selector", "ai-guardian.daemon=true")
+        label_selector = k8s_cfg.get("label_selector", "app=ai-guardian")
         rest_port = daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
 
         namespaces = k8s_cfg.get("namespaces")
         if namespaces is None:
             ns_single = k8s_cfg.get("namespace")
-            if ns_single:
-                namespaces = [ns_single]
+            namespaces = [ns_single or "ai-sdlc"]
 
         if HAS_K8S_SDK:
             return self._discover_kubernetes_sdk(

@@ -376,6 +376,7 @@ class TestPushTraceToRemoteFallback:
         from ai_guardian.integrations.anthropic.agent import GuardedAgent
 
         monkeypatch.setenv("AI_GUARDIAN_TRACE_ENDPOINT", "tray-host:63152")
+        monkeypatch.setenv("AI_GUARDIAN_TRACE_AUTH_TOKEN", "trace-token")
         with mock.patch("urllib.request.urlopen") as mock_urlopen:
             GuardedAgent._push_trace_to_remote(
                 "test_20260101-100000_abcd1234.json", {"agent_name": "test"}
@@ -384,3 +385,4 @@ class TestPushTraceToRemoteFallback:
             req = mock_urlopen.call_args[0][0]
             assert "/api/traces/remote" in req.full_url
             assert "tray-host:63152" in req.full_url
+            assert req.get_header("Authorization") == "Bearer trace-token"

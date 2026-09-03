@@ -537,13 +537,17 @@ class MultiDaemonClient:
 
     # --- Tray ask forwarding (#1342) ---
 
-    def register_tray(self, target, tray_host, tray_port):
+    def register_tray(self, target, tray_host, tray_port, tray_auth_token=None):
         """Register this tray with a remote daemon for ask dialog forwarding."""
         result = self._rest_request(
             target,
             "POST",
             "/api/register-tray",
-            {"host": tray_host, "port": int(tray_port)},
+            {
+                "host": tray_host,
+                "port": int(tray_port),
+                "auth_token": tray_auth_token,
+            },
         )
         return result is not None
 

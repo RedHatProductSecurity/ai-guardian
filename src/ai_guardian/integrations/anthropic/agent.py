@@ -987,6 +987,11 @@ class GuardedAgent:
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            auth_token = os.environ.get(
+                "AI_GUARDIAN_TRACE_AUTH_TOKEN"
+            ) or os.environ.get("AI_GUARDIAN_AUTH_TOKEN")
+            if auth_token:
+                req.add_header("Authorization", f"Bearer {auth_token}")
             urlopen(req, timeout=5)
         except Exception as exc:
             logger.debug("Failed to push trace to remote endpoint: %s", exc)

@@ -16,6 +16,7 @@ from typing import Dict, Iterable, Optional
 
 from ai_guardian.tui.display import (
     _nicegui_available,
+    _textual_available,
     _tkinter_available,
     get_preferred_ui,
 )
@@ -129,7 +130,7 @@ class ProactivePromptDialog:
                     return self._show_tkinter()
                 if tier == "nicegui" and _nicegui_available():
                     return self._show_nicegui()
-                if tier == "textual":
+                if tier == "textual" and _textual_available():
                     return self._show_textual()
             except Exception as exc:
                 logger.debug("Proactive %s prompt unavailable: %s", tier, exc)
@@ -217,9 +218,63 @@ class ProactivePromptDialog:
         return result["value"]
 
     def _show_nicegui(self) -> str:
-        logger.info("%s: %s", self.title, self.message)
-        return "dismiss"
+        from nicegui import app, ui
+
+        result = {"value": "dismiss"}
+        done = threading.Event()
+
+        def choose(value):
+            result["value"] = value
+            done.set()
+            app.shutdown()
+
+        with ui.card():
+            ui.label(self.title).classes("text-h6")
+            ui.label(self.message)
+            with ui.row():
+                ui.button(self.action_label, on_click=lambda: choose("action"))
+                for option in self.snooze_options:
+                    ui.button(
+                        f"Later ({option})",
+                        on_click=lambda option=option: choose(f"snooze_{option}"),
+                    )
+                ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
+
+        ui.run(title=self.title, reload=False, show=True, port=0)
+        done.wait(timeout=3600)
+        return result["value"]
 
     def _show_textual(self) -> str:
-        logger.info("%s: %s", self.title, self.message)
-        return "dismiss"
+        from textual.app import App, ComposeResult
+        from textual.containers import Horizontal, Vertical
+        from textual.widgets import Button, Label
+
+        dialog = self
+
+        class PromptApp(App):
+            def compose(self) -> ComposeResult:
+                with Vertical():
+                    yield Label(dialog.title)
+                    yield Label(dialog.message)
+                    with Horizontal():
+                        yield Button(dialog.action_label, id="action")
+                        for index, option in enumerate(dialog.snooze_options):
+                            yield Button(f"Later ({option})", id=f"snooze_{index}")
+                        yield Button(dialog.dismiss_label, id="dismiss")
+
+            def on_button_pressed(self, event: Button.Pressed) -> None:
+                button_id = event.button.id or "dismiss"
+                if button_id == "action":
+                    value = "action"
+                elif button_id.startswith("snooze_"):
+                    index = int(button_id.rsplit("_", 1)[1])
+                    value = f"snooze_{dialog.snooze_options[index]}"
+                else:
+                    value = "dismiss"
+                self.result = value
+                self.exit()
+
+        app = PromptApp()
+        app.result = "dismiss"
+        app.run()
+        return app.result

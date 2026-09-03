@@ -129,7 +129,7 @@ class DaemonState:
         self._allowed_findings = {}  # session_id -> set of fingerprints
 
         # Tray registration for remote ask forwarding (#1342)
-        self._registered_tray = None  # {"host", "port", "registered_at"}
+        self._registered_tray = None  # {"host", "port", "auth_token", "registered_at"}
         self._tray_registration_ttl = DEFAULT_TRAY_REGISTRATION_TTL
 
         # Pending ask prompts waiting for host tray decision (#1342)
@@ -493,12 +493,13 @@ class DaemonState:
 
     # --- Tray registration & prompt queue (#1342) ---
 
-    def register_tray(self, host, port):
+    def register_tray(self, host, port, auth_token=None):
         """Register a host tray for ask dialog forwarding."""
         with self._lock:
             self._registered_tray = {
                 "host": host,
                 "port": int(port),
+                "auth_token": auth_token,
                 "registered_at": time.monotonic(),
             }
         logger.info("Tray registered: %s:%s", host, port)

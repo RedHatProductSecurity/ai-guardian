@@ -1148,7 +1148,10 @@ class DaemonTray:
                 tray_host = self._resolve_tray_host(target)
                 try:
                     local_port = self._get_local_daemon_port()
-                    ok = self._multi_client.register_tray(target, tray_host, local_port)
+                    local_token = self._get_local_daemon_token()
+                    ok = self._multi_client.register_tray(
+                        target, tray_host, local_port, local_token
+                    )
                     if ok:
                         registered.add(target.name)
                         logger.info(
@@ -1193,6 +1196,16 @@ class DaemonTray:
             return DEFAULT_REST_PORT
         except Exception:
             return 0
+
+    @staticmethod
+    def _get_local_daemon_token() -> str:
+        """Read the local REST token for authenticated remote trace forwarding."""
+        try:
+            from ai_guardian.daemon import get_auth_token_path
+
+            return get_auth_token_path().read_text(encoding="utf-8").strip()
+        except (OSError, UnicodeError):
+            return ""
 
     def _start_prompt_poll(self):
         """Start background thread that fast-polls remote daemons for pending ask prompts."""

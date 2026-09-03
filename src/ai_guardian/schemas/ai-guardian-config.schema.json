@@ -2307,6 +2307,18 @@
                   "default": "ai-sdlc",
                   "description": "Kubernetes namespace to search for daemon pods."
                 },
+                "namespaces": {
+                  "type": "array",
+                  "items": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+                  "minItems": 1,
+                  "description": "Kubernetes namespaces to search. Overrides namespace when provided."
+                },
+                "contexts": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1},
+                  "minItems": 1,
+                  "description": "Kubeconfig contexts to search. Defaults to the active context."
+                },
                 "label_selector": {
                   "type": "string",
                   "default": "app=ai-guardian",

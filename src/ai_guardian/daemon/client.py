@@ -13,6 +13,7 @@ import shlex
 import socket
 import subprocess
 import time
+import ipaddress
 from typing import Optional, Tuple
 from urllib.parse import urlparse
 
@@ -40,20 +41,30 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
 
     Returns:
         (scheme, host, port, auth_token) or None if env var is not set.
-        Only http:// scheme is supported.
+        HTTPS is required for non-loopback hosts.
     """
     url = os.environ.get("AI_GUARDIAN_DAEMON_URL")
     if not url:
         return None
 
     parsed = urlparse(url)
-    if parsed.scheme != "http":
+    if parsed.scheme not in ("http", "https"):
         logger.warning(
-            "Unsupported daemon URL scheme: %s (only http:// supported)", parsed.scheme
+            "Unsupported daemon URL scheme: %s (use http:// locally or https:// remotely)",
+            parsed.scheme,
         )
         return None
 
     host = parsed.hostname or "127.0.0.1"
+    try:
+        is_loopback = ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        is_loopback = host.lower() in {"localhost", "localhost.localdomain"}
+    if parsed.scheme == "http" and not is_loopback:
+        logger.warning(
+            "Refusing insecure HTTP daemon URL for non-loopback host: %s", host
+        )
+        return None
     from ai_guardian.daemon import DEFAULT_REST_PORT
 
     port = parsed.port or DEFAULT_REST_PORT
@@ -63,17 +74,6 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
         auth_token = parsed.username
     elif os.environ.get("AI_GUARDIAN_AUTH_TOKEN"):
         auth_token = os.environ["AI_GUARDIAN_AUTH_TOKEN"]
-    else:
-        try:
-            from ai_guardian.daemon import get_auth_token_path
-
-            token_path = get_auth_token_path()
-            if token_path.exists():
-                token = token_path.read_text(encoding="utf-8").strip()
-                if token:
-                    auth_token = token
-        except Exception:
-            pass
 
     return (parsed.scheme, host, port, auth_token)
 
