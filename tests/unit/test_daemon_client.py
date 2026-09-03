@@ -17,6 +17,7 @@ _skip_no_unix_socket = pytest.mark.skipif(
 
 from ai_guardian.daemon.client import (
     _get_remote_url,
+    _remote_url_configured,
     _is_daemon_running_remote,
     _read_pid_from_file,
     _send_remote,
@@ -532,19 +533,19 @@ class TestRemoteURL:
 
     def test_http_url(self, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_AUTH_TOKEN", raising=False)
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://myhost:9999")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://myhost:9999")
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", "/nonexistent")
         result = _get_remote_url()
         assert result is not None
         scheme, host, port, token = result
-        assert scheme == "http"
+        assert scheme == "https"
         assert host == "myhost"
         assert port == 9999
         assert token is None
 
     def test_http_default_port(self, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_AUTH_TOKEN", raising=False)
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://myhost")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://myhost")
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", "/nonexistent")
         result = _get_remote_url()
         assert result is not None
@@ -554,18 +555,18 @@ class TestRemoteURL:
 
     def test_token_in_url(self, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_AUTH_TOKEN", raising=False)
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://mytoken@host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://mytoken@host:1234")
         result = _get_remote_url()
         assert result[3] == "mytoken"
 
     def test_env_token(self, monkeypatch):
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://host:1234")
         monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "env-token-abc")
         result = _get_remote_url()
         assert result[3] == "env-token-abc"
 
     def test_url_token_overrides_env(self, monkeypatch):
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://url-token@host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://url-token@host:1234")
         monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "env-token")
         result = _get_remote_url()
         assert result[3] == "url-token"
@@ -574,14 +575,24 @@ class TestRemoteURL:
         monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
         assert _get_remote_url() is None
 
+    def test_invalid_url_remains_configured(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
+        assert _remote_url_configured() is True
+
+    def test_invalid_url_does_not_fall_back_to_socket(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
+        with mock.patch("ai_guardian.daemon.client._connect") as connect:
+            assert send_hook_request({"prompt": "test"}) is None
+        connect.assert_not_called()
+
     def test_token_from_file_fallback(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://host:1234")
         monkeypatch.delenv("AI_GUARDIAN_AUTH_TOKEN", raising=False)
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
         token_path = tmp_path / "daemon.token"
         token_path.write_text("file-token-xyz")
         result = _get_remote_url()
-        assert result[3] == "file-token-xyz"
+        assert result[3] is None
 
 
 class TestSendRemote:
@@ -618,14 +629,27 @@ class TestSendRemote:
             def get_config(self):
                 return {}
 
+            def register_tray(self, host, port, auth_token=None):
+                self.registered = (host, port, auth_token)
+
         state = _MinState()
-        api = DaemonRestAPI(state=state, host="127.0.0.1", port=0)
+        api = DaemonRestAPI(
+            state=state, host="127.0.0.1", port=0, auth_token="test-token"
+        )
         port = api.start()
         try:
             monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", f"http://127.0.0.1:{port}")
-            result = _send_remote("/api/health", {}, timeout=5.0)
-            # /api/health is GET only, POST will 404 — test with a GET-based approach
-            # Instead, test _is_daemon_running_remote which uses GET /api/health
+            monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "test-token")
+            result = _send_remote(
+                "/api/register-tray",
+                {"host": "127.0.0.1", "port": 63152},
+                timeout=5.0,
+            )
+            assert result == {
+                "status": "registered",
+                "host": "127.0.0.1",
+                "port": 63152,
+            }
             assert _is_daemon_running_remote() is True
         finally:
             api.stop()
@@ -681,7 +705,7 @@ class TestSendHookRequestRemote:
             captured["data"] = data
             return {"output": "{}", "exit_code": 0}
 
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://host:1234")
         monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "tok")
         monkeypatch.setattr("ai_guardian.daemon.client._send_remote", mock_send_remote)
 
@@ -695,7 +719,7 @@ class TestSendHookRequestRemote:
         """Original hook_data dict must not be modified."""
         original = {"hook_event_name": "PreToolUse"}
 
-        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "http://host:1234")
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://host:1234")
         monkeypatch.setenv("AI_GUARDIAN_AUTH_TOKEN", "tok")
         monkeypatch.setattr(
             "ai_guardian.daemon.client._send_remote",

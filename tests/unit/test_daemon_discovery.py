@@ -1157,6 +1157,38 @@ class TestDiscoverKubernetesKubectl:
             ns_idx = call_args[0][0].index("-n")
             assert call_args[0][0][ns_idx + 1] == "my-ns"
 
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    @mock.patch("subprocess.run")
+    @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
+    def test_kubectl_uses_configured_context(self, mock_which, mock_run):
+        mock_run.return_value = mock.MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "items": [
+                        {"metadata": {"name": "pod-a"}, "status": {"phase": "Running"}}
+                    ]
+                }
+            ),
+            stderr="",
+        )
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "contexts": ["cluster-a"],
+                            "namespaces": ["ai-sdlc"],
+                        }
+                    }
+                }
+            }
+        )
+        targets = d.discover_kubernetes()
+        command = mock_run.call_args_list[0][0][0]
+        assert command[0:3] == ["kubectl", "--context", "cluster-a"]
+        assert targets[0].context == "cluster-a"
+
 
 def _make_mock_k8s_pod(
     name="guardian-pod",
@@ -1629,11 +1661,11 @@ class TestDiscoverKubernetesSDK:
         )
         assert len(targets) == 1
 
-    def test_sdk_all_namespaces_when_none_configured(self):
+    def test_sdk_uses_default_namespace_when_none_configured(self):
         pod = _make_mock_k8s_pod()
 
         mock_api = mock.MagicMock()
-        mock_api.list_pod_for_all_namespaces.return_value.items = [pod]
+        mock_api.list_namespaced_pod.return_value.items = [pod]
         mock_api.list_namespaced_service.return_value.items = []
 
         active_ctx = {"name": "default"}
@@ -1652,7 +1684,9 @@ class TestDiscoverKubernetesSDK:
             ):
                 targets = d.discover_kubernetes()
 
-        mock_api.list_pod_for_all_namespaces.assert_called_once()
+        mock_api.list_namespaced_pod.assert_called_once_with(
+            namespace="ai-sdlc", label_selector="app=ai-guardian"
+        )
         assert len(targets) == 1
 
     def test_sdk_loadbalancer_connectivity(self):

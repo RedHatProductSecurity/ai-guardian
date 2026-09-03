@@ -1185,7 +1185,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         if not host or port is None:
             self._send_error(400, "host and port are required")
             return
-        self.server.daemon_state.register_tray(host, int(port))
+        self.server.daemon_state.register_tray(host, int(port), body.get("auth_token"))
         self._send_json({"status": "registered", "host": host, "port": int(port)})
 
     def _handle_prompt_decision(self, body):
@@ -1384,6 +1384,8 @@ class _RestHandler(BaseHTTPRequestHandler):
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            if tray.get("auth_token"):
+                req.add_header("Authorization", f"Bearer {tray['auth_token']}")
             with urlopen(req, timeout=10) as resp:
                 resp.read()
         except (URLError, OSError, Exception):

@@ -27,6 +27,28 @@ class TestLocalRouting:
         mock_popen.assert_called_once()
 
 
+class TestRestTransportSecurity:
+    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    def test_rejects_http_for_non_loopback_target(self, mock_urlopen):
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="remote", runtime="manual", host="remote.example", port=63152
+        )
+        assert client._rest_request(target, "GET", "/api/status") is None
+        mock_urlopen.assert_not_called()
+
+    @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
+    @mock.patch("ai_guardian.daemon.multi_client.urlopen")
+    def test_allows_http_for_loopback_target(self, mock_urlopen, mock_reachable):
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = b"{}"
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="local-http", runtime="manual", host="127.0.0.1", port=63152
+        )
+        assert client._rest_request(target, "GET", "/api/status") == {}
+        assert mock_urlopen.call_args[0][0].full_url.startswith("http://127.0.0.1")
+
+
 class TestLocalPauseResumeRouting:
     """Test local daemon pause/resume via socket (issue #683)."""
 
@@ -362,6 +384,7 @@ class TestRestRequestReachabilityCheck:
             runtime="manual",
             host="10.0.0.99",
             port=63152,
+            url="https://10.0.0.99:63152",
         )
         result = MultiDaemonClient._rest_request(target, "GET", "/api/status")
         assert result == {"status": "running"}
