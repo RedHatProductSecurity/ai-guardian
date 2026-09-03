@@ -856,6 +856,7 @@ class CodexSessionAdapter(SessionAdapter):
             return []
 
         steps = []
+        tool_names = {}
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -875,6 +876,43 @@ class CodexSessionAdapter(SessionAdapter):
                         if cwd:
                             steps.append({"type": "system", "content": f"cwd: {cwd}"})
                     elif rtype == "response_item":
+                        payload_type = payload.get("type", "")
+                        if payload_type == "custom_tool_call":
+                            call_id = payload.get("call_id", "")
+                            tool_name = payload.get("name", "")
+                            tool_names[call_id] = tool_name
+                            tool_input = payload.get("input", {})
+                            if isinstance(tool_input, str):
+                                try:
+                                    tool_input = json.loads(tool_input)
+                                except (json.JSONDecodeError, TypeError):
+                                    pass
+                            steps.append(
+                                {
+                                    "type": "tool_use",
+                                    "tool_name": tool_name,
+                                    "tool_input": tool_input,
+                                    "tool_id": call_id,
+                                }
+                            )
+                            continue
+                        if payload_type == "custom_tool_call_output":
+                            call_id = payload.get("call_id", "")
+                            output = payload.get("output", "")
+                            if not isinstance(output, str):
+                                output = json.dumps(output, default=str)
+                            steps.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_name": payload.get(
+                                        "name", tool_names.get(call_id, "")
+                                    ),
+                                    "content": output,
+                                    "tool_id": call_id,
+                                }
+                            )
+                            continue
+
                         role = payload.get("role", "")
                         content = payload.get("content", [])
                         if isinstance(content, str):
@@ -899,19 +937,25 @@ class CodexSessionAdapter(SessionAdapter):
                                         }
                                     )
                             elif ptype == "function_call":
+                                call_id = part.get("call_id", "")
+                                tool_names[call_id] = part.get("name", "")
                                 steps.append(
                                     {
                                         "type": "tool_use",
                                         "tool_name": part.get("name", ""),
                                         "tool_input": part.get("arguments", {}),
+                                        "tool_id": call_id,
                                     }
                                 )
                             elif ptype == "function_call_output":
+                                call_id = part.get("call_id", "")
                                 output = part.get("output", "")
                                 steps.append(
                                     {
                                         "type": "tool_result",
+                                        "tool_name": tool_names.get(call_id, ""),
                                         "content": str(output),
+                                        "tool_id": call_id,
                                     }
                                 )
                             elif ptype == "reasoning":
