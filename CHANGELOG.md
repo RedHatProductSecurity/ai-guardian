@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
 
+- **Codex conversation titles**: Resolve explicit titles, genuine prompts, assistant fallbacks, and stable project/time titles while excluding bootstrap content in list and detail views (#2232)
+
 - **Session step formatting**: Syntax-highlight inline JSON, Python, JavaScript, and YAML content while preserving plain-text rendering, and serialize dictionary tool results as valid JSON (#2214)
 - **Hook trace finalization**: Finalize stale IDE hook traces as timed out with their last activity timestamp and computed token usage, including periodic daemon cleanup (#2209)
 - **Codex conversation titles**: Ignore injected AGENTS.md instruction messages when choosing session titles and omit empty model parentheses from detail headers (#2205)
