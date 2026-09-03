@@ -55,6 +55,59 @@ def read_session_detail(session: Dict) -> List[Dict]:
     return adapter.read_detail(session)
 
 
+def read_session_detail_page(
+    session: Dict,
+    offset: int = 0,
+    limit: int = 50,
+) -> Dict:
+    """Read one bounded page of a session's structured conversation.
+
+    ``offset=-1`` requests the final page, which lets callers display the
+    newest steps without first materializing the complete transcript.  The
+    returned ``total`` is based on the normalized steps produced by the
+    adapter, so it remains consistent across JSON, JSONL, and database-backed
+    session formats.
+    """
+    ide = session.get("ide", "")
+    adapter = SESSION_ADAPTERS.get(ide)
+    if not adapter:
+        return {
+            "steps": [],
+            "offset": max(0, offset),
+            "limit": limit,
+            "total": 0,
+            "has_more": False,
+        }
+
+    safe_limit = max(1, int(limit))
+    safe_offset = int(offset)
+    steps = adapter.read_detail_page(session, safe_offset, safe_limit)
+    total = getattr(steps, "total_count", len(steps))
+    page_offset = getattr(steps, "page_offset", max(0, safe_offset))
+    summary = dict(session)
+    parsed_summary = getattr(steps, "summary", {})
+    for key, value in parsed_summary.items():
+        if key == "token_usage":
+            current = summary.get(key) or {}
+            if not current or current == {
+                "input_tokens": 0,
+                "output_tokens": 0,
+                "cache_read_input_tokens": 0,
+                "cache_creation_input_tokens": 0,
+            }:
+                summary[key] = value
+        elif summary.get(key) in (None, "", 0, {}):
+            summary[key] = value
+    return {
+        "steps": list(steps),
+        "offset": page_offset,
+        "limit": safe_limit,
+        "total": total,
+        "has_more": page_offset + len(steps) < total,
+        "summary": summary,
+    }
+
+
 def match_violations_to_steps(
     steps: List[Dict], violations: List[Dict]
 ) -> Dict[int, List[Dict]]:

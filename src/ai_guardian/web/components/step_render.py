@@ -9,6 +9,7 @@ from ai_guardian.web.components.content_viewer import detect_content_type
 
 _GUARDIAN_ICON_B64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABuklEQVR4nG2TO2tVURCFvzn35ibGB3YSBcELKWxsQrS1CNpo4Q+wsxGs/AOpbAQLC7HUX2ChNiktFIV01iHkgXko4vsdl6zrOnCMGRiYWWet2Xv2zClJJ4ELwAngAHAEGAP2Afv5a5+Br8BPYAv4BCwDj/vAOeAm8AR4F8Iv4CPwIQUOAQeBfuLjwFXgh4EB8KyqzrLLJPk2VNXWHt+eWtskH5PUkzSQNCFpXNIlYNPuONhEOL20iW8wsqrakaSq+p0TpjoHTlXV9+CNOZL4p0BMEZ4C1oA3wdcknQdeAht0rG9RlBXsCnAdOAzsBHsIvAbuADcktbj8Bu6nqsqFjgHfMlZPouKOLwLvgWG4xnu+wSow7QfK6B5U1ZKkdeBVTjpaVS8kbbtIuNPWNsBCFuZyVfmEZT9Uev0S3wi2WlVvzY1moQlwC7gtaZgp+Hrr2ZFB4sqkhuZaY22TyvNZzeeSZkwEVjJr+0rEM+aEO29t4wYz47n0vCjpGuB+3YZ9O9hiOHPtXrTDHxWSNCnprpchdl/SvU7ub5NdzX9FEs9KetQROp7di7u7SGXP2/y0pDOd3P9Lu3Aj+wNyeh1fmZqHzAAAAABJRU5ErkJggg=="  # noqa: E501
 _GUARDIAN_ICON_SRC = f"data:image/png;base64,{_GUARDIAN_ICON_B64}"
+MAX_INLINE_CONTENT_CHARS = 20_000
 
 
 def render_guardian_icon(extra_classes=""):
@@ -75,6 +76,17 @@ def render_content_block(
         content = json.dumps(tool_input, indent=2, default=str)
 
     if not content:
+        return
+
+    if len(content) > MAX_INLINE_CONTENT_CHARS:
+        from ai_guardian.web.components.content_viewer import render_view_button
+
+        render_view_button(step_label or step_type or "Content", content, dialog_host)
+        preview = content[:MAX_INLINE_CONTENT_CHARS]
+        render_text_block(
+            preview + "\n\n[Content truncated in the conversation view]",
+            max_height=400,
+        )
         return
 
     line_count = content.count("\n") + 1

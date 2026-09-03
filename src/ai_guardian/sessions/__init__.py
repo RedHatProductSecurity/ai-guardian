@@ -7,7 +7,11 @@ from ai_guardian.sessions.discovery import (
     get_default_ide,
     get_supported_ides,
 )
-from ai_guardian.sessions.reader import read_session_detail, read_session_summary
+from ai_guardian.sessions.reader import (
+    read_session_detail,
+    read_session_detail_page,
+    read_session_summary,
+)
 
 __all__ = [
     "SESSION_ADAPTERS",
@@ -16,5 +20,6 @@ __all__ = [
     "get_default_ide",
     "get_supported_ides",
     "read_session_detail",
+    "read_session_detail_page",
     "read_session_summary",
 ]

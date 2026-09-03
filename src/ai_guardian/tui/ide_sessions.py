@@ -43,6 +43,7 @@ class IDESessionsContent(Container):
     """
 
     PAGE_SIZE = 50
+    MAX_DISCOVERY_LIMIT = 1000
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -54,6 +55,9 @@ class IDESessionsContent(Container):
         self._detail_text = ""
         self._page = 1
         self._filtered_sessions = []
+        self._load_lock = threading.Lock()
+        self._load_in_flight = False
+        self._load_generation = 0
 
     def compose(self) -> ComposeResult:
         yield Static(
@@ -194,9 +198,17 @@ class IDESessionsContent(Container):
             pass
 
     def _load_sessions(self) -> None:
+        with self._load_lock:
+            if self._load_in_flight:
+                return
+            self._load_in_flight = True
+            self._load_generation += 1
+            generation = self._load_generation
+
         select = self.query_one("#ide-sessions-ide-select", Select)
         ide = select.value
         if not ide:
+            self._finish_load(generation)
             return
 
         tree = self.query_one("#ide-sessions-tree", Tree)
@@ -208,6 +220,7 @@ class IDESessionsContent(Container):
             limit = int(top_input.value.strip()) if top_input.value.strip() else 1000
         except ValueError:
             limit = 1000
+        limit = max(10, min(limit, self.MAX_DISCOVERY_LIMIT))
 
         def _worker():
             from ai_guardian.sessions.discovery import discover_sessions
@@ -218,13 +231,24 @@ class IDESessionsContent(Container):
                 sessions = []
 
             try:
-                self.app.call_from_thread(self._render_sessions, sessions)
-            except NoActiveAppError:
+                self.app.call_from_thread(self._render_sessions, sessions, generation)
+            except Exception:
+                self._finish_load(generation)
                 return
 
         threading.Thread(target=_worker, daemon=True).start()
 
-    def _render_sessions(self, sessions) -> None:
+    def _finish_load(self, generation) -> None:
+        with self._load_lock:
+            if generation == self._load_generation:
+                self._load_in_flight = False
+
+    def _render_sessions(self, sessions, generation=None) -> None:
+        if generation is not None:
+            with self._load_lock:
+                if generation != self._load_generation:
+                    return
+                self._load_in_flight = False
         self._sessions = sessions
         self._apply_filter()
 

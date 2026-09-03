@@ -184,6 +184,26 @@ class TestWebDetailPageAutoRefresh:
         source = inspect.getsource(create_ide_session_detail_page)
         assert "position: sticky" not in source
 
+    def test_detail_page_renders_bounded_conversation_pages(self):
+        from ai_guardian.web.pages.ide_sessions import (
+            create_ide_session_detail_page,
+        )
+
+        source = inspect.getsource(create_ide_session_detail_page)
+        assert "read_session_detail_page" in source
+        assert '"page_size": 50' in source
+        assert "Page {detail_state['page']} of {total_pages}" in source
+
+    def test_detail_refresh_skips_unchanged_session_files(self):
+        from ai_guardian.web.pages.ide_sessions import (
+            create_ide_session_detail_page,
+        )
+
+        source = inspect.getsource(create_ide_session_detail_page)
+        assert "_session_file_signature" in source
+        assert 'detail_state["file_signature"]' in source
+        assert 'detail_state["loaded"]' in source
+
 
 class TestWebTracesPageAutoRefresh:
     """Verify traces pages have pause support (#2119)."""
@@ -245,6 +265,13 @@ class TestTuiAutoRefresh:
         source = inspect.getsource(IDESessionsContent.on_button_pressed)
         assert "ide-sessions-copy" in source
         assert "copy_to_clipboard" in source
+
+    def test_session_discovery_is_bounded_and_non_overlapping(self):
+        from ai_guardian.tui.ide_sessions import IDESessionsContent
+
+        source = inspect.getsource(IDESessionsContent._load_sessions)
+        assert "MAX_DISCOVERY_LIMIT" in source
+        assert "_load_in_flight" in source
 
 
 class TestStripRichMarkup:
