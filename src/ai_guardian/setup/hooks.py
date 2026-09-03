@@ -417,7 +417,9 @@ class IDESetup:
             return False
         return not ide_config.get("mcp_only", False)
 
-    def check_hooks_for_ide(self, ide_type: str) -> Tuple[bool, str]:
+    def check_hooks_for_ide(
+        self, ide_type: str, integrity: bool = False
+    ) -> Tuple[bool, str]:
         """Check if hooks are configured for a specific IDE.
 
         Returns (configured: bool, detail: str).
@@ -436,10 +438,272 @@ class IDESetup:
             return False, f"{ide_name}: no config path"
 
         config_path = Path(config_path_str).expanduser()
-        configured = self.check_hooks_configured(config_path, ide_type)
-        if configured:
+        if not integrity:
+            if self.check_hooks_configured(config_path, ide_type):
+                return True, f"{ide_name}: configured"
+            return False, f"{ide_name}: not configured"
+        verification = self.verify_hooks_for_ide(ide_type)
+        if verification["healthy"]:
             return True, f"{ide_name}: configured"
-        return False, f"{ide_name}: not configured"
+        attention = [
+            name
+            for name, status in verification["events"].items()
+            if status != "healthy"
+        ]
+        attention.extend(f"obsolete:{name}" for name in verification["obsolete"])
+        detail = ", ".join(attention) or "configuration unreadable"
+        if verification["events"] and all(
+            status == "missing" for status in verification["events"].values()
+        ):
+            return False, f"{ide_name}: not configured"
+        return False, f"{ide_name}: needs attention ({detail})"
+
+    def expected_hook_manifest(self, ide_type: str) -> Dict[str, str]:
+        """Return the canonical hook events owned by an IDE adapter.
+
+        The manifest is derived from ``IDE_CONFIGS`` so setup and verification
+        cannot silently drift apart when a new event is added to an adapter.
+        Values identify the ownership category and are intentionally stable for
+        callers that want to render diagnostics.
+        """
+        config = self.IDE_CONFIGS.get(ide_type, {})
+        if config.get("mcp_only"):
+            return {}
+        if config.get("plugin_file"):
+            return {"plugin": "plugin"}
+        if config.get("extension_based"):
+            return {"extension": "extension"}
+        if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
+            return {name: "script" for name in config.get("hook_scripts", [])}
+        hooks = config.get("hooks", {})
+        if ide_type == "windsurf":
+            hooks = hooks.get("hooks", hooks)
+        if ide_type == "gemini":
+            return {
+                str(entry.get("event")): "event"
+                for entry in (
+                    hooks if isinstance(hooks, list) else hooks.get("hooks", hooks)
+                )
+                if isinstance(entry, dict) and entry.get("event")
+            }
+        return {
+            str(name): "event"
+            for name in hooks
+            if isinstance(name, str) and name != "version"
+        }
+
+    @staticmethod
+    def _contains_owned_command(value: Any) -> bool:
+        """Return whether a nested hook value contains an AI Guardian command."""
+        if isinstance(value, dict):
+            return any(
+                IDESetup._contains_owned_command(item) for item in value.values()
+            )
+        if isinstance(value, list):
+            return any(IDESetup._contains_owned_command(item) for item in value)
+        return isinstance(value, str) and _is_ai_guardian_command(value)
+
+    @staticmethod
+    def _contains_current_command(value: Any, ide_type: str) -> bool:
+        """Return whether an owned command targets the current adapter."""
+        if isinstance(value, dict):
+            return any(
+                IDESetup._contains_current_command(item, ide_type)
+                for item in value.values()
+            )
+        if isinstance(value, list):
+            return any(
+                IDESetup._contains_current_command(item, ide_type) for item in value
+            )
+        return (
+            isinstance(value, str)
+            and _is_ai_guardian_command(value)
+            and f"--ide {ide_type}" in value
+        )
+
+    def verify_hooks_for_ide(self, ide_type: str) -> Dict[str, Any]:
+        """Compare an installed adapter configuration with its hook manifest.
+
+        The result is deliberately JSON-serializable for CLI, tray, and REST
+        consumers.  ``events`` maps every expected event to ``healthy``,
+        ``missing``, or ``changed``; ``obsolete`` contains only events that
+        still contain AI Guardian-owned entries.
+        """
+        manifest = self.expected_hook_manifest(ide_type)
+        config = self.IDE_CONFIGS.get(ide_type, {})
+        result: Dict[str, Any] = {
+            "ide": ide_type,
+            "config_path": self.get_config_path(ide_type),
+            "healthy": True,
+            "events": {},
+            "obsolete": [],
+        }
+        if config.get("mcp_only"):
+            return result
+
+        path = Path(self.get_config_path(ide_type)).expanduser()
+        if config.get("plugin_file"):
+            plugin_file = path / "ai-guardian.ts"
+            try:
+                content = plugin_file.read_text(encoding="utf-8")
+            except OSError:
+                content = ""
+            if not self.check_hooks_configured(path, ide_type):
+                status = "missing"
+            elif f"--ide {ide_type}" not in content:
+                status = "changed"
+            else:
+                status = "healthy"
+            result["events"]["plugin"] = status
+            result["healthy"] = status == "healthy"
+            return result
+        if config.get("extension_based"):
+            ext_file = path / "index.ts"
+            try:
+                content = ext_file.read_text(encoding="utf-8")
+            except OSError:
+                content = ""
+            if "ai-guardian" not in content:
+                status = "missing"
+            elif f"--ide {ide_type}" not in content:
+                status = "changed"
+            else:
+                status = "healthy"
+            result["events"]["extension"] = status
+            result["healthy"] = status == "healthy"
+            return result
+        if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
+            hooks_dir = path if path.is_dir() else path.parent
+            for script_name in manifest:
+                found = False
+                current = False
+                for candidate in [hooks_dir / script_name]:
+                    if candidate.exists():
+                        try:
+                            content = candidate.read_text(encoding="utf-8")
+                            found = "ai-guardian" in content
+                            current = f"--ide {ide_type}" in content
+                        except OSError:
+                            found = False
+                            current = False
+                    if found:
+                        break
+                result["events"][script_name] = (
+                    "healthy" if current else "changed" if found else "missing"
+                )
+            result["healthy"] = all(
+                status == "healthy" for status in result["events"].values()
+            )
+            return result
+
+        try:
+            raw = path.read_text(encoding="utf-8")
+            if path.suffix == ".jsonc":
+                raw = _strip_jsonc_comments(raw)
+            installed = json.loads(raw)
+        except (OSError, json.JSONDecodeError):
+            installed = {}
+
+        installed_hooks = installed.get("hooks", {})
+        if ide_type == "gemini":
+            installed_hooks = {
+                str(entry.get("event")): entry
+                for entry in installed_hooks
+                if isinstance(entry, dict) and entry.get("event")
+            }
+        elif ide_type == "windsurf":
+            installed_hooks = installed_hooks.get("hooks", installed_hooks)
+
+        for event_name in manifest:
+            value = (
+                installed_hooks.get(event_name)
+                if isinstance(installed_hooks, dict)
+                else None
+            )
+            if not self._contains_owned_command(value):
+                status = "missing"
+            elif self._contains_current_command(value, ide_type):
+                status = "healthy"
+            else:
+                status = "changed"
+            result["events"][event_name] = status
+
+        if isinstance(installed_hooks, dict):
+            result["obsolete"] = [
+                name
+                for name, value in installed_hooks.items()
+                if name not in manifest and self._contains_owned_command(value)
+            ]
+        result["healthy"] = (
+            all(status == "healthy" for status in result["events"].values())
+            and not result["obsolete"]
+        )
+        return result
+
+    def _remove_obsolete_owned_hooks(
+        self, config: Dict[str, Any], ide_type: str
+    ) -> List[str]:
+        """Remove obsolete AI Guardian entries while retaining other hooks."""
+        manifest = self.expected_hook_manifest(ide_type)
+        hooks = config.get("hooks", {})
+        if ide_type == "windsurf" and isinstance(hooks, dict):
+            hooks = hooks.get("hooks", hooks)
+        if not isinstance(hooks, dict):
+            return []
+
+        removed: List[str] = []
+        for event_name in list(hooks):
+            if event_name in manifest:
+                continue
+            value = hooks[event_name]
+            if not self._contains_owned_command(value):
+                continue
+            cleaned = self._remove_owned_commands(value)
+            if cleaned:
+                hooks[event_name] = cleaned
+            else:
+                del hooks[event_name]
+            removed.append(event_name)
+        return removed
+
+    def reconcile_hooks_for_ide(
+        self, ide_type: str, dry_run: bool = False
+    ) -> Tuple[bool, str]:
+        """Bring a drifted IDE adapter back to the current manifest.
+
+        Reconciliation is idempotent: healthy adapters are left untouched.
+        A forced setup is used only after verification reports drift, and its
+        existing backup/merge behavior protects unrelated user hooks.
+        """
+        status = self.verify_hooks_for_ide(ide_type)
+        if status["healthy"]:
+            name = self.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
+            return True, f"{name}: hooks already current"
+        return self.setup_ide_hooks(ide_type, dry_run=dry_run, force=True)
+
+    @classmethod
+    def _remove_owned_commands(cls, value: Any) -> Any:
+        """Remove owned command leaves from a nested hook value."""
+        if isinstance(value, list):
+            return [
+                cleaned
+                for item in value
+                if (cleaned := cls._remove_owned_commands(item)) is not None
+            ]
+        if isinstance(value, dict):
+            cleaned = {}
+            for key, item in value.items():
+                if (
+                    key == "command"
+                    and isinstance(item, str)
+                    and _is_ai_guardian_command(item)
+                ):
+                    continue
+                child = cls._remove_owned_commands(item)
+                if child is not None:
+                    cleaned[key] = child
+            return cleaned or None
+        return value
 
     @classmethod
     def get_ide_for_mcp_client(cls, client_name: str) -> Optional[str]:
@@ -1401,7 +1665,20 @@ class IDESetup:
                 return True, msg
 
             # Check if hooks already configured
-            if not force and self.check_hooks_configured(config_path, ide_type):
+            if not force:
+                if self.expected_hook_manifest(ide_type):
+                    verification = self.verify_hooks_for_ide(ide_type)
+                    already_configured = verification["healthy"] or not any(
+                        status == "missing"
+                        for status in verification["events"].values()
+                    )
+                else:
+                    already_configured = self.check_hooks_configured(
+                        config_path, ide_type
+                    )
+            else:
+                already_configured = False
+            if already_configured:
                 return (
                     False,
                     f"ai-guardian hooks already configured for {ide_name}. Use --force to overwrite.",
@@ -1433,6 +1710,12 @@ class IDESetup:
                         existing_config = json.load(f)
                 except json.JSONDecodeError as e:
                     return False, f"Invalid JSON in {config_path}: {e}"
+
+            obsolete_removed = []
+            if force:
+                obsolete_removed = self._remove_obsolete_owned_hooks(
+                    existing_config, ide_type
+                )
 
             # Resolve absolute path and substitute into hook templates
             abs_path = _resolve_binary_path()
@@ -1515,6 +1798,12 @@ class IDESetup:
             gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
             message = f"✓ Successfully configured {ide_name} hooks at {config_path}\n"
+            if obsolete_removed:
+                message += (
+                    "  Removed obsolete AI Guardian hook events: "
+                    + ", ".join(obsolete_removed)
+                    + "\n"
+                )
             message += f"\n  {gitleaks_message}\n"
 
             if vbs_path:
