@@ -5,6 +5,7 @@ import pytest
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
 from ai_guardian.web.pages.traces import (
+    _format_tool_result_output,
     _get_tool_result_output,
     _get_turn_prompt_preview,
     _get_turn_type,
@@ -47,3 +48,13 @@ def test_sdk_tool_result_output_takes_precedence():
         )
         == "sdk output"
     )
+
+
+def test_tool_result_dict_is_formatted_as_json():
+    formatted = _format_tool_result_output({"status": "ok", "count": 2})
+
+    assert formatted == '{\n  "status": "ok",\n  "count": 2\n}'
+
+
+def test_tool_result_text_is_unchanged():
+    assert _format_tool_result_output("command output") == "command output"

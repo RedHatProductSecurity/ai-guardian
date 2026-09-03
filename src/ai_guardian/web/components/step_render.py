@@ -5,6 +5,8 @@ import urllib.parse
 
 from nicegui import ui
 
+from ai_guardian.web.components.content_viewer import detect_content_type
+
 _GUARDIAN_ICON_B64 = "iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAABuklEQVR4nG2TO2tVURCFvzn35ibGB3YSBcELKWxsQrS1CNpo4Q+wsxGs/AOpbAQLC7HUX2ChNiktFIV01iHkgXko4vsdl6zrOnCMGRiYWWet2Xv2zClJJ4ELwAngAHAEGAP2Afv5a5+Br8BPYAv4BCwDj/vAOeAm8AR4F8Iv4CPwIQUOAQeBfuLjwFXgh4EB8KyqzrLLJPk2VNXWHt+eWtskH5PUkzSQNCFpXNIlYNPuONhEOL20iW8wsqrakaSq+p0TpjoHTlXV9+CNOZL4p0BMEZ4C1oA3wdcknQdeAht0rG9RlBXsCnAdOAzsBHsIvAbuADcktbj8Bu6nqsqFjgHfMlZPouKOLwLvgWG4xnu+wSow7QfK6B5U1ZKkdeBVTjpaVS8kbbtIuNPWNsBCFuZyVfmEZT9Uev0S3wi2WlVvzY1moQlwC7gtaZgp+Hrr2ZFB4sqkhuZaY22TyvNZzeeSZkwEVjJr+0rEM+aEO29t4wYz47n0vCjpGuB+3YZ9O9hiOHPtXrTDHxWSNCnprpchdl/SvU7ub5NdzX9FEs9KetQROp7di7u7SGXP2/y0pDOd3P9Lu3Aj+wNyeh1fmZqHzAAAAABJRU5ErkJggg=="  # noqa: E501
 _GUARDIAN_ICON_SRC = f"data:image/png;base64,{_GUARDIAN_ICON_B64}"
 
@@ -47,6 +49,17 @@ def render_text_block(text, color="text-grey-6", max_height=None):
     height_style = (
         f"max-height: {max_height}px; overflow-y: auto; " if max_height else ""
     )
+    content_type = detect_content_type(text)
+    if content_type != "plain":
+        return (
+            ui.code(text, language=content_type)
+            .classes(f"w-full text-xs {color}")
+            .style(
+                "white-space: pre-wrap; word-break: break-word; "
+                f"margin: 2px 0; {height_style}"
+            )
+        )
+
     ui.html(
         f'<pre style="white-space: pre-wrap; word-break: break-word; '
         f"margin: 2px 0; font-size: 0.75rem; {height_style}"

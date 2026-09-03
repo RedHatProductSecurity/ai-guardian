@@ -939,6 +939,13 @@ def _get_tool_result_output(step):
     return step.get("output", step.get("content", ""))
 
 
+def _format_tool_result_output(output):
+    """Format structured tool results as valid, readable JSON."""
+    if isinstance(output, dict):
+        return json.dumps(output, indent=2, default=str)
+    return str(output)
+
+
 def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
     step_type = step.get("type", "")
     step_num = step.get("step", 0)
@@ -1031,7 +1038,7 @@ def _render_step(step, daemon_name="", turn_num=0, dialog_host=None):
                         "text-xs font-bold"
                     )
                     if output:
-                        output_text = str(output)
+                        output_text = _format_tool_result_output(output)
                         if len(output_text) > 200 or output_text.count("\n") > 5:
                             render_view_button(
                                 f"Tool Result: {name}", output_text, dialog_host
