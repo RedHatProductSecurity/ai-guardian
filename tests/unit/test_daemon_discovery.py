@@ -1718,6 +1718,24 @@ class TestDiscoverKubernetesSDK:
         mock_api.list_pod_for_all_namespaces.assert_called_once()
         assert len(targets) == 1
 
+    @mock.patch.dict(os.environ, {"USERNAME": "windows-user"}, clear=True)
+    def test_windows_username_is_used_for_default_ownership_scope(self):
+        with mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False):
+            d = DaemonDiscovery(
+                config={"daemon": {"tray": {"kubernetes": {"namespace": "shared"}}}}
+            )
+            with (
+                mock.patch("shutil.which", return_value=None),
+                mock.patch.object(d, "_discover_kubernetes_kubectl") as discover,
+            ):
+                d.discover_kubernetes()
+
+        discover.assert_called_once_with(
+            ["shared"],
+            "ai-guardian.daemon=true,ai-guardian.owner=windows-user",
+            63152,
+        )
+
     def test_sdk_loadbalancer_connectivity(self):
         pod = _make_mock_k8s_pod()
         svc = _make_mock_k8s_service(svc_type="LoadBalancer", lb_ip="203.0.113.10")

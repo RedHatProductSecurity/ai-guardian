@@ -609,6 +609,7 @@ class DaemonDiscovery:
             ownership.get("value")
             or os.environ.get("AI_GUARDIAN_K8S_OWNER")
             or os.environ.get("USER")
+            or os.environ.get("USERNAME")
         )
         if not self._valid_k8s_label(owner_label, owner_value):
             logger.warning(
