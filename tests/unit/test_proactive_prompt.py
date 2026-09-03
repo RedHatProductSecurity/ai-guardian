@@ -52,6 +52,21 @@ def test_prompt_uses_tkinter_first():
     show.assert_called_once_with()
 
 
+def test_tray_prompt_uses_tkinter_subprocess():
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch.object(dialog, "_show_tkinter_subprocess", return_value="action") as show,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+    show.assert_called_once_with()
+
+
 def test_prompt_falls_back_to_headless_when_ui_unavailable():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
@@ -103,3 +118,66 @@ def test_upgrade_prompt_records_snooze_for_local_tray(tmp_path):
 
     state = ProactivePromptState(tmp_path / "proactive_prompts.json")
     assert not state.available("upgrade_v9.9.9")
+
+
+def test_ide_setup_prompt_skips_remote_only_tray():
+    tray = SimpleNamespace(
+        _standalone=False,
+        _targets=[SimpleNamespace(name="container", runtime="container")],
+    )
+    monitor = TrayHealthMonitor(tray)
+
+    with patch.object(monitor, "_get_unconfigured_ides") as detected:
+        monitor._check_ide_setup_notification()
+
+    detected.assert_not_called()
+
+
+def test_ide_setup_prompt_configures_detected_local_ides(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ),
+        patch("ai_guardian.setup.setup_hooks") as setup_hooks,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    setup_hooks.assert_called_once_with(ide_type="claude", interactive=False)
+
+
+def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="snooze_1h",
+        ),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    assert not state.available("ide_setup_cursor")

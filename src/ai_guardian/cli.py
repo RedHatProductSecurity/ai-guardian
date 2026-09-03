@@ -53,6 +53,7 @@ def _is_stop_requested():
 
 def _ensure_daemon_started():
     """Auto-start daemon if not running. Silent — no output on success or failure."""
+    local_daemon = False
     try:
         if _is_stop_requested():
             logger.debug("Skipping daemon auto-start: recent stop requested")
@@ -60,8 +61,10 @@ def _ensure_daemon_started():
 
         from ai_guardian.daemon.client import is_daemon_running, start_daemon_background
 
-        if not is_daemon_running():
+        local_daemon = is_daemon_running()
+        if not local_daemon:
             start_daemon_background()
+            local_daemon = is_daemon_running()
     except Exception:
         pass  # intentionally silent — best-effort operation
 
@@ -69,6 +72,10 @@ def _ensure_daemon_started():
         from ai_guardian.daemon.auto_setup import auto_setup_tray
 
         auto_setup_tray()
+        from ai_guardian.daemon.auto_setup import notify_ide_setup_needed
+
+        if local_daemon:
+            notify_ide_setup_needed(runtime="local")
     except Exception:
         pass  # intentionally silent — best-effort operation
 
