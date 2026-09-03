@@ -36,6 +36,11 @@ from ai_guardian.daemon.protocol import (
 logger = logging.getLogger(__name__)
 
 
+def _remote_url_configured() -> bool:
+    """Return whether a remote daemon URL was explicitly configured."""
+    return bool(os.environ.get("AI_GUARDIAN_DAEMON_URL"))
+
+
 def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
     """Parse AI_GUARDIAN_DAEMON_URL env var for remote daemon connectivity.
 
@@ -47,7 +52,14 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
     if not url:
         return None
 
-    parsed = urlparse(url)
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or "127.0.0.1"
+        port = parsed.port
+    except ValueError as exc:
+        logger.warning("Invalid daemon URL: %s (%s)", url, exc)
+        return None
+
     if parsed.scheme not in ("http", "https"):
         logger.warning(
             "Unsupported daemon URL scheme: %s (use http:// locally or https:// remotely)",
@@ -55,7 +67,6 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
         )
         return None
 
-    host = parsed.hostname or "127.0.0.1"
     try:
         is_loopback = ipaddress.ip_address(host).is_loopback
     except ValueError:
@@ -67,7 +78,7 @@ def _get_remote_url() -> Optional[Tuple[str, str, int, Optional[str]]]:
         return None
     from ai_guardian.daemon import DEFAULT_REST_PORT
 
-    port = parsed.port or DEFAULT_REST_PORT
+    port = port or DEFAULT_REST_PORT
 
     auth_token = None
     if parsed.username:
@@ -145,7 +156,7 @@ def is_daemon_running():
     Returns:
         bool: True if daemon is running and responsive
     """
-    if _get_remote_url():
+    if _remote_url_configured():
         return _is_daemon_running_remote()
 
     pid_path = get_pid_path()
@@ -195,7 +206,7 @@ def send_hook_request(hook_data, timeout=2.0):
     if run_id:
         data["_ai_guardian_run_id"] = run_id
 
-    if _get_remote_url():
+    if _remote_url_configured():
         return _send_remote("/api/hook", data, timeout=timeout)
 
     try:
@@ -234,7 +245,7 @@ def send_sdk_check(check_type, data, timeout=5.0):
     Returns:
         dict or None: Response with check results, or None on failure
     """
-    if _get_remote_url():
+    if _remote_url_configured():
         payload = {"check_type": check_type, **data}
         return _send_remote("/api/check", payload, timeout=timeout)
 
@@ -544,7 +555,7 @@ def start_daemon_background():
     Returns:
         bool: True if daemon started successfully
     """
-    if _get_remote_url():
+    if _remote_url_configured():
         logger.debug("Remote daemon URL configured, skipping auto-start")
         return False
 

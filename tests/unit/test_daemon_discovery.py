@@ -1157,6 +1157,38 @@ class TestDiscoverKubernetesKubectl:
             ns_idx = call_args[0][0].index("-n")
             assert call_args[0][0][ns_idx + 1] == "my-ns"
 
+    @mock.patch("ai_guardian.daemon.discovery.HAS_K8S_SDK", False)
+    @mock.patch("subprocess.run")
+    @mock.patch("shutil.which", return_value="/usr/bin/kubectl")
+    def test_kubectl_uses_configured_context(self, mock_which, mock_run):
+        mock_run.return_value = mock.MagicMock(
+            returncode=0,
+            stdout=json.dumps(
+                {
+                    "items": [
+                        {"metadata": {"name": "pod-a"}, "status": {"phase": "Running"}}
+                    ]
+                }
+            ),
+            stderr="",
+        )
+        d = DaemonDiscovery(
+            config={
+                "daemon": {
+                    "tray": {
+                        "kubernetes": {
+                            "contexts": ["cluster-a"],
+                            "namespaces": ["ai-sdlc"],
+                        }
+                    }
+                }
+            }
+        )
+        targets = d.discover_kubernetes()
+        command = mock_run.call_args_list[0][0][0]
+        assert command[0:3] == ["kubectl", "--context", "cluster-a"]
+        assert targets[0].context == "cluster-a"
+
 
 def _make_mock_k8s_pod(
     name="guardian-pod",

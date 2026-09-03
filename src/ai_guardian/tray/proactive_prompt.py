@@ -240,7 +240,13 @@ class ProactivePromptDialog:
                     )
                 ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
 
-        ui.run(title=self.title, reload=False, show=True, port=0)
+        ui.run(
+            title=self.title,
+            reload=False,
+            show=True,
+            port=0,
+            host="127.0.0.1",
+        )
         done.wait(timeout=3600)
         return result["value"]
 

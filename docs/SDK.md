@@ -1407,7 +1407,7 @@ Traces are grouped by `run_id` across daemons (via `RunContext`), ordered by `ru
 
 ```bash
 # In docker-compose or k8s spec
-AI_GUARDIAN_TRACE_ENDPOINT=host.docker.internal:63152
+AI_GUARDIAN_TRACE_ENDPOINT=https://host.docker.internal:63152
 AI_GUARDIAN_TRACE_AUTH_TOKEN=<receiving-daemon-token>
 ```
 

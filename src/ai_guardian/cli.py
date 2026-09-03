@@ -60,15 +60,15 @@ def _ensure_daemon_started():
             return
 
         from ai_guardian.daemon.client import (
-            _get_remote_url,
+            _remote_url_configured,
             is_daemon_running,
             start_daemon_background,
         )
 
-        local_daemon = _get_remote_url() is None and is_daemon_running()
+        local_daemon = not _remote_url_configured() and is_daemon_running()
         if not local_daemon:
             start_daemon_background()
-            local_daemon = _get_remote_url() is None and is_daemon_running()
+            local_daemon = not _remote_url_configured() and is_daemon_running()
     except Exception:
         pass  # intentionally silent — best-effort operation
 

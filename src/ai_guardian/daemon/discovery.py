@@ -607,7 +607,9 @@ class DaemonDiscovery:
             return self._discover_kubernetes_sdk(
                 k8s_cfg, namespaces, label_selector, rest_port
             )
-        return self._discover_kubernetes_kubectl(namespaces, label_selector, rest_port)
+        return self._discover_kubernetes_kubectl(
+            namespaces, label_selector, rest_port, k8s_cfg.get("contexts")
+        )
 
     def _discover_kubernetes_sdk(
         self,
@@ -813,6 +815,7 @@ class DaemonDiscovery:
         namespaces: Optional[List[str]],
         label_selector: str,
         rest_port: int,
+        contexts: Optional[List[str]] = None,
     ) -> List[DaemonTarget]:
         """Discover K8s pod daemons via kubectl subprocess (fallback)."""
         if not shutil.which("kubectl"):
@@ -821,14 +824,14 @@ class DaemonDiscovery:
         target_namespaces = namespaces or ["ai-sdlc"]
 
         all_targets: List[DaemonTarget] = []
-        for namespace in target_namespaces:
-            if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", namespace):
-                logger.debug("Invalid Kubernetes namespace: %s", namespace)
-                continue
+        for context in contexts or [None]:
+            for namespace in target_namespaces:
+                if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", namespace):
+                    logger.debug("Invalid Kubernetes namespace: %s", namespace)
+                    continue
 
-            try:
-                result = subprocess.run(
-                    [
+                try:
+                    command = [
                         "kubectl",
                         "get",
                         "pods",
@@ -838,70 +841,86 @@ class DaemonDiscovery:
                         namespace,
                         "-o",
                         "json",
-                    ],
-                    capture_output=True,
-                    text=True,
-                    timeout=15,
-                )
-                if result.returncode != 0:
-                    logger.debug(
-                        "kubectl discovery failed for %s: %s",
-                        namespace,
-                        result.stderr,
+                    ]
+                    if context:
+                        command[1:1] = ["--context", context]
+                    result = subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=15,
                     )
-                    continue
-
-                data = json.loads(result.stdout)
-                for pod in data.get("items", []):
-                    metadata = pod.get("metadata", {})
-                    status = pod.get("status", {})
-                    phase = status.get("phase", "Unknown")
-
-                    pod_name = metadata.get("name", "")
-                    if not pod_name:
+                    if result.returncode != 0:
+                        logger.debug(
+                            "kubectl discovery failed for %s/%s: %s",
+                            context or "active",
+                            namespace,
+                            result.stderr,
+                        )
                         continue
 
-                    labels = metadata.get("labels", {})
-                    name = labels.get("ai-guardian.name", pod_name)
-                    pod_status = "running" if phase == "Running" else "unknown"
-                    k8s_token = self._kubectl_exec_auth_token(pod_name, namespace)
+                    data = json.loads(result.stdout)
+                    for pod in data.get("items", []):
+                        metadata = pod.get("metadata", {})
+                        status = pod.get("status", {})
+                        phase = status.get("phase", "Unknown")
 
-                    target = DaemonTarget(
-                        name=name,
-                        runtime="kubernetes",
-                        status=pod_status,
-                        port=rest_port,
-                        pod_name=pod_name,
-                        namespace=namespace,
-                        auth_token=k8s_token,
-                        last_seen=time.monotonic(),
+                        pod_name = metadata.get("name", "")
+                        if not pod_name:
+                            continue
+
+                        labels = metadata.get("labels", {})
+                        name = labels.get("ai-guardian.name", pod_name)
+                        pod_status = "running" if phase == "Running" else "unknown"
+                        k8s_token = self._kubectl_exec_auth_token(
+                            pod_name, namespace, context
+                        )
+
+                        target = DaemonTarget(
+                            name=name,
+                            runtime="kubernetes",
+                            status=pod_status,
+                            port=rest_port,
+                            pod_name=pod_name,
+                            namespace=namespace,
+                            context=context,
+                            auth_token=k8s_token,
+                            last_seen=time.monotonic(),
+                        )
+                        all_targets.append(target)
+
+                except (
+                    subprocess.TimeoutExpired,
+                    OSError,
+                    json.JSONDecodeError,
+                ) as e:
+                    logger.debug(
+                        "kubectl discovery error for %s/%s: %s",
+                        context or "active",
+                        namespace,
+                        e,
                     )
-                    all_targets.append(target)
-
-            except (
-                subprocess.TimeoutExpired,
-                OSError,
-                json.JSONDecodeError,
-            ) as e:
-                logger.debug("kubectl discovery error for %s: %s", namespace, e)
 
         return all_targets
 
     @staticmethod
-    def _kubectl_exec_auth_token(pod_name, namespace):
+    def _kubectl_exec_auth_token(pod_name, namespace, context=None):
         """Read auto-generated auth token from K8s pod via kubectl exec."""
         try:
+            command = [
+                "kubectl",
+                "exec",
+                pod_name,
+                "-n",
+                namespace,
+                "--",
+                "cat",
+                "/root/.local/state/ai-guardian/daemon.token",
+            ]
+            if context:
+                command[1:1] = ["--context", context]
             result = subprocess.run(
-                [
-                    "kubectl",
-                    "exec",
-                    pod_name,
-                    "-n",
-                    namespace,
-                    "--",
-                    "cat",
-                    "/root/.local/state/ai-guardian/daemon.token",
-                ],
+                command,
                 capture_output=True,
                 text=True,
                 timeout=5,

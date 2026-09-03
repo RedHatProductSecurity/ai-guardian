@@ -79,6 +79,9 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         patch(
             "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
         ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
+        ),
     ):
         assert dialog.show() == "dismiss"
 

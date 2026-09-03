@@ -386,3 +386,21 @@ class TestPushTraceToRemoteFallback:
             assert "/api/traces/remote" in req.full_url
             assert "tray-host:63152" in req.full_url
             assert req.get_header("Authorization") == "Bearer trace-token"
+
+    def test_rejects_insecure_non_loopback_endpoint(self, monkeypatch):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        monkeypatch.setenv("AI_GUARDIAN_TRACE_ENDPOINT", "http://tray-host:63152")
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
+            GuardedAgent._push_trace_to_remote("trace.json", {})
+        mock_urlopen.assert_not_called()
+
+    def test_binds_loopback_endpoint_to_http(self, monkeypatch):
+        from ai_guardian.integrations.anthropic.agent import GuardedAgent
+
+        monkeypatch.setenv("AI_GUARDIAN_TRACE_ENDPOINT", "127.0.0.1:63152")
+        with mock.patch("urllib.request.urlopen") as mock_urlopen:
+            GuardedAgent._push_trace_to_remote("trace.json", {})
+        assert mock_urlopen.call_args[0][0].full_url.startswith(
+            "http://127.0.0.1:63152"
+        )

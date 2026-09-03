@@ -17,6 +17,7 @@ _skip_no_unix_socket = pytest.mark.skipif(
 
 from ai_guardian.daemon.client import (
     _get_remote_url,
+    _remote_url_configured,
     _is_daemon_running_remote,
     _read_pid_from_file,
     _send_remote,
@@ -573,6 +574,16 @@ class TestRemoteURL:
     def test_unsupported_scheme(self, monkeypatch):
         monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
         assert _get_remote_url() is None
+
+    def test_invalid_url_remains_configured(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
+        assert _remote_url_configured() is True
+
+    def test_invalid_url_does_not_fall_back_to_socket(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "tcp://host:1234")
+        with mock.patch("ai_guardian.daemon.client._connect") as connect:
+            assert send_hook_request({"prompt": "test"}) is None
+        connect.assert_not_called()
 
     def test_token_from_file_fallback(self, monkeypatch, tmp_path):
         monkeypatch.setenv("AI_GUARDIAN_DAEMON_URL", "https://host:1234")

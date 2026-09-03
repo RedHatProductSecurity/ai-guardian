@@ -6,6 +6,7 @@ Kubernetes (REST + kubectl exec), and manual (REST) targets.
 """
 
 import json
+import ipaddress
 import logging
 import os
 import platform
@@ -21,6 +22,15 @@ from ai_guardian.daemon.discovery import DaemonTarget
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT = 5.0
+
+
+def _is_loopback_host(host: str) -> bool:
+    """Return whether host is a loopback IP or localhost name."""
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host.lower() in {"localhost", "localhost.localdomain"}
+
 
 # macOS terminals that support Terminal.app-style "do script" AppleScript.
 _MACOS_DO_SCRIPT_APPS = {"Terminal", "Warp"}
@@ -1396,6 +1406,11 @@ class MultiDaemonClient:
         parsed = urlparse(base)
         check_host = parsed.hostname or target.host
         check_port = parsed.port or target.port
+        if parsed.scheme == "http" and check_host and not _is_loopback_host(check_host):
+            logger.warning(
+                "Refusing insecure HTTP request to non-loopback target %s", check_host
+            )
+            return None
         if (
             check_host
             and check_port
