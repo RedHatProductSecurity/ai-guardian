@@ -31,6 +31,7 @@ class TrayHealthMonitor:
         self._upgrade_in_progress = set()
         self._self_upgrade_in_progress = False
         self._upgrade_notified_version = None
+        self._upgrade_prompt_in_progress = False
 
     def _check_config_error_notification(self):
         """Show OS notification once when a config error is detected."""
@@ -361,6 +362,12 @@ class TrayHealthMonitor:
         except (ImportError, Exception):
             return False
 
+    def _has_local_daemon(self):
+        """Return whether this tray controls a local daemon installation."""
+        return self._tray._standalone or any(
+            target.runtime == "local" for target in self._tray._targets
+        )
+
     def _self_upgrade_label(self):
         """Dynamic label for the self-upgrade menu item."""
         if self._self_upgrade_in_progress:
@@ -416,10 +423,10 @@ class TrayHealthMonitor:
         ).start()
 
     def _check_self_upgrade_notification(self):
-        """Send one-time OS notification when a new version is detected."""
-        if not self._is_self_upgrade_available():
+        """Show a persistent upgrade prompt when a new version is detected."""
+        if not self._has_local_daemon() or not self._is_self_upgrade_available():
             return
-        if self._pypi_latest == self._upgrade_notified_version:
+        if self._upgrade_prompt_in_progress:
             return
 
         try:
@@ -433,14 +440,45 @@ class TrayHealthMonitor:
         except Exception:
             pass
 
-        self._upgrade_notified_version = self._pypi_latest
+        from ai_guardian.tray.proactive_prompt import (
+            ProactivePromptDialog,
+            ProactivePromptState,
+        )
+
+        version = self._pypi_latest
+        prompt_key = f"upgrade_v{version}"
+        state = ProactivePromptState()
+        if not state.available(prompt_key):
+            return
+
+        self._upgrade_notified_version = version
+        self._upgrade_prompt_in_progress = True
+
+        def _show_prompt():
+            try:
+                from ai_guardian import __version__ as current_version
+
+                dialog = ProactivePromptDialog(
+                    title="AI Guardian Update Available",
+                    message=(
+                        f"A new version is available: v{current_version} → v{version}\n\n"
+                        "Upgrade now to get the latest security and reliability fixes."
+                    ),
+                    action_label="Upgrade Now",
+                    dismiss_label="Skip This Version",
+                    snooze_options=("1h", "6h", "1d", "1w"),
+                )
+                result = dialog.show()
+                state.record(prompt_key, result)
+                if result == "action":
+                    self._do_self_upgrade()
+            except Exception as exc:
+                logger.warning("Upgrade prompt failed: %s", exc)
+            finally:
+                self._upgrade_prompt_in_progress = False
+
         threading.Thread(
-            target=tray_notifications.show_notification,
-            args=(
-                "AI Guardian Update Available",
-                f"v{self._pypi_latest} is available. "
-                "Click Upgrade in the tray menu.",
-            ),
+            target=_show_prompt,
             daemon=True,
-            name="upgrade-notify",
+            name="upgrade-prompt",
         ).start()
