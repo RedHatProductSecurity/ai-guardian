@@ -2,6 +2,7 @@
 
 import atexit
 import json
+import ipaddress
 import logging
 import os
 import random
@@ -10,6 +11,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Union
+from urllib.parse import urlparse
 
 from ai_guardian.integrations.anthropic.tools import (
     MCP_TOOL_PREFIX,
@@ -960,7 +962,7 @@ class GuardedAgent:
     def _push_trace_to_remote(filename: str, trace_doc: Dict[str, Any]) -> None:
         """Push trace directly to a remote tray daemon (direct-mode fallback).
 
-        Uses ``AI_GUARDIAN_TRACE_ENDPOINT`` env var (``host:port``).
+        Uses ``AI_GUARDIAN_TRACE_ENDPOINT`` env var (``https://host:port``).
         """
         endpoint = os.environ.get("AI_GUARDIAN_TRACE_ENDPOINT", "")
         if not endpoint:
@@ -980,13 +982,31 @@ class GuardedAgent:
 
             from urllib.request import Request, urlopen
 
-            url = f"http://{endpoint}/api/traces/remote"
+            parsed = urlparse(endpoint if "://" in endpoint else f"//{endpoint}")
+            host = parsed.hostname or ""
+            try:
+                is_loopback = ipaddress.ip_address(host).is_loopback
+            except ValueError:
+                is_loopback = host.lower() in {"localhost", "localhost.localdomain"}
+            scheme = parsed.scheme or ("http" if is_loopback else "https")
+            if scheme not in ("http", "https") or (
+                scheme == "http" and not is_loopback
+            ):
+                logger.warning("Refusing insecure trace endpoint: %s", endpoint)
+                return
+            netloc = parsed.netloc or parsed.path
+            url = f"{scheme}://{netloc}/api/traces/remote"
             req = Request(
                 url,
                 data=payload,
                 headers={"Content-Type": "application/json"},
                 method="POST",
             )
+            auth_token = os.environ.get(
+                "AI_GUARDIAN_TRACE_AUTH_TOKEN"
+            ) or os.environ.get("AI_GUARDIAN_AUTH_TOKEN")
+            if auth_token:
+                req.add_header("Authorization", f"Bearer {auth_token}")
             urlopen(req, timeout=5)
         except Exception as exc:
             logger.debug("Failed to push trace to remote endpoint: %s", exc)

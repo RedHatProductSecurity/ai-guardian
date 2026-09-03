@@ -314,7 +314,12 @@ def perform_full_upgrade(
     result = run_self_upgrade(version=version)
 
     if result.success and restart_daemon:
-        _restart_daemon()
+        if not _restart_daemon():
+            result.success = False
+            result.output = (
+                result.output.rstrip()
+                + "\nPackage upgraded, but the daemon failed to restart."
+            )
 
     return result
 

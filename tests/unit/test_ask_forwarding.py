@@ -368,10 +368,13 @@ class TestTrayPolling:
         remote_target.status = "running"
 
         tray._targets = [local_target, remote_target]
-        with patch.object(DaemonTray, "_get_local_daemon_port", return_value=63152):
+        with (
+            patch.object(DaemonTray, "_get_local_daemon_port", return_value=63152),
+            patch.object(DaemonTray, "_get_local_daemon_token", return_value=""),
+        ):
             tray._register_tray_with_remotes()
         tray._multi_client.register_tray.assert_called_once_with(
-            remote_target, "host.docker.internal", 63152
+            remote_target, "host.docker.internal", 63152, ""
         )
 
 

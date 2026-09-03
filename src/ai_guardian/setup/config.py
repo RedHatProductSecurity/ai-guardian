@@ -460,7 +460,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "headers": {},
             "resource_attributes": {},
         },
-        "_comment_update_checking": "Version update checking and self-upgrade notification (NEW in v1.19.0, Issue #2155). Checks PyPI for new releases. Disable for air-gapped environments.",
+        "_comment_update_checking": "Version update checking and self-upgrade notification (NEW in v1.18.0, Issue #2155). Checks PyPI for new releases. Disable for air-gapped environments.",
         "update_checking": {
             "enabled": True,
             "check_interval_seconds": 300,

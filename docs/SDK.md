@@ -1403,11 +1403,12 @@ When running pipelines across multiple machines (e.g., triage on machine A, reme
 
 Traces are grouped by `run_id` across daemons (via `RunContext`), ordered by `run_sequence`, and each trace shows a daemon source badge.
 
-**Direct-mode SDK on containers**: When the SDK runs in direct mode (no local daemon), set `AI_GUARDIAN_TRACE_ENDPOINT` to push traces directly to the tray's daemon:
+**Direct-mode SDK on containers**: When the SDK runs in direct mode (no local daemon), set `AI_GUARDIAN_TRACE_ENDPOINT` and the receiving daemon token to push traces directly to the tray's daemon:
 
 ```bash
 # In docker-compose or k8s spec
-AI_GUARDIAN_TRACE_ENDPOINT=host.docker.internal:63152
+AI_GUARDIAN_TRACE_ENDPOINT=https://host.docker.internal:63152
+AI_GUARDIAN_TRACE_AUTH_TOKEN=<receiving-daemon-token>
 ```
 
 The SDK uses `hostname` as the daemon name for traces pushed this way.
