@@ -377,7 +377,7 @@ class TrayHealthMonitor:
             setup = IDESetup()
             unconfigured = []
             for ide_type in setup.list_detected_ides():
-                configured, _ = setup.check_hooks_for_ide(ide_type)
+                configured, _ = setup.check_hooks_for_ide(ide_type, integrity=True)
                 if not configured:
                     unconfigured.append(ide_type)
             return unconfigured
@@ -401,6 +401,18 @@ class TrayHealthMonitor:
         )
 
         names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+        attention = {}
+        statuses = {}
+        for ide_type in unconfigured:
+            status = IDESetup().verify_hooks_for_ide(ide_type)
+            statuses[ide_type] = status
+            events = [
+                f"{event} ({event_status})"
+                for event, event_status in status["events"].items()
+                if event_status != "healthy"
+            ]
+            events.extend(f"{event} (obsolete)" for event in status["obsolete"])
+            attention[ide_type] = ", ".join(events)
         prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         state = ProactivePromptState()
         if not state.available(prompt_key):
@@ -417,8 +429,11 @@ class TrayHealthMonitor:
                     )
                 else:
                     message = (
-                        "These IDEs were detected but are not protected by AI Guardian:\n"
-                        + "\n".join(f"• {name}" for name in names)
+                        "These IDEs have incomplete AI Guardian hooks:\n"
+                        + "\n".join(
+                            f"• {name}: {attention.get(ide, 'unknown')}"
+                            for ide, name in zip(unconfigured, names)
+                        )
                         + "\n\nSet up their security hooks now?"
                     )
                 dialog = ProactivePromptDialog(
@@ -434,7 +449,18 @@ class TrayHealthMonitor:
                     from ai_guardian.setup import setup_hooks
 
                     for ide_type in unconfigured:
-                        setup_hooks(ide_type=ide_type, interactive=False)
+                        needs_force = bool(statuses[ide_type]["obsolete"]) or any(
+                            status == "changed"
+                            for status in statuses[ide_type]["events"].values()
+                        )
+                        if needs_force:
+                            setup_hooks(
+                                ide_type=ide_type,
+                                interactive=False,
+                                force=True,
+                            )
+                        else:
+                            setup_hooks(ide_type=ide_type, interactive=False)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:
