@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **OpenCode IDE Conversations adapter**: Discover OpenCode SQLite sessions and render their titles, models, timestamps, messages, reasoning, and tool activity in the IDE Conversations page (#2206)
+
 - **Merged hook trace sessions**: Group trace fragments sharing a `session_id` into one Sessions entry and detail view, with combined turns, token usage, time boundaries, and visible fragment counts (#2208)
 
 - **IDE Conversations filters**: Add a searchable IDE dropdown with an "All" option for browsing conversations across every supported IDE (#2207)

@@ -2,6 +2,8 @@
 
 import json
 import logging
+import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -1446,6 +1448,225 @@ class KiroSessionAdapter(SessionAdapter):
 
 
 # ---------------------------------------------------------------------------
+# OpenCode
+# ---------------------------------------------------------------------------
+
+
+class OpenCodeSessionAdapter(SessionAdapter):
+    """Read OpenCode conversations from its SQLite session database."""
+
+    name = "opencode"
+    session_dirs = {
+        "env": "OPENCODE_HOME",
+        "default_mac": "~/.local/share/opencode",
+        "default_linux": "~/.local/share/opencode",
+        "default_win": "%LOCALAPPDATA%/opencode",
+        "file": "opencode.db",
+    }
+
+    def discover(self, project_path=None, limit=100):
+        base = self.resolve_session_dir()
+        if not base:
+            return []
+
+        db_path = base / "opencode.db"
+        if not db_path.is_file():
+            return []
+        try:
+            db_size = db_path.stat().st_size
+        except OSError:
+            return []
+
+        sessions = []
+        try:
+            with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
+                query = (
+                    "SELECT id, directory, title, time_created, time_updated "
+                    "FROM session"
+                )
+                params = []
+                if project_path:
+                    query += " WHERE directory = ?"
+                    params.append(project_path)
+                query += " ORDER BY time_updated DESC LIMIT ?"
+                params.append(limit)
+                rows = conn.execute(query, params).fetchall()
+
+                for session_id, directory, title, created, updated in rows:
+                    meta = self._read_session_meta(db_path, session_id, conn=conn)
+                    sessions.append(
+                        {
+                            "ide": self.name,
+                            "session_id": session_id,
+                            "project_path": directory or "",
+                            "file_path": str(db_path),
+                            "size_bytes": db_size,
+                            "modified": (updated or created or 0) / 1000.0,
+                            "title": title or meta["title"],
+                            "model": meta["model"],
+                            "message_count": meta["message_count"],
+                            "token_usage": meta["token_usage"],
+                        }
+                    )
+        except sqlite3.Error as exc:
+            logger.debug("Failed to discover OpenCode sessions: %s", exc)
+
+        return sessions[:limit]
+
+    def read_summary(self, session):
+        result = super().read_summary(session)
+        file_path = session.get("file_path", "")
+        session_id = session.get("session_id", "")
+        if not file_path or not session_id:
+            return result
+
+        meta = self._read_session_meta(Path(file_path), session_id)
+        for key in ("title", "model", "message_count", "token_usage"):
+            if meta.get(key) not in (None, "", {}):
+                result[key] = meta[key]
+        return result
+
+    def read_detail(self, session):
+        file_path = session.get("file_path", "")
+        session_id = session.get("session_id", "")
+        if not file_path or not session_id:
+            return []
+
+        steps = []
+        try:
+            with sqlite3.connect(f"file:{file_path}?mode=ro", uri=True) as conn:
+                rows = conn.execute(
+                    "SELECT m.data, m.time_created, p.id, p.data, p.time_created "
+                    "FROM message AS m LEFT JOIN part AS p ON p.message_id = m.id "
+                    "WHERE m.session_id = ? "
+                    "ORDER BY m.time_created ASC, p.time_created ASC, p.id ASC",
+                    (session_id,),
+                ).fetchall()
+
+            for message_data, message_created, part_id, part_data, part_created in rows:
+                message = self._load_json_object(message_data)
+                part = self._load_json_object(part_data)
+                if not part:
+                    continue
+
+                role = message.get("role", "")
+                timestamp = self._format_timestamp(part_created or message_created)
+                part_type = part.get("type", "")
+                if part_type == "text" and part.get("text"):
+                    steps.append(
+                        {
+                            "type": "user" if role == "user" else "assistant",
+                            "content": part["text"],
+                            "timestamp": timestamp,
+                            "model": self._model_name(message),
+                        }
+                    )
+                elif part_type == "reasoning" and part.get("text"):
+                    steps.append(
+                        {
+                            "type": "thinking",
+                            "content": part["text"],
+                            "timestamp": timestamp,
+                        }
+                    )
+                elif part_type == "tool":
+                    state = self._load_json_object(part.get("state"))
+                    tool_id = part.get("callID", part_id or "")
+                    steps.append(
+                        {
+                            "type": "tool_use",
+                            "tool_name": part.get("tool", ""),
+                            "tool_input": state.get("input", {}),
+                            "tool_id": tool_id,
+                            "timestamp": timestamp,
+                        }
+                    )
+                    if state.get("output") not in (None, ""):
+                        steps.append(
+                            {
+                                "type": "tool_result",
+                                "tool_name": part.get("tool", ""),
+                                "content": str(state["output"]),
+                                "tool_id": tool_id,
+                                "timestamp": timestamp,
+                            }
+                        )
+        except sqlite3.Error as exc:
+            logger.debug("Failed to read OpenCode session detail: %s", exc)
+
+        return steps
+
+    @classmethod
+    def _read_session_meta(cls, db_path, session_id, conn=None):
+        meta = {"title": "", "model": "", "message_count": 0, "token_usage": {}}
+        owns_connection = conn is None
+        try:
+            if conn is None:
+                conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+
+            row = conn.execute(
+                "SELECT title FROM session WHERE id = ?", (session_id,)
+            ).fetchone()
+            if row:
+                meta["title"] = row[0] or ""
+
+            messages = conn.execute(
+                "SELECT data FROM message WHERE session_id = ? ORDER BY time_created",
+                (session_id,),
+            ).fetchall()
+            meta["message_count"] = len(messages)
+            input_tokens = 0
+            output_tokens = 0
+            for (data,) in messages:
+                message = cls._load_json_object(data)
+                if not meta["model"]:
+                    meta["model"] = cls._model_name(message)
+                tokens = message.get("tokens", {})
+                if isinstance(tokens, dict):
+                    input_tokens += tokens.get("input", 0) or 0
+                    output_tokens += tokens.get("output", 0) or 0
+            meta["token_usage"] = {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+            }
+        except sqlite3.Error as exc:
+            logger.debug("Failed to read OpenCode session metadata: %s", exc)
+        finally:
+            if owns_connection and conn is not None:
+                conn.close()
+        return meta
+
+    @staticmethod
+    def _load_json_object(value):
+        if isinstance(value, dict):
+            return value
+        if not isinstance(value, str):
+            return {}
+        try:
+            parsed = json.loads(value)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+
+    @staticmethod
+    def _model_name(message):
+        return message.get("modelID", message.get("model", ""))
+
+    @staticmethod
+    def _format_timestamp(timestamp):
+        if not timestamp:
+            return ""
+        try:
+            return (
+                datetime.fromtimestamp(timestamp / 1000.0, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+        except (OSError, OverflowError, TypeError, ValueError):
+            return ""
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -1459,5 +1680,6 @@ for _adapter in [
     GeminiSessionAdapter(),
     ClineSessionAdapter(),
     KiroSessionAdapter(),
+    OpenCodeSessionAdapter(),
 ]:
     SESSION_ADAPTERS[_adapter.name] = _adapter
