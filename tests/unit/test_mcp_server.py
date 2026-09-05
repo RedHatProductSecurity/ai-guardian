@@ -752,6 +752,37 @@ class TestGetViolations:
         result = tool.fn()
         assert result["violations"][0]["file"] == "/tmp/from_context.py"
 
+    @patch("ai_guardian.violations.logger.ViolationLogger")
+    def test_prompt_injection_file_content_includes_location(self, mock_vl_cls):
+        """get_violations exposes prompt-injection file and line metadata."""
+        mock_vl = MagicMock()
+        mock_vl.get_recent_violations.return_value = [
+            {
+                "timestamp": "2026-07-27T10:00:00Z",
+                "violation_type": "prompt_injection",
+                "severity": "high",
+                "blocked": {
+                    "file_path": "/repo/reference.md",
+                    "line_number": 2,
+                    "start_column": 0,
+                    "end_column": 31,
+                },
+                "context": {"tool_name": "Read"},
+            }
+        ]
+        mock_vl_cls.return_value = mock_vl
+
+        server = create_server()
+        tool = server._tool_manager._tools["get_violations"]
+        result = tool.fn(limit=1)
+
+        violation = result["violations"][0]
+        assert violation["type"] == "prompt_injection"
+        assert violation["file"] == "/repo/reference.md"
+        assert violation["line"] == 2
+        assert violation["start_column"] == 1
+        assert violation["end_column"] == 32
+
 
 class TestGetConfig:
     """Test get_config tool."""
