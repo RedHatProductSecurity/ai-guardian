@@ -30,7 +30,8 @@ Install modes (mutually exclusive, default: auto-detect):
       3. venv fails    → bare pip install
 
 Options:
-    --ide NAME          Setup hooks for a specific IDE (skipped if omitted)
+    --ide NAME          Setup hooks for a specific IDE; when omitted, detect
+                        installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, codex, windsurf,
                                  gemini, cline, zoocode, augment, kiro, junie,
                                  aiderdesk, opencode
@@ -84,22 +85,23 @@ has_uv() { command -v uv >/dev/null 2>&1; }
 detect_installed_agents() {
     local agents=()
 
-    # JSON-config agents: check file exists + contains "ai-guardian"
-    local claude_config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/settings.json"
-    [ -f "$claude_config" ] && grep -q "ai-guardian" "$claude_config" 2>/dev/null && agents+=("claude")
-    [ -f "$HOME/.cursor/hooks.json" ] && grep -q "ai-guardian" "$HOME/.cursor/hooks.json" 2>/dev/null && agents+=("cursor")
-    [ -f "$HOME/.github/hooks/hooks.json" ] && grep -q "ai-guardian" "$HOME/.github/hooks/hooks.json" 2>/dev/null && agents+=("copilot")
-    [ -f "$HOME/.codex/hooks.json" ] && grep -q "ai-guardian" "$HOME/.codex/hooks.json" 2>/dev/null && agents+=("codex")
-    [ -f "$HOME/.codeium/windsurf/hooks.json" ] && grep -q "ai-guardian" "$HOME/.codeium/windsurf/hooks.json" 2>/dev/null && agents+=("windsurf")
-    [ -f "$HOME/.gemini/settings.json" ] && grep -q "ai-guardian" "$HOME/.gemini/settings.json" 2>/dev/null && agents+=("gemini")
-    [ -f "$HOME/.augment/settings.json" ] && grep -q "ai-guardian" "$HOME/.augment/settings.json" 2>/dev/null && agents+=("augment")
+    # Detect the IDE's configuration directory, not an ai-guardian hook marker.
+    # A fresh IDE installation has no ai-guardian entry yet, which is exactly
+    # the case this installer must configure.
+    local claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+    [ -d "$claude_dir" ] && agents+=("claude")
+    [ -d "$HOME/.cursor" ] && agents+=("cursor")
+    [ -d "$HOME/.github/hooks" ] && agents+=("copilot")
+    [ -d "$HOME/.codex" ] && agents+=("codex")
+    [ -d "$HOME/.codeium/windsurf" ] && agents+=("windsurf")
+    [ -d "$HOME/.gemini" ] && agents+=("gemini")
+    [ -d "$HOME/.augment" ] && agents+=("augment")
 
-    # Plugin-file agents: check file exists
-    [ -f "$HOME/.config/opencode/plugins/ai-guardian.ts" ] && agents+=("opencode")
-
-    # Extension-based agents: check index.ts exists + contains "ai-guardian"
-    [ -f "$HOME/.aider-desk/extensions/ai-guardian/index.ts" ] && agents+=("aiderdesk")
-    [ -f "$HOME/.openclaw/plugins/ai-guardian/index.ts" ] && agents+=("openclaw")
+    # Plugin/extension agents are detected from their parent configuration
+    # directory so the installer can create the integration on first setup.
+    [ -d "$HOME/.config/opencode" ] && agents+=("opencode")
+    [ -d "$HOME/.aider-desk/extensions" ] && agents+=("aiderdesk")
+    [ -d "$HOME/.openclaw/plugins" ] && agents+=("openclaw")
 
     echo "${agents[@]}"
 }
@@ -490,15 +492,15 @@ if [ "$INSTALL_GOBJECT" = true ]; then
     fi
 fi
 
-# --- Step 3e: Auto-detect and update existing agent hooks ---
+# --- Step 3e: Auto-detect installed IDEs and update/install their hooks ---
 
 if [ -z "$IDE" ] && [ "$NO_SETUP" = false ]; then
     DETECTED=$(detect_installed_agents)
     if [ -n "$DETECTED" ]; then
-        log "Detected existing hooks, updating..."
+        log "Detected installed IDEs, setting up hooks..."
         UPDATED=()
         for agent in $DETECTED; do
-            if $AG_CMD setup --ide "$agent" --force --yes \
+            if $AG_CMD setup --ide "$agent" --install-scanner --force --yes \
                 "${SETUP_ARGS[@]+"${SETUP_ARGS[@]}"}" >/dev/null 2>&1; then
                 UPDATED+=("$agent")
             fi
@@ -508,7 +510,7 @@ if [ -z "$IDE" ] && [ "$NO_SETUP" = false ]; then
         fi
     else
         echo ""
-        echo "  No existing hooks found. Run setup for your IDE:"
+        echo "  No supported IDE installations detected. Run setup explicitly:"
         echo "    ai-guardian setup --ide claude"
         echo "    ai-guardian setup --ide opencode"
         echo "    ai-guardian setup --ide cursor"

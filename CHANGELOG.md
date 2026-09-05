@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
+
 - **Proactive upgrade prompt**: Show a local tray popup for available releases with Upgrade Now, snooze, and version-specific dismissal actions (#2218)
 
 - **OpenCode IDE Conversations adapter**: Discover OpenCode SQLite sessions and render their titles, models, timestamps, messages, reasoning, and tool activity in the IDE Conversations page (#2206)

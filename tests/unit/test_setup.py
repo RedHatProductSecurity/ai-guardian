@@ -116,6 +116,59 @@ class TestIDESetup:
             detected = setup.list_detected_ides()
             assert set(detected) == {"claude", "cursor"}
 
+    def test_list_installed_ides_uses_config_directories(self, tmp_path, monkeypatch):
+        """User-facing detection uses IDE config directories, not project root."""
+        setup = IDESetup()
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        cursor_dir = tmp_path / ".cursor"
+        cursor_dir.mkdir()
+        (cursor_dir / "mcp.json").write_text("{}")
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "claude": {
+                    "config_path": str(claude_dir / "settings.json"),
+                    "config_filename": "settings.json",
+                },
+                "cursor": {
+                    "config_path": str(cursor_dir / "hooks.json"),
+                    "config_filename": "hooks.json",
+                },
+                "crush": {
+                    "config_path": ".crush.json",
+                    "config_filename": "crush.json",
+                },
+            },
+        ):
+            monkeypatch.chdir(tmp_path)
+            installed = setup.list_installed_ides()
+
+        assert installed == ["claude", "cursor"]
+
+    def test_list_installed_ides_accepts_cursor_config_directory(self, tmp_path):
+        """Cursor is installed when its canonical config directory exists."""
+        setup = IDESetup()
+        cursor_dir = tmp_path / ".cursor"
+        cursor_dir.mkdir()
+        (cursor_dir / "mcp.json").write_text(
+            json.dumps({"mcpServers": {"ai-guardian": {"command": "ai-guardian"}}})
+        )
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "cursor": {
+                    "config_path": str(cursor_dir / "hooks.json"),
+                    "config_filename": "hooks.json",
+                }
+            },
+        ):
+            assert setup.list_installed_ides() == ["cursor"]
+
     def test_backup_config(self, tmp_path):
         """Test creating backup of config file."""
         setup = IDESetup()

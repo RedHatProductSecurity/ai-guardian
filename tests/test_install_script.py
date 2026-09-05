@@ -175,23 +175,55 @@ class TestInstallScriptAgentDetection:
     def script_content(self):
         return SCRIPT.read_text()
 
+    @staticmethod
+    def _detection_function(script_content):
+        """Extract the self-contained Bash detection function for a behavior test."""
+        start = script_content.index("detect_installed_agents()")
+        end = script_content.index("\n}\n\n# --- Parse arguments ---", start) + 2
+        return script_content[start:end]
+
     @pytest.mark.parametrize(
         "agent_path",
         [
             "CLAUDE_CONFIG_DIR",
-            ".cursor/hooks.json",
-            ".github/hooks/hooks.json",
-            ".codex/hooks.json",
-            ".codeium/windsurf/hooks.json",
-            ".gemini/settings.json",
-            ".augment/settings.json",
-            ".config/opencode/plugins/ai-guardian.ts",
-            ".aider-desk/extensions/ai-guardian/index.ts",
-            ".openclaw/plugins/ai-guardian/index.ts",
+            ".cursor",
+            ".github/hooks",
+            ".codex",
+            ".codeium/windsurf",
+            ".gemini",
+            ".augment",
+            ".config/opencode",
+            ".aider-desk/extensions",
+            ".openclaw/plugins",
         ],
     )
     def test_detection_checks_agent_path(self, script_content, agent_path):
         assert agent_path in script_content, f"Detection missing path: {agent_path}"
+
+    def test_detects_unconfigured_ide_directory(self, tmp_path, script_content):
+        """Fresh IDE directories are detected before they contain our hooks."""
+        home = tmp_path / "home"
+        (home / ".cursor").mkdir(parents=True)
+        env = dict(os.environ, HOME=str(home), CLAUDE_CONFIG_DIR="")
+
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                self._detection_function(script_content) + "\ndetect_installed_agents",
+            ],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=tmp_path,
+        )
+
+        assert result.returncode == 0
+        assert result.stdout.strip() == "cursor"
+
+    def test_detection_includes_setup_for_unconfigured_agents(self, script_content):
+        assert "Detected installed IDEs, setting up hooks" in script_content
+        assert "--install-scanner --force --yes" in script_content
 
 
 class TestInstallPs1:
@@ -231,6 +263,22 @@ class TestInstallPs1:
     def test_ps1_contains_detect_function(self):
         content = PS1_SCRIPT.read_text()
         assert "Detect-InstalledAgents" in content
+
+    def test_ps1_detects_unconfigured_ide_directories(self):
+        content = PS1_SCRIPT.read_text()
+        for config_dir in (
+            "$claudeDir",
+            "$cursorDir",
+            "$copilotDir",
+            "$codexDir",
+            "$windsurfDir",
+            "$geminiDir",
+            "$augmentDir",
+            "$opencodeDir",
+            "$aiderdeskDir",
+            "$openclawDir",
+        ):
+            assert f"Test-Path {config_dir} -PathType Container" in content
 
     @pytest.mark.skipif(
         shutil.which("pwsh") is None,
