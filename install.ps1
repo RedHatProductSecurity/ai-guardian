@@ -10,7 +10,8 @@
     Create a virtual environment at $HOME\.ai-guardian-venv\
 
 .PARAMETER IDE
-    Setup hooks for a specific IDE (skipped if omitted).
+    Setup hooks for a specific IDE. When omitted, installed IDEs are detected
+    and their hooks are set up automatically.
     Choices: claude, cursor, copilot, codex, windsurf, gemini, cline,
              zoocode, augment, kiro, junie, aiderdesk, opencode
 
@@ -134,44 +135,45 @@ if ($Tkinter) {
     }
 }
 
-# --- Step 3c: Auto-detect and update existing agent hooks ---
+# --- Step 3c: Auto-detect installed IDEs and update/install their hooks ---
 
 function Detect-InstalledAgents {
     $agents = @()
 
-    # JSON-config agents: check file exists + contains "ai-guardian"
+    # Detect the IDE's configuration directory, not an ai-guardian hook marker.
+    # A fresh IDE installation has no ai-guardian entry yet, which is exactly
+    # the case this installer must configure.
     $claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
-    $claudeConfig = Join-Path $claudeDir "settings.json"
-    if ((Test-Path $claudeConfig) -and (Select-String -Path $claudeConfig -Pattern "ai-guardian" -Quiet)) { $agents += "claude" }
+    if (Test-Path $claudeDir -PathType Container) { $agents += "claude" }
 
-    $cursorConfig = Join-Path $HOME ".cursor\hooks.json"
-    if ((Test-Path $cursorConfig) -and (Select-String -Path $cursorConfig -Pattern "ai-guardian" -Quiet)) { $agents += "cursor" }
+    $cursorDir = Join-Path $HOME ".cursor"
+    if (Test-Path $cursorDir -PathType Container) { $agents += "cursor" }
 
-    $copilotConfig = Join-Path $HOME ".github\hooks\hooks.json"
-    if ((Test-Path $copilotConfig) -and (Select-String -Path $copilotConfig -Pattern "ai-guardian" -Quiet)) { $agents += "copilot" }
+    $copilotDir = Join-Path $HOME ".github\hooks"
+    if (Test-Path $copilotDir -PathType Container) { $agents += "copilot" }
 
-    $codexConfig = Join-Path $HOME ".codex\hooks.json"
-    if ((Test-Path $codexConfig) -and (Select-String -Path $codexConfig -Pattern "ai-guardian" -Quiet)) { $agents += "codex" }
+    $codexDir = Join-Path $HOME ".codex"
+    if (Test-Path $codexDir -PathType Container) { $agents += "codex" }
 
-    $windsurfConfig = Join-Path $HOME ".codeium\windsurf\hooks.json"
-    if ((Test-Path $windsurfConfig) -and (Select-String -Path $windsurfConfig -Pattern "ai-guardian" -Quiet)) { $agents += "windsurf" }
+    $windsurfDir = Join-Path $HOME ".codeium\windsurf"
+    if (Test-Path $windsurfDir -PathType Container) { $agents += "windsurf" }
 
-    $geminiConfig = Join-Path $HOME ".gemini\settings.json"
-    if ((Test-Path $geminiConfig) -and (Select-String -Path $geminiConfig -Pattern "ai-guardian" -Quiet)) { $agents += "gemini" }
+    $geminiDir = Join-Path $HOME ".gemini"
+    if (Test-Path $geminiDir -PathType Container) { $agents += "gemini" }
 
-    $augmentConfig = Join-Path $HOME ".augment\settings.json"
-    if ((Test-Path $augmentConfig) -and (Select-String -Path $augmentConfig -Pattern "ai-guardian" -Quiet)) { $agents += "augment" }
+    $augmentDir = Join-Path $HOME ".augment"
+    if (Test-Path $augmentDir -PathType Container) { $agents += "augment" }
 
-    # Plugin-file agents
-    $opencodePlugin = Join-Path $HOME ".config\opencode\plugins\ai-guardian.ts"
-    if (Test-Path $opencodePlugin) { $agents += "opencode" }
+    # Plugin/extension agents are detected from their parent configuration
+    # directory so the installer can create the integration on first setup.
+    $opencodeDir = Join-Path $HOME ".config\opencode"
+    if (Test-Path $opencodeDir -PathType Container) { $agents += "opencode" }
 
-    # Extension-based agents
-    $aiderdeskExt = Join-Path $HOME ".aider-desk\extensions\ai-guardian\index.ts"
-    if (Test-Path $aiderdeskExt) { $agents += "aiderdesk" }
+    $aiderdeskDir = Join-Path $HOME ".aider-desk\extensions"
+    if (Test-Path $aiderdeskDir -PathType Container) { $agents += "aiderdesk" }
 
-    $openclawExt = Join-Path $HOME ".openclaw\plugins\ai-guardian\index.ts"
-    if (Test-Path $openclawExt) { $agents += "openclaw" }
+    $openclawDir = Join-Path $HOME ".openclaw\plugins"
+    if (Test-Path $openclawDir -PathType Container) { $agents += "openclaw" }
 
     return $agents
 }
@@ -179,20 +181,20 @@ function Detect-InstalledAgents {
 if (-not $IDE -and -not $NoSetup) {
     $DetectedAgents = Detect-InstalledAgents
     if ($DetectedAgents.Count -gt 0) {
-        Log "Detected existing hooks, updating..."
+        Log "Detected installed IDEs, setting up hooks..."
         $UpdatedAgents = @()
         foreach ($agent in $DetectedAgents) {
-            try {
-                & $Python -m ai_guardian setup --ide $agent --force --yes @SetupArgs 2>&1 | Out-Null
+            & $Python -m ai_guardian setup --ide $agent --install-scanner --force --yes @SetupArgs 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
                 $UpdatedAgents += $agent
-            } catch { }
+            }
         }
         if ($UpdatedAgents.Count -gt 0) {
             Ok "Updated hooks for: $($UpdatedAgents -join ', ')"
         }
     } else {
         Write-Host ""
-        Write-Host "  No existing hooks found. Run setup for your IDE:"
+        Write-Host "  No supported IDE installations detected. Run setup explicitly:"
         Write-Host "    ai-guardian setup --ide claude"
         Write-Host "    ai-guardian setup --ide opencode"
         Write-Host "    ai-guardian setup --ide cursor"

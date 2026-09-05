@@ -93,9 +93,18 @@ See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/
 
 ### One-Line Install
 
-Creates config, installs scanner, and sets up hooks automatically:
+Creates config, installs a scanner, and automatically detects supported IDE
+configuration directories so their hooks can be installed. Use `--ide` to
+target one IDE explicitly, or `--no-setup` to skip hook setup:
+
+From the tray, use **Local Setup... → Check IDE/CLI configuration** to
+re-check installed integrations and configure any missing hooks. After setup,
+the tray reports each integration's hook count and verification status.
 
 ```bash
+# Auto-detect installed IDEs (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash
+
 # Linux / macOS (auto-detects uv → venv → pip)
 curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --ide claude
 
@@ -106,6 +115,9 @@ curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/m
 
 # Windows (PowerShell)
 irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
+
+# Install without changing IDE hooks
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --no-setup
 ```
 
 ### Container

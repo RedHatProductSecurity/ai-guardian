@@ -376,7 +376,7 @@ class TrayHealthMonitor:
 
             setup = IDESetup()
             unconfigured = []
-            for ide_type in setup.list_detected_ides():
+            for ide_type in setup.list_installed_ides():
                 configured, _ = setup.check_hooks_for_ide(ide_type, integrity=True)
                 if not configured:
                     unconfigured.append(ide_type)
@@ -385,13 +385,134 @@ class TrayHealthMonitor:
             logger.warning("Unable to check IDE setup status: %s", exc)
             return []
 
-    def _check_ide_setup_notification(self):
-        """Prompt local-daemon users to configure detected IDE integrations."""
-        if not self._has_local_daemon() or self._ide_setup_prompt_in_progress:
+    def _get_installed_ides(self):
+        """Return locally installed IDEs, or ``None`` if the check failed."""
+        try:
+            from ai_guardian.setup.hooks import IDESetup
+
+            return IDESetup().list_installed_ides()
+        except Exception as exc:
+            logger.warning("Unable to check installed IDEs: %s", exc)
+            return None
+
+    @staticmethod
+    def _verify_ide_setup(ide_type):
+        """Return the current hook verification result for an IDE."""
+        from ai_guardian.setup.hooks import IDESetup
+
+        return IDESetup().verify_hooks_for_ide(ide_type)
+
+    @staticmethod
+    def _notify_ide_check_result(installed):
+        """Tell the user the result of an on-demand IDE configuration check."""
+        from ai_guardian.tray.plugins import send_notification
+
+        if installed is None:
+            send_notification(
+                "AI Guardian",
+                "Unable to check IDE/CLI configuration.",
+            )
             return
+        if not installed:
+            send_notification(
+                "AI Guardian",
+                "No installed IDE/CLI configuration directories were found.",
+            )
+            return
+
+        from ai_guardian.setup.hooks import IDESetup
+
+        names = [
+            IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide) for ide in installed
+        ]
+        send_notification(
+            "AI Guardian",
+            "All installed IDE/CLI integrations are configured:\n"
+            + "\n".join(f"• {name}" for name in names),
+        )
+
+    @staticmethod
+    def _notify_ide_setup_result(results):
+        """Show doctor-style results after setting up IDE/CLI hooks."""
+        from ai_guardian.setup.hooks import IDESetup
+        from ai_guardian.tray.plugins import send_notification
+
+        lines = ["IDE/CLI setup result", ""]
+        counts = {"PASS": 0, "WARN": 0, "FAIL": 0}
+
+        for result in results:
+            ide_type = result["ide"]
+            setup_success = result["success"]
+            verification = result.get("verification")
+            events = (
+                verification.get("events", {}) if isinstance(verification, dict) else {}
+            )
+            if not isinstance(events, dict):
+                events = {}
+            configured = sum(status == "healthy" for status in events.values())
+            total = len(events)
+
+            if not setup_success:
+                status = "FAIL"
+            elif isinstance(verification, dict) and verification.get("healthy"):
+                status = "PASS"
+            else:
+                status = "WARN"
+            counts[status] += 1
+
+            name = IDESetup.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
+            if total:
+                detail = f"{configured}/{total} hooks configured"
+            elif verification is None:
+                detail = "verification unavailable"
+            else:
+                detail = "no hooks reported"
+            if not setup_success:
+                detail += " (setup failed)"
+            elif status == "WARN":
+                detail += " (needs attention)"
+            lines.append(f"[{status}] {name}: {detail}")
+
+        summary = []
+        if counts["PASS"]:
+            summary.append(f"{counts['PASS']} passed")
+        if counts["WARN"]:
+            summary.append(f"{counts['WARN']} warning(s)")
+        if counts["FAIL"]:
+            summary.append(f"{counts['FAIL']} error(s)")
+        lines.extend(["", ", ".join(summary)])
+        send_notification("AI Guardian Setup", "\n".join(lines))
+
+    def _on_check_ide_setup(self, _icon, _item):
+        """Run an on-demand check for installed IDE/CLI integrations."""
+        if self._ide_setup_prompt_in_progress:
+            return
+
+        threading.Thread(
+            target=self._check_ide_setup_notification,
+            kwargs={"manual": True},
+            daemon=True,
+            name="ide-setup-check",
+        ).start()
+
+    def _check_ide_setup_notification(self, manual=False):
+        """Prompt users to configure installed IDE integrations.
+
+        Automatic checks are limited to local-daemon trays and honor the
+        proactive-prompt state. The tray menu's manual check bypasses those
+        restrictions and reports when every installed integration is healthy.
+        """
+        if (
+            not manual and not self._has_local_daemon()
+        ) or self._ide_setup_prompt_in_progress:
+            return
+
+        installed = self._get_installed_ides() if manual else None
 
         unconfigured = self._get_unconfigured_ides()
         if not unconfigured:
+            if manual:
+                self._notify_ide_check_result(installed)
             return
 
         from ai_guardian.setup.hooks import IDESetup
@@ -404,7 +525,7 @@ class TrayHealthMonitor:
         attention = {}
         statuses = {}
         for ide_type in unconfigured:
-            status = IDESetup().verify_hooks_for_ide(ide_type)
+            status = self._verify_ide_setup(ide_type)
             statuses[ide_type] = status
             events = [
                 f"{event} ({event_status})"
@@ -415,7 +536,7 @@ class TrayHealthMonitor:
             attention[ide_type] = ", ".join(events)
         prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         state = ProactivePromptState()
-        if not state.available(prompt_key):
+        if not manual and not state.available(prompt_key):
             return
 
         self._ide_setup_prompt_in_progress = True
@@ -424,12 +545,13 @@ class TrayHealthMonitor:
             try:
                 if len(names) == 1:
                     message = (
-                        f"{names[0]} was detected but is not protected by AI Guardian.\n\n"
+                        f"{names[0]} is installed but is not protected by "
+                        "AI Guardian.\n\n"
                         "Set up its security hooks now?"
                     )
                 else:
                     message = (
-                        "These IDEs have incomplete AI Guardian hooks:\n"
+                        "These installed IDEs have incomplete AI Guardian hooks:\n"
                         + "\n".join(
                             f"• {name}: {attention.get(ide, 'unknown')}"
                             for ide, name in zip(unconfigured, names)
@@ -448,19 +570,45 @@ class TrayHealthMonitor:
                 if result == "action":
                     from ai_guardian.setup import setup_hooks
 
+                    setup_results = []
                     for ide_type in unconfigured:
                         needs_force = bool(statuses[ide_type]["obsolete"]) or any(
                             status == "changed"
                             for status in statuses[ide_type]["events"].values()
                         )
-                        if needs_force:
-                            setup_hooks(
-                                ide_type=ide_type,
-                                interactive=False,
-                                force=True,
+                        try:
+                            if needs_force:
+                                setup_success = setup_hooks(
+                                    ide_type=ide_type,
+                                    interactive=False,
+                                    force=True,
+                                )
+                            else:
+                                setup_success = setup_hooks(
+                                    ide_type=ide_type, interactive=False
+                                )
+                            setup_success = bool(setup_success)
+                        except Exception as exc:
+                            logger.warning("IDE setup failed for %s: %s", ide_type, exc)
+                            setup_success = False
+
+                        try:
+                            verification = self._verify_ide_setup(ide_type)
+                        except Exception as exc:
+                            logger.warning(
+                                "Unable to verify IDE setup for %s: %s",
+                                ide_type,
+                                exc,
                             )
-                        else:
-                            setup_hooks(ide_type=ide_type, interactive=False)
+                            verification = None
+                        setup_results.append(
+                            {
+                                "ide": ide_type,
+                                "success": setup_success,
+                                "verification": verification,
+                            }
+                        )
+                    self._notify_ide_setup_result(setup_results)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:

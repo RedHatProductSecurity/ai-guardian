@@ -3,6 +3,7 @@
 import json
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -791,6 +792,46 @@ class IDESetup:
             if config_path.parent.exists():
                 detected.append(ide_type)
         return detected
+
+    def _ide_has_install_evidence(self, ide_type: str) -> bool:
+        """Return whether an IDE's configuration directory exists.
+
+        ``list_detected_ides`` intentionally uses parent directories because
+        setup needs to find a place to create a missing config file. That is too
+        broad for a user-facing notification when the path is project-local.
+        Checking the actual configuration directory works for both GUI IDEs and
+        CLI tools, including CLI tools without an executable on ``PATH``.
+        """
+        raw_path = self.get_config_path(ide_type)
+        if not raw_path:
+            return False
+
+        config_path = Path(raw_path).expanduser()
+
+        # Crush uses a project-local file. Its parent is always '.', so only
+        # the file itself is valid evidence.
+        if ide_type == "crush":
+            return config_path.is_file()
+
+        # For file, plugin, extension, and script integrations, the parent is
+        # the IDE's configuration directory. Requiring it to exist avoids
+        # treating the current project directory as an installed IDE.
+        config_dir = config_path.parent
+        return config_dir != Path(".") and config_dir.is_dir()
+
+    def list_installed_ides(self) -> List[str]:
+        """List IDEs with evidence of an actual local installation.
+
+        This stricter companion to :meth:`list_detected_ides` is used by
+        user-facing setup notifications. It avoids treating a project-root
+        relative path as an installed IDE while still recognizing an IDE whose
+        config directory is fresh and empty.
+        """
+        return [
+            ide_type
+            for ide_type in self.IDE_CONFIGS
+            if self._ide_has_install_evidence(ide_type)
+        ]
 
     def backup_config(self, config_path: Path) -> Optional[Path]:
         """

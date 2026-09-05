@@ -136,7 +136,40 @@ def test_ide_setup_prompt_skips_remote_only_tray():
     detected.assert_not_called()
 
 
-def test_ide_setup_prompt_configures_detected_local_ides(tmp_path):
+def test_manual_ide_check_reports_all_configured():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with(
+        "AI Guardian",
+        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+    )
+
+
+def test_manual_ide_check_action_runs_a_manual_check():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_check_ide_setup_notification") as check,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ](**thread.call_args.kwargs["kwargs"])
+        monitor._on_check_ide_setup(None, None)
+
+    check.assert_called_once_with(manual=True)
+
+
+def test_ide_setup_prompt_configures_installed_local_ides(tmp_path):
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
 
@@ -150,7 +183,20 @@ def test_ide_setup_prompt_configures_detected_local_ides(tmp_path):
             "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
             return_value="action",
         ),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": True,
+                "events": {
+                    "PreToolUse": "healthy",
+                    "PostToolUse": "healthy",
+                },
+                "obsolete": [],
+            },
+        ),
         patch("ai_guardian.setup.setup_hooks") as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
         patch("ai_guardian.tray.health.threading.Thread") as thread,
     ):
         thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
@@ -159,6 +205,12 @@ def test_ide_setup_prompt_configures_detected_local_ides(tmp_path):
         monitor._check_ide_setup_notification()
 
     setup_hooks.assert_called_once_with(ide_type="claude", interactive=False)
+    notify.assert_called_once_with(
+        "AI Guardian Setup",
+        "IDE/CLI setup result\n\n"
+        "[PASS] Claude Code: 2/2 hooks configured\n\n"
+        "1 passed",
+    )
 
 
 def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):

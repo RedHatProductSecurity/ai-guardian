@@ -884,6 +884,31 @@ class TestIDESetupMenu:
             top_call = mock_pystray.MenuItem.call_args_list[-1]
             assert top_call[0][0] == "Local Setup..."
 
+    def test_build_ide_setup_menu_includes_manual_configuration_check(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+            mock.patch.object(tray._health, "_on_check_ide_setup") as check,
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_ide_setup_menu_items()
+
+        check_calls = [
+            call
+            for call in mock_pystray.MenuItem.call_args_list
+            if call[0][0] == "Check IDE/CLI configuration"
+        ]
+        assert len(check_calls) == 1
+        assert check_calls[0][0][1] is check
+
     def test_build_ide_setup_menu_has_all_supported_ides(self):
         from ai_guardian.setup import IDESetup
 

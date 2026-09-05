@@ -385,7 +385,7 @@ class TestAutoSetupTray:
 class TestNotifyIdeSetupNeeded:
     def _setup(self):
         setup = mock.MagicMock()
-        setup.list_detected_ides.return_value = ["cursor"]
+        setup.list_installed_ides.return_value = ["cursor"]
         setup.check_hooks_for_ide.return_value = (False, "Cursor IDE: not configured")
         setup.IDE_CONFIGS = {"cursor": {"name": "Cursor IDE"}}
         return setup
