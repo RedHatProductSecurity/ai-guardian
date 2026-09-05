@@ -11,6 +11,7 @@ from ai_guardian.web.components.local_time import (
 )
 
 from ai_guardian.constants import HookEvent, VIOLATION_FILTER_TYPES
+from ai_guardian.violations.allowlist_context import get_annotation_target
 from ai_guardian.violations.guidance import get_resolution_instructions
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.violations.utils import is_temp_path
@@ -561,7 +562,8 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             if isinstance(blocked_data, dict)
                             else ""
                         )
-                        if v_file_path:
+                        annotation_target = get_annotation_target(violation)
+                        if v_file_path or annotation_target:
                             from ai_guardian.tui.source_annotator import (
                                 get_comment_prefix,
                             )
@@ -571,14 +573,14 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                 if isinstance(blocked_data, dict)
                                 else None
                             )
-                            if is_temp_path(v_file_path):
-                                if v_line_number:
-                                    ui.label("Temp file — use config editor").classes(
-                                        "text-xs text-grey-6"
-                                    )
-                            elif (
-                                v_line_number
-                                and get_comment_prefix(v_file_path) is not None
+                            if annotation_target:
+                                annotation_path, annotation_line = annotation_target
+                            else:
+                                annotation_path, annotation_line = "", None
+
+                            if (
+                                annotation_line
+                                and get_comment_prefix(annotation_path) is not None
                             ):
 
                                 def on_suppress_source(viol=violation):
@@ -589,15 +591,21 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                     icon="code",
                                     on_click=on_suppress_source,
                                 ).props("color=warning dense size=sm")
+                            elif is_temp_path(v_file_path) and v_line_number:
+                                ui.label("Temp file — use config editor").classes(
+                                    "text-xs text-grey-6"
+                                )
 
-                            def on_ignore_file(viol=violation):
-                                _show_ignore_file_flow(viol)
+                            if v_file_path:
 
-                            ui.button(
-                                "Ignore File...",
-                                icon="block",
-                                on_click=on_ignore_file,
-                            ).props("color=warning dense size=sm")
+                                def on_ignore_file(viol=violation):
+                                    _show_ignore_file_flow(viol)
+
+                                ui.button(
+                                    "Ignore File...",
+                                    icon="block",
+                                    on_click=on_ignore_file,
+                                ).props("color=warning dense size=sm")
 
                         ui.button("Close", on_click=dialog.close)
                 dialog.open()
@@ -983,11 +991,14 @@ def _show_suppress_in_source_flow(violation):
         write_annotated_source,
     )
 
-    blocked = violation.get("blocked", {})
-    file_path = blocked.get("file_path", "") if isinstance(blocked, dict) else ""
-    line_number = (
-        (blocked.get("line_number", 1) or 1) if isinstance(blocked, dict) else 1
-    )
+    target = get_annotation_target(violation)
+    if target is None:
+        ui.notify(
+            "Source line is unavailable or changed since detection; use config allowlist",
+            type="warning",
+        )
+        return
+    file_path, line_number = target
 
     result = prepare_annotation(file_path, line_number)
     if result is None:

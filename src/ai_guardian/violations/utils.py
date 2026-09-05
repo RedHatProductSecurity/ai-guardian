@@ -21,6 +21,7 @@ def is_temp_path(path: str) -> bool:
         for d in (
             "/tmp",
             "/var/tmp",
+            "/dev/shm",
             tempfile.gettempdir(),
             os.environ.get("TEMP"),
             os.environ.get("TMP"),

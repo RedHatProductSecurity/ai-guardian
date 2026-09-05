@@ -53,6 +53,7 @@ class ViolationLogger:
         suggestion: Optional[Dict] = None,
         severity: str = "warning",
         violation_id: Optional[str] = None,
+        allowlist_context: Optional[Dict] = None,
     ):
         """
         Log a violation to JSONL file.
@@ -63,6 +64,7 @@ class ViolationLogger:
             context: Context information (IDE type, project path, etc.)
             suggestion: Optional suggestion for resolving the violation
             severity: Severity level (warning, high, critical)
+            allowlist_context: Safe source metadata for deferred annotation.
         """
         # Check if logging is enabled
         if not self._is_logging_enabled():
@@ -91,6 +93,8 @@ class ViolationLogger:
                 "resolved_at": None,
                 "resolved_action": None,
             }
+            if isinstance(allowlist_context, dict) and allowlist_context:
+                entry["allowlist_context"] = allowlist_context
 
             # Append to JSONL file
             with open(self.log_path, "a", encoding="utf-8") as f:

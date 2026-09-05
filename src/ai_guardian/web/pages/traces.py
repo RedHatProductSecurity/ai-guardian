@@ -8,6 +8,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from nicegui import run, ui
 
+from ai_guardian.web.client_state import is_client_deleted
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import (
     inject_local_time_js,
@@ -164,7 +165,7 @@ def create_traces_page(service, daemon_name: str):
 
         async def load_traces():
             try:
-                if ui.context.client.is_deleted:
+                if is_client_deleted(ui.context.client):
                     return
                 await run.io_bound(service.refresh_targets)
 
@@ -394,7 +395,7 @@ def create_trace_detail_page(service, daemon_name: str):
         scroll_anchor = ui.element("div")
 
         async def load_detail():
-            if ui.context.client.is_deleted:
+            if is_client_deleted(ui.context.client):
                 return
             await run.io_bound(service.refresh_targets)
 

@@ -280,6 +280,16 @@ def handle_post_tool_use(ctx=None, **kwargs):
         post_secret_ctx["session_id"] = hook_session_id
     if source_command:
         post_secret_ctx["source_command"] = source_command
+    # PostToolUse output is the source file for read tools.  Bash and edit
+    # tools may return a summary or fragment whose line numbers do not map to
+    # the source file, so do not create an unverifiable source locator for it.
+    source_content = (
+        original_tool_output if tool_name in ("Read", "read_file", "ReadFile") else None
+    )
+    post_secret_ctx["_allowlist_content"] = source_content
+    post_secret_ctx["_allowlist_file_path"] = file_path_for_ctx
+    _scan_ctx.allowlist_content = source_content
+    _scan_ctx.allowlist_file_path = file_path_for_ctx
 
     if skip_secret_scan:
         has_secrets = False
@@ -293,6 +303,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             filename=f"{tool_identifier}_output",
             config=secret_config,
             secret_context=post_secret_ctx,
+            file_path=file_path_for_ctx,
             tool_name=tool_identifier,
             ignore_files=ignore_files,
             ignore_tools=ignore_tools,

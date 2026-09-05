@@ -11,6 +11,7 @@ IMPORTANT — self-protection rule (see AGENTS.md):
 import json
 from typing import Tuple
 
+from ai_guardian.violations.allowlist_context import get_annotation_target
 from ai_guardian.violations.utils import is_temp_path
 
 
@@ -39,6 +40,13 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):
         blocked = {}
+    verified_target = get_annotation_target(violation)
+    if verified_target:
+        # A temp scan can still be resolved to the original source line. Use
+        # that path for guidance and config snippets instead of the scanner
+        # copy, while the UI separately verifies source comment syntax.
+        blocked = dict(blocked)
+        blocked["file_path"] = verified_target[0]
     suggestion = violation.get("suggestion", {})
     if not isinstance(suggestion, dict):
         suggestion = {}

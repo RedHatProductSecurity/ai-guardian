@@ -5,6 +5,7 @@ import json
 from nicegui import run, ui
 
 from ai_guardian.constants import HookEvent
+from ai_guardian.violations.allowlist_context import get_annotation_target
 from ai_guardian.violations.guidance import get_resolution_instructions
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import (
@@ -260,15 +261,14 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
         v_file_path = (
             blocked_data.get("file_path", "") if isinstance(blocked_data, dict) else ""
         )
-        if v_file_path:
+        annotation_target = get_annotation_target(v)
+        if v_file_path or annotation_target:
             from ai_guardian.tui.source_annotator import get_comment_prefix
 
-            v_line_number = (
-                blocked_data.get("line_number")
-                if isinstance(blocked_data, dict)
-                else None
-            )
-            if v_line_number and get_comment_prefix(v_file_path) is not None:
+            if (
+                annotation_target
+                and get_comment_prefix(annotation_target[0]) is not None
+            ):
 
                 def on_suppress_source(viol=v):
                     _show_suppress_in_source_flow(viol)
@@ -279,14 +279,16 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
                     on_click=on_suppress_source,
                 ).props("color=warning dense size=sm")
 
-            def on_ignore_file(viol=v):
-                _show_ignore_file_flow(viol)
+            if v_file_path:
 
-            ui.button(
-                "Ignore File...",
-                icon="block",
-                on_click=on_ignore_file,
-            ).props("color=warning dense size=sm")
+                def on_ignore_file(viol=v):
+                    _show_ignore_file_flow(viol)
+
+                ui.button(
+                    "Ignore File...",
+                    icon="block",
+                    on_click=on_ignore_file,
+                ).props("color=warning dense size=sm")
 
     # --- Raw JSON (collapsible) ---
     with ui.expansion("Raw JSON", icon="data_object").classes("w-full").props("dense"):

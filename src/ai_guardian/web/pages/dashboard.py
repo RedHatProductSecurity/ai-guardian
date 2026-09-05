@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from nicegui import run, ui
 
+from ai_guardian.web.client_state import is_client_deleted
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.config_helpers import load_web_config
 
@@ -290,7 +291,7 @@ def create_dashboard_page(service, daemon_name: str):
         violations_box = None
 
         async def refresh_violations():
-            if ui.context.client.is_deleted:
+            if is_client_deleted(ui.context.client):
                 return
             if violations_box is None:
                 return
