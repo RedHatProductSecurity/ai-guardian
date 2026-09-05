@@ -2,9 +2,9 @@
 
 <!-- Summarize the change and the problem it solves. -->
 
-## Related issue
+## Related issue (if applicable)
 
-<!-- Link the issue, for example: Closes #123 -->
+<!-- If this PR addresses an existing issue, link it here using a closing keyword, for example: Closes #123. If no issue exists, write N/A. -->
 
 ## Type of change
 
