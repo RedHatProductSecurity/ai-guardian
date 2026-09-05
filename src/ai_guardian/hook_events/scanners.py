@@ -197,6 +197,7 @@ def run_prompt_injection_scan(
         confidence=detector.last_confidence or 0.0,
         findings=detector.findings if detector.findings else None,
         attack_type=detector.last_attack_type or "",
+        file_path=file_path,
     )
     result.extra["action"] = config.get("action", "block")
     return result

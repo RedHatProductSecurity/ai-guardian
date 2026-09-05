@@ -125,6 +125,7 @@ class TestFromPromptInjection:
             confidence=0.95,
             findings=[{"pattern": "ignore.*instructions"}],
             attack_type="instruction_override",
+            file_path="/repo/reference.md",
         )
         assert r.detected is True
         assert r.should_block is True
@@ -133,6 +134,7 @@ class TestFromPromptInjection:
         assert r.confidence == 0.95
         assert r.config_section == "prompt_injection"
         assert r.attack_type == "instruction_override"
+        assert r.file_path == "/repo/reference.md"
         assert r.total_findings == 1
 
     def test_injection_logged_only(self):

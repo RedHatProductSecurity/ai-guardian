@@ -794,6 +794,53 @@ class MCPBlockReasonUXTest(TestCase):
             ), "File path must be included for context"
             assert violation["line"] == 3, "Line number must be included when available"
 
+    @pytest.mark.skipif(
+        sys.version_info < (3, 10),
+        reason="MCP SDK requires Python >= 3.10",
+    )
+    def test_file_content_prompt_injection_reports_scanned_path(self):
+        """
+        USER EXPERIENCE: File-content prompt injection → location is reported.
+
+        Scenario:
+        1. Claude reads a file containing a prompt-injection attempt.
+        2. ai-guardian blocks the file-content scan.
+        3. Claude calls get_violations(limit=1) for the structured reason.
+
+        Expected User Experience:
+        ✅ get_violations() identifies the violation as prompt_injection.
+        ✅ The response includes the scanned file path and line number.
+        """
+        from unittest.mock import MagicMock
+        from ai_guardian.mcp.server import create_server
+
+        with patch("ai_guardian.violations.logger.ViolationLogger") as mock_vl_cls:
+            mock_vl = MagicMock()
+            mock_vl.get_recent_violations.return_value = [
+                {
+                    "timestamp": "2026-05-13T10:00:00Z",
+                    "violation_type": "prompt_injection",
+                    "severity": "high",
+                    "blocked": {
+                        "file_path": "/repo/reference.md",
+                        "line_number": 2,
+                        "start_column": 0,
+                        "end_column": 31,
+                    },
+                    "context": {"tool_name": "Read"},
+                }
+            ]
+            mock_vl_cls.return_value = mock_vl
+
+            server = create_server()
+            tool = server._tool_manager._tools["get_violations"]
+            result = tool.fn(limit=1)
+
+        violation = result["violations"][0]
+        assert violation["type"] == "prompt_injection"
+        assert violation["file"] == "/repo/reference.md"
+        assert violation["line"] == 2
+
     def test_documentation_block_reason_flow(self):
         """
         Documentation test: Correct flow when a tool is blocked.

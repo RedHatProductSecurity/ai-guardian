@@ -128,6 +128,7 @@ class ScanResult:
         confidence: float = 0.0,
         findings: Optional[list] = None,
         attack_type: str = "",
+        file_path: Optional[str] = None,
     ) -> "ScanResult":
         """Wrap prompt injection detector result."""
         vtype = (
@@ -148,6 +149,7 @@ class ScanResult:
             total_findings=len(findings) if findings else (1 if detected else 0),
             config_section="prompt_injection",
             attack_type=attack_type,
+            file_path=file_path,
         )
 
     @classmethod
