@@ -16,6 +16,8 @@
 
 ## Security impact
 
+Select exactly one of the following mutually exclusive options:
+
 - [ ] This change has no security impact.
 - [ ] This change affects security behavior; describe the threat, protection, and user-visible behavior below.
 
@@ -29,8 +31,12 @@
 - [ ] Related tests pass locally.
 - [ ] Manual verification completed, if applicable.
 
+## Commands run
+
+<!-- Record the exact commands run and relevant output or other evidence below. -->
+
 ```text
-# Commands run
+# Record command evidence here
 ```
 
 ## Checklist
