@@ -1740,7 +1740,10 @@ class TestLinuxPauseMenuStability:
             DaemonTarget(name="local", runtime="local", status="paused"),
             DaemonTarget(name="remote", runtime="container", status="paused"),
         ]
-        with mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray:
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray,
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
             mock_pystray.MenuItem = mock.MagicMock()
             mock_pystray.Menu = mock.MagicMock()
             mock_pystray.Menu.SEPARATOR = mock.MagicMock()
