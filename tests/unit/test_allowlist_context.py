@@ -2,6 +2,8 @@
 
 import hashlib
 import json
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
 
 from ai_guardian.scanners.scan_result import ScanResult
@@ -24,22 +26,23 @@ def _violation(path, line_number, metadata):
 
 def test_build_context_hashes_line_and_redacts_known_value():
     content = "before\nsetting = SENSITIVE_VALUE\nafter"
+    source_path = str(Path.cwd() / "settings.py")
     with patch(
         "ai_guardian.violations.allowlist_context.is_temp_path", return_value=False
     ):
         context = build_allowlist_context(
             content,
-            "/workspace/project/settings.py",
+            source_path,
             2,
             rule_id="custom-rule",
-            project_path="/workspace/project",
+            project_path=str(Path.cwd()),
             git_ref="test-ref",
             sensitive_values=["SENSITIVE_VALUE"],
         )
 
     assert context is not None
     assert context["rule_id"] == "custom-rule"
-    assert context["original_file_path"] == "/workspace/project/settings.py"
+    assert context["original_file_path"] == source_path
     assert (
         context["line_content_hash"]
         == hashlib.sha256(b"setting = SENSITIVE_VALUE").hexdigest()
@@ -73,7 +76,8 @@ def test_build_context_fails_closed_if_sanitizer_fails():
 
 
 def test_build_context_skips_temporary_paths():
-    assert build_allowlist_context("finding", "/tmp/scanner-copy.py", 1) is None
+    temp_path = str(Path(tempfile.gettempdir()) / "scanner-copy.py")
+    assert build_allowlist_context("finding", temp_path, 1) is None
 
 
 def test_resolve_source_location_prefers_logged_line(tmp_path):
@@ -141,7 +145,7 @@ def test_legacy_non_temp_location_remains_available():
 
 
 def test_shared_logger_persists_safe_context_only():
-    source_path = "/workspace/project/app.py"
+    source_path = str(Path.cwd() / "app.py")
     result = ScanResult(
         detected=True,
         violation_type="secret_detected",
@@ -157,7 +161,7 @@ def test_shared_logger_persists_safe_context_only():
             logger_calls.append(kwargs)
 
     context = ScanContext(
-        project_path="/workspace/project",
+        project_path=str(Path.cwd()),
         allowlist_content="value = SENSITIVE_VALUE\n",
         allowlist_file_path=source_path,
         allowlist_sensitive_values=["SENSITIVE_VALUE"],
