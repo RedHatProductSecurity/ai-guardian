@@ -17,6 +17,56 @@ from ai_guardian.constants import ViolationType
 logger = logging.getLogger(__name__)
 
 
+def _handle_ide_setup_command(args):
+    """Handle local IDE/setup state commands."""
+    command = getattr(args, "ide_setup_command", None)
+    if command not in {"sync", "reset"}:
+        print(
+            "Usage: ai-guardian ide-setup sync [--json] | " "reset --ide IDE [--json]",
+            file=sys.stderr,
+        )
+        return 1
+
+    if command == "sync":
+        from ai_guardian.tray.proactive_prompt import sync_ide_setup_state
+
+        result = sync_ide_setup_state()
+    else:
+        from ai_guardian.tray.proactive_prompt import reset_ide_setup_state
+
+        result = reset_ide_setup_state(getattr(args, "ide_type", ""))
+
+    if getattr(args, "json_output", False):
+        print(json.dumps(result, indent=2))
+    elif result.get("error"):
+        action = "sync" if command == "sync" else "reset"
+        print(
+            f"Unable to {action} IDE setup state: {result['error']}",
+            file=sys.stderr,
+        )
+    elif command == "reset":
+        ide_type = result.get("ide", "unknown")
+        if result.get("changed"):
+            print(f"Reset IDE setup decisions for {ide_type}.")
+        else:
+            print(f"No saved IDE setup decisions found for {ide_type}.")
+    else:
+        print("IDE setup state synchronized. No hooks were changed.")
+        integrations = result.get("integrations", {})
+        for status in integrations.values():
+            if status.get("healthy") is True:
+                state = "configured"
+            elif status.get("excluded"):
+                state = "excluded (needs setup)"
+            elif status.get("error"):
+                state = "check failed"
+            else:
+                state = "needs setup"
+            print(f"  {status.get('name', status.get('ide', 'unknown'))}: {state}")
+
+    return 1 if result.get("error") else 0
+
+
 def _format_duration_ago(secs):
     """Format a duration in seconds as a human-readable 'X ago' string.
 

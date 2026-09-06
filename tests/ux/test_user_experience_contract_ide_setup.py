@@ -46,6 +46,83 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     )
 
 
+def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
+    """
+    USER EXPERIENCE: Multiple incomplete integrations -> per-IDE choices.
+
+    Scenario:
+    1. A local tray detects Claude Code and Cursor without healthy hooks.
+    2. The tray opens one setup dialog containing both integrations.
+    3. The user keeps Claude Code selected for installation and marks Cursor
+       as Never install.
+
+    Expected User Experience:
+    - Each integration appears in the same two-column choice list.
+    - Install now is selected by default and Never install is clear by default.
+    - Only the selected integration is configured.
+    - The Never install choice is persisted for future automatic checks.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"PreToolUse": "missing"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            return_value=["claude", "cursor"],
+        ),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.setup.setup_hooks", return_value=True) as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        dialog.return_value.show.return_value = {
+            "result": "action",
+            "install": ["claude"],
+            "never": ["cursor"],
+        }
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    dialog.assert_called_once_with(
+        title="Set Up AI Guardian",
+        message=(
+            "These installed IDEs have incomplete AI Guardian hooks:\n"
+            "• Claude Code: PreToolUse (missing)\n"
+            "• Cursor IDE: PreToolUse (missing)\n\n"
+            "Set up their security hooks now?"
+        ),
+        action_label="Set Up Selected",
+        dismiss_label="Cancel",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        ide_choices=[
+            {
+                "ide": "claude",
+                "name": "Claude Code",
+                "detail": "PreToolUse (missing)",
+            },
+            {
+                "ide": "cursor",
+                "name": "Cursor IDE",
+                "detail": "PreToolUse (missing)",
+            },
+        ],
+    )
+    setup_hooks.assert_called_once_with(ide_type="claude", interactive=False)
+
+
 def test_setup_action_reports_doctor_style_hook_counts():
     """
     USER EXPERIENCE: Setup action -> show per-IDE hook setup results.

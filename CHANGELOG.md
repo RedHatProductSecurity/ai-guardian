@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **NiceGUI proactive prompt state viewer** — added a read-only Configuration page
+  for inspecting the local XDG `proactive_prompts.json` file without mixing
+  personal prompt decisions into the shareable `ai-guardian.json` config.
+  - Syncs a current installed-IDE and hook-health snapshot without removing
+    historical prompt decisions.
+  - Added `ai-guardian ide-setup sync [--json]` for the same reconciliation.
+  - Added per-IDE reset controls in NiceGUI and
+    `ai-guardian ide-setup reset --ide <ide>`.
+
+- **Per-IDE tray setup choices**: When multiple local IDE/CLI integrations need
+  hooks, the tray offers per-integration Install now or Never install choices,
+  persists exclusions in XDG state, and keeps manual setup available (#2241)
+
 - **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
 
 - **Proactive upgrade prompt**: Show a local tray popup for available releases with Upgrade Now, snooze, and version-specific dismissal actions (#2218)

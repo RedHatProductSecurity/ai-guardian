@@ -408,6 +408,14 @@ class WebConsole:
 
             create_config_file_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/proactive-prompts")
+        def proactive_prompts_page(daemon_name: str):
+            from ai_guardian.web.pages.proactive_prompts import (
+                create_proactive_prompts_page,
+            )
+
+            create_proactive_prompts_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/config-editor")
         def config_editor_page(daemon_name: str):
             from ai_guardian.web.pages.config_editor import (

@@ -110,6 +110,7 @@ NAV_GROUPS = [
             ("Config Cache", "/cache-status"),
             ("Remote Configs", "/remote-configs"),
             ("Config File", "/config-file"),
+            ("Proactive Prompt State", "/proactive-prompts"),
             ("Config Editor", "/config-editor"),
             ("Console Settings", "/console-settings"),
             ("Tray Plugins", "/tray-plugins"),

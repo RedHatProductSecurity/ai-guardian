@@ -28,6 +28,7 @@ from ai_guardian.cli_handlers import (
     _handle_violations_command,
     _get_client_timeout,
     _handle_daemon_command,
+    _handle_ide_setup_command,
     _handle_tray_command,
     _handle_prompt,
     _handle_tray_target_select,
@@ -359,6 +360,42 @@ def main():
             action="store_true",
             default=None,
             help="Install AI guidelines/rules file instructing the agent to use ai-guardian MCP tools",
+        )
+
+        # IDE setup state subcommand
+        ide_setup_parser = subparsers.add_parser(
+            "ide-setup",
+            help="Inspect and synchronize local IDE/setup state",
+        )
+        ide_setup_sub = ide_setup_parser.add_subparsers(
+            dest="ide_setup_command", help="IDE setup state commands"
+        )
+        ide_setup_sync_parser = ide_setup_sub.add_parser(
+            "sync",
+            help="Sync proactive state with installed IDEs and hook health",
+        )
+        ide_setup_sync_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            help="Output the synchronized state as JSON",
+        )
+        ide_setup_reset_parser = ide_setup_sub.add_parser(
+            "reset",
+            help="Reset one IDE's proactive setup decisions",
+        )
+        ide_setup_reset_parser.add_argument(
+            "--ide",
+            required=True,
+            dest="ide_type",
+            metavar="IDE",
+            help="IDE type to reset (for example: claude, cursor, or crush)",
+        )
+        ide_setup_reset_parser.add_argument(
+            "--json",
+            action="store_true",
+            dest="json_output",
+            help="Output the reset result as JSON",
         )
 
         # Violations subcommand
@@ -1451,6 +1488,7 @@ def main():
             "mcp-server",
             "tray",
             "setup",
+            "ide-setup",
             "dummy-agent",
             "check-update",
             "upgrade",
@@ -1488,6 +1526,10 @@ def main():
                 rules=args.rules if args.rules else None,
             )
             return 0 if success else 1
+
+        # Handle IDE setup state command
+        if args.command == "ide-setup":
+            return _handle_ide_setup_command(args)
 
         # Handle violations command
         if args.command == "violations":
