@@ -342,22 +342,9 @@ See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian
 
 ## Integration
 
-| Agent | Setup Command | Hooks | MCP | Status |
-|-------|--------------|-------|-----|--------|
-| Claude Code | `--ide claude` | Full | Full | Complete |
-| Cursor | `--ide cursor` | Full | N/A | Complete |
-| GitHub Copilot | `--ide copilot` | Full | N/A | Complete |
-| OpenAI Codex | `--ide codex` | Full | N/A | Complete |
-| Windsurf | `--ide windsurf` | Full | N/A | Complete |
-| Gemini CLI | `--ide gemini` | Full | N/A | Complete |
-| Cline / ZooCode | `--ide cline` | Full | N/A | Complete |
-| Kiro (AWS) | `--ide kiro` | Full | N/A | Complete |
-| Augment Code | `--ide augment` | Full | N/A | Complete |
-| AiderDesk | `--ide aiderdesk` | Extension | N/A | Complete |
-| OpenClaw | `--ide openclaw` | Plugin | N/A | Complete |
-| OpenCode | `--ide opencode` | Plugin | N/A | Complete |
-| Crush (Charmbracelet) | `--ide crush` | Partial | Full | Complete |
-| Junie (JetBrains) | `--ide junie` | N/A | Full | MCP-only |
+See [Agent Support](docs/AGENT_SUPPORT.md) for the current capability
+matrix and [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md)
+for the implementation and validation workflow.
 
 - [GitHub Copilot Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
 - [Aider Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md)

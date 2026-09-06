@@ -104,6 +104,7 @@ nav:
       - MCP Security Advisor: MCP_SERVER.md
       - Multi-Daemon Tray: MULTI_DAEMON_TRAY.md
   - IDE Integrations:
+      - IDE/Agent Integration Checklist: IDE_INTEGRATION_CHECKLIST.md
       - GitHub Copilot: GITHUB_COPILOT.md
       - Aider: AIDER.md
       - AiderDesk: AIDERDESK.md
