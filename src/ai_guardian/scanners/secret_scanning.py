@@ -166,6 +166,7 @@ def _log_secret_detection_violation(
         violation_type=ViolationType.SECRET_DETECTED,
         id=generate_violation_id(),
         severity="critical",
+        rule_id=details.get("rule_id", ""),
         file_path=file_path,
         line_number=details.get("line_number"),
         start_column=details.get("start_column"),
@@ -178,9 +179,20 @@ def _log_secret_detection_violation(
 
     sanitize_blocked_for_secret(extras)
 
+    scan_context = ScanContext.from_hook_dicts(context, hook_context)
+    matched_values = [details.get("matched_text")]
+    matched_values.extend(
+        finding.get("matched_text")
+        for finding in details.get("findings") or []
+        if isinstance(finding, dict)
+    )
+    scan_context.allowlist_sensitive_values = [
+        value for value in matched_values if value
+    ]
+
     log_violation(
         result,
-        ScanContext.from_hook_dicts(context, hook_context),
+        scan_context,
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,
@@ -252,6 +264,7 @@ def _log_finding_violation(
         violation_type=vtype,
         id=generate_violation_id(),
         severity=severity,
+        rule_id=rule_id,
         file_path=file_path,
         line_number=details.get("line_number"),
         start_column=details.get("start_column"),
@@ -268,9 +281,15 @@ def _log_finding_violation(
     if vtype.value in REDACT_VIOLATION_TYPES:
         sanitize_blocked_for_secret(extras)
 
+    scan_context = ScanContext.from_hook_dicts(context, hook_context)
+    matched_values = [details.get("matched_text")]
+    scan_context.allowlist_sensitive_values = [
+        value for value in matched_values if value
+    ]
+
     log_violation(
         result,
-        ScanContext.from_hook_dicts(context, hook_context),
+        scan_context,
         violation_logger=violation_logger,
         source="prompt" if filename == "user_prompt" else "file",
         blocked_overrides=extras,
@@ -729,6 +748,8 @@ def check_secrets(
     _last_secret_line_number = None
     _last_secret_start_column = None
     _last_secret_findings = []
+    context = dict(context or {})
+    context.setdefault("_allowlist_file_path", file_path)
     try:
         # Check if tool should be ignored
         if ignore_tools and tool_name:
@@ -768,6 +789,7 @@ def check_secrets(
             content = "\n".join(str(item) for item in content)
         elif not isinstance(content, str):
             content = str(content)
+        context.setdefault("_allowlist_content", content)
 
         # Skip scanning if file is a gitleaks config file (path-based check)
         # This prevents false positives when viewing pattern files

@@ -19,6 +19,7 @@ from textual.binding import Binding
 from textual import events
 
 from ai_guardian.violations.logger import ViolationLogger
+from ai_guardian.violations.allowlist_context import get_annotation_target
 from ai_guardian.violations.guidance import get_resolution_instructions
 from ai_guardian.violations.utils import is_temp_path
 from ai_guardian.tui.widgets import format_local_time
@@ -269,22 +270,30 @@ class ViolationDetailsModal(ModalScreen):
                         "Always Allow...", id="always-allow", variant="warning"
                     )
                 blocked = self.violation.get("blocked", {})
-                if isinstance(blocked, dict) and blocked.get("file_path"):
-                    file_path = blocked["file_path"]
-                    line_number = blocked.get("line_number")
+                annotation_target = get_annotation_target(self.violation)
+                annotation_available = False
+                if annotation_target:
+                    annotation_path, annotation_line = annotation_target
                     from ai_guardian.tui.source_annotator import get_comment_prefix
 
-                    if is_temp_path(file_path):
-                        if line_number:
-                            yield Static(
-                                "[dim]Temp file — use config allowlist[/dim]",
-                                id="temp-file-hint",
-                            )
-                    elif line_number and get_comment_prefix(file_path) is not None:
+                    if get_comment_prefix(annotation_path) is not None:
+                        annotation_available = True
                         yield Button(
                             "Suppress in Source...",
                             id="suppress-source",
                             variant="warning",
+                        )
+                if isinstance(blocked, dict) and blocked.get("file_path"):
+                    file_path = blocked["file_path"]
+                    line_number = blocked.get("line_number")
+                    if (
+                        not annotation_available
+                        and is_temp_path(file_path)
+                        and line_number
+                    ):
+                        yield Static(
+                            "[dim]Temp file — use config allowlist[/dim]",
+                            id="temp-file-hint",
                         )
                     yield Button("Ignore File...", id="ignore-file", variant="warning")
                 yield Button("Close (ESC)", id="close-details", variant="primary")
@@ -379,11 +388,14 @@ class ViolationDetailsModal(ModalScreen):
 
     def _on_suppress_in_source(self):
         """Insert annotation marker in source file."""
-        blocked = self.violation.get("blocked", {})
-        if not isinstance(blocked, dict):
+        target = get_annotation_target(self.violation)
+        if target is None:
+            self.app.notify(
+                "Source line is unavailable or changed since detection; use config allowlist",
+                severity="warning",
+            )
             return
-        file_path = blocked.get("file_path", "")
-        line_number = blocked.get("line_number", 1) or 1
+        file_path, line_number = target
 
         from ai_guardian.tui.source_annotator import prepare_annotation
 

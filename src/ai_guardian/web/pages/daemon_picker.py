@@ -2,6 +2,7 @@
 
 from nicegui import run, ui
 
+from ai_guardian.web.client_state import is_client_deleted
 from ai_guardian.web.components.daemon_card import daemon_card
 from ai_guardian.web.components.header import create_header
 
@@ -18,7 +19,7 @@ def create_daemon_picker_page(service):
         cards = ui.row().classes("gap-4 flex-wrap justify-center")
 
         async def refresh():
-            if ui.context.client.is_deleted:
+            if is_client_deleted(ui.context.client):
                 return
             cards.clear()
             targets = await run.io_bound(service.refresh_targets)

@@ -55,6 +55,10 @@ class PostScanContext:
     violation_logger: Any = None
     latency_timer: Any = None
     invocation_allowed_findings: Any = None
+    # Raw source is kept only for the duration of this invocation.  The
+    # shared logger converts it to hashed/sanitized metadata before writing.
+    allowlist_content: Optional[str] = None
+    allowlist_file_path: Optional[str] = None
 
 
 @dataclass
@@ -117,6 +121,8 @@ def _scan_context_from_post_scan(ctx: PostScanContext) -> ScanContext:
         session_id=ctx.hook_session_id,
         tool_use_id=ctx.hook_tool_use_id,
         tool_name=ctx.tool_name,
+        allowlist_content=ctx.allowlist_content,
+        allowlist_file_path=ctx.allowlist_file_path,
     )
 
 

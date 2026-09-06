@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **NiceGUI 3.0 WebUI compatibility**: Avoid `Client.is_deleted` errors when opening session and auto-refresh pages on the minimum supported NiceGUI version
+
+- **Deferred source allowlisting**: Preserve a hashed, sanitized source-line context for violations detected through temporary scanner files, restoring the `Suppress in Source...` action only when the original line can be verified (#2162)
+
 - **Prompt-injection violation locations**: Preserve scanned file paths and line/column metadata in violation logs and `get_violations()` responses (#2238)
 
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)

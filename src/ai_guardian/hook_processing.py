@@ -2595,6 +2595,15 @@ def _process_hook_data(hook_data, daemon_state=None):
                                     latency_timer=_latency_timer,
                                 )
                                 if cs_result is not None and cs_result.detected:
+                                    # Write carries the complete prospective
+                                    # file. Edit carries only a replacement
+                                    # fragment, so its finding line cannot be
+                                    # safely hashed against the source file.
+                                    if tool_name == "Write":
+                                        _post_scan_ctx.allowlist_content = cs_content
+                                        _post_scan_ctx.allowlist_file_path = (
+                                            cs_file_path
+                                        )
                                     all_findings = cs_result.extra.get(
                                         "all_findings", []
                                     )

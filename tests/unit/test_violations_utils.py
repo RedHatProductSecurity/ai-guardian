@@ -24,6 +24,10 @@ class TestIsTempPath:
         """/var/tmp paths return True."""
         assert is_temp_path("/var/tmp/file.txt") is True
 
+    def test_linux_shared_memory_path(self):
+        """The scanner's Linux shared-memory temp directory is temporary."""
+        assert is_temp_path("/dev/shm/aiguardian_copy.py") is True
+
     def test_system_tmp_path(self):
         """System temp dir returns True."""
         assert is_temp_path(tempfile.gettempdir()) is True

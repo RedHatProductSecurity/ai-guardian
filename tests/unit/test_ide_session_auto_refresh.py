@@ -97,11 +97,11 @@ class TestWebListPageAutoRefresh:
         assert "_get_auto_refresh_interval" in source
         assert 'auto_timer["ref"]' in source
 
-    def test_list_page_checks_is_deleted(self):
+    def test_list_page_checks_client_lifecycle(self):
         from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
 
         source = inspect.getsource(create_ide_sessions_page)
-        assert "is_deleted" in source
+        assert "is_client_deleted" in source
 
     def test_list_page_has_pause_toggle(self):
         from ai_guardian.web.pages.ide_sessions import create_ide_sessions_page
@@ -152,13 +152,13 @@ class TestWebDetailPageAutoRefresh:
         assert "_get_auto_refresh_interval" in source
         assert 'auto_timer["ref"]' in source
 
-    def test_detail_page_checks_is_deleted(self):
+    def test_detail_page_checks_client_lifecycle(self):
         from ai_guardian.web.pages.ide_sessions import (
             create_ide_session_detail_page,
         )
 
         source = inspect.getsource(create_ide_session_detail_page)
-        assert "is_deleted" in source
+        assert "is_client_deleted" in source
 
     def test_detail_page_has_pause_toggle(self):
         from ai_guardian.web.pages.ide_sessions import (

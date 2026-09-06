@@ -127,6 +127,12 @@ def run_content_pipeline(
 
     # --- Pre-scan setup ---
 
+    # Keep the original source content available to the shared violation
+    # logger.  It is converted to a line hash and sanitized context there;
+    # the raw content never enters the persisted violation entry.
+    _post_scan_ctx.allowlist_content = content_to_scan
+    _post_scan_ctx.allowlist_file_path = file_path
+
     # Build content overrides for per-scanner text (annotation suppressions)
     content_overrides = {}
     if secret_content_to_scan is not None:
@@ -152,6 +158,8 @@ def run_content_pipeline(
             "hook_event": hook_event,
             "tool_name": tool_identifier,
             "source": "scanner",
+            "_allowlist_content": content_to_scan,
+            "_allowlist_file_path": file_path,
         }
         if file_path:
             pre_secret_ctx["file_path"] = file_path

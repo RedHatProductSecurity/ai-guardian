@@ -33,6 +33,12 @@ class ScanContext:
     tool_name: Optional[str] = None
     run_id: Optional[str] = None
     run_sequence: Optional[int] = None
+    # Private, in-memory source data used to build safe deferred-resolution
+    # metadata.  These fields are deliberately excluded from ``to_dict``.
+    allowlist_content: Optional[str] = None
+    allowlist_file_path: Optional[str] = None
+    allowlist_sensitive_values: Optional[List[str]] = None
+    allowlist_context: Optional[Dict[str, Any]] = None
 
     @classmethod
     def from_hook_dicts(
@@ -52,6 +58,19 @@ class ScanContext:
             session_id=hctx.get("session_id"),
             tool_use_id=hctx.get("tool_use_id"),
             tool_name=hctx.get("tool_name"),
+            allowlist_content=ctx.get(
+                "_allowlist_content", hctx.get("_allowlist_content")
+            ),
+            allowlist_file_path=ctx.get(
+                "_allowlist_file_path", hctx.get("_allowlist_file_path")
+            ),
+            allowlist_sensitive_values=ctx.get(
+                "_allowlist_sensitive_values",
+                hctx.get("_allowlist_sensitive_values"),
+            ),
+            allowlist_context=ctx.get(
+                "_allowlist_context", hctx.get("_allowlist_context")
+            ),
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -82,6 +101,7 @@ def log_violation(
     context_overrides: Optional[Dict[str, Any]] = None,
     suggestion: Optional[Dict[str, Any]] = None,
     source: str = "",
+    allowlist_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Log a single violation to ``violations.jsonl``.
 
@@ -94,6 +114,7 @@ def log_violation(
         context_overrides: Extra keys merged into the ``context`` dict.
         suggestion: Optional suggestion dict for resolving the violation.
         source: Source label (e.g. ``"prompt"``, ``"file"``, ``"transcript"``).
+        allowlist_context: Pre-built safe source metadata, if available.
     """
     if violation_logger is None:
         from ai_guardian.violations.logger import ViolationLogger
@@ -109,14 +130,40 @@ def log_violation(
         if context_overrides:
             ctx.update(context_overrides)
 
-        violation_logger.log_violation(
-            violation_type=result.violation_type,
-            blocked=blocked,
-            context=ctx,
-            suggestion=suggestion or {},
-            severity=result.severity,
-            violation_id=result.id,
-        )
+        metadata = allowlist_context or context.allowlist_context
+        if metadata is None and context.allowlist_content is not None:
+            from ai_guardian.violations.allowlist_context import (
+                build_allowlist_context,
+            )
+
+            metadata = build_allowlist_context(
+                context.allowlist_content,
+                context.allowlist_file_path or result.file_path,
+                result.line_number,
+                rule_id=(
+                    result.rule_id
+                    or blocked.get("rule_id")
+                    or blocked.get("secret_type")
+                    or result.violation_type
+                ),
+                project_path=context.project_path,
+                sensitive_values=(
+                    context.allowlist_sensitive_values
+                    or ([result.matched_text] if result.matched_text else None)
+                ),
+            )
+
+        log_kwargs = {
+            "violation_type": result.violation_type,
+            "blocked": blocked,
+            "context": ctx,
+            "suggestion": suggestion or {},
+            "severity": result.severity,
+            "violation_id": result.id,
+        }
+        if metadata:
+            log_kwargs["allowlist_context"] = metadata
+        violation_logger.log_violation(**log_kwargs)
     except Exception as e:
         logger.error("Failed to log %s violation: %s", result.violation_type, e)
 

@@ -2,6 +2,7 @@
 
 from nicegui import run, ui
 
+from ai_guardian.web.client_state import is_client_deleted
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import inject_local_time_js
 
@@ -151,7 +152,7 @@ def create_daemon_detail_page(service, daemon_name: str):
         _info_built = {"done": False}
 
         async def refresh():
-            if ui.context.client.is_deleted:
+            if is_client_deleted(ui.context.client):
                 return
             await run.io_bound(service.refresh_targets)
             target = service.get_target_by_name(daemon_name)

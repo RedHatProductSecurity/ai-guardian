@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta
 
 from nicegui import run, ui
 
+from ai_guardian.web.client_state import is_client_deleted
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.step_render import (
     STEP_ICON_MAP,
@@ -159,11 +160,8 @@ def create_ide_sessions_page(service, daemon_name: str):
         cards_container = ui.column().classes("w-full gap-2")
 
         async def load_sessions():
-            try:
-                if ui.context.client.is_deleted:
-                    return
-            except Exception:
-                pass
+            if is_client_deleted(ui.context.client):
+                return
 
             ide = ide_select.value
             state["ide"] = ide
@@ -690,11 +688,8 @@ def create_ide_session_detail_page(service, daemon_name: str):
         dialog_host = ui.element("div")
 
         async def load_detail(force=False):
-            try:
-                if ui.context.client.is_deleted:
-                    return
-            except Exception:
-                pass
+            if is_client_deleted(ui.context.client):
+                return
 
             if not file_path:
                 header_label.text = "No session file specified"
