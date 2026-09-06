@@ -127,7 +127,7 @@ class TrayMenuBuilder:
     def _resume_menu_label(self):
         stats = self._tray._get_stats()
         remaining = stats.get("pause_remaining_seconds", 0)
-        if remaining > 0:
+        if remaining > 0 and self._tray._supports_live_pause_countdown():
             mins = int(remaining // 60)
             secs = int(remaining % 60)
             return f"Resume ({mins}m {secs}s left)"
@@ -145,7 +145,7 @@ class TrayMenuBuilder:
         if is_paused:
             stats = stats_fns[13](_item)
             remaining = stats.get("pause_remaining_seconds", 0)
-            if remaining > 0:
+            if remaining > 0 and self._tray._supports_live_pause_countdown():
                 mins = int(remaining // 60)
                 secs = int(remaining % 60)
                 return f"☾ Daemon (global) ({mins}m {secs}s)"
@@ -211,7 +211,7 @@ class TrayMenuBuilder:
                     short = "..." + short[-37:]
                 if d in paused_dirs:
                     remaining = paused_dirs[d]
-                    if remaining > 0:
+                    if remaining > 0 and self._tray._supports_live_pause_countdown():
                         mins = int(remaining // 60)
                         secs = int(remaining % 60)
                         return f"☾ {short} ({mins}m {secs}s)"
@@ -803,7 +803,7 @@ class TrayMenuBuilder:
             stats = _get_stats(_item)
             if stats.get("paused"):
                 remaining = stats.get("pause_remaining_seconds", 0)
-                if remaining > 0:
+                if remaining > 0 and self._tray._supports_live_pause_countdown():
                     mins = int(remaining // 60)
                     secs = int(remaining % 60)
                     return f"☾ Daemon (global) ({mins}m {secs}s)"

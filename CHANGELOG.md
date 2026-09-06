@@ -30,6 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Prompt-injection violation locations**: Preserve scanned file paths and line/column metadata in violation logs and `get_violations()` responses (#2238)
 
+- **KDE tray pause/resume stability**: Keep Linux pause labels stable and avoid countdown-driven native menu rebuilds that collapse an open nested submenu before **Resume** can be selected (#2242)
+
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
 
 - **Codex conversation titles**: Resolve explicit titles, genuine prompts, assistant fallbacks, and stable project/time titles while excluding bootstrap content in list and detail views (#2232)
