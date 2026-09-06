@@ -5,9 +5,13 @@ from pathlib import Path
 from unittest.mock import patch
 from types import SimpleNamespace
 
+import pytest
+
 from ai_guardian.tray.proactive_prompt import (
     ProactivePromptDialog,
     ProactivePromptState,
+    reset_ide_setup_state,
+    sync_ide_setup_state,
 )
 from ai_guardian.tray.health import TrayHealthMonitor
 
@@ -35,6 +39,86 @@ def test_prompt_state_does_not_persist_completed_action(tmp_path: Path):
     state.record("upgrade_v1.18.0", "action")
 
     assert not (tmp_path / "proactive_prompts.json").exists()
+
+
+def test_prompt_state_persists_per_ide_exclusions_and_manual_override(tmp_path: Path):
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+
+    state.update_ide_setup_exclusions(never=("cursor", "claude"))
+    assert state.get_ide_setup_exclusions() == {"claude", "cursor"}
+
+    state.update_ide_setup_exclusions(install=("cursor",))
+    assert state.get_ide_setup_exclusions() == {"claude"}
+
+
+def test_sync_ide_setup_state_records_current_reality_and_keeps_history(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {
+            "claude": {"name": "Claude Code"},
+            "cursor": {"name": "Cursor IDE"},
+        }
+
+        def list_installed_ides(self):
+            return ["claude", "cursor"]
+
+        def verify_hooks_for_ide(self, ide_type):
+            return {
+                "ide": ide_type,
+                "config_path": f"/{ide_type}/settings.json",
+                "healthy": ide_type == "claude",
+                "events": {
+                    "PreToolUse": "healthy" if ide_type == "claude" else "missing"
+                },
+                "obsolete": [],
+            }
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    state.record("ide_setup_claude_codex_cursor", "dismiss")
+    state.update_ide_setup_exclusions(never=("cursor",))
+    now = datetime(2026, 9, 6, 12, tzinfo=timezone.utc)
+
+    snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup(), now=now)
+
+    assert snapshot["checked_at"] == "2026-09-06T12:00:00Z"
+    assert snapshot["installed"] == ["claude", "cursor"]
+    assert snapshot["configured"] == ["claude"]
+    assert snapshot["needs_setup"] == ["cursor"]
+    assert snapshot["never_install"] == ["cursor"]
+    assert snapshot["integrations"]["cursor"]["excluded"] is True
+    saved = state.load()
+    assert saved["ide_setup_claude_codex_cursor"]["status"] == "dismissed"
+    assert saved["ide_setup_status"] == snapshot
+
+
+def test_reset_ide_setup_clears_one_ide_history_and_exclusion(tmp_path):
+    path = tmp_path / "proactive_prompts.json"
+    state = ProactivePromptState(path)
+    state.save(
+        {
+            "ide_setup_claude_crush": {"status": "dismissed"},
+            "ide_setup_codex_cursor": {"status": "snoozed"},
+            "ide_setup_never_install": ["claude", "cursor"],
+            "ide_setup_status": {
+                "never_install": ["claude", "cursor"],
+                "integrations": {
+                    "claude": {"excluded": True},
+                    "cursor": {"excluded": True},
+                },
+            },
+        }
+    )
+
+    result = reset_ide_setup_state("claude", state=state)
+
+    assert result["changed"] is True
+    assert result["removed_prompt_keys"] == ["ide_setup_claude_crush"]
+    assert result["removed_exclusion"] is True
+    saved = state.load()
+    assert "ide_setup_claude_crush" not in saved
+    assert "ide_setup_codex_cursor" in saved
+    assert saved["ide_setup_never_install"] == ["cursor"]
+    assert saved["ide_setup_status"]["never_install"] == ["cursor"]
+    assert saved["ide_setup_status"]["integrations"]["claude"]["excluded"] is False
 
 
 def test_prompt_uses_tkinter_first():
@@ -86,6 +170,25 @@ def test_prompt_falls_back_to_headless_when_ui_unavailable():
         assert dialog.show() == "dismiss"
 
 
+def test_multi_ide_prompt_defaults_to_install_now():
+    dialog = ProactivePromptDialog(
+        "Title",
+        "Message",
+        "Continue",
+        "Cancel",
+        ide_choices=[
+            {"ide": "claude", "name": "Claude Code"},
+            {"ide": "cursor", "name": "Cursor IDE"},
+        ],
+    )
+
+    assert dialog._default_ide_selection() == {
+        "result": "action",
+        "install": ["claude", "cursor"],
+        "never": [],
+    }
+
+
 def test_upgrade_prompt_skips_remote_only_trays():
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -123,10 +226,11 @@ def test_upgrade_prompt_records_snooze_for_local_tray(tmp_path):
     assert not state.available("upgrade_v9.9.9")
 
 
-def test_ide_setup_prompt_skips_remote_only_tray():
+@pytest.mark.parametrize("runtime", ["container", "kubernetes", "manual"])
+def test_ide_setup_prompt_skips_remote_only_tray(runtime):
     tray = SimpleNamespace(
         _standalone=False,
-        _targets=[SimpleNamespace(name="container", runtime="container")],
+        _targets=[SimpleNamespace(name=runtime, runtime=runtime)],
     )
     monitor = TrayHealthMonitor(tray)
 
@@ -236,3 +340,154 @@ def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
 
     state = ProactivePromptState(tmp_path / "proactive_prompts.json")
     assert not state.available("ide_setup_cursor")
+
+
+def test_multi_ide_prompt_only_configures_selected_integrations(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"PreToolUse": "missing"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            return_value=["claude", "cursor"],
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value={
+                "result": "action",
+                "install": ["claude"],
+                "never": ["cursor"],
+            },
+        ),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.setup.setup_hooks", return_value=True) as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    setup_hooks.assert_called_once_with(ide_type="claude", interactive=False)
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    assert state.get_ide_setup_exclusions() == {"cursor"}
+
+
+def test_never_install_exclusion_suppresses_automatic_prompt(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    state.update_ide_setup_exclusions(never=("cursor",))
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            },
+        ),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+    ):
+        monitor._check_ide_setup_notification()
+
+    dialog.assert_not_called()
+
+
+def test_newly_detected_ide_remains_eligible_after_an_exclusion(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    state_path = tmp_path / "proactive_prompts.json"
+    ProactivePromptState(state_path).update_ide_setup_exclusions(never=("cursor",))
+
+    with (
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            return_value=["cursor", "codex"],
+        ),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            },
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=state_path,
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ),
+        patch("ai_guardian.setup.setup_hooks", return_value=True) as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    setup_hooks.assert_called_once_with(ide_type="codex", interactive=False)
+    assert ProactivePromptState(state_path).get_ide_setup_exclusions() == {"cursor"}
+
+
+def test_manual_ide_check_can_override_never_install_exclusion(tmp_path):
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    state_path = tmp_path / "proactive_prompts.json"
+    state = ProactivePromptState(state_path)
+    state.update_ide_setup_exclusions(never=("cursor",))
+
+    with (
+        patch.object(monitor, "_get_installed_ides", return_value=["cursor"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=state_path,
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            },
+        ),
+        patch("ai_guardian.setup.setup_hooks", return_value=True),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification(manual=True)
+
+    assert ProactivePromptState(state_path).get_ide_setup_exclusions() == set()
