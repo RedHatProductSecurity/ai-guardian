@@ -431,7 +431,11 @@ def run_content_pipeline(
         )
         and not _secret_detected
     ):
-        if hook_event == HookEvent.PRE_TOOL_USE:
+        if hook_event in (
+            HookEvent.PRE_TOOL_USE,
+            HookEvent.PERMISSION_REQUEST,
+            HookEvent.BEFORE_READ_FILE,
+        ):
             if file_path:
                 logger.info(f"✓ No secrets detected in file '{filename}' ({file_path})")
             else:
@@ -519,9 +523,14 @@ def run_content_pipeline(
                 )
             break
 
-    # --- Save PreToolUse context for PostToolUse correlation (#366) ---
+    # --- Save pre-tool context for PostToolUse correlation (#366) ---
     if (
-        hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE)
+        hook_event
+        in (
+            HookEvent.PRE_TOOL_USE,
+            HookEvent.PERMISSION_REQUEST,
+            HookEvent.BEFORE_READ_FILE,
+        )
         and context_mgr
         and hook_tool_use_id
     ):

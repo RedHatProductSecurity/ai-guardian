@@ -957,10 +957,16 @@ class Doctor:
             configured, detail = setup.check_hooks_for_ide(ide_type)
 
             if configured:
-                if ide_type in ("claude", "codex"):
+                if ide_type == "claude":
                     hook_count = self._count_claude_hooks(config_path)
                     results.append(f"{ide_name}: {hook_count}/5 hooks")
                     if hook_count < 5:
+                        all_configured = False
+                elif ide_type == "codex":
+                    hook_count = self._count_codex_hooks(config_path)
+                    total = len(setup.expected_hook_manifest("codex"))
+                    results.append(f"{ide_name}: {hook_count}/{total} hooks")
+                    if hook_count < total:
                         all_configured = False
                 elif ide_type == "cursor":
                     from ai_guardian.constants import CURSOR_HOOK_EVENTS
@@ -1002,6 +1008,27 @@ class Doctor:
 
     def _count_claude_hooks(self, config_path: Path) -> int:
         from ai_guardian.constants import HookEvent
+
+        return self._count_nested_hooks(
+            config_path,
+            [
+                HookEvent.PROMPT.display_name,
+                HookEvent.PRE_TOOL_USE.display_name,
+                HookEvent.POST_TOOL_USE.display_name,
+                HookEvent.SESSION_END.display_name,
+                HookEvent.POST_COMPACT.display_name,
+            ],
+        )
+
+    def _count_codex_hooks(self, config_path: Path) -> int:
+        from ai_guardian.setup import IDESetup
+
+        return self._count_nested_hooks(
+            config_path, IDESetup().expected_hook_manifest("codex")
+        )
+
+    @staticmethod
+    def _count_nested_hooks(config_path: Path, event_names) -> int:
         from ai_guardian.setup import _is_ai_guardian_command
 
         try:
@@ -1009,13 +1036,7 @@ class Doctor:
                 config = json.load(f)
             hooks = config.get("hooks", {})
             count = 0
-            for hook_name in [
-                HookEvent.PROMPT.display_name,
-                HookEvent.PRE_TOOL_USE.display_name,
-                HookEvent.POST_TOOL_USE.display_name,
-                HookEvent.SESSION_END.display_name,
-                HookEvent.POST_COMPACT.display_name,
-            ]:
+            for hook_name in event_names:
                 if hook_name in hooks:
                     hook_list = hooks[hook_name]
                     if isinstance(hook_list, list):

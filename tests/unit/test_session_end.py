@@ -1,5 +1,6 @@
 """Tests for Stop/SessionEnd/PostCompact hook handling (Issue #765, #1007)."""
 
+import json
 import time
 from pathlib import Path
 from unittest import TestCase
@@ -255,6 +256,7 @@ class TestProcessHookDataStop(TestCase):
         )
 
         assert result["exit_code"] == 0
+        assert result["output"] is None
         mock_advance.assert_not_called()
 
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
@@ -350,6 +352,67 @@ class TestProcessHookDataPostCompact(TestCase):
 
         assert result["exit_code"] == 0
         assert result["output"] is None
+
+
+class TestCodexLifecycleEvents(TestCase):
+    """Codex lifecycle events are installed but not treated as content hooks."""
+
+    @patch("ai_guardian.hook_processing._handle_bootstrap_scan", return_value=None)
+    def test_lifecycle_notifications_return_allow_without_scanning(
+        self, mock_bootstrap
+    ):
+        from ai_guardian.hook_processing import process_hook_data
+
+        for event_name in (
+            "PreCompact",
+            "Stop",
+            "Interrupt",
+            "SubagentStart",
+            "SubagentStop",
+        ):
+            result = process_hook_data(
+                {
+                    "hook_event_name": event_name,
+                    "model": "gpt-5-codex",
+                    "session_id": "codex-session",
+                }
+            )
+            assert result == {"output": None, "exit_code": 0}
+
+        mock_bootstrap.assert_not_called()
+
+    @patch("ai_guardian.hook_processing._handle_bootstrap_scan", return_value=None)
+    @patch("ai_guardian.hook_processing._load_permissions_config")
+    @patch("ai_guardian.hook_processing.ToolPolicyChecker")
+    def test_permission_request_can_deny_with_codex_decision(
+        self, mock_policy_class, mock_permissions, mock_bootstrap
+    ):
+        from ai_guardian.hook_processing import process_hook_data
+
+        mock_permissions.return_value = ({"enabled": True}, None)
+        checker = mock_policy_class.return_value
+        checker.check_tool_allowed.return_value = (
+            False,
+            "Blocked by permission policy",
+            "Bash",
+        )
+        checker.last_deny_action = "block"
+
+        result = process_hook_data(
+            {
+                "hook_event_name": "PermissionRequest",
+                "model": "gpt-5-codex",
+                "permission_mode": "default",
+                "tool_name": "Bash",
+                "tool_input": {"command": "echo hello"},
+            }
+        )
+
+        payload = json.loads(result["output"])
+        assert payload["hookSpecificOutput"]["hookEventName"] == "PermissionRequest"
+        assert payload["hookSpecificOutput"]["decision"]["behavior"] == "deny"
+        assert result["_blocked"] is True
+        mock_bootstrap.assert_called_once()
 
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")

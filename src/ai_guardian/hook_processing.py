@@ -1841,7 +1841,17 @@ def _process_hook_data(hook_data, daemon_state=None):
                 )
             return {"output": None, "exit_code": 0}
 
-        if hook_event == HookEvent.STOP:
+        if hook_event in (
+            HookEvent.PRE_COMPACT,
+            HookEvent.STOP,
+            HookEvent.INTERRUPT,
+            HookEvent.SUBAGENT_START,
+            HookEvent.SUBAGENT_STOP,
+        ):
+            # Codex exposes these lifecycle notifications, but they do not
+            # provide a security-enforceable content or permission decision.
+            # Keep the hooks installed and observable without treating them as
+            # prompts or tool calls.
             return {"output": None, "exit_code": 0}
 
         # SESSION_START: agents that fire a dedicated session-open event (e.g. Gemini CLI
@@ -1962,7 +1972,11 @@ def _process_hook_data(hook_data, daemon_state=None):
         tool_identifier = (
             None  # Composite identifier like "Skill:code-review" or "mcp__server__tool"
         )
-        if hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE):
+        if hook_event in (
+            HookEvent.PRE_TOOL_USE,
+            HookEvent.BEFORE_READ_FILE,
+            HookEvent.PERMISSION_REQUEST,
+        ):
             tool_name = normalized.tool_name
             tool_input = normalized.tool_input
             _latency_tool = tool_name or ""
@@ -1982,7 +1996,12 @@ def _process_hook_data(hook_data, daemon_state=None):
 
         # Check tool permissions for PreToolUse events (MCP servers and Skills)
         if (
-            hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE)
+            hook_event
+            in (
+                HookEvent.PRE_TOOL_USE,
+                HookEvent.BEFORE_READ_FILE,
+                HookEvent.PERMISSION_REQUEST,
+            )
             and HAS_TOOL_POLICY
         ):
             try:
@@ -2179,12 +2198,19 @@ def _process_hook_data(hook_data, daemon_state=None):
             invocation_allowed_findings=_invocation_allowed,
         )
 
-        if hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE):
-            # PreToolUse or beforeReadFile hook
+        if hook_event in (
+            HookEvent.PRE_TOOL_USE,
+            HookEvent.BEFORE_READ_FILE,
+            HookEvent.PERMISSION_REQUEST,
+        ):
+            # PreToolUse, PermissionRequest, or beforeReadFile hook
             logger.info(f"Processing {hook_event} hook...")
 
             # Bash command exfiltration detection (Issue #1100)
-            if hook_event == HookEvent.PRE_TOOL_USE and tool_name == "Bash":
+            if (
+                hook_event in (HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST)
+                and tool_name == "Bash"
+            ):
                 bash_command = tool_input.get("command", "") if tool_input else ""
                 if bash_command:
                     bash_exfil_result = run_bash_exfil_scan(

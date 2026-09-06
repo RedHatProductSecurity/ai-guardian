@@ -46,6 +46,36 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     )
 
 
+def test_codex_setup_reports_conflicting_active_configuration(tmp_path, monkeypatch):
+    """
+    USER EXPERIENCE: Conflicting Codex hook representation -> clear diagnostic.
+
+    Scenario:
+    1. User runs Codex setup while the active user ``config.toml`` already
+       defines inline hooks.
+    2. AI Guardian detects that it targets ``hooks.json`` in the same layer.
+
+    Expected User Experience:
+    - Setup stops before writing a second hook representation.
+    - User sees an actionable message naming the conflict and next step.
+    """
+    codex_home = tmp_path / "codex"
+    codex_home.mkdir()
+    (codex_home / "config.toml").write_text("[hooks]\n", encoding="utf-8")
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+    success, message = IDESetup().setup_ide_hooks("codex")
+
+    assert success is False
+    assert message == (
+        "OpenAI Codex setup stopped: inline hooks are already defined in "
+        f"{codex_home / 'config.toml'}. AI Guardian targets "
+        f"{codex_home / 'hooks.json'}; choose one hook representation in "
+        "the active user layer and rerun setup to avoid duplicate hook loading."
+    )
+    assert not (codex_home / "hooks.json").exists()
+
+
 def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
     """
     USER EXPERIENCE: Multiple incomplete integrations -> per-IDE choices.
