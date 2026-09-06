@@ -135,7 +135,8 @@ class TestDaemonTrayCallbacks:
             pause_callback=lambda mins: None,
         )
         tray._status = "paused"
-        label = tray._menu._resume_menu_label()
+        with mock.patch("platform.system", return_value="Darwin"):
+            label = tray._menu._resume_menu_label()
         assert "2m" in label
         assert "5s" in label
 
@@ -1638,9 +1639,124 @@ class TestResumeMenuLabelFormats:
             stop_callback=lambda: None,
             pause_callback=lambda mins: None,
         )
-        label = tray._menu._resume_menu_label()
+        with mock.patch("platform.system", return_value="Darwin"):
+            label = tray._menu._resume_menu_label()
         assert "3m" in label
         assert "42s" in label
+
+    def test_resume_label_is_stable_on_linux(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {"pause_remaining_seconds": 222},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        with mock.patch("platform.system", return_value="Linux"):
+            assert tray._menu._resume_menu_label() == "Resume (paused)"
+
+
+class TestLinuxPauseMenuStability:
+    """Keep KDE nested pause menus stable while a timed pause counts down."""
+
+    def _make_tray(self, stats=None, multi_client=None):
+        return DaemonTray(
+            get_stats_callback=lambda: stats if stats is not None else {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+            multi_client=multi_client,
+        )
+
+    def test_pause_timer_does_not_refresh_menu_on_linux(self):
+        tray = self._make_tray({"paused": True, "pause_remaining_seconds": 60})
+        with (
+            mock.patch("platform.system", return_value="Linux"),
+            mock.patch.object(tray, "_dispatch_to_main") as dispatch,
+        ):
+            tray._refresh_pause_menu()
+        dispatch.assert_not_called()
+
+    def test_pause_timer_keeps_live_refresh_on_macos(self):
+        tray = self._make_tray({"paused": True, "pause_remaining_seconds": 60})
+        with (
+            mock.patch("platform.system", return_value="Darwin"),
+            mock.patch.object(tray, "_dispatch_to_main") as dispatch,
+        ):
+            tray._refresh_pause_menu()
+        dispatch.assert_called_once_with(tray._refresh_menu)
+
+    def test_linux_stats_snapshot_ignores_countdown_changes(self):
+        stats = {"paused": True, "pause_remaining_seconds": 60}
+        tray = self._make_tray(stats)
+        with mock.patch("platform.system", return_value="Linux"):
+            first = tray._build_stats_snapshot()
+            stats["pause_remaining_seconds"] = 55
+            second = tray._build_stats_snapshot()
+        assert first == second
+
+    def test_macos_stats_snapshot_tracks_countdown_changes(self):
+        stats = {"paused": True, "pause_remaining_seconds": 60}
+        tray = self._make_tray(stats)
+        with mock.patch("platform.system", return_value="Darwin"):
+            first = tray._build_stats_snapshot()
+            stats["pause_remaining_seconds"] = 55
+            second = tray._build_stats_snapshot()
+        assert first != second
+
+    def test_linux_pause_state_change_still_refreshes_menu(self):
+        stats = {"paused": False, "pause_remaining_seconds": 0}
+        tray = self._make_tray(stats)
+        tray._icon = mock.MagicMock()
+        with mock.patch("platform.system", return_value="Linux"):
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            stats["paused"] = True
+            tray._refresh_menu_if_changed()
+        tray._icon.update_menu.assert_called_once()
+
+    def test_single_daemon_resume_stays_visible_on_linux(self):
+        stats = {"paused": True, "pause_remaining_seconds": 60}
+        tray = self._make_tray(stats)
+        tray._targets = [DaemonTarget(name="local", runtime="local", status="paused")]
+        with mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray:
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_single_daemon_menu_items()
+            tray._menu._build_single_daemon_daemon_items()
+
+            resume_calls = [
+                call
+                for call in mock_pystray.MenuItem.call_args_list
+                if call[0] and call[0][0] == "Resume"
+            ]
+            assert resume_calls
+            with mock.patch("platform.system", return_value="Linux"):
+                assert any(call[1]["visible"](None) for call in resume_calls)
+
+    def test_multi_daemon_resume_stays_visible_on_linux(self):
+        stats = {"paused": True, "pause_remaining_seconds": 60}
+        multi_client = mock.MagicMock()
+        multi_client.get_status.return_value = stats
+        tray = self._make_tray(multi_client=multi_client)
+        tray._targets = [
+            DaemonTarget(name="local", runtime="local", status="paused"),
+            DaemonTarget(name="remote", runtime="container", status="paused"),
+        ]
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray,
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_multi_daemon_menu_items()
+
+            resume_calls = [
+                call
+                for call in mock_pystray.MenuItem.call_args_list
+                if call[0] and call[0][0] == "Resume"
+            ]
+            assert resume_calls
+            with mock.patch("platform.system", return_value="Linux"):
+                assert any(call[1]["visible"](None) for call in resume_calls)
 
 
 class TestWakeDetection:
@@ -5276,7 +5392,8 @@ class TestBuildDirPauseItems:
             lambda d, m: None,
             lambda d: None,
         )
-        label = items[0].text
+        with mock.patch("platform.system", return_value="Darwin"):
+            label = items[0].text
         assert label.startswith("☾")
         assert "2m" in label
 
@@ -5335,9 +5452,23 @@ class TestMultiGlobalPauseLabel:
         stats_fns = [None] * 14
         stats_fns[11] = lambda _: True
         stats_fns[13] = lambda _: {"pause_remaining_seconds": 305}
-        label = tray._menu._multi_global_pause_label(stats_fns, None)
+        with mock.patch("platform.system", return_value="Darwin"):
+            label = tray._menu._multi_global_pause_label(stats_fns, None)
         assert "☾ Daemon (global)" in label
         assert "5m" in label
+
+    def test_paused_with_timer_is_stable_on_linux(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda _: None,
+        )
+        stats_fns = [None] * 14
+        stats_fns[11] = lambda _: True
+        stats_fns[13] = lambda _: {"pause_remaining_seconds": 305}
+        with mock.patch("platform.system", return_value="Linux"):
+            label = tray._menu._multi_global_pause_label(stats_fns, None)
+        assert label == "☾ Daemon (global)"
 
 
 class TestDirPauseRouting:
