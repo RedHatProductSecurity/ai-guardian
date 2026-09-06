@@ -536,6 +536,15 @@ class TrayHealthMonitor:
             attention[ide_type] = ", ".join(events)
         prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         state = ProactivePromptState()
+        if not manual:
+            excluded = state.get_ide_setup_exclusions()
+            unconfigured = [
+                ide_type for ide_type in unconfigured if ide_type not in excluded
+            ]
+            if not unconfigured:
+                return
+            names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+            prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         if not manual and not state.available(prompt_key):
             return
 
@@ -558,57 +567,110 @@ class TrayHealthMonitor:
                         )
                         + "\n\nSet up their security hooks now?"
                     )
-                dialog = ProactivePromptDialog(
-                    title="Set Up AI Guardian",
-                    message=message,
-                    action_label="Set Up Now",
-                    dismiss_label="Don't Ask Again",
-                    snooze_options=("1h", "6h", "1d", "1w"),
-                )
-                result = dialog.show(tray_safe=True)
-                state.record(prompt_key, result)
-                if result == "action":
-                    from ai_guardian.setup import setup_hooks
-
-                    setup_results = []
-                    for ide_type in unconfigured:
-                        needs_force = bool(statuses[ide_type]["obsolete"]) or any(
-                            status == "changed"
-                            for status in statuses[ide_type]["events"].values()
-                        )
-                        try:
-                            if needs_force:
-                                setup_success = setup_hooks(
-                                    ide_type=ide_type,
-                                    interactive=False,
-                                    force=True,
-                                )
-                            else:
-                                setup_success = setup_hooks(
-                                    ide_type=ide_type, interactive=False
-                                )
-                            setup_success = bool(setup_success)
-                        except Exception as exc:
-                            logger.warning("IDE setup failed for %s: %s", ide_type, exc)
-                            setup_success = False
-
-                        try:
-                            verification = self._verify_ide_setup(ide_type)
-                        except Exception as exc:
-                            logger.warning(
-                                "Unable to verify IDE setup for %s: %s",
-                                ide_type,
-                                exc,
-                            )
-                            verification = None
-                        setup_results.append(
+                if len(names) == 1:
+                    dialog = ProactivePromptDialog(
+                        title="Set Up AI Guardian",
+                        message=message,
+                        action_label="Set Up Now",
+                        dismiss_label="Don't Ask Again",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                    )
+                else:
+                    dialog = ProactivePromptDialog(
+                        title="Set Up AI Guardian",
+                        message=message,
+                        action_label="Set Up Selected",
+                        dismiss_label="Cancel",
+                        snooze_options=("1h", "6h", "1d", "1w"),
+                        ide_choices=[
                             {
                                 "ide": ide_type,
-                                "success": setup_success,
-                                "verification": verification,
+                                "name": name,
+                                "detail": attention.get(ide_type, "unknown"),
                             }
+                            for ide_type, name in zip(unconfigured, names)
+                        ],
+                    )
+                result = dialog.show(tray_safe=True)
+                if isinstance(result, dict):
+                    action = result.get("result", "dismiss")
+                    selected_install = {
+                        ide_type
+                        for ide_type in (result.get("install") or ())
+                        if ide_type in unconfigured
+                    }
+                    selected_never = {
+                        ide_type
+                        for ide_type in (result.get("never") or ())
+                        if ide_type in unconfigured
+                    }
+                    selected_install -= selected_never
+                else:
+                    action = result
+                    selected_install = (
+                        set(unconfigured) if action == "action" else set()
+                    )
+                    selected_never = set()
+
+                if not isinstance(action, str):
+                    action = "dismiss"
+                if action != "action":
+                    if action.startswith("snooze_") or (
+                        not isinstance(result, dict) and len(unconfigured) == 1
+                    ):
+                        state.record(prompt_key, action)
+                    return
+
+                state.update_ide_setup_exclusions(
+                    install=selected_install,
+                    never=selected_never,
+                )
+                if not selected_install:
+                    return
+
+                from ai_guardian.setup import setup_hooks
+
+                setup_results = []
+                for ide_type in unconfigured:
+                    if ide_type not in selected_install:
+                        continue
+                    needs_force = bool(statuses[ide_type]["obsolete"]) or any(
+                        status == "changed"
+                        for status in statuses[ide_type]["events"].values()
+                    )
+                    try:
+                        if needs_force:
+                            setup_success = setup_hooks(
+                                ide_type=ide_type,
+                                interactive=False,
+                                force=True,
+                            )
+                        else:
+                            setup_success = setup_hooks(
+                                ide_type=ide_type, interactive=False
+                            )
+                        setup_success = bool(setup_success)
+                    except Exception as exc:
+                        logger.warning("IDE setup failed for %s: %s", ide_type, exc)
+                        setup_success = False
+
+                    try:
+                        verification = self._verify_ide_setup(ide_type)
+                    except Exception as exc:
+                        logger.warning(
+                            "Unable to verify IDE setup for %s: %s",
+                            ide_type,
+                            exc,
                         )
-                    self._notify_ide_setup_result(setup_results)
+                        verification = None
+                    setup_results.append(
+                        {
+                            "ide": ide_type,
+                            "success": setup_success,
+                            "verification": verification,
+                        }
+                    )
+                self._notify_ide_setup_result(setup_results)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:

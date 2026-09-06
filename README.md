@@ -100,6 +100,21 @@ target one IDE explicitly, or `--no-setup` to skip hook setup:
 From the tray, use **Local Setup... → Check IDE/CLI configuration** to
 re-check installed integrations and configure any missing hooks. After setup,
 the tray reports each integration's hook count and verification status.
+When multiple integrations need setup, the tray shows an individual
+**Install now** or **Never install** choice for each one. These choices are
+kept per integration, so a newly detected IDE can still be offered later, and
+the explicit **Local Setup...** entries remain available for manual setup.
+The web console's **Configuration → Proactive Prompt State** page provides a
+read-only view of these local prompt decisions. They are stored separately in
+the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.
+Entries named `ide_setup_<combination>` are prompt history; the synchronized
+`ide_setup_status` entry is the current installed-IDE and hook-health snapshot.
+Within prompt history, `dismissed` means the automatic prompt was declined for
+that exact combination, while `snoozed` means it is postponed until its stored
+time. Neither value says whether the hooks are currently healthy.
+Use the per-IDE **Reset** button on that page, or
+`ai-guardian ide-setup reset --ide <ide>`, to clear one IDE's saved prompt
+decisions and Never install choice.
 
 ```bash
 # Auto-detect installed IDEs (Linux / macOS)
@@ -306,6 +321,9 @@ ai-guardian setup --ide copilot      # GitHub Copilot
 ai-guardian setup --dry-run          # Preview changes
 ai-guardian setup --ide claude       # MCP security advisor installed by default
 ai-guardian setup --remote-config-url https://example.com/policy.json
+ai-guardian ide-setup sync           # Refresh local IDE/hook status in XDG state
+ai-guardian ide-setup sync --json     # Print the synchronized status as JSON
+ai-guardian ide-setup reset --ide claude  # Reset Claude setup prompt decisions
 ```
 
 Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
