@@ -236,6 +236,11 @@ When adding a new feature, check whether it needs any of these surfaces:
 | System tray | Feature produces a quick status or count | `src/ai_guardian/tray/` |
 | CLI command | Feature needs a standalone command | `src/ai_guardian/cli.py` |
 
+For any new or changed IDE/agent integration, use the
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md). It combines
+the runtime, setup, transcript, MCP, test, documentation, and
+release-readiness checks that must stay synchronized across an integration.
+
 ### Configuration Schema Changes
 
 When adding new configuration options, update all of these:

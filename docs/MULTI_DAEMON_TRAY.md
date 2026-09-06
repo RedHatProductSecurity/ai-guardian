@@ -491,6 +491,15 @@ By default, all plugins appear on all daemons. Use tags to filter plugins to spe
 - Up to 12 items per plugin
 - These are pre-allocated pystray slots (macOS requires fixed menu structure)
 
+### Linux pause/resume menu stability
+
+On Linux, the tray intentionally does not rebuild the native menu every second
+while a daemon is paused. GTK/AppIndicator replaces the menu during an update,
+which can collapse an open nested submenu in KDE before **Resume** can be
+selected. Linux pause labels therefore use a stable paused indicator instead of
+a live countdown; pause/resume visibility still refreshes when the pause state
+changes. macOS keeps the live countdown refresh behavior.
+
 ## Migration from v1.7.x
 
 In v1.7.x, `ai-guardian daemon start` launched both the daemon and the system tray. In v1.8.0+, these are separate:

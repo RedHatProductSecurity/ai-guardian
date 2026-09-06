@@ -779,13 +779,30 @@ class DaemonTray:
                     self._status = "running"
                     self._dispatch_to_main(self._refresh_icon_running)
                     break
-                self._dispatch_to_main(self._refresh_menu)
+                self._refresh_pause_menu()
                 time.sleep(1)
 
         self._pause_timer = threading.Thread(
             target=_tick, daemon=True, name="pause-timer"
         )
         self._pause_timer.start()
+
+    @staticmethod
+    def _supports_live_pause_countdown():
+        """Return whether the native tray menu can refresh countdown labels safely.
+
+        Linux AppIndicator/GTK replaces the native menu when ``update_menu``
+        is called. KDE can close an open nested submenu during that replacement,
+        so pause countdown updates must not rebuild the menu while paused.
+        """
+        import platform
+
+        return platform.system() != "Linux"
+
+    def _refresh_pause_menu(self):
+        """Refresh pause countdown labels on platforms with stable menu updates."""
+        if self._supports_live_pause_countdown():
+            self._dispatch_to_main(self._refresh_menu)
 
     @staticmethod
     def _dispatch_to_main(func):
@@ -850,7 +867,11 @@ class DaemonTray:
                 stats.get("warning_count"),
                 stats.get("violation_count"),
                 stats.get("paused"),
-                stats.get("pause_remaining_seconds", 0) // 5,
+                (
+                    stats.get("pause_remaining_seconds", 0) // 5
+                    if self._supports_live_pause_countdown()
+                    else None
+                ),
                 stats.get("config_error"),
                 self._status,
                 len(self._targets),

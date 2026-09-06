@@ -550,7 +550,7 @@ ai-guardian/
    - Jobs:
      - **fresh-install**: Clean install across Python 3.9–3.14 (version, doctor, config profiles, patterns, show-config)
      - **upgrade-from-previous**: Upgrade from previous stable release, permissions migration
-     - **multi-agent-setup**: All IDE adapters (claude, cursor, copilot, gemini, codex, windsurf, cline, augment, kiro)
+     - **multi-agent-setup**: All supported IDE/agent setup integrations (see [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md))
      - **daemon-lifecycle**: Start/status/reload/REST API (health, status, pause, resume)/stop
      - **smoke-tests**: Calls `.github/workflows/smoke-tests.yml` (detection scan, hook pipeline, false positives)
      - **config-validation**: Doctor, permissions migration, profiles, config merge (project + user level)
@@ -1141,6 +1141,7 @@ All detailed documentation lives in the `docs/` folder:
 - `docs/CONSOLE.md` — Interactive console guide
 - `docs/TOOL_POLICY.md` — Permission system details
 - `docs/SECURITY_DESIGN.md` — Architecture and self-protection
+- `docs/IDE_INTEGRATION_CHECKLIST.md` — IDE/agent implementation and validation checklist
 
 **When adding a new feature:**
 1. Add a one-line entry to the README Features table with a link
@@ -1162,8 +1163,8 @@ When adding any new feature, check:
 - [ ] **Tray menu** — Does it produce a quick status or count? → Add to tray in `daemon/tray.py`
 - [ ] **Console panel** — Does it have configurable settings? → Add Console UI in `tui/` and `web/pages/`
 - [ ] **CLI command** — Does it need a standalone command? → Add to CLI in `__init__.py`
-- [ ] **Multi-agent compatibility** — Does it affect hook responses? → Test with all supported IDEs. Verify adapter's `format_response()` returns correct format. See [docs/AGENT_SUPPORT.md](docs/AGENT_SUPPORT.md) for the full agent capability matrix and adapter architecture.
-- [ ] **Agent documentation** — Adding a new IDE/agent? → Update ALL tables in `docs/AGENT_SUPPORT.md`: Supported Agents, Hook Capability Matrix, Violation Type Coverage Matrix, Agent Confidence Levels, Hook Event Name Mapping, Response Format Differences, Config File Locations.
+- [ ] **Multi-agent compatibility** — Does it affect hook responses or setup? → Follow the [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md) and test all applicable supported IDEs. Verify each adapter's `format_response()` contract.
+- [ ] **Agent documentation** — Adding or changing an IDE/agent? → Update the applicable tables in `docs/AGENT_SUPPORT.md` and keep the checklist's runtime, test, and release-readiness surfaces synchronized.
 - [ ] **Violation type documentation** — Adding a new violation type? → Add a row to the Violation Type Coverage Matrix in `docs/AGENT_SUPPORT.md` and document any agent-specific limitations.
 - [ ] **`.aiguardignore.toml` scanner type** — Adding a new violation/scanner type that scans file content (not URL-based or tool-based)? → Add it to `SCANNER_TYPES` in `src/ai_guardian/aiguardignore.py` so `.aiguardignore.toml` can filter it.
 

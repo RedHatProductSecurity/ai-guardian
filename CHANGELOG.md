@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
 
+### Documentation
+
+- **IDE/agent integration checklist**: Consolidated implementation, setup,
+  testing, manual acceptance, documentation, and release-readiness guidance
+  in `docs/IDE_INTEGRATION_CHECKLIST.md` and linked it from the support and
+  contributor documentation.
+
 - **Proactive upgrade prompt**: Show a local tray popup for available releases with Upgrade Now, snooze, and version-specific dismissal actions (#2218)
 
 - **OpenCode IDE Conversations adapter**: Discover OpenCode SQLite sessions and render their titles, models, timestamps, messages, reasoning, and tool activity in the IDE Conversations page (#2206)
@@ -44,6 +51,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Deferred source allowlisting**: Preserve a hashed, sanitized source-line context for violations detected through temporary scanner files, restoring the `Suppress in Source...` action only when the original line can be verified (#2162)
 
 - **Prompt-injection violation locations**: Preserve scanned file paths and line/column metadata in violation logs and `get_violations()` responses (#2238)
+
+- **KDE tray pause/resume stability**: Keep Linux pause labels stable and avoid countdown-driven native menu rebuilds that collapse an open nested submenu before **Resume** can be selected (#2242)
 
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
 

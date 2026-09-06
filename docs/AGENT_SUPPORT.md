@@ -2,6 +2,12 @@
 
 AI Guardian protects multiple AI coding agents through a unified hook adapter architecture. Each agent gets a dedicated adapter that normalizes its hook format into a common internal model, so the core scanning pipeline stays agent-agnostic.
 
+This document is the capability reference: it records what each integration
+supports and where known limitations remain. Use the
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) for the
+implementation, test, documentation, and release workflow when adding or
+changing an integration.
+
 ## Supported Agents
 
 | Agent | Setup Command | Hooks | MCP | Status |
@@ -407,20 +413,13 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Aider (CLI) | [AIDER.md](AIDER.md) | Git pre-commit hook integration (not hook adapter — scans at commit time) |
 | AiderDesk | [AIDERDESK.md](AIDERDESK.md) | TypeScript extension setup, npm install, hot reload |
 
-## Adding a New Agent
+## Adding or Changing an Agent
 
-1. Create `src/ai_guardian/hook_adapters/<agent>.py` implementing `HookAdapter`
-2. Add the adapter to `ADAPTER_CLASSES` in `hook_adapters/__init__.py`
-3. Add setup config to `IDESetup.IDE_CONFIGS` in `setup/hooks.py`
-4. Add tests in `tests/unit/test_<agent>_support.py`
-5. Update the tables in this document:
-   - Supported Agents table
-   - Hook Capability Matrix
-   - Violation Type Coverage Matrix (or note coverage matches an existing agent)
-   - Agent Confidence Levels table
-   - Hook Event Name Mapping
-   - Response Format Differences
-   - Config File Locations
+Follow the [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md).
+It covers the adapter and registry, setup and reconciliation, optional MCP
+and transcript surfaces, focused tests, manual acceptance, documentation, and
+release-readiness coverage. Keep the capability tables in this document
+synchronized with the evidence collected by that checklist.
 
 ## Adding a New Violation Type
 

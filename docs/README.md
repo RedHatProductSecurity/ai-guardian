@@ -67,6 +67,7 @@ Run `mkdocs build` before submitting documentation changes. The generated `site/
 
 | Document | Description |
 |----------|-------------|
+| [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) | Implementation, testing, documentation, and release checklist for integrations |
 | [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture |
 | [Pre-commit Hook](PRE_COMMIT.md) | Scan staged files for secrets before commit |
 | [GitHub Copilot Setup](GITHUB_COPILOT.md) | Setup guide for GitHub Copilot |
