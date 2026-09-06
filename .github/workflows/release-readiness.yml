@@ -193,7 +193,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot gemini codex windsurf cline augment kiro opencode"
+          IDES="claude cursor copilot gemini codex windsurf cline zoocode augment kiro aiderdesk openclaw opencode crush junie"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -212,8 +212,10 @@ jobs:
           fi
           echo "All IDE adapters set up successfully"
 
-      - name: Verify AGENT_SUPPORT.md exists
-        run: test -f docs/AGENT_SUPPORT.md
+      - name: Verify integration documentation exists
+        run: |
+          test -f docs/AGENT_SUPPORT.md
+          test -f docs/IDE_INTEGRATION_CHECKLIST.md
 
   daemon-lifecycle:
     name: Daemon Lifecycle
