@@ -996,6 +996,8 @@ print(result["output"])  # validated structured object
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
 | `between_turns` | callable | `None` | `(messages: list, response: AgentResponse, turn: int) -> str \| None \| False` — called after each successful assistant turn. `response` is a normalized `AgentResponse` with `.text`, `.tool_calls`, `.stop_reason`, and `.raw` (original provider response). Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `goal_evaluator` | callable | `None` | `(state: Any, response: AgentResponse, turn: int) -> GoalEvaluation \| str \| bool \| None` — evaluates an external goal after each successful turn. Return `GoalEvaluation(done=True)` to stop with `goal_completed`, or feedback to request another iteration |
+| `goal_timeout` | float | `None` | Maximum seconds for one `goal_evaluator` call. A timeout returns `stop_reason='goal_evaluator_timeout'`; `None` means no evaluator timeout |
 | `strip_chat_tokens` | bool | `None` | Strip chat template tokens (`<\|im_start\|>`, `[INST]`, etc.) from model output. `None` = auto-detect (enabled for Ollama, llama.cpp, vLLM). `True` = always strip. `False` = never strip |
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
@@ -1102,6 +1104,101 @@ agent = GuardedAgent(
 )
 result = agent.run("Write a pytest test for the calculate_discount function...")
 ```
+
+### Goal-oriented loops
+
+Use `between_turns` when you need a general extension point or already have
+loop state in application code. It supports the complete basic pattern:
+return a string to send feedback, return `False` to stop, and use `max_turns`
+as the safety bound. `post_run` can inspect the final result and `on_turn` can
+observe the trace while the loop runs.
+
+Use `goal_evaluator` when the application has an external definition of
+completion and wants an explicit, reusable contract for it. The evaluator is
+called after the assistant response has been scanned and, for tool-use turns,
+after tool results have been added to the conversation. It runs before the
+legacy `between_turns` callback when both are configured.
+
+```python
+from ai_guardian.integrations import GoalEvaluation
+from ai_guardian.integrations.anthropic import GuardedAgent
+
+
+def evaluate_tests(state, response, turn):
+    """Accept a draft only after the external test runner passes."""
+    state["checks"] += 1
+    test_result = run_project_tests()  # application-owned evaluator
+    if test_result.returncode == 0:
+        return GoalEvaluation(done=True, reason="tests_passed")
+    return GoalEvaluation(
+        feedback=(
+            f"The external tests failed on attempt {turn}. "
+            "Fix the implementation and try again.\n"
+            f"{test_result.stdout}\n{test_result.stderr}"
+        )
+    )
+
+
+state = {"checks": 0}
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools="coding",
+    max_turns=5,
+    goal_evaluator=evaluate_tests,
+)
+result = agent.run("Implement the function and its tests", goal_state=state)
+
+assert result["stop_reason"] == "goal_completed"
+assert result["goal_reason"] == "tests_passed"
+assert result["goal_state"] is state
+```
+
+The evaluator contract is:
+
+```python
+from dataclasses import dataclass
+from typing import Any, Optional
+
+
+@dataclass
+class GoalEvaluation:
+    done: bool = False
+    feedback: Optional[str] = None
+    reason: Optional[str] = None
+```
+
+`goal_state` is passed only to this run, defaults to a fresh dictionary, and
+is returned as `result["goal_state"]`. It is application-owned and is not
+serialized into the security trace. The `turn` argument is one-based. Return
+values have these meanings:
+
+| Return value | Behavior |
+|--------------|----------|
+| `GoalEvaluation(done=True, reason="...")` | Stop with `stop_reason="goal_completed"`; the reason is available as `result["goal_reason"]` and in the goal trace event. If `done=True`, completion wins over any feedback field |
+| `GoalEvaluation(feedback="...")` | Scan and inject feedback, then request another model turn |
+| non-empty `str` | Shorthand for `GoalEvaluation(feedback=...)` |
+| `None`, `False`, or `GoalEvaluation()` | Defer to normal loop behavior; an `end_turn` response completes naturally |
+| `True` | Shorthand for `GoalEvaluation(done=True)` |
+
+Feedback is passed through the same ai-guardian scan and optional secret
+redaction path as other generated context. Blocked feedback is replaced with
+a safe warning and the loop continues. The trace and `on_turn` callback record
+`type="goal_evaluation"` plus a scan event for evaluator feedback.
+
+Evaluator failures are returned rather than raised so callers can distinguish
+them from provider errors:
+
+| Condition | `stop_reason` | Result details |
+|-----------|---------------|----------------|
+| Evaluator accepts the goal | `goal_completed` | `goal_reason` and `goal_state` |
+| Evaluator raises an exception | `goal_evaluator_error` | Last response plus `goal_error` |
+| Evaluator exceeds `goal_timeout` | `goal_evaluator_timeout` | Last response plus `goal_error` |
+| `max_turns` is reached first | `max_turns` | Evaluator ran for the final turn; no further turn is started |
+| `max_budget_tokens` is reached first | `budget_exceeded` | The evaluator is not called for that turn |
+
+The timeout uses a daemon worker so the agent can return promptly; Python
+cannot force-stop a callback that is already running. Evaluators should keep
+side effects bounded and tolerate being abandoned after a timeout.
 
 ### Shell Hooks (Config-Driven)
 
@@ -1223,6 +1320,8 @@ def my_handler(turn: int, event: TurnEvent):
         print(f"[turn {turn}] tool: {event.name}({event.input})")
     elif event.type == "tool_result":
         print(f"[turn {turn}] result: {event.output[:100]}...")
+    elif event.type == "goal_evaluation":
+        print(f"[turn {turn}] goal done: {event.goal_done}")
     elif event.type == "scan":
         if event.violations:
             print(f"[turn {turn}] {len(event.violations)} violations")
@@ -1285,6 +1384,7 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
+| N | `goal_evaluation` | `goal_done`, optional `goal_reason`, and scanned/redacted `goal_feedback` |
 
 #### `AgentResponse` Dataclass
 
@@ -1306,7 +1406,7 @@ When `strip_chat_tokens` is enabled (auto for local providers), `text` has chat 
 ```python
 @dataclass
 class TurnEvent:
-    type: str                          # "system" | "input" | "response" | "tool_call" | "tool_result" | "scan" | "compaction"
+    type: str                          # "system" | "input" | "response" | "tool_call" | "tool_result" | "scan" | "compaction" | "goal_evaluation"
     text: Optional[str] = None
     name: Optional[str] = None
     input: Optional[dict] = None
@@ -1323,6 +1423,9 @@ class TurnEvent:
     method: Optional[str] = None         # compaction only
     messages_count: Optional[int] = None # input only
     compacted: Optional[bool] = None     # input only
+    goal_done: Optional[bool] = None     # goal_evaluation only
+    goal_reason: Optional[str] = None    # goal_evaluation only
+    goal_feedback: Optional[str] = None  # goal_evaluation only
 ```
 
 #### Auto-Persist Traces to Disk
@@ -1477,6 +1580,9 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 |-------|---------|
 | `end_turn` | Model returned a text response with no tool calls — natural completion |
 | `hook_early_stop` | `after_call` or `between_turns` callback returned `False` to stop the loop |
+| `goal_completed` | `goal_evaluator` accepted the latest response |
+| `goal_evaluator_error` | `goal_evaluator` raised an exception or returned an invalid value |
+| `goal_evaluator_timeout` | `goal_evaluator` exceeded `goal_timeout` |
 | `max_turns` | Reached the `max_turns` limit without the model finishing |
 | `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
 | `max_schema_nudges` | Model failed to call `submit_result` after `max_schema_nudges` re-prompts |

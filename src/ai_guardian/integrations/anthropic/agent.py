@@ -5,8 +5,10 @@ import json
 import ipaddress
 import logging
 import os
+import queue
 import random
 import subprocess
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -28,6 +30,7 @@ from ai_guardian.integrations.mcp_client import (
 from ai_guardian.integrations.base import (
     AgentLoopStrategy,
     AgentResponse,
+    GoalEvaluation,
     ParsedResponse,
     ToolCall,
     TurnEvent,
@@ -49,6 +52,10 @@ logger = logging.getLogger(__name__)
 
 def _get_usage_field(usage: Any, field: str) -> int:
     return getattr(usage, field, 0) if usage else 0
+
+
+class _GoalEvaluatorTimeout(Exception):
+    """Internal signal used when a goal evaluator exceeds its time limit."""
 
 
 # ---------------------------------------------------------------------------
@@ -313,7 +320,14 @@ class GuardedAgent:
     Bedrock) and OpenAI out of the box.
     """
 
-    _TRACE_TEXT_FIELDS = ("text", "system_prompt", "user_prompt", "output", "preamble")
+    _TRACE_TEXT_FIELDS = (
+        "text",
+        "system_prompt",
+        "user_prompt",
+        "output",
+        "preamble",
+        "goal_feedback",
+    )
 
     _OVERRIDABLE_PARAMS = frozenset(
         {
@@ -379,9 +393,18 @@ class GuardedAgent:
             Callable[[str, Dict[str, Any]], Dict[str, Any]]
         ] = None,
         context: Optional[Any] = None,
+        goal_evaluator: Optional[Callable[[Any, AgentResponse, int], Any]] = None,
+        goal_timeout: Optional[float] = None,
     ):
+        if goal_evaluator is not None and not callable(goal_evaluator):
+            raise TypeError("goal_evaluator must be callable")
+        if goal_timeout is not None and goal_timeout <= 0:
+            raise ValueError("goal_timeout must be greater than zero")
+
         self._run_context = context
         self._run_sequence: Optional[int] = None
+        self._goal_evaluator = goal_evaluator
+        self._goal_timeout = goal_timeout
         self._api_timeout = api_timeout
         self._retry_max_attempts = max(1, retry_max_attempts)
         self._retry_base_delay = max(0.0, retry_base_delay)
@@ -799,8 +822,21 @@ class GuardedAgent:
             "trace": [],
         }
 
-    def run(self, prompt: str) -> Dict[str, Any]:
+    def _attach_goal_state(
+        self, result: Dict[str, Any], goal_state: Optional[Any]
+    ) -> Dict[str, Any]:
+        """Add per-run goal metadata without changing legacy results."""
+        if self._goal_evaluator is not None:
+            result["goal_state"] = goal_state
+            result["goal_evaluations"] = 0
+        return result
+
+    def run(self, prompt: str, *, goal_state: Optional[Any] = None) -> Dict[str, Any]:
         """Run the agent loop and return the result.
+
+        When ``goal_evaluator`` is configured, ``goal_state`` is a fresh
+        per-run state value passed to that callback after each successful
+        assistant turn.  The same value is returned in ``result["goal_state"]``.
 
         Returns a dict with:
         - ``output``: final text (or structured object if *output_schema* set)
@@ -808,6 +844,9 @@ class GuardedAgent:
         - ``stop_reason``: why the loop ended
         - ``usage``: cumulative token usage
         """
+        if self._goal_evaluator is not None and goal_state is None:
+            goal_state = {}
+
         run_config = {
             "model": self._model,
             "tools": list(self._resolved_tools),
@@ -816,15 +855,15 @@ class GuardedAgent:
             "max_budget_tokens": self._max_budget_tokens,
         }
         if not self._exec_hook("pre_run", "pre"):
-            return self._hook_abort_result()
+            return self._attach_goal_state(self._hook_abort_result(), goal_state)
         if self._pre_run:
             self._pre_run(prompt, run_config)
         if not self._exec_hook("pre_run", "post"):
-            return self._hook_abort_result()
+            return self._attach_goal_state(self._hook_abort_result(), goal_state)
 
         result = None
         try:
-            result = self._run_loop(prompt)
+            result = self._run_loop(prompt, goal_state=goal_state)
             return result
         finally:
             self._exec_hook("post_run", "pre")
@@ -872,6 +911,9 @@ class GuardedAgent:
                 "ended_at": ended_at.isoformat(),
                 "max_tokens": self._max_tokens,
             }
+            for key in ("goal_reason", "goal_evaluations", "goal_error"):
+                if key in result:
+                    extras[key] = result[key]
             if trace_id:
                 extras["trace_id"] = trace_id
             if self._run_context is not None:
@@ -1119,7 +1161,154 @@ class GuardedAgent:
             logger.error("Failed to start MCP servers: %s", exc)
             return None
 
-    def _run_loop(self, prompt: str) -> Dict[str, Any]:
+    def _call_goal_evaluator(
+        self, goal_state: Any, response: AgentResponse, turn_num: int
+    ) -> Any:
+        """Call the goal evaluator, enforcing its optional timeout."""
+        if self._goal_evaluator is None:
+            return None
+
+        if self._goal_timeout is None:
+            return self._goal_evaluator(goal_state, response, turn_num)
+
+        result_queue = queue.Queue(maxsize=1)
+
+        def _invoke() -> None:
+            try:
+                result_queue.put(
+                    (True, self._goal_evaluator(goal_state, response, turn_num))
+                )
+            except Exception as exc:
+                result_queue.put((False, exc))
+
+        evaluator_thread = threading.Thread(
+            target=_invoke,
+            name="ai-guardian-goal-evaluator",
+            daemon=True,
+        )
+        evaluator_thread.start()
+        evaluator_thread.join(self._goal_timeout)
+        if evaluator_thread.is_alive():
+            raise _GoalEvaluatorTimeout(
+                "goal evaluator timed out after " f"{self._goal_timeout:g} seconds"
+            )
+
+        try:
+            succeeded, payload = result_queue.get_nowait()
+        except queue.Empty as exc:
+            raise RuntimeError("goal evaluator did not return a result") from exc
+        if not succeeded:
+            raise payload
+        return payload
+
+    @staticmethod
+    def _normalize_goal_evaluation(value: Any) -> GoalEvaluation:
+        """Normalize the supported goal evaluator return values."""
+        if isinstance(value, GoalEvaluation):
+            evaluation = value
+        elif isinstance(value, str):
+            evaluation = GoalEvaluation(feedback=value)
+        elif value is True:
+            evaluation = GoalEvaluation(done=True)
+        elif value is False or value is None:
+            evaluation = GoalEvaluation()
+        else:
+            raise TypeError(
+                "goal_evaluator must return GoalEvaluation, str, bool, or None"
+            )
+
+        if not isinstance(evaluation.done, bool):
+            raise TypeError("GoalEvaluation.done must be a bool")
+        if evaluation.feedback is not None and not isinstance(evaluation.feedback, str):
+            raise TypeError("GoalEvaluation.feedback must be a string or None")
+        if evaluation.reason is not None and not isinstance(evaluation.reason, str):
+            raise TypeError("GoalEvaluation.reason must be a string or None")
+        return evaluation
+
+    def _scan_goal_feedback(
+        self,
+        feedback: str,
+        session: Any,
+        turn_num: int,
+        _emit: Callable,
+    ) -> str:
+        """Scan evaluator feedback and return safe content for the model."""
+        if not self._scanning:
+            return feedback
+
+        try:
+            scan_result = session.check_content(
+                feedback, filename="goal_evaluator_feedback"
+            )
+            _emit(
+                turn_num,
+                TurnEvent(type="scan", scanned="goal_evaluator_feedback"),
+            )
+            if session.secret_redaction_enabled and scan_result.detected:
+                sanitized = _try_sanitize_text(session, feedback)
+                if sanitized:
+                    return sanitized
+        except SecurityViolation as exc:
+            _emit(
+                turn_num,
+                TurnEvent(
+                    type="scan",
+                    scanned="goal_evaluator_feedback",
+                    violations=[
+                        {
+                            "id": exc.result.violation_id,
+                            "type": exc.result.violation_type,
+                            "message": exc.result.message,
+                        }
+                    ],
+                ),
+            )
+            logger.warning(
+                "goal evaluator feedback blocked by security scan: %s",
+                exc.result.message,
+            )
+            return (
+                "[ai-guardian] Goal evaluator feedback was blocked: "
+                f"{exc.result.violation_type}. The content was not added to "
+                "context. "
+                f"Violation ID: {exc.result.violation_id}"
+            )
+
+        return feedback
+
+    def _evaluate_goal(
+        self,
+        goal_state: Any,
+        response: AgentResponse,
+        turn_num: int,
+        session: Any,
+        _emit: Callable,
+    ) -> GoalEvaluation:
+        """Evaluate a turn and record the decision in the live trace."""
+        raw_evaluation = self._call_goal_evaluator(goal_state, response, turn_num)
+        evaluation = self._normalize_goal_evaluation(raw_evaluation)
+        feedback = evaluation.feedback
+        if feedback and not evaluation.done:
+            feedback = self._scan_goal_feedback(feedback, session, turn_num, _emit)
+
+        _emit(
+            turn_num,
+            TurnEvent(
+                type="goal_evaluation",
+                goal_done=evaluation.done,
+                goal_reason=evaluation.reason,
+                goal_feedback=feedback,
+            ),
+        )
+        return GoalEvaluation(
+            done=evaluation.done,
+            feedback=feedback,
+            reason=evaluation.reason,
+        )
+
+    def _run_loop(
+        self, prompt: str, *, goal_state: Optional[Any] = None
+    ) -> Dict[str, Any]:
         strategy = self._strategy
         self._last_trace = []
         trace = self._last_trace
@@ -1219,6 +1408,7 @@ class GuardedAgent:
                     run_start_mono=run_start_mono,
                     otel_emitter=otel_emitter,
                     mcp_manager=mcp_manager,
+                    goal_state=goal_state,
                 )
             except BaseException as exc:
                 exc.trace = trace
@@ -1275,6 +1465,7 @@ class GuardedAgent:
         run_start_mono: Optional[float] = None,
         otel_emitter: Optional[Any] = None,
         mcp_manager: Optional[MCPClientManager] = None,
+        goal_state: Optional[Any] = None,
     ) -> Dict[str, Any]:
         parent_span_id = uuid.uuid4().hex
         _emit(
@@ -1319,6 +1510,7 @@ class GuardedAgent:
                     "trace": trace,
                     "error": "System prompt blocked by security scan",
                 }
+                self._attach_goal_state(result, goal_state)
                 if self._trace_dir:
                     self._persist_trace(
                         result,
@@ -1362,6 +1554,7 @@ class GuardedAgent:
                     "trace": trace,
                     "error": "User prompt blocked by security scan",
                 }
+                self._attach_goal_state(result, goal_state)
                 if self._trace_dir:
                     self._persist_trace(
                         result,
@@ -1412,6 +1605,9 @@ class GuardedAgent:
         compaction_count = 0
         last_input_tokens = 0
         schema_nudge_count = 0
+        goal_evaluations = 0
+        goal_reason = None
+        goal_error = None
 
         for _turn in range(self._max_turns):
             turn_num = _turn + 1
@@ -1626,6 +1822,68 @@ class GuardedAgent:
                         final_text = parsed.text
                         stop_reason = "hook_abort"
                         break
+                    goal_feedback_injected = False
+                    if self._goal_evaluator is not None:
+                        goal_evaluations += 1
+                        try:
+                            goal_decision = self._evaluate_goal(
+                                goal_state,
+                                AgentResponse(
+                                    text=parsed.text,
+                                    tool_calls=parsed.tool_calls,
+                                    stop_reason=parsed.stop_reason,
+                                    raw=response,
+                                ),
+                                turn_num,
+                                session,
+                                _emit,
+                            )
+                        except _GoalEvaluatorTimeout as exc:
+                            logger.warning("%s", exc)
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="goal_evaluation",
+                                    goal_done=False,
+                                    goal_reason="evaluator_timeout",
+                                ),
+                            )
+                            final_text = parsed.text
+                            stop_reason = "goal_evaluator_timeout"
+                            goal_error = str(exc)
+                            break
+                        except Exception as exc:
+                            logger.error(
+                                "Goal evaluator failed on turn %d: %s",
+                                turn_num,
+                                exc,
+                                exc_info=True,
+                            )
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="goal_evaluation",
+                                    goal_done=False,
+                                    goal_reason="evaluator_error",
+                                ),
+                            )
+                            final_text = parsed.text
+                            stop_reason = "goal_evaluator_error"
+                            goal_error = f"{type(exc).__name__}: {exc}"
+                            break
+                        if goal_decision.done:
+                            final_text = parsed.text
+                            stop_reason = "goal_completed"
+                            goal_reason = goal_decision.reason or "goal_completed"
+                            break
+                        if goal_decision.feedback:
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": goal_decision.feedback,
+                                }
+                            )
+                            goal_feedback_injected = True
                     if self._between_turns:
                         agent_response = AgentResponse(
                             text=parsed.text,
@@ -1712,6 +1970,9 @@ class GuardedAgent:
                         final_text = parsed.text
                         stop_reason = "hook_abort"
                         break
+
+                    if goal_feedback_injected:
+                        continue
 
                     if self._output_schema and structured_output is None:
                         extracted = self._try_extract_structured_output(parsed.text)
@@ -1890,6 +2151,64 @@ class GuardedAgent:
                         final_text = parsed.text
                         stop_reason = "hook_abort"
                         break
+                    if self._goal_evaluator is not None:
+                        goal_evaluations += 1
+                        try:
+                            goal_decision = self._evaluate_goal(
+                                goal_state,
+                                AgentResponse(
+                                    text=parsed.text,
+                                    tool_calls=parsed.tool_calls,
+                                    stop_reason=parsed.stop_reason,
+                                    raw=response,
+                                ),
+                                turn_num,
+                                session,
+                                _emit,
+                            )
+                        except _GoalEvaluatorTimeout as exc:
+                            logger.warning("%s", exc)
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="goal_evaluation",
+                                    goal_done=False,
+                                    goal_reason="evaluator_timeout",
+                                ),
+                            )
+                            final_text = parsed.text
+                            stop_reason = "goal_evaluator_timeout"
+                            goal_error = str(exc)
+                            break
+                        except Exception as exc:
+                            logger.error(
+                                "Goal evaluator failed on turn %d: %s",
+                                turn_num,
+                                exc,
+                                exc_info=True,
+                            )
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="goal_evaluation",
+                                    goal_done=False,
+                                    goal_reason="evaluator_error",
+                                ),
+                            )
+                            final_text = parsed.text
+                            stop_reason = "goal_evaluator_error"
+                            goal_error = f"{type(exc).__name__}: {exc}"
+                            break
+                        if goal_decision.done:
+                            final_text = parsed.text
+                            stop_reason = "goal_completed"
+                            goal_reason = goal_decision.reason or "goal_completed"
+                            break
+                        if goal_decision.feedback:
+                            strategy.inject_user_text_after_results(
+                                messages, goal_decision.feedback
+                            )
+                            structured_output = None
                     if self._between_turns:
                         agent_response = AgentResponse(
                             text=parsed.text,
@@ -2018,6 +2337,15 @@ class GuardedAgent:
             "started_at": started_at.isoformat(),
             "ended_at": datetime.now(timezone.utc).isoformat(),
         }
+
+        if self._goal_evaluator is not None:
+            result["goal_state"] = goal_state
+            result["goal_evaluations"] = goal_evaluations
+            if goal_reason is not None:
+                result["goal_reason"] = goal_reason
+            if goal_error is not None:
+                result["goal_error"] = goal_error
+                result["error"] = goal_error
 
         if self._trace_dir:
             self._persist_trace(

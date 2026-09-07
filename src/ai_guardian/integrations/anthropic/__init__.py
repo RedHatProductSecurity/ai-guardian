@@ -12,13 +12,14 @@ from ai_guardian.integrations.anthropic.agent import (
     AnthropicLoopStrategy,
     GuardedAgent,
 )
-from ai_guardian.integrations.base import TurnEvent
+from ai_guardian.integrations.base import GoalEvaluation, TurnEvent
 
 __all__ = [
     "AnthropicExtractor",
     "AnthropicLoopStrategy",
     "create_client",
     "GuardedAgent",
+    "GoalEvaluation",
     "TurnEvent",
     "_ENV_DETECTORS",
 ]

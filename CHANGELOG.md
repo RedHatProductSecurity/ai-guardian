@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Goal-oriented `GuardedAgent` loops**: Add an optional external goal
+  evaluator with per-run state, scanned feedback, explicit completion/error/
+  timeout stop reasons, and trace/on-turn decision events; document when to
+  use it versus the existing `between_turns` callback (#2252)
+
 - **NiceGUI proactive prompt state viewer** — added a read-only Configuration page
   for inspecting the local XDG `proactive_prompts.json` file without mixing
   personal prompt decisions into the shareable `ai-guardian.json` config.

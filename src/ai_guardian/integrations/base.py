@@ -87,6 +87,7 @@ class TurnEvent:
     * ``"tool_result"`` — ``name``, ``output``
     * ``"scan"`` — ``scanned``, ``violations``
     * ``"compaction"`` — ``tokens_before``, ``tokens_after``, ``method``
+    * ``"goal_evaluation"`` — ``goal_done``, ``goal_reason``, ``goal_feedback``
     """
 
     type: str
@@ -108,6 +109,9 @@ class TurnEvent:
     compacted: Optional[bool] = None
     latency_ms: Optional[int] = None
     output_bytes: Optional[int] = None
+    goal_done: Optional[bool] = None
+    goal_reason: Optional[str] = None
+    goal_feedback: Optional[str] = None
 
     def __str__(self) -> str:
         if self.type == "system":
@@ -142,6 +146,10 @@ class TurnEvent:
         if self.type == "input":
             c = " (compacted)" if self.compacted else ""
             return f"[input] {self.messages_count} messages{c}"
+        if self.type == "goal_evaluation":
+            status = "done" if self.goal_done else "continue"
+            reason = f" ({self.goal_reason})" if self.goal_reason else ""
+            return f"[goal_evaluation] {status}{reason}"
         if self.type == "timeout":
             return f"[timeout] {self.text}"
         if self.type == "retry":
@@ -169,6 +177,9 @@ class TurnEvent:
             "compacted",
             "latency_ms",
             "output_bytes",
+            "goal_done",
+            "goal_reason",
+            "goal_feedback",
         ):
             val = getattr(self, attr)
             if val is not None:
@@ -200,6 +211,24 @@ class AgentResponse:
     tool_calls: List[ToolCall]
     stop_reason: str
     raw: Any
+
+
+@dataclass
+class GoalEvaluation:
+    """Decision returned by a :class:`GuardedAgent` goal evaluator.
+
+    Set ``done`` to ``True`` when an external evaluator accepts the latest
+    response.  Set ``feedback`` to a string when the model should perform
+    another iteration.  ``reason`` is retained for application-level
+    observability and does not alter the normalized ``stop_reason``.
+
+    A goal evaluator may also return ``None`` (or an empty evaluation) to
+    defer to the normal agent-loop behavior.
+    """
+
+    done: bool = False
+    feedback: Optional[str] = None
+    reason: Optional[str] = None
 
 
 @dataclass
