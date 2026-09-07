@@ -846,6 +846,36 @@ class TestIDESetupParametrized:
         assert result["events"]["beforeReadFile"] == "missing"
         assert result["healthy"] is False
 
+    @pytest.mark.parametrize(
+        "ide_name, expected_events",
+        [
+            ("augment", {"PreToolUse", "PostToolUse"}),
+            ("crush", {"PreToolUse"}),
+        ],
+        ids=["augment", "crush"],
+    )
+    def test_verify_hooks_flattens_nested_hook_templates(
+        self, tmp_path, ide_name, expected_events
+    ):
+        setup = IDESetup()
+        config_file = tmp_path / f"{ide_name}.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        event_name: [{"command": f"ai-guardian --ide {ide_name}"}]
+                        for event_name in expected_events
+                    }
+                }
+            )
+        )
+
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide(ide_name)
+
+        assert set(result["events"]) == expected_events
+        assert result["healthy"] is True
+
     def test_verify_hooks_handles_copilot_root_events(self, tmp_path):
         setup = IDESetup()
         config_file = tmp_path / "hooks.json"

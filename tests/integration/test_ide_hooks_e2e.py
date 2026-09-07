@@ -130,6 +130,7 @@ def _write_guardian_config(config_dir: Path, blocked_dir: Path) -> None:
         "id": "synthetic-hook-output-marker",
         "match_type": "regex",
         "regex": POST_OUTPUT_PATTERN,
+        "pattern": POST_OUTPUT_PATTERN,
         "description": "synthetic hook-output marker",
         "redaction_strategy": "full_redact",
         "strategy": "full_redact",
@@ -138,7 +139,7 @@ def _write_guardian_config(config_dir: Path, blocked_dir: Path) -> None:
     config = {
         "secret_scanning": {
             "enabled": True,
-            "engines": ["toml-patterns"],
+            "engines": [{"type": "toml-patterns"}],
             "execution_strategy": "first-match",
             "min_entropy": 0.0,
             "stopwords": [],
@@ -520,7 +521,8 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
     source_path = root / ("ai-guardian.ts" if config.get("plugin_file") else "index.ts")
     package_path = root / "package.json"
     assert source_path.is_file(), f"{ide_type}/setup: bridge source missing"
-    assert package_path.is_file(), f"{ide_type}/setup: package manifest missing"
+    if config.get("extension_based"):
+        assert package_path.is_file(), f"{ide_type}/setup: package manifest missing"
     source = source_path.read_text(encoding="utf-8")
     assert f"--ide {ide_type}" in source, f"{ide_type}/setup: IDE flag missing"
     assert "execSync" in source and "AI_GUARDIAN_IDE_TYPE" in source

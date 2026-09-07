@@ -676,7 +676,7 @@ class IDESetup:
         if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
             return {name: "script" for name in config.get("hook_scripts", [])}
         hooks = config.get("hooks", {})
-        if ide_type == "windsurf":
+        if ide_type in ("windsurf", "augment", "crush"):
             hooks = hooks.get("hooks", hooks)
         if ide_type == "gemini":
             return {
@@ -875,7 +875,7 @@ class IDESetup:
         """Remove obsolete AI Guardian entries while retaining other hooks."""
         manifest = self.expected_hook_manifest(ide_type)
         hooks = config if ide_type == "copilot" else config.get("hooks", {})
-        if ide_type == "windsurf" and isinstance(hooks, dict):
+        if ide_type in ("windsurf", "augment", "crush") and isinstance(hooks, dict):
             hooks = hooks.get("hooks", hooks)
         if not isinstance(hooks, dict):
             return []
