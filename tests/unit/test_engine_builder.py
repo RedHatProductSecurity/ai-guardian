@@ -494,6 +494,32 @@ class TestParentConfigPassthrough(unittest.TestCase):
         self.assertIsNotNone(config)
         self.assertEqual(config.python_scanner._ignore_files, ["*.test"])
 
+    def test_parent_scanner_options_are_forwarded(self):
+        marker = "E2E_GUARDIAN_MARKER_A1B2C3D4E5F6G7H8"
+        parent = {
+            "additional_patterns": [
+                {
+                    "id": "synthetic-hook-output-marker",
+                    "match_type": "regex",
+                    "regex": r"E2E_GUARDIAN_MARKER_[A-Z0-9]{16}",
+                }
+            ],
+            "min_entropy": 0.0,
+            "stopwords": ["custom-stopword"],
+        }
+        config = _build_engine_config("toml-patterns", parent_config=parent)
+
+        self.assertIsNotNone(config)
+        scanner = config.python_scanner
+        self.assertEqual(scanner._min_entropy, 0.0)
+        self.assertIn("custom-stopword", scanner._stopwords)
+        self.assertTrue(
+            any(
+                finding.rule_id == "synthetic-hook-output-marker"
+                for finding in scanner.scan(marker)
+            )
+        )
+
     def test_scanner_config_overrides_parent_config(self):
         from ai_guardian.scanners.engine_builder import _build_python_preset
 

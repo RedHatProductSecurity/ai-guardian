@@ -676,7 +676,7 @@ class IDESetup:
         if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
             return {name: "script" for name in config.get("hook_scripts", [])}
         hooks = config.get("hooks", {})
-        if ide_type == "windsurf":
+        if ide_type in ("windsurf", "augment", "crush"):
             hooks = hooks.get("hooks", hooks)
         if ide_type == "gemini":
             return {
@@ -792,7 +792,15 @@ class IDESetup:
             for script_name in manifest:
                 found = False
                 current = False
-                for candidate in [hooks_dir / script_name]:
+                candidates = [hooks_dir / script_name]
+                if platform.system() == "Windows":
+                    candidates.extend(
+                        [
+                            hooks_dir / f"{script_name}.bat",
+                            hooks_dir / f"{script_name}.ps1",
+                        ]
+                    )
+                for candidate in candidates:
                     if candidate.exists():
                         try:
                             content = candidate.read_text(encoding="utf-8")
@@ -820,7 +828,11 @@ class IDESetup:
             installed = {}
 
         installed_hooks = installed.get("hooks", {})
-        if ide_type == "gemini":
+        if ide_type == "copilot":
+            # Copilot's hooks.json schema stores hook events at the config
+            # document root rather than under a top-level ``hooks`` object.
+            installed_hooks = installed
+        elif ide_type == "gemini":
             installed_hooks = {
                 str(entry.get("event")): entry
                 for entry in installed_hooks
@@ -862,8 +874,8 @@ class IDESetup:
     ) -> List[str]:
         """Remove obsolete AI Guardian entries while retaining other hooks."""
         manifest = self.expected_hook_manifest(ide_type)
-        hooks = config.get("hooks", {})
-        if ide_type == "windsurf" and isinstance(hooks, dict):
+        hooks = config if ide_type == "copilot" else config.get("hooks", {})
+        if ide_type in ("windsurf", "augment", "crush") and isinstance(hooks, dict):
             hooks = hooks.get("hooks", hooks)
         if not isinstance(hooks, dict):
             return []
@@ -1565,6 +1577,17 @@ class IDESetup:
                                     h.get("command", "")
                                 ):
                                     return True
+
+            elif ide_type == "copilot":
+                # Copilot stores its hook events at the document root.
+                for hook_name in ("userPromptSubmitted", "preToolUse"):
+                    hook_list = config.get(hook_name, [])
+                    if isinstance(hook_list, list):
+                        for h in hook_list:
+                            if isinstance(h, dict) and _is_ai_guardian_command(
+                                h.get("command", "")
+                            ):
+                                return True
 
             elif ide_type == "windsurf":
                 hooks = config.get("hooks", {})
