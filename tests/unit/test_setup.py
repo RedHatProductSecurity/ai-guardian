@@ -1451,6 +1451,23 @@ class TestCodexSetup:
         assert layers[0]["inline_hooks"] is True
         assert layers[1]["hooks_json_exists"] is True
 
+    def test_codex_config_layers_ignore_hooks_state_metadata(
+        self, monkeypatch, tmp_path
+    ):
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        (codex_home / "config.toml").write_text(
+            '[hooks.state]\n[hooks.state."hooks.json:pre_tool_use:0:0"]\n'
+            'trusted_hash = "sha256:example"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        layers = IDESetup().get_codex_config_layers()
+
+        assert layers[0]["config_toml_exists"] is True
+        assert layers[0]["inline_hooks"] is False
+
     def test_codex_setup_reports_inline_hooks_conflict(self, monkeypatch, tmp_path):
         codex_home = tmp_path / "codex"
         codex_home.mkdir()

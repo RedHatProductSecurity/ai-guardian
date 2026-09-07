@@ -42,7 +42,14 @@ def _state_path() -> Path:
 
 
 class ProactivePromptState:
-    """Persistent state for proactive prompts."""
+    """Persistent state for proactive prompts.
+
+    IDE setup health and prompt decisions are intentionally independent. The
+    ``ide_setup_status`` entry is the current or last verified snapshot, while
+    ``ide_setup_<combination>`` entries and ``ide_setup_never_install`` only
+    control whether an automatic prompt is eligible to appear. A snooze or
+    dismissal must never make an unhealthy integration look configured.
+    """
 
     def __init__(self, path: Optional[Path] = None):
         self.path = path or _state_path()
@@ -139,6 +146,11 @@ class ProactivePromptState:
             data[IDE_SETUP_STATUS_KEY] = status
             self.save(data)
 
+    def get_ide_setup_status(self) -> Dict:
+        """Return the last persisted IDE/setup reality snapshot."""
+        status = self.load().get(IDE_SETUP_STATUS_KEY)
+        return status if isinstance(status, dict) else {}
+
     def reset_ide_setup(self, ide_type: str) -> Dict:
         """Clear one IDE's automatic-setup decision history and exclusion."""
         if not isinstance(ide_type, str) or not ide_type:
@@ -207,12 +219,16 @@ def sync_ide_setup_state(
     state: Optional[ProactivePromptState] = None,
     setup=None,
     now: Optional[datetime] = None,
+    skip_excluded: bool = False,
 ) -> Dict:
     """Refresh the persisted IDE/setup status from the local configuration.
 
     The existing ``ide_setup_<combination>`` records are prompt history and
     are deliberately retained. This function adds a current, canonical
     ``ide_setup_status`` snapshot without changing setup hooks or exclusions.
+    The tray sets ``skip_excluded`` for automatic monitoring so an IDE marked
+    Never install is not rechecked; its last verified result remains visible.
+    Explicit manual syncs still verify excluded IDEs by default.
     """
     if state is None:
         state = ProactivePromptState()
@@ -235,29 +251,52 @@ def sync_ide_setup_state(
     installed = [ide for ide in installed if isinstance(ide, str)]
     exclusions = state.get_ide_setup_exclusions()
     ide_configs = getattr(setup, "IDE_CONFIGS", {})
+    previous_status = state.get_ide_setup_status()
+    previous_integrations = (
+        previous_status.get("integrations", {})
+        if isinstance(previous_status, dict)
+        else {}
+    )
+    if not isinstance(previous_integrations, dict):
+        previous_integrations = {}
     integrations = {}
 
     for ide_type in installed:
         config = ide_configs.get(ide_type, {})
-        try:
-            verification = setup.verify_hooks_for_ide(ide_type)
-            if not isinstance(verification, dict):
+        previous_verification = previous_integrations.get(ide_type)
+        if skip_excluded and ide_type in exclusions:
+            if isinstance(previous_verification, dict):
+                verification = dict(previous_verification)
+            else:
                 verification = {
                     "ide": ide_type,
                     "healthy": False,
                     "events": {},
                     "obsolete": [],
-                    "error": "Invalid verification result",
+                    "verification_skipped": True,
                 }
-        except Exception as exc:
-            logger.warning("Unable to verify IDE setup for %s: %s", ide_type, exc)
-            verification = {
-                "ide": ide_type,
-                "healthy": False,
-                "events": {},
-                "obsolete": [],
-                "error": str(exc),
-            }
+            verification["verification_skipped"] = True
+            verification["verification_skip_reason"] = "Never install selected"
+        else:
+            try:
+                verification = setup.verify_hooks_for_ide(ide_type)
+                if not isinstance(verification, dict):
+                    verification = {
+                        "ide": ide_type,
+                        "healthy": False,
+                        "events": {},
+                        "obsolete": [],
+                        "error": "Invalid verification result",
+                    }
+            except Exception as exc:
+                logger.warning("Unable to verify IDE setup for %s: %s", ide_type, exc)
+                verification = {
+                    "ide": ide_type,
+                    "healthy": False,
+                    "events": {},
+                    "obsolete": [],
+                    "error": str(exc),
+                }
 
         current = dict(verification)
         current["name"] = config.get("name", ide_type)

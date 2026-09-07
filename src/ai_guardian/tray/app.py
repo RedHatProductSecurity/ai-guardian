@@ -524,6 +524,7 @@ class DaemonTray:
             *self._menu._build_multi_daemon_menu_items(),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
+            pystray.MenuItem("Check hooks", self._health._on_check_ide_setup),
             *self._menu._build_ide_setup_menu_items(),
             pystray.MenuItem("Restart", self._on_restart_tray),
             pystray.MenuItem("Quit", self._on_quit),
@@ -549,6 +550,9 @@ class DaemonTray:
                 callback=lambda: self._refresh_event.set()
             )
         self._start_stats_refresh()
+        # Check hook health as soon as the tray is available. The callback
+        # starts a worker so tray startup/restart is not blocked by the UI.
+        self._health._on_startup_ide_setup()
         self._start_subscriber()
         self._start_prompt_poll()
         self._start_web_console()

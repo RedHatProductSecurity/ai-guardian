@@ -27,6 +27,22 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
 
     with (
         patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {
+                    "beforeSubmitPrompt": "missing",
+                    "beforeReadFile": "missing",
+                    "beforeShellExecution": "missing",
+                    "afterShellExecution": "missing",
+                    "preToolUse": "missing",
+                    "postToolUse": "missing",
+                },
+                "obsolete": [],
+            },
+        ),
         patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
         patch("ai_guardian.tray.health.threading.Thread") as thread,
     ):
@@ -39,6 +55,10 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
         title="Set Up AI Guardian",
         message=(
             "Cursor IDE is installed but is not protected by AI Guardian.\n\n"
+            "Current hook status: beforeSubmitPrompt (missing), "
+            "beforeReadFile (missing), beforeShellExecution (missing), "
+            "afterShellExecution (missing), preToolUse (missing), "
+            "postToolUse (missing)\n\n"
             "Set up its security hooks now?"
         ),
         action_label="Set Up Now",
@@ -201,6 +221,44 @@ def test_setup_action_reports_doctor_style_hook_counts():
         "[PASS] Claude Code: 3/3 hooks configured\n\n"
         "1 passed",
     )
+
+
+def test_setup_result_uses_final_verification_health():
+    """
+    USER EXPERIENCE: Healthy post-setup verification -> report success.
+
+    Scenario:
+    1. The setup adapter reports a false result because configuration changed
+       during setup or was already complete.
+    2. The tray performs its final hook verification.
+    3. Verification reports every managed hook as healthy.
+
+    Expected User Experience:
+    - The user sees a PASS result based on the final health check.
+    - The notification does not claim that setup failed.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": True,
+        "events": {"PreToolUse": "healthy"},
+        "obsolete": [],
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        monitor._notify_ide_setup_result(
+            [
+                {
+                    "ide": "claude",
+                    "success": False,
+                    "verification": verification,
+                }
+            ]
+        )
+
+    message = notify.call_args.args[1]
+    assert "[PASS] Claude Code: 1/1 hooks configured" in message
+    assert "setup failed" not in message
 
 
 def test_codex_setup_reports_only_managed_hook_count():

@@ -33,6 +33,10 @@ class TrayHealthMonitor:
         self._upgrade_notified_version = None
         self._upgrade_prompt_in_progress = False
         self._ide_setup_prompt_in_progress = False
+        self._ide_setup_state = None
+        self._ide_setup_snapshot = None
+        self._ide_setup_previous_snapshot = None
+        self._ide_setup_snapshot_used = False
 
     def _check_config_error_notification(self):
         """Show OS notification once when a config error is detected."""
@@ -369,14 +373,136 @@ class TrayHealthMonitor:
             target.runtime == "local" for target in self._tray._targets
         )
 
-    def _get_unconfigured_ides(self):
+    def _refresh_ide_setup_state(self, include_excluded=False):
+        """Refresh and cache the canonical local IDE/setup health snapshot."""
+        from ai_guardian.tray.proactive_prompt import (
+            ProactivePromptState,
+            sync_ide_setup_state,
+        )
+
+        state = ProactivePromptState()
+        self._ide_setup_state = state
+        self._ide_setup_previous_snapshot = state.get_ide_setup_status()
+        snapshot = sync_ide_setup_state(
+            state=state,
+            skip_excluded=not include_excluded,
+        )
+        if not isinstance(snapshot, dict) or snapshot.get("error"):
+            self._ide_setup_snapshot = None
+            return None
+
+        self._ide_setup_snapshot = snapshot
+        return snapshot
+
+    @staticmethod
+    def _verification_is_healthy(verification):
+        """Return whether a verification result explicitly reports health."""
+        return isinstance(verification, dict) and verification.get("healthy") is True
+
+    @staticmethod
+    def _verification_attention(verification):
+        """Return actionable, user-facing details for an unhealthy result."""
+        if not isinstance(verification, dict):
+            return "verification unavailable"
+
+        attention = []
+        events = verification.get("events", {})
+        if isinstance(events, dict):
+            attention.extend(
+                f"{event} ({status})"
+                for event, status in events.items()
+                if status != "healthy"
+            )
+
+        obsolete = verification.get("obsolete", [])
+        if isinstance(obsolete, (list, tuple, set)):
+            attention.extend(f"{event} (obsolete)" for event in obsolete)
+
+        diagnostics = verification.get("diagnostics", [])
+        if isinstance(diagnostics, (list, tuple, set)):
+            attention.extend(str(diagnostic) for diagnostic in diagnostics)
+
+        error = verification.get("error")
+        if error:
+            attention.append(str(error))
+
+        return ", ".join(attention) or "configuration unreadable"
+
+    @staticmethod
+    def _verification_health_signature(verification):
+        """Return a stable signature for detecting live health transitions."""
+        if not isinstance(verification, dict):
+            return None
+
+        events = verification.get("events", {})
+        if not isinstance(events, dict):
+            events = {}
+        obsolete = verification.get("obsolete", [])
+        if not isinstance(obsolete, (list, tuple, set)):
+            obsolete = []
+        diagnostics = verification.get("diagnostics", [])
+        if not isinstance(diagnostics, (list, tuple, set)):
+            diagnostics = []
+
+        return (
+            verification.get("healthy") is True,
+            tuple(
+                sorted((str(event), str(status)) for event, status in events.items())
+            ),
+            tuple(sorted(str(event) for event in obsolete)),
+            tuple(sorted(str(diagnostic) for diagnostic in diagnostics)),
+            str(verification.get("error")) if verification.get("error") else None,
+        )
+
+    def _changed_unhealthy_ides(self, ide_types):
+        """Return IDEs whose current unhealthy result differs from the snapshot."""
+        previous = self._ide_setup_previous_snapshot
+        current = self._ide_setup_snapshot
+        if not isinstance(previous, dict) or not isinstance(current, dict):
+            return set()
+
+        previous_integrations = previous.get("integrations", {})
+        current_integrations = current.get("integrations", {})
+        if not isinstance(previous_integrations, dict) or not isinstance(
+            current_integrations, dict
+        ):
+            return set()
+
+        return {
+            ide_type
+            for ide_type in ide_types
+            if ide_type in current_integrations
+            and not self._verification_is_healthy(current_integrations[ide_type])
+            and (
+                ide_type not in previous_integrations
+                or self._verification_health_signature(previous_integrations[ide_type])
+                != self._verification_health_signature(current_integrations[ide_type])
+            )
+        }
+
+    def _get_unconfigured_ides(self, include_excluded=False):
         """Return installed IDEs that do not yet use ai-guardian hooks."""
+        snapshot = self._ide_setup_snapshot
+        if isinstance(snapshot, dict):
+            needs_setup = snapshot.get("needs_setup")
+            if isinstance(needs_setup, (list, tuple, set)):
+                self._ide_setup_snapshot_used = True
+                return [ide for ide in needs_setup if isinstance(ide, str)]
+        self._ide_setup_snapshot_used = False
+
         try:
             from ai_guardian.setup.hooks import IDESetup
 
             setup = IDESetup()
+            excluded = (
+                self._ide_setup_state.get_ide_setup_exclusions()
+                if self._ide_setup_state is not None
+                else set()
+            )
             unconfigured = []
             for ide_type in setup.list_installed_ides():
+                if not include_excluded and ide_type in excluded:
+                    continue
                 configured, _ = setup.check_hooks_for_ide(ide_type, integrity=True)
                 if not configured:
                     unconfigured.append(ide_type)
@@ -387,6 +513,12 @@ class TrayHealthMonitor:
 
     def _get_installed_ides(self):
         """Return locally installed IDEs, or ``None`` if the check failed."""
+        snapshot = self._ide_setup_snapshot
+        if isinstance(snapshot, dict):
+            installed = snapshot.get("installed")
+            if isinstance(installed, (list, tuple, set)):
+                return [ide for ide in installed if isinstance(ide, str)]
+
         try:
             from ai_guardian.setup.hooks import IDESetup
 
@@ -442,7 +574,6 @@ class TrayHealthMonitor:
 
         for result in results:
             ide_type = result["ide"]
-            setup_success = result["success"]
             verification = result.get("verification")
             events = (
                 verification.get("events", {}) if isinstance(verification, dict) else {}
@@ -459,10 +590,10 @@ class TrayHealthMonitor:
             configured = sum(status == "healthy" for status in events.values())
             total = len(events)
 
-            if not setup_success:
-                status = "FAIL"
-            elif isinstance(verification, dict) and verification.get("healthy"):
+            if TrayHealthMonitor._verification_is_healthy(verification):
                 status = "PASS"
+            elif verification is None:
+                status = "FAIL"
             else:
                 status = "WARN"
             counts[status] += 1
@@ -474,10 +605,11 @@ class TrayHealthMonitor:
                 detail = "verification unavailable"
             else:
                 detail = "no hooks reported"
-            if not setup_success:
-                detail += " (setup failed)"
-            elif status == "WARN":
-                detail += " (needs attention)"
+            if status == "WARN":
+                detail += (
+                    " (needs attention: "
+                    f"{TrayHealthMonitor._verification_attention(verification)})"
+                )
             lines.append(f"[{status}] {name}: {detail}")
 
         summary = []
@@ -492,14 +624,22 @@ class TrayHealthMonitor:
 
     def _on_check_ide_setup(self, _icon, _item):
         """Run an on-demand check for installed IDE/CLI integrations."""
+        self._start_ide_setup_check(manual=True, name="ide-setup-check")
+
+    def _on_startup_ide_setup(self):
+        """Start the automatic IDE hook check during tray startup."""
+        self._start_ide_setup_check(manual=False, name="ide-setup-startup-check")
+
+    def _start_ide_setup_check(self, manual, name):
+        """Run an IDE hook check in a worker thread."""
         if self._ide_setup_prompt_in_progress:
             return
 
         threading.Thread(
             target=self._check_ide_setup_notification,
-            kwargs={"manual": True},
+            kwargs={"manual": manual},
             daemon=True,
-            name="ide-setup-check",
+            name=name,
         ).start()
 
     def _check_ide_setup_notification(self, manual=False):
@@ -509,14 +649,16 @@ class TrayHealthMonitor:
         proactive-prompt state. The tray menu's manual check bypasses those
         restrictions and reports when every installed integration is healthy.
         """
-        if (
-            not manual and not self._has_local_daemon()
-        ) or self._ide_setup_prompt_in_progress:
+        if not manual and not self._has_local_daemon():
+            return
+
+        self._refresh_ide_setup_state(include_excluded=manual)
+        if self._ide_setup_prompt_in_progress:
             return
 
         installed = self._get_installed_ides() if manual else None
 
-        unconfigured = self._get_unconfigured_ides()
+        unconfigured = self._get_unconfigured_ides(include_excluded=manual)
         if not unconfigured:
             if manual:
                 self._notify_ide_check_result(installed)
@@ -531,18 +673,29 @@ class TrayHealthMonitor:
         names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
         attention = {}
         statuses = {}
+        snapshot_integrations = (
+            self._ide_setup_snapshot.get("integrations", {})
+            if isinstance(self._ide_setup_snapshot, dict)
+            else {}
+        )
+        if not isinstance(snapshot_integrations, dict):
+            snapshot_integrations = {}
         for ide_type in unconfigured:
-            status = self._verify_ide_setup(ide_type)
+            status = (
+                snapshot_integrations.get(ide_type)
+                if self._ide_setup_snapshot_used
+                else None
+            )
+            if not isinstance(status, dict):
+                status = self._verify_ide_setup(ide_type)
             statuses[ide_type] = status
-            events = [
-                f"{event} ({event_status})"
-                for event, event_status in status["events"].items()
-                if event_status != "healthy"
-            ]
-            events.extend(f"{event} (obsolete)" for event in status["obsolete"])
-            attention[ide_type] = ", ".join(events)
+            attention[ide_type] = (
+                self._verification_attention(status)
+                if not self._verification_is_healthy(status)
+                else ""
+            )
         prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
-        state = ProactivePromptState()
+        state = self._ide_setup_state or ProactivePromptState()
         if not manual:
             excluded = state.get_ide_setup_exclusions()
             unconfigured = [
@@ -552,7 +705,12 @@ class TrayHealthMonitor:
                 return
             names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
             prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
-        if not manual and not state.available(prompt_key):
+        changed_unhealthy = self._changed_unhealthy_ides(unconfigured)
+        if (
+            not manual
+            and not state.available(prompt_key)
+            and not (changed_unhealthy.intersection(unconfigured))
+        ):
             return
 
         self._ide_setup_prompt_in_progress = True
@@ -563,8 +721,11 @@ class TrayHealthMonitor:
                     message = (
                         f"{names[0]} is installed but is not protected by "
                         "AI Guardian.\n\n"
-                        "Set up its security hooks now?"
                     )
+                    detail = attention.get(unconfigured[0])
+                    if detail:
+                        message += f"Current hook status: {detail}\n\n"
+                    message += "Set up its security hooks now?"
                 else:
                     message = (
                         "These installed IDEs have incomplete AI Guardian hooks:\n"
@@ -633,6 +794,7 @@ class TrayHealthMonitor:
                     never=selected_never,
                 )
                 if not selected_install:
+                    self._refresh_ide_setup_state(include_excluded=manual)
                     return
 
                 from ai_guardian.setup import setup_hooks
@@ -641,9 +803,20 @@ class TrayHealthMonitor:
                 for ide_type in unconfigured:
                     if ide_type not in selected_install:
                         continue
-                    needs_force = bool(statuses[ide_type]["obsolete"]) or any(
-                        status == "changed"
-                        for status in statuses[ide_type]["events"].values()
+                    setup_status = statuses.get(ide_type)
+                    setup_events = (
+                        setup_status.get("events", {})
+                        if isinstance(setup_status, dict)
+                        else {}
+                    )
+                    setup_obsolete = (
+                        setup_status.get("obsolete", [])
+                        if isinstance(setup_status, dict)
+                        else []
+                    )
+                    needs_force = bool(setup_obsolete) or (
+                        isinstance(setup_events, dict)
+                        and any(status == "changed" for status in setup_events.values())
                     )
                     try:
                         if needs_force:
@@ -673,26 +846,31 @@ class TrayHealthMonitor:
                     setup_results.append(
                         {
                             "ide": ide_type,
-                            "success": setup_success,
+                            # The final verification is authoritative. The
+                            # setup return value can be false when a race or
+                            # an already-configured result is encountered.
+                            "success": self._verification_is_healthy(verification),
+                            "setup_success": setup_success,
                             "verification": verification,
                         }
                     )
-                if any(
-                    not result.get("success")
-                    or not isinstance(result.get("verification"), dict)
-                    or not result["verification"].get("healthy")
+                unhealthy = [
+                    result["ide"]
                     for result in setup_results
-                ):
+                    if not self._verification_is_healthy(result.get("verification"))
+                ]
+                if unhealthy:
                     # A failed or incomplete setup should not immediately
                     # reopen the same automatic prompt on the next health
                     # poll. Keep manual checks available while backing off
                     # automatic retries for one hour.
-                    remaining = sorted(set(unconfigured) - selected_never)
+                    remaining = sorted(set(unhealthy) - selected_never)
                     if remaining:
                         state.record(
                             "ide_setup_" + "_".join(remaining),
                             "snooze_1h",
                         )
+                self._refresh_ide_setup_state(include_excluded=manual)
                 self._notify_ide_setup_result(setup_results)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)

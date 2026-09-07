@@ -574,6 +574,7 @@ class TestRunPlatformBranching:
             mock_pystray.Menu = mock.MagicMock()
             mock_pystray.MenuItem = mock.MagicMock()
             tray._start_stats_refresh = mock.MagicMock()
+            tray._health._on_startup_ide_setup = mock.MagicMock()
             tray._create_icon = mock.MagicMock()
             tray._run()
             mock_icon.run.assert_called_once()
@@ -583,6 +584,7 @@ class TestRunPlatformBranching:
                 0.5, _restore_stderr, args=[42]
             )
             mock_threading.Timer.return_value.start.assert_called_once()
+            tray._health._on_startup_ide_setup.assert_called_once_with()
 
     def test_run_on_macos_no_setup_callback(self):
         tray = DaemonTray(
@@ -603,6 +605,7 @@ class TestRunPlatformBranching:
             mock_pystray.Menu = mock.MagicMock()
             mock_pystray.MenuItem = mock.MagicMock()
             tray._start_stats_refresh = mock.MagicMock()
+            tray._health._on_startup_ide_setup = mock.MagicMock()
             tray._create_icon = mock.MagicMock()
             tray._ensure_macos_activation_policy = mock.MagicMock()
             tray._run()
@@ -610,6 +613,7 @@ class TestRunPlatformBranching:
             _, kwargs = mock_icon.run.call_args
             assert "setup" not in kwargs
             tray._ensure_macos_activation_policy.assert_called_once()
+            tray._health._on_startup_ide_setup.assert_called_once_with()
 
     def test_ensure_macos_activation_policy_on_darwin(self):
         """Verify activation policy is set on macOS (issue #691)."""
@@ -885,30 +889,41 @@ class TestIDESetupMenu:
             top_call = mock_pystray.MenuItem.call_args_list[-1]
             assert top_call[0][0] == "Local Setup..."
 
-    def test_build_ide_setup_menu_includes_manual_configuration_check(self):
+    def test_run_exposes_direct_manual_hook_check(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
             pause_callback=lambda mins: None,
         )
+        tray._health._on_check_ide_setup = mock.MagicMock()
+        tray._health._on_startup_ide_setup = mock.MagicMock()
+        mock_icon = mock.MagicMock()
         with (
             mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
             mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
             mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
-            mock.patch.object(tray._health, "_on_check_ide_setup") as check,
+            mock.patch.object(tray, "_start_stats_refresh"),
+            mock.patch.object(tray, "_start_subscriber"),
+            mock.patch.object(tray, "_start_prompt_poll"),
+            mock.patch.object(tray, "_start_web_console"),
+            mock.patch.object(tray, "_register_wake_handler"),
+            mock.patch.object(tray, "_ensure_macos_activation_policy"),
+            mock.patch("platform.system", return_value="Windows"),
         ):
             mock_pystray.MenuItem = mock.MagicMock()
             mock_pystray.Menu = mock.MagicMock()
-            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
-            tray._menu._build_ide_setup_menu_items()
+            mock_pystray.Icon.return_value = mock_icon
+            with mock.patch.object(mock_icon, "run"):
+                tray._run()
 
         check_calls = [
             call
             for call in mock_pystray.MenuItem.call_args_list
-            if call[0][0] == "Check IDE/CLI configuration"
+            if call[0][0] == "Check hooks"
         ]
         assert len(check_calls) == 1
-        assert check_calls[0][0][1] is check
+        assert check_calls[0][0][1] is tray._health._on_check_ide_setup
+        tray._health._on_startup_ide_setup.assert_called_once_with()
 
     def test_build_ide_setup_menu_has_all_supported_ides(self):
         from ai_guardian.setup import IDESetup
@@ -1969,6 +1984,7 @@ class TestWakeDetection:
             mock_pystray.Menu = mock.MagicMock()
             mock_pystray.MenuItem = mock.MagicMock()
             tray._start_stats_refresh = mock.MagicMock()
+            tray._health._on_startup_ide_setup = mock.MagicMock()
             tray._create_icon = mock.MagicMock()
             tray._ensure_macos_activation_policy = mock.MagicMock()
             with (
@@ -1979,6 +1995,7 @@ class TestWakeDetection:
             ):
                 tray._run()
             mock_reg.assert_called_once()
+            tray._health._on_startup_ide_setup.assert_called_once_with()
 
 
 class TestNonBlockingMenuRefresh:
