@@ -15,7 +15,7 @@ changing an integration.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor | `--ide cursor` | Full | N/A | **Complete** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex | `--ide codex` | 12-event protocol | N/A | **Complete** |
+| OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | N/A | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -34,7 +34,7 @@ changing an integration.
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
+| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
@@ -180,7 +180,7 @@ Codex mode in ChatGPT desktop. The official [Codex hooks documentation](https://
 describes the same event names, command-hook payload, and layered discovery
 model used by this adapter.
 
-AI Guardian installs the managed hooks in the Codex user layer at
+AI Guardian installs its five managed hooks in the Codex user layer at
 `~/.codex/hooks.json`, or at `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set.
 Verification also reports the active project layer at `<repo>/.codex/` and
 whether either `hooks.json` or inline `hooks` in `config.toml` is present.
@@ -190,29 +190,31 @@ active alongside the user layer.
 
 #### Codex event classification
 
-The adapter recognizes every documented Codex lifecycle event. “Supported”
-means AI Guardian installs and handles the event; “lifecycle-only” means the
-event is acknowledged without pretending it carries content that can be
-security-enforced.
+The adapter recognizes every documented Codex lifecycle event. “Managed” means
+AI Guardian installs and verifies the event. Other recognized events may be
+configured by a user, but are not installed by `ai-guardian setup` and do not
+count toward setup health until AI Guardian has a managed setup and enforcement
+path for them.
 
 | Codex event | Classification | AI Guardian behavior |
 |---|---|---|
-| `SessionStart` | Supported | Scans active agent configuration files and can block on a detected threat. |
-| `UserPromptSubmit` | Supported | Scans prompts, including prompt injection, secrets, PII, and transcript coverage. |
-| `PreToolUse` | Supported | Enforces tool permissions and pre-tool content/security scanners. |
-| `PermissionRequest` | Supported | Applies the permission and security pipeline; denials use Codex’s nested decision shape. |
-| `PostToolUse` | Supported | Scans tool results and applies post-tool handling/redaction where supported. |
-| `PreCompact` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
-| `PostCompact` | Supported | Marks the session for security-context reinjection after compaction. |
-| `SubagentStart` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
-| `SubagentStop` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
-| `Stop` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
-| `Interrupt` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
-| `SessionEnd` | Supported | Performs session cleanup. |
+| `SessionStart` | Recognized, not managed | If configured by the user, scans active agent configuration files and can block on a detected threat. |
+| `UserPromptSubmit` | Managed | Scans prompts, including prompt injection, secrets, PII, and transcript coverage. |
+| `PreToolUse` | Managed | Enforces tool permissions and pre-tool content/security scanners. |
+| `PermissionRequest` | Recognized, not managed | If configured by the user, applies the permission and security pipeline; denials use Codex’s nested decision shape. |
+| `PostToolUse` | Managed | Scans tool results and applies post-tool handling/redaction where supported. |
+| `PreCompact` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `PostCompact` | Managed | Marks the session for security-context reinjection after compaction. |
+| `SubagentStart` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `SubagentStop` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `Stop` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `Interrupt` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `SessionEnd` | Managed | Performs session cleanup. |
 
-No event in this table is silently discarded. The five lifecycle-only events
-are intentionally not treated as prompt or tool content because they do not
-provide a security-enforceable payload.
+No event in this table is silently discarded when it is present in a user
+configuration. The seven recognized-but-unmanaged events are intentionally not
+installed or counted as required setup because they do not yet have a managed
+AI Guardian setup contract.
 
 If the target Codex user `config.toml` already contains inline hooks, or any
 active Codex configuration layer is malformed, setup stops with a diagnostic
@@ -243,7 +245,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor | High | Extensively tested in production |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
-| Codex | Medium | Compatibility-tested across the 12 documented hook events; enforcement is concentrated in prompt, tool, permission, session-start, and post-compaction paths |
+| Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |
 | Augment Code | Low | Hook format implemented but limited testing |

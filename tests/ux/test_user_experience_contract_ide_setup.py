@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
+from ai_guardian.tray.proactive_prompt import ProactivePromptState
 
 
 def test_local_daemon_prompts_for_installed_unconfigured_ide():
@@ -200,6 +201,105 @@ def test_setup_action_reports_doctor_style_hook_counts():
         "[PASS] Claude Code: 3/3 hooks configured\n\n"
         "1 passed",
     )
+
+
+def test_codex_setup_reports_only_managed_hook_count():
+    """
+    USER EXPERIENCE: Codex setup -> report five managed hooks, not twelve.
+
+    Scenario:
+    1. Codex setup verifies the hooks installed by AI Guardian.
+    2. Codex exposes additional lifecycle events that are not installed by
+       AI Guardian setup.
+
+    Expected User Experience:
+    - The result notification reports ``5/5 hooks configured``.
+    - The notification does not imply that all twelve documented lifecycle
+      events are required.
+    """
+    managed_events = IDESetup().expected_hook_manifest("codex")
+    events = {event: "healthy" for event in managed_events}
+    events.update(
+        {
+            event: "healthy"
+            for event in (
+                "SessionStart",
+                "PermissionRequest",
+                "PreCompact",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+                "Interrupt",
+            )
+        }
+    )
+    verification = {
+        "healthy": True,
+        "events": events,
+        "obsolete": [],
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_setup_result(
+            [
+                {
+                    "ide": "codex",
+                    "success": True,
+                    "verification": verification,
+                }
+            ]
+        )
+
+    message = notify.call_args.args[1]
+    assert "[PASS] OpenAI Codex: 5/5 hooks configured" in message
+    assert "12/12" not in message
+
+
+def test_failed_codex_setup_is_snoozed_for_automatic_prompt(tmp_path):
+    """
+    USER EXPERIENCE: Failed Codex setup -> avoid an immediate prompt loop.
+
+    Scenario:
+    1. The tray detects Codex without healthy managed hooks.
+    2. The user selects Set Up Now.
+    3. Hook setup fails.
+
+    Expected User Experience:
+    - The setup result is still reported.
+    - The same automatic prompt is snoozed for one hour instead of reopening
+      on the next health poll.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"PreToolUse": "missing"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.setup.setup_hooks", return_value=False),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    assert state.load()["ide_setup_codex"]["status"] == "snoozed"
+    assert not state.available("ide_setup_codex")
 
 
 def test_local_daemon_ignores_project_root_only_ide(tmp_path, monkeypatch):

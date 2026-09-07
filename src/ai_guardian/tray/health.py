@@ -449,6 +449,13 @@ class TrayHealthMonitor:
             )
             if not isinstance(events, dict):
                 events = {}
+            if ide_type == "codex":
+                managed_events = IDESetup().expected_hook_manifest("codex")
+                events = {
+                    event: status
+                    for event, status in events.items()
+                    if event in managed_events
+                }
             configured = sum(status == "healthy" for status in events.values())
             total = len(events)
 
@@ -670,6 +677,22 @@ class TrayHealthMonitor:
                             "verification": verification,
                         }
                     )
+                if any(
+                    not result.get("success")
+                    or not isinstance(result.get("verification"), dict)
+                    or not result["verification"].get("healthy")
+                    for result in setup_results
+                ):
+                    # A failed or incomplete setup should not immediately
+                    # reopen the same automatic prompt on the next health
+                    # poll. Keep manual checks available while backing off
+                    # automatic retries for one hour.
+                    remaining = sorted(set(unconfigured) - selected_never)
+                    if remaining:
+                        state.record(
+                            "ide_setup_" + "_".join(remaining),
+                            "snooze_1h",
+                        )
                 self._notify_ide_setup_result(setup_results)
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
