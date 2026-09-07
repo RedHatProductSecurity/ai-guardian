@@ -22,6 +22,17 @@ from ai_guardian.setup.utils import (
     _upgrade_ide_flag,
 )
 
+# These are the Codex hooks AI Guardian installs and verifies. Codex exposes
+# additional lifecycle events, but they are not part of the managed setup
+# contract and therefore are not installed or counted here.
+CODEX_MANAGED_HOOK_EVENTS = (
+    HookEvent.PROMPT.display_name,
+    HookEvent.PRE_TOOL_USE.display_name,
+    HookEvent.POST_TOOL_USE.display_name,
+    HookEvent.SESSION_END.display_name,
+    HookEvent.POST_COMPACT.display_name,
+)
+
 
 class IDESetup:
     """Handle IDE hook setup and configuration."""
@@ -158,19 +169,6 @@ class IDESetup:
                         ],
                     }
                 ],
-                HookEvent.PERMISSION_REQUEST.display_name: [
-                    {
-                        "matcher": ".*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 300,
-                                "statusMessage": "🛡️ Checking approval request...",
-                            }
-                        ],
-                    }
-                ],
                 HookEvent.POST_TOOL_USE.display_name: [
                     {
                         "matcher": ".*",
@@ -184,19 +182,6 @@ class IDESetup:
                         ],
                     }
                 ],
-                HookEvent.PRE_COMPACT.display_name: [
-                    {
-                        "matcher": ".*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 60,
-                                "statusMessage": "🛡️ Checking before compaction...",
-                            }
-                        ],
-                    }
-                ],
                 HookEvent.POST_COMPACT.display_name: [
                     {
                         "matcher": ".*",
@@ -206,59 +191,6 @@ class IDESetup:
                                 "command": "ai-guardian",
                                 "timeout": 60,
                                 "statusMessage": "🛡️ Restoring security context...",
-                            }
-                        ],
-                    }
-                ],
-                HookEvent.SUBAGENT_START.display_name: [
-                    {
-                        "matcher": ".*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 60,
-                                "statusMessage": "🛡️ Tracking subagent start...",
-                            }
-                        ],
-                    }
-                ],
-                HookEvent.SUBAGENT_STOP.display_name: [
-                    {
-                        "matcher": ".*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 60,
-                                "statusMessage": "🛡️ Tracking subagent stop...",
-                            }
-                        ],
-                    }
-                ],
-                HookEvent.STOP.display_name: [
-                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
-                ],
-                HookEvent.INTERRUPT.display_name: [
-                    {
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 3,
-                            }
-                        ]
-                    }
-                ],
-                HookEvent.SESSION_START.display_name: [
-                    {
-                        "matcher": "startup|resume|clear|compact",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "ai-guardian",
-                                "timeout": 300,
-                                "statusMessage": "🛡️ Scanning agent config files...",
                             }
                         ],
                     }
@@ -676,6 +608,8 @@ class IDESetup:
         if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
             return {name: "script" for name in config.get("hook_scripts", [])}
         hooks = config.get("hooks", {})
+        if ide_type == "codex":
+            return {name: "event" for name in CODEX_MANAGED_HOOK_EVENTS}
         if ide_type == "windsurf":
             hooks = hooks.get("hooks", hooks)
         if ide_type == "gemini":

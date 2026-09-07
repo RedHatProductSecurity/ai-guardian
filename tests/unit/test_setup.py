@@ -1266,33 +1266,32 @@ class TestCodexSetup:
         assert hooks["SessionEnd"][0]["hooks"][0]["command"] == "ai-guardian"
         assert hooks["PostCompact"][0]["hooks"][0]["command"] == "ai-guardian"
 
-    def test_codex_has_all_documented_hook_events(self):
-        """Verify Codex installs all documented lifecycle hook events."""
+    def test_codex_has_only_managed_hook_events(self):
+        """Verify Codex setup installs only AI Guardian's managed events."""
         hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
         expected = {
             "UserPromptSubmit",
             "PreToolUse",
-            "PermissionRequest",
             "PostToolUse",
-            "PreCompact",
             "PostCompact",
+            "SessionEnd",
+        }
+        assert set(hooks.keys()) == expected
+        assert set(IDESetup().expected_hook_manifest("codex")) == expected
+
+    def test_codex_excludes_unmanaged_lifecycle_events(self):
+        """Verify lifecycle-only events are not installed by setup."""
+        hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        for event_name in (
+            "SessionStart",
+            "PermissionRequest",
+            "PreCompact",
             "SubagentStart",
             "SubagentStop",
             "Stop",
             "Interrupt",
-            "SessionStart",
-            "SessionEnd",
-        }
-        assert set(hooks.keys()) == expected
-
-    def test_codex_hooks_classify_lifecycle_timeouts(self):
-        """Verify short lifecycle hooks and long enforcement hooks are distinct."""
-        hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
-        assert hooks["PermissionRequest"][0]["matcher"] == ".*"
-        assert hooks["PreCompact"][0]["hooks"][0]["timeout"] == 60
-        assert hooks["Interrupt"][0]["hooks"][0]["timeout"] == 3
-        assert hooks["Stop"][0].get("matcher") is None
-        assert hooks["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
+        ):
+            assert event_name not in hooks
 
     def test_merge_hooks_codex_preserves_other_hooks(self, tmp_path):
         """Test that merging Codex hooks preserves existing non-ai-guardian hooks."""
@@ -1323,7 +1322,7 @@ class TestCodexSetup:
         setup = IDESetup()
         existing_config = {
             "hooks": {
-                "PermissionRequest": [
+                "PreToolUse": [
                     {
                         "matcher": "Bash",
                         "hooks": [
@@ -1346,7 +1345,7 @@ class TestCodexSetup:
             "codex",
         )
 
-        entries = merged["hooks"]["PermissionRequest"]
+        entries = merged["hooks"]["PreToolUse"]
         assert entries[0]["matcher"] == "Bash"
         assert entries[0]["hooks"][0]["command"] == "custom-a"
         assert entries[1]["matcher"] == ".*"
@@ -1434,6 +1433,10 @@ class TestCodexSetup:
 
         assert success is True
         assert (codex_home / "hooks.json").is_file()
+        installed_hooks = json.loads(
+            (codex_home / "hooks.json").read_text(encoding="utf-8")
+        )["hooks"]
+        assert set(installed_hooks) == set(setup.expected_hook_manifest("codex"))
         assert json.loads(project_hooks.read_text(encoding="utf-8")) == {
             "hooks": {
                 "UserPromptSubmit": [

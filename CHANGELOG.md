@@ -24,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
 
-- **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
+- **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, while keeping setup focused on its five managed hooks; add layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
 
 ### Documentation
 
@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documentation dependencies: `mkdocs-material` (MIT) and `mkdocstrings` (ISC).
 
 ### Fixed
+
+- **Codex proactive setup health**: Count and install only the five managed Codex hooks, and snooze automatic setup prompts after a failed or incomplete setup instead of immediately reopening the prompt (#2250)
 
 - **NiceGUI 3.0 WebUI compatibility**: Avoid `Client.is_deleted` errors when opening session and auto-refresh pages on the minimum supported NiceGUI version
 

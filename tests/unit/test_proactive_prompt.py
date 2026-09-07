@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.proactive_prompt import (
     ProactivePromptDialog,
     ProactivePromptState,
@@ -317,6 +318,43 @@ def test_ide_setup_prompt_configures_installed_local_ides(tmp_path):
     )
 
 
+def test_codex_setup_result_reports_managed_hook_count():
+    managed_events = IDESetup().expected_hook_manifest("codex")
+    events = {event: "healthy" for event in managed_events}
+    events.update(
+        {
+            event: "healthy"
+            for event in (
+                "SessionStart",
+                "PermissionRequest",
+                "PreCompact",
+                "SubagentStart",
+                "SubagentStop",
+                "Stop",
+                "Interrupt",
+            )
+        }
+    )
+    verification = {
+        "healthy": True,
+        "events": events,
+        "obsolete": [],
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_setup_result(
+            [
+                {
+                    "ide": "codex",
+                    "success": True,
+                    "verification": verification,
+                }
+            ]
+        )
+
+    assert "[PASS] OpenAI Codex: 5/5 hooks configured" in notify.call_args.args[1]
+
+
 def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -340,6 +378,42 @@ def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
 
     state = ProactivePromptState(tmp_path / "proactive_prompts.json")
     assert not state.available("ide_setup_cursor")
+
+
+def test_ide_setup_prompt_snoozes_after_failed_setup(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"PreToolUse": "missing"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ) as show,
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.setup.setup_hooks", return_value=False),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+        monitor._check_ide_setup_notification()
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    assert state.load()["ide_setup_codex"]["status"] == "snoozed"
+    assert not state.available("ide_setup_codex")
+    show.assert_called_once()
 
 
 def test_multi_ide_prompt_only_configures_selected_integrations(tmp_path):
