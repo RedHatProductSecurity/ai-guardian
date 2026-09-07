@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
 
+- **Per-IDE hook E2E matrix**: Add isolated setup, verification, MCP-registration,
+  and representative runtime checks for every supported external integration;
+  release readiness now reports failures by IDE and hook event (#2248)
+
 ### Documentation
 
 - **IDE/agent integration checklist**: Consolidated implementation, setup,
@@ -53,6 +57,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Prompt-injection violation locations**: Preserve scanned file paths and line/column metadata in violation logs and `get_violations()` responses (#2238)
 
 - **KDE tray pause/resume stability**: Keep Linux pause labels stable and avoid countdown-driven native menu rebuilds that collapse an open nested submenu before **Resume** can be selected (#2242)
+
+- **IDE hook verification compatibility**: Verify Copilot's root-level hook schema,
+  recognize Windows script variants, and accept the supported Crush adapter in
+  the CLI setup and hook commands (#2248)
 
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
 

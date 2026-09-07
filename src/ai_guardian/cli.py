@@ -236,6 +236,7 @@ def main():
                 "aiderdesk",
                 "openclaw",
                 "opencode",
+                "crush",
             ],
             help="Specify IDE adapter for hook processing (auto-detected if not provided)",
         )
@@ -264,6 +265,7 @@ def main():
                 "aiderdesk",
                 "openclaw",
                 "opencode",
+                "crush",
             ],
             help="Specify IDE type (auto-detected if not provided)",
         )
