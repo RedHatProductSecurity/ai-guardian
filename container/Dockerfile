@@ -92,12 +92,23 @@ RUN npm install -g --prefix /opt/npm @google/gemini-cli @openai/codex openclaw 2
     && (PATH="/opt/npm/bin:$PATH" codex --version 2>/dev/null || echo "Codex CLI installed") \
     && (PATH="/opt/npm/bin:$PATH" openclaw --version 2>/dev/null || echo "OpenClaw installed")
 
-# OpenCode (Go binary — self-contained)
-RUN mkdir -p /opt/opencode \
-    && export HOME=/opt/opencode \
-    && cd /opt/opencode \
-    && curl -fsSL https://opencode.ai/install | VERSION=${OPENCODE_VERSION} bash \
-    && chmod 755 /opt/opencode/.opencode/bin/opencode \
+# OpenCode (pinned Linux archive — avoid the mutable install script)
+RUN case "$(uname -m)" in \
+        x86_64) OPENCODE_ARCH=x64 ;; \
+        aarch64|arm64) OPENCODE_ARCH=arm64 ;; \
+        *) echo "Unsupported OpenCode architecture: $(uname -m)" >&2; exit 1 ;; \
+    esac \
+    && if [ "$OPENCODE_ARCH" = "x64" ] \
+        && ! grep -qwi avx2 /proc/cpuinfo 2>/dev/null; then \
+        OPENCODE_ARCH=x64-baseline; \
+    fi \
+    && OPENCODE_ARCHIVE="/tmp/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
+    && curl -fsSL --retry 3 -o "$OPENCODE_ARCHIVE" \
+        "https://github.com/anomalyco/opencode/releases/download/v${OPENCODE_VERSION}/opencode-linux-${OPENCODE_ARCH}.tar.gz" \
+    && mkdir -p /opt/opencode/.opencode/bin \
+    && tar -xzf "$OPENCODE_ARCHIVE" -C /opt/opencode/.opencode/bin \
+    && rm "$OPENCODE_ARCHIVE" \
+    && test -x /opt/opencode/.opencode/bin/opencode \
     && (/opt/opencode/.opencode/bin/opencode --version 2>/dev/null \
         || echo "OpenCode ${OPENCODE_VERSION} installed")
 

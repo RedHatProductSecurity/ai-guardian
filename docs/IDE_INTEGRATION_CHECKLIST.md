@@ -131,6 +131,22 @@ Complete the applicable checks:
 - [ ] Run the related unit tests, then run formatting and lint checks required
   by `AGENTS.md` for code changes.
 
+### Isolated IDE hook matrix
+
+`tests/integration/test_ide_hooks_e2e.py` installs each supported external IDE
+integration into a temporary home and project, verifies the generated hook
+manifest and MCP registration, and invokes representative allow, directory
+block, and post-output redaction paths where the host exposes command hooks.
+The `ide-hook-e2e` release-readiness matrix runs one IDE per job so failures
+identify the IDE and event.
+
+Plugin and extension integrations are verified through their generated
+TypeScript bridge and registration because their host runtimes and SDKs are
+not dependencies of this repository. Junie is MCP-only, so its test verifies
+registration and records that no enforcement hook can be invoked. Windows
+setup is structurally checked; the runtime command matrix runs on Ubuntu
+because executing generated `.bat` hooks requires a Windows command host.
+
 ## 4. Documentation and release bookkeeping
 
 - [ ] Update every applicable reference table in `docs/AGENT_SUPPORT.md`:

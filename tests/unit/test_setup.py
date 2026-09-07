@@ -846,6 +846,80 @@ class TestIDESetupParametrized:
         assert result["events"]["beforeReadFile"] == "missing"
         assert result["healthy"] is False
 
+    @pytest.mark.parametrize(
+        "ide_name, expected_events",
+        [
+            ("augment", {"PreToolUse", "PostToolUse"}),
+            ("crush", {"PreToolUse"}),
+        ],
+        ids=["augment", "crush"],
+    )
+    def test_verify_hooks_flattens_nested_hook_templates(
+        self, tmp_path, ide_name, expected_events
+    ):
+        setup = IDESetup()
+        config_file = tmp_path / f"{ide_name}.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        event_name: [{"command": f"ai-guardian --ide {ide_name}"}]
+                        for event_name in expected_events
+                    }
+                }
+            )
+        )
+
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide(ide_name)
+
+        assert set(result["events"]) == expected_events
+        assert result["healthy"] is True
+
+    def test_verify_hooks_handles_copilot_root_events(self, tmp_path):
+        setup = IDESetup()
+        config_file = tmp_path / "hooks.json"
+        config_file.write_text(
+            json.dumps(
+                {
+                    "userPromptSubmitted": [{"command": "ai-guardian --ide copilot"}],
+                    "preToolUse": [{"command": "ai-guardian --ide copilot"}],
+                }
+            )
+        )
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide("copilot")
+            configured_basic = setup.check_hooks_configured(config_file, "copilot")
+            configured, detail = setup.check_hooks_for_ide("copilot", integrity=True)
+
+        assert result["healthy"] is True
+        assert result["events"] == {
+            "userPromptSubmitted": "healthy",
+            "preToolUse": "healthy",
+        }
+        assert configured_basic is True
+        assert configured is True, detail
+
+    def test_verify_hooks_finds_windows_script_variants(self, tmp_path):
+        setup = IDESetup()
+        hooks_dir = tmp_path / "hooks"
+        hooks_dir.mkdir()
+        for script_name in IDESetup.IDE_CONFIGS["cline"]["hook_scripts"]:
+            (hooks_dir / f"{script_name}.bat").write_text(
+                "@echo off\nai-guardian --ide cline\n"
+            )
+
+        with (
+            mock.patch.object(setup, "get_config_path", return_value=str(hooks_dir)),
+            mock.patch(
+                "ai_guardian.setup.hooks.platform.system", return_value="Windows"
+            ),
+        ):
+            result = setup.verify_hooks_for_ide("cline")
+
+        assert result["healthy"] is True
+        assert all(status == "healthy" for status in result["events"].values())
+
     def test_verify_hooks_reports_obsolete_owned_event(self, tmp_path):
         setup = IDESetup()
         config_file = tmp_path / "hooks.json"
