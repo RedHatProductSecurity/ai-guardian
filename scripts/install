@@ -25,4 +25,4 @@ else
 fi
 
 echo ""
-echo "Repository: https://github.com/itdove/ai-guardian"
+echo "Repository: https://github.com/RedHatProductSecurity/ai-guardian"

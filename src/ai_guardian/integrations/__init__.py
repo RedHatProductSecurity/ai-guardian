@@ -3,6 +3,7 @@
 from ai_guardian.integrations.base import (
     AgentLoopStrategy,
     AgentResponse,
+    GoalEvaluation,
     ParsedResponse,
     ProviderExtractor,
     ToolCall,
@@ -20,6 +21,7 @@ from ai_guardian.integrations import gemini as _gemini_ext  # noqa: F401
 __all__ = [
     "AgentLoopStrategy",
     "AgentResponse",
+    "GoalEvaluation",
     "ParsedResponse",
     "ProviderExtractor",
     "ToolCall",
