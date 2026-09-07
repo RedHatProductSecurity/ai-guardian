@@ -39,6 +39,7 @@ ADAPTER_CLASSES = [
     OpenCodeAdapter,  # opencode_version or hook_source
     CrushAdapter,  # CRUSH env var or event+tool_input fields
     DummyAgentAdapter,  # dummy_agent field (simulated IDE)
+    CodexAdapter,  # Codex protocol metadata or explicit Codex lifecycle fields
     BaseAgentAdapter,  # PascalCase hook_event_name (fallback)
 ]
 

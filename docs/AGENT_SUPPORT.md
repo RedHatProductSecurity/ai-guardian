@@ -15,7 +15,7 @@ changing an integration.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor | `--ide cursor` | Full | N/A | **Complete** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex | `--ide codex` | Full | N/A | **Complete** |
+| OpenAI Codex | `--ide codex` | 12-event protocol | N/A | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -34,7 +34,7 @@ changing an integration.
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
+| OpenAI Codex | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
@@ -173,6 +173,52 @@ environment should provide `run_id` in their hook events when supported.
 
 Agents not listed above do not have transcript scanning support.
 
+### OpenAI Codex and ChatGPT desktop
+
+AI Guardian supports the documented Codex hook interface used by Codex CLI and
+Codex mode in ChatGPT desktop. The official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
+describes the same event names, command-hook payload, and layered discovery
+model used by this adapter.
+
+AI Guardian installs the managed hooks in the Codex user layer at
+`~/.codex/hooks.json`, or at `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set.
+Verification also reports the active project layer at `<repo>/.codex/` and
+whether either `hooks.json` or inline `hooks` in `config.toml` is present.
+Existing matcher groups, non-AI-Guardian commands, and their order are
+preserved. Codex loads all matching layers, so project-local hooks remain
+active alongside the user layer.
+
+#### Codex event classification
+
+The adapter recognizes every documented Codex lifecycle event. “Supported”
+means AI Guardian installs and handles the event; “lifecycle-only” means the
+event is acknowledged without pretending it carries content that can be
+security-enforced.
+
+| Codex event | Classification | AI Guardian behavior |
+|---|---|---|
+| `SessionStart` | Supported | Scans active agent configuration files and can block on a detected threat. |
+| `UserPromptSubmit` | Supported | Scans prompts, including prompt injection, secrets, PII, and transcript coverage. |
+| `PreToolUse` | Supported | Enforces tool permissions and pre-tool content/security scanners. |
+| `PermissionRequest` | Supported | Applies the permission and security pipeline; denials use Codex’s nested decision shape. |
+| `PostToolUse` | Supported | Scans tool results and applies post-tool handling/redaction where supported. |
+| `PreCompact` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
+| `PostCompact` | Supported | Marks the session for security-context reinjection after compaction. |
+| `SubagentStart` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
+| `SubagentStop` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
+| `Stop` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
+| `Interrupt` | Supported, lifecycle-only | Acknowledged; no security-enforceable content or decision is inferred. |
+| `SessionEnd` | Supported | Performs session cleanup. |
+
+No event in this table is silently discarded. The five lifecycle-only events
+are intentionally not treated as prompt or tool content because they do not
+provide a security-enforceable payload.
+
+If the target Codex user `config.toml` already contains inline hooks, or any
+active Codex configuration layer is malformed, setup stops with a diagnostic
+instead of writing a second competing representation. Fix the reported
+configuration and rerun setup.
+
 #### Augment Code — transcript scanning not currently feasible
 
 Augment Code (Auggie CLI) stores conversation sessions server-side, not as local files. The only local files under `~/.augment/` are authentication (`session.json`), settings (`settings.json`), commands, and rules. Augment also does not implement a `UserPromptSubmit` hook event (only PreToolUse, PostToolUse, Stop, SessionStart, SessionEnd), and transcript scanning requires the PROMPT event to trigger. This can be revisited if Augment exposes local session files or adds a UserPromptSubmit-equivalent hook.
@@ -197,7 +243,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor | High | Extensively tested in production |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
-| Codex | Medium | Tested — all 5 hooks install and work correctly |
+| Codex | Medium | Compatibility-tested across the 12 documented hook events; enforcement is concentrated in prompt, tool, permission, session-start, and post-compaction paths |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |
 | Augment Code | Low | Hook format implemented but limited testing |
@@ -240,7 +286,7 @@ Each agent uses different event names. The adapter layer normalizes these.
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
 | Windsurf | Exit code 2 + stderr | stderr = error message |
-| Codex | Same as Claude Code | Same as Claude Code |
+| Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode | Same as Claude Code | Same as Claude Code |
 | Crush | Same as Claude Code | Same as Claude Code |
 

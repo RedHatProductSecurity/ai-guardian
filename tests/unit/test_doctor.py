@@ -23,6 +23,7 @@ from ai_guardian.doctor import (
     format_human,
     format_json,
 )
+from ai_guardian.setup import IDESetup
 
 # --- Data model tests ---
 
@@ -507,6 +508,42 @@ class TestCheckHooks:
                 result = doctor.check_hooks()
                 assert result.status == CheckStatus.PASS
                 assert "5/5" in result.message
+
+    def test_codex_hooks_use_twelve_event_count(self, _isolate_config_dir, tmp_path):
+        """Doctor reports the full Codex lifecycle manifest, not Claude's count."""
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        hooks = {
+            name: [
+                {"hooks": [{"type": "command", "command": "ai-guardian --ide codex"}]}
+            ]
+            for name in IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        }
+        hooks["PreToolUse"][0]["matcher"] = ".*"
+        hooks["PermissionRequest"][0]["matcher"] = ".*"
+        hooks["PostToolUse"][0]["matcher"] = ".*"
+        hooks["PreCompact"][0]["matcher"] = ".*"
+        hooks["PostCompact"][0]["matcher"] = ".*"
+        hooks["SubagentStart"][0]["matcher"] = ".*"
+        hooks["SubagentStop"][0]["matcher"] = ".*"
+        hooks["SessionStart"][0]["matcher"] = "startup|resume|clear|compact"
+        hooks_path = codex_dir / "hooks.json"
+        hooks_path.write_text(json.dumps({"hooks": hooks}))
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides", return_value=["codex"]
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(hooks_path),
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+
+        assert result.status == CheckStatus.PASS
+        assert "12/12" in result.message
 
     def test_missing_config_file_not_failure(self, _isolate_config_dir, tmp_path):
         """IDE detected but config file missing → not FAIL (e.g. Crush on CI)."""

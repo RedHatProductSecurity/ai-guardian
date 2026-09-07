@@ -18,6 +18,7 @@ from ai_guardian.constants import ALL_HOOK_EVENT_DISPLAY_NAMES, HookEvent
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
 
 _BLOCK_USES_PERMISSION_DECISION = {HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE}
+_PERMISSION_REQUEST_EVENTS = {HookEvent.PERMISSION_REQUEST}
 
 # SESSION_START omits 'reason' — Claude Code UI shows both reason and
 # systemMessage for this event, causing duplicate display.
@@ -111,7 +112,12 @@ class BaseAgentAdapter(HookAdapter):
                 "additionalContext": context,
             },
         }
-        if hook_event in _BLOCK_USES_PERMISSION_DECISION:
+        if hook_event in _PERMISSION_REQUEST_EVENTS:
+            response["hookSpecificOutput"]["decision"] = {
+                "behavior": "deny",
+                "message": sanitized,
+            }
+        elif hook_event in _BLOCK_USES_PERMISSION_DECISION:
             response["hookSpecificOutput"]["permissionDecision"] = "deny"
         else:
             response["decision"] = "block"

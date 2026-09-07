@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
 
+- **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
+
 ### Documentation
 
 - **IDE/agent integration checklist**: Consolidated implementation, setup,

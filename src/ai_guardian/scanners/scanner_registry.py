@@ -151,6 +151,7 @@ def _build_default_registry() -> ScannerRegistry:
 
     CONTENT_EVENTS = {
         HookEvent.PRE_TOOL_USE,
+        HookEvent.PERMISSION_REQUEST,
         HookEvent.BEFORE_READ_FILE,
         HookEvent.PROMPT,
     }
@@ -176,7 +177,7 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.BASH_EXFIL,
             run_fn=run_bash_exfil_scan,
             violation_type=ViolationType.CONFIG_FILE_EXFIL,
-            hook_events={HookEvent.PRE_TOOL_USE},
+            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST},
             requires_content=False,
             requires_command=True,
             order=5,
@@ -198,7 +199,7 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.EXFIL_DETECTION,
             run_fn=run_exfil_detection_scan,
             violation_type=ViolationType.EXFIL_DETECTION,
-            hook_events={HookEvent.PRE_TOOL_USE},
+            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST},
             requires_content=False,
             requires_command=True,
             order=6,
@@ -219,7 +220,7 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.CODE_SECURITY,
             run_fn=run_code_security_scan,
             violation_type=ViolationType.CODE_SECURITY,
-            hook_events={HookEvent.PRE_TOOL_USE},
+            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.PERMISSION_REQUEST},
             requires_content=True,
             requires_file_path=True,
             order=7,
@@ -277,7 +278,11 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.SUPPLY_CHAIN,
             run_fn=run_supply_chain_scan,
             violation_type=ViolationType.SUPPLY_CHAIN,
-            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE},
+            hook_events={
+                HookEvent.PRE_TOOL_USE,
+                HookEvent.PERMISSION_REQUEST,
+                HookEvent.BEFORE_READ_FILE,
+            },
             order=30,
             config_section="supply_chain",
             violation_suggestion={
@@ -334,7 +339,11 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.CONFIG_FILE,
             run_fn=run_config_file_scan,
             violation_type=ViolationType.CONFIG_FILE_EXFIL,
-            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE},
+            hook_events={
+                HookEvent.PRE_TOOL_USE,
+                HookEvent.PERMISSION_REQUEST,
+                HookEvent.BEFORE_READ_FILE,
+            },
             requires_content=True,
             requires_file_path=True,
             order=60,
@@ -396,7 +405,11 @@ def _build_default_registry() -> ScannerRegistry:
             name=ScannerName.DIRECTORY,
             run_fn=run_directory_check,
             violation_type=ViolationType.DIRECTORY_BLOCKING,
-            hook_events={HookEvent.PRE_TOOL_USE, HookEvent.BEFORE_READ_FILE},
+            hook_events={
+                HookEvent.PRE_TOOL_USE,
+                HookEvent.PERMISSION_REQUEST,
+                HookEvent.BEFORE_READ_FILE,
+            },
             requires_content=False,
             requires_file_path=True,
             order=90,

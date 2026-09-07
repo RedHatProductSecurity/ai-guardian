@@ -241,6 +241,31 @@ class TestDefaultRegistry:
         assert ScannerName.BASH_EXFIL in names
         assert ScannerName.EXFIL_DETECTION in names
 
+    def test_permission_request_uses_pretool_security_pipeline(self):
+        """PermissionRequest must retain the security scanners used for tools."""
+        reg = get_default_registry()
+        content_names = {
+            entry.name
+            for entry in reg.get_pipeline(
+                HookEvent.PERMISSION_REQUEST,
+                has_content=True,
+                has_file_path=True,
+            )
+        }
+        command_names = {
+            entry.name
+            for entry in reg.get_pipeline(
+                HookEvent.PERMISSION_REQUEST,
+                has_command=True,
+            )
+        }
+
+        assert ScannerName.SECRET in content_names
+        assert ScannerName.CONFIG_FILE in content_names
+        assert ScannerName.DIRECTORY in content_names
+        assert ScannerName.BASH_EXFIL in command_names
+        assert ScannerName.EXFIL_DETECTION in command_names
+
     def test_posttooluse_pipeline(self):
         """POST_TOOL_USE should include PI, CP, OL, secret, PII."""
         reg = get_default_registry()

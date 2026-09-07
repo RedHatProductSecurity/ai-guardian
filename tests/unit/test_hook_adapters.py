@@ -325,6 +325,40 @@ class TestAutoDetection:
         adapter = detect_adapter({"hook_event_name": "UserPromptSubmit"})
         assert isinstance(adapter, BaseAgentAdapter)
 
+    def test_detect_codex_from_documented_model_metadata(self):
+        adapter = detect_adapter(
+            {
+                "hook_event_name": "PreToolUse",
+                "model": "gpt-5-codex",
+                "turn_id": "turn-123",
+            }
+        )
+        assert isinstance(adapter, CodexAdapter)
+
+    def test_detect_codex_from_permission_request_metadata(self):
+        adapter = detect_adapter(
+            {
+                "hook_event_name": "PermissionRequest",
+                "model": "gpt-5-codex",
+                "permission_mode": "default",
+            }
+        )
+        assert isinstance(adapter, CodexAdapter)
+
+    def test_unmarked_pascal_case_event_remains_base_agent(self):
+        adapter = detect_adapter({"hook_event_name": "PreToolUse"})
+        assert isinstance(adapter, BaseAgentAdapter)
+
+    def test_claude_permission_mode_does_not_trigger_codex_detection(self):
+        adapter = detect_adapter(
+            {
+                "hook_event_name": "PreToolUse",
+                "permission_mode": "default",
+                "tool_name": "Bash",
+            }
+        )
+        assert isinstance(adapter, BaseAgentAdapter)
+
 
 # ── Normalization ────────────────────────────────────────────────────────
 
@@ -669,6 +703,38 @@ class TestSharedResponseMethods:
         )
         assert "AKIA" not in resp["hookSpecificOutput"]["additionalContext"]
         assert "secret detected" in resp["hookSpecificOutput"]["additionalContext"]
+
+    def test_permission_request_block_uses_codex_decision_shape(self):
+        resp = BaseAgentAdapter()._block_response(
+            HookEvent.PERMISSION_REQUEST,
+            "Permission denied by security policy",
+            "tool_permission",
+        )
+
+        assert resp["hookSpecificOutput"]["hookEventName"] == "PermissionRequest"
+        assert resp["hookSpecificOutput"]["decision"]["behavior"] == "deny"
+        assert (
+            resp["hookSpecificOutput"]["decision"]["message"]
+            == "Operation blocked by ai-guardian: tool permission denied"
+        )
+        assert "permissionDecision" not in resp["hookSpecificOutput"]
+        assert "decision" not in resp
+
+    @pytest.mark.parametrize(
+        "event_name,expected",
+        [
+            ("PermissionRequest", HookEvent.PERMISSION_REQUEST),
+            ("PreCompact", HookEvent.PRE_COMPACT),
+            ("Interrupt", HookEvent.INTERRUPT),
+            ("SubagentStart", HookEvent.SUBAGENT_START),
+            ("SubagentStop", HookEvent.SUBAGENT_STOP),
+        ],
+    )
+    def test_codex_event_names_normalize(self, event_name, expected):
+        normalized = CodexAdapter().normalize_input(
+            {"hook_event_name": event_name, "model": "gpt-5-codex"}
+        )
+        assert normalized.event == expected
 
 
 # ── Response Formatting ─────────────────────────────────────────────────

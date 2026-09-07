@@ -1266,17 +1266,33 @@ class TestCodexSetup:
         assert hooks["SessionEnd"][0]["hooks"][0]["command"] == "ai-guardian"
         assert hooks["PostCompact"][0]["hooks"][0]["command"] == "ai-guardian"
 
-    def test_codex_has_five_hook_events(self):
-        """Verify Codex installs all 5 hook events."""
+    def test_codex_has_all_documented_hook_events(self):
+        """Verify Codex installs all documented lifecycle hook events."""
         hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
         expected = {
             "UserPromptSubmit",
             "PreToolUse",
+            "PermissionRequest",
             "PostToolUse",
-            "SessionEnd",
+            "PreCompact",
             "PostCompact",
+            "SubagentStart",
+            "SubagentStop",
+            "Stop",
+            "Interrupt",
+            "SessionStart",
+            "SessionEnd",
         }
         assert set(hooks.keys()) == expected
+
+    def test_codex_hooks_classify_lifecycle_timeouts(self):
+        """Verify short lifecycle hooks and long enforcement hooks are distinct."""
+        hooks = IDESetup.IDE_CONFIGS["codex"]["hooks"]
+        assert hooks["PermissionRequest"][0]["matcher"] == ".*"
+        assert hooks["PreCompact"][0]["hooks"][0]["timeout"] == 60
+        assert hooks["Interrupt"][0]["hooks"][0]["timeout"] == 3
+        assert hooks["Stop"][0].get("matcher") is None
+        assert hooks["SessionStart"][0]["matcher"] == "startup|resume|clear|compact"
 
     def test_merge_hooks_codex_preserves_other_hooks(self, tmp_path):
         """Test that merging Codex hooks preserves existing non-ai-guardian hooks."""
@@ -1301,6 +1317,131 @@ class TestCodexSetup:
         assert pre_tool_hooks[0]["command"] == "ai-guardian"
         assert pre_tool_hooks[1]["command"] == "other-tool"
         assert len(warnings) > 0
+
+    def test_merge_hooks_codex_preserves_other_matcher_groups(self):
+        """Codex setup keeps custom matcher groups and their order."""
+        setup = IDESetup()
+        existing_config = {
+            "hooks": {
+                "PermissionRequest": [
+                    {
+                        "matcher": "Bash",
+                        "hooks": [
+                            {"type": "command", "command": "custom-a"},
+                        ],
+                    },
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {"type": "command", "command": "custom-b"},
+                        ],
+                    },
+                ]
+            }
+        }
+
+        merged, _ = setup.merge_hooks(
+            existing_config,
+            IDESetup.IDE_CONFIGS["codex"]["hooks"],
+            "codex",
+        )
+
+        entries = merged["hooks"]["PermissionRequest"]
+        assert entries[0]["matcher"] == "Bash"
+        assert entries[0]["hooks"][0]["command"] == "custom-a"
+        assert entries[1]["matcher"] == ".*"
+        assert entries[1]["hooks"][0]["command"] == "ai-guardian"
+        assert entries[1]["hooks"][1]["command"] == "custom-b"
+
+    def test_codex_config_path_honors_code_home(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+        assert IDESetup().get_config_path("codex") == str(
+            tmp_path / "codex" / "hooks.json"
+        )
+
+    def test_codex_config_layers_report_user_and_project(self, monkeypatch, tmp_path):
+        codex_home = tmp_path / "codex"
+        project = tmp_path / "project"
+        (project / ".git").mkdir(parents=True)
+        (project / ".codex").mkdir()
+        (codex_home / "config.toml").parent.mkdir(parents=True)
+        (codex_home / "config.toml").write_text("[hooks]\n", encoding="utf-8")
+        (project / ".codex" / "hooks.json").write_text(
+            '{"hooks": {}}\n', encoding="utf-8"
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        monkeypatch.chdir(project)
+
+        layers = IDESetup().get_codex_config_layers()
+
+        assert [layer["scope"] for layer in layers] == ["user", "project"]
+        assert layers[0]["inline_hooks"] is True
+        assert layers[1]["hooks_json_exists"] is True
+
+    def test_codex_setup_reports_inline_hooks_conflict(self, monkeypatch, tmp_path):
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        (codex_home / "config.toml").write_text("[hooks]\n", encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        success, message = IDESetup().setup_ide_hooks("codex")
+
+        assert success is False
+        assert "inline hooks are already defined" in message
+        assert not (codex_home / "hooks.json").exists()
+
+    def test_codex_setup_reports_malformed_active_config(self, monkeypatch, tmp_path):
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        (codex_home / "config.toml").write_text("[hooks\n", encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        success, message = IDESetup().setup_ide_hooks("codex")
+
+        assert success is False
+        assert "cannot be parsed" in message
+        assert "Fix that file" in message
+        assert not (codex_home / "hooks.json").exists()
+
+    def test_codex_setup_writes_user_layer_and_preserves_project_layer(
+        self, monkeypatch, tmp_path
+    ):
+        codex_home = tmp_path / "codex"
+        project = tmp_path / "project"
+        project_hooks = project / ".codex" / "hooks.json"
+        project_hooks.parent.mkdir(parents=True)
+        project_hooks.write_text(
+            '{"hooks": {"UserPromptSubmit": [{"hooks": '
+            '[{"type": "command", "command": "project-hook"}]}]}}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        monkeypatch.chdir(project)
+
+        setup = IDESetup()
+        with (
+            mock.patch.object(
+                setup,
+                "verify_gitleaks_installed",
+                return_value=(True, "Gitleaks available"),
+            ),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_binary_path",
+                return_value="/usr/local/bin/ai-guardian",
+            ),
+        ):
+            success, message = setup.setup_ide_hooks("codex")
+
+        assert success is True
+        assert (codex_home / "hooks.json").is_file()
+        assert json.loads(project_hooks.read_text(encoding="utf-8")) == {
+            "hooks": {
+                "UserPromptSubmit": [
+                    {"hooks": [{"type": "command", "command": "project-hook"}]}
+                ]
+            }
+        }
+        assert "preserved active Codex layers" in message
 
 
 class TestGeminiSetup:

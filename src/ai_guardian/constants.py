@@ -77,12 +77,17 @@ class HookEvent(str, Enum):
 
     PROMPT = "prompt"
     PRE_TOOL_USE = "pretooluse"
+    PERMISSION_REQUEST = "permissionrequest"
     POST_TOOL_USE = "posttooluse"
+    PRE_COMPACT = "precompact"
     BEFORE_READ_FILE = "beforereadfile"
     STOP = "stop"
+    INTERRUPT = "interrupt"
     SESSION_START = "sessionstart"
     SESSION_END = "sessionend"
     POST_COMPACT = "postcompact"
+    SUBAGENT_START = "subagentstart"
+    SUBAGENT_STOP = "subagentstop"
 
     @property
     def display_name(self) -> str:
@@ -102,11 +107,16 @@ _DISPLAY_NAMES = {
     HookEvent.SESSION_START: "SessionStart",
     HookEvent.PROMPT: "UserPromptSubmit",
     HookEvent.PRE_TOOL_USE: "PreToolUse",
+    HookEvent.PERMISSION_REQUEST: "PermissionRequest",
     HookEvent.POST_TOOL_USE: "PostToolUse",
+    HookEvent.PRE_COMPACT: "PreCompact",
     HookEvent.BEFORE_READ_FILE: "PreToolUse",
     HookEvent.SESSION_END: "SessionEnd",
     HookEvent.STOP: "Stop",
+    HookEvent.INTERRUPT: "Interrupt",
     HookEvent.POST_COMPACT: "PostCompact",
+    HookEvent.SUBAGENT_START: "SubagentStart",
+    HookEvent.SUBAGENT_STOP: "SubagentStop",
 }
 
 ALL_HOOK_EVENT_DISPLAY_NAMES = frozenset(_DISPLAY_NAMES.values())

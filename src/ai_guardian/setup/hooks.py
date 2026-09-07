@@ -6,6 +6,7 @@ import platform
 import shutil
 import subprocess
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -129,7 +130,7 @@ class IDESetup:
             "name": "OpenAI Codex",
             "mcp_client_name": "codex-cli",
             "config_path": "~/.codex/hooks.json",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "CODEX_HOME",
             "config_filename": "hooks.json",
             "hooks": {
                 HookEvent.PROMPT.display_name: [
@@ -157,6 +158,19 @@ class IDESetup:
                         ],
                     }
                 ],
+                HookEvent.PERMISSION_REQUEST.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 300,
+                                "statusMessage": "🛡️ Checking approval request...",
+                            }
+                        ],
+                    }
+                ],
                 HookEvent.POST_TOOL_USE.display_name: [
                     {
                         "matcher": ".*",
@@ -170,10 +184,86 @@ class IDESetup:
                         ],
                     }
                 ],
-                HookEvent.SESSION_END.display_name: [
-                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                HookEvent.PRE_COMPACT.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 60,
+                                "statusMessage": "🛡️ Checking before compaction...",
+                            }
+                        ],
+                    }
                 ],
                 HookEvent.POST_COMPACT.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 60,
+                                "statusMessage": "🛡️ Restoring security context...",
+                            }
+                        ],
+                    }
+                ],
+                HookEvent.SUBAGENT_START.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 60,
+                                "statusMessage": "🛡️ Tracking subagent start...",
+                            }
+                        ],
+                    }
+                ],
+                HookEvent.SUBAGENT_STOP.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 60,
+                                "statusMessage": "🛡️ Tracking subagent stop...",
+                            }
+                        ],
+                    }
+                ],
+                HookEvent.STOP.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+                HookEvent.INTERRUPT.display_name: [
+                    {
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 3,
+                            }
+                        ]
+                    }
+                ],
+                HookEvent.SESSION_START.display_name: [
+                    {
+                        "matcher": "startup|resume|clear|compact",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "ai-guardian",
+                                "timeout": 300,
+                                "statusMessage": "🛡️ Scanning agent config files...",
+                            }
+                        ],
+                    }
+                ],
+                HookEvent.SESSION_END.display_name: [
                     {"hooks": [{"type": "command", "command": "ai-guardian"}]}
                 ],
             },
@@ -408,6 +498,104 @@ class IDESetup:
         """Initialize IDE setup manager."""
         self._last_merged_config: Optional[Dict] = None
 
+    @staticmethod
+    def _codex_project_root(cwd: Optional[str] = None) -> Optional[Path]:
+        """Find the repository root whose ``.codex`` layer is active."""
+        try:
+            current = Path(cwd or os.getcwd()).expanduser().resolve()
+        except OSError:
+            return None
+
+        for candidate in (current, *current.parents):
+            if (candidate / ".git").exists():
+                return candidate
+        for candidate in (current, *current.parents):
+            if (candidate / ".codex").is_dir():
+                return candidate
+        return None
+
+    @staticmethod
+    def _codex_inline_hooks_status(config_path: Path) -> Tuple[bool, Optional[str]]:
+        """Return whether a Codex TOML file defines hooks and any parse error."""
+        if not config_path.is_file():
+            return False, None
+
+        try:
+            import tomllib
+        except ImportError:
+            try:
+                import tomli as tomllib  # type: ignore
+            except ImportError:
+                return False, f"TOML parser is unavailable for {config_path}"
+
+        try:
+            data = tomllib.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            return False, f"Unable to parse {config_path}: {exc}"
+
+        return "hooks" in data, None
+
+    def get_codex_config_layers(
+        self, cwd: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Describe the user and project Codex configuration layers.
+
+        Codex loads hooks from every matching layer. AI Guardian installs its
+        managed command hooks in the user layer, while reporting project-local
+        layers so verification can explain which other sources are active.
+        """
+        configured_path = self.get_config_path("codex")
+        if not configured_path:
+            return []
+
+        user_dir = Path(configured_path).expanduser().parent
+        directories = [("user", user_dir)]
+        project_root = self._codex_project_root(cwd)
+        if project_root:
+            project_dir = project_root / ".codex"
+            if project_dir != user_dir:
+                directories.append(("project", project_dir))
+
+        layers = []
+        for scope, directory in directories:
+            config_toml = directory / "config.toml"
+            inline_hooks, parse_error = self._codex_inline_hooks_status(config_toml)
+            layers.append(
+                {
+                    "scope": scope,
+                    "directory": str(directory),
+                    "hooks_json": str(directory / "hooks.json"),
+                    "config_toml": str(config_toml),
+                    "hooks_json_exists": (directory / "hooks.json").is_file(),
+                    "config_toml_exists": config_toml.is_file(),
+                    "inline_hooks": inline_hooks,
+                    "parse_error": parse_error,
+                }
+            )
+        return layers
+
+    def _codex_setup_diagnostic(self) -> Optional[str]:
+        """Return a clear diagnostic when the target layer cannot be used."""
+        layers = self.get_codex_config_layers()
+        target_dir = str(Path(self.get_config_path("codex")).expanduser().parent)
+        for layer in layers:
+            if layer["parse_error"]:
+                return (
+                    "OpenAI Codex setup stopped: the active Codex configuration "
+                    f"layer at {layer['directory']} cannot be parsed "
+                    f"({layer['parse_error']}). Fix that file "
+                    "before installing AI Guardian hooks."
+                )
+            if layer["directory"] == target_dir and layer["inline_hooks"]:
+                return (
+                    "OpenAI Codex setup stopped: inline hooks are already defined "
+                    f"in {layer['config_toml']}. AI Guardian targets "
+                    f"{layer['hooks_json']}; choose one hook representation in "
+                    "the active user layer and rerun setup to avoid duplicate "
+                    "hook loading."
+                )
+        return None
+
     def supports_hooks(self, ide_type: str) -> bool:
         """Check if an IDE supports hook installation.
 
@@ -440,6 +628,13 @@ class IDESetup:
 
         config_path = Path(config_path_str).expanduser()
         if not integrity:
+            if ide_type == "codex":
+                verification = self.verify_hooks_for_ide(ide_type)
+                if verification["healthy"]:
+                    return True, f"{ide_name}: configured"
+                diagnostics = verification.get("diagnostics", [])
+                if diagnostics:
+                    return False, f"{ide_name}: needs attention ({diagnostics[0]})"
             if self.check_hooks_configured(config_path, ide_type):
                 return True, f"{ide_name}: configured"
             return False, f"{ide_name}: not configured"
@@ -453,6 +648,10 @@ class IDESetup:
         ]
         attention.extend(f"obsolete:{name}" for name in verification["obsolete"])
         detail = ", ".join(attention) or "configuration unreadable"
+        diagnostics = verification.get("diagnostics", [])
+        if diagnostics:
+            detail = f"{detail}; {diagnostics[0]}"
+            return False, f"{ide_name}: needs attention ({detail})"
         if verification["events"] and all(
             status == "missing" for status in verification["events"].values()
         ):
@@ -539,6 +738,21 @@ class IDESetup:
             "events": {},
             "obsolete": [],
         }
+        if ide_type == "codex":
+            result["config_layers"] = self.get_codex_config_layers()
+            result["diagnostics"] = [
+                layer["parse_error"]
+                for layer in result["config_layers"]
+                if layer["parse_error"]
+            ]
+            target_dir = str(Path(self.get_config_path(ide_type)).expanduser().parent)
+            if any(
+                layer["directory"] == target_dir and layer["inline_hooks"]
+                for layer in result["config_layers"]
+            ):
+                result["diagnostics"].append(
+                    "inline hooks are active in the target Codex user layer"
+                )
         if config.get("mcp_only"):
             return result
 
@@ -639,6 +853,8 @@ class IDESetup:
             all(status == "healthy" for status in result["events"].values())
             and not result["obsolete"]
         )
+        if result.get("diagnostics"):
+            result["healthy"] = False
         return result
 
     def _remove_obsolete_owned_hooks(
@@ -1002,69 +1218,79 @@ class IDESetup:
             return existing_config, warnings
 
         elif ide_type == "codex":
-            # Codex: same nested structure as Claude Code (hooks.json)
+            # Codex: same nested structure as Claude Code (hooks.json). Keep
+            # every existing matcher group because Codex loads all matching
+            # groups from every active configuration layer.
             if "hooks" not in existing_config:
                 existing_config["hooks"] = {}
 
-            for hook_name in [
-                HookEvent.PROMPT.display_name,
-                HookEvent.PRE_TOOL_USE.display_name,
-                HookEvent.POST_TOOL_USE.display_name,
-                HookEvent.SESSION_END.display_name,
-                HookEvent.POST_COMPACT.display_name,
-            ]:
-                if hook_name not in ai_guardian_hooks:
+            if not isinstance(existing_config["hooks"], dict):
+                existing_config["hooks"] = {}
+
+            for hook_name, template_entries in ai_guardian_hooks.items():
+                if not isinstance(template_entries, list) or not template_entries:
                     continue
 
-                if hook_name not in existing_config["hooks"]:
-                    existing_config["hooks"][hook_name] = []
-
-                hook_list = existing_config["hooks"][hook_name]
-                template_entry = ai_guardian_hooks[hook_name][0]
+                template_entry = deepcopy(template_entries[0])
                 target_matcher = template_entry.get("matcher")
+                hook_list = existing_config["hooks"].get(hook_name, [])
+                if not isinstance(hook_list, list):
+                    hook_list = []
 
+                other_hook_names = []
+                for entry in hook_list:
+                    if not isinstance(entry, dict):
+                        continue
+                    handlers = entry.get("hooks", [])
+                    if not isinstance(handlers, list):
+                        continue
+                    for handler in handlers:
+                        if isinstance(handler, dict) and not _is_ai_guardian_command(
+                            handler.get("command", "")
+                        ):
+                            other_hook_names.append(handler.get("command", "unknown"))
+
+                if other_hook_names:
+                    warnings.append(
+                        f"⚠️  {hook_name}: Found other hooks "
+                        f"[{', '.join(other_hook_names)}]. "
+                        "ai-guardian has been placed first to ensure warnings "
+                        "display correctly."
+                    )
+
+                remaining_entries = []
                 matched_entry = None
-                matched_idx = -1
-                for idx, entry in enumerate(hook_list):
+                for entry in hook_list:
                     if (
                         isinstance(entry, dict)
                         and entry.get("matcher") == target_matcher
+                        and matched_entry is None
                     ):
-                        matched_entry = entry
-                        matched_idx = idx
-                        break
+                        matched_entry = deepcopy(entry)
+                        existing_handlers = matched_entry.get("hooks", [])
+                        if not isinstance(existing_handlers, list):
+                            existing_handlers = []
+                        matched_entry["hooks"] = [
+                            handler
+                            for handler in existing_handlers
+                            if not (
+                                isinstance(handler, dict)
+                                and _is_ai_guardian_command(handler.get("command", ""))
+                            )
+                        ]
+                        matched_entry["hooks"].insert(
+                            0, deepcopy(template_entry["hooks"][0])
+                        )
+                        remaining_entries.append(matched_entry)
+                    else:
+                        cleaned = self._remove_owned_commands(entry)
+                        if cleaned is not None:
+                            remaining_entries.append(cleaned)
 
                 if matched_entry is None:
-                    existing_config["hooks"][hook_name] = ai_guardian_hooks[hook_name]
-                    continue
+                    remaining_entries.insert(0, template_entry)
 
-                if "hooks" not in matched_entry:
-                    matched_entry["hooks"] = []
-
-                hooks_array = matched_entry["hooks"]
-                other_hooks = []
-                for hook in hooks_array:
-                    if isinstance(hook, dict) and _is_ai_guardian_command(
-                        hook.get("command", "")
-                    ):
-                        continue
-                    other_hooks.append(hook)
-
-                ai_guardian_hook = template_entry["hooks"][0]
-
-                if other_hooks:
-                    hook_names = [
-                        h.get("command", "unknown")
-                        for h in other_hooks
-                        if isinstance(h, dict)
-                    ]
-                    warnings.append(
-                        f"⚠️  {hook_name}: Found other hooks [{', '.join(hook_names)}]. "
-                        f"ai-guardian has been placed first to ensure warnings display correctly."
-                    )
-
-                matched_entry["hooks"] = [ai_guardian_hook] + other_hooks
-                existing_config["hooks"][hook_name][matched_idx] = matched_entry
+                existing_config["hooks"][hook_name] = remaining_entries
 
             return existing_config, warnings
 
@@ -1299,13 +1525,18 @@ class IDESetup:
 
             if ide_type in ("claude", "codex"):
                 hooks = config.get("hooks", {})
-                for hook_name in [
-                    HookEvent.PROMPT.display_name,
-                    HookEvent.PRE_TOOL_USE.display_name,
-                    HookEvent.POST_TOOL_USE.display_name,
-                    HookEvent.SESSION_END.display_name,
-                    HookEvent.POST_COMPACT.display_name,
-                ]:
+                hook_names = (
+                    self.expected_hook_manifest(ide_type)
+                    if ide_type == "codex"
+                    else {
+                        HookEvent.PROMPT.display_name,
+                        HookEvent.PRE_TOOL_USE.display_name,
+                        HookEvent.POST_TOOL_USE.display_name,
+                        HookEvent.SESSION_END.display_name,
+                        HookEvent.POST_COMPACT.display_name,
+                    }
+                )
+                for hook_name in hook_names:
                     if hook_name in hooks:
                         hook_list = hooks[hook_name]
                         if isinstance(hook_list, list):
@@ -1709,9 +1940,12 @@ class IDESetup:
             if not force:
                 if self.expected_hook_manifest(ide_type):
                     verification = self.verify_hooks_for_ide(ide_type)
-                    already_configured = verification["healthy"] or not any(
-                        status == "missing"
-                        for status in verification["events"].values()
+                    already_configured = not verification.get("diagnostics") and (
+                        verification["healthy"]
+                        or not any(
+                            status == "missing"
+                            for status in verification["events"].values()
+                        )
                     )
                 else:
                     already_configured = self.check_hooks_configured(
@@ -1724,6 +1958,11 @@ class IDESetup:
                     False,
                     f"ai-guardian hooks already configured for {ide_name}. Use --force to overwrite.",
                 )
+
+            if ide_type == "codex":
+                codex_diagnostic = self._codex_setup_diagnostic()
+                if codex_diagnostic:
+                    return False, codex_diagnostic
 
             # Plugin-file IDEs (OpenCode): drop a single .ts file in plugins dir
             if ide_config.get("plugin_file"):
@@ -1839,6 +2078,19 @@ class IDESetup:
             gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
             message = f"✓ Successfully configured {ide_name} hooks at {config_path}\n"
+            if ide_type == "codex":
+                active_layers = [
+                    layer
+                    for layer in self.get_codex_config_layers()
+                    if layer["hooks_json_exists"] or layer["inline_hooks"]
+                ]
+                if active_layers:
+                    message += (
+                        "  Codex loads hooks from all active layers; preserved "
+                        "active Codex layers: "
+                        + ", ".join(layer["directory"] for layer in active_layers)
+                        + "\n"
+                    )
             if obsolete_removed:
                 message += (
                     "  Removed obsolete AI Guardian hook events: "

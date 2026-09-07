@@ -361,10 +361,20 @@ class HookAdapter(ABC):
             return HookEvent.SESSION_START
         if event_name in ("sessionend",):
             return HookEvent.SESSION_END
+        if event_name in ("permissionrequest", "permission_request"):
+            return HookEvent.PERMISSION_REQUEST
+        if event_name in ("precompact", "pre_compact"):
+            return HookEvent.PRE_COMPACT
         if event_name in ("postcompact",):
             return HookEvent.POST_COMPACT
         if event_name in ("stop", "session.idle", "session.end"):
             return HookEvent.STOP
+        if event_name in ("interrupt",):
+            return HookEvent.INTERRUPT
+        if event_name in ("subagentstart", "subagent_start"):
+            return HookEvent.SUBAGENT_START
+        if event_name in ("subagentstop", "subagent_stop"):
+            return HookEvent.SUBAGENT_STOP
 
         # OpenCode plugin events
         if event_name == "tool.execute.before":
