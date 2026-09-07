@@ -73,13 +73,21 @@ EOF
 
 **CRITICAL**: All code changes MUST include appropriate tests.
 
+**User-visible message regression check**: When changing a notification,
+dialog, prompt, or error message, search the entire `tests/` tree for the old
+text and update every exact-string assertion and UX contract that describes
+the expected experience. Run the complete directly affected UX contract file
+as well as the related unit tests; adding only a new test is not sufficient.
+
 #### Running Tests
 
 **Note**: Tests are only required when making code changes. Documentation-only changes do not require running tests.
 
-**Run only related unit tests locally.** Do not run the full suite, integration
-tests, UX tests, container scenarios, or other unrelated tests. GitHub Actions
-runs all remaining validation on every PR across Python 3.9-3.14 and Windows.
+**Run only related tests locally.** Do not run the full suite, integration
+tests, container scenarios, or other unrelated tests. For user-facing changes,
+run the complete directly affected UX contract file in addition to the related
+unit tests. GitHub Actions runs all remaining validation on every PR across
+Python 3.9-3.14 and Windows.
 
 #### Which Tests to Run
 

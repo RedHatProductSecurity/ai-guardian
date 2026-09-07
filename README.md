@@ -100,7 +100,9 @@ target one IDE explicitly, or `--no-setup` to skip hook setup:
 From the tray, use **Check hooks** to immediately re-check installed
 integrations and configure any missing hooks. The per-IDE setup commands remain
 under **Local Setup...**. After setup, the tray reports each integration's hook
-count and verification status.
+count and verification status. The tray also checks automatically when it
+starts and then every 10 seconds while running; **Check hooks** triggers the
+same check immediately.
 When multiple integrations need setup, the tray shows an individual
 **Install now** or **Never install** choice for each one. These choices are
 kept per integration, so a newly detected IDE can still be offered later, and

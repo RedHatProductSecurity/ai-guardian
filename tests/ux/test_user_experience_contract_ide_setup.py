@@ -27,6 +27,22 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
 
     with (
         patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {
+                    "beforeSubmitPrompt": "missing",
+                    "beforeReadFile": "missing",
+                    "beforeShellExecution": "missing",
+                    "afterShellExecution": "missing",
+                    "preToolUse": "missing",
+                    "postToolUse": "missing",
+                },
+                "obsolete": [],
+            },
+        ),
         patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
         patch("ai_guardian.tray.health.threading.Thread") as thread,
     ):
@@ -39,6 +55,10 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
         title="Set Up AI Guardian",
         message=(
             "Cursor IDE is installed but is not protected by AI Guardian.\n\n"
+            "Current hook status: beforeSubmitPrompt (missing), "
+            "beforeReadFile (missing), beforeShellExecution (missing), "
+            "afterShellExecution (missing), preToolUse (missing), "
+            "postToolUse (missing)\n\n"
             "Set up its security hooks now?"
         ),
         action_label="Set Up Now",
