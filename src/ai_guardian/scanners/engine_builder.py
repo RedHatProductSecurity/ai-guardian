@@ -215,8 +215,8 @@ def _build_python_preset(
         preset_name: Name of the preset (e.g. "toml-patterns").
         scanner_config: Per-engine scanner configuration overrides.
         parent_config: Top-level secret_scanning config — used to pass
-            ``allowlist_patterns`` and ``ignore_files`` to the scanner
-            when not set in *scanner_config*.
+            scanner-supported options to the scanner when not set in
+            *scanner_config*.
     """
     if preset_name == "toml-patterns":
         try:
@@ -225,7 +225,13 @@ def _build_python_preset(
             scanner = TomlPatternsScanner()
             effective_config = dict(scanner_config) if scanner_config else {}
             if parent_config:
-                for key in ("allowlist_patterns", "ignore_files"):
+                for key in (
+                    "additional_patterns",
+                    "allowlist_patterns",
+                    "ignore_files",
+                    "min_entropy",
+                    "stopwords",
+                ):
                     if key not in effective_config and key in parent_config:
                         effective_config[key] = parent_config[key]
             if effective_config:

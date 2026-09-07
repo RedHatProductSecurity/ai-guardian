@@ -66,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   archive directly with architecture and CPU-feature selection instead of
   relying on the mutable upstream installer script.
 
+- **Built-in scanner configuration propagation**: Apply top-level custom
+  patterns, entropy thresholds, and stopwords to the TOML-patterns engine so
+  configured hook-output redaction and scanning use the same rules.
+
 - **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
 
 - **Codex conversation titles**: Resolve explicit titles, genuine prompts, assistant fallbacks, and stable project/time titles while excluding bootstrap content in list and detail views (#2232)
