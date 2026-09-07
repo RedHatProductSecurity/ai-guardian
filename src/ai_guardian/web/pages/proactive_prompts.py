@@ -106,11 +106,19 @@ def create_proactive_prompts_page(service, daemon_name: str):
                                 if not isinstance(status, dict):
                                     continue
                                 if status.get("healthy") is True:
-                                    hook_status = "Configured"
+                                    hook_status = (
+                                        "Configured (last verified)"
+                                        if status.get("verification_skipped")
+                                        else "Configured"
+                                    )
                                 elif status.get("error"):
                                     hook_status = "Check failed"
                                 elif status.get("excluded"):
-                                    hook_status = "Excluded (needs setup)"
+                                    hook_status = (
+                                        "Excluded (last verified)"
+                                        if status.get("verification_skipped")
+                                        else "Excluded (needs setup)"
+                                    )
                                 else:
                                     hook_status = "Needs setup"
                                 attention = []
@@ -127,6 +135,16 @@ def create_proactive_prompts_page(service, daemon_name: str):
                                 )
                                 if status.get("error"):
                                     attention.append(str(status["error"]))
+                                if status.get("verification_skipped"):
+                                    attention.append(
+                                        "not rechecked: "
+                                        + str(
+                                            status.get(
+                                                "verification_skip_reason",
+                                                "automatic exclusion",
+                                            )
+                                        )
+                                    )
                                 rows.append(
                                     {
                                         "ide": ide_type,

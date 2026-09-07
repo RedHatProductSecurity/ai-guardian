@@ -465,6 +465,14 @@ class IDESetup:
         except (OSError, ValueError) as exc:
             return False, f"Unable to parse {config_path}: {exc}"
 
+        hooks = data.get("hooks")
+        if isinstance(hooks, dict):
+            # Codex stores trusted-hook hashes under [hooks.state]. That is
+            # bookkeeping for hooks.json, not a second inline hook source.
+            # Treat an empty [hooks] table as an explicit inline declaration
+            # for backwards-compatible conflict diagnostics, but ignore a
+            # table containing only Codex's state metadata.
+            return not hooks or any(key != "state" for key in hooks), None
         return "hooks" in data, None
 
     def get_codex_config_layers(

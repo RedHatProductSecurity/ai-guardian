@@ -91,6 +91,49 @@ def test_sync_ide_setup_state_records_current_reality_and_keeps_history(tmp_path
     assert saved["ide_setup_status"] == snapshot
 
 
+def test_sync_ide_setup_state_skips_never_install_when_requested(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {
+            "claude": {"name": "Claude Code"},
+            "cursor": {"name": "Cursor IDE"},
+        }
+
+        def __init__(self):
+            self.healthy = {"claude": True, "cursor": True}
+            self.verify_calls = []
+
+        def list_installed_ides(self):
+            return ["claude", "cursor"]
+
+        def verify_hooks_for_ide(self, ide_type):
+            self.verify_calls.append(ide_type)
+            status = "healthy" if self.healthy[ide_type] else "missing"
+            return {
+                "ide": ide_type,
+                "healthy": self.healthy[ide_type],
+                "events": {"PreToolUse": status},
+                "obsolete": [],
+            }
+
+    setup = FakeIDESetup()
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    sync_ide_setup_state(state=state, setup=setup)
+    state.update_ide_setup_exclusions(never=("cursor",))
+    setup.verify_calls.clear()
+    setup.healthy["cursor"] = False
+
+    snapshot = sync_ide_setup_state(
+        state=state,
+        setup=setup,
+        skip_excluded=True,
+    )
+
+    assert setup.verify_calls == ["claude"]
+    assert snapshot["integrations"]["cursor"]["healthy"] is True
+    assert snapshot["integrations"]["cursor"]["excluded"] is True
+    assert snapshot["integrations"]["cursor"]["verification_skipped"] is True
+
+
 def test_reset_ide_setup_clears_one_ide_history_and_exclusion(tmp_path):
     path = tmp_path / "proactive_prompts.json"
     state = ProactivePromptState(path)
@@ -274,6 +317,22 @@ def test_manual_ide_check_action_runs_a_manual_check():
     check.assert_called_once_with(manual=True)
 
 
+def test_startup_ide_check_runs_an_automatic_check():
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_check_ide_setup_notification") as check,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ](**thread.call_args.kwargs["kwargs"])
+        monitor._on_startup_ide_setup()
+
+    check.assert_called_once_with(manual=False)
+
+
 def test_ide_setup_prompt_configures_installed_local_ides(tmp_path):
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -355,6 +414,29 @@ def test_codex_setup_result_reports_managed_hook_count():
     assert "[PASS] OpenAI Codex: 5/5 hooks configured" in notify.call_args.args[1]
 
 
+def test_setup_result_uses_final_verification_health_over_setup_return():
+    verification = {
+        "healthy": True,
+        "events": {"PreToolUse": "healthy"},
+        "obsolete": [],
+    }
+
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_setup_result(
+            [
+                {
+                    "ide": "claude",
+                    "success": False,
+                    "verification": verification,
+                }
+            ]
+        )
+
+    message = notify.call_args.args[1]
+    assert "[PASS] Claude Code: 1/1 hooks configured" in message
+    assert "setup failed" not in message
+
+
 def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -414,6 +496,41 @@ def test_ide_setup_prompt_snoozes_after_failed_setup(tmp_path):
     assert state.load()["ide_setup_codex"]["status"] == "snoozed"
     assert not state.available("ide_setup_codex")
     show.assert_called_once()
+
+
+def test_ide_setup_prompt_does_not_snooze_when_final_verification_is_healthy(
+    tmp_path,
+):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": True,
+        "events": {"PreToolUse": "healthy"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="action",
+        ),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.setup.setup_hooks", return_value=False),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    assert "ide_setup_codex" not in state.load()
 
 
 def test_multi_ide_prompt_only_configures_selected_integrations(tmp_path):
@@ -484,6 +601,147 @@ def test_never_install_exclusion_suppresses_automatic_prompt(tmp_path):
         monitor._check_ide_setup_notification()
 
     dialog.assert_not_called()
+
+
+def test_automatic_monitoring_does_not_recheck_never_install(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+
+        def __init__(self):
+            self.healthy = True
+            self.verify_calls = 0
+
+        def list_installed_ides(self):
+            return ["claude"]
+
+        def verify_hooks_for_ide(self, _ide_type):
+            self.verify_calls += 1
+            return {
+                "healthy": self.healthy,
+                "events": {"PreToolUse": "healthy" if self.healthy else "missing"},
+                "obsolete": [],
+            }
+
+    setup = FakeIDESetup()
+    state_path = tmp_path / "proactive_prompts.json"
+    state = ProactivePromptState(state_path)
+    sync_ide_setup_state(state=state, setup=setup)
+    state.update_ide_setup_exclusions(never=("claude",))
+    setup.healthy = False
+
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=state_path,
+        ),
+        patch("ai_guardian.setup.hooks.IDESetup", return_value=setup),
+    ):
+        monitor._check_ide_setup_notification()
+        monitor._check_ide_setup_notification()
+
+    assert setup.verify_calls == 1
+    saved = ProactivePromptState(state_path).get_ide_setup_status()
+    assert saved["integrations"]["claude"]["healthy"] is True
+    assert saved["integrations"]["claude"]["excluded"] is True
+
+
+def test_dismissed_prompt_reappears_after_live_health_change(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+
+        def __init__(self):
+            self.healthy = False
+            self.verify_calls = 0
+
+        def list_installed_ides(self):
+            return ["claude"]
+
+        def verify_hooks_for_ide(self, _ide_type):
+            self.verify_calls += 1
+            return {
+                "healthy": self.healthy,
+                "events": {"PreToolUse": "healthy" if self.healthy else "missing"},
+                "obsolete": [],
+            }
+
+    setup = FakeIDESetup()
+    state_path = tmp_path / "proactive_prompts.json"
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=state_path,
+        ),
+        patch("ai_guardian.setup.hooks.IDESetup", return_value=setup),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            side_effect=["dismiss", "dismiss"],
+        ) as show,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+        setup.healthy = True
+        monitor._check_ide_setup_notification()
+        setup.healthy = False
+        monitor._check_ide_setup_notification()
+
+    assert setup.verify_calls == 3
+    assert show.call_count == 2
+    status = ProactivePromptState(state_path).get_ide_setup_status()
+    assert status["needs_setup"] == ["claude"]
+
+
+def test_dismissed_prompt_is_eligible_when_no_health_snapshot_exists(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {"claude": {"name": "Claude Code"}}
+
+        def __init__(self):
+            self.verify_calls = 0
+
+        def list_installed_ides(self):
+            return ["claude"]
+
+        def verify_hooks_for_ide(self, _ide_type):
+            self.verify_calls += 1
+            return {
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            }
+
+    setup = FakeIDESetup()
+    state_path = tmp_path / "proactive_prompts.json"
+    state = ProactivePromptState(state_path)
+    state.record("ide_setup_claude", "dismiss")
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=state_path,
+        ),
+        patch("ai_guardian.setup.hooks.IDESetup", return_value=setup),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value="dismiss",
+        ) as show,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    assert setup.verify_calls == 1
+    show.assert_called_once()
 
 
 def test_newly_detected_ide_remains_eligible_after_an_exclusion(tmp_path):

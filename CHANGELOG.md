@@ -52,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Codex proactive setup health**: Count and install only the five managed Codex hooks, and snooze automatic setup prompts after a failed or incomplete setup instead of immediately reopening the prompt (#2250)
 
+- **IDE setup health and proactive prompt reconciliation**: Base setup results
+  on final hook verification, surface actionable diagnostics, refresh the
+  persisted IDE health snapshot during tray monitoring, keep prompt history
+  decisions separate from current configuration health, and add an immediate
+  startup/direct tray hook check; ignore Codex ``[hooks.state]`` bookkeeping
+  when detecting inline-hook conflicts (#2254)
+
 - **NiceGUI 3.0 WebUI compatibility**: Avoid `Client.is_deleted` errors when opening session and auto-refresh pages on the minimum supported NiceGUI version
 
 - **Deferred source allowlisting**: Preserve a hashed, sanitized source-line context for violations detected through temporary scanner files, restoring the `Suppress in Source...` action only when the original line can be verified (#2162)

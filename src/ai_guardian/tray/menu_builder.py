@@ -1475,14 +1475,7 @@ class TrayMenuBuilder:
 
             return action
 
-        ide_items = [
-            pystray.MenuItem(
-                "Check IDE/CLI configuration",
-                self._tray._health._on_check_ide_setup,
-            ),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("IDE Hooks (required)", None),
-        ]
+        ide_items = [pystray.MenuItem("IDE Hooks (required)", None)]
         for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items():
             ide_items.append(
                 pystray.MenuItem(f"  {ide_cfg['name']}", _mk_ide_action(ide_key))

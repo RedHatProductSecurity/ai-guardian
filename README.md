@@ -97,9 +97,10 @@ Creates config, installs a scanner, and automatically detects supported IDE
 configuration directories so their hooks can be installed. Use `--ide` to
 target one IDE explicitly, or `--no-setup` to skip hook setup:
 
-From the tray, use **Local Setup... → Check IDE/CLI configuration** to
-re-check installed integrations and configure any missing hooks. After setup,
-the tray reports each integration's hook count and verification status.
+From the tray, use **Check hooks** to immediately re-check installed
+integrations and configure any missing hooks. The per-IDE setup commands remain
+under **Local Setup...**. After setup, the tray reports each integration's hook
+count and verification status.
 When multiple integrations need setup, the tray shows an individual
 **Install now** or **Never install** choice for each one. These choices are
 kept per integration, so a newly detected IDE can still be offered later, and
@@ -108,10 +109,17 @@ The web console's **Configuration → Proactive Prompt State** page provides a
 read-only view of these local prompt decisions. They are stored separately in
 the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.
 Entries named `ide_setup_<combination>` are prompt history; the synchronized
-`ide_setup_status` entry is the current installed-IDE and hook-health snapshot.
+`ide_setup_status` entry is the current installed-IDE and current/last-verified
+hook-health snapshot.
 Within prompt history, `dismissed` means the automatic prompt was declined for
 that exact combination, while `snoozed` means it is postponed until its stored
-time. Neither value says whether the hooks are currently healthy.
+time. Neither value says whether the hooks are currently healthy: the tray
+refreshes the snapshot from live hook verification before applying either
+decision. Dismissed and snoozed integrations continue to be rechecked, and a
+changed unhealthy result can make their prompt eligible again. **Never
+install** is the only automatic choice that stops rechecking; the tray keeps
+its last verified status visible and suppresses automatic setup until the
+choice is reset, while manual setup remains available.
 Use the per-IDE **Reset** button on that page, or
 `ai-guardian ide-setup reset --ide <ide>`, to clear one IDE's saved prompt
 decisions and Never install choice.
