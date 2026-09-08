@@ -24,7 +24,11 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 import pytest
 
-from ai_guardian.setup import _MCP_IDE_CONFIGS, _install_mcp_config
+from ai_guardian.setup import (
+    _MCP_IDE_CONFIGS,
+    _install_mcp_config,
+    get_mcp_config_path,
+)
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.setup.utils import _resolve_opencode_config, _strip_jsonc_comments
 
@@ -239,12 +243,7 @@ def _read_json_config(path: Path) -> Dict[str, Any]:
 
 
 def _mcp_config_path(ide_type: str) -> Optional[Path]:
-    spec = _MCP_IDE_CONFIGS.get(ide_type, {})
-    if not spec.get("config_file"):
-        return None
-    if ide_type == "opencode":
-        return _resolve_opencode_config()
-    return Path(spec["config_file"]).expanduser()
+    return get_mcp_config_path(ide_type)
 
 
 def _assert_mcp_registration(ide_type: str) -> None:
@@ -258,7 +257,12 @@ def _assert_mcp_registration(ide_type: str) -> None:
         return
 
     assert path.is_file(), f"{ide_type}/mcp-config: {path} was not created"
-    config = _read_json_config(path)
+    if path.suffix.lower() == ".toml":
+        from ai_guardian.setup.mcp import _load_toml_text
+
+        config = _load_toml_text(path.read_text(encoding="utf-8"))
+    else:
+        config = _read_json_config(path)
     entry = config.get(spec["config_key"], {}).get("ai-guardian")
     assert isinstance(entry, dict), f"{ide_type}/mcp-config: entry missing"
     if ide_type == "opencode":
