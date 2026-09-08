@@ -243,6 +243,35 @@ Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this aut
 export AI_GUARDIAN_NO_TKINTER=1
 ```
 
+### macOS Tray Health Check Has No Visible Result
+
+The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action first
+uses a macOS desktop notification. If Notification Center rejects the
+notification or `osascript` exits unsuccessfully, the tray shows the result in
+a modal dialog instead. Setup-required checks use a foreground browser prompt
+or a native action dialog so **Set Up Now** remains available even when a
+Tkinter child cannot be brought to the front by the menu-bar process.
+
+For reliable macOS delivery:
+
+1. In **System Settings → Notifications**, allow notifications for the sender
+   shown by macOS. The notification transport uses `osascript`, so macOS may
+   list the sender as **Script Editor** even when the tray was launched from
+   the installed application bundle.
+2. Prefer the installed tray application when notification identity matters:
+   `ai-guardian tray --install` creates `~/Applications/AI Guardian Tray.app`
+   with the AI Guardian bundle identifier and icon. This gives the tray
+   process a stable macOS identity; the `osascript` notification may still be
+   attributed to Script Editor.
+3. Start the tray from a logged-in graphical session. A terminal-only or
+   remote session cannot display macOS dialogs, so use the CLI setup command
+   when no desktop session is available.
+
+If the notification banner is still absent, use the modal result dialog or run
+`ai-guardian doctor` to inspect the detected IDE/MCP configuration. The tray
+records failed UI subprocesses in its log rather than treating them as
+successful delivery.
+
 ### Tcl Can't Find init.tcl from Tray Daemon
 
 **Symptom:** tkinter works from the CLI but fails when launched from the tray daemon subprocess with an error like `can't find a usable init.tcl`.

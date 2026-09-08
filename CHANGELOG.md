@@ -68,6 +68,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **macOS tray IDE/MCP health-check visibility**: Check UI subprocess exit
+  status, avoid invisible Tkinter prompts from the accessory tray process, and
+  fall back to visible modal/action dialogs when native notification delivery
+  fails (#2264)
+
 - **NiceGUI Python 3.14 compatibility**: Require NiceGUI 3.0.4 or newer so
   fresh installations receive the upstream vbuild compatibility fix.
 

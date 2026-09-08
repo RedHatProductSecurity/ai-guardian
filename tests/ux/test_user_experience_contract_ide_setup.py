@@ -189,6 +189,35 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
     )
 
 
+def test_manual_health_check_falls_back_to_visible_dialog_when_notification_fails():
+    """
+    USER EXPERIENCE: macOS notification failure -> visible health result.
+
+    Scenario:
+    1. User selects Check hooks/MCP installation from the tray.
+    2. Every installed integration is healthy.
+    3. macOS notification delivery reports a failure.
+
+    Expected User Experience:
+    - The result is not silently discarded.
+    - The tray presents the same health result in a modal dialog fallback.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch("ai_guardian.tray.plugins.send_notification", return_value=False),
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    dialog.assert_called_once_with("AI Guardian", message)
+
+
 def test_codex_setup_reports_conflicting_active_configuration(tmp_path, monkeypatch):
     """
     USER EXPERIENCE: Conflicting Codex hook representation -> clear diagnostic.

@@ -16,7 +16,7 @@ import shlex
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -944,6 +944,30 @@ def _find_icon(filename: str) -> str:
     return ""
 
 
+def _subprocess_succeeded(result, operation: str) -> bool:
+    """Return whether a UI subprocess completed successfully.
+
+    ``subprocess.run`` returns an integer return code.  The type guard keeps
+    lightweight test doubles and alternate subprocess implementations that do
+    not expose a return code compatible with the historical success behavior.
+    """
+    returncode = getattr(result, "returncode", 0)
+    if not isinstance(returncode, int) or returncode == 0:
+        return True
+
+    stderr = getattr(result, "stderr", "")
+    detail = ""
+    if isinstance(stderr, str) and stderr.strip():
+        detail = f": {stderr.strip().replace(chr(10), ' ')[:200]}"
+    logger.warning(
+        "%s failed with exit code %s%s",
+        operation,
+        returncode,
+        detail,
+    )
+    return False
+
+
 def show_dialog(title: str, message: str) -> bool:
     """Show a modal dialog box. Returns True on success.
 
@@ -971,14 +995,21 @@ def show_dialog(title: str, message: str) -> bool:
                 f'display dialog "{msg}" with title "{ttl}" '
                 f'buttons {{"OK"}} default button "OK"{icon_clause}'
             )
-            subprocess.run(["osascript", "-e", script], timeout=30)
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
         elif system == "Linux":
             icon_args = []
             png_path = _find_icon("ai-guardian-320.png")
             if png_path:
                 icon_args = ["--icon-name", png_path]
-            subprocess.run(
+            result = subprocess.run(
                 ["zenity", "--info", "--title", title, "--text", message] + icon_args,
+                capture_output=True,
+                text=True,
                 timeout=30,
             )
         elif system == "Windows":
@@ -988,12 +1019,88 @@ def show_dialog(title: str, message: str) -> bool:
                 "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
                 f"[System.Windows.Forms.MessageBox]::Show('{msg}', '{ttl}', 'OK', 'Information')"
             )
-            subprocess.run(["powershell", "-Command", ps], timeout=30)
+            result = subprocess.run(
+                ["powershell", "-Command", ps],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
         else:
             return False
-        return True
+        return _subprocess_succeeded(result, f"{system} dialog")
     except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
         return False
+
+
+def show_action_dialog(
+    title: str,
+    message: str,
+    action_label: str,
+    dismiss_label: str,
+    snooze_options: Iterable[str] = (),
+) -> Optional[str]:
+    """Show an actionable native prompt on macOS.
+
+    This is the last-resort UI for prompts invoked from the macOS tray.  A
+    tray process cannot reliably bring a Tkinter window to the foreground, so
+    the prompt uses the native AppleScript dialog when the normal browser or
+    terminal UI tiers are unavailable.
+
+    Returns ``"action"``, ``"dismiss"``, or ``"snooze_<option>"`` for a
+    completed prompt.  Returns ``None`` when the native prompt could not be
+    launched.
+    """
+    import subprocess
+
+    if platform.system() != "Darwin":
+        return None
+
+    options = tuple(str(option) for option in snooze_options if option)
+    later_labels = tuple(f"Later ({option})" for option in options)
+    button_labels = (action_label,) + later_labels + (dismiss_label,)
+
+    try:
+        from ai_guardian.daemon.multi_client import _escape_for_applescript
+
+        msg = (
+            _escape_for_applescript(message)
+            .replace("\r", "")
+            .replace("\n", '" & return & "')
+        )
+        ttl = _escape_for_applescript(title).replace("\r", "").replace("\n", " ")
+        buttons = ", ".join(
+            f'"{_escape_for_applescript(label)}"' for label in button_labels
+        )
+        action = _escape_for_applescript(action_label)
+        script = (
+            "try\n"
+            f'    set dialog_result to display dialog "{msg}" with title "{ttl}" '
+            f'buttons {{{buttons}}} default button "{action}"\n'
+            "    return button returned of dialog_result\n"
+            "on error number -128\n"
+            '    return ""\n'
+            "end try"
+        )
+        result = subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+        if not _subprocess_succeeded(result, "macOS action dialog"):
+            return None
+
+        selected = (result.stdout or "").strip()
+        if selected.startswith("button returned:"):
+            selected = selected.split(":", 1)[1].strip()
+        if selected == action_label:
+            return "action"
+        if selected in later_labels:
+            return f"snooze_{options[later_labels.index(selected)]}"
+        return "dismiss"
+    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+        logger.warning("macOS action dialog could not be shown")
+        return None
 
 
 def send_notification(title: str, message: str) -> bool:
@@ -1027,14 +1134,21 @@ def send_notification(title: str, message: str) -> bool:
             script = (
                 f'display notification ("{msg}") with title "{ttl}" subtitle "{ts}"'
             )
-            subprocess.run(["osascript", "-e", script], timeout=5)
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
         elif system == "Linux":
             icon_args: list[str] = []
             png_path = _find_icon("ai-guardian-320.png")
             if png_path:
                 icon_args = ["--icon", png_path]
-            subprocess.run(
+            result = subprocess.run(
                 ["notify-send"] + icon_args + [title, message],
+                capture_output=True,
+                text=True,
                 timeout=5,
             )
         elif system == "Windows":
@@ -1061,10 +1175,15 @@ def send_notification(title: str, message: str) -> bool:
                 "$n.Visible = $true; "
                 f"$n.ShowBalloonTip(5000, '{ttl}', '{msg}', 'Info')"
             )
-            subprocess.run(["powershell", "-Command", ps], timeout=10)
+            result = subprocess.run(
+                ["powershell", "-Command", ps],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
         else:
             return False
-        return True
+        return _subprocess_succeeded(result, f"{system} notification")
     except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
         return False
 
