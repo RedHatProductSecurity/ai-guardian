@@ -591,20 +591,20 @@ class TrayHealthMonitor:
         return False
 
     @staticmethod
-    def _notify_ide_check_result(installed):
-        """Tell the user the result of an on-demand IDE configuration check."""
+    def _notify_ide_check_result(installed, unconfigured=None, ensure_visible=True):
+        """Tell the user the result of an IDE configuration check."""
         if installed is None:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "Unable to check IDE/CLI configuration.",
-                ensure_visible=True,
+                ensure_visible=ensure_visible,
             )
             return
         if not installed:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "No installed IDE/CLI configuration directories were found.",
-                ensure_visible=True,
+                ensure_visible=ensure_visible,
             )
             return
 
@@ -613,11 +613,24 @@ class TrayHealthMonitor:
         names = [
             IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide) for ide in installed
         ]
+        if unconfigured:
+            unconfigured_names = [
+                IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide)
+                for ide in unconfigured
+            ]
+            TrayHealthMonitor._notify_user(
+                "AI Guardian",
+                "IDE/CLI health check found integrations that need setup:\n"
+                + "\n".join(f"• {name}" for name in unconfigured_names),
+                ensure_visible=ensure_visible,
+            )
+            return
+
         TrayHealthMonitor._notify_user(
             "AI Guardian",
             "All installed IDE/CLI integrations are configured:\n"
             + "\n".join(f"• {name}" for name in names),
-            ensure_visible=True,
+            ensure_visible=ensure_visible,
         )
 
     @staticmethod
@@ -688,26 +701,35 @@ class TrayHealthMonitor:
 
     def _on_startup_ide_setup(self):
         """Start the automatic IDE hook check during tray startup."""
-        self._start_ide_setup_check(manual=False, name="ide-setup-startup-check")
+        self._start_ide_setup_check(
+            manual=False,
+            name="ide-setup-startup-check",
+            report_result=True,
+        )
 
-    def _start_ide_setup_check(self, manual, name):
+    def _start_ide_setup_check(self, manual, name, report_result=False):
         """Run an IDE hook check in a worker thread."""
         if self._ide_setup_prompt_in_progress:
             return
 
+        kwargs = {"manual": manual}
+        if report_result:
+            kwargs["report_result"] = True
         threading.Thread(
             target=self._check_ide_setup_notification,
-            kwargs={"manual": manual},
+            kwargs=kwargs,
             daemon=True,
             name=name,
         ).start()
 
-    def _check_ide_setup_notification(self, manual=False):
+    def _check_ide_setup_notification(self, manual=False, report_result=False):
         """Prompt users to configure installed IDE integrations.
 
         Automatic checks are limited to local-daemon trays and honor the
         proactive-prompt state. The tray menu's manual check bypasses those
         restrictions and reports when every installed integration is healthy.
+        The first startup check also reports its result once; periodic checks
+        remain silent unless setup is needed.
         """
         if not manual and not self._has_local_daemon():
             return
@@ -716,12 +738,16 @@ class TrayHealthMonitor:
         if self._ide_setup_prompt_in_progress:
             return
 
-        installed = self._get_installed_ides() if manual else None
+        installed = self._get_installed_ides() if (manual or report_result) else None
 
         unconfigured = self._get_unconfigured_ides(include_excluded=manual)
+        if manual or report_result:
+            TrayHealthMonitor._notify_ide_check_result(
+                installed,
+                unconfigured=unconfigured,
+                ensure_visible=manual,
+            )
         if not unconfigured:
-            if manual:
-                self._notify_ide_check_result(installed)
             return
 
         from ai_guardian.setup.hooks import IDESetup

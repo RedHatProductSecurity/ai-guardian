@@ -434,7 +434,23 @@ def test_startup_ide_check_runs_an_automatic_check():
         ](**thread.call_args.kwargs["kwargs"])
         monitor._on_startup_ide_setup()
 
-    check.assert_called_once_with(manual=False)
+    check.assert_called_once_with(manual=False, report_result=True)
+
+
+def test_startup_ide_check_reports_health_result_once():
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(report_result=True)
+
+    notify.assert_called_once_with("AI Guardian", message)
 
 
 def test_ide_setup_prompt_configures_installed_local_ides(tmp_path):
