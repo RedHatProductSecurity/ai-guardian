@@ -373,13 +373,19 @@ class ProactivePromptDialog:
             tiers = [preferred]
 
         # pystray owns an NSApplication with accessory activation policy on
-        # modern macOS.  A Tkinter child can therefore exist without ever
-        # becoming visible.  Prefer a browser/terminal UI and keep the native
-        # AppleScript action dialog as the final fallback below.
-        if tray_safe and platform.system() == "Darwin" and "tkinter" in tiers:
-            tiers.remove("tkinter")
+        # modern macOS.  Keep the prompt outside that process by using the
+        # Tkinter subprocess path first.  NiceGUI is deliberately excluded:
+        # starting it in the tray worker can open a browser against the
+        # default web-console port before its page is ready, producing an
+        # Internal Server Error instead of a setup prompt.
+        if tray_safe and platform.system() == "Darwin":
+            if preferred == "auto":
+                tiers = ["tkinter", "textual"]
+            elif preferred == "nicegui":
+                tiers = ["tkinter"]
             logger.info(
-                "Skipping Tkinter for tray prompt on macOS; using foreground UI"
+                "Using subprocess/native UI for tray prompt on macOS; "
+                "skipping in-process NiceGUI"
             )
 
         for tier in tiers:
