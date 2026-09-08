@@ -18,6 +18,7 @@ def _load_local_latency(since_days):
         "hook_stats": report.hook_stats,
         "check_stats": report.check_stats,
         "invocation_count": report.invocation_count,
+        "paused": report.paused,
     }
 
 
@@ -130,6 +131,19 @@ def _get_retention_days():
         return cfg.get("retention_days", 30)
     except Exception:
         return 30
+
+
+def _latency_empty_message(data):
+    """Return an actionable explanation for an empty performance result."""
+    if data.get("paused"):
+        return (
+            "Latency collection is paused because the selected daemon is paused. "
+            "Resume the daemon, then trigger another hook."
+        )
+    return (
+        "Enable latency tracking in Settings above, "
+        "then hook invocations will record timing data."
+    )
 
 
 def create_performance_page(service, daemon_name: str):
@@ -310,10 +324,9 @@ def create_performance_page(service, daemon_name: str):
                     not data.get("hook_stats") and not data.get("check_stats")
                 ):
                     ui.label("No latency data found.").classes("text-grey-6")
-                    ui.label(
-                        "Enable latency tracking in Settings above, "
-                        "then hook invocations will record timing data."
-                    ).classes("text-sm text-grey-5")
+                    ui.label(_latency_empty_message(data or {})).classes(
+                        "text-sm text-grey-5"
+                    )
                     return
 
                 with ui.card().classes("items-center p-4"):

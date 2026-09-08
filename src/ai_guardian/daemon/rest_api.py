@@ -649,7 +649,12 @@ class _RestHandler(BaseHTTPRequestHandler):
             return MultiDaemonClient._local_performance(since_days)
         except Exception as e:
             logger.debug("Failed to get performance: %s", e)
-            return {"hook_stats": [], "check_stats": [], "invocation_count": 0}
+            return {
+                "hook_stats": [],
+                "check_stats": [],
+                "invocation_count": 0,
+                "paused": False,
+            }
 
     @staticmethod
     def _get_health_check(fix):

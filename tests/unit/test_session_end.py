@@ -357,6 +357,48 @@ class TestProcessHookDataPostCompact(TestCase):
 class TestCodexLifecycleEvents(TestCase):
     """Codex lifecycle events are installed but not treated as content hooks."""
 
+    def test_codex_latency_is_recorded_in_direct_and_daemon_modes(self):
+        import ai_guardian.hook_processing as hook_processing
+        from ai_guardian.reporting.latency import LatencyLogger
+        from ai_guardian.session_state import SessionStateManager
+
+        # Resolve deferred hook-event imports before replacing their handlers.
+        hook_processing._ensure_hook_events_imported()
+        with (
+            patch.object(hook_processing, "_is_latency_enabled", return_value=True),
+            patch.object(LatencyLogger, "log_timing") as mock_log_timing,
+            patch.object(hook_processing, "_handle_bootstrap_scan", return_value=None),
+            patch.object(SessionStateManager, "mark_security_reinject"),
+        ):
+            for daemon_state in (None, MagicMock()):
+                for hook_data in (
+                    {
+                        "hook_event_name": "UserPromptSubmit",
+                        "model": "gpt-5-codex",
+                        "prompt": "",
+                        "session_id": "codex-session",
+                    },
+                    {
+                        "hook_event_name": "PostCompact",
+                        "model": "gpt-5-codex",
+                        "session_id": "codex-session",
+                    },
+                ):
+                    result = hook_processing.process_hook_data(
+                        hook_data, daemon_state=daemon_state
+                    )
+                    assert result["exit_code"] == 0
+
+        assert mock_log_timing.call_count == 4
+        assert [
+            call.args[0]["hook_event"] for call in mock_log_timing.call_args_list
+        ] == [
+            "prompt",
+            "postcompact",
+            "prompt",
+            "postcompact",
+        ]
+
     @patch("ai_guardian.hook_processing._handle_bootstrap_scan", return_value=None)
     def test_lifecycle_notifications_return_allow_without_scanning(
         self, mock_bootstrap

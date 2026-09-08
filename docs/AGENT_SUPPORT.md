@@ -44,6 +44,44 @@ changing an integration.
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
+## Hook Latency Support Matrix
+
+Latency tracking is implemented in the shared hook pipeline after each
+adapter normalizes an invocation. When `latency_tracking.enabled` is `true`,
+each invocation that reaches `process_hook_data()` produces one entry in
+`latency.jsonl`, including lifecycle events that return without content
+scanning. Reports store the lower-case enum IDs (for example, `prompt` and
+`pretooluse`); source-specific display names are shown in this matrix and the
+integration guides.
+
+| Integration | Collection surface | Timed normalized events | Latency status |
+|-------------|--------------------|-------------------------|----------------|
+| Claude Code | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported |
+| Cursor | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
+| GitHub Copilot | Command hooks | UserPromptSubmit, PreToolUse | Supported |
+| OpenAI Codex | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
+| Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
+| Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Kiro | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Augment Code | Command hooks | PreToolUse, PostToolUse | Supported |
+| AiderDesk | Extension | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| OpenClaw | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
+| Junie | MCP | None | MCP-only; no hook latency |
+| Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
+
+Codex setup installs five managed events. The adapter also records timing for
+`SessionStart`, `PermissionRequest`, `PreCompact`, `Interrupt`, `SubagentStart`,
+`SubagentStop`, and `Stop` when a user-configured hook invokes AI Guardian for
+those recognized events. These events are recognized but are not installed or
+health-checked by `ai-guardian setup`.
+
+Junie's MCP calls and Aider CLI's commit-time `ai-guardian scan` do not enter
+the hook pipeline, so they do not create latency entries. A paused daemon also
+does not create entries because it intentionally skips hook processing.
+
 ## Protection Level by Hook Availability
 
 | Hooks Available | AI Guardian Capabilities |

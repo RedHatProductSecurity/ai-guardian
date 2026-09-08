@@ -1797,6 +1797,10 @@ def _process_hook_data(hook_data, daemon_state=None):
         ide_type = adapter.ide_type
         normalized = adapter.normalize_input(hook_data)
         hook_event = normalized.event
+        # Start timing after adapter normalization so every normalized event,
+        # including lifecycle events that return below, gets a latency entry.
+        _latency_timer = _CheckTimer(enabled=_is_latency_enabled())
+        _latency_event = hook_event
         tool_name = None
 
         # Disable logging for Cursor (it's sensitive to stderr output)
@@ -1884,9 +1888,6 @@ def _process_hook_data(hook_data, daemon_state=None):
                     pass
 
             return {"output": None, "exit_code": 0}
-
-        _latency_timer = _CheckTimer(enabled=_is_latency_enabled())
-        _latency_event = hook_event
 
         # Bootstrap scan: scan agent config files on first hook of a new session (#1394).
         # Agents with SESSION_START (e.g. Gemini CLI) already ran bootstrap above and

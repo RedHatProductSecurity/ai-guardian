@@ -27,6 +27,19 @@ class TestLocalRouting:
         mock_popen.assert_called_once()
 
 
+class TestPerformanceRouting:
+    def test_local_performance_exposes_paused_state(self):
+        from ai_guardian.reporting.latency import LatencyReport
+
+        with mock.patch(
+            "ai_guardian.reporting.latency.LatencyComputer.compute",
+            return_value=LatencyReport(paused=True),
+        ):
+            result = MultiDaemonClient._local_performance()
+
+        assert result["paused"] is True
+
+
 class TestRestTransportSecurity:
     @mock.patch("ai_guardian.daemon.multi_client.urlopen")
     def test_rejects_http_for_non_loopback_target(self, mock_urlopen):

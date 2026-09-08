@@ -1048,6 +1048,7 @@ class MultiDaemonClient:
             "hook_stats": report.hook_stats,
             "check_stats": report.check_stats,
             "invocation_count": report.invocation_count,
+            "paused": report.paused,
         }
 
     def get_health_check(

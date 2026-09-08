@@ -110,6 +110,24 @@ class TestRestAPIEndpoints:
         assert data["request_count"] == 42
         assert data["blocked_count"] == 3
 
+    def test_performance_includes_paused_state(self, rest_api):
+        api, port, state = rest_api
+        performance = {
+            "hook_stats": [],
+            "check_stats": [],
+            "invocation_count": 0,
+            "paused": True,
+        }
+        with mock.patch(
+            "ai_guardian.daemon.multi_client.MultiDaemonClient._local_performance",
+            return_value=performance,
+        ):
+            url = f"http://127.0.0.1:{port}/api/performance"
+            with urlopen(url, timeout=5) as resp:
+                data = json.loads(resp.read())
+
+        assert data["paused"] is True
+
     def test_stats_includes_menu_tags(self, rest_api):
         api, port, state = rest_api
         cfg = {"menu_tags": ["carbonite", "container"]}
