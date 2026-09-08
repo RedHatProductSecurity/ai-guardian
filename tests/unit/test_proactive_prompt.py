@@ -385,7 +385,7 @@ def test_manual_ide_check_falls_back_to_dialog_when_notification_fails():
     )
 
 
-def test_manual_ide_check_confirms_result_on_macos_when_notification_succeeds():
+def test_manual_ide_check_does_not_open_popup_when_notification_succeeds():
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
     message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
@@ -402,7 +402,7 @@ def test_manual_ide_check_confirms_result_on_macos_when_notification_succeeds():
         monitor._check_ide_setup_notification(manual=True)
 
     notify.assert_called_once_with("AI Guardian", message)
-    dialog.assert_called_once_with("AI Guardian", message)
+    dialog.assert_not_called()
 
 
 def test_manual_ide_check_action_runs_a_manual_check():

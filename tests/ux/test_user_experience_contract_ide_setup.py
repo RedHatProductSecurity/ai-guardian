@@ -218,19 +218,17 @@ def test_manual_health_check_falls_back_to_visible_dialog_when_notification_fail
     dialog.assert_called_once_with("AI Guardian", message)
 
 
-def test_manual_health_check_confirms_result_when_macos_accepts_but_hides_notification():
+def test_manual_health_check_does_not_open_popup_when_notification_succeeds():
     """
-    USER EXPERIENCE: Silent macOS notification acceptance -> visible result.
+    USER EXPERIENCE: Successful macOS notification -> no duplicate modal.
 
     Scenario:
     1. User selects Check hooks/MCP installation from the tray.
     2. macOS accepts the osascript notification command.
-    3. Notification Center suppresses the banner because sender permissions
-       are not visible or trusted yet.
 
     Expected User Experience:
-    - The tray still shows the health result in a modal confirmation.
-    - The user is never required to infer the result from a missing banner.
+    - The user sees the health result as a notification.
+    - The tray does not open a duplicate modal confirmation.
     """
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -246,7 +244,7 @@ def test_manual_health_check_confirms_result_when_macos_accepts_but_hides_notifi
     ):
         monitor._check_ide_setup_notification(manual=True)
 
-    dialog.assert_called_once_with("AI Guardian", message)
+    dialog.assert_not_called()
 
 
 def test_startup_health_check_reports_result_once():
