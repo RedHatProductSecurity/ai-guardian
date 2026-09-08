@@ -824,7 +824,7 @@ class TestSingleDaemonFlatMenu:
 
 
 class TestIDESetupMenu:
-    """Tests for the Local Setup... IDE submenu."""
+    """Tests for the consolidated IDE/CLI Setup... submenu."""
 
     def test_launch_ide_setup_builds_correct_command(self):
         with mock.patch("platform.system", return_value="Darwin"):
@@ -887,9 +887,12 @@ class TestIDESetupMenu:
             items = tray._menu._build_ide_setup_menu_items()
             assert len(items) == 1
             top_call = mock_pystray.MenuItem.call_args_list[-1]
-            assert top_call[0][0] == "Local Setup..."
+            assert top_call[0][0] == "IDE/CLI Setup..."
+            item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
+            assert "Check hook health..." in item_names
+            assert "Manual setup (specific IDE)" in item_names
 
-    def test_run_exposes_direct_manual_hook_check(self):
+    def test_run_exposes_health_check_inside_ide_setup_menu(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
             stop_callback=lambda: None,
@@ -919,10 +922,20 @@ class TestIDESetupMenu:
         check_calls = [
             call
             for call in mock_pystray.MenuItem.call_args_list
-            if call[0][0] == "Check hooks"
+            if call[0][0] == "Check hook health..."
         ]
         assert len(check_calls) == 1
         assert check_calls[0][0][1] is tray._health._on_check_ide_setup
+        setup_menu_calls = [
+            call
+            for call in mock_pystray.MenuItem.call_args_list
+            if call[0][0] == "IDE/CLI Setup..."
+        ]
+        assert len(setup_menu_calls) == 1
+        assert not any(
+            call[0][0] == "Local Setup..."
+            for call in mock_pystray.MenuItem.call_args_list
+        )
         tray._health._on_startup_ide_setup.assert_called_once_with()
 
     def test_build_ide_setup_menu_has_all_supported_ides(self):
@@ -947,6 +960,7 @@ class TestIDESetupMenu:
             item_names = [
                 call[0][0] for call in mock_pystray.MenuItem.call_args_list[:-1]
             ]
+            assert "Manual setup (specific IDE)" in item_names
             assert "  Create Config..." in item_names
             for ide_cfg in IDESetup.IDE_CONFIGS.values():
                 assert f"  {ide_cfg['name']}" in item_names

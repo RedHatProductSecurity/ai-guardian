@@ -1,4 +1,4 @@
-"""User experience contract for automatic IDE setup prompts (#2216)."""
+"""User experience contract for tray IDE/CLI setup flows (#2257)."""
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -64,6 +64,74 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
         action_label="Set Up Now",
         dismiss_label="Don't Ask Again",
         snooze_options=("1h", "6h", "1d", "1w"),
+    )
+
+
+def test_manual_health_check_works_without_daemon_for_multiple_ides():
+    """
+    USER EXPERIENCE: Manual health check -> inspect and optionally set up
+    multiple IDEs without a daemon.
+
+    Scenario:
+    1. The tray has no local daemon target (for example, it is a standalone
+       tray waiting for discovery).
+    2. The user opens IDE/CLI Setup and chooses Check hook health.
+    3. Claude Code and Cursor are installed but both need hooks.
+
+    Expected User Experience:
+    - The on-demand check is still available without a daemon.
+    - One dialog lists each incomplete integration separately.
+    - The user can choose targeted setup actions for each IDE.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"PreToolUse": "missing"},
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude", "cursor"]),
+        patch.object(
+            monitor,
+            "_get_unconfigured_ides",
+            return_value=["claude", "cursor"],
+        ),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        dialog.return_value.show.return_value = "dismiss"
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification(manual=True)
+
+    dialog.assert_called_once_with(
+        title="Set Up AI Guardian",
+        message=(
+            "These installed IDEs have incomplete AI Guardian hooks:\n"
+            "• Claude Code: PreToolUse (missing)\n"
+            "• Cursor IDE: PreToolUse (missing)\n\n"
+            "Set up their security hooks now?"
+        ),
+        action_label="Set Up Selected",
+        dismiss_label="Cancel",
+        snooze_options=("1h", "6h", "1d", "1w"),
+        ide_choices=[
+            {
+                "ide": "claude",
+                "name": "Claude Code",
+                "detail": "PreToolUse (missing)",
+            },
+            {
+                "ide": "cursor",
+                "name": "Cursor IDE",
+                "detail": "PreToolUse (missing)",
+            },
+        ],
     )
 
 

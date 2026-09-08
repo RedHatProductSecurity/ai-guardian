@@ -97,16 +97,20 @@ Creates config, installs a scanner, and automatically detects supported IDE
 configuration directories so their hooks can be installed. Use `--ide` to
 target one IDE explicitly, or `--no-setup` to skip hook setup:
 
-From the tray, use **Check hooks** to immediately re-check installed
-integrations and configure any missing hooks. The per-IDE setup commands remain
-under **Local Setup...**. After setup, the tray reports each integration's hook
-count and verification status. The tray also checks automatically when it
-starts and then every 10 seconds while running; **Check hooks** triggers the
-same check immediately.
-When multiple integrations need setup, the tray shows an individual
-**Install now** or **Never install** choice for each one. These choices are
-kept per integration, so a newly detected IDE can still be offered later, and
-the explicit **Local Setup...** entries remain available for manual setup.
+From the tray, open **IDE/CLI Setup...**. Use **Check hook health...** to
+immediately verify locally installed integrations; if any hooks are missing or
+unhealthy, the tray offers setup choices and reports the final verification
+status. The **Manual setup (specific IDE)** entries are for unusual,
+incompletely detected, or targeted repair cases, while **Create Config...** is
+for first-time or manual configuration. These explicit actions remain
+available even when no daemon is running or only remote daemons are connected;
+per-IDE setup also installs the MCP security advisor by default when that IDE
+supports it.
+The tray also checks automatically when it starts and then every 10 seconds
+while running; automatic checks only offer setup on local-daemon trays.
+When multiple integrations need setup, the tray shows an individual **Install
+now** or **Never install** choice for each one. These choices are kept per
+integration, so a newly detected IDE can still be offered later.
 The web console's **Configuration → Proactive Prompt State** page provides a
 read-only view of these local prompt decisions. They are stored separately in
 the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.
