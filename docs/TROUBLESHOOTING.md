@@ -245,13 +245,12 @@ export AI_GUARDIAN_NO_TKINTER=1
 
 ### macOS Tray Health Check Has No Visible Result
 
-The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action first
-uses a macOS desktop notification and also shows a modal confirmation for the
-user-requested health result. This is intentional: Notification Center can
-accept an `osascript` notification without displaying a banner when the sender
-is not yet trusted. Setup-required checks use a Tkinter subprocess or a native
-action dialog, never an in-process browser prompt, so **Set Up Now** remains
-available without opening a broken port-8080 page.
+The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action uses a
+macOS desktop notification for the health result. If notification delivery
+fails, the tray falls back to a modal confirmation. Setup-required checks use a
+Tkinter subprocess or a native action dialog, never an in-process browser
+prompt, so **Set Up Now** remains available without opening a broken port-8080
+page.
 
 The tray also sends one separate **AI Guardian** health-result notification
 after its initial startup check. Later periodic checks stay silent when all
@@ -273,10 +272,11 @@ For reliable macOS delivery:
    remote session cannot display macOS dialogs, so use the CLI setup command
    when no desktop session is available.
 
-If the notification banner is still absent, use the modal result dialog or run
-`ai-guardian doctor` to inspect the detected IDE/MCP configuration. The tray
-records failed UI subprocesses in its log rather than treating them as
-successful delivery.
+If the notification banner is still absent, check the sender's macOS
+notification settings or run `ai-guardian doctor` to inspect the detected
+IDE/MCP configuration. The modal appears only when the notification command
+reports failure; the tray records failed UI subprocesses in its log rather
+than treating them as successful delivery.
 
 ### Tcl Can't Find init.tcl from Tray Daemon
 
