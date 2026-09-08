@@ -68,6 +68,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **NiceGUI Python 3.14 compatibility**: Require NiceGUI 3.0.4 or newer so
+  fresh installations receive the upstream vbuild compatibility fix.
+
 - **Hook latency configuration and lifecycle coverage**: Use the effective
   global/project/overlay configuration and record normalized lifecycle events,
   including Codex hooks, in both direct and daemon processing; surface paused
