@@ -7,6 +7,7 @@ Disabled by default; enable via latency_tracking.enabled in ai-guardian.json.
 import json
 import logging
 import math
+import os
 import threading
 import time
 from contextlib import contextmanager
@@ -70,7 +71,7 @@ class LatencyLogger:
     _lock = threading.Lock()
 
     def __init__(self, log_path: Optional[Path] = None, config: Optional[Dict] = None):
-        self.config = config or self._load_config()
+        self.config = config if config is not None else self._load_config()
         if log_path is None:
             from ai_guardian.config.utils import get_state_dir
 
@@ -160,20 +161,12 @@ class LatencyLogger:
             logger.debug(f"Latency log rotation failed (non-fatal): {e}")
 
     def _load_config(self) -> Dict:
-        try:
-            from ai_guardian.config.utils import get_config_dir
+        from ai_guardian.config.loaders import _load_latency_tracking_config
 
-            config_dir = get_config_dir()
-            config_path = config_dir / "ai-guardian.json"
-            if not config_path.exists():
-                config_path = Path.cwd() / ".ai-guardian.json"
-            if not config_path.exists():
-                return self._default_config()
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
-            return config.get("latency_tracking", self._default_config())
-        except Exception:
-            return self._default_config()
+        config, error_msg = _load_latency_tracking_config()
+        if error_msg:
+            logger.warning("Error loading latency tracking config: %s", error_msg)
+        return config or self._default_config()
 
     @staticmethod
     def _default_config() -> Dict:
@@ -249,6 +242,7 @@ class LatencyReport:
     time_range_end: str = ""
     ask_dialog_count: int = 0
     ask_dialog_stats: Optional[Dict] = None
+    paused: bool = False
 
 
 def _compute_stats(values: List[float]) -> Dict:
@@ -295,11 +289,13 @@ class LatencyComputer:
             self._cutoff = datetime.now(timezone.utc) - timedelta(days=30)
 
     def compute(self) -> LatencyReport:
+        paused = _is_latency_paused()
         entries = LatencyLogger().read_entries(since=self._cutoff)
         if not entries:
             return LatencyReport(
                 time_range_start=self._cutoff.isoformat(),
                 time_range_end=datetime.now(timezone.utc).isoformat(),
+                paused=paused,
             )
 
         hook_totals: Dict[str, List[float]] = {}
@@ -347,7 +343,19 @@ class LatencyComputer:
             time_range_end=datetime.now(timezone.utc).isoformat(),
             ask_dialog_count=len(ask_dialog_values),
             ask_dialog_stats=ask_stats,
+            paused=paused,
         )
+
+
+def _is_latency_paused() -> bool:
+    """Return whether persisted daemon state is currently paused."""
+    try:
+        from ai_guardian.daemon.state import DaemonState
+
+        return DaemonState.is_paused_on_disk(cwd=os.getcwd())
+    except Exception as e:
+        logger.debug("Unable to determine persisted pause state: %s", e)
+        return False
 
 
 def format_latency_human(report: LatencyReport) -> str:
@@ -358,8 +366,12 @@ def format_latency_human(report: LatencyReport) -> str:
     if not report.hook_stats and not report.check_stats:
         lines.append("")
         lines.append("No latency data found in the selected time range.")
-        lines.append("Enable latency tracking: set latency_tracking.enabled = true")
-        lines.append("in ~/.config/ai-guardian/ai-guardian.json")
+        if report.paused:
+            lines.append("Latency collection is paused because the daemon is paused.")
+            lines.append("Resume the daemon and trigger a new hook invocation.")
+        else:
+            lines.append("Enable latency tracking: set latency_tracking.enabled = true")
+            lines.append("in ~/.config/ai-guardian/ai-guardian.json")
         return "\n".join(lines)
 
     lines.append(f"  Invocations: {report.invocation_count:,}")
@@ -417,5 +429,6 @@ def format_latency_json(report: LatencyReport) -> str:
         "check_stats": report.check_stats,
         "ask_dialog_count": report.ask_dialog_count,
         "ask_dialog_stats": report.ask_dialog_stats,
+        "paused": report.paused,
     }
     return json.dumps(data, indent=2)

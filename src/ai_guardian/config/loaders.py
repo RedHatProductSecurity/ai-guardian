@@ -606,6 +606,18 @@ def _load_annotations_config():
     return _load_config_section("annotations", defaults={"enabled": True})
 
 
+_LATENCY_TRACKING_DEFAULTS = {
+    "enabled": False,
+    "max_entries": 5000,
+    "retention_days": 30,
+}
+
+
+def _load_latency_tracking_config():
+    """Load hook latency configuration from the effective merged config."""
+    return _load_config_section("latency_tracking", defaults=_LATENCY_TRACKING_DEFAULTS)
+
+
 _IMAGE_SCANNING_DEFAULTS = {
     "enabled": True,
     "action": "block",

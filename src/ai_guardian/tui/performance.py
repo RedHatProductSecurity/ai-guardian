@@ -10,6 +10,19 @@ from ai_guardian.tui.schema_defaults import ConfigSaveMixin
 from ai_guardian.tui.widgets import TimeBasedToggle, sanitize_enabled_value
 
 
+def _empty_latency_message(report) -> str:
+    """Return the TUI guidance for a latency report with no hook rows."""
+    if report.paused:
+        return (
+            "[dim]Latency collection is paused because the daemon is paused. "
+            "Resume the daemon, then trigger a new hook.[/dim]"
+        )
+    return (
+        "[dim]No latency data. Enable in Settings above, then hook "
+        "calls will record timing.[/dim]"
+    )
+
+
 class PerformanceContent(ConfigSaveMixin, Container):
     """Content widget for Performance (Hook Latency) panel."""
 
@@ -285,7 +298,7 @@ class PerformanceContent(ConfigSaveMixin, Container):
 
         if not report.hook_stats:
             self.query_one("#perf-hook-table", Static).update(
-                "[dim]No latency data. Enable in Settings above, then hook calls will record timing.[/dim]"
+                _empty_latency_message(report)
             )
             self.query_one("#perf-check-table", Static).update("")
             return

@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **Hook latency support matrix and Codex troubleshooting**: Document latency
+  coverage for every supported integration, direct/daemon configuration reload
+  behavior, restart requirements, and verification steps (#2259)
+
 - **IDE/agent integration checklist**: Consolidated implementation, setup,
   testing, manual acceptance, documentation, and release-readiness guidance
   in `docs/IDE_INTEGRATION_CHECKLIST.md` and linked it from the support and
@@ -58,6 +62,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Documentation dependencies: `mkdocs-material` (MIT) and `mkdocstrings` (ISC).
 
 ### Fixed
+
+- **Hook latency configuration and lifecycle coverage**: Use the effective
+  global/project/overlay configuration and record normalized lifecycle events,
+  including Codex hooks, in both direct and daemon processing; surface paused
+  state in performance views (#2259)
 
 - **Codex proactive setup health**: Count and install only the five managed Codex hooks, and snooze automatic setup prompts after a failed or incomplete setup instead of immediately reopening the prompt (#2250)
 

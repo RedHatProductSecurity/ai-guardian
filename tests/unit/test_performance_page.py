@@ -121,3 +121,20 @@ class TestRemoteVisibilityLogic:
         assert (
             last_if_not_remote != -1
         ), "Clear Log should be inside 'if not _is_remote'"
+
+
+def test_empty_performance_message_explains_paused_daemon():
+    from ai_guardian.web.pages.performance import _latency_empty_message
+
+    message = _latency_empty_message({"paused": True})
+
+    assert "Latency collection is paused" in message
+    assert "trigger another hook" in message
+
+
+def test_empty_performance_message_keeps_enablement_guidance():
+    from ai_guardian.web.pages.performance import _latency_empty_message
+
+    message = _latency_empty_message({"paused": False})
+
+    assert "Enable latency tracking in Settings above" in message

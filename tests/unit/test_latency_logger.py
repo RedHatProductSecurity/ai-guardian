@@ -156,6 +156,49 @@ class TestLatencyLogger:
         )
         assert not log_path.exists()
 
+    def test_default_config_uses_shared_config_loader(self, tmp_path):
+        log_path = tmp_path / "latency.jsonl"
+        effective_config = {
+            "enabled": True,
+            "max_entries": 25,
+            "retention_days": 7,
+        }
+        with patch(
+            "ai_guardian.config.loaders._load_latency_tracking_config",
+            return_value=(effective_config, None),
+        ):
+            ll = LatencyLogger(log_path=log_path)
+
+        assert ll.config == effective_config
+        assert ll._is_enabled()
+
+    def test_project_config_is_used_for_latency_tracking(self, tmp_path):
+        from ai_guardian.config.loaders import _clear_config_cache
+        from ai_guardian.config.utils import (
+            clear_project_dir_override,
+            set_project_dir_override,
+        )
+
+        project_dir = tmp_path / "project"
+        config_path = project_dir / ".ai-guardian" / "ai-guardian.json"
+        config_path.parent.mkdir(parents=True)
+        config_path.write_text(
+            json.dumps({"latency_tracking": {"enabled": True}}),
+            encoding="utf-8",
+        )
+
+        set_project_dir_override(str(project_dir))
+        try:
+            _clear_config_cache()
+            ll = LatencyLogger(log_path=tmp_path / "latency.jsonl")
+        finally:
+            clear_project_dir_override()
+            _clear_config_cache()
+
+        assert ll.config["enabled"] is True
+        assert ll.config["max_entries"] == 5000
+        assert ll.config["retention_days"] == 30
+
     def test_read_entries_with_since(self, tmp_path):
         log_path = tmp_path / "latency.jsonl"
         ll = LatencyLogger(
@@ -301,6 +344,31 @@ class TestLatencyComputer:
             assert report.invocation_count == 0
             assert report.hook_stats == []
             assert report.check_stats == []
+
+    def test_empty_data_reports_paused_state(self):
+        from ai_guardian.daemon.state import DaemonState
+
+        with (
+            patch.object(LatencyLogger, "read_entries", return_value=[]),
+            patch.object(DaemonState, "is_paused_on_disk", return_value=True),
+        ):
+            report = LatencyComputer(since_days=7).compute()
+
+        assert report.paused is True
+
+    def test_empty_data_checks_project_pause_state(self):
+        from ai_guardian.daemon.state import DaemonState
+
+        with (
+            patch.object(LatencyLogger, "read_entries", return_value=[]),
+            patch.object(
+                DaemonState, "is_paused_on_disk", return_value=True
+            ) as mock_is_paused,
+        ):
+            LatencyComputer(since_days=7).compute()
+
+        mock_is_paused.assert_called_once()
+        assert mock_is_paused.call_args.kwargs["cwd"]
 
     def test_computes_hook_stats(self):
         entries = [
@@ -463,6 +531,11 @@ class TestFormatLatencyHuman:
         assert "No latency data" in output
         assert "latency_tracking.enabled" in output
 
+    def test_empty_report_explains_paused_state(self):
+        output = format_latency_human(LatencyReport(paused=True))
+        assert "Latency collection is paused" in output
+        assert "trigger a new hook invocation" in output
+
     def test_with_data(self):
         report = LatencyReport(
             hook_stats=[
@@ -552,6 +625,7 @@ class TestFormatLatencyJson:
         data = json.loads(output)
         assert data["invocation_count"] == 0
         assert data["hook_stats"] == []
+        assert data["paused"] is False
 
     def test_with_data(self):
         report = LatencyReport(

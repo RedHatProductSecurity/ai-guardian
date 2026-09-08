@@ -487,6 +487,55 @@ Data is stored in `~/.local/state/ai-guardian/latency.jsonl` alongside `violatio
 
 Both the TUI (`ai-guardian console`) and web console (`ai-guardian console --web`) display latency metrics on the Security Dashboard, showing average hook execution time and per-check breakdowns.
 
+### Coverage, configuration, and restart behavior
+
+Latency is collected by the shared hook pipeline after the active IDE adapter
+normalizes the input. This makes the setting available in both execution
+modes:
+
+- **Direct hook mode** reads the effective configuration for each short-lived
+  `ai-guardian` process.
+- **Daemon hook mode** checks configuration as part of hook handling. Global
+  configuration changes are detected by modification time, and daemon hook
+  requests use the project directory supplied by the IDE when resolving a
+  project config. The web/REST configuration update and
+  `ai-guardian daemon reload` paths can also force an immediate reload.
+
+A daemon or IDE restart is not required for a configuration-only change when
+the hooks are already installed. Restart or reload the host application only
+when its hook definitions or an extension/plugin installation has changed.
+
+Codex's five managed hooks (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostCompact`, and `SessionEnd`) all produce latency entries when they invoke
+AI Guardian. Lifecycle events return an allow response without security
+content scanning, but are still timed. See the [Hook Latency Support
+Matrix](AGENT_SUPPORT.md#hook-latency-support-matrix) for every supported
+integration, including the commit-time Aider CLI and MCP-only Junie limits.
+
+### Verifying collection
+
+1. Enable `latency_tracking.enabled` in the global or project configuration,
+   or in the Performance page.
+2. Trigger a normal prompt or tool hook in the target IDE/agent.
+3. Run:
+
+   ```bash
+   ai-guardian metrics --latency --since 1d
+   ai-guardian metrics --latency --json --since 1d
+   ```
+
+4. Confirm that `Invocations` is non-zero (or `invocation_count` in JSON) and
+   that the report contains the normalized event for the hook you triggered.
+   The log is normally `~/.local/state/ai-guardian/latency.jsonl`; deployments
+   using `AI_GUARDIAN_STATE_DIR` use that directory instead.
+
+If Codex still shows no entries, confirm that the daemon is running and not
+paused with `ai-guardian daemon status`, then use `ai-guardian daemon reload`
+after a configuration edit. Verify that the Codex hook is installed in the
+active Codex layer; changing the setting alone does not install a missing
+hook. The report groups entries by normalized hook event and check, so it does
+not identify the source IDE in each row.
+
 ---
 
 ## Related Documentation
