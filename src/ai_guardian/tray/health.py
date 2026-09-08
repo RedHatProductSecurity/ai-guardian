@@ -549,18 +549,35 @@ class TrayHealthMonitor:
         return setup.verify_hooks_for_ide(ide_type)
 
     @staticmethod
+    def _notify_user(title, message):
+        """Show a tray result, falling back to a modal dialog if needed."""
+        try:
+            if tray_plugins.send_notification(title, message):
+                return True
+        except Exception as exc:
+            logger.warning("Tray notification failed: %s", exc)
+
+        logger.warning("Tray notification unavailable; showing a dialog fallback")
+        try:
+            if tray_plugins.show_dialog(title, message):
+                return True
+        except Exception as exc:
+            logger.warning("Tray dialog fallback failed: %s", exc)
+
+        logger.error("Unable to present tray result to the user")
+        return False
+
+    @staticmethod
     def _notify_ide_check_result(installed):
         """Tell the user the result of an on-demand IDE configuration check."""
-        from ai_guardian.tray.plugins import send_notification
-
         if installed is None:
-            send_notification(
+            TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "Unable to check IDE/CLI configuration.",
             )
             return
         if not installed:
-            send_notification(
+            TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "No installed IDE/CLI configuration directories were found.",
             )
@@ -571,7 +588,7 @@ class TrayHealthMonitor:
         names = [
             IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide) for ide in installed
         ]
-        send_notification(
+        TrayHealthMonitor._notify_user(
             "AI Guardian",
             "All installed IDE/CLI integrations are configured:\n"
             + "\n".join(f"• {name}" for name in names),
@@ -581,7 +598,6 @@ class TrayHealthMonitor:
     def _notify_ide_setup_result(results):
         """Show doctor-style results after setting up IDE/CLI hooks."""
         from ai_guardian.setup.hooks import IDESetup
-        from ai_guardian.tray.plugins import send_notification
 
         lines = ["IDE/CLI setup result", ""]
         counts = {"PASS": 0, "WARN": 0, "FAIL": 0}
@@ -634,7 +650,7 @@ class TrayHealthMonitor:
         if counts["FAIL"]:
             summary.append(f"{counts['FAIL']} error(s)")
         lines.extend(["", ", ".join(summary)])
-        send_notification("AI Guardian Setup", "\n".join(lines))
+        TrayHealthMonitor._notify_user("AI Guardian Setup", "\n".join(lines))
 
     def _on_check_ide_setup(self, _icon, _item):
         """Run an on-demand check for installed IDE/CLI integrations."""

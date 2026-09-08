@@ -19,6 +19,7 @@ from ai_guardian.tray.plugins import (
     load_plugins,
     plugins_to_dict,
     resolve_command,
+    show_action_dialog,
     show_dialog,
     substitute_params,
     substitute_target_vars,
@@ -890,6 +891,15 @@ class TestSendNotification:
 
                 assert send_notification("T", "M") is False
 
+    def test_returns_false_on_nonzero_exit(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                from ai_guardian.tray.plugins import send_notification
+
+                assert send_notification("T", "M") is False
+
     def test_escapes_quotes_in_message(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
@@ -1098,6 +1108,13 @@ class TestShowDialog:
             with mock.patch("subprocess.run", side_effect=FileNotFoundError):
                 assert show_dialog("T", "M") is False
 
+    def test_returns_false_on_nonzero_exit(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                assert show_dialog("T", "M") is False
+
     def test_escapes_quotes_in_message(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
@@ -1126,6 +1143,54 @@ class TestShowDialog:
                 show_dialog("Title", "line1\nline2\nline3")
                 script = mock_run.call_args[0][0][2]
                 assert "return" in script
+
+
+class TestShowActionDialog:
+    def test_macos_returns_selected_action(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "Set Up Now\n"
+                result = show_action_dialog(
+                    "Set Up AI Guardian",
+                    "Hooks are missing.",
+                    "Set Up Now",
+                    "Cancel",
+                    snooze_options=("1h",),
+                )
+
+        assert result == "action"
+        script = mock_run.call_args[0][0][2]
+        assert "display dialog" in script
+        assert '"Set Up Now"' in script
+        assert '"Later (1h)"' in script
+        assert '"Cancel"' in script
+
+    def test_macos_returns_snooze_choice(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = "Later (6h)\n"
+                result = show_action_dialog(
+                    "Title",
+                    "Message",
+                    "Continue",
+                    "Cancel",
+                    snooze_options=("1h", "6h"),
+                )
+
+        assert result == "snooze_6h"
+
+    def test_macos_returns_none_on_nonzero_exit(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                assert (
+                    show_action_dialog("Title", "Message", "Continue", "Cancel") is None
+                )
 
 
 class TestPluginTags:

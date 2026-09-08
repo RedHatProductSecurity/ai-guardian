@@ -364,15 +364,32 @@ class ProactivePromptDialog:
         self.ide_choices = tuple(ide_choices or ())
 
     def show(self, tray_safe: bool = False) -> object:
+        import platform
+
         preferred = get_preferred_ui()
-        tiers = (
-            ["tkinter", "nicegui", "textual"] if preferred == "auto" else [preferred]
-        )
+        if preferred == "auto":
+            tiers = ["tkinter", "nicegui", "textual"]
+        else:
+            tiers = [preferred]
+
+        # pystray owns an NSApplication with accessory activation policy on
+        # modern macOS.  A Tkinter child can therefore exist without ever
+        # becoming visible.  Prefer a browser/terminal UI and keep the native
+        # AppleScript action dialog as the final fallback below.
+        if tray_safe and platform.system() == "Darwin" and "tkinter" in tiers:
+            tiers.remove("tkinter")
+            logger.info(
+                "Skipping Tkinter for tray prompt on macOS; using foreground UI"
+            )
+
         for tier in tiers:
             try:
                 if tier == "tkinter" and _tkinter_available():
                     if tray_safe:
-                        return self._show_tkinter_subprocess()
+                        result = self._show_tkinter_subprocess()
+                        if result is not None:
+                            return result
+                        continue
                     if self.ide_choices:
                         return self._show_ide_choices_tkinter()
                     return self._show_tkinter()
@@ -386,10 +403,31 @@ class ProactivePromptDialog:
                     return self._show_textual()
             except Exception as exc:
                 logger.debug("Proactive %s prompt unavailable: %s", tier, exc)
+
+        if tray_safe and platform.system() == "Darwin" and preferred != "headless":
+            try:
+                result = self._show_native_fallback()
+                if result is not None:
+                    return result
+            except Exception as exc:
+                logger.warning("Native macOS proactive prompt failed: %s", exc)
+
         logger.info("%s: %s", self.title, self.message)
         return "dismiss"
 
-    def _show_tkinter_subprocess(self) -> object:
+    def _show_native_fallback(self) -> Optional[str]:
+        """Show an actionable native fallback when tray UI tiers fail."""
+        from ai_guardian.tray.plugins import show_action_dialog
+
+        return show_action_dialog(
+            self.title,
+            self.message,
+            self.action_label,
+            self.dismiss_label,
+            self.snooze_options,
+        )
+
+    def _show_tkinter_subprocess(self) -> Optional[object]:
         """Show Tkinter dialog outside tray process (macOS pystray safety)."""
         import subprocess
         import sys
@@ -424,8 +462,19 @@ class ProactivePromptDialog:
                 check=False,
             )
             if result.returncode == 0:
-                value = result.stdout.strip().splitlines()[-1]
+                output = (result.stdout or "").strip().splitlines()
+                if not output:
+                    logger.warning("Tkinter proactive prompt returned no result")
+                    return None
+                value = output[-1]
                 return json.loads(value) if self.ide_choices else value
+            stderr = (result.stderr or "").strip()
+            detail = f": {stderr[:500]}" if stderr else ""
+            logger.warning(
+                "Tkinter proactive prompt exited with code %s%s",
+                result.returncode,
+                detail,
+            )
         except (
             OSError,
             IndexError,
@@ -433,7 +482,7 @@ class ProactivePromptDialog:
             subprocess.TimeoutExpired,
         ) as exc:
             logger.warning("Tkinter proactive prompt failed: %s", exc)
-        return "dismiss"
+        return None
 
     def _ide_selection_result(self, result, install: Iterable[str] = (), never=None):
         """Build the serializable result returned by the IDE chooser."""

@@ -195,6 +195,38 @@ def test_tray_prompt_uses_tkinter_subprocess():
     show.assert_called_once_with()
 
 
+def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailable():
+    dialog = ProactivePromptDialog("Title", "Message", "Set Up", "Cancel")
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
+        ),
+        patch.object(
+            dialog, "_show_native_fallback", return_value="action"
+        ) as fallback,
+        patch.object(dialog, "_show_tkinter_subprocess") as tkinter,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
+    tkinter.assert_not_called()
+    fallback.assert_called_once_with()
+
+
+def test_tkinter_subprocess_failure_returns_none_for_fallback():
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    failed = SimpleNamespace(returncode=1, stdout="", stderr="Tk failed")
+
+    with patch("subprocess.run", return_value=failed):
+        assert dialog._show_tkinter_subprocess() is None
+
+
 def test_prompt_falls_back_to_headless_when_ui_unavailable():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
@@ -296,6 +328,30 @@ def test_manual_ide_check_reports_all_configured():
         monitor._check_ide_setup_notification(manual=True)
 
     notify.assert_called_once_with(
+        "AI Guardian",
+        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+    )
+
+
+def test_manual_ide_check_falls_back_to_dialog_when_notification_fails():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch(
+            "ai_guardian.tray.plugins.send_notification", return_value=False
+        ) as notify,
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with(
+        "AI Guardian",
+        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+    )
+    dialog.assert_called_once_with(
         "AI Guardian",
         "All installed IDE/CLI integrations are configured:\n• Claude Code",
     )
@@ -435,6 +491,33 @@ def test_setup_result_uses_final_verification_health_over_setup_return():
     message = notify.call_args.args[1]
     assert "[PASS] Claude Code: 1/1 hooks configured" in message
     assert "setup failed" not in message
+
+
+def test_setup_result_falls_back_to_dialog_when_notification_fails():
+    verification = {
+        "healthy": True,
+        "events": {"PreToolUse": "healthy"},
+        "obsolete": [],
+    }
+    message = (
+        "IDE/CLI setup result\n\n[PASS] Claude Code: 1/1 hooks configured\n\n1 passed"
+    )
+
+    with (
+        patch("ai_guardian.tray.plugins.send_notification", return_value=False),
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        TrayHealthMonitor._notify_ide_setup_result(
+            [
+                {
+                    "ide": "claude",
+                    "success": True,
+                    "verification": verification,
+                }
+            ]
+        )
+
+    dialog.assert_called_once_with("AI Guardian Setup", message)
 
 
 def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
