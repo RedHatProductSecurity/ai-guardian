@@ -855,14 +855,17 @@ class TestSendNotification:
     def test_macos_uses_osascript(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.run") as mock_run:
+            with mock.patch("subprocess.Popen") as mock_popen:
                 from ai_guardian.tray.plugins import send_notification
 
                 result = send_notification("Title", "Hello world")
                 assert result is True
-                mock_run.assert_called_once()
-                args = mock_run.call_args[0][0]
+                mock_popen.assert_called_once()
+                args = mock_popen.call_args[0][0]
                 assert args[0] == "osascript"
+                assert args[2] == (
+                    'display notification "Hello world" with title "Title"'
+                )
 
     def test_linux_uses_notify_send(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
@@ -891,11 +894,10 @@ class TestSendNotification:
 
                 assert send_notification("T", "M") is False
 
-    def test_returns_false_on_nonzero_exit(self):
+    def test_returns_false_when_macos_notification_cannot_start(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 1
+            with mock.patch("subprocess.Popen", side_effect=FileNotFoundError):
                 from ai_guardian.tray.plugins import send_notification
 
                 assert send_notification("T", "M") is False
@@ -903,11 +905,11 @@ class TestSendNotification:
     def test_escapes_quotes_in_message(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.run") as mock_run:
+            with mock.patch("subprocess.Popen") as mock_popen:
                 from ai_guardian.tray.plugins import send_notification
 
                 send_notification("Title", 'He said "hello"')
-                script = mock_run.call_args[0][0][2]
+                script = mock_popen.call_args[0][0][2]
                 assert '\\"' in script
 
     def test_linux_includes_icon_flag(self):

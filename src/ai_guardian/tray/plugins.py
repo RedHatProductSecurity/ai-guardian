@@ -1106,11 +1106,9 @@ def show_action_dialog(
 def send_notification(title: str, message: str) -> bool:
     """Show a system notification.
 
-    On macOS, osascript ``display notification`` always shows the Script
+    On macOS, use the same detached ``osascript`` transport as the tray's
+    web-console-ready notification. ``display notification`` shows the Script
     Editor icon — custom icons require running from a signed .app bundle.
-    NSUserNotification (which respected setApplicationIconImage_) was
-    removed in macOS 26. A timestamp subtitle is added to prevent
-    Notification Center from deduplicating identical messages.
     On Linux ``--icon`` is passed to ``notify-send``.
     On Windows a custom icon is loaded from PNG for the balloon tip.
     Returns True on success.
@@ -1120,26 +1118,18 @@ def send_notification(title: str, message: str) -> bool:
     system = platform.system()
     try:
         if system == "Darwin":
-            from datetime import datetime
-
             from ai_guardian.daemon.multi_client import _escape_for_applescript
 
-            ts = datetime.now().strftime("%H:%M:%S")
-            msg = (
-                _escape_for_applescript(message)
-                .replace("\r", "")
-                .replace("\n", '" & return & "')
+            safe_title = _escape_for_applescript(title)
+            safe_message = _escape_for_applescript(message)
+            subprocess.Popen(
+                [
+                    "osascript",
+                    "-e",
+                    f'display notification "{safe_message}" with title "{safe_title}"',
+                ]
             )
-            ttl = _escape_for_applescript(title).replace("\r", "").replace("\n", " ")
-            script = (
-                f'display notification ("{msg}") with title "{ttl}" subtitle "{ts}"'
-            )
-            result = subprocess.run(
-                ["osascript", "-e", script],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
+            return True
         elif system == "Linux":
             icon_args: list[str] = []
             png_path = _find_icon("ai-guardian-320.png")
