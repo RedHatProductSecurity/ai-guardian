@@ -203,6 +203,9 @@ def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailabl
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
         patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
+        ),
+        patch(
             "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
         ),
         patch(
@@ -217,6 +220,31 @@ def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailabl
 
     tkinter.assert_not_called()
     fallback.assert_called_once_with()
+
+
+def test_tray_prompt_uses_tkinter_subprocess_before_nicegui_on_macos():
+    dialog = ProactivePromptDialog("Title", "Message", "Set Up", "Cancel")
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=True
+        ) as nicegui_available,
+        patch.object(
+            dialog, "_show_tkinter_subprocess", return_value="action"
+        ) as tkinter,
+        patch.object(dialog, "_show_nicegui") as nicegui,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
+    tkinter.assert_called_once_with()
+    nicegui.assert_not_called()
+    nicegui_available.assert_not_called()
 
 
 def test_tkinter_subprocess_failure_returns_none_for_fallback():
@@ -355,6 +383,26 @@ def test_manual_ide_check_falls_back_to_dialog_when_notification_fails():
         "AI Guardian",
         "All installed IDE/CLI integrations are configured:\n• Claude Code",
     )
+
+
+def test_manual_ide_check_confirms_result_on_macos_when_notification_succeeds():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch(
+            "ai_guardian.tray.plugins.send_notification", return_value=True
+        ) as notify,
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with("AI Guardian", message)
+    dialog.assert_called_once_with("AI Guardian", message)
 
 
 def test_manual_ide_check_action_runs_a_manual_check():

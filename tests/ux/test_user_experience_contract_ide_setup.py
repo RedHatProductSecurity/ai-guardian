@@ -218,6 +218,37 @@ def test_manual_health_check_falls_back_to_visible_dialog_when_notification_fail
     dialog.assert_called_once_with("AI Guardian", message)
 
 
+def test_manual_health_check_confirms_result_when_macos_accepts_but_hides_notification():
+    """
+    USER EXPERIENCE: Silent macOS notification acceptance -> visible result.
+
+    Scenario:
+    1. User selects Check hooks/MCP installation from the tray.
+    2. macOS accepts the osascript notification command.
+    3. Notification Center suppresses the banner because sender permissions
+       are not visible or trusted yet.
+
+    Expected User Experience:
+    - The tray still shows the health result in a modal confirmation.
+    - The user is never required to infer the result from a missing banner.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch("ai_guardian.tray.plugins.send_notification", return_value=True),
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    dialog.assert_called_once_with("AI Guardian", message)
+
+
 def test_codex_setup_reports_conflicting_active_configuration(tmp_path, monkeypatch):
     """
     USER EXPERIENCE: Conflicting Codex hook representation -> clear diagnostic.

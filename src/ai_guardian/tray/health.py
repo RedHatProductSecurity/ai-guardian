@@ -7,6 +7,7 @@ upgrade, and notification state. It receives a back-reference to DaemonTray.
 """
 
 import logging
+import platform
 import threading
 
 from ai_guardian.tray import notifications as tray_notifications
@@ -549,13 +550,35 @@ class TrayHealthMonitor:
         return setup.verify_hooks_for_ide(ide_type)
 
     @staticmethod
-    def _notify_user(title, message):
-        """Show a tray result, falling back to a modal dialog if needed."""
+    def _notify_user(title, message, ensure_visible=False):
+        """Show a tray result, falling back to a modal dialog if needed.
+
+        User-initiated health results use ``ensure_visible`` on macOS because
+        Notification Center can accept an ``osascript`` notification without
+        displaying a banner when the sender is not yet trusted.
+        """
+        notification_sent = False
         try:
-            if tray_plugins.send_notification(title, message):
-                return True
+            notification_sent = bool(tray_plugins.send_notification(title, message))
         except Exception as exc:
             logger.warning("Tray notification failed: %s", exc)
+
+        dialog_attempted = False
+        if ensure_visible and platform.system() == "Darwin":
+            dialog_attempted = True
+            logger.info("Showing modal confirmation for macOS tray health result")
+            try:
+                if tray_plugins.show_dialog(title, message):
+                    return True
+            except Exception as exc:
+                logger.warning("macOS tray health result dialog failed: %s", exc)
+
+        if notification_sent:
+            return True
+
+        if dialog_attempted:
+            logger.error("Unable to present macOS tray health result")
+            return False
 
         logger.warning("Tray notification unavailable; showing a dialog fallback")
         try:
@@ -574,12 +597,14 @@ class TrayHealthMonitor:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "Unable to check IDE/CLI configuration.",
+                ensure_visible=True,
             )
             return
         if not installed:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "No installed IDE/CLI configuration directories were found.",
+                ensure_visible=True,
             )
             return
 
@@ -592,6 +617,7 @@ class TrayHealthMonitor:
             "AI Guardian",
             "All installed IDE/CLI integrations are configured:\n"
             + "\n".join(f"• {name}" for name in names),
+            ensure_visible=True,
         )
 
     @staticmethod
@@ -650,7 +676,11 @@ class TrayHealthMonitor:
         if counts["FAIL"]:
             summary.append(f"{counts['FAIL']} error(s)")
         lines.extend(["", ", ".join(summary)])
-        TrayHealthMonitor._notify_user("AI Guardian Setup", "\n".join(lines))
+        TrayHealthMonitor._notify_user(
+            "AI Guardian Setup",
+            "\n".join(lines),
+            ensure_visible=True,
+        )
 
     def _on_check_ide_setup(self, _icon, _item):
         """Run an on-demand check for installed IDE/CLI integrations."""

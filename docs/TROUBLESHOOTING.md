@@ -246,11 +246,12 @@ export AI_GUARDIAN_NO_TKINTER=1
 ### macOS Tray Health Check Has No Visible Result
 
 The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action first
-uses a macOS desktop notification. If Notification Center rejects the
-notification or `osascript` exits unsuccessfully, the tray shows the result in
-a modal dialog instead. Setup-required checks use a foreground browser prompt
-or a native action dialog so **Set Up Now** remains available even when a
-Tkinter child cannot be brought to the front by the menu-bar process.
+uses a macOS desktop notification and also shows a modal confirmation for the
+user-requested health result. This is intentional: Notification Center can
+accept an `osascript` notification without displaying a banner when the sender
+is not yet trusted. Setup-required checks use a Tkinter subprocess or a native
+action dialog, never an in-process browser prompt, so **Set Up Now** remains
+available without opening a broken port-8080 page.
 
 For reliable macOS delivery:
 
