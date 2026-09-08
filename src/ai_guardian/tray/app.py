@@ -524,7 +524,6 @@ class DaemonTray:
             *self._menu._build_multi_daemon_menu_items(),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
-            pystray.MenuItem("Check hooks", self._health._on_check_ide_setup),
             *self._menu._build_ide_setup_menu_items(),
             pystray.MenuItem("Restart", self._on_restart_tray),
             pystray.MenuItem("Quit", self._on_quit),

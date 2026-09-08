@@ -1462,10 +1462,11 @@ class TrayMenuBuilder:
         return items
 
     def _build_ide_setup_menu_items(self):
-        """Build the top-level 'Local Setup...' submenu.
+        """Build the top-level IDE/CLI setup submenu.
 
-        Always visible regardless of daemon count. Contains config
-        creation and per-IDE hook setup entries.
+        Always visible regardless of daemon count. Groups the on-demand hook
+        health check with targeted per-IDE setup and config creation so the
+        three user flows are discoverable in one place.
         """
         from ai_guardian.setup import IDESetup
 
@@ -1475,7 +1476,14 @@ class TrayMenuBuilder:
 
             return action
 
-        ide_items = [pystray.MenuItem("IDE Hooks (required)", None)]
+        ide_items = [
+            pystray.MenuItem(
+                "Check hook health...",
+                self._tray._health._on_check_ide_setup,
+            ),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Manual setup (specific IDE)", None),
+        ]
         for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items():
             ide_items.append(
                 pystray.MenuItem(f"  {ide_cfg['name']}", _mk_ide_action(ide_key))
@@ -1493,7 +1501,7 @@ class TrayMenuBuilder:
 
         return [
             pystray.MenuItem(
-                "Local Setup...",
+                "IDE/CLI Setup...",
                 pystray.Menu(*ide_items),
             ),
         ]

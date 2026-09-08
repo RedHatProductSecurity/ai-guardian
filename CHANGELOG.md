@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Consolidated tray IDE/CLI setup menu**: Group the on-demand hook health
+  check, targeted per-IDE setup, and config creation under one clearly labeled
+  menu while keeping manual checks available without a daemon (#2257)
+
 - **Goal-oriented `GuardedAgent` loops**: Add an optional external goal
   evaluator with per-run state, scanned feedback, explicit completion/error/
   timeout stop reasons, and trace/on-turn decision events; document when to
