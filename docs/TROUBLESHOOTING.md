@@ -253,6 +253,11 @@ is not yet trusted. Setup-required checks use a Tkinter subprocess or a native
 action dialog, never an in-process browser prompt, so **Set Up Now** remains
 available without opening a broken port-8080 page.
 
+The tray also sends one separate **AI Guardian** health-result notification
+after its initial startup check. Later periodic checks stay silent when all
+integrations are healthy; seeing only **Web Console Ready** means the startup
+health result was not emitted by the running tray version.
+
 For reliable macOS delivery:
 
 1. In **System Settings → Notifications**, allow notifications for the sender

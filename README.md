@@ -107,7 +107,9 @@ available even when no daemon is running or only remote daemons are connected;
 per-IDE setup also installs the MCP security advisor by default when that IDE
 supports it.
 The tray also checks automatically when it starts and then every 10 seconds
-while running; automatic checks only offer setup on local-daemon trays.
+while running. The initial check also sends an **AI Guardian** health-result
+notification; later healthy polling checks remain silent. Automatic checks
+only offer setup on local-daemon trays.
 When multiple integrations need setup, the tray shows an individual **Install
 now** or **Never install** choice for each one. These choices are kept per
 integration, so a newly detected IDE can still be offered later.

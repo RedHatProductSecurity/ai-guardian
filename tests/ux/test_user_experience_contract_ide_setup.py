@@ -249,6 +249,35 @@ def test_manual_health_check_confirms_result_when_macos_accepts_but_hides_notifi
     dialog.assert_called_once_with("AI Guardian", message)
 
 
+def test_startup_health_check_reports_result_once():
+    """
+    USER EXPERIENCE: Tray startup -> one hook/MCP health result notification.
+
+    Scenario:
+    1. The user starts the tray with installed integrations already healthy.
+    2. The tray performs its initial automatic setup check.
+    3. The web console readiness notification is also emitted.
+
+    Expected User Experience:
+    - The user sees a separate AI Guardian health result, not only
+      "Web Console Ready".
+    - Later periodic health polls remain silent when no setup is needed.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(report_result=True)
+
+    notify.assert_called_once_with("AI Guardian", message)
+
+
 def test_codex_setup_reports_conflicting_active_configuration(tmp_path, monkeypatch):
     """
     USER EXPERIENCE: Conflicting Codex hook representation -> clear diagnostic.
