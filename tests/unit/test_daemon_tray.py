@@ -889,7 +889,7 @@ class TestIDESetupMenu:
             top_call = mock_pystray.MenuItem.call_args_list[-1]
             assert top_call[0][0] == "IDE/CLI Setup..."
             item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
-            assert "Check hook health..." in item_names
+            assert "Check hooks/MCP installation..." in item_names
             assert "Manual setup (specific IDE)" in item_names
 
     def test_run_exposes_health_check_inside_ide_setup_menu(self):
@@ -922,7 +922,7 @@ class TestIDESetupMenu:
         check_calls = [
             call
             for call in mock_pystray.MenuItem.call_args_list
-            if call[0][0] == "Check hook health..."
+            if call[0][0] == "Check hooks/MCP installation..."
         ]
         assert len(check_calls) == 1
         assert check_calls[0][0][1] is tray._health._on_check_ide_setup
@@ -2235,14 +2235,20 @@ class TestMcpProactiveMenuVisibility:
             with mock.patch("pathlib.Path.expanduser", return_value=config_file):
                 assert is_mcp_installed() is True
 
-    def test_is_mcp_installed_returns_false_when_no_ide_configs(self, tmp_path):
+    def test_is_mcp_installed_returns_false_when_no_ide_configs(
+        self, tmp_path, monkeypatch
+    ):
         """Returns False when no IDE config files contain ai-guardian."""
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "missing-codex"))
         missing = tmp_path / "nonexistent.json"
         with mock.patch("pathlib.Path.expanduser", return_value=missing):
             assert is_mcp_installed() is False
 
-    def test_is_mcp_installed_returns_false_when_no_mcp_entry(self, tmp_path):
+    def test_is_mcp_installed_returns_false_when_no_mcp_entry(
+        self, tmp_path, monkeypatch
+    ):
         """Returns False when IDE config exists but has no ai-guardian entry."""
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "missing-codex"))
         import json
 
         config_file = tmp_path / ".claude.json"
@@ -2250,8 +2256,9 @@ class TestMcpProactiveMenuVisibility:
         with mock.patch("pathlib.Path.expanduser", return_value=config_file):
             assert is_mcp_installed() is False
 
-    def test_is_mcp_installed_handles_corrupt_json(self, tmp_path):
+    def test_is_mcp_installed_handles_corrupt_json(self, tmp_path, monkeypatch):
         """Gracefully handles corrupt JSON config files."""
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "missing-codex"))
         config_file = tmp_path / ".claude.json"
         config_file.write_text("not valid json {{{")
         with mock.patch("pathlib.Path.expanduser", return_value=config_file):
@@ -2298,6 +2305,20 @@ class TestMcpProactiveMenuVisibility:
         )
         with mock.patch("pathlib.Path.expanduser", return_value=config_file):
             assert is_mcp_installed() is True
+
+    def test_is_mcp_installed_checks_codex_global_toml(self, monkeypatch, tmp_path):
+        """Detects AI Guardian in Codex's global MCP configuration."""
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        (codex_home / "config.toml").write_text(
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        assert is_mcp_installed() is True
 
 
 class TestMcpProactiveMultiDaemonClosure:

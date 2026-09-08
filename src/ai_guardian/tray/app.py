@@ -549,7 +549,7 @@ class DaemonTray:
                 callback=lambda: self._refresh_event.set()
             )
         self._start_stats_refresh()
-        # Check hook health as soon as the tray is available. The callback
+        # Check setup status as soon as the tray is available. The callback
         # starts a worker so tray startup/restart is not blocked by the UI.
         self._health._on_startup_ide_setup()
         self._start_subscriber()

@@ -9,12 +9,15 @@ All symbols are re-exported for backward compatibility.
 import contextlib
 import io
 import json
+import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ai_guardian.config.utils import get_cache_dir, get_config_dir
+
+logger = logging.getLogger(__name__)
 
 # --- Canonical imports used by orchestrator functions ---
 
@@ -39,6 +42,7 @@ from ai_guardian.setup.mcp import (
     _handle_mcp_setup,
     _install_mcp_config,
     _remove_mcp_config,
+    get_mcp_config_path,
 )
 from ai_guardian.setup.rules import (
     _RULES_IDE_CONFIGS,
@@ -371,23 +375,37 @@ def setup_hooks(
 
     # Setup IDE hooks
     success, message = setup.setup_ide_hooks(ide_type, dry_run=dry_run, force=force)
+    mcp_repair = False
+    if not success and ide_type == "codex":
+        try:
+            hook_verification = setup.verify_hooks_for_ide(ide_type)
+            mcp_repair = (
+                isinstance(hook_verification, dict)
+                and hook_verification.get("healthy") is True
+            )
+        except Exception as exc:
+            logger.debug(
+                "Unable to verify existing Codex hooks during setup repair: %s", exc
+            )
+            mcp_repair = False
     print(message)
 
     # MCP server always installed by default (Issue #477, #808, #1377)
-    if success:
+    setup_success = success or mcp_repair
+    if setup_success:
         if no_mcp:
             _handle_mcp_setup(setup, ide_type, no_mcp=True, dry_run=dry_run)
         else:
             _handle_mcp_setup(setup, ide_type, dry_run=dry_run)
 
     # Handle rules/guidelines file installation (Issue #637)
-    if success and rules:
+    if setup_success and rules:
         _handle_rules_setup(ide_type, dry_run=dry_run, force=force)
 
-    if success and not dry_run:
+    if setup_success and not dry_run:
         _notify_daemon_reload()
 
-    return success
+    return setup_success
 
 
 def _setup_hooks_json_output(
@@ -494,14 +512,29 @@ def _setup_hooks_json_output(
             force=force,
         )
 
-    result["success"] = success
-    if success and setup._last_merged_config is not None:
+    mcp_repair = False
+    if not success and ide_type == "codex":
+        try:
+            hook_verification = setup.verify_hooks_for_ide(ide_type)
+            mcp_repair = (
+                isinstance(hook_verification, dict)
+                and hook_verification.get("healthy") is True
+            )
+        except Exception as exc:
+            logger.debug(
+                "Unable to verify existing Codex hooks during setup repair: %s", exc
+            )
+            mcp_repair = False
+
+    setup_success = success or mcp_repair
+    result["success"] = setup_success
+    if setup_success and setup._last_merged_config is not None:
         result["hooks"] = setup._last_merged_config
-    elif not success:
+    elif not setup_success:
         result["error"] = message
 
     # MCP server always installed by default (Issue #477, #808, #1377)
-    if success:
+    if setup_success:
         with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
             if no_mcp:
                 _handle_mcp_setup(setup, ide_type, no_mcp=True, dry_run=dry_run)
@@ -509,19 +542,16 @@ def _setup_hooks_json_output(
                 _handle_mcp_setup(setup, ide_type, dry_run=dry_run)
 
     # Always include MCP server config in JSON output (unless --no-mcp)
-    if success and not no_mcp:
-        mcp_ide = _MCP_IDE_CONFIGS.get(ide_type, {})
-        mcp_path = mcp_ide.get("config_file", "")
-        result["mcp_config_path"] = (
-            str(Path(mcp_path).expanduser()) if mcp_path else None
-        )
+    if setup_success and not no_mcp:
+        mcp_path = get_mcp_config_path(ide_type)
+        result["mcp_config_path"] = str(mcp_path) if mcp_path else None
         abs_path = _resolve_binary_path()
         mcp_entry = dict(_MCP_SERVER_ENTRY)
         mcp_entry["command"] = abs_path
         result["mcp_servers"] = {"ai-guardian": mcp_entry}
 
     # Handle rules/guidelines file setup (Issue #637)
-    if success and rules:
+    if setup_success and rules:
         with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
             _handle_rules_setup(ide_type, dry_run=dry_run, force=force)
         rules_config = _RULES_IDE_CONFIGS.get(ide_type)

@@ -1121,7 +1121,8 @@ class TestMcpInstalled:
         with mock.patch("pathlib.Path.expanduser", return_value=config_file):
             assert DaemonState._check_mcp_installed() is True
 
-    def test_mcp_installed_false_when_no_configs(self, tmp_path):
+    def test_mcp_installed_false_when_no_configs(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path / "missing-codex"))
         missing = tmp_path / "nonexistent.json"
         with mock.patch("pathlib.Path.expanduser", return_value=missing):
             assert DaemonState._check_mcp_installed() is False

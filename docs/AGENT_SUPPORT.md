@@ -15,7 +15,7 @@ changing an integration.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor | `--ide cursor` | Full | N/A | **Complete** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | N/A | **Complete** |
+| OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -225,6 +225,16 @@ whether either `hooks.json` or inline `hooks` in `config.toml` is present.
 Existing matcher groups, non-AI-Guardian commands, and their order are
 preserved. Codex loads all matching layers, so project-local hooks remain
 active alongside the user layer.
+
+AI Guardian also registers its MCP server in Codex's global `config.toml` at
+`~/.codex/config.toml`, or at `$CODEX_HOME/config.toml` when `CODEX_HOME` is
+set, following the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
+MCP setup is enabled by default and preserves unrelated global and project
+configuration. A stale project-root `codex.json` entry is removed after the
+global registration is written.
+The tray's **Check hooks/MCP installation...** action checks hooks and MCP
+registration separately and can repair a missing global MCP entry without
+rewriting healthy Codex hooks.
 
 #### Codex event classification
 
