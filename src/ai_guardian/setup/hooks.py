@@ -578,7 +578,11 @@ class IDESetup:
             if self.check_hooks_configured(config_path, ide_type):
                 return True, f"{ide_name}: configured"
             return False, f"{ide_name}: not configured"
-        verification = self.verify_hooks_for_ide(ide_type)
+        verification = (
+            self.verify_ide_setup(ide_type)
+            if integrity
+            else self.verify_hooks_for_ide(ide_type)
+        )
         if verification["healthy"]:
             return True, f"{ide_name}: configured"
         attention = [
@@ -587,6 +591,8 @@ class IDESetup:
             if status != "healthy"
         ]
         attention.extend(f"obsolete:{name}" for name in verification["obsolete"])
+        if verification.get("mcp_installed") is False:
+            attention.append("MCP server (missing)")
         detail = ", ".join(attention) or "configuration unreadable"
         diagnostics = verification.get("diagnostics", [])
         if diagnostics:
@@ -810,6 +816,34 @@ class IDESetup:
         if result.get("diagnostics"):
             result["healthy"] = False
         return result
+
+    def verify_ide_setup(self, ide_type: str) -> Dict[str, Any]:
+        """Verify hooks and any required global MCP registration for an IDE.
+
+        Hook verification remains available separately because several callers
+        need to reason about hook files alone. The tray and persisted IDE setup
+        state use this combined result so Codex can report healthy hooks with a
+        missing user-level MCP registration as incomplete setup.
+        """
+        verification = self.verify_hooks_for_ide(ide_type)
+        if not isinstance(verification, dict) or ide_type != "codex":
+            return verification
+
+        from ai_guardian.setup.mcp import (
+            get_codex_mcp_config_path,
+            is_codex_mcp_configured,
+        )
+
+        hooks_healthy = verification.get("healthy") is True
+        mcp_config_path = get_codex_mcp_config_path()
+        mcp_installed = is_codex_mcp_configured(mcp_config_path)
+        combined = dict(verification)
+        combined["hooks_healthy"] = hooks_healthy
+        combined["mcp_config_path"] = str(mcp_config_path)
+        combined["mcp_installed"] = mcp_installed
+        combined["mcp_status"] = "healthy" if mcp_installed else "missing"
+        combined["healthy"] = hooks_healthy and mcp_installed
+        return combined
 
     def _remove_obsolete_owned_hooks(
         self, config: Dict[str, Any], ide_type: str

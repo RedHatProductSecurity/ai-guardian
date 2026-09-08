@@ -67,6 +67,60 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     )
 
 
+def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_path):
+    """
+    USER EXPERIENCE: Codex hooks healthy + MCP missing -> explain the gap.
+
+    Scenario:
+    1. The local tray finds OpenAI Codex with all AI Guardian hooks healthy.
+    2. The global Codex MCP configuration does not contain AI Guardian.
+    3. The tray asks whether to register the missing MCP server.
+
+    Expected User Experience:
+    - The prompt distinguishes missing MCP registration from missing hooks.
+    - The user sees the effective Codex configuration path.
+    - The action is labeled for MCP setup.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    mcp_path = tmp_path / "codex" / "config.toml"
+    verification = {
+        "healthy": False,
+        "hooks_healthy": True,
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_config_path": str(mcp_path),
+        "events": {
+            event: "healthy" for event in IDESetup().expected_hook_manifest("codex")
+        },
+        "obsolete": [],
+    }
+
+    with (
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    dialog.assert_called_once_with(
+        title="Set Up AI Guardian",
+        message=(
+            "OpenAI Codex hooks are configured, but the AI Guardian MCP server is "
+            "missing.\n\n"
+            f"Codex MCP configuration: {mcp_path}\n\n"
+            "Register the AI Guardian MCP server now?"
+        ),
+        action_label="Set Up MCP",
+        dismiss_label="Don't Ask Again",
+        snooze_options=("1h", "6h", "1d", "1w"),
+    )
+
+
 def test_manual_health_check_works_without_daemon_for_multiple_ides():
     """
     USER EXPERIENCE: Manual health check -> inspect and optionally set up
@@ -75,7 +129,7 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
     Scenario:
     1. The tray has no local daemon target (for example, it is a standalone
        tray waiting for discovery).
-    2. The user opens IDE/CLI Setup and chooses Check hook health.
+    2. The user opens IDE/CLI Setup and chooses Check hooks/MCP installation.
     3. Claude Code and Cursor are installed but both need hooks.
 
     Expected User Experience:

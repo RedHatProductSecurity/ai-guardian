@@ -93,6 +93,41 @@ class TestDiscoverServers:
         assert servers[0].args == ["my-server-package"]
         assert servers[0].env_var_names == ["API_KEY"]
 
+    def test_discover_from_codex_toml(self, tmp_path, monkeypatch):
+        """Discover Codex MCP servers from its global TOML format."""
+        config_file = tmp_path / "config.toml"
+        monkeypatch.setenv("CODEX_HOME", str(tmp_path))
+        config_file.write_text(
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n'
+            'env_vars = ["EXAMPLE_TOKEN"]\n',
+            encoding="utf-8",
+        )
+
+        auditor = MCPAuditor()
+        with patch.object(
+            auditor, "_get_config_paths", return_value=[str(config_file)]
+        ):
+            with patch.object(auditor, "_check_trust", return_value=True):
+                servers = auditor.discover_servers()
+
+        assert len(servers) == 1
+        assert servers[0].name == "ai-guardian"
+        assert servers[0].command == "/usr/local/bin/ai-guardian"
+        assert servers[0].args == ["mcp-server"]
+        assert servers[0].env_var_names == ["EXAMPLE_TOKEN"]
+        assert servers[0].ide_configs[0].ide == "Codex"
+
+    def test_config_paths_honor_codex_home(self, monkeypatch, tmp_path):
+        """Audit discovery uses the active global CODEX_HOME config."""
+        codex_home = tmp_path / "codex"
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        paths = MCPAuditor()._get_config_paths()
+
+        assert str(codex_home / "config.toml") in paths
+
     def test_discover_empty_config(self, tmp_path):
         """No servers found when config has no mcpServers."""
         config_file = tmp_path / "settings.json"

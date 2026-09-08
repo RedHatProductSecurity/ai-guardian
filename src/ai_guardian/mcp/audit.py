@@ -217,13 +217,20 @@ class MCPAuditor:
             if not path.exists():
                 continue
             try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-            except (json.JSONDecodeError, OSError):
+                if path.suffix.lower() == ".toml":
+                    from ai_guardian.setup.mcp import _load_toml_text
+
+                    data = _load_toml_text(path.read_text(encoding="utf-8"))
+                    mcp_key = "mcp_servers"
+                else:
+                    with open(path, "r") as f:
+                        data = json.load(f)
+                    mcp_key = "mcpServers"
+            except (json.JSONDecodeError, OSError, ValueError):
                 logger.debug("Could not read %s", path)
                 continue
 
-            mcp_servers = data.get("mcpServers", {})
+            mcp_servers = data.get(mcp_key, {})
             if not isinstance(mcp_servers, dict):
                 continue
 
@@ -235,6 +242,15 @@ class MCPAuditor:
                 args = server_def.get("args", [])
                 env = server_def.get("env", {})
                 env_var_names = list(env.keys()) if isinstance(env, dict) else []
+                if path.suffix.lower() == ".toml":
+                    env_vars = server_def.get("env_vars", [])
+                    if isinstance(env_vars, dict):
+                        env_var_names.extend(str(name) for name in env_vars)
+                    elif isinstance(env_vars, list):
+                        env_var_names.extend(
+                            str(name) for name in env_vars if isinstance(name, str)
+                        )
+                env_var_names = list(dict.fromkeys(env_var_names))
                 parsed_args = [str(a) for a in args] if isinstance(args, list) else []
 
                 ide_cfg = MCPServerIDEConfig(
@@ -285,10 +301,17 @@ class MCPAuditor:
 
         # All IDE configs from the canonical registry
         try:
-            from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
+            from ai_guardian.setup.mcp import (
+                _MCP_IDE_CONFIGS,
+                get_codex_mcp_config_path,
+            )
+
+            paths.append(str(get_codex_mcp_config_path()))
 
             seen = set()
-            for ide_cfg in _MCP_IDE_CONFIGS.values():
+            for ide_type, ide_cfg in _MCP_IDE_CONFIGS.items():
+                if ide_type == "codex":
+                    continue
                 cfg_file = ide_cfg.get("config_file")
                 if cfg_file and cfg_file not in seen:
                     seen.add(cfg_file)
@@ -299,11 +322,16 @@ class MCPAuditor:
                         local = Path.cwd() / cfg_file
                         if local.exists():
                             paths.append(str(local))
+
+            project_codex = Path.cwd() / ".codex" / "config.toml"
+            if project_codex.exists():
+                paths.append(str(project_codex))
         except ImportError:
             # Fallback: hardcoded paths if setup module unavailable
             paths.append("~/.claude.json")
             paths.append("~/.cursor/mcp.json")
             paths.append("~/.windsurf/mcp.json")
+            paths.append("~/.codex/config.toml")
 
         # VS Code / Copilot — project-local MCP config (not in _MCP_IDE_CONFIGS)
         vscode_mcp = Path.cwd() / ".vscode" / "mcp.json"
@@ -696,6 +724,15 @@ class MCPAuditor:
             return "Cursor"
         if ".windsurf/" in p or ".codeium/windsurf" in p:
             return "Windsurf"
+        try:
+            from ai_guardian.setup.mcp import get_codex_mcp_config_path
+
+            if Path(config_path).expanduser() == get_codex_mcp_config_path():
+                return "Codex"
+        except (ImportError, OSError):
+            pass
+        if ".codex/" in p:
+            return "Codex"
         if p.endswith("codex.json"):
             return "Codex"
         if ".cline/" in p or "claude-dev/" in p or "roo-cline/" in p:

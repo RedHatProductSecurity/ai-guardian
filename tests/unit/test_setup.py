@@ -11,6 +11,11 @@ from unittest import mock
 
 import pytest
 
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib  # type: ignore
+
 from ai_guardian.config.utils import get_config_dir
 from ai_guardian.setup import (
     IDESetup,
@@ -1536,6 +1541,158 @@ class TestCodexSetup:
             }
         }
         assert "preserved active Codex layers" in message
+
+    def test_codex_mcp_config_path_honors_codex_home(self, monkeypatch, tmp_path):
+        """Codex MCP registration follows the same CODEX_HOME as Codex itself."""
+        from ai_guardian.setup.mcp import get_codex_mcp_config_path
+
+        codex_home = tmp_path / "codex"
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        assert get_codex_mcp_config_path() == codex_home / "config.toml"
+
+    def test_codex_mcp_install_preserves_toml_and_project_config(
+        self, monkeypatch, tmp_path
+    ):
+        """Global MCP setup preserves unrelated user and project Codex config."""
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        project = tmp_path / "project"
+        project_config = project / ".codex" / "config.toml"
+        project_config.parent.mkdir(parents=True)
+        project_config.write_text(
+            'model = "project-model"\n\n[mcp_servers.project]\ncommand = "project"\n',
+            encoding="utf-8",
+        )
+        global_config = codex_home / "config.toml"
+        global_config.write_text(
+            'model = "user-model"\n\n[mcp_servers.other]\ncommand = "other"\n',
+            encoding="utf-8",
+        )
+        project_before = project_config.read_text(encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        monkeypatch.chdir(project)
+
+        with mock.patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value="/usr/local/bin/ai-guardian",
+        ):
+            _install_mcp_config(IDESetup(), "codex")
+
+        installed = tomllib.loads(global_config.read_text(encoding="utf-8"))
+        assert installed["model"] == "user-model"
+        assert installed["mcp_servers"]["other"]["command"] == "other"
+        assert installed["mcp_servers"]["ai-guardian"] == {
+            "command": "/usr/local/bin/ai-guardian",
+            "args": ["mcp-server"],
+        }
+        assert project_config.read_text(encoding="utf-8") == project_before
+
+    def test_codex_mcp_remove_preserves_unrelated_toml(self, monkeypatch, tmp_path):
+        """MCP removal deletes only AI Guardian from the global Codex table."""
+        from ai_guardian.setup.mcp import _remove_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        global_config = codex_home / "config.toml"
+        global_config.write_text(
+            'model = "user-model"\n\n'
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n\n'
+            "[mcp_servers.other]\n"
+            'command = "other"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        _remove_mcp_config(IDESetup(), "codex")
+
+        remaining = tomllib.loads(global_config.read_text(encoding="utf-8"))
+        assert remaining["model"] == "user-model"
+        assert "ai-guardian" not in remaining["mcp_servers"]
+        assert remaining["mcp_servers"]["other"]["command"] == "other"
+
+    def test_codex_mcp_install_migrates_stale_project_root_json(
+        self, monkeypatch, tmp_path
+    ):
+        """Setup moves the old project-root entry into the current global layer."""
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        legacy = tmp_path / "codex.json"
+        legacy.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "ai-guardian": {"command": "old"},
+                        "other": {"command": "other"},
+                    },
+                    "unrelated": True,
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+        monkeypatch.chdir(tmp_path)
+
+        with mock.patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value="/usr/local/bin/ai-guardian",
+        ):
+            _install_mcp_config(IDESetup(), "codex")
+
+        migrated = json.loads(legacy.read_text(encoding="utf-8"))
+        assert "ai-guardian" not in migrated["mcpServers"]
+        assert migrated["mcpServers"]["other"] == {"command": "other"}
+        assert migrated["unrelated"] is True
+        assert (
+            "ai-guardian"
+            in tomllib.loads((codex_home / "config.toml").read_text(encoding="utf-8"))[
+                "mcp_servers"
+            ]
+        )
+
+    def test_codex_combined_setup_verification_reports_missing_mcp(
+        self, monkeypatch, tmp_path
+    ):
+        """Hook health remains visible while missing global MCP is reported."""
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        hooks_config = codex_home / "hooks.json"
+        hooks_config.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        event: [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": (
+                                            "/usr/local/bin/ai-guardian " "--ide codex"
+                                        ),
+                                    }
+                                ]
+                            }
+                        ]
+                        for event in IDESetup().expected_hook_manifest("codex")
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        status = IDESetup().verify_ide_setup("codex")
+
+        assert status["hooks_healthy"] is True
+        assert status["mcp_installed"] is False
+        assert status["healthy"] is False
+        assert status["mcp_config_path"] == str(codex_home / "config.toml")
 
 
 class TestGeminiSetup:
@@ -3473,6 +3630,30 @@ class TestMcpDefaultOn:
                 )
 
                 mock_mcp.assert_not_called()
+
+    def test_codex_setup_repairs_missing_mcp_when_hooks_are_healthy(self, tmp_path):
+        """A second setup run can repair Codex MCP without rewriting hooks."""
+        with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {"codex": {"name": "OpenAI Codex"}}
+            mock_instance.setup_ide_hooks.return_value = (
+                False,
+                "ai-guardian hooks already configured for OpenAI Codex.",
+            )
+            mock_instance.verify_hooks_for_ide.return_value = {"healthy": True}
+
+            with (
+                mock.patch("ai_guardian.setup._handle_mcp_setup") as mock_mcp,
+                mock.patch("ai_guardian.setup._notify_daemon_reload"),
+            ):
+                success = setup_hooks(ide_type="codex", interactive=False)
+
+        assert success is True
+        mock_mcp.assert_called_once_with(
+            mock_instance,
+            "codex",
+            dry_run=False,
+        )
 
 
 class TestOpenCodeMcpConfig:

@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Global Codex MCP registration and setup checks**: Register AI Guardian in
+  Codex's user-level `config.toml` (respecting `CODEX_HOME`), preserve existing
+  configuration, migrate stale project-root entries, and distinguish missing
+  MCP registration from unhealthy hooks in tray setup health (#2261)
+
 - **Consolidated tray IDE/CLI setup menu**: Group the on-demand hook health
   check, targeted per-IDE setup, and config creation under one clearly labeled
   menu while keeping manual checks available without a daemon (#2257)

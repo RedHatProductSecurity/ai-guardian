@@ -192,4 +192,13 @@ def is_mcp_installed():
                     return True
         except Exception:
             continue
+
+    try:
+        from ai_guardian.setup.mcp import is_codex_mcp_configured
+
+        if is_codex_mcp_configured():
+            return True
+    except Exception:
+        pass  # intentionally silent — MCP status is best-effort
+
     return False

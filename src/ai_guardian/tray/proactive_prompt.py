@@ -279,7 +279,10 @@ def sync_ide_setup_state(
             verification["verification_skip_reason"] = "Never install selected"
         else:
             try:
-                verification = setup.verify_hooks_for_ide(ide_type)
+                verifier = getattr(setup, "verify_ide_setup", None)
+                if not callable(verifier):
+                    verifier = setup.verify_hooks_for_ide
+                verification = verifier(ide_type)
                 if not isinstance(verification, dict):
                     verification = {
                         "ide": ide_type,

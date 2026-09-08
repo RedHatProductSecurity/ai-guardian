@@ -422,6 +422,9 @@ class TrayHealthMonitor:
         if isinstance(diagnostics, (list, tuple, set)):
             attention.extend(str(diagnostic) for diagnostic in diagnostics)
 
+        if verification.get("mcp_installed") is False:
+            attention.append("MCP server (missing)")
+
         error = verification.get("error")
         if error:
             attention.append(str(error))
@@ -451,6 +454,13 @@ class TrayHealthMonitor:
             ),
             tuple(sorted(str(event) for event in obsolete)),
             tuple(sorted(str(diagnostic) for diagnostic in diagnostics)),
+            verification.get("hooks_healthy"),
+            verification.get("mcp_installed"),
+            (
+                str(verification.get("mcp_status"))
+                if verification.get("mcp_status")
+                else None
+            ),
             str(verification.get("error")) if verification.get("error") else None,
         )
 
@@ -529,10 +539,14 @@ class TrayHealthMonitor:
 
     @staticmethod
     def _verify_ide_setup(ide_type):
-        """Return the current hook verification result for an IDE."""
+        """Return the current hook and integration verification for an IDE."""
         from ai_guardian.setup.hooks import IDESetup
 
-        return IDESetup().verify_hooks_for_ide(ide_type)
+        setup = IDESetup()
+        verifier = getattr(setup, "verify_ide_setup", None)
+        if callable(verifier):
+            return verifier(ide_type)
+        return setup.verify_hooks_for_ide(ide_type)
 
     @staticmethod
     def _notify_ide_check_result(installed):
@@ -715,17 +729,38 @@ class TrayHealthMonitor:
 
         self._ide_setup_prompt_in_progress = True
 
+        codex_mcp_only = False
+        if len(unconfigured) == 1 and unconfigured[0] == "codex":
+            codex_status = statuses.get("codex")
+            codex_mcp_only = (
+                isinstance(codex_status, dict)
+                and codex_status.get("hooks_healthy") is True
+                and codex_status.get("mcp_installed") is False
+            )
+
         def _show_prompt():
             try:
                 if len(names) == 1:
-                    message = (
-                        f"{names[0]} is installed but is not protected by "
-                        "AI Guardian.\n\n"
-                    )
-                    detail = attention.get(unconfigured[0])
-                    if detail:
-                        message += f"Current hook status: {detail}\n\n"
-                    message += "Set up its security hooks now?"
+                    if codex_mcp_only:
+                        codex_status = statuses["codex"]
+                        message = (
+                            "OpenAI Codex hooks are configured, but the AI Guardian "
+                            "MCP server is missing.\n\n"
+                            f"Codex MCP configuration: "
+                            f"{codex_status.get('mcp_config_path', 'global config.toml')}"
+                            "\n\nRegister the AI Guardian MCP server now?"
+                        )
+                        action_label = "Set Up MCP"
+                    else:
+                        message = (
+                            f"{names[0]} is installed but is not protected by "
+                            "AI Guardian.\n\n"
+                        )
+                        detail = attention.get(unconfigured[0])
+                        if detail:
+                            message += f"Current hook status: {detail}\n\n"
+                        message += "Set up its security hooks now?"
+                        action_label = "Set Up Now"
                 else:
                     message = (
                         "These installed IDEs have incomplete AI Guardian hooks:\n"
@@ -739,7 +774,7 @@ class TrayHealthMonitor:
                     dialog = ProactivePromptDialog(
                         title="Set Up AI Guardian",
                         message=message,
-                        action_label="Set Up Now",
+                        action_label=action_label,
                         dismiss_label="Don't Ask Again",
                         snooze_options=("1h", "6h", "1d", "1w"),
                     )

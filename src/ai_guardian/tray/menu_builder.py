@@ -1478,7 +1478,7 @@ class TrayMenuBuilder:
 
         ide_items = [
             pystray.MenuItem(
-                "Check hook health...",
+                "Check hooks/MCP installation...",
                 self._tray._health._on_check_ide_setup,
             ),
             pystray.Menu.SEPARATOR,

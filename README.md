@@ -97,9 +97,9 @@ Creates config, installs a scanner, and automatically detects supported IDE
 configuration directories so their hooks can be installed. Use `--ide` to
 target one IDE explicitly, or `--no-setup` to skip hook setup:
 
-From the tray, open **IDE/CLI Setup...**. Use **Check hook health...** to
-immediately verify locally installed integrations; if any hooks are missing or
-unhealthy, the tray offers setup choices and reports the final verification
+From the tray, open **IDE/CLI Setup...**. Use **Check hooks/MCP installation...** to
+immediately verify locally installed integrations; if hooks or a required MCP
+registration are missing or unhealthy, the tray offers setup choices and reports the final verification
 status. The **Manual setup (specific IDE)** entries are for unusual,
 incompletely detected, or targeted repair cases, while **Create Config...** is
 for first-time or manual configuration. These explicit actions remain
