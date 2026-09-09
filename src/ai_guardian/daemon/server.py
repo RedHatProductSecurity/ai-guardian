@@ -13,6 +13,7 @@ import platform
 import signal
 import socket
 import threading
+from pathlib import Path
 
 from ai_guardian.daemon import (
     get_pid_path,
@@ -81,40 +82,48 @@ class DaemonServer:
 
         ensure_scanner_path()
 
-        self._cleanup_stale()
         self._acquire_pid_lock()
-        self._setup_signals()
-        self._server_socket = self._setup_socket()
-        self._running = True
-
-        # Record source file mtime for dev-mode auto-restart (#1223)
-        self.state.record_source_mtime()
-
-        if self._enable_rest_api:
-            self._start_rest_api()
-
-        # Write PID file once with all info (pid, rest_port, name, tcp_port)
-        self._write_pid_file()
-
-        idle_thread = threading.Thread(
-            target=self._idle_check_loop, daemon=True, name="idle-checker"
-        )
-        idle_thread.start()
-
-        sock_info = self._socket_info()
-        name_info = f", name={self._name}" if hasattr(self, "_name") else ""
-        logger.info(f"Daemon started (pid {os.getpid()}, {sock_info}{name_info})")
-        print(f"ai-guardian daemon started (pid {os.getpid()}, {sock_info}{name_info})")
-        print("Use 'ai-guardian tray' to start the system tray client")
-
-        self._ready_event.set()
-
         try:
-            self._accept_loop()
-        except Exception as e:
-            logger.error(f"Daemon accept loop error: {e}")
+            self._cleanup_stale()
+            self._setup_signals()
+            self._server_socket = self._setup_socket()
+            self._running = True
+
+            # Record source file mtime for dev-mode auto-restart (#1223)
+            self.state.record_source_mtime()
+
+            if self._enable_rest_api:
+                self._start_rest_api()
+
+            # Write PID file once with all info (pid, rest_port, name, tcp_port)
+            self._write_pid_file()
+
+            idle_thread = threading.Thread(
+                target=self._idle_check_loop, daemon=True, name="idle-checker"
+            )
+            idle_thread.start()
+
+            sock_info = self._socket_info()
+            name_info = f", name={self._name}" if hasattr(self, "_name") else ""
+            logger.info(f"Daemon started (pid {os.getpid()}, {sock_info}{name_info})")
+            print(
+                f"ai-guardian daemon started (pid {os.getpid()}, {sock_info}{name_info})"
+            )
+            print("Use 'ai-guardian tray' to start the system tray client")
+
+            self._ready_event.set()
+
+            try:
+                self._accept_loop()
+            except Exception as e:
+                logger.error(f"Daemon accept loop error: {e}")
         finally:
-            self.stop()
+            if self._running:
+                self.stop()
+            else:
+                # Startup failed before this instance became the daemon. Do
+                # not remove state files belonging to an existing daemon.
+                self._release_pid_lock()
 
     def stop(self):
         """Graceful shutdown (idempotent, thread-safe)."""
@@ -183,12 +192,23 @@ class DaemonServer:
         get_pid_path().unlink(missing_ok=True)
         if not self._use_tcp:
             get_socket_path().unlink(missing_ok=True)
+        self._release_pid_lock()
+
+    def _release_pid_lock(self):
+        """Release this process's startup lock without touching another lock."""
         lock_path = getattr(self, "_lock_path", None)
-        if lock_path:
+        if not lock_path:
+            return
+        try:
+            lock_pid = int(Path(lock_path).read_text().strip())
+        except (ValueError, OSError):
+            lock_pid = None
+        if lock_pid == os.getpid():
             try:
                 os.unlink(lock_path)
             except OSError:
                 pass  # intentionally silent — cleanup best-effort
+        self._lock_path = None
 
     def _setup_socket(self):
         """Create and bind the server socket."""
@@ -201,8 +221,15 @@ class DaemonServer:
         sock_path = get_socket_path()
         sock_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Remove existing socket file
+        # Never unlink a socket that still answers. This protects a running
+        # daemon when its PID file was removed or corrupted during shutdown
+        # or an interrupted write.
         if sock_path.exists():
+            if self._is_old_daemon_responsive():
+                raise RuntimeError(
+                    "Daemon is already running but its PID file is missing or invalid. "
+                    "Stop it first with: ai-guardian daemon reset"
+                )
             sock_path.unlink()
 
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -683,8 +710,15 @@ class DaemonServer:
             pid_info["version"] = __version__
         except ImportError:
             pass
-        pid_path.write_text(json.dumps(pid_info))
-        os.chmod(str(pid_path), 0o600)
+        # Replace atomically so an interrupted write cannot leave a partially
+        # written PID file for the tray or the next daemon start to consume.
+        temp_path = pid_path.with_name(f".{pid_path.name}.{os.getpid()}.tmp")
+        try:
+            temp_path.write_text(json.dumps(pid_info))
+            os.chmod(str(temp_path), 0o600)
+            os.replace(str(temp_path), str(pid_path))
+        finally:
+            temp_path.unlink(missing_ok=True)
 
     def _start_rest_api(self):
         """Start the REST API server for tray/remote queries."""
@@ -769,23 +803,27 @@ class DaemonServer:
             try:
                 lock_content = open(lock_path).read().strip()
                 lock_pid = int(lock_content) if lock_content else 0
-                if lock_pid and is_pid_active(lock_pid):
-                    raise RuntimeError(
-                        f"Another daemon is starting (pid {lock_pid}). "
-                        f"Stop it first with: ai-guardian daemon stop"
-                    )
+            except (ValueError, OSError):
+                raise RuntimeError(
+                    "Another daemon start is in progress, but its lock is invalid. "
+                    "Stop it first with: ai-guardian daemon reset"
+                )
+            if lock_pid and is_pid_active(lock_pid):
+                raise RuntimeError(
+                    f"Another daemon is starting (pid {lock_pid}). "
+                    f"Stop it first with: ai-guardian daemon stop"
+                )
+            try:
                 os.unlink(lock_path)
-                fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-                os.write(fd, str(os.getpid()).encode())
-                os.close(fd)
-                self._lock_path = lock_path
-            except (FileExistsError, RuntimeError):
-                raise
-            except Exception:
+            except OSError:
                 raise RuntimeError(
                     "Another daemon start is in progress. "
                     "Stop it first with: ai-guardian daemon stop"
                 )
+            fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            self._lock_path = lock_path
 
     def _cleanup_stale(self):
         """Clean up stale socket and PID files from crashed daemon.
@@ -804,6 +842,8 @@ class DaemonServer:
             try:
                 pid_info = json.loads(pid_path.read_text())
                 old_pid = pid_info.get("pid", 0)
+                if isinstance(old_pid, bool) or not isinstance(old_pid, int):
+                    raise ValueError("invalid daemon PID")
                 if old_pid and _is_pid_alive(old_pid):
                     if self._is_old_daemon_responsive():
                         raise RuntimeError(
@@ -826,7 +866,12 @@ class DaemonServer:
                 else:
                     logger.info(f"Cleaned up stale PID file (pid {old_pid})")
                 pid_path.unlink()
-            except (json.JSONDecodeError, OSError):
+            except (json.JSONDecodeError, OSError, TypeError, ValueError):
+                if sock_path.exists() and self._is_old_daemon_responsive():
+                    raise RuntimeError(
+                        "Daemon is running but its PID file is missing or invalid. "
+                        "Stop it first with: ai-guardian daemon reset"
+                    )
                 pid_path.unlink(missing_ok=True)
 
         # Clean up stale lock file from crashed prior start (including zombies)
@@ -844,8 +889,14 @@ class DaemonServer:
                 except OSError:
                     pass  # intentionally silent — stale lock cleanup
 
-        # Only clean socket if PID file was successfully removed (daemon is dead)
+        # Only clean an untracked socket after proving it is not responsive.
+        # This prevents a corrupt/missing PID file from orphaning a live daemon.
         if sock_path.exists() and not self._use_tcp and not pid_path.exists():
+            if self._is_old_daemon_responsive():
+                raise RuntimeError(
+                    "Daemon is running but its PID file is missing or invalid. "
+                    "Stop it first with: ai-guardian daemon reset"
+                )
             sock_path.unlink()
             logger.info("Cleaned up stale socket file")
 

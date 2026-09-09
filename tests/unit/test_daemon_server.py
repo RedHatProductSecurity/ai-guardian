@@ -151,6 +151,34 @@ class TestDaemonServerLifecycle:
         server._cleanup_stale()
         assert not pid_path.exists()
 
+    def test_server_preserves_socket_when_pid_file_is_corrupt(self, short_state_dir):
+        """A corrupt PID file must not orphan a responsive daemon socket."""
+
+        pid_path = Path(short_state_dir) / "daemon.pid"
+        sock_path = Path(short_state_dir) / "daemon.sock"
+        pid_path.write_text("{corrupt")
+        sock_path.write_text("")
+
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        with mock.patch.object(server, "_is_old_daemon_responsive", return_value=True):
+            with pytest.raises(RuntimeError, match="PID file is missing or invalid"):
+                server._cleanup_stale()
+
+        assert pid_path.exists()
+        assert sock_path.exists()
+
+    def test_start_releases_lock_when_startup_fails(self, short_state_dir):
+        """A failed startup must not leave a lock blocking future recovery."""
+
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        with mock.patch.object(
+            server, "_cleanup_stale", side_effect=RuntimeError("startup failure")
+        ):
+            with pytest.raises(RuntimeError, match="startup failure"):
+                server.start()
+
+        assert not (Path(short_state_dir) / "daemon.pid.lock").exists()
+
     def test_server_cleans_stale_socket_file(self, short_state_dir):
         """Stale socket file from crashed daemon is cleaned up."""
 
