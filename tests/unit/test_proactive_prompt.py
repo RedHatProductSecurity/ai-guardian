@@ -293,6 +293,228 @@ def test_multi_ide_prompt_defaults_to_install_now():
     }
 
 
+def test_profile_prompt_defaults_to_standard_and_includes_skip_choice():
+    dialog = ProactivePromptDialog(
+        "Title",
+        "Message",
+        "Continue",
+        "Cancel",
+        profile_choices=TrayHealthMonitor._security_profile_choices(),
+    )
+
+    assert [choice["profile"] for choice in dialog._profile_options()] == [
+        "@minimal",
+        "@standard",
+        "@strict",
+        "@moderator",
+        None,
+    ]
+    assert dialog._default_profile_selection() == "@standard"
+    assert dialog._ide_selection_result("action", profile="@strict") == {
+        "result": "action",
+        "install": [],
+        "never": [],
+        "profile": "@strict",
+    }
+
+
+def test_user_config_detection_ignores_project_local_config(tmp_path, monkeypatch):
+    global_config_dir = tmp_path / "global-config"
+    global_config_dir.mkdir()
+    project_dir = tmp_path / "project"
+    project_config_dir = project_dir / ".ai-guardian"
+    project_config_dir.mkdir(parents=True)
+    (project_config_dir / "ai-guardian.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(global_config_dir))
+    monkeypatch.chdir(project_dir)
+
+    monitor = TrayHealthMonitor(SimpleNamespace(_standalone=True, _targets=[]))
+
+    assert monitor._has_user_config() is False
+    (global_config_dir / "ai-guardian.json").write_text("{}", encoding="utf-8")
+    assert monitor._has_user_config() is True
+
+
+def test_missing_user_config_creates_selected_profile_before_hook_setup(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    calls = []
+
+    def create_config(**kwargs):
+        calls.append(("config", kwargs))
+        return True, "created"
+
+    def setup_hooks(**kwargs):
+        calls.append(("hooks", kwargs))
+        return True
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=False),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": True,
+                "events": {"PreToolUse": "healthy"},
+                "obsolete": [],
+            },
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.setup.create_default_config", side_effect=create_config),
+        patch("ai_guardian.setup.setup_hooks", side_effect=setup_hooks),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        dialog.return_value.show.return_value = {
+            "result": "action",
+            "profile": "@strict",
+        }
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    assert calls == [
+        ("config", {"profile": "@strict", "force": False}),
+        ("hooks", {"ide_type": "claude", "interactive": False}),
+    ]
+    assert dialog.call_args.kwargs["profile_choices"] == (
+        monitor._security_profile_choices()
+    )
+
+
+def test_missing_user_config_can_skip_profile_and_setup_hooks(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=False),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": True,
+                "events": {"PreToolUse": "healthy"},
+                "obsolete": [],
+            },
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._state_path",
+            return_value=tmp_path / "proactive_prompts.json",
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value={"result": "action", "profile": None},
+        ),
+        patch("ai_guardian.setup.create_default_config") as create_config,
+        patch("ai_guardian.setup.setup_hooks", return_value=True) as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    create_config.assert_not_called()
+    setup_hooks.assert_called_once_with(ide_type="claude", interactive=False)
+
+
+def test_first_run_profile_prompt_preserves_single_ide_dismissal_state(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    state_path = tmp_path / "proactive_prompts.json"
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=False),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            },
+        ),
+        patch("ai_guardian.tray.proactive_prompt._state_path", return_value=state_path),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value={"result": "dismiss", "profile": None},
+        ),
+        patch("ai_guardian.setup.create_default_config") as create_config,
+        patch("ai_guardian.setup.setup_hooks") as setup_hooks,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    assert ProactivePromptState(state_path).load()["ide_setup_claude"]["status"] == (
+        "dismissed"
+    )
+    create_config.assert_not_called()
+    setup_hooks.assert_not_called()
+
+
+def test_profile_creation_failure_stops_hook_setup_and_snoozes_prompt(tmp_path):
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    state_path = tmp_path / "proactive_prompts.json"
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=False),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": False,
+                "events": {"PreToolUse": "missing"},
+                "obsolete": [],
+            },
+        ),
+        patch("ai_guardian.tray.proactive_prompt._state_path", return_value=state_path),
+        patch(
+            "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
+            return_value={"result": "action", "profile": "@strict"},
+        ),
+        patch(
+            "ai_guardian.setup.create_default_config",
+            return_value=(False, "configuration could not be written"),
+        ) as create_config,
+        patch("ai_guardian.setup.setup_hooks") as setup_hooks,
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    create_config.assert_called_once_with(profile="@strict", force=False)
+    setup_hooks.assert_not_called()
+    assert ProactivePromptState(state_path).load()["ide_setup_claude"]["status"] == (
+        "snoozed"
+    )
+    notify.assert_called_once_with(
+        "AI Guardian Setup",
+        "Unable to create the AI Guardian security profile @strict.\n\n"
+        "configuration could not be written",
+    )
+
+
 def test_upgrade_prompt_skips_remote_only_trays():
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -458,6 +680,7 @@ def test_ide_setup_prompt_configures_installed_local_ides(tmp_path):
     monitor = TrayHealthMonitor(tray)
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
@@ -589,6 +812,7 @@ def test_ide_setup_prompt_snoozes_local_prompt(tmp_path):
     monitor = TrayHealthMonitor(tray)
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
@@ -619,6 +843,7 @@ def test_ide_setup_prompt_snoozes_after_failed_setup(tmp_path):
     }
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
@@ -657,6 +882,7 @@ def test_ide_setup_prompt_does_not_snooze_when_final_verification_is_healthy(
     }
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
@@ -695,6 +921,7 @@ def test_multi_ide_prompt_only_configures_selected_integrations(tmp_path):
             "_get_unconfigured_ides",
             return_value=["claude", "cursor"],
         ),
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
             return_value=tmp_path / "proactive_prompts.json",
@@ -779,6 +1006,7 @@ def test_automatic_monitoring_does_not_recheck_never_install(tmp_path):
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
             return_value=state_path,
@@ -819,6 +1047,7 @@ def test_dismissed_prompt_reappears_after_live_health_change(tmp_path):
     monitor = TrayHealthMonitor(tray)
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
             return_value=state_path,
@@ -898,6 +1127,7 @@ def test_newly_detected_ide_remains_eligible_after_an_exclusion(tmp_path):
     ProactivePromptState(state_path).update_ide_setup_exclusions(never=("cursor",))
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(
             monitor,
             "_get_unconfigured_ides",
@@ -941,6 +1171,7 @@ def test_manual_ide_check_can_override_never_install_exclusion(tmp_path):
     state.update_ide_setup_exclusions(never=("cursor",))
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_installed_ides", return_value=["cursor"]),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
         patch(

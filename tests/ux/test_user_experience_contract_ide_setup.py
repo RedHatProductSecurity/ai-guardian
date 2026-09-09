@@ -26,6 +26,7 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     monitor = TrayHealthMonitor(tray)
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
         patch.object(
             monitor,
@@ -67,6 +68,76 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     )
 
 
+def test_first_run_setup_offers_profile_and_configures_before_hooks():
+    """
+    USER EXPERIENCE: First-run setup -> choose a profile before hook setup.
+
+    Scenario:
+    1. The local tray finds an installed IDE without healthy AI Guardian hooks.
+    2. No global ``ai-guardian.json`` exists; project-local config is not used
+       as first-run evidence.
+    3. The user selects the strict built-in profile and confirms hook setup.
+
+    Expected User Experience:
+    - The setup prompt explains that @standard is recommended.
+    - All built-in profiles and an explicit skip option are available.
+    - The selected profile is created first, then the IDE hooks are installed.
+    - The existing configuration is never overwritten by this flow.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    calls = []
+
+    def create_config(**kwargs):
+        calls.append(("config", kwargs))
+        return True, "created"
+
+    def setup_hooks(**kwargs):
+        calls.append(("hooks", kwargs))
+        return True
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=False),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch.object(
+            monitor,
+            "_verify_ide_setup",
+            return_value={
+                "healthy": True,
+                "events": {"preToolUse": "healthy"},
+                "obsolete": [],
+            },
+        ),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.setup.create_default_config", side_effect=create_config),
+        patch("ai_guardian.setup.setup_hooks", side_effect=setup_hooks),
+        patch("ai_guardian.tray.plugins.send_notification"),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        dialog.return_value.show.return_value = {
+            "result": "action",
+            "profile": "@strict",
+        }
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    prompt = dialog.call_args.kwargs
+    assert "@standard is recommended" in prompt["message"]
+    assert [choice["profile"] for choice in prompt["profile_choices"]] == [
+        "@minimal",
+        "@standard",
+        "@strict",
+        "@moderator",
+    ]
+    assert calls == [
+        ("config", {"profile": "@strict", "force": False}),
+        ("hooks", {"ide_type": "cursor", "interactive": False}),
+    ]
+
+
 def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_path):
     """
     USER EXPERIENCE: Codex hooks healthy + MCP missing -> explain the gap.
@@ -97,6 +168,7 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
     }
 
     with (
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
         patch.object(monitor, "_verify_ide_setup", return_value=verification),
         patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
@@ -147,6 +219,7 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
 
     with (
         patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_get_installed_ides", return_value=["claude", "cursor"]),
         patch.object(
             monitor,
@@ -336,6 +409,7 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
             "_get_unconfigured_ides",
             return_value=["claude", "cursor"],
         ),
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_verify_ide_setup", return_value=verification),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
@@ -410,6 +484,7 @@ def test_setup_action_reports_doctor_style_hook_counts():
 
     with (
         patch.object(monitor, "_get_unconfigured_ides", return_value=["claude"]),
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch.object(monitor, "_verify_ide_setup", return_value=verification),
         patch(
             "ai_guardian.tray.proactive_prompt.ProactivePromptDialog.show",
@@ -546,6 +621,7 @@ def test_failed_codex_setup_is_snoozed_for_automatic_prompt(tmp_path):
 
     with (
         patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch.object(monitor, "_has_user_config", return_value=True),
         patch(
             "ai_guardian.tray.proactive_prompt._state_path",
             return_value=tmp_path / "proactive_prompts.json",

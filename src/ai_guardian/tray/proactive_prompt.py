@@ -34,6 +34,8 @@ IDE_SETUP_EXCLUSIONS_KEY = "ide_setup_never_install"
 IDE_SETUP_STATUS_KEY = "ide_setup_status"
 IDE_SETUP_KEY_PREFIX = "ide_setup_"
 
+_PROFILE_NOT_SELECTED = object()
+
 
 def _state_path() -> Path:
     from ai_guardian.config.utils import get_state_dir
@@ -343,8 +345,8 @@ class ProactivePromptDialog:
     """Prompt with action, snooze, and dismiss choices.
 
     The UI cascade is tkinter, NiceGUI, Textual, then a log-only fallback.
-    show returns a stable string for ordinary prompts. When ide_choices is
-    provided it returns a mapping containing selected install and never IDEs.
+    show returns a stable string for ordinary prompts. When IDE or profile
+    choices are provided it returns a mapping containing the selected values.
     """
 
     def __init__(
@@ -355,6 +357,7 @@ class ProactivePromptDialog:
         dismiss_label: str,
         snooze_options: Optional[Iterable[str]] = None,
         ide_choices: Optional[Iterable[Dict[str, str]]] = None,
+        profile_choices: Optional[Iterable[Dict[str, str]]] = None,
     ):
         self.title = title
         self.message = message
@@ -362,6 +365,50 @@ class ProactivePromptDialog:
         self.dismiss_label = dismiss_label
         self.snooze_options = tuple(snooze_options or SNOOZE_OPTIONS)
         self.ide_choices = tuple(ide_choices or ())
+        self.profile_choices = tuple(profile_choices or ())
+
+    def _profile_options(self):
+        """Return valid profile options plus an explicit skip choice."""
+        options = []
+        seen = set()
+        for choice in self.profile_choices:
+            if not isinstance(choice, dict):
+                continue
+            profile = choice.get("profile") or choice.get("name")
+            if not isinstance(profile, str) or not profile or profile in seen:
+                continue
+            seen.add(profile)
+            options.append(
+                {
+                    "profile": profile,
+                    "name": str(choice.get("name") or profile),
+                    "description": str(choice.get("description") or ""),
+                }
+            )
+        if options:
+            options.append(
+                {
+                    "profile": None,
+                    "name": "Skip configuration for now",
+                    "description": "Set up hooks without creating a user config",
+                }
+            )
+        return options
+
+    def _default_profile_selection(self):
+        """Return the recommended profile, falling back to the first option."""
+        options = self._profile_options()
+        for option in options:
+            if option["profile"] == "@standard":
+                return option["profile"]
+        return options[0]["profile"] if options else None
+
+    @staticmethod
+    def _profile_choice_label(option):
+        """Format a profile option for the interactive selectors."""
+        label = option["name"]
+        description = option.get("description")
+        return f"{label} — {description}" if description else label
 
     def show(self, tray_safe: bool = False) -> object:
         import platform
@@ -396,15 +443,15 @@ class ProactivePromptDialog:
                         if result is not None:
                             return result
                         continue
-                    if self.ide_choices:
+                    if self.ide_choices or self._profile_options():
                         return self._show_ide_choices_tkinter()
                     return self._show_tkinter()
                 if tier == "nicegui" and _nicegui_available():
-                    if self.ide_choices:
+                    if self.ide_choices or self._profile_options():
                         return self._show_ide_choices_nicegui()
                     return self._show_nicegui()
                 if tier == "textual" and _textual_available():
-                    if self.ide_choices:
+                    if self.ide_choices or self._profile_options():
                         return self._show_ide_choices_textual()
                     return self._show_textual()
             except Exception as exc:
@@ -446,6 +493,7 @@ class ProactivePromptDialog:
                 "dismiss_label": self.dismiss_label,
                 "snooze_options": self.snooze_options,
                 "ide_choices": self.ide_choices,
+                "profile_choices": self.profile_choices,
             }
         )
         child = (
@@ -454,10 +502,12 @@ class ProactivePromptDialog:
             "p=json.loads(sys.argv[1]); "
             "d=ProactivePromptDialog(p['title'], p['message'], "
             "p['action_label'], p['dismiss_label'], p['snooze_options'], "
-            "p.get('ide_choices')); "
-            "value=(d._show_ide_choices_tkinter() if p.get('ide_choices') "
+            "p.get('ide_choices'), p.get('profile_choices')); "
+            "value=(d._show_ide_choices_tkinter() if (p.get('ide_choices') "
+            "or p.get('profile_choices')) "
             "else d._show_tkinter()); "
-            "print(json.dumps(value) if p.get('ide_choices') else value)"
+            "print(json.dumps(value) if (p.get('ide_choices') "
+            "or p.get('profile_choices')) else value)"
         )
         try:
             result = subprocess.run(
@@ -473,7 +523,11 @@ class ProactivePromptDialog:
                     logger.warning("Tkinter proactive prompt returned no result")
                     return None
                 value = output[-1]
-                return json.loads(value) if self.ide_choices else value
+                return (
+                    json.loads(value)
+                    if self.ide_choices or self._profile_options()
+                    else value
+                )
             stderr = (result.stderr or "").strip()
             detail = f": {stderr[:500]}" if stderr else ""
             logger.warning(
@@ -490,13 +544,24 @@ class ProactivePromptDialog:
             logger.warning("Tkinter proactive prompt failed: %s", exc)
         return None
 
-    def _ide_selection_result(self, result, install: Iterable[str] = (), never=None):
-        """Build the serializable result returned by the IDE chooser."""
-        return {
+    def _ide_selection_result(
+        self,
+        result,
+        install: Iterable[str] = (),
+        never=None,
+        profile=_PROFILE_NOT_SELECTED,
+    ):
+        """Build the serializable result returned by a setup chooser."""
+        selection = {
             "result": result,
             "install": list(install),
             "never": list(never or ()),
         }
+        if self._profile_options():
+            if profile is _PROFILE_NOT_SELECTED:
+                profile = self._default_profile_selection()
+            selection["profile"] = profile
+        return selection
 
     def _default_ide_selection(self):
         """Return the default selection for each displayed integration."""
@@ -518,15 +583,38 @@ class ProactivePromptDialog:
         ttk.Label(frame, text=self.message, justify="left", wraplength=560).grid(
             row=0, column=0, columnspan=3, sticky="w", pady=(0, 14)
         )
-        ttk.Label(frame, text="Integration").grid(
-            row=1, column=0, sticky="w", padx=(0, 24), pady=(0, 4)
-        )
-        ttk.Label(frame, text="Install now").grid(
-            row=1, column=1, sticky="w", padx=(0, 18), pady=(0, 4)
-        )
-        ttk.Label(frame, text="Never install").grid(
-            row=1, column=2, sticky="w", pady=(0, 4)
-        )
+
+        row = 1
+        profile_var = None
+        profile_options = self._profile_options()
+        if profile_options:
+            ttk.Label(frame, text="Security profile").grid(
+                row=row, column=0, columnspan=3, sticky="w", pady=(0, 4)
+            )
+            row += 1
+            profile_var = tk.StringVar(value=self._default_profile_selection() or "")
+            for option in profile_options:
+                value = option["profile"] or ""
+                ttk.Radiobutton(
+                    frame,
+                    text=self._profile_choice_label(option),
+                    variable=profile_var,
+                    value=value,
+                ).grid(row=row, column=0, columnspan=3, sticky="w", pady=2)
+                row += 1
+            row += 1
+
+        if self.ide_choices:
+            ttk.Label(frame, text="Integration").grid(
+                row=row, column=0, sticky="w", padx=(0, 24), pady=(0, 4)
+            )
+            ttk.Label(frame, text="Install now").grid(
+                row=row, column=1, sticky="w", padx=(0, 18), pady=(0, 4)
+            )
+            ttk.Label(frame, text="Never install").grid(
+                row=row, column=2, sticky="w", pady=(0, 4)
+            )
+            row += 1
 
         install_vars = {}
         never_vars = {}
@@ -540,7 +628,7 @@ class ProactivePromptDialog:
             elif not other.get():
                 selected.set(True)
 
-        for index, choice in enumerate(self.ide_choices, start=2):
+        for index, choice in enumerate(self.ide_choices, start=row):
             key = choice["ide"]
             label = choice.get("name", key)
             detail = choice.get("detail")
@@ -566,14 +654,26 @@ class ProactivePromptDialog:
 
         def choose(value):
             if value == "action":
+                profile = (
+                    profile_var.get()
+                    if profile_var is not None
+                    else _PROFILE_NOT_SELECTED
+                )
+                if profile == "":
+                    profile = None
                 install = [key for key, var in install_vars.items() if var.get()]
                 never = [key for key, var in never_vars.items() if var.get()]
-                result["value"] = self._ide_selection_result(value, install, never)
+                result["value"] = self._ide_selection_result(
+                    value, install, never, profile
+                )
             else:
-                result["value"] = self._ide_selection_result(value)
+                result["value"] = self._ide_selection_result(
+                    value,
+                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                )
             root.destroy()
 
-        button_row = 2 + len(self.ide_choices)
+        button_row = row + len(self.ide_choices)
         ttk.Button(
             frame,
             text=self.action_label,
@@ -608,9 +708,11 @@ class ProactivePromptDialog:
         result = {"value": self._ide_selection_result("dismiss")}
         done = threading.Event()
         controls = {}
+        profile_control = None
         defaults = self._default_ide_selection()
         default_install = set(defaults["install"])
         default_never = set(defaults["never"])
+        profile_options = self._profile_options()
 
         def keep_one_selected(selected, other):
             if selected.value:
@@ -620,23 +722,45 @@ class ProactivePromptDialog:
 
         def choose(value):
             if value == "action":
+                profile = (
+                    profile_control.value
+                    if profile_control is not None
+                    else _PROFILE_NOT_SELECTED
+                )
+                if profile == "":
+                    profile = None
                 install = [
                     key for key, pair in controls.items() if pair["install"].value
                 ]
                 never = [key for key, pair in controls.items() if pair["never"].value]
-                result["value"] = self._ide_selection_result(value, install, never)
+                result["value"] = self._ide_selection_result(
+                    value, install, never, profile
+                )
             else:
-                result["value"] = self._ide_selection_result(value)
+                result["value"] = self._ide_selection_result(
+                    value,
+                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                )
             done.set()
             app.shutdown()
 
         with ui.card().classes("min-w-[620px]"):
             ui.label(self.title).classes("text-h6")
             ui.label(self.message)
-            with ui.row().classes("items-center font-bold"):
-                ui.label("Integration").classes("w-80")
-                ui.label("Install now").classes("w-28")
-                ui.label("Never install").classes("w-28")
+            if profile_options:
+                ui.label("Security profile").classes("font-bold")
+                profile_control = ui.radio(
+                    options={
+                        option["profile"] or "": self._profile_choice_label(option)
+                        for option in profile_options
+                    },
+                    value=self._default_profile_selection() or "",
+                )
+            if self.ide_choices:
+                with ui.row().classes("items-center font-bold"):
+                    ui.label("Integration").classes("w-80")
+                    ui.label("Install now").classes("w-28")
+                    ui.label("Never install").classes("w-28")
             for choice in self.ide_choices:
                 key = choice["ide"]
                 label = choice.get("name", key)
@@ -680,7 +804,7 @@ class ProactivePromptDialog:
     def _show_ide_choices_textual(self):
         from textual.app import App, ComposeResult
         from textual.containers import Horizontal, Vertical
-        from textual.widgets import Button, Checkbox, Label
+        from textual.widgets import Button, Checkbox, Label, Select
 
         dialog = self
 
@@ -692,10 +816,25 @@ class ProactivePromptDialog:
                 with Vertical():
                     yield Label(dialog.title)
                     yield Label(dialog.message)
-                    with Horizontal():
-                        yield Label("Integration")
-                        yield Label("Install now")
-                        yield Label("Never install")
+                    profile_options = dialog._profile_options()
+                    if profile_options:
+                        yield Label("Security profile")
+                        yield Select(
+                            [
+                                (
+                                    dialog._profile_choice_label(option),
+                                    option["profile"] or "",
+                                )
+                                for option in profile_options
+                            ],
+                            value=dialog._default_profile_selection() or "",
+                            id="profile",
+                        )
+                    if dialog.ide_choices:
+                        with Horizontal():
+                            yield Label("Integration")
+                            yield Label("Install now")
+                            yield Label("Never install")
                     for index, choice in enumerate(dialog.ide_choices):
                         label = choice.get("name", choice["ide"])
                         detail = choice.get("detail")
@@ -727,7 +866,13 @@ class ProactivePromptDialog:
                         install.append(choice["ide"])
                     if self.query_one(f"never-{index}", Checkbox).value:
                         never.append(choice["ide"])
-                return dialog._ide_selection_result("action", install, never)
+                profile = _PROFILE_NOT_SELECTED
+                if dialog._profile_options():
+                    selected = self.query_one("#profile", Select).value
+                    profile = (
+                        selected if isinstance(selected, str) and selected else None
+                    )
+                return dialog._ide_selection_result("action", install, never, profile)
 
             def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
                 checkbox_id = event.checkbox.id or ""
@@ -750,10 +895,18 @@ class ProactivePromptDialog:
                 elif button_id.startswith("snooze-"):
                     index = int(button_id.rsplit("-", 1)[1])
                     value = dialog._ide_selection_result(
-                        f"snooze_{dialog.snooze_options[index]}"
+                        f"snooze_{dialog.snooze_options[index]}",
+                        profile=(
+                            None if dialog._profile_options() else _PROFILE_NOT_SELECTED
+                        ),
                     )
                 else:
-                    value = dialog._ide_selection_result("dismiss")
+                    value = dialog._ide_selection_result(
+                        "dismiss",
+                        profile=(
+                            None if dialog._profile_options() else _PROFILE_NOT_SELECTED
+                        ),
+                    )
                 self.result = value
                 self.exit()
 

@@ -373,6 +373,36 @@ class TrayHealthMonitor:
             target.runtime == "local" for target in self._tray._targets
         )
 
+    @staticmethod
+    def _has_user_config():
+        """Return whether the global user configuration file exists.
+
+        The automatic setup flow must not treat a project overlay as the
+        user's first-run configuration. Profile onboarding always targets the
+        global file returned by :func:`get_config_dir`.
+        """
+        from ai_guardian.config.utils import get_config_dir
+
+        try:
+            return (get_config_dir() / "ai-guardian.json").is_file()
+        except OSError as exc:
+            logger.warning("Unable to check user configuration: %s", exc)
+            return False
+
+    @staticmethod
+    def _security_profile_choices():
+        """Return built-in security profiles for first-run onboarding."""
+        from ai_guardian.profile_manager import BUILT_IN_PROFILES, PROFILE_DESCRIPTIONS
+
+        return [
+            {
+                "profile": f"@{name}",
+                "name": f"@{name}",
+                "description": PROFILE_DESCRIPTIONS.get(name, ""),
+            }
+            for name in BUILT_IN_PROFILES
+        ]
+
     def _refresh_ide_setup_state(self, include_excluded=False):
         """Refresh and cache the canonical local IDE/setup health snapshot."""
         from ai_guardian.tray.proactive_prompt import (
@@ -607,7 +637,7 @@ class TrayHealthMonitor:
         )
 
     @staticmethod
-    def _notify_ide_setup_result(results):
+    def _notify_ide_setup_result(results, profile=None):
         """Show doctor-style results after setting up IDE/CLI hooks."""
         from ai_guardian.setup.hooks import IDESetup
 
@@ -662,6 +692,8 @@ class TrayHealthMonitor:
         if counts["FAIL"]:
             summary.append(f"{counts['FAIL']} error(s)")
         lines.extend(["", ", ".join(summary)])
+        if profile:
+            lines.extend(["", f"Security profile: {profile}"])
         TrayHealthMonitor._notify_user("AI Guardian Setup", "\n".join(lines))
 
     def _on_check_ide_setup(self, _icon, _item):
@@ -724,6 +756,10 @@ class TrayHealthMonitor:
             ProactivePromptState,
         )
 
+        user_config_exists = self._has_user_config()
+        profile_choices = (
+            self._security_profile_choices() if not user_config_exists else None
+        )
         names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
         attention = {}
         statuses = {}
@@ -799,6 +835,12 @@ class TrayHealthMonitor:
                         detail = attention.get(unconfigured[0])
                         if detail:
                             message += f"Current hook status: {detail}\n\n"
+                        if profile_choices:
+                            message += (
+                                "No user security profile is configured yet. "
+                                "Choose one below; @standard is recommended, or "
+                                "skip configuration for now.\n\n"
+                            )
                         message += "Set up its security hooks now?"
                         action_label = "Set Up Now"
                 else:
@@ -808,32 +850,38 @@ class TrayHealthMonitor:
                             f"• {name}: {attention.get(ide, 'unknown')}"
                             for ide, name in zip(unconfigured, names)
                         )
-                        + "\n\nSet up their security hooks now?"
+                        + "\n\n"
                     )
+                    if profile_choices:
+                        message += (
+                            "No user security profile is configured yet. Choose one "
+                            "below; @standard is recommended, or skip configuration "
+                            "for now.\n\n"
+                        )
+                    message += "Set up their security hooks now?"
+                dialog_kwargs = {
+                    "title": "Set Up AI Guardian",
+                    "message": message,
+                    "action_label": (
+                        action_label if len(names) == 1 else "Set Up Selected"
+                    ),
+                    "dismiss_label": "Don't Ask Again" if len(names) == 1 else "Cancel",
+                    "snooze_options": ("1h", "6h", "1d", "1w"),
+                }
+                if profile_choices:
+                    dialog_kwargs["profile_choices"] = profile_choices
                 if len(names) == 1:
-                    dialog = ProactivePromptDialog(
-                        title="Set Up AI Guardian",
-                        message=message,
-                        action_label=action_label,
-                        dismiss_label="Don't Ask Again",
-                        snooze_options=("1h", "6h", "1d", "1w"),
-                    )
+                    dialog = ProactivePromptDialog(**dialog_kwargs)
                 else:
-                    dialog = ProactivePromptDialog(
-                        title="Set Up AI Guardian",
-                        message=message,
-                        action_label="Set Up Selected",
-                        dismiss_label="Cancel",
-                        snooze_options=("1h", "6h", "1d", "1w"),
-                        ide_choices=[
-                            {
-                                "ide": ide_type,
-                                "name": name,
-                                "detail": attention.get(ide_type, "unknown"),
-                            }
-                            for ide_type, name in zip(unconfigured, names)
-                        ],
-                    )
+                    dialog_kwargs["ide_choices"] = [
+                        {
+                            "ide": ide_type,
+                            "name": name,
+                            "detail": attention.get(ide_type, "unknown"),
+                        }
+                        for ide_type, name in zip(unconfigured, names)
+                    ]
+                    dialog = ProactivePromptDialog(**dialog_kwargs)
                 result = dialog.show(tray_safe=True)
                 if isinstance(result, dict):
                     action = result.get("result", "dismiss")
@@ -848,18 +896,27 @@ class TrayHealthMonitor:
                         if ide_type in unconfigured
                     }
                     selected_install -= selected_never
+                    selected_profile = result.get("profile")
                 else:
                     action = result
                     selected_install = (
                         set(unconfigured) if action == "action" else set()
                     )
                     selected_never = set()
+                    selected_profile = "@standard" if profile_choices else None
 
                 if not isinstance(action, str):
                     action = "dismiss"
+                if profile_choices and action == "action":
+                    if not isinstance(result, dict) or "profile" not in result:
+                        selected_profile = "@standard"
+                    elif selected_profile == "":
+                        selected_profile = None
+                    elif not isinstance(selected_profile, str):
+                        selected_profile = None
                 if action != "action":
                     if action.startswith("snooze_") or (
-                        not isinstance(result, dict) and len(unconfigured) == 1
+                        len(unconfigured) == 1 and len(names) == 1
                     ):
                         state.record(prompt_key, action)
                     return
@@ -868,8 +925,51 @@ class TrayHealthMonitor:
                     install=selected_install,
                     never=selected_never,
                 )
+
+                # A single-IDE first-run prompt uses the profile selector as
+                # its only chooser, so an action implicitly includes that IDE.
+                if (
+                    profile_choices
+                    and len(unconfigured) == 1
+                    and isinstance(result, dict)
+                    and not result.get("install")
+                ):
+                    selected_install = set(unconfigured)
+
+                configured_profile = None
+                if profile_choices and selected_profile:
+                    from ai_guardian.setup import create_default_config
+
+                    try:
+                        config_success, config_message = create_default_config(
+                            profile=selected_profile,
+                            force=False,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "Security profile setup failed for %s: %s",
+                            selected_profile,
+                            exc,
+                        )
+                        config_success = False
+                        config_message = str(exc)
+                    if not config_success:
+                        state.record(prompt_key, "snooze_1h")
+                        self._notify_user(
+                            "AI Guardian Setup",
+                            "Unable to create the AI Guardian security profile "
+                            f"{selected_profile}.\n\n{config_message}",
+                        )
+                        return
+                    configured_profile = selected_profile
+
                 if not selected_install:
                     self._refresh_ide_setup_state(include_excluded=manual)
+                    if configured_profile:
+                        self._notify_user(
+                            "AI Guardian Configuration",
+                            f"Security profile {configured_profile} is configured.",
+                        )
                     return
 
                 from ai_guardian.setup import setup_hooks
@@ -946,7 +1046,10 @@ class TrayHealthMonitor:
                             "snooze_1h",
                         )
                 self._refresh_ide_setup_state(include_excluded=manual)
-                self._notify_ide_setup_result(setup_results)
+                self._notify_ide_setup_result(
+                    setup_results,
+                    profile=configured_profile,
+                )
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:

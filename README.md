@@ -113,6 +113,14 @@ only offer setup on local-daemon trays.
 When multiple integrations need setup, the tray shows an individual **Install
 now** or **Never install** choice for each one. These choices are kept per
 integration, so a newly detected IDE can still be offered later.
+When no global `ai-guardian.json` exists, the automatic setup prompt also shows
+a **Security profile** selector. `@standard` is selected and recommended by
+default; `@minimal`, `@strict`, and `@moderator` include concise guidance, and
+**Skip configuration for now** installs only the selected IDE hooks. If a
+profile is selected, the tray creates the global config only after confirmation
+and before installing hooks. Existing global or project-local configuration is
+never overwritten by this flow. Configuration creation failures leave hook
+setup untouched and the prompt is temporarily deferred.
 The web console's **Configuration → Proactive Prompt State** page provides a
 read-only view of these local prompt decisions. They are stored separately in
 the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.

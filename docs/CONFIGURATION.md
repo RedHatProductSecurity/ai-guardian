@@ -141,6 +141,20 @@ ai-guardian setup --create-config --profile @moderator      # Human-in-the-loop 
 ai-guardian setup --list-profiles                           # List all available profiles
 ```
 
+On first run, the tray's automatic IDE setup prompt shows the same built-in
+profiles when the global user config is missing. `@standard` is preselected,
+and **Skip configuration for now** installs only the selected IDE hooks. To
+open the setup flow later, use the tray's **IDE/CLI Setup → Create Config...**
+entry. To change an existing global profile from the CLI, choose a profile and
+explicitly pass `--force`, for example:
+
+```bash
+ai-guardian setup --create-config --profile @strict --force
+```
+
+The automatic tray flow never passes `--force` and therefore never overwrites
+an existing global config or a project-local overlay.
+
 | Profile | Secrets | PII | Prompt Injection | SSRF | Use case |
 |---------|---------|-----|------------------|------|----------|
 | `@minimal` | block | warn | low | warn | Personal projects, low friction |
