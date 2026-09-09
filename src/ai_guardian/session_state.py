@@ -36,11 +36,15 @@ def derive_session_key(hook_data: dict) -> str:
     1. session_id (Claude Code provides this)
     2. transcript_path (fallback for older versions)
     3. cwd + 30-minute time bucket (last resort)
+
+    Agents using protojson camelCase payloads (Antigravity) are read from
+    their equivalent keys, so distinct sessions never collapse onto the
+    time-bucket fallback.
     """
-    key = hook_data.get("session_id")
+    key = hook_data.get("session_id") or hook_data.get("conversationId")
     if key:
         return key
-    key = hook_data.get("transcript_path")
+    key = hook_data.get("transcript_path") or hook_data.get("transcriptPath")
     if key:
         return key
     return f"{os.getcwd()}:{int(time.time() // 1800)}"

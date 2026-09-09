@@ -45,6 +45,7 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode | `--ide opencode` | Plugin | N/A | **Complete** |
+| Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
 
@@ -99,6 +100,7 @@ future integrations. For this repository, the main evidence paths are
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
 | OpenCode | N/A | Yes (chat.message) | Yes | Yes | N/A | N/A | N/A |
+| Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
@@ -126,6 +128,7 @@ integration guides.
 | Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Kiro | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Augment Code | Command hooks | PreToolUse, PostToolUse | Supported |
+| Antigravity CLI (agy) | Command hooks | PreInvocation, PreToolUse, PostToolUse | Supported (partial output surface) |
 | AiderDesk | Extension | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | OpenClaw | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
 | OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
@@ -156,26 +159,28 @@ does not create entries because it intentionally skips hook processing.
 
 Coverage per agent depends on which hooks are available. This table shows representative agents across the enforcement spectrum: full hooks + MCP, full hooks only, partial hooks, and MCP-only.
 
+Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
+
 Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
-| Violation Type | Requires | Claude Code | Cursor | Copilot | Junie (MCP) |
-|---|---|---|---|---|---|
-| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Advisory |
-| secret_redaction | Post | Enforce | Enforce | Enforce | No |
-| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| directory_blocking | Pre | Enforce | Enforce | Enforce | Advisory |
-| tool_permission | Pre | Enforce | Enforce | Enforce | No |
-| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Advisory |
-| config_file_exfil | Pre | Enforce | Enforce | Enforce | No |
-| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| image_secret | Pre | Caution | Caution | Caution | No |
-| image_pii | Pre | Caution | Caution | Caution | No |
-| offensive_language | Pre+Post | Enforce | Enforce | Partial | Advisory |
-| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Advisory |
+| Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
+|---|---|---|---|---|---|---|
+| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
+| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| tool_permission | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| config_file_exfil | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| image_secret | Pre | Caution | Caution | Caution | Caution | No |
+| image_pii | Pre | Caution | Caution | Caution | Caution | No |
+| offensive_language | Pre+Post | Enforce | Enforce | Partial | Partial | Advisory |
+| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Enforce | Advisory |
 
 **Legend:**
 
@@ -352,6 +357,68 @@ configuration and rerun setup.
 
 Augment Code (Auggie CLI) stores conversation sessions server-side, not as local files. The only local files under `~/.augment/` are authentication (`session.json`), settings (`settings.json`), commands, and rules. Augment also does not implement a `UserPromptSubmit` hook event (only PreToolUse, PostToolUse, Stop, SessionStart, SessionEnd), and transcript scanning requires the PROMPT event to trigger. This can be revisited if Augment exposes local session files or adds a UserPromptSubmit-equivalent hook.
 
+### Antigravity CLI (agy) — no tool output in PostToolUse
+
+Antigravity configures hooks in `hooks.json` (`~/.gemini/config/hooks.json` globally,
+`<workspace>/.agents/hooks.json` per project, or `plugins/<name>/hooks.json`). Its payload is
+protojson camelCase and differs from every other supported agent: the tool call is nested under
+`toolCall` (`{"name": ..., "args": {...}}`), and the response is flat
+(`{"decision": "allow|deny|ask|force_ask", "reason": ...}`) rather than Claude Code's
+`hookSpecificOutput.permissionDecision`.
+
+The implementation follows the [official Antigravity hooks specification](https://www.antigravity.google/docs/hooks/).
+AI Guardian does not bundle or link Antigravity code; it invokes the host's documented
+command-hook interface. The default installation is user-scoped for hooks and MCP at
+`~/.gemini/config/`; workspace hook setup is explicit and does not imply protection for
+remote execution. The generated command-hook contract is platform-independent JSON
+stdin/stdout, while the isolated runtime matrix executes on Ubuntu and shared setup
+tests cover Windows path and script behavior.
+
+**Every PreToolUse response must carry a decision.** Antigravity has no "no opinion" value — an
+absent or unrecognised `decision` denies the tool call, and `{"decision": "none"}` is rejected with
+`unsupported hook decision`. A clean check therefore returns `{"decision": "ask"}`, which hands the
+choice back to Antigravity's own permission prompt and respects its "Always Allow" cache, so
+ai-guardian never silently widens the user's existing permissions. The trade-off: in
+non-interactive `-p` mode `ask` resolves to a denial, so headless runs need an Antigravity
+permission allowlist.
+
+**Event resolution.** Antigravity does not name the event in the payload, and — contrary to its own
+documentation, which describes PostToolUse as carrying only `stepIdx` and an optional `error` —
+the PreToolUse and PostToolUse payloads are near-identical:
+
+```
+PreToolUse   {"stepIdx": 3, "toolCall": {...}}
+PostToolUse  {"stepIdx": 3, "toolCall": {...}, "error": ""}
+```
+
+The generated hook commands therefore pass `--hook-event <Event>`, which is stamped into the hook
+data so it survives forwarding to the ai-guardian daemon (a separate, long-lived process — an
+environment variable would neither reach it nor stay correct between invocations). Hand-written
+configs fall back to inference, which keys off `error` (present on every PostToolUse payload,
+empty string on success).
+
+PostToolUse fires normally, but the payload carries **no tool output** — only the originating
+`toolCall` and its arguments. Post-tool output scanning and redaction are therefore not possible
+on Antigravity; the command itself can still be inspected. `PreInvocation` (fired before each model
+call) carries the security-instruction injection via `injectSteps`.
+
+Antigravity supplies `transcriptPath`, which AI Guardian preserves in the normalized session
+input, but no transcript reader is registered: the incremental transcript contract is not part
+of the supported integration and transcript scanning is therefore not claimed.
+
+The MCP advisor is registered in the global `~/.gemini/config/mcp_config.json`. Project hook
+configuration does not create a project MCP file; any remote or team-level MCP registration
+must be managed through Antigravity's own deployment surface.
+
+Tool names are the lowercased `CORTEX_STEP_TYPE_*` enum with the prefix stripped
+(`run_command`, `view_file`, `find_by_name`, `list_dir`, `call_mcp_tool`, …) and are mapped onto
+canonical Claude Code names so existing pattern and permission rules apply unchanged. MCP calls
+arrive as `call_mcp_tool` with the server and tool in the arguments, and are rebuilt as
+`mcp__<server>__<tool>` so MCP restriction and `mcp__*` rules keep applying.
+
+Only `matcher: "*"` in the grouped form is honoured for tool-scoped events. An empty matcher, a
+named matcher, and the flat handler list documented upstream were all observed not to fire.
+
 ### Crush (Charmbracelet) — PreToolUse only
 
 Crush currently implements only the `PreToolUse` hook event. PostToolUse, UserPromptSubmit, and other events are proposed but not yet available (see their `docs/hooks/FUTURE.md`). This means post-tool redaction, prompt scanning, and transcript scanning are not enforced. ai-guardian's MCP advisory server provides supplementary coverage.
@@ -372,6 +439,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
+| Antigravity CLI | Medium | Tested — PreToolUse blocking, PreInvocation injection and MCP verified against `agy`; no PostToolUse output available |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |
@@ -397,16 +465,16 @@ Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guar
 
 Each agent uses different event names. The adapter layer normalizes these.
 
-| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush |
-|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|
-| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A |
-| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` |
-| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A |
-| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) |
-| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A |
-| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) |
-| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A |
-| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A |
+| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush | Antigravity |
+|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|-------------|
+| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A | N/A |
+| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` | `PreToolUse` |
+| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A | N/A |
+| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) | `PostToolUse` |
+| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) | `PreInvocation` |
+| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 
 Cursor's default managed user-level setup installs these six events:
 `beforeSubmitPrompt`, `beforeReadFile`, `beforeShellExecution`, `preToolUse`,
@@ -432,6 +500,7 @@ JSON object so error payloads are not echoed.
 | Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode | Same as Claude Code | Same as Claude Code |
 | Crush | Same as Claude Code | Same as Claude Code |
+| Antigravity CLI | Flat JSON `decision` field (required — an absent decision denies) | `{"decision": "deny", "reason": "..."}`; a clean check returns `{"decision": "ask"}` |
 
 ## Agent-Facing Message Delivery
 
@@ -480,6 +549,7 @@ hook_adapters/
 ├── gemini.py            # Google Gemini CLI
 ├── cline.py             # Cline / ZooCode
 ├── kiro.py              # Kiro + AiderDesk + OpenClaw
+├── antigravity.py       # Google Antigravity CLI
 ├── augment.py           # Augment Code (extends ClaudeCodeAdapter)
 ├── opencode.py          # OpenCode (extends ClaudeCodeAdapter)
 ├── crush.py             # Crush (extends ClaudeCodeAdapter)
@@ -493,6 +563,7 @@ hook_adapters/
 3. Fall back to Claude Code adapter (handles PascalCase and all unknown formats)
 
 Detection priority checks unique fields:
+- `conversationId` + `workspacePaths` or `toolCall` → Antigravity CLI
 - `clineVersion` → Cline
 - `transcript_path` → Gemini CLI
 - `agent_action_name` → Windsurf
@@ -529,7 +600,7 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, `junie`
 
 ### Config File Locations
 
@@ -551,6 +622,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin) |
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
+| Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |
 | Junie | `.junie/guidelines` (MCP only) |
 
 ### Cursor desktop, CLI, and agent scope

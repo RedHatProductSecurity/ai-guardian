@@ -848,7 +848,9 @@ class TestIDESetupParametrized:
                 )
             else:
                 hooks = config["hooks"]
-                if ide_name in ("windsurf", "augment", "crush"):
+                if ide_name == "antigravity":
+                    hooks = hooks["ai-guardian"]
+                elif ide_name in ("windsurf", "augment", "crush"):
                     hooks = hooks.get("hooks", hooks)
                 configured_events = tuple(name for name in hooks if name != "version")
             assert set(configured_events) == set(expected_events)

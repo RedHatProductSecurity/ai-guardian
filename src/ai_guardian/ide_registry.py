@@ -185,6 +185,25 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ),
     ),
     IDEIntegration(
+        "antigravity",
+        "Antigravity CLI",
+        "AntigravityAdapter",
+        ("antigravity", "agy"),
+        "command-hooks",
+        "local",
+        (),
+        "none",
+        (
+            ("PreToolUse", ("allow", "block")),
+            # Antigravity's PostToolUse payload has no tool output, so the
+            # event is exercised as a clean observation rather than a
+            # redaction case.
+            ("PostToolUse", ("allow",)),
+            ("PreInvocation", ("allow",)),
+        ),
+        platform_contract="Antigravity CLI; PostToolUse has no output transform surface",
+    ),
+    IDEIntegration(
         "cline",
         "Cline",
         "ClineAdapter",

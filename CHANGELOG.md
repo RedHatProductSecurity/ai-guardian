@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Antigravity CLI (`agy`) hooks and MCP integration**: Add camelCase
+  payload normalization, canonical tool and MCP-name mapping, flat decision
+  responses, root-level `hooks.json` setup, and isolated hook regression
+  coverage (#2134).
+
 - **Cursor desktop/CLI hooks and MCP integration**: Normalize Cursor's six
   managed command-hook events, recognize additional upstream MCP/failure
   payloads without treating them as required setup, install local desktop
@@ -175,6 +180,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Web console header**: Keep the hamburger menu and header quicklinks interactive on IDE Conversations pages by removing overlapping sticky control layers (#2193)
 
 ### Added
+
+- **Antigravity CLI (`agy`) support** — new `--ide antigravity` (alias `--ide agy`) target with a hook adapter, `~/.gemini/config/hooks.json` + `mcp_config.json` setup, and tool-name mapping onto canonical names. Antigravity has no "no opinion" PreToolUse decision (an absent decision denies the call), so a clean check returns `ask`, deferring to Antigravity's own permission prompt without widening existing permissions. Its PreToolUse and PostToolUse payloads are near-identical, so generated hook commands declare `--hook-event`, stamped into the hook data to survive daemon forwarding. MCP calls arrive as `call_mcp_tool` and are rebuilt as `mcp__{server}__{tool}` so MCP restriction and `mcp__*` rules keep applying. PostToolUse fires but carries no tool output, so post-tool redaction is not available on Antigravity
 
 - **Unified hook session traces**: Persist IDE hook sessions in the GuardedAgent JSON trace format, including prompts, tool calls, scan outcomes, session metadata, and `AI_GUARDIAN_RUN_ID` correlation for combined SDK and IDE pipeline views (#2190)
 

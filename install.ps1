@@ -13,7 +13,7 @@
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, codex, windsurf, gemini, cline,
-             zoocode, kiro, aiderdesk, openclaw, opencode, augment, crush, junie
+             antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, augment, crush, junie
 
 .PARAMETER Profile
     Security profile: @minimal, @standard (default), @strict
@@ -160,6 +160,9 @@ function Detect-InstalledAgents {
 
     $geminiDir = Join-Path $HOME ".gemini"
     if (Test-Path $geminiDir -PathType Container) { $agents += "gemini" }
+
+    $antigravityDir = Join-Path $HOME ".gemini\config"
+    if (Test-Path $antigravityDir -PathType Container) { $agents += "antigravity" }
 
     $augmentDir = Join-Path $HOME ".augment"
     if (Test-Path $augmentDir -PathType Container) { $agents += "augment" }

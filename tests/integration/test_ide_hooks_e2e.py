@@ -212,6 +212,11 @@ def _assert_mcp_registration(ide_type: str) -> None:
 
 
 def _json_event_value(config: Dict[str, Any], ide_type: str, event_name: str) -> Any:
+    if ide_type == "antigravity":
+        # hooks.json is keyed by hook NAME at the document root; our events
+        # live under our own block rather than under a "hooks" object.
+        owned = config.get("ai-guardian", {})
+        return owned.get(event_name) if isinstance(owned, dict) else None
     if ide_type == "copilot":
         return config.get(event_name)
     if ide_type == "gemini":
@@ -275,7 +280,12 @@ def _payload(
         "session_id": "isolated-ide-e2e",
     }
 
-    if ide_type == "cursor":
+    if ide_type == "antigravity":
+        payload = {
+            "conversationId": "isolated-ide-e2e",
+            "workspacePaths": [str(project)],
+        }
+    elif ide_type == "cursor":
         payload["cursor_version"] = "synthetic"
     elif ide_type in ("cline", "zoocode"):
         payload["clineVersion"] = "synthetic"
@@ -300,6 +310,9 @@ def _payload(
 
     if ide_type == "crush":
         payload["event"] = payload_event_name
+    elif ide_type == "antigravity":
+        # The event is declared by --hook-event, never named in the payload.
+        pass
     elif ide_type == "windsurf":
         payload["agent_action_name"] = payload_event_name
     else:
@@ -313,6 +326,8 @@ def _payload(
                     "tool_input": {"file_path": str(project / "README.md")},
                 }
             )
+        elif ide_type == "antigravity":
+            payload["invocationNum"] = 1
         else:
             payload["prompt"] = "List the files in this synthetic project."
         return payload
@@ -353,6 +368,17 @@ def _payload(
                     },
                 }
             )
+        elif ide_type == "antigravity":
+            payload.update(
+                {
+                    "toolCall": {
+                        "name": "view_file",
+                        "args": {"AbsolutePath": str(blocked_file)},
+                    },
+                    "stepIdx": 1,
+                }
+            )
+            return payload
         else:
             tool_name = "view" if ide_type == "augment" else "Read"
             payload.update(
@@ -364,6 +390,17 @@ def _payload(
         return payload
 
     if case_name == "post":
+        if ide_type == "antigravity":
+            # PostToolUse carries the originating toolCall and an error field;
+            # it carries no tool output at all, so nothing can be redacted.
+            payload.update(
+                {
+                    "toolCall": {"name": "run_command", "args": {"CommandLine": "ls"}},
+                    "stepIdx": 2,
+                    "error": "",
+                }
+            )
+            return payload
         tool_name = "launch-process" if ide_type == "augment" else "Bash"
         payload.update(
             {
