@@ -7,6 +7,11 @@ typos and provide IDE discoverability.
 from enum import Enum
 
 CODEX_DISPLAY_NAME = "OpenAI Codex (CLI + Desktop)"
+CODEX_COVERAGE_NOTE = (
+    "AI Guardian hooks cover Codex CLI and Codex mode in the ChatGPT desktop app; "
+    "regular ChatGPT mode is not currently protected by these Codex lifecycle "
+    "hooks. Shared MCP configuration does not imply hook enforcement."
+)
 
 
 class ActionMode(str, Enum):

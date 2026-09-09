@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
@@ -223,6 +224,7 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
         message=(
             "OpenAI Codex (CLI + Desktop) hooks are configured, but the AI Guardian MCP server is "
             "missing.\n\n"
+            f"{CODEX_COVERAGE_NOTE}\n\n"
             f"Codex MCP configuration: {mcp_path}\n\n"
             "Register the AI Guardian MCP server now?"
         ),
@@ -663,6 +665,7 @@ def test_codex_setup_reports_only_managed_hook_count():
 
     message = notify.call_args.args[1]
     assert "[PASS] OpenAI Codex (CLI + Desktop): 5/5 hooks configured" in message
+    assert CODEX_COVERAGE_NOTE in message
     assert "12/12" not in message
 
 

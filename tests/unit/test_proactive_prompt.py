@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.proactive_prompt import (
     ProactivePromptDialog,
@@ -657,7 +658,7 @@ def test_ide_health_notification_explains_configured_and_pending_counts():
         "IDE/CLI health check: 2 configured, 1 need setup.\n\n"
         "Configured:\n"
         "• Claude Code\n"
-        "• OpenAI Codex (CLI + Desktop)\n\n"
+        f"• OpenAI Codex (CLI + Desktop) ({CODEX_COVERAGE_NOTE})\n\n"
         "Needs setup:\n"
         "• Cursor IDE/CLI",
     )
@@ -893,6 +894,7 @@ def test_codex_setup_result_reports_managed_hook_count():
         "[PASS] OpenAI Codex (CLI + Desktop): 5/5 hooks configured"
         in notify.call_args.args[1]
     )
+    assert CODEX_COVERAGE_NOTE in notify.call_args.args[1]
 
 
 def test_setup_result_uses_final_verification_health_over_setup_return():

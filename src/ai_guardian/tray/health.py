@@ -10,6 +10,7 @@ import logging
 import threading
 import time
 
+from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.tray import notifications as tray_notifications
 from ai_guardian.tray import plugins as tray_plugins
 
@@ -646,6 +647,8 @@ class TrayHealthMonitor:
                 mcp_status = status.get("mcp_status")
                 if mcp_status and mcp_status != "healthy":
                     details.append(f"MCP: {mcp_status}")
+            if ide == "codex":
+                details.append(CODEX_COVERAGE_NOTE)
             return f"{name} ({'; '.join(details)})" if details else name
 
         names = [_label(ide) for ide in installed]
@@ -735,6 +738,8 @@ class TrayHealthMonitor:
                     detail += f"; scope: {scope_detail}"
                 elif effective_scope and effective_scope != "none":
                     detail += f"; scope: {effective_scope}"
+            if ide_type == "codex":
+                detail += f"; {CODEX_COVERAGE_NOTE}"
             lines.append(f"[{status}] {name}: {detail}")
 
         summary = []
@@ -957,6 +962,7 @@ class TrayHealthMonitor:
                             f"{TrayHealthMonitor._ide_display_name('codex')} hooks are "
                             "configured, but the AI Guardian "
                             "MCP server is missing.\n\n"
+                            f"{CODEX_COVERAGE_NOTE}\n\n"
                             f"Codex MCP configuration: "
                             f"{codex_status.get('mcp_config_path', 'global config.toml')}"
                             "\n\nRegister the AI Guardian MCP server now?"
@@ -967,6 +973,8 @@ class TrayHealthMonitor:
                             f"{names[0]} is installed but is not protected by "
                             "AI Guardian.\n\n"
                         )
+                        if unconfigured[0] == "codex":
+                            message += f"{CODEX_COVERAGE_NOTE}\n\n"
                         detail = attention.get(unconfigured[0])
                         if detail:
                             message += f"Current hook status: {detail}\n\n"
@@ -987,6 +995,8 @@ class TrayHealthMonitor:
                         )
                         + "\n\n"
                     )
+                    if "codex" in unconfigured:
+                        message += f"{CODEX_COVERAGE_NOTE}\n\n"
                     if profile_choices:
                         message += (
                             "No user security profile is configured yet. Choose one "

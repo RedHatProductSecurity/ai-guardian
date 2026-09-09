@@ -352,6 +352,14 @@ ai-guardian ide-setup reset --ide claude  # Reset Claude setup prompt decisions
 
 Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
 
+### OpenAI Codex coverage
+
+`OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** selected in
+the ChatGPT desktop app. Regular ChatGPT mode in that app is not currently
+protected by AI Guardian's Codex lifecycle hooks. The ChatGPT desktop app,
+Codex CLI, and Codex IDE extension can share MCP configuration, but shared MCP
+availability does not imply hook enforcement.
+
 ## Action Modes
 
 Each security policy supports three enforcement levels:

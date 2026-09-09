@@ -8,6 +8,20 @@ supports and where known limitations remain. Use the
 implementation, test, documentation, and release workflow when adding or
 changing an integration.
 
+### Codex and ChatGPT desktop scope
+
+`OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the
+ChatGPT desktop app. It does not include regular ChatGPT mode in that app.
+AI Guardian's Codex lifecycle hooks currently run only for the Codex hook
+surface, so regular ChatGPT mode is not protected by those hooks. The ChatGPT
+desktop app, Codex CLI, and Codex IDE extension can share MCP configuration,
+but shared MCP availability is separate from hook enforcement and does not
+extend Codex lifecycle hooks to regular ChatGPT mode. See the official
+[Codex environments](https://learn.chatgpt.com/docs/environments/modes),
+[Codex hooks](https://learn.chatgpt.com/docs/hooks), and
+[MCP](https://learn.chatgpt.com/docs/extend/mcp) documentation for the
+upstream distinction.
+
 ## Supported Agents
 
 | Agent | Setup Command | Hooks | MCP | Status |
@@ -15,7 +29,7 @@ changing an integration.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`); Cloud Agents use dashboard/API MCP | **Complete locally; project hooks available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
+| OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete for Codex CLI and desktop Codex mode** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -43,6 +57,9 @@ changing an integration.
 | OpenCode | N/A | Yes (chat.message) | Yes | Yes | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+The Codex row applies to Codex CLI and desktop Codex mode only. Regular
+ChatGPT mode does not run these Codex lifecycle hooks.
 
 ## Hook Latency Support Matrix
 
@@ -213,10 +230,13 @@ Agents not listed above do not have transcript scanning support.
 
 ### OpenAI Codex (CLI + Desktop)
 
-AI Guardian supports the documented Codex hook interface used by Codex CLI and
-Codex mode in ChatGPT desktop. The official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
+The display label is intentionally scoped: AI Guardian supports the documented
+Codex hook interface used by Codex CLI and Codex mode in ChatGPT desktop. The
+official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
 describes the same event names, command-hook payload, and layered discovery
-model used by this adapter.
+model used by this adapter. Selecting regular ChatGPT mode in the desktop app
+does not run these Codex lifecycle hooks, so it is not currently hook-enforced
+by AI Guardian.
 
 AI Guardian installs its five managed hooks in the Codex user layer at
 `~/.codex/hooks.json`, or at `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set.
@@ -229,6 +249,10 @@ active alongside the user layer.
 AI Guardian also registers its MCP server in Codex's global `config.toml` at
 `~/.codex/config.toml`, or at `$CODEX_HOME/config.toml` when `CODEX_HOME` is
 set, following the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
+The ChatGPT desktop app, Codex CLI, and IDE extension can share that MCP
+configuration, but MCP availability is advisory and separate from lifecycle
+hook enforcement. An MCP server being visible in regular ChatGPT mode does not
+mean that AI Guardian's Codex hooks run there.
 MCP setup is enabled by default and preserves unrelated global and project
 configuration. A stale project-root `codex.json` entry is removed after the
 global registration is written.
@@ -241,8 +265,10 @@ rewriting healthy Codex hooks.
 Violation records use `context.ide_type` for the stable integration identity,
 independently of the response protocol. Codex CLI and Codex mode in ChatGPT
 desktop both record `codex`, while Claude-compatible response formatting is
-preserved. Other adapters that share Claude-compatible formatting use their
-own stable values, such as `windsurf`, `augment`, `opencode`, and `crush`.
+preserved. This identity does not indicate coverage for regular ChatGPT mode;
+that mode is outside the current Codex hook enforcement path. Other adapters
+that share Claude-compatible formatting use their own stable values, such as
+`windsurf`, `augment`, `opencode`, and `crush`.
 Payloads that do not identify an integration use `unknown` rather than being
 attributed to Claude Code.
 

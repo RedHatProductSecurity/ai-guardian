@@ -14,6 +14,7 @@ from unittest import mock
 
 import pytest
 
+from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.doctor import (
     CheckResult,
     CheckStatus,
@@ -621,7 +622,10 @@ class TestCheckHooks:
             result = doctor.check_hooks()
 
         assert result.status == CheckStatus.PASS
-        assert "OpenAI Codex (CLI + Desktop): 5/5 hooks; MCP: healthy" in result.message
+        assert (
+            f"OpenAI Codex (CLI + Desktop): 5/5 hooks; MCP: healthy; "
+            f"{CODEX_COVERAGE_NOTE}" in result.message
+        )
 
     def test_missing_config_file_not_failure(self, _isolate_config_dir, tmp_path):
         """IDE detected but config file missing → not FAIL (e.g. Crush on CI)."""

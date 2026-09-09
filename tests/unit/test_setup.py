@@ -18,7 +18,7 @@ except ImportError:
     import tomli as tomllib  # type: ignore
 
 from ai_guardian.config.utils import get_config_dir
-from ai_guardian.constants import MANAGED_HOOK_EVENTS_BY_IDE
+from ai_guardian.constants import CODEX_COVERAGE_NOTE, MANAGED_HOOK_EVENTS_BY_IDE
 from ai_guardian.setup import (
     IDESetup,
     setup_hooks,
@@ -1732,6 +1732,7 @@ class TestCodexSetup:
             }
         }
         assert "preserved active Codex layers" in message
+        assert CODEX_COVERAGE_NOTE in message
 
     def test_codex_mcp_config_path_honors_codex_home(self, monkeypatch, tmp_path):
         """Codex MCP registration follows the same CODEX_HOME as Codex itself."""

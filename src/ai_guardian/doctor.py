@@ -27,6 +27,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ai_guardian.constants import CODEX_COVERAGE_NOTE
+
 logger = logging.getLogger(__name__)
 
 
@@ -967,7 +969,8 @@ class Doctor:
                 total = len(setup.expected_hook_manifest("codex"))
                 mcp_status = verification.get("mcp_status", "missing")
                 results.append(
-                    f"{ide_name}: {hook_count}/{total} hooks; MCP: {mcp_status}"
+                    f"{ide_name}: {hook_count}/{total} hooks; MCP: {mcp_status}; "
+                    f"{CODEX_COVERAGE_NOTE}"
                 )
                 any_configured = True
                 if verification.get("healthy") is not True or hook_count < total:
