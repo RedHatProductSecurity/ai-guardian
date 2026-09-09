@@ -176,6 +176,63 @@ class TestIDESetup:
         ):
             assert setup.list_installed_ides() == ["cursor"]
 
+    def test_list_installed_ides_rejects_cli_config_directories_without_evidence(
+        self, tmp_path
+    ):
+        """CLI config directories alone do not prove Gemini or Antigravity exists."""
+        setup = IDESetup()
+        gemini_dir = tmp_path / ".gemini"
+        (gemini_dir / "config").mkdir(parents=True)
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "gemini": {
+                    "config_path": str(gemini_dir / "settings.json"),
+                    "executable": "gemini",
+                },
+                "antigravity": {
+                    "config_path": str(gemini_dir / "config" / "hooks.json"),
+                    "executable": "agy",
+                },
+            },
+        ):
+            with mock.patch("ai_guardian.setup.hooks.shutil.which", return_value=None):
+                assert setup.list_installed_ides() == []
+                assert setup.list_detected_ides() == []
+
+    def test_list_installed_ides_accepts_cli_executable_or_config_file(self, tmp_path):
+        """CLI detection accepts a binary or an agent-specific config file."""
+        setup = IDESetup()
+        gemini_dir = tmp_path / ".gemini"
+        antigravity_dir = gemini_dir / "config"
+        antigravity_dir.mkdir(parents=True)
+        antigravity_config = antigravity_dir / "hooks.json"
+        antigravity_config.write_text("{}")
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "gemini": {
+                    "config_path": str(gemini_dir / "settings.json"),
+                    "executable": "gemini",
+                },
+                "antigravity": {
+                    "config_path": str(antigravity_config),
+                    "executable": "agy",
+                },
+            },
+        ):
+            with mock.patch(
+                "ai_guardian.setup.hooks.shutil.which",
+                side_effect=lambda executable: (
+                    f"/usr/local/bin/{executable}" if executable == "gemini" else None
+                ),
+            ):
+                assert setup.list_installed_ides() == ["gemini", "antigravity"]
+
     def test_backup_config(self, tmp_path):
         """Test creating backup of config file."""
         setup = IDESetup()
