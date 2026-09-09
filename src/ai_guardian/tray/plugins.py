@@ -1346,7 +1346,8 @@ function showDialog() {
 
     if (hasDismiss && response === dismissButton) {
         var structured =
-            payload.ide_choices.length > 0 || payload.profile_choices.length > 0;
+            String(payload.dismiss_label) === "Never" &&
+            (payload.ide_choices.length > 0 || payload.profile_choices.length > 0);
         return {
             result: structured ? "action" : "dismiss",
             install: [],

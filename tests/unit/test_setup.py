@@ -1343,30 +1343,70 @@ class TestCursorSetup:
         assert not user_hooks.exists()
         assert project_hooks.exists()
 
-    def test_cursor_mcp_setup_writes_explicit_project_scope(self, tmp_path):
-        """Explicit Cursor project MCP setup preserves unrelated servers."""
-        from ai_guardian.setup import _install_mcp_config, _MCP_IDE_CONFIGS
+    def test_cursor_cloud_mcp_setup_is_external_and_preserves_project_file(
+        self, tmp_path, capsys
+    ):
+        """Cursor Cloud MCP is external and local project MCP is untouched."""
+        from ai_guardian.setup import _install_mcp_config
 
-        user_mcp = tmp_path / "user" / "mcp.json"
         project_mcp = tmp_path / "project" / ".cursor" / "mcp.json"
         project_mcp.parent.mkdir(parents=True)
-        project_mcp.write_text(json.dumps({"mcpServers": {"other": {}}}))
+        original_config = {
+            "mcpServers": {
+                "other": {},
+                "ai-guardian": {"command": "existing"},
+            }
+        }
+        project_mcp.write_text(json.dumps(original_config))
 
-        with mock.patch.dict(
-            _MCP_IDE_CONFIGS,
-            {"cursor": {**_MCP_IDE_CONFIGS["cursor"], "config_file": str(user_mcp)}},
+        _install_mcp_config(
+            IDESetup(),
+            "cursor",
+            scope="project",
+            project_dir=str(project_mcp.parent.parent),
+        )
+
+        project_config = json.loads(project_mcp.read_text())
+        assert project_config == original_config
+        assert project_config["mcpServers"]["other"] == {}
+        assert "Cursor Cloud MCP" in capsys.readouterr().out
+
+    def test_cursor_cloud_project_health_uses_hooks_not_project_mcp(self, tmp_path):
+        """Cloud project health does not infer MCP from .cursor/mcp.json."""
+        setup = IDESetup()
+        project_root = tmp_path / "project"
+        project_hooks = project_root / ".cursor" / "hooks.json"
+        project_hooks.parent.mkdir(parents=True)
+        project_mcp = project_root / ".cursor" / "mcp.json"
+        project_mcp.write_text(
+            json.dumps({"mcpServers": {"ai-guardian": {"command": "local"}}})
+        )
+        manifest = setup.expected_hook_manifest("cursor")
+        project_hooks.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "hooks": {
+                        event: [{"command": "ai-guardian --ide cursor"}]
+                        for event in manifest
+                    },
+                }
+            )
+        )
+
+        with mock.patch.object(
+            setup, "get_config_path", return_value=str(project_hooks)
         ):
-            _install_mcp_config(
-                IDESetup(),
-                "cursor",
-                scope="project",
-                project_dir=str(project_mcp.parent.parent),
+            verification = setup.verify_ide_setup(
+                "cursor", scope="project", project_dir=str(project_root)
             )
 
-        assert not user_mcp.exists()
-        project_config = json.loads(project_mcp.read_text())
-        assert project_config["mcpServers"]["other"] == {}
-        assert project_config["mcpServers"]["ai-guardian"]["type"] == "stdio"
+        assert verification["healthy"] is True
+        assert verification["hooks_healthy"] is True
+        assert verification["mcp_installed"] is None
+        assert verification["mcp_status"] == "external"
+        assert verification["mcp_registration"] == "cursor-cloud"
+        assert verification["mcp_config_path"] is None
 
     def test_cursor_effective_health_still_requires_user_scope(self, tmp_path):
         """A project-only config is reported, but is incomplete for setup."""
@@ -3452,6 +3492,38 @@ class TestSetupJsonOutput:
         assert "ai-guardian" in result["mcp_servers"]
         assert _is_ai_guardian_command(result["mcp_servers"]["ai-guardian"]["command"])
         assert result["mcp_servers"]["ai-guardian"]["args"] == ["mcp-server"]
+
+    def test_json_output_cursor_project_reports_external_mcp(self, tmp_path, capsys):
+        """Cursor Cloud JSON setup reports external MCP registration."""
+        project_dir = tmp_path / "cloud-project"
+        project_dir.mkdir()
+        ide_config_file = tmp_path / "settings.json"
+
+        with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {
+                "cursor": {
+                    "name": "Cursor IDE/CLI",
+                    "config_path": str(ide_config_file),
+                }
+            }
+            mock_instance.get_config_path.return_value = str(ide_config_file)
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+            mock_instance._last_merged_config = {"hooks": {}}
+
+            setup_hooks(
+                ide_type="cursor",
+                json_output=True,
+                interactive=False,
+                scope="project",
+                project_dir=str(project_dir),
+            )
+
+        result = json.loads(capsys.readouterr().out)
+        assert result["mcp_status"] == "external"
+        assert result["mcp_registration"] == "cursor-cloud"
+        assert result["mcp_config_path"] is None
+        assert "mcp_servers" not in result
 
     def test_json_output_no_mcp_excludes_mcp(self, tmp_path, capsys):
         """setup --ide claude --no-mcp --json excludes MCP server config."""

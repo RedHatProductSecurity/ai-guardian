@@ -1003,6 +1003,7 @@ class IDESetup:
             "mcp_config_scopes": mcp_layers,
             "mcp_installed": user_mcp_installed,
             "mcp_status": "healthy" if user_mcp_installed else "missing",
+            "mcp_registration": mcp.get("mcp_registration", "local"),
             "effective_mcp_installed": mcp.get("mcp_installed", False),
             "effective_mcp_status": mcp.get("mcp_status", "missing"),
         }
@@ -1042,11 +1043,18 @@ class IDESetup:
                     "mcp_config_scopes": mcp.get("config_scopes", []),
                     "mcp_installed": mcp.get("mcp_installed", False),
                     "mcp_status": mcp.get("mcp_status", "missing"),
+                    "mcp_registration": mcp.get("mcp_registration", "local"),
                 }
             )
-            combined["healthy"] = (
-                combined["hooks_healthy"] and combined["mcp_installed"]
-            )
+            if combined["mcp_status"] == "external":
+                # Project-scoped Cursor setup protects Cloud Agent hooks. MCP
+                # registration is managed outside the local project files and
+                # cannot be verified by this process.
+                combined["healthy"] = combined["hooks_healthy"]
+            else:
+                combined["healthy"] = (
+                    combined["hooks_healthy"] and combined["mcp_installed"]
+                )
             return combined
 
         from ai_guardian.setup.mcp import (

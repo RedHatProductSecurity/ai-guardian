@@ -216,7 +216,7 @@ jobs:
               mkdir -p "$CLOUD_PROJECT"
               (cd "$WORK_DIR" && ai-guardian setup --ide cursor --project "$CLOUD_PROJECT" --yes)
               test -f "$CLOUD_PROJECT/.cursor/hooks.json"
-              test -f "$CLOUD_PROJECT/.cursor/mcp.json"
+              test ! -f "$CLOUD_PROJECT/.cursor/mcp.json"
               test -f "$HOME/.cursor/hooks.json"
               test -f "$HOME/.cursor/mcp.json"
             fi

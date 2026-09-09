@@ -1507,6 +1507,36 @@ class TestCheckClientHooks:
         mock_setup.verify_ide_setup.assert_called_once_with("cursor")
         mock_setup.check_hooks_for_ide.assert_not_called()
 
+    def test_cursor_accepts_effective_project_scope_health(self):
+        mock_setup = MagicMock()
+        mock_setup.IDE_CONFIGS = {
+            "cursor": {
+                "name": "Cursor IDE/CLI",
+                "mcp_client_name": "cursor",
+            }
+        }
+        mock_setup.supports_hooks.return_value = True
+        mock_setup.verify_ide_setup.return_value = {
+            "healthy": False,
+            "hooks_healthy": False,
+            "effective_hooks_healthy": True,
+            "installation_scope": "user",
+            "effective_scope": "project",
+        }
+
+        MockIDESetup = MagicMock(return_value=mock_setup)
+        MockIDESetup.get_ide_for_mcp_client.return_value = "cursor"
+        with (
+            patch("ai_guardian.setup.IDESetup", MockIDESetup),
+            patch("ai_guardian.tray.notifications.show_notification") as notify,
+        ):
+            result = _check_client_hooks("cursor")
+
+        assert result is None
+        notify.assert_not_called()
+        mock_setup.verify_ide_setup.assert_called_once_with("cursor")
+        mock_setup.check_hooks_for_ide.assert_not_called()
+
     def test_mcp_only_ide_returns_none(self):
         mock_setup = MagicMock()
         mock_setup.IDE_CONFIGS = {

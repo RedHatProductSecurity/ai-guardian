@@ -88,6 +88,11 @@ one integration mode.
   installation and reconciliation.
 - [ ] Add the MCP client registration in `src/ai_guardian/setup/mcp.py` when
   the agent supports the MCP advisor.
+- [ ] For every local/remote or desktop/cloud variant, verify the MCP
+  registration source independently from hooks. Test that user-level files do
+  not get reported as protecting a remote run, and that project files are only
+  used when the upstream agent explicitly supports them; otherwise document
+  the required dashboard/team/API registration.
 - [ ] Add guidelines or rules setup in `src/ai_guardian/setup/rules.py` when
   the agent has a supported context-file mechanism.
 - [ ] Add plugin or extension installation, update, and removal handling when
@@ -160,6 +165,9 @@ Complete the applicable checks:
 integration into a temporary home and project, verifies the generated hook
 manifest and MCP registration, and invokes representative allow, directory
 block, and post-output redaction paths where the host exposes command hooks.
+For Cursor, the local matrix verifies user-level MCP registration separately
+from the cloud-project hook flow; project setup must not create a local MCP
+file because Cloud Agent MCP is externally registered.
 The `ide-hook-e2e` release-readiness matrix runs one IDE per job so failures
 identify the IDE and event.
 

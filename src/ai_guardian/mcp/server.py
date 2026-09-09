@@ -66,7 +66,13 @@ def _check_client_hooks(client_name: str) -> Optional[str]:
 
         if ide_type == "cursor":
             verification = setup.verify_ide_setup(ide_type)
-            configured = verification.get("hooks_healthy") is True
+            # Cursor combines user and project hook layers. A project-only
+            # installation is effective for the current workspace even when
+            # the user layer is not configured.
+            configured = (
+                verification.get("effective_hooks_healthy") is True
+                or verification.get("hooks_healthy") is True
+            )
         else:
             configured, _ = setup.check_hooks_for_ide(ide_type)
         if configured:

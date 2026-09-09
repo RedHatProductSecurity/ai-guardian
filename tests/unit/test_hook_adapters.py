@@ -2028,6 +2028,41 @@ class TestCursorToolNameExtraction:
         tool_name, tool_input = checker._extract_tool_info(hook_data)
         assert tool_name == "Bash"
 
+    def test_tool_policy_extract_cursor_shell_json_input(self):
+        from ai_guardian.tools.policy import ToolPolicyChecker
+
+        checker = ToolPolicyChecker(config={})
+        hook_data = {
+            "cursor_version": "0.50.0",
+            "hook_event_name": "beforeShellExecution",
+            "tool_input": '{"command": "echo safe"}',
+        }
+        tool_name, tool_input = checker._extract_tool_info(hook_data)
+
+        assert tool_name == "Bash"
+        assert tool_input == {"command": "echo safe"}
+
+    @pytest.mark.parametrize(
+        "tool_input",
+        ["not-json", '["not", "an", "object"]'],
+        ids=["invalid-json", "json-array"],
+    )
+    def test_tool_policy_blocks_invalid_cursor_shell_json_input(self, tool_input):
+        from ai_guardian.tools.policy import ToolPolicyChecker
+
+        checker = ToolPolicyChecker(config={"permissions": []})
+        hook_data = {
+            "cursor_version": "0.50.0",
+            "hook_event_name": "beforeShellExecution",
+            "tool_input": tool_input,
+        }
+
+        allowed, error_msg, extracted_tool = checker.check_tool_allowed(hook_data)
+
+        assert allowed is False
+        assert extracted_tool is None
+        assert "unable to determine tool name" in (error_msg or "")
+
     def test_tool_policy_no_block_on_cursor_beforereadfile(self):
         """check_tool_allowed should not fail with 'unable to determine tool name'."""
         from ai_guardian.tools.policy import ToolPolicyChecker

@@ -665,20 +665,27 @@ def _setup_hooks_json_output(
                     mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
                 _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
 
-    # Always include MCP server config in JSON output (unless --no-mcp)
+    # Include local MCP configuration in JSON output. Cursor Cloud MCP is
+    # registered through Cursor's dashboard/team settings or API, not a local
+    # project file, so report that external registration separately.
     if setup_success and not no_mcp:
-        mcp_path = get_mcp_config_path(
-            ide_type,
-            scope=scope if ide_type == "cursor" else "user",
-            project_dir=project_dir if ide_type == "cursor" else None,
-        )
-        result["mcp_config_path"] = str(mcp_path) if mcp_path else None
-        abs_path = _resolve_binary_path()
-        mcp_entry = dict(_MCP_SERVER_ENTRY)
-        mcp_entry["command"] = abs_path
-        if ide_type == "cursor":
-            mcp_entry["type"] = "stdio"
-        result["mcp_servers"] = {"ai-guardian": mcp_entry}
+        if ide_type == "cursor" and scope == "project":
+            result["mcp_config_path"] = None
+            result["mcp_status"] = "external"
+            result["mcp_registration"] = "cursor-cloud"
+        else:
+            mcp_path = get_mcp_config_path(
+                ide_type,
+                scope=scope if ide_type == "cursor" else "user",
+                project_dir=project_dir if ide_type == "cursor" else None,
+            )
+            result["mcp_config_path"] = str(mcp_path) if mcp_path else None
+            abs_path = _resolve_binary_path()
+            mcp_entry = dict(_MCP_SERVER_ENTRY)
+            mcp_entry["command"] = abs_path
+            if ide_type == "cursor":
+                mcp_entry["type"] = "stdio"
+            result["mcp_servers"] = {"ai-guardian": mcp_entry}
 
     # Handle rules/guidelines file setup (Issue #637)
     if setup_success and rules:

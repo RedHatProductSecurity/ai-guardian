@@ -1258,6 +1258,7 @@ class TestShowActionDialog:
         assert "alertWindow.makeKeyAndOrderFront" in script
         assert "Number(control.never.state)" in script
         assert "Number(control.install.state)" in script
+        assert 'String(payload.dismiss_label) === "Never"' in script
 
 
 class TestPluginTags:
