@@ -13,7 +13,7 @@ changing an integration.
 | Agent | Setup Command | Hooks | MCP | Status |
 |-------|--------------|-------|-----|--------|
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
-| Cursor | `--ide cursor` | Full | N/A | **Complete** |
+| Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`) | **Complete locally; project setup available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
 | OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
@@ -57,7 +57,7 @@ integration guides.
 | Integration | Collection surface | Timed normalized events | Latency status |
 |-------------|--------------------|-------------------------|----------------|
 | Claude Code | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported |
-| Cursor | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
+| Cursor desktop / local CLI | Command hooks | 6 managed Cursor events; other upstream events are normalized when explicitly configured | Supported |
 | GitHub Copilot | Command hooks | UserPromptSubmit, PreToolUse | Supported |
 | OpenAI Codex | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
 | Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
@@ -260,9 +260,9 @@ path for them.
 | `SessionEnd` | Managed | Performs session cleanup. |
 
 No event in this table is silently discarded when it is present in a user
-configuration. The seven recognized-but-unmanaged events are intentionally not
-installed or counted as required setup because they do not yet have a managed
-AI Guardian setup contract.
+configuration. Recognized-but-unmanaged events are intentionally not installed
+or counted as required setup because they do not belong to AI Guardian's
+managed hook contract.
 
 If the target Codex user `config.toml` already contains inline hooks, or any
 active Codex configuration layer is malformed, setup stops with a diagnostic
@@ -290,7 +290,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Agent | Confidence | Reason |
 |---|---|---|
 | Claude Code | High | Extensively tested in production |
-| Cursor | High | Extensively tested in production |
+| Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
@@ -320,17 +320,31 @@ Each agent uses different event names. The adapter layer normalizes these.
 
 | Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush |
 |---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|
-| Session start | `SessionStart` | N/A | N/A | N/A | `SessionStart` | N/A | N/A | N/A | N/A |
-| Before tool | `PreToolUse` | `preToolUse` | `beforeShellExecution` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` |
-| After tool | `PostToolUse` | `postToolUse` | `postToolUse` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) |
+| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A |
+| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` |
+| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A |
+| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) |
+| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A |
 | User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) |
+| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A |
+| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A |
+
+Cursor's default managed user-level setup installs these six events:
+`beforeSubmitPrompt`, `beforeReadFile`, `beforeShellExecution`, `preToolUse`,
+`afterShellExecution`, and `postToolUse`. The adapter recognizes additional
+documented Cursor events when a user has configured them, but they are not
+AI Guardian hooks and are never reported as missing setup.
+Cursor command hooks receive JSON on stdin and return JSON on stdout; decision
+events use `permission: allow|deny`, while post-tool MCP redaction uses
+`updated_mcp_tool_output: {"modified": "..."}`. Failure hooks return an empty
+JSON object so error payloads are not echoed.
 
 ## Response Format Differences
 
 | Agent | Blocking Mechanism | Block Response |
 |-------|-------------------|----------------|
 | Claude Code | JSON `hookSpecificOutput.permissionDecision` | `{"hookSpecificOutput": {"permissionDecision": "deny"}}` |
-| Cursor | JSON `decision`/`permission` field | `{"decision": "deny", "reason": "..."}` |
+| Cursor desktop / CLI | JSON `permission` field for decision hooks; JSON transform field for MCP post-hooks | `{"permission": "deny", "user_message": "...", "agent_message": "..."}`; MCP output uses `updated_mcp_tool_output` |
 | GitHub Copilot | JSON (PreToolUse) or exit code 2 | `{"permissionDecision": "deny"}` |
 | Gemini CLI | JSON `decision` field | `{"decision": "deny", "reason": "..."}` |
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
@@ -443,7 +457,10 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Agent | Config Path |
 |-------|------------|
 | Claude Code | `~/.claude/settings.json` |
-| Cursor | `~/.cursor/hooks.json` |
+| Cursor desktop / local CLI hooks | `~/.cursor/hooks.json` (AI Guardian install target) |
+| Cursor project hooks (explicit cloud setup target) | `<project>/.cursor/hooks.json` |
+| Cursor desktop / local CLI MCP | `~/.cursor/mcp.json` (AI Guardian install target) |
+| Cursor project MCP (explicit cloud setup target) | `<project>/.cursor/mcp.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
 | OpenAI Codex | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
@@ -454,6 +471,36 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
 | Junie | `.junie/guidelines` (MCP only) |
+
+### Cursor desktop, CLI, and agent scope
+
+Cursor uses the same command-hook JSON protocol and `hooks.json` event names
+for its local desktop Agent and local CLI/headless-agent execution. The normal
+configuration scope is the local user level, so the desktop and local CLI share
+one installation:
+
+```text
+~/.cursor/hooks.json
+~/.cursor/mcp.json
+```
+
+Project-level files are inspected to explain effective Cursor behavior and are
+not changed by the default local setup. For a Cursor Cloud workspace, an
+explicit project setup can be requested with:
+
+```bash
+ai-guardian setup --ide cursor --project /path/to/workspace
+```
+
+The tray exposes the same operation as **Cursor Cloud (project setup)...**
+under **Manual setup (specific IDE)** and asks the user to select the project
+directory before launching setup. This explicit path creates or updates only
+that workspace's `.cursor/hooks.json` and `.cursor/mcp.json`; it does not
+redirect ordinary desktop/CLI setup away from the user files. Enterprise/team
+hooks remain an upstream deployment option outside this local project flow.
+
+See the upstream [Cursor Hooks documentation](https://cursor.com/docs/hooks)
+for the event list, command-hook protocol, and cloud-agent scope rules.
 
 ## Per-Agent Deep-Dive Guides
 

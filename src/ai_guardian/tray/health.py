@@ -8,6 +8,7 @@ upgrade, and notification state. It receives a back-reference to DaemonTray.
 
 import logging
 import threading
+import time
 
 from ai_guardian.tray import notifications as tray_notifications
 from ai_guardian.tray import plugins as tray_plugins
@@ -32,7 +33,11 @@ class TrayHealthMonitor:
         self._self_upgrade_in_progress = False
         self._upgrade_notified_version = None
         self._upgrade_prompt_in_progress = False
+        self._ide_setup_prompt_lock = threading.Lock()
         self._ide_setup_prompt_in_progress = False
+        self._ide_setup_check_in_progress = False
+        self._ide_setup_check_thread = None
+        self._ide_setup_snoozed_until = {}
         self._ide_setup_state = None
         self._ide_setup_snapshot = None
         self._ide_setup_previous_snapshot = None
@@ -598,7 +603,16 @@ class TrayHealthMonitor:
         return False
 
     @staticmethod
-    def _notify_ide_check_result(installed, unconfigured=None):
+    def _ide_display_name(ide_type):
+        """Return the tray label for an IDE/CLI integration."""
+        from ai_guardian.setup.hooks import IDESetup
+
+        if ide_type == "cursor":
+            return "Cursor IDE/CLI"
+        return IDESetup.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
+
+    @staticmethod
+    def _notify_ide_check_result(installed, unconfigured=None, statuses=None):
         """Tell the user the result of an IDE configuration check."""
         if installed is None:
             TrayHealthMonitor._notify_user(
@@ -613,20 +627,49 @@ class TrayHealthMonitor:
             )
             return
 
-        from ai_guardian.setup.hooks import IDESetup
+        statuses = statuses if isinstance(statuses, dict) else {}
 
-        names = [
-            IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide) for ide in installed
-        ]
+        def _label(ide):
+            name = TrayHealthMonitor._ide_display_name(ide)
+            status = statuses.get(ide)
+            details = []
+            if isinstance(status, dict):
+                installation_scope = status.get("installation_scope")
+                effective_scope = status.get("effective_scope")
+                if installation_scope:
+                    scope_detail = installation_scope
+                    if effective_scope and effective_scope != installation_scope:
+                        scope_detail += f"; effective: {effective_scope}"
+                    details.append(f"scope: {scope_detail}")
+                elif effective_scope and effective_scope != "none":
+                    details.append(f"scope: {effective_scope}")
+                mcp_status = status.get("mcp_status")
+                if mcp_status and mcp_status != "healthy":
+                    details.append(f"MCP: {mcp_status}")
+            return f"{name} ({'; '.join(details)})" if details else name
+
+        names = [_label(ide) for ide in installed]
         if unconfigured:
-            unconfigured_names = [
-                IDESetup.IDE_CONFIGS.get(ide, {}).get("name", ide)
-                for ide in unconfigured
+            unconfigured_names = [_label(ide) for ide in unconfigured]
+            unconfigured_set = set(unconfigured)
+            configured_names = [
+                _label(ide) for ide in installed if ide not in unconfigured_set
             ]
+            lines = [
+                "IDE/CLI health check: "
+                f"{len(configured_names)} configured, "
+                f"{len(unconfigured_names)} need setup.",
+            ]
+            if configured_names:
+                lines.extend(
+                    ["", "Configured:"] + [f"• {name}" for name in configured_names]
+                )
+            lines.extend(
+                ["", "Needs setup:"] + [f"• {name}" for name in unconfigured_names]
+            )
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
-                "IDE/CLI health check found integrations that need setup:\n"
-                + "\n".join(f"• {name}" for name in unconfigured_names),
+                "\n".join(lines),
             )
             return
 
@@ -637,7 +680,7 @@ class TrayHealthMonitor:
         )
 
     @staticmethod
-    def _notify_ide_setup_result(results, profile=None):
+    def _notify_ide_setup_result(results, profile=None, remaining=None):
         """Show doctor-style results after setting up IDE/CLI hooks."""
         from ai_guardian.setup.hooks import IDESetup
 
@@ -652,8 +695,8 @@ class TrayHealthMonitor:
             )
             if not isinstance(events, dict):
                 events = {}
-            if ide_type == "codex":
-                managed_events = IDESetup().expected_hook_manifest("codex")
+            managed_events = IDESetup().expected_hook_manifest(ide_type)
+            if managed_events:
                 events = {
                     event: status
                     for event, status in events.items()
@@ -670,7 +713,7 @@ class TrayHealthMonitor:
                 status = "WARN"
             counts[status] += 1
 
-            name = IDESetup.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
+            name = TrayHealthMonitor._ide_display_name(ide_type)
             if total:
                 detail = f"{configured}/{total} hooks configured"
             elif verification is None:
@@ -682,6 +725,16 @@ class TrayHealthMonitor:
                     " (needs attention: "
                     f"{TrayHealthMonitor._verification_attention(verification)})"
                 )
+            if isinstance(verification, dict):
+                installation_scope = verification.get("installation_scope")
+                effective_scope = verification.get("effective_scope")
+                if installation_scope:
+                    scope_detail = installation_scope
+                    if effective_scope and effective_scope != installation_scope:
+                        scope_detail += f"; effective: {effective_scope}"
+                    detail += f"; scope: {scope_detail}"
+                elif effective_scope and effective_scope != "none":
+                    detail += f"; scope: {effective_scope}"
             lines.append(f"[{status}] {name}: {detail}")
 
         summary = []
@@ -694,6 +747,14 @@ class TrayHealthMonitor:
         lines.extend(["", ", ".join(summary)])
         if profile:
             lines.extend(["", f"Security profile: {profile}"])
+        if remaining:
+            remaining_names = [
+                TrayHealthMonitor._ide_display_name(ide_type) for ide_type in remaining
+            ]
+            lines.extend(
+                ["", f"Still needs setup ({len(remaining_names)}):"]
+                + [f"• {name}" for name in remaining_names]
+            )
         TrayHealthMonitor._notify_user("AI Guardian Setup", "\n".join(lines))
 
     def _on_check_ide_setup(self, _icon, _item):
@@ -708,20 +769,73 @@ class TrayHealthMonitor:
             report_result=True,
         )
 
+    def _ide_setup_prompt_is_snoozed(self, prompt_key):
+        """Return whether this prompt was snoozed in the current tray run.
+
+        The persistent state is the source of truth across tray restarts. The
+        in-memory copy closes the small window between a prompt decision and
+        the next health poll, and also keeps a second check from bypassing a
+        just-recorded snooze because it observed an older health snapshot.
+        """
+        now = time.monotonic()
+        with self._ide_setup_prompt_lock:
+            snooze_until = self._ide_setup_snoozed_until.get(prompt_key)
+            if snooze_until is None:
+                return False
+            if snooze_until > now:
+                return True
+            self._ide_setup_snoozed_until.pop(prompt_key, None)
+            return False
+
+    def _remember_ide_setup_snooze(self, prompt_key, result):
+        """Cache a valid snooze decision until its configured expiry."""
+        if not isinstance(result, str) or not result.startswith("snooze_"):
+            return
+
+        from ai_guardian.tray.proactive_prompt import SNOOZE_OPTIONS
+
+        duration = SNOOZE_OPTIONS.get(result.removeprefix("snooze_"))
+        if duration is None:
+            return
+        with self._ide_setup_prompt_lock:
+            self._ide_setup_snoozed_until[prompt_key] = (
+                time.monotonic() + duration.total_seconds()
+            )
+
     def _start_ide_setup_check(self, manual, name, report_result=False):
         """Run an IDE hook check in a worker thread."""
-        if self._ide_setup_prompt_in_progress:
-            return
+        with self._ide_setup_prompt_lock:
+            if self._ide_setup_prompt_in_progress or self._ide_setup_check_in_progress:
+                return
+            self._ide_setup_check_in_progress = True
 
         kwargs = {"manual": manual}
         if report_result:
             kwargs["report_result"] = True
-        threading.Thread(
-            target=self._check_ide_setup_notification,
-            kwargs=kwargs,
-            daemon=True,
-            name=name,
-        ).start()
+
+        def run_check(**_thread_kwargs):
+            with self._ide_setup_prompt_lock:
+                self._ide_setup_check_thread = threading.current_thread()
+            try:
+                self._check_ide_setup_notification(**kwargs)
+            finally:
+                with self._ide_setup_prompt_lock:
+                    if not self._ide_setup_prompt_in_progress:
+                        self._ide_setup_check_in_progress = False
+                        self._ide_setup_check_thread = None
+
+        try:
+            threading.Thread(
+                target=run_check,
+                kwargs=kwargs,
+                daemon=True,
+                name=name,
+            ).start()
+        except Exception:
+            with self._ide_setup_prompt_lock:
+                self._ide_setup_check_in_progress = False
+                self._ide_setup_check_thread = None
+            raise
 
     def _check_ide_setup_notification(self, manual=False, report_result=False):
         """Prompt users to configure installed IDE integrations.
@@ -735,17 +849,30 @@ class TrayHealthMonitor:
         if not manual and not self._has_local_daemon():
             return
 
+        with self._ide_setup_prompt_lock:
+            if self._ide_setup_prompt_in_progress or (
+                self._ide_setup_check_in_progress
+                and self._ide_setup_check_thread is not threading.current_thread()
+            ):
+                return
+
         self._refresh_ide_setup_state(include_excluded=manual)
-        if self._ide_setup_prompt_in_progress:
-            return
 
         installed = self._get_installed_ides() if (manual or report_result) else None
 
         unconfigured = self._get_unconfigured_ides(include_excluded=manual)
+        snapshot_integrations = (
+            self._ide_setup_snapshot.get("integrations", {})
+            if isinstance(self._ide_setup_snapshot, dict)
+            else {}
+        )
+        if not isinstance(snapshot_integrations, dict):
+            snapshot_integrations = {}
         if manual or report_result:
             TrayHealthMonitor._notify_ide_check_result(
                 installed,
                 unconfigured=unconfigured,
+                statuses=snapshot_integrations,
             )
         if not unconfigured:
             return
@@ -760,16 +887,9 @@ class TrayHealthMonitor:
         profile_choices = (
             self._security_profile_choices() if not user_config_exists else None
         )
-        names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+        names = [self._ide_display_name(ide) for ide in unconfigured]
         attention = {}
         statuses = {}
-        snapshot_integrations = (
-            self._ide_setup_snapshot.get("integrations", {})
-            if isinstance(self._ide_setup_snapshot, dict)
-            else {}
-        )
-        if not isinstance(snapshot_integrations, dict):
-            snapshot_integrations = {}
         for ide_type in unconfigured:
             status = (
                 snapshot_integrations.get(ide_type)
@@ -793,7 +913,7 @@ class TrayHealthMonitor:
             ]
             if not unconfigured:
                 return
-            names = [IDESetup.IDE_CONFIGS[ide].get("name", ide) for ide in unconfigured]
+            names = [self._ide_display_name(ide) for ide in unconfigured]
             prompt_key = "ide_setup_" + "_".join(sorted(unconfigured))
         changed_unhealthy = self._changed_unhealthy_ides(unconfigured)
         if (
@@ -803,7 +923,21 @@ class TrayHealthMonitor:
         ):
             return
 
-        self._ide_setup_prompt_in_progress = True
+        if not manual and self._ide_setup_prompt_is_snoozed(prompt_key):
+            return
+
+        # Re-check under the lock immediately before starting the prompt. A
+        # periodic health tick can overlap the startup/manual worker while the
+        # first check is still calculating its verification snapshot.
+        with self._ide_setup_prompt_lock:
+            if self._ide_setup_prompt_in_progress:
+                return
+            if (
+                self._ide_setup_check_in_progress
+                and self._ide_setup_check_thread is not threading.current_thread()
+            ):
+                return
+            self._ide_setup_prompt_in_progress = True
 
         codex_mcp_only = False
         if len(unconfigured) == 1 and unconfigured[0] == "codex":
@@ -862,10 +996,8 @@ class TrayHealthMonitor:
                 dialog_kwargs = {
                     "title": "Set Up AI Guardian",
                     "message": message,
-                    "action_label": (
-                        action_label if len(names) == 1 else "Set Up Selected"
-                    ),
-                    "dismiss_label": "Don't Ask Again" if len(names) == 1 else "Cancel",
+                    "action_label": (action_label if len(names) == 1 else "Submit"),
+                    "dismiss_label": "Don't Ask Again" if len(names) == 1 else None,
                     "snooze_options": ("1h", "6h", "1d", "1w"),
                 }
                 if profile_choices:
@@ -919,6 +1051,7 @@ class TrayHealthMonitor:
                         len(unconfigured) == 1 and len(names) == 1
                     ):
                         state.record(prompt_key, action)
+                        self._remember_ide_setup_snooze(prompt_key, action)
                     return
 
                 state.update_ide_setup_exclusions(
@@ -1041,19 +1174,28 @@ class TrayHealthMonitor:
                     # automatic retries for one hour.
                     remaining = sorted(set(unhealthy) - selected_never)
                     if remaining:
-                        state.record(
-                            "ide_setup_" + "_".join(remaining),
+                        failed_prompt_key = "ide_setup_" + "_".join(remaining)
+                        state.record(failed_prompt_key, "snooze_1h")
+                        self._remember_ide_setup_snooze(
+                            failed_prompt_key,
                             "snooze_1h",
                         )
                 self._refresh_ide_setup_state(include_excluded=manual)
                 self._notify_ide_setup_result(
                     setup_results,
                     profile=configured_profile,
+                    remaining=sorted(
+                        (set(unconfigured) - selected_install - selected_never)
+                        | set(unhealthy)
+                    ),
                 )
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
             finally:
-                self._ide_setup_prompt_in_progress = False
+                with self._ide_setup_prompt_lock:
+                    self._ide_setup_prompt_in_progress = False
+                    self._ide_setup_check_in_progress = False
+                    self._ide_setup_check_thread = None
 
         threading.Thread(
             target=_show_prompt,

@@ -16,9 +16,20 @@ AI Guardian includes an MCP (Model Context Protocol) server that exposes read-on
 
 ```bash
 ai-guardian setup --ide claude
+ai-guardian setup --ide cursor
 ```
 
 The MCP server is installed by default during setup. Use `--no-mcp` to skip.
+Cursor desktop and the local Cursor CLI share the local user configuration
+(`~/.cursor/hooks.json` and `~/.cursor/mcp.json`). For a Cursor Cloud workspace,
+select the project explicitly; this writes only that workspace's files:
+
+```bash
+ai-guardian setup --ide cursor --project /path/to/workspace
+```
+
+The tray exposes the same operation as **Cursor Cloud (project setup)...**.
+Without `--project`, setup remains user/desktop-scoped.
 
 ### Manual setup
 
@@ -48,12 +59,26 @@ Add to `~/.claude.json` (or `~/.claude/settings.json`):
 }
 ```
 
+For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ai-guardian": {
+      "type": "stdio",
+      "command": "ai-guardian",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
 ### Multi-IDE support
 
 | IDE | MCP config file |
 |-----|----------------|
 | Claude Code | `~/.claude/settings.json` or `~/.claude.json` → `mcpServers` |
-| Cursor | `~/.cursor/mcp.json` |
+| Cursor desktop / CLI | `~/.cursor/mcp.json` (`type: "stdio"`) |
 | Windsurf | `~/.windsurf/mcp.json` |
 
 ## Enable / Disable

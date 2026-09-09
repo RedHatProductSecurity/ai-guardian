@@ -851,6 +851,16 @@ class TestIDESetupMenu:
                 script = mock_popen.call_args[0][0][2]
                 assert "setup --ide cursor" in script
 
+    def test_launch_cursor_cloud_setup_includes_selected_project(self):
+        with mock.patch("platform.system", return_value="Darwin"):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                launch_ide_setup(
+                    "cursor", scope="project", project_dir="/tmp/cloud-project"
+                )
+                script = mock_popen.call_args[0][0][2]
+                assert "setup --ide cursor --project" in script
+                assert "cloud-project" in script
+
     def test_launch_ide_setup_linux_keeps_terminal_open(self):
         with mock.patch("platform.system", return_value="Linux"):
             with mock.patch("sys.executable", "/usr/bin/python3"):
@@ -891,6 +901,7 @@ class TestIDESetupMenu:
             item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
             assert "Check hooks/MCP installation..." in item_names
             assert "Manual setup (specific IDE)" in item_names
+            assert "  Cursor Cloud (project setup)..." in item_names
 
     def test_run_exposes_health_check_inside_ide_setup_menu(self):
         tray = DaemonTray(
@@ -962,8 +973,38 @@ class TestIDESetupMenu:
             ]
             assert "Manual setup (specific IDE)" in item_names
             assert "  Create Config..." in item_names
+            assert "  Cursor Cloud (project setup)..." in item_names
             for ide_cfg in IDESetup.IDE_CONFIGS.values():
-                assert f"  {ide_cfg['name']}" in item_names
+                expected_name = (
+                    "Cursor IDE/CLI"
+                    if ide_cfg.get("mcp_client_name") == "cursor"
+                    else ide_cfg["name"]
+                )
+                assert f"  {expected_name}" in item_names
+
+    def test_cursor_cloud_setup_picks_project_before_launching(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        with (
+            mock.patch(
+                "ai_guardian.daemon.working_dir.choose_directory",
+                return_value="/tmp/cloud-project",
+            ) as choose_directory,
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_menu.launch_ide_setup"
+            ) as launch,
+        ):
+            tray._menu._pick_cursor_cloud_project("/tmp/current")
+
+        choose_directory.assert_called_once_with(
+            "/tmp/current", title="Choose Cursor Cloud project directory"
+        )
+        launch.assert_called_once_with(
+            "cursor", scope="project", project_dir="/tmp/cloud-project"
+        )
 
     def test_launch_create_config_builds_correct_command(self):
         with mock.patch("platform.system", return_value="Darwin"):

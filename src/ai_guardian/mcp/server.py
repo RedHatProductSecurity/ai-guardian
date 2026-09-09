@@ -64,7 +64,11 @@ def _check_client_hooks(client_name: str) -> Optional[str]:
         if not setup.supports_hooks(ide_type):
             return None
 
-        configured, _ = setup.check_hooks_for_ide(ide_type)
+        if ide_type == "cursor":
+            verification = setup.verify_ide_setup(ide_type)
+            configured = verification.get("hooks_healthy") is True
+        else:
+            configured, _ = setup.check_hooks_for_ide(ide_type)
         if configured:
             return None
 

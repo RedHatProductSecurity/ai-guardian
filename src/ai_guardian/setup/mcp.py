@@ -120,8 +120,24 @@ def get_codex_mcp_config_path() -> Path:
     return Path.home() / ".codex" / "config.toml"
 
 
-def get_mcp_config_path(ide_type: str) -> Optional[Path]:
-    """Return the effective MCP configuration path for an IDE."""
+def _cursor_project_root(cwd: Optional[str] = None) -> Path:
+    """Resolve the workspace root used by Cursor project MCP config."""
+    current = Path(cwd or os.getcwd()).expanduser().resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    for candidate in (current, *current.parents):
+        if (candidate / ".cursor").is_dir():
+            return candidate
+    return current
+
+
+def get_mcp_config_path(
+    ide_type: str,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
+) -> Optional[Path]:
+    """Return an IDE's user or project MCP configuration path."""
     if ide_type == "codex":
         return get_codex_mcp_config_path()
 
@@ -132,9 +148,81 @@ def get_mcp_config_path(ide_type: str) -> Optional[Path]:
     config_file = mcp_ide.get("config_file", "")
     if not config_file:
         return None
+    if ide_type == "cursor":
+        if scope == "project":
+            return _cursor_project_root(project_dir) / ".cursor" / "mcp.json"
+        if scope not in ("user", "auto"):
+            raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
     if ide_type == "opencode":
         return _resolve_opencode_config()
     return Path(config_file).expanduser()
+
+
+def _cursor_mcp_entry_exists(path: Path) -> bool:
+    """Check one Cursor MCP file without exposing its contents."""
+    if not path.is_file():
+        return False
+    try:
+        raw = path.read_text(encoding="utf-8")
+        config = json.loads(_strip_jsonc_comments(raw)) if raw.strip() else {}
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Unable to verify Cursor MCP config %s: %s", path, exc)
+        return False
+    servers = config.get("mcpServers", {}) if isinstance(config, dict) else {}
+    return isinstance(servers, dict) and isinstance(servers.get("ai-guardian"), dict)
+
+
+def verify_cursor_mcp_config(
+    scope: str = "auto", project_dir: Optional[str] = None
+) -> Dict:
+    """Return JSON-safe health information for Cursor MCP layers."""
+    if scope == "auto":
+        paths = [
+            ("user", get_mcp_config_path("cursor", scope="user")),
+            (
+                "project",
+                get_mcp_config_path("cursor", scope="project", project_dir=project_dir),
+            ),
+        ]
+    else:
+        paths = [
+            (scope, get_mcp_config_path("cursor", scope=scope, project_dir=project_dir))
+        ]
+
+    config_scopes = []
+    for layer_scope, path in paths:
+        configured = _cursor_mcp_entry_exists(path)
+        config_scopes.append(
+            {
+                "scope": layer_scope,
+                "config_path": str(path),
+                "exists": path.is_file(),
+                "configured": configured,
+                "status": "healthy" if configured else "missing",
+            }
+        )
+
+    configured_layers = [layer for layer in config_scopes if layer["configured"]]
+    effective_path = (
+        configured_layers[0]["config_path"]
+        if configured_layers
+        else config_scopes[0]["config_path"]
+    )
+    user_path = next(
+        (
+            layer["config_path"]
+            for layer in config_scopes
+            if layer.get("scope") == "user"
+        ),
+        effective_path,
+    )
+    return {
+        "mcp_installed": bool(configured_layers),
+        "mcp_status": "healthy" if configured_layers else "missing",
+        "mcp_config_path": user_path if scope == "auto" else effective_path,
+        "effective_mcp_config_path": effective_path,
+        "config_scopes": config_scopes,
+    }
 
 
 def _load_toml_text(text: str) -> Dict:
@@ -289,21 +377,55 @@ def _handle_mcp_setup(
     ide_type: str,
     no_mcp: bool = False,
     dry_run: bool = False,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
 ) -> None:
     """Install or remove MCP server config for an IDE."""
     if no_mcp:
-        _remove_mcp_config(setup, ide_type, dry_run)
+        _remove_mcp_config(
+            setup, ide_type, dry_run, scope=scope, project_dir=project_dir
+        )
     else:
-        _install_mcp_config(setup, ide_type, dry_run)
+        _install_mcp_config(
+            setup, ide_type, dry_run, scope=scope, project_dir=project_dir
+        )
 
 
-def _install_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
+def _install_mcp_config(
+    setup,
+    ide_type: str,
+    dry_run: bool = False,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
+) -> None:
     """Add MCP server entry to IDE config and enable in ai-guardian config."""
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
         return
 
-    config_path = get_mcp_config_path(ide_type)
+    if ide_type == "cursor":
+        if project_dir and scope == "user":
+            scope = "project"
+        if scope not in ("user", "project"):
+            logger.warning("Cursor MCP setup scope must be 'user' or 'project'")
+            return
+        if scope == "project":
+            if not project_dir:
+                logger.warning("Cursor project MCP setup requires a project directory")
+                return
+            project_path = Path(project_dir).expanduser()
+            if not project_path.is_dir():
+                logger.warning(
+                    "Cursor project MCP directory does not exist or is not a "
+                    "directory: %s",
+                    project_path,
+                )
+                return
+            project_dir = str(project_path.resolve())
+        else:
+            project_dir = None
+
+    config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
         return
 
@@ -319,14 +441,20 @@ def _install_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
     config = {}
     if config_path.exists():
         try:
-            with open(config_path, "r") as f:
+            with open(config_path, "r", encoding="utf-8") as f:
                 raw = f.read()
             if config_path.suffix == ".jsonc":
                 raw = _strip_jsonc_comments(raw)
             if raw.strip():
                 config = json.loads(raw)
         except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to read config: %s", e)
+            # Never replace a non-empty user config that cannot be parsed.
+            logger.warning("Failed to read MCP config %s: %s", config_path, e)
+            return
+
+    if not isinstance(config, dict):
+        logger.warning("MCP config %s must contain a JSON object", config_path)
+        return
 
     # Add MCP server entry with absolute path
     abs_path = _resolve_binary_path()
@@ -341,13 +469,15 @@ def _install_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
     else:
         mcp_entry = dict(_MCP_SERVER_ENTRY)
         mcp_entry["command"] = abs_path
+        if ide_type == "cursor":
+            mcp_entry["type"] = "stdio"
 
     if key not in config:
         config[key] = {}
     config[key]["ai-guardian"] = mcp_entry
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(config_path, "w") as f:
+    with open(config_path, "w", encoding="utf-8") as f:
         json.dump(config, f, indent=2)
         f.write("\n")
 
@@ -426,13 +556,19 @@ def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
     _clean_legacy_codex_mcp_entry(target_path=config_path)
 
 
-def _remove_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
+def _remove_mcp_config(
+    setup,
+    ide_type: str,
+    dry_run: bool = False,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
+) -> None:
     """Remove MCP server entry from IDE config."""
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
         return
 
-    config_path = get_mcp_config_path(ide_type)
+    config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
         return
 
@@ -449,7 +585,7 @@ def _remove_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
         return
 
     try:
-        with open(config_path, "r") as f:
+        with open(config_path, "r", encoding="utf-8") as f:
             config = json.load(f)
     except (json.JSONDecodeError, OSError):
         return
@@ -459,7 +595,7 @@ def _remove_mcp_config(setup, ide_type: str, dry_run: bool = False) -> None:
         del config[key]["ai-guardian"]
         if not config[key]:
             del config[key]
-        with open(config_path, "w") as f:
+        with open(config_path, "w", encoding="utf-8") as f:
             json.dump(config, f, indent=2)
             f.write("\n")
         print(f"  MCP: Removed ai-guardian MCP server from {config_path}")

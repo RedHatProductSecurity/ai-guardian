@@ -115,12 +115,20 @@ class HookTraceWriter:
         if event_value == "prompt":
             self._turn += 1
             steps.append({"type": "prompt", "text": normalized.prompt_text or ""})
-        elif event_value in ("pretooluse", "beforereadfile"):
+        elif event_value in ("pretooluse", "beforereadfile", "subagentstart"):
             steps.append(
                 {
                     "type": "tool_call",
                     "name": normalized.tool_name or "unknown",
-                    "input": normalized.tool_input or {},
+                    "input": (
+                        {
+                            key: normalized.tool_input[key]
+                            for key in ("subagent_id", "subagent_type")
+                            if key in (normalized.tool_input or {})
+                        }
+                        if event_value == "subagentstart"
+                        else normalized.tool_input or {}
+                    ),
                 }
             )
         elif event_value == "posttooluse":
@@ -131,8 +139,30 @@ class HookTraceWriter:
                     "content": normalized.tool_response,
                 }
             )
+        elif event_value == "posttoolusefailure":
+            steps.append(
+                {
+                    "type": "tool_failure",
+                    "name": normalized.tool_name or "unknown",
+                    "failure_type": hook_data.get("failure_type", "unknown"),
+                }
+            )
+        elif event_value in ("afterfileedit", "aftertabfileedit"):
+            steps.append(
+                {
+                    "type": "file_edit",
+                    "path": normalized.file_path or hook_data.get("file_path"),
+                    "source": event_value,
+                }
+            )
 
-        if event_value in ("prompt", "pretooluse", "beforereadfile", "posttooluse"):
+        if event_value in (
+            "prompt",
+            "pretooluse",
+            "beforereadfile",
+            "subagentstart",
+            "posttooluse",
+        ):
             violations = []
             violation_type = result.get("_violation_type")
             if violation_type:

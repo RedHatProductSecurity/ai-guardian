@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cursor desktop/CLI hooks and MCP integration**: Normalize Cursor's six
+  managed command-hook events, recognize additional upstream MCP/failure
+  payloads without treating them as required setup, install local desktop
+  and CLI protection at the shared user scope by default, and add explicit
+  Cursor Cloud project setup through `--project` and the tray directory picker
+  (#2265)
+
 - **First-run tray security profile onboarding**: When no global
   `ai-guardian.json` exists, automatic IDE setup offers the built-in security
   profiles with `@standard` recommended by default, an explicit skip option,
@@ -40,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Per-IDE tray setup choices**: When multiple local IDE/CLI integrations need
   hooks, the tray offers per-integration Install now or Never install choices,
-  persists exclusions in XDG state, and keeps manual setup available (#2241)
+  applies them with a single Submit action, persists exclusions in XDG state,
+  and keeps manual setup available (#2241)
 
 - **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
 
@@ -74,10 +82,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **macOS proactive prompt fallback**: Keep native AppleScript dialogs within
-  the three-button limit while preserving all snooze durations through a
-  platform-compatible list picker, and retain complete Tkinter failure
-  diagnostics (#2268)
+- **macOS proactive prompt fallback**: Use one foregrounded native Cocoa
+  prompt for simple and structured tray setup flows, with native per-IDE
+  checkboxes and a visible snooze selector; remove the legacy multi-dialog
+  AppleScript cascade, retain complete Tkinter failure diagnostics, return
+  native modal results reliably for snooze persistence, and deduplicate
+  overlapping health checks (#2268)
 
 - **Codex PostToolUse fail-open output**: Emit valid JSON when an unexpected
   hook-processing error occurs, while preserving fail-open behavior (#2267)

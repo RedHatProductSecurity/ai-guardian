@@ -129,15 +129,24 @@ def launch_doctor():
     _launch_in_terminal(resolve_cli_cmd("doctor"), keep_open=True)
 
 
-def launch_ide_setup(ide_key):
-    """Launch ai-guardian setup --ide <name> in a new terminal window."""
+def launch_ide_setup(ide_key, scope="user", project_dir=None):
+    """Launch IDE setup in a new terminal window.
+
+    Normal setup installs hooks and MCP at the local user/desktop level.  The
+    explicit Cursor project target is reserved for cloud-agent workspaces.
+    """
     from ai_guardian.daemon.multi_client import _launch_in_terminal
     from ai_guardian.tray.plugins import resolve_cli_cmd
 
-    _launch_in_terminal(
-        resolve_cli_cmd("setup", "--ide", ide_key),
-        keep_open=True,
-    )
+    command = resolve_cli_cmd("setup", "--ide", ide_key)
+    if scope == "project":
+        if ide_key != "cursor" or not project_dir:
+            logger.warning(
+                "Project-scoped IDE setup requires Cursor and a project directory"
+            )
+            return False
+        command.extend(["--project", project_dir])
+    return _launch_in_terminal(command, keep_open=True)
 
 
 def launch_create_config():

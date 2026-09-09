@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
+from ai_guardian.tray.menu_builder import TrayMenuBuilder
 from ai_guardian.tray.proactive_prompt import ProactivePromptState
 
 
@@ -38,8 +39,8 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
                     "beforeSubmitPrompt": "missing",
                     "beforeReadFile": "missing",
                     "beforeShellExecution": "missing",
-                    "afterShellExecution": "missing",
                     "preToolUse": "missing",
+                    "afterShellExecution": "missing",
                     "postToolUse": "missing",
                 },
                 "obsolete": [],
@@ -56,16 +57,53 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     dialog.assert_called_once_with(
         title="Set Up AI Guardian",
         message=(
-            "Cursor IDE is installed but is not protected by AI Guardian.\n\n"
+            "Cursor IDE/CLI is installed but is not protected by AI Guardian.\n\n"
             "Current hook status: beforeSubmitPrompt (missing), "
             "beforeReadFile (missing), beforeShellExecution (missing), "
-            "afterShellExecution (missing), preToolUse (missing), "
+            "preToolUse (missing), afterShellExecution (missing), "
             "postToolUse (missing)\n\n"
             "Set up its security hooks now?"
         ),
         action_label="Set Up Now",
         dismiss_label="Don't Ask Again",
         snooze_options=("1h", "6h", "1d", "1w"),
+    )
+
+
+def test_cursor_cloud_setup_requires_explicit_project_selection():
+    """
+    USER EXPERIENCE: Cursor Cloud setup -> choose a project before writing files.
+
+    Scenario:
+    1. User opens the tray's Manual setup (specific IDE) submenu.
+    2. User selects Cursor Cloud (project setup)....
+    3. The tray opens a directory picker and launches project-scoped setup only
+       after a directory is selected.
+
+    Expected User Experience:
+    - Local Cursor IDE/CLI setup remains user-scoped by default.
+    - The cloud flow passes the selected directory to ``--project``.
+    - Cancelling the picker would launch nothing.
+    """
+    tray = SimpleNamespace(
+        _targets=[SimpleNamespace(working_dir="/tmp/current-project")]
+    )
+    builder = TrayMenuBuilder(tray)
+
+    with (
+        patch(
+            "ai_guardian.daemon.working_dir.choose_directory",
+            return_value="/tmp/cloud-project",
+        ) as choose,
+        patch("ai_guardian.tray.menu_builder.tray_menu.launch_ide_setup") as launch,
+    ):
+        builder._pick_cursor_cloud_project("/tmp/current-project")
+
+    choose.assert_called_once_with(
+        "/tmp/current-project", title="Choose Cursor Cloud project directory"
+    )
+    launch.assert_called_once_with(
+        "cursor", scope="project", project_dir="/tmp/cloud-project"
     )
 
 
@@ -242,11 +280,11 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
         message=(
             "These installed IDEs have incomplete AI Guardian hooks:\n"
             "• Claude Code: PreToolUse (missing)\n"
-            "• Cursor IDE: PreToolUse (missing)\n\n"
+            "• Cursor IDE/CLI: PreToolUse (missing)\n\n"
             "Set up their security hooks now?"
         ),
-        action_label="Set Up Selected",
-        dismiss_label="Cancel",
+        action_label="Submit",
+        dismiss_label=None,
         snooze_options=("1h", "6h", "1d", "1w"),
         ide_choices=[
             {
@@ -256,7 +294,7 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
             },
             {
                 "ide": "cursor",
-                "name": "Cursor IDE",
+                "name": "Cursor IDE/CLI",
                 "detail": "PreToolUse (missing)",
             },
         ],
@@ -319,6 +357,33 @@ def test_manual_health_check_does_not_open_popup_when_notification_succeeds():
         monitor._check_ide_setup_notification(manual=True)
 
     dialog.assert_not_called()
+
+
+def test_cursor_health_reports_user_install_scope_and_project_effective_scope():
+    """
+    USER EXPERIENCE: Cursor health -> distinguish installation and effective scopes.
+
+    Expected User Experience:
+    - The tray tells the user that AI Guardian installs at user scope.
+    - A project-level Cursor file is visible as effective configuration, not
+      mistaken for the AI Guardian installation target.
+    - Missing user MCP registration is called out.
+    """
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_check_result(
+            ["cursor"],
+            unconfigured=["cursor"],
+            statuses={
+                "cursor": {
+                    "installation_scope": "user",
+                    "effective_scope": "project",
+                    "mcp_status": "missing",
+                }
+            },
+        )
+
+    message = notify.call_args.args[1]
+    assert "Cursor IDE/CLI (scope: user; effective: project; MCP: missing)" in message
 
 
 def test_startup_health_check_reports_result_once():
@@ -391,8 +456,11 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
        as Never install.
 
     Expected User Experience:
-    - Each integration appears in the same two-column choice list.
+    - Each integration appears with the same Install now/Never install
+      checkbox columns in Tkinter and the macOS native fallback.
     - Install now is selected by default and Never install is clear by default.
+    - The Later control has a visible snooze-duration dropdown.
+    - Submit applies the per-integration Install now/Never install choices.
     - Only the selected integration is configured.
     - The Never install choice is persisted for future automatic checks.
     """
@@ -436,11 +504,11 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
         message=(
             "These installed IDEs have incomplete AI Guardian hooks:\n"
             "• Claude Code: PreToolUse (missing)\n"
-            "• Cursor IDE: PreToolUse (missing)\n\n"
+            "• Cursor IDE/CLI: PreToolUse (missing)\n\n"
             "Set up their security hooks now?"
         ),
-        action_label="Set Up Selected",
-        dismiss_label="Cancel",
+        action_label="Submit",
+        dismiss_label=None,
         snooze_options=("1h", "6h", "1d", "1w"),
         ide_choices=[
             {
@@ -450,7 +518,7 @@ def test_multiple_integrations_show_per_ide_install_or_never_choices(tmp_path):
             },
             {
                 "ide": "cursor",
-                "name": "Cursor IDE",
+                "name": "Cursor IDE/CLI",
                 "detail": "PreToolUse (missing)",
             },
         ],

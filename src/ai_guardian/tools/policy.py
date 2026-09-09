@@ -751,6 +751,17 @@ class ToolPolicyChecker:
                 tool_name = hook_data["tool_name"]
                 tool_input = hook_data.get("tool_input", {})
 
+            # Cursor sends MCP parameters as a JSON string and provides shell
+            # and subagent arguments at the event root.  Normalize those
+            # shapes here as well as in the hook adapter because this checker
+            # receives the original payload for policy/audit context.
+            if isinstance(tool_input, str):
+                try:
+                    decoded_input = json.loads(tool_input)
+                except (TypeError, json.JSONDecodeError):
+                    decoded_input = {}
+                tool_input = decoded_input if isinstance(decoded_input, dict) else {}
+
             # Cursor/Windsurf: synthesize from event-based hook names
             if not tool_name:
                 event_name = hook_data.get("hook_event_name", "").lower()
@@ -763,7 +774,21 @@ class ToolPolicyChecker:
                         tool_input = {"file_path": file_path}
                 elif effective_event in ("beforeshellexecution",):
                     tool_name = "Bash"
-                    tool_input = hook_data.get("tool_input", {})
+                    tool_input = hook_data.get("tool_input") or {}
+                    if not tool_input and hook_data.get("command"):
+                        tool_input = {"command": hook_data["command"]}
+                elif effective_event in ("beforetabfileread",):
+                    tool_name = "Read"
+                    file_path = hook_data.get("file_path", "")
+                    if file_path:
+                        tool_input = {"file_path": file_path}
+                elif effective_event in ("subagentstart",):
+                    tool_name = "Task"
+                    tool_input = {
+                        key: hook_data[key]
+                        for key in ("subagent_id", "subagent_type", "task")
+                        if key in hook_data
+                    }
 
             # Augment Code: normalize tool names and mcp: prefix
             if tool_name and tool_name in self._AUGMENT_TOOL_MAP:

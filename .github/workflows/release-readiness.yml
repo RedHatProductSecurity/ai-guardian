@@ -198,11 +198,28 @@ jobs:
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
             WORK_DIR=$(mktemp -d)
+            export HOME="$WORK_DIR/home"
+            export USERPROFILE="$HOME"
+            mkdir -p "$HOME"
             export XDG_CONFIG_HOME=$(mktemp -d)
             ai-guardian setup --create-config
             (cd "$WORK_DIR" && ai-guardian setup --ide "$ide" --yes) && \
               echo "  $ide: OK" || \
               { echo "  $ide: FAILED"; FAILED="$FAILED $ide"; }
+            if [ "$ide" = "cursor" ]; then
+              test -f "$HOME/.cursor/hooks.json"
+              test -f "$HOME/.cursor/mcp.json"
+              test ! -f "$WORK_DIR/.cursor/hooks.json"
+              test ! -f "$WORK_DIR/.cursor/mcp.json"
+
+              CLOUD_PROJECT="$WORK_DIR/cloud-project"
+              mkdir -p "$CLOUD_PROJECT"
+              (cd "$WORK_DIR" && ai-guardian setup --ide cursor --project "$CLOUD_PROJECT" --yes)
+              test -f "$CLOUD_PROJECT/.cursor/hooks.json"
+              test -f "$CLOUD_PROJECT/.cursor/mcp.json"
+              test -f "$HOME/.cursor/hooks.json"
+              test -f "$HOME/.cursor/mcp.json"
+            fi
             rm -rf "$WORK_DIR"
           done
 

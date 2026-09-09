@@ -207,7 +207,7 @@ The actual value is in audit logging, not user warnings:
 | IDE | Block Mode Messages | Log Mode Messages | Notes |
 |-----|-------------------|-------------------|-------|
 | **Claude Code** | ✅ Displayed (exit != 0) | ❌ Not displayed (exit 0) | Logs only |
-| **Cursor** | ✅ Displayed (`continue: false`) | ❌ Not displayed (`continue: true`) | Tested April 2026 |
+| **Cursor** | ✅ Displayed (`permission: deny`; legacy `continue: false` is retained for file-read compatibility) | ❌ Not displayed (`permission: allow`) | User-level desktop/CLI hooks |
 | **Aider** | ✅ Displayed (exit != 0) | ❌ Not displayed (exit 0) | Same as Claude Code |
 | **GitHub Copilot** | ✅ Displayed (deny) | ❌ No log mode support | Binary only |
 
@@ -549,4 +549,8 @@ not identify the source IDE in each row.
 
 **Last Updated:** 2026-06-11  
 **Version:** 1.11.0  
-**Cursor Testing:** Completed - confirmed same limitation as Claude Code
+**Cursor Testing:** Desktop and local CLI command hooks use the same JSON
+protocol. AI Guardian installs the managed hook set and MCP registration in the
+user-level Cursor configuration by default. Use the explicit Cursor Cloud
+project setup flow (`ai-guardian setup --ide cursor --project DIR`, or the tray
+directory picker) when the remote run needs `<DIR>/.cursor` configuration.
