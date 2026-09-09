@@ -2087,7 +2087,14 @@ class IDESetup:
 
             # Check if hooks already configured
             if not force:
-                if self.expected_hook_manifest(ide_type):
+                # Generated plugin/extension artifacts are protected by the
+                # historical no-overwrite contract. Event-based hook files
+                # can be repaired in place, but an existing plugin/extension
+                # requires --force before replacing user-owned source.
+                generated_artifact = ide_config.get("plugin_file") or ide_config.get(
+                    "extension_based"
+                )
+                if self.expected_hook_manifest(ide_type) and not generated_artifact:
                     verification = self.verify_hooks_for_ide(
                         ide_type, scope=scope, project_dir=project_dir
                     )
