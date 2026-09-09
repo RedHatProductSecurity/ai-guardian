@@ -18,6 +18,7 @@ class OpenCodeAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["opencode"]
+    AGENT_TYPE: ClassVar[str] = "opencode"
 
     @property
     def name(self) -> str:

@@ -1557,35 +1557,20 @@ class ToolPolicyChecker:
 
     def _detect_ide_type(self, hook_data: Dict) -> str:
         """
-        Detect IDE type from hook data.
+        Detect the stable agent identity from hook data.
 
         Args:
             hook_data: Hook data from PreToolUse event
 
         Returns:
-            str: IDE type (claude_code, cursor, github_copilot, unknown)
+            str: Agent identity used in violation context (for example,
+                claude_code, codex, cursor, github_copilot, or unknown)
         """
-        # Check for environment variable override
-        ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
-        if ide_override:
-            return ide_override
+        # Use the same adapter selection as the main hook pipeline so
+        # Claude-compatible agents (notably Codex) are not misattributed.
+        from ai_guardian.hook_adapters import detect_adapter
 
-        # GitHub Copilot detection
-        if "toolName" in hook_data or ("timestamp" in hook_data and "cwd" in hook_data):
-            return "github_copilot"
-
-        # Cursor detection
-        if "cursor_version" in hook_data or "hook_name" in hook_data:
-            return "cursor"
-
-        # Claude Code detection
-        if "hook_event_name" in hook_data and hook_data.get("hook_event_name") in [
-            HookEvent.PROMPT.display_name,
-            HookEvent.PRE_TOOL_USE.display_name,
-        ]:
-            return "claude_code"
-
-        return "unknown"
+        return detect_adapter(hook_data).agent_type
 
     def _load_config(self) -> Dict:
         """

@@ -111,7 +111,13 @@ def _handle_session_end(hook_data, daemon_state, session_id, adapter):
 
 
 def _handle_bootstrap_scan(
-    daemon_state, hook_session_id, adapter, ide_type, hook_event, violation_logger
+    daemon_state,
+    hook_session_id,
+    adapter,
+    ide_type,
+    hook_event,
+    violation_logger,
+    agent_type=None,
 ):
     """Run bootstrap scan if this is a new session. Returns block response or None.
 
@@ -156,9 +162,12 @@ def _handle_bootstrap_scan(
                         context={
                             "source": "bootstrap_scan",
                             "ide_type": (
-                                ide_type.value
-                                if hasattr(ide_type, "value")
-                                else str(ide_type)
+                                agent_type
+                                or (
+                                    ide_type.value
+                                    if hasattr(ide_type, "value")
+                                    else str(ide_type)
+                                )
                             ),
                             "hook_event": hook_event,
                             "project_path": _bs_cwd,

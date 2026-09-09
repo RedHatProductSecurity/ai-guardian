@@ -22,6 +22,7 @@ class CrushAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["crush"]
+    AGENT_TYPE: ClassVar[str] = "crush"
 
     @property
     def name(self) -> str:

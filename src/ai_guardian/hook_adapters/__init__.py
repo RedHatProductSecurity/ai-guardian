@@ -93,8 +93,10 @@ def detect_adapter(hook_data: Dict) -> HookAdapter:
             return adapter
 
     # 4. Default fallback
-    logger.debug("No adapter matched, falling back to BaseAgentAdapter")
-    return BaseAgentAdapter()
+    logger.debug("No adapter matched, falling back to unknown agent identity")
+    # Keep Claude's response protocol as the safe fallback while preserving
+    # the fact that the payload itself did not identify an agent.
+    return BaseAgentAdapter(agent_type="unknown")
 
 
 def get_adapter_by_ide_type(ide_type) -> HookAdapter:
@@ -120,6 +122,8 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.UNKNOWN: BaseAgentAdapter,
     }
     adapter_cls = _IDE_TYPE_MAP.get(ide_type, BaseAgentAdapter)
+    if ide_type == IDEType.UNKNOWN:
+        return BaseAgentAdapter(agent_type="unknown")
     return adapter_cls()
 
 

@@ -36,6 +36,18 @@ from ai_guardian.scanners.scanner_registry import ScannerName, get_default_regis
 logger = logging.getLogger(__name__)
 
 
+def _agent_type_value(adapter, ide_type):
+    """Return stable agent attribution without changing response semantics."""
+    value = getattr(adapter, "agent_type", None)
+    if isinstance(value, str) and value:
+        return value
+    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
+        return value.value
+    if hasattr(ide_type, "value"):
+        return ide_type.value
+    return str(ide_type or "unknown")
+
+
 _MAX_REDACTED_CONTEXT_BYTES = 102400
 _MAX_SOURCE_COMMAND_LEN = 500
 
@@ -127,6 +139,8 @@ def handle_post_tool_use(ctx=None, **kwargs):
         _invocation_allowed = kwargs["_invocation_allowed"]
         now = kwargs["now"]
 
+    agent_type = _agent_type_value(adapter, ide_type)
+
     logger.info("Processing PostToolUse hook...")
 
     # Extract tool output
@@ -171,7 +185,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
             source_command = _sanitize_source_command(raw_cmd)
 
     _scan_ctx = ScanContext(
-        ide_type=ide_type.value if hasattr(ide_type, "value") else str(ide_type),
+        ide_type=agent_type,
         hook_event=hook_event,
         project_path=get_project_dir(),
         session_id=hook_session_id,
@@ -264,7 +278,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
         skip_secret_scan = True
 
     post_secret_ctx = {
-        "ide_type": ide_type.value,
+        "ide_type": agent_type,
         "hook_event": HookEvent.POST_TOOL_USE,
         "tool_name": tool_identifier,
         "source": "scanner",
@@ -672,6 +686,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             file_path=pii_file_path,
                             line_number=pii_line_number,
                             dialog_wait_ms=pii_ask_result.dialog_wait_ms,
+                            ide_type=agent_type,
                             invocation_allowed_findings=_invocation_allowed,
                             finding_fingerprints=_compute_pii_transcript_fingerprints(
                                 pii_redactions, tool_output
@@ -687,6 +702,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                             file_path=pii_file_path,
                             line_number=pii_line_number,
                             dialog_wait_ms=pii_ask_result.dialog_wait_ms,
+                            ide_type=agent_type,
                         )
 
                 if pii_action == "block":
@@ -857,6 +873,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                     file_path=post_pi_file,
                                     line_number=post_pi_result.line_number,
                                     dialog_wait_ms=post_pi_ask.dialog_wait_ms,
+                                    ide_type=agent_type,
                                 )
 
                         if post_pi_block:
@@ -977,6 +994,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                                     file_path=post_cp_file,
                                     line_number=post_cp_result.line_number,
                                     dialog_wait_ms=post_cp_ask.dialog_wait_ms,
+                                    ide_type=agent_type,
                                 )
 
                         if post_cp_block:
@@ -1065,6 +1083,7 @@ def handle_post_tool_use(ctx=None, **kwargs):
                         file_path=post_ol_result.file_path,
                         line_number=post_ol_result.line_number,
                         dialog_wait_ms=post_ol_ask.dialog_wait_ms,
+                        ide_type=agent_type,
                     )
             if post_ol_should_block:
                 logger.info("PostToolUse: blocking due to offensive language detection")

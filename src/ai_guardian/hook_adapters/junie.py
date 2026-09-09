@@ -18,6 +18,7 @@ class JunieAdapter(HookAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["junie"]
+    AGENT_TYPE: ClassVar[str] = "junie"
 
     @property
     def ide_type(self):

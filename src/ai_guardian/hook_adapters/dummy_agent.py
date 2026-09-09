@@ -18,6 +18,7 @@ class DummyAgentAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["dummy-agent", "dummy_agent"]
+    AGENT_TYPE: ClassVar[str] = "dummy_agent"
 
     @property
     def ide_type(self):

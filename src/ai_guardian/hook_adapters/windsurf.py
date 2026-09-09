@@ -36,6 +36,7 @@ class WindsurfAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["windsurf"]
+    AGENT_TYPE: ClassVar[str] = "windsurf"
 
     @property
     def name(self) -> str:

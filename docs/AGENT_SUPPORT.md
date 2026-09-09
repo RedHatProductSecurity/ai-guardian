@@ -236,6 +236,16 @@ The tray's **Check hooks/MCP installation...** action checks hooks and MCP
 registration separately and can repair a missing global MCP entry without
 rewriting healthy Codex hooks.
 
+#### Violation attribution
+
+Violation records use `context.ide_type` for the stable integration identity,
+independently of the response protocol. Codex CLI and Codex mode in ChatGPT
+desktop both record `codex`, while Claude-compatible response formatting is
+preserved. Other adapters that share Claude-compatible formatting use their
+own stable values, such as `windsurf`, `augment`, `opencode`, and `crush`.
+Payloads that do not identify an integration use `unknown` rather than being
+attributed to Claude Code.
+
 #### Codex event classification
 
 The adapter recognizes every documented Codex lifecycle event. “Managed” means

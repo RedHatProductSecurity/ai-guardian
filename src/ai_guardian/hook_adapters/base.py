@@ -49,11 +49,37 @@ class HookAdapter(ABC):
     # Subclasses set this to map env var values to the adapter.
     # e.g., BaseAgentAdapter.ENV_ALIASES = ["claude"]
     ENV_ALIASES: ClassVar[List[str]] = []
+    # Stable agent identity used for violation attribution.  This is kept
+    # separate from ``ide_type`` because several agents intentionally share
+    # Claude Code's response protocol.
+    AGENT_TYPE: ClassVar[str] = ""
+
+    def __init__(self, agent_type: Optional[str] = None):
+        self._agent_type_override = agent_type
 
     @property
     @abstractmethod
     def ide_type(self):
         """Return the IDEType enum value for this adapter."""
+
+    @property
+    def agent_type(self) -> str:
+        """Return the stable agent identity for violation attribution.
+
+        ``ide_type`` remains the response-format identity for backward
+        compatibility.  ``agent_type`` identifies the integration that
+        generated the hook, even when it uses a compatible response format.
+        "unknown" is reserved for genuinely ambiguous payloads.
+        """
+        explicit = getattr(self, "_agent_type_override", None)
+        if explicit:
+            return str(explicit)
+        if self.AGENT_TYPE:
+            return self.AGENT_TYPE
+        ide_type = self.ide_type
+        return (
+            ide_type.value if hasattr(ide_type, "value") else str(ide_type or "unknown")
+        )
 
     @property
     @abstractmethod
