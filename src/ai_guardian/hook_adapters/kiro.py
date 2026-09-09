@@ -20,6 +20,7 @@ class KiroAdapter(HookAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["kiro", "aiderdesk", "openclaw"]
+    AGENT_TYPE: ClassVar[str] = "kiro"
 
     @property
     def ide_type(self):

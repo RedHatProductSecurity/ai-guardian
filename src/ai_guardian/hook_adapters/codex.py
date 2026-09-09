@@ -24,6 +24,7 @@ class CodexAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["codex"]
+    AGENT_TYPE: ClassVar[str] = "codex"
     CODEX_HOOK_EVENTS: ClassVar[FrozenSet[str]] = frozenset(
         {
             "PermissionRequest",

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Hook violation attribution**: Record the actual agent identity in
+  `context.ide_type` for Codex and other integrations that share Claude Code's
+  response protocol, while preserving existing response formatting (#2276).
+
 - **Daemon startup recovery**: Serialize stale-state cleanup, write PID files
   atomically, preserve responsive sockets when PID state is missing or corrupt,
   and allow reset to recover a daemon using its startup lock.

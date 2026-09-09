@@ -33,6 +33,7 @@ class BaseAgentAdapter(HookAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["claude"]
+    AGENT_TYPE: ClassVar[str] = "claude_code"
 
     @property
     def ide_type(self):

@@ -51,6 +51,8 @@ class PostScanContext:
     hook_session_id: Optional[str] = None
     hook_tool_use_id: Optional[str] = None
     tool_name: Optional[str] = None
+    # Stable agent identity persisted as context.ide_type.  This is separate
+    # from the response-protocol IDEType used by hook processing.
     ide_type_value: str = "unknown"
     violation_logger: Any = None
     latency_timer: Any = None
@@ -290,6 +292,7 @@ def apply_post_scan_pipeline(
                 file_path=file_path,
                 line_number=result.line_number,
                 dialog_wait_ms=ask_result.dialog_wait_ms,
+                ide_type=ctx.ide_type_value,
                 invocation_allowed_findings=ctx.invocation_allowed_findings,
                 finding_fingerprints=finding_fingerprints,
             )

@@ -21,6 +21,18 @@ from ai_guardian.scanners.scan_result import ScanResult  # noqa: F401 — used b
 logger = logging.getLogger(__name__)
 
 
+def _agent_type_value(adapter, ide_type):
+    """Return stable agent attribution without changing response semantics."""
+    value = getattr(adapter, "agent_type", None)
+    if isinstance(value, str) and value:
+        return value
+    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
+        return value.value
+    if hasattr(ide_type, "value"):
+        return ide_type.value
+    return str(ide_type or "unknown")
+
+
 def _matches_ignore_files(file_path, ignore_files):
     from ai_guardian.hook_processing import _matches_ignore_files as _mif
 
@@ -125,6 +137,8 @@ def run_content_pipeline(
         security_message = ctx.security_message
         _invocation_allowed = ctx._invocation_allowed
 
+    agent_type = _agent_type_value(adapter, ide_type)
+
     # --- Pre-scan setup ---
 
     # Keep the original source content available to the shared violation
@@ -154,7 +168,7 @@ def run_content_pipeline(
         secret_allowlist = secret_config.get("allowlist_patterns", [])
 
         pre_secret_ctx = {
-            "ide_type": ide_type.value,
+            "ide_type": agent_type,
             "hook_event": hook_event,
             "tool_name": tool_identifier,
             "source": "scanner",

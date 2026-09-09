@@ -81,6 +81,7 @@ class TestAdapterRegistry:
     def test_default_fallback_is_claude_code(self):
         adapter = detect_adapter({})
         assert isinstance(adapter, BaseAgentAdapter)
+        assert adapter.agent_type == "unknown"
 
     def test_env_var_override_claude(self):
         with mock.patch.dict(os.environ, {"AI_GUARDIAN_IDE_TYPE": "claude"}):
@@ -641,6 +642,7 @@ class TestNormalization:
         adapter = CodexAdapter()
         assert adapter.name == "OpenAI Codex"
         assert adapter.ide_type == IDEType.CLAUDE_CODE
+        assert adapter.agent_type == "codex"
 
 
 # ── Shared Response Methods (#1527) ────────────────────────────────────
@@ -1725,7 +1727,9 @@ class TestIDETypeProperties:
     """Test that each adapter reports the correct IDEType."""
 
     def test_claude_code_ide_type(self):
-        assert BaseAgentAdapter().ide_type == IDEType.CLAUDE_CODE
+        adapter = BaseAgentAdapter()
+        assert adapter.ide_type == IDEType.CLAUDE_CODE
+        assert adapter.agent_type == "claude_code"
 
     def test_cursor_ide_type(self):
         assert CursorAdapter().ide_type == IDEType.CURSOR
@@ -1734,10 +1738,14 @@ class TestIDETypeProperties:
         assert CopilotAdapter().ide_type == IDEType.GITHUB_COPILOT
 
     def test_codex_ide_type(self):
-        assert CodexAdapter().ide_type == IDEType.CLAUDE_CODE
+        adapter = CodexAdapter()
+        assert adapter.ide_type == IDEType.CLAUDE_CODE
+        assert adapter.agent_type == "codex"
 
     def test_windsurf_ide_type(self):
-        assert WindsurfAdapter().ide_type == IDEType.CLAUDE_CODE
+        adapter = WindsurfAdapter()
+        assert adapter.ide_type == IDEType.CLAUDE_CODE
+        assert adapter.agent_type == "windsurf"
 
     def test_gemini_ide_type(self):
         assert GeminiCLIAdapter().ide_type == IDEType.GEMINI_CLI
@@ -1749,7 +1757,9 @@ class TestIDETypeProperties:
         assert KiroAdapter().ide_type == IDEType.KIRO
 
     def test_augment_ide_type(self):
-        assert AugmentAdapter().ide_type == IDEType.CLAUDE_CODE
+        adapter = AugmentAdapter()
+        assert adapter.ide_type == IDEType.CLAUDE_CODE
+        assert adapter.agent_type == "augment"
 
     def test_junie_ide_type(self):
         assert JunieAdapter().ide_type == IDEType.UNKNOWN

@@ -306,6 +306,16 @@ from ai_guardian.scanners.transcript import (
 logger = logging.getLogger(__name__)
 
 
+def _get_agent_type(adapter, fallback="unknown"):
+    """Return the adapter's stable violation-attribution identity."""
+    value = getattr(adapter, "agent_type", None)
+    if isinstance(value, str) and value:
+        return value
+    if hasattr(value, "value") and isinstance(value.value, str) and value.value:
+        return value.value
+    return fallback
+
+
 # Deferred imports for hook_events and ask_mode modules — these modules import
 # from hook_processing, so module-level imports here would create circular deps.
 # Resolved lazily on first call to process_hook_data().
@@ -705,7 +715,7 @@ def _check_directory_rules(file_path, config):
         return None, None, None
 
 
-def check_directory_denied(file_path, config=None):
+def check_directory_denied(file_path, config=None, hook_context=None):
     """
     Check if a file should be blocked based on directory rules and .ai-read-deny markers.
 
@@ -725,6 +735,7 @@ def check_directory_denied(file_path, config=None):
     Args:
         file_path: Path to the file being accessed
         config: Optional configuration dict containing directory_rules
+        hook_context: Optional hook metadata used for violation attribution
 
     Returns:
         tuple: (is_denied: bool, denied_directory: str or None, warning_message: str or None, matched_pattern: str or None)
@@ -795,7 +806,10 @@ def check_directory_denied(file_path, config=None):
                         f"Policy violation (warn mode): {file_path} - .ai-read-deny marker in {denied_directory} but allowed for audit"
                     )
                     _log_directory_blocking_violation(
-                        file_path, denied_directory, is_excluded=False
+                        file_path,
+                        denied_directory,
+                        is_excluded=False,
+                        hook_context=hook_context,
                     )
                     warn_msg = "⚠️  Directory access policy violation (warn mode) - execution allowed"
                     return (
@@ -809,7 +823,10 @@ def check_directory_denied(file_path, config=None):
                         f"Policy violation (log-only mode): {file_path} - .ai-read-deny marker in {denied_directory} but allowed for audit (silent)"
                     )
                     _log_directory_blocking_violation(
-                        file_path, denied_directory, is_excluded=False
+                        file_path,
+                        denied_directory,
+                        is_excluded=False,
+                        hook_context=hook_context,
                     )
                     return (
                         False,
@@ -823,7 +840,10 @@ def check_directory_denied(file_path, config=None):
                         f".ai-read-deny marker blocks access to {denied_directory}"
                     )
                     _log_directory_blocking_violation(
-                        file_path, denied_directory, is_excluded=False
+                        file_path,
+                        denied_directory,
+                        is_excluded=False,
+                        hook_context=hook_context,
                     )
                     return True, denied_directory, None, matched_pattern  # BLOCK
 
@@ -846,6 +866,7 @@ def check_directory_denied(file_path, config=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    hook_context=hook_context,
                 )
                 warn_msg = "⚠️  Directory access policy violation (warn mode) - execution allowed"
                 return (
@@ -864,6 +885,7 @@ def check_directory_denied(file_path, config=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    hook_context=hook_context,
                 )
                 return (
                     False,
@@ -880,6 +902,7 @@ def check_directory_denied(file_path, config=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    hook_context=hook_context,
                 )
                 return True, os.path.dirname(abs_path), None, matched_pattern  # BLOCK
 
@@ -1119,12 +1142,13 @@ def _build_directory_denied_message(file_path, denied_dir, matched_pattern):
     return error_msg
 
 
-def extract_file_content_from_tool(hook_data):
+def extract_file_content_from_tool(hook_data, hook_context=None):
     """
     Extract file path/content from PreToolUse/beforeReadFile hook data.
 
     Args:
         hook_data: Parsed JSON input from PreToolUse or beforeReadFile hook
+        hook_context: Optional hook metadata used for violation attribution
 
     Returns:
         tuple: (content: str or None, filename: str, file_path: str or None, is_denied: bool, deny_reason: str or None, warning_message: str or None)
@@ -1138,7 +1162,7 @@ def extract_file_content_from_tool(hook_data):
 
             # Check if directory is denied
             is_denied, denied_dir, dir_warning, matched_pattern = (
-                check_directory_denied(file_path)
+                check_directory_denied(file_path, hook_context=hook_context)
             )
             if is_denied:
                 error_msg = _build_directory_denied_message(
@@ -1215,7 +1239,7 @@ def extract_file_content_from_tool(hook_data):
 
         # Check if directory is denied BEFORE reading the file
         is_denied, denied_dir, dir_warning, matched_pattern = check_directory_denied(
-            file_path
+            file_path, hook_context=hook_context
         )
         if is_denied:
             error_msg = _build_directory_denied_message(
@@ -1641,9 +1665,12 @@ def _log_directory_blocking_violation(
     log_violation(
         result,
         ScanContext(
+            ide_type=hctx.get("ide_type", "unknown"),
+            hook_event=hctx.get("hook_event", ""),
             project_path=get_project_dir(),
             session_id=hctx.get("session_id"),
             tool_use_id=hctx.get("tool_use_id"),
+            tool_name=hctx.get("tool_name"),
         ),
         violation_logger=violation_logger,
         blocked_overrides={
@@ -1831,6 +1858,7 @@ def _process_hook_data(hook_data, daemon_state=None):
         # Detect adapter and normalize input in a single pass
         adapter = detect_adapter(hook_data)
         ide_type = adapter.ide_type
+        agent_type = _get_agent_type(adapter)
         normalized = adapter.normalize_input(hook_data)
         hook_event = normalized.event
         # Start timing after adapter normalization so every normalized event,
@@ -1844,7 +1872,8 @@ def _process_hook_data(hook_data, daemon_state=None):
             logging.disable(logging.CRITICAL)
         else:
             logger.info(
-                f"Detected IDE type: {ide_type.value} (adapter: {adapter.name})"
+                f"Detected IDE type: {ide_type.value} (agent: {agent_type}; "
+                f"adapter: {adapter.name})"
             )
             logger.info(f"Detected hook event: {hook_event}")
 
@@ -1923,6 +1952,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                 ide_type,
                 hook_event,
                 violation_logger,
+                agent_type=agent_type,
             )
             if bs_response:
                 return bs_response
@@ -1954,6 +1984,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             ide_type,
             hook_event,
             violation_logger,
+            agent_type=agent_type,
         )
         if _bs_response:
             return _bs_response
@@ -2134,6 +2165,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                                         matched_text=perm_matched_text or "",
                                         error_msg=error_message or "",
                                         dialog_wait_ms=perm_ask_result.dialog_wait_ms,
+                                        ide_type=agent_type,
                                     )
 
                         if not perm_ask_allowed:
@@ -2248,9 +2280,9 @@ def _process_hook_data(hook_data, daemon_state=None):
             hook_session_id=hook_session_id,
             hook_tool_use_id=hook_tool_use_id,
             tool_name=tool_name,
-            ide_type_value=(
-                ide_type.value if hasattr(ide_type, "value") else str(ide_type)
-            ),
+            # This field is persisted as context.ide_type.  Keep it separate
+            # from ``ide_type``, which controls the response protocol.
+            ide_type_value=agent_type,
             violation_logger=violation_logger,
             latency_timer=_latency_timer,
             invocation_allowed_findings=_invocation_allowed,
@@ -2367,7 +2399,16 @@ def _process_hook_data(hook_data, daemon_state=None):
                         is_denied,
                         deny_reason,
                         dir_warning,
-                    ) = extract_file_content_from_tool(hook_data)
+                    ) = extract_file_content_from_tool(
+                        hook_data,
+                        hook_context={
+                            "ide_type": agent_type,
+                            "session_id": hook_session_id,
+                            "tool_use_id": hook_tool_use_id,
+                            "hook_event": hook_event,
+                            "tool_name": tool_name,
+                        },
+                    )
 
                 # Check if directory access is denied
                 if is_denied:
@@ -2412,6 +2453,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                                 error_msg=deny_reason or "",
                                 file_path=file_path,
                                 dialog_wait_ms=dir_ask_result.dialog_wait_ms,
+                                ide_type=agent_type,
                             )
 
                 if is_denied:
@@ -2592,7 +2634,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                             if violation_logger:
                                 try:
                                     ann_ctx = {
-                                        "ide_type": ide_type.value,
+                                        "ide_type": agent_type,
                                         "hook_event": hook_event,
                                         "file_path": file_path,
                                     }

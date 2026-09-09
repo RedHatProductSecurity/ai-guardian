@@ -416,6 +416,7 @@ def _log_ask_decision(
     session_id=None,
     finding_fingerprints=None,
     invocation_allowed_findings=None,
+    ide_type="unknown",
 ):
     """Log an ask-mode decision (allow or block) to violations.jsonl.
 
@@ -467,7 +468,14 @@ def _log_ask_decision(
         decision_str, action_taken = _DECISION_MAP.get(
             decision, ("allow_once", "allowed")
         )
-        ctx = {"ask_decision": decision_str, "action_taken": action_taken}
+        context_ide_type = (
+            ide_type.value if hasattr(ide_type, "value") else str(ide_type or "unknown")
+        )
+        ctx = {
+            "ide_type": context_ide_type,
+            "ask_decision": decision_str,
+            "action_taken": action_taken,
+        }
         if dialog_wait_ms > 0:
             ctx["dialog_wait_ms"] = round(dialog_wait_ms, 1)
         from ai_guardian.scanners.scan_result import generate_violation_id

@@ -21,6 +21,7 @@ class AugmentAdapter(BaseAgentAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["augment"]
+    AGENT_TYPE: ClassVar[str] = "augment"
 
     @property
     def name(self) -> str:
