@@ -1888,6 +1888,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             HookEvent.PRE_COMPACT,
             HookEvent.STOP,
             HookEvent.INTERRUPT,
+            HookEvent.SUBAGENT_START,
             HookEvent.SUBAGENT_STOP,
             HookEvent.POST_TOOL_USE_FAILURE,
             HookEvent.AFTER_FILE_EDIT,
@@ -1895,11 +1896,15 @@ def _process_hook_data(hook_data, daemon_state=None):
             HookEvent.AFTER_AGENT_RESPONSE,
             HookEvent.AFTER_AGENT_THOUGHT,
             HookEvent.WORKSPACE_OPEN,
+        ) and not (
+            hook_event == HookEvent.SUBAGENT_START and ide_type == IDEType.CURSOR
         ):
-            # Codex exposes these lifecycle notifications, but they do not
-            # provide a security-enforceable content or permission decision.
-            # Keep the hooks installed and observable without treating them as
-            # prompts or tool calls.
+            # Codex and other adapters expose these lifecycle notifications,
+            # but they do not provide a security-enforceable content or
+            # permission decision. Keep the hooks installed and observable
+            # without treating them as prompts or tool calls. Cursor's
+            # subagentStart event is a decision-capable exception and falls
+            # through to the normal tool-policy path below.
             # Cursor command hooks use JSON responses.  The lifecycle events
             # above do not expose a decision/output channel, so acknowledge
             # them with an empty object without echoing event payloads such as
