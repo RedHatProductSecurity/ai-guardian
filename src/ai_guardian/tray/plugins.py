@@ -1057,7 +1057,20 @@ def show_action_dialog(
 
     options = tuple(str(option) for option in snooze_options if option)
     later_labels = tuple(f"Later ({option})" for option in options)
-    button_labels = (action_label,) + later_labels + (dismiss_label,)
+    if len(later_labels) > 1:
+        # AppleScript display dialogs accept at most three buttons. Keep the
+        # primary action and dismiss controls visible, then use a list picker
+        # for the complete snooze range.
+        snooze_button_label = "Later..."
+    elif later_labels:
+        snooze_button_label = later_labels[0]
+    else:
+        snooze_button_label = None
+
+    button_labels = (action_label,)
+    if snooze_button_label:
+        button_labels += (snooze_button_label,)
+    button_labels += (dismiss_label,)
 
     try:
         from ai_guardian.daemon.multi_client import _escape_for_applescript
@@ -1072,11 +1085,30 @@ def show_action_dialog(
             f'"{_escape_for_applescript(label)}"' for label in button_labels
         )
         action = _escape_for_applescript(action_label)
+        snooze_flow = ""
+        if len(later_labels) > 1:
+            snooze_items = ", ".join(
+                f'"{_escape_for_applescript(label)}"' for label in later_labels
+            )
+            snooze_button = _escape_for_applescript(snooze_button_label)
+            snooze_flow = (
+                f'    if selected_button is "{snooze_button}" then\n'
+                f"        set snooze_result to choose from list {{{snooze_items}}} "
+                f'with prompt "Choose a snooze duration:" with title "{ttl}" '
+                'OK button name "Snooze" cancel button name "Cancel"\n'
+                "        if snooze_result is false then\n"
+                '            return "dismiss"\n'
+                "        end if\n"
+                "        return item 1 of snooze_result\n"
+                "    end if\n"
+            )
         script = (
             "try\n"
             f'    set dialog_result to display dialog "{msg}" with title "{ttl}" '
             f'buttons {{{buttons}}} default button "{action}"\n'
-            "    return button returned of dialog_result\n"
+            "    set selected_button to button returned of dialog_result\n"
+            f"{snooze_flow}"
+            "    return selected_button\n"
             "on error number -128\n"
             '    return ""\n'
             "end try"

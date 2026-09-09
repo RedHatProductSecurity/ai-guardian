@@ -889,7 +889,7 @@ class TestSendNotification:
     def test_returns_false_on_error(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+            with mock.patch("subprocess.Popen", side_effect=FileNotFoundError):
                 from ai_guardian.tray.plugins import send_notification
 
                 assert send_notification("T", "M") is False
@@ -1148,42 +1148,56 @@ class TestShowDialog:
 
 
 class TestShowActionDialog:
-    def test_macos_returns_selected_action(self):
+    @pytest.mark.parametrize(
+        ("snooze_options", "stdout", "expected", "button_labels", "list_labels"),
+        [
+            ((), "Set Up Now\n", "action", ("Set Up Now", "Cancel"), ()),
+            (
+                ("1h",),
+                "Later (1h)\n",
+                "snooze_1h",
+                ("Set Up Now", "Later (1h)", "Cancel"),
+                (),
+            ),
+            (
+                ("1h", "6h", "1d", "1w"),
+                "Later (6h)\n",
+                "snooze_6h",
+                ("Set Up Now", "Later...", "Cancel"),
+                ("Later (1h)", "Later (6h)", "Later (1d)", "Later (1w)"),
+            ),
+        ],
+    )
+    def test_macos_limits_buttons_and_preserves_snooze_options(
+        self, snooze_options, stdout, expected, button_labels, list_labels
+    ):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
             with mock.patch("subprocess.run") as mock_run:
                 mock_run.return_value.returncode = 0
-                mock_run.return_value.stdout = "Set Up Now\n"
+                mock_run.return_value.stdout = stdout
                 result = show_action_dialog(
                     "Set Up AI Guardian",
                     "Hooks are missing.",
                     "Set Up Now",
                     "Cancel",
-                    snooze_options=("1h",),
+                    snooze_options=snooze_options,
                 )
 
-        assert result == "action"
+        assert result == expected
         script = mock_run.call_args[0][0][2]
         assert "display dialog" in script
-        assert '"Set Up Now"' in script
-        assert '"Later (1h)"' in script
-        assert '"Cancel"' in script
-
-    def test_macos_returns_snooze_choice(self):
-        with mock.patch("ai_guardian.tray.plugins.platform") as m:
-            m.system.return_value = "Darwin"
-            with mock.patch("subprocess.run") as mock_run:
-                mock_run.return_value.returncode = 0
-                mock_run.return_value.stdout = "Later (6h)\n"
-                result = show_action_dialog(
-                    "Title",
-                    "Message",
-                    "Continue",
-                    "Cancel",
-                    snooze_options=("1h", "6h"),
-                )
-
-        assert result == "snooze_6h"
+        button_block = script.split("buttons {", 1)[1].split("} default button", 1)[0]
+        assert button_block.count('"') // 2 == len(button_labels)
+        assert len(button_labels) <= 3
+        for label in button_labels:
+            assert f'"{label}"' in button_block
+        if list_labels:
+            assert "choose from list" in script
+            for label in list_labels:
+                assert f'"{label}"' in script
+        else:
+            assert "choose from list" not in script
 
     def test_macos_returns_none_on_nonzero_exit(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
