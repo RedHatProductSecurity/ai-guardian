@@ -62,6 +62,24 @@ class TestIsDaemonRunning:
         # PID exists but no socket to connect to
         assert not is_daemon_running()
 
+    def test_corrupt_pid_file_uses_responsive_socket(self, tmp_path, monkeypatch):
+        """A healthy daemon remains detectable while its PID file is corrupt."""
+
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        (tmp_path / "daemon.pid").write_text("{corrupt")
+        sock = mock.MagicMock()
+
+        with (
+            mock.patch("ai_guardian.daemon.client._connect", return_value=sock),
+            mock.patch(
+                "ai_guardian.daemon.client.decode_message",
+                return_value={"type": "pong"},
+            ),
+        ):
+            assert is_daemon_running()
+
+        sock.close.assert_called_once()
+
 
 @_skip_no_unix_socket
 class TestSendHookRequest:

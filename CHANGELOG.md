@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Daemon startup recovery**: Serialize stale-state cleanup, write PID files
+  atomically, preserve responsive sockets when PID state is missing or corrupt,
+  and allow reset to recover a daemon using its startup lock.
+
 - **Cursor Cloud setup review fixes**: Keep cloud MCP registration separate from
   local `.cursor/mcp.json`, recognize effective project hooks in MCP health
   checks, fail closed on malformed Cursor tool inputs, preserve decoded shell

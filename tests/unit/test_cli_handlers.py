@@ -275,6 +275,28 @@ class TestDaemonResetCommand:
         assert "stopped" in out
         assert "SIGKILL" not in out
 
+    def test_reset_uses_lock_pid_when_pid_file_is_corrupt(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        """Reset can stop a daemon when only its startup lock is readable."""
+
+        monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
+        (tmp_path / "daemon.pid").write_text("{corrupt")
+        (tmp_path / "daemon.pid.lock").write_text("12345")
+
+        args = mock.MagicMock()
+        args.daemon_command = "reset"
+
+        with (
+            mock.patch("ai_guardian.daemon.is_pid_alive", side_effect=[True, False]),
+            mock.patch("os.kill") as mock_kill,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        assert "pid 12345" in capsys.readouterr().out
+        mock_kill.assert_called_once()
+
     def test_reset_running_daemon_sigkill(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
         (tmp_path / "daemon.pid").write_text('{"pid": 12345}')

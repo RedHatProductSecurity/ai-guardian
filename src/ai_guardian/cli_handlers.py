@@ -592,24 +592,51 @@ def _handle_daemon_command(args):
 
         # Kill daemon process if running
         pid = None
+        pid_is_alive = False
         if pid_path.exists():
             try:
                 pid_info = json.loads(pid_path.read_text())
-                pid = pid_info.get("pid", 0)
-            except (json.JSONDecodeError, OSError):
+                candidate = pid_info.get("pid", 0)
+                if isinstance(candidate, int) and not isinstance(candidate, bool):
+                    pid = candidate
+            except (
+                json.JSONDecodeError,
+                OSError,
+                TypeError,
+                ValueError,
+                AttributeError,
+            ):
                 pid = None
 
-        if pid and is_pid_alive(pid):
+        if pid:
+            pid_is_alive = is_pid_alive(pid)
+
+        # A running daemon can retain the startup lock even when its PID file
+        # is missing or was interrupted during an atomic replacement. Use that
+        # record as recovery metadata, but only when it names a live process.
+        if not pid:
+            try:
+                lock_candidate = int(Path(lock_path).read_text().strip())
+            except (OSError, ValueError):
+                lock_candidate = 0
+            if lock_candidate and is_pid_alive(lock_candidate):
+                pid = lock_candidate
+                pid_is_alive = True
+
+        if pid and pid_is_alive:
             try:
                 os.kill(pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError, OSError):
                 pass  # intentionally silent — process may have exited
 
             deadline = time.monotonic() + 3
-            while time.monotonic() < deadline and is_pid_alive(pid):
+            while time.monotonic() < deadline:
+                pid_is_alive = is_pid_alive(pid)
+                if not pid_is_alive:
+                    break
                 time.sleep(0.2)
 
-            if is_pid_alive(pid):
+            if pid_is_alive:
                 try:
                     if sys.platform == "win32":
                         os.kill(pid, signal.SIGTERM)

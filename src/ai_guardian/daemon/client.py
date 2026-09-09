@@ -35,6 +35,8 @@ from ai_guardian.daemon.protocol import (
 
 logger = logging.getLogger(__name__)
 
+DAEMON_START_TIMEOUT_SECONDS = 10.0
+
 
 def _remote_url_configured() -> bool:
     """Return whether a remote daemon URL was explicitly configured."""
@@ -160,17 +162,20 @@ def is_daemon_running():
         return _is_daemon_running_remote()
 
     pid_path = get_pid_path()
-    if not pid_path.exists():
-        return False
+    pid = None
+    try:
+        if pid_path.exists():
+            pid_info = json.loads(pid_path.read_text())
+            candidate = pid_info.get("pid")
+            if isinstance(candidate, int) and not isinstance(candidate, bool):
+                pid = candidate
+    except (json.JSONDecodeError, OSError, TypeError, ValueError, AttributeError):
+        # The Unix socket is authoritative for local liveness. A malformed
+        # PID file must not make a healthy daemon appear stopped.
+        logger.warning("Daemon PID file is invalid; checking socket directly")
 
     try:
-        pid_info = json.loads(pid_path.read_text())
-        pid = pid_info.get("pid", 0)
-        if not pid:
-            return False
-
-        # Check if process exists
-        if not is_pid_alive(pid):
+        if pid is not None and (not pid or not is_pid_alive(pid)):
             return False
 
         # Verify socket connectivity with a ping
@@ -185,7 +190,7 @@ def is_daemon_running():
         finally:
             sock.close()
 
-    except (json.JSONDecodeError, OSError, Exception):
+    except Exception:
         return False
 
 
@@ -610,14 +615,16 @@ def start_daemon_background():
 
         # Wait for daemon to become ready
         sock_path = get_socket_path()
-        for _ in range(30):  # up to 3 seconds
+        for _ in range(int(DAEMON_START_TIMEOUT_SECONDS / 0.1)):
             time.sleep(0.1)
             if sock_path.exists() or _tcp_pid_has_port():
                 if is_daemon_running():
                     logger.info("Daemon started in background")
                     return True
 
-        logger.warning("Daemon start timed out after 3s")
+        logger.warning(
+            "Daemon start timed out after %.0fs", DAEMON_START_TIMEOUT_SECONDS
+        )
         return False
 
     except Exception as e:
