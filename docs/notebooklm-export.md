@@ -324,7 +324,7 @@ See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian
 | Claude Code | `--ide claude` | Full | Full | Complete |
 | Cursor | `--ide cursor` | Full | N/A | Complete |
 | GitHub Copilot | `--ide copilot` | Full | N/A | Complete |
-| OpenAI Codex | `--ide codex` | Full | N/A | Complete |
+| OpenAI Codex (CLI + Desktop) | `--ide codex` | Full | N/A | Complete |
 | Windsurf | `--ide windsurf` | Full | N/A | Complete |
 | Gemini CLI | `--ide gemini` | Full | N/A | Complete |
 | Cline / ZooCode | `--ide cline` | Full | N/A | Complete |
@@ -779,7 +779,7 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor | `--ide cursor` | Full | N/A | **Complete** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex | `--ide codex` | Full | N/A | **Complete** |
+| OpenAI Codex (CLI + Desktop) | `--ide codex` | Full | N/A | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -798,7 +798,7 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
+| OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
@@ -1028,7 +1028,7 @@ hook_adapters/
 ├── claude_code.py       # Claude Code (default fallback)
 ├── cursor.py            # Cursor IDE
 ├── copilot.py           # GitHub Copilot
-├── codex.py             # OpenAI Codex (extends ClaudeCodeAdapter)
+├── codex.py             # OpenAI Codex (CLI + Desktop) (extends ClaudeCodeAdapter)
 ├── windsurf.py          # Windsurf (extends ClaudeCodeAdapter)
 ├── gemini.py            # Google Gemini CLI
 ├── cline.py             # Cline / ZooCode
@@ -1091,7 +1091,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Claude Code | `~/.claude/settings.json` |
 | Cursor | `~/.cursor/hooks.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
-| OpenAI Codex | `~/.codex/hooks.json` |
+| OpenAI Codex (CLI + Desktop) | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
 | Gemini CLI | `~/.gemini/settings.json` |
 | Cline / ZooCode | `.clinerules/hooks/` (scripts) |

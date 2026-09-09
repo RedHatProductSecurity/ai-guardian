@@ -182,7 +182,7 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
     USER EXPERIENCE: Codex hooks healthy + MCP missing -> explain the gap.
 
     Scenario:
-    1. The local tray finds OpenAI Codex with all AI Guardian hooks healthy.
+    1. The local tray finds OpenAI Codex (CLI + Desktop) with all AI Guardian hooks healthy.
     2. The global Codex MCP configuration does not contain AI Guardian.
     3. The tray asks whether to register the missing MCP server.
 
@@ -221,7 +221,7 @@ def test_codex_hooks_healthy_but_global_mcp_missing_gets_targeted_prompt(tmp_pat
     dialog.assert_called_once_with(
         title="Set Up AI Guardian",
         message=(
-            "OpenAI Codex hooks are configured, but the AI Guardian MCP server is "
+            "OpenAI Codex (CLI + Desktop) hooks are configured, but the AI Guardian MCP server is "
             "missing.\n\n"
             f"Codex MCP configuration: {mcp_path}\n\n"
             "Register the AI Guardian MCP server now?"
@@ -437,7 +437,7 @@ def test_codex_setup_reports_conflicting_active_configuration(tmp_path, monkeypa
 
     assert success is False
     assert message == (
-        "OpenAI Codex setup stopped: inline hooks are already defined in "
+        "OpenAI Codex (CLI + Desktop) setup stopped: inline hooks are already defined in "
         f"{codex_home / 'config.toml'}. AI Guardian targets "
         f"{codex_home / 'hooks.json'}; choose one hook representation in "
         "the active user layer and rerun setup to avoid duplicate hook loading."
@@ -662,7 +662,7 @@ def test_codex_setup_reports_only_managed_hook_count():
         )
 
     message = notify.call_args.args[1]
-    assert "[PASS] OpenAI Codex: 5/5 hooks configured" in message
+    assert "[PASS] OpenAI Codex (CLI + Desktop): 5/5 hooks configured" in message
     assert "12/12" not in message
 
 

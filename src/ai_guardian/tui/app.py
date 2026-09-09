@@ -27,6 +27,7 @@ from textual.binding import Binding
 from textual import events
 
 from ai_guardian import theme as _theme
+from ai_guardian.constants import CODEX_DISPLAY_NAME
 
 
 def copy_osc52(text: str) -> bool:
@@ -858,7 +859,7 @@ HELP_DOCS = {
     "panel-ide-sessions": (
         "[bold]IDE Sessions[/bold]\n\n"
         "Browse conversations from AI coding assistants.\n\n"
-        "Supports: Claude Code, Cursor, Copilot, Codex, Windsurf, "
+        f"Supports: Claude Code, Cursor, Copilot, {CODEX_DISPLAY_NAME}, Windsurf, "
         "Gemini, Cline, Kiro.\n\n"
         "[bold]Features:[/bold]\n"
         "  - IDE selector dropdown\n"

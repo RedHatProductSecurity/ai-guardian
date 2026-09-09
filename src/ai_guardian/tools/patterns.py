@@ -40,7 +40,7 @@ _WRITE_EDIT_DENY = [
     "*/.cursor/hooks.json",
     "*/Cursor/hooks.json",  # Windows
     "*/.github/hooks/hooks.json",  # GitHub Copilot
-    "*/.codex/hooks.json",  # OpenAI Codex
+    "*/.codex/hooks.json",  # OpenAI Codex (CLI + Desktop)
     "*/.codeium/windsurf/hooks.json",  # Windsurf
     # Script-based hooks - ALWAYS protected (prevents disabling ai-guardian)
     "*/.clinerules/hooks/*",  # Cline / ZooCode

@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ai_guardian.constants import CODEX_DISPLAY_NAME
 from ai_guardian.patterns.language import SKIP_DIRS
 from typing import Dict, List, Optional
 
@@ -728,13 +729,13 @@ class MCPAuditor:
             from ai_guardian.setup.mcp import get_codex_mcp_config_path
 
             if Path(config_path).expanduser() == get_codex_mcp_config_path():
-                return "Codex"
+                return CODEX_DISPLAY_NAME
         except (ImportError, OSError):
             pass
         if ".codex/" in p:
-            return "Codex"
+            return CODEX_DISPLAY_NAME
         if p.endswith("codex.json"):
-            return "Codex"
+            return CODEX_DISPLAY_NAME
         if ".cline/" in p or "claude-dev/" in p or "roo-cline/" in p:
             return "Cline"
         if ".vscode/" in p:

@@ -954,7 +954,8 @@ class TrayHealthMonitor:
                     if codex_mcp_only:
                         codex_status = statuses["codex"]
                         message = (
-                            "OpenAI Codex hooks are configured, but the AI Guardian "
+                            f"{TrayHealthMonitor._ide_display_name('codex')} hooks are "
+                            "configured, but the AI Guardian "
                             "MCP server is missing.\n\n"
                             f"Codex MCP configuration: "
                             f"{codex_status.get('mcp_config_path', 'global config.toml')}"

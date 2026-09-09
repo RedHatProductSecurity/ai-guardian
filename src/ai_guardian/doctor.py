@@ -960,6 +960,20 @@ class Doctor:
                 results.append(f"{ide_name}: not installed (no config)")
                 continue
 
+            if ide_type == "codex":
+                verification = setup.verify_ide_setup(ide_type)
+                events = verification.get("events", {})
+                hook_count = sum(status == "healthy" for status in events.values())
+                total = len(setup.expected_hook_manifest("codex"))
+                mcp_status = verification.get("mcp_status", "missing")
+                results.append(
+                    f"{ide_name}: {hook_count}/{total} hooks; MCP: {mcp_status}"
+                )
+                any_configured = True
+                if verification.get("healthy") is not True or hook_count < total:
+                    all_configured = False
+                continue
+
             if ide_type == "cursor":
                 verification = setup.verify_ide_setup(ide_type)
                 events = verification.get("events", {})

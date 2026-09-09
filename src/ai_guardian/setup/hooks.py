@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian.config.utils import get_config_dir
 from ai_guardian.constants import (
+    CODEX_DISPLAY_NAME,
     CRUSH_MANAGED_HOOK_EVENTS,
     HookEvent,
     MANAGED_HOOK_EVENTS_BY_IDE,
@@ -137,7 +138,7 @@ class IDESetup:
             },
         },
         "codex": {
-            "name": "OpenAI Codex",
+            "name": CODEX_DISPLAY_NAME,
             "mcp_client_name": "codex-cli",
             "config_path": "~/.codex/hooks.json",
             "config_dir_env_var": "CODEX_HOME",
@@ -560,14 +561,15 @@ class IDESetup:
         for layer in layers:
             if layer["parse_error"]:
                 return (
-                    "OpenAI Codex setup stopped: the active Codex configuration "
+                    f"{CODEX_DISPLAY_NAME} setup stopped: the active Codex "
+                    "configuration "
                     f"layer at {layer['directory']} cannot be parsed "
                     f"({layer['parse_error']}). Fix that file "
                     "before installing AI Guardian hooks."
                 )
             if layer["directory"] == target_dir and layer["inline_hooks"]:
                 return (
-                    "OpenAI Codex setup stopped: inline hooks are already defined "
+                    f"{CODEX_DISPLAY_NAME} setup stopped: inline hooks are already defined "
                     f"in {layer['config_toml']}. AI Guardian targets "
                     f"{layer['hooks_json']}; choose one hook representation in "
                     "the active user layer and rerun setup to avoid duplicate "

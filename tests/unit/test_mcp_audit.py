@@ -117,7 +117,7 @@ class TestDiscoverServers:
         assert servers[0].command == "/usr/local/bin/ai-guardian"
         assert servers[0].args == ["mcp-server"]
         assert servers[0].env_var_names == ["EXAMPLE_TOKEN"]
-        assert servers[0].ide_configs[0].ide == "Codex"
+        assert servers[0].ide_configs[0].ide == "OpenAI Codex (CLI + Desktop)"
 
     def test_config_paths_honor_codex_home(self, monkeypatch, tmp_path):
         """Audit discovery uses the active global CODEX_HOME config."""
@@ -939,7 +939,7 @@ class TestIDELabel:
         assert MCPAuditor.ide_label("~/.windsurf/mcp.json") == "Windsurf"
 
     def test_codex(self):
-        assert MCPAuditor.ide_label("codex.json") == "Codex"
+        assert MCPAuditor.ide_label("codex.json") == "OpenAI Codex (CLI + Desktop)"
 
     def test_unknown(self):
         assert MCPAuditor.ide_label("/some/other/file.json") == "Unknown"
