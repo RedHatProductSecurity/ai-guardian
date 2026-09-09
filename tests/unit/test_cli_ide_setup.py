@@ -4,6 +4,8 @@ import json
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 
 def test_ide_setup_sync_handler_outputs_json(capsys):
     from ai_guardian.cli_handlers import _handle_ide_setup_command
@@ -78,6 +80,21 @@ def test_ide_setup_reset_is_registered():
     assert args.ide_setup_command == "reset"
     assert args.ide_type == "claude"
     assert args.json_output is True
+
+
+def test_setup_help_explains_codex_scope(capsys):
+    from ai_guardian.cli import main
+
+    with patch("sys.argv", ["ai-guardian", "setup", "--help"]):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    assert exc_info.value.code == 0
+    output = capsys.readouterr().out
+    assert "Codex mode in the ChatGPT" in output
+    assert "desktop app" in output
+    assert "regular ChatGPT mode is not protected" in output
+    assert "Shared MCP configuration does not imply hook enforcement" in output
 
 
 def test_cursor_project_setup_option_reaches_setup_orchestrator():

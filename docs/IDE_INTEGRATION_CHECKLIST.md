@@ -23,6 +23,12 @@ one integration mode.
 | Pre-commit guard | `setup/hooks.py`, `examples/aider/` | Commit-time coverage and its relationship to real-time agent protection |
 | Test harness | `dummy_agent.py`, scenario files | Scenarios that provide repeatable hook regression coverage |
 
+For products with multiple host modes, document the boundary for each mode.
+For OpenAI Codex, lifecycle hooks cover Codex CLI and Codex mode in the
+ChatGPT desktop app. Regular ChatGPT mode is not currently protected by those
+Codex hooks. Shared MCP configuration must be documented independently; MCP
+availability does not imply hook enforcement.
+
 ## 1. Scope and capability record
 
 - [ ] Choose a stable CLI key and display name. Keep aliases consistent with

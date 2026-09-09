@@ -512,6 +512,12 @@ content scanning, but are still timed. See the [Hook Latency Support
 Matrix](AGENT_SUPPORT.md#hook-latency-support-matrix) for every supported
 integration, including the commit-time Aider CLI and MCP-only Junie limits.
 
+The `OpenAI Codex (CLI + Desktop)` label covers Codex CLI and Codex mode in
+the ChatGPT desktop app. Regular ChatGPT mode does not run these Codex
+lifecycle hooks and is not currently protected by them. The ChatGPT desktop
+app, Codex CLI, and Codex IDE extension can share MCP configuration, but MCP
+availability is separate from hook enforcement.
+
 ### Verifying collection
 
 1. Enable `latency_tracking.enabled` in the global or project configuration,

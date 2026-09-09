@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Codex integration display name**: Rename setup, tray, doctor, and support
   labels to `OpenAI Codex (CLI + Desktop)` while preserving the internal
   `codex` identity, configuration paths, hook counts, and MCP status (#2275).
+- **Codex coverage documentation**: Clarify that the label covers Codex CLI and
+  desktop Codex mode, not regular ChatGPT mode, and that shared MCP
+  configuration does not imply lifecycle-hook enforcement (#2274).
 
 ### Fixed
 

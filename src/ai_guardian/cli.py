@@ -263,7 +263,15 @@ def main():
 
         # Setup subcommand
         setup_parser = subparsers.add_parser(
-            "setup", help="Setup IDE hooks with optional remote config"
+            "setup",
+            help="Setup IDE hooks with optional remote config",
+            description=(
+                "Install AI Guardian hooks and optional MCP integration for a "
+                "supported IDE. OpenAI Codex (CLI + Desktop) means Codex CLI and "
+                "Codex mode in the ChatGPT desktop app; regular ChatGPT mode is "
+                "not protected by Codex lifecycle hooks. Shared MCP configuration "
+                "does not imply hook enforcement."
+            ),
         )
         setup_parser.add_argument(
             "--ide",

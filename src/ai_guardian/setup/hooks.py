@@ -12,6 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian.config.utils import get_config_dir
 from ai_guardian.constants import (
+    CODEX_COVERAGE_NOTE,
     CODEX_DISPLAY_NAME,
     CRUSH_MANAGED_HOOK_EVENTS,
     HookEvent,
@@ -2241,6 +2242,7 @@ class IDESetup:
 
             message = f"✓ Successfully configured {ide_name} hooks at {config_path}\n"
             if ide_type == "codex":
+                message += f"  Coverage: {CODEX_COVERAGE_NOTE}\n"
                 active_layers = [
                     layer
                     for layer in self.get_codex_config_layers()
