@@ -155,7 +155,7 @@ from ai_guardian.response_format import (
     _SECURITY_SYSTEM_MESSAGE,
     IDEType,
 )
-from ai_guardian.hook_adapters import detect_adapter
+from ai_guardian.hook_adapters import CodexAdapter, detect_adapter
 from ai_guardian.reporting.latency import _CheckTimer
 
 
@@ -2838,9 +2838,39 @@ def _process_hook_data(hook_data, daemon_state=None):
                 pass  # intentionally silent — metrics recording best-effort
 
 
+def _ensure_codex_post_tool_use_json(hook_data, result):
+    """Return valid JSON for Codex when PostToolUse processing fails open.
+
+    Codex requires every PostToolUse hook invocation to emit JSON on stdout.
+    The general fail-open response intentionally omits stdout for Claude Code
+    and other adapters, so only repair the response for Codex's PostToolUse
+    protocol.
+    """
+    if result.get("output"):
+        return result
+
+    event_name = hook_data.get("hook_event_name") or hook_data.get("hookEventName", "")
+    if event_name != HookEvent.POST_TOOL_USE.display_name:
+        return result
+
+    try:
+        adapter = detect_adapter(hook_data)
+    except Exception as e:
+        logger.debug("Unable to identify Codex fail-open response: %s", e)
+        return result
+
+    if not isinstance(adapter, CodexAdapter):
+        return result
+
+    repaired = dict(result)
+    repaired["output"] = "{}"
+    return repaired
+
+
 def process_hook_data(hook_data, daemon_state=None):
     """Process one hook event and append it to the unified session trace."""
     result = _process_hook_data(hook_data, daemon_state=daemon_state)
+    result = _ensure_codex_post_tool_use_json(hook_data, result)
     if daemon_state is None:
         return result
     try:

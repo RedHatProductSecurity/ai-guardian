@@ -106,6 +106,44 @@ class HookInputParsingTests(TestCase):
 
         assert result["exit_code"] == 0, "Clean output should be allowed"
 
+    def test_codex_posttooluse_internal_error_emits_valid_json(self):
+        """Codex must receive JSON even when PostToolUse fails open."""
+        hook_data = {
+            "_ide_type": "codex",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_response": {"output": "Hello, World!"},
+        }
+
+        with patch(
+            "ai_guardian.hook_processing.extract_tool_result",
+            side_effect=RuntimeError("simulated PostToolUse failure"),
+        ):
+            result = ai_guardian.process_hook_data(hook_data)
+
+        assert result["exit_code"] == 0
+        assert json.loads(result["output"]) == {}
+
+    def test_claude_posttooluse_internal_error_preserves_empty_stdout(self):
+        """Claude's existing fail-open response remains unchanged."""
+        hook_data = {
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Bash",
+            "tool_response": {"output": "Hello, World!"},
+        }
+
+        with (
+            patch.dict(os.environ, {"AI_GUARDIAN_IDE_TYPE": "claude"}),
+            patch(
+                "ai_guardian.hook_processing.extract_tool_result",
+                side_effect=RuntimeError("simulated PostToolUse failure"),
+            ),
+        ):
+            result = ai_guardian.process_hook_data(hook_data)
+
+        assert result["exit_code"] == 0
+        assert result["output"] is None
+
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_userpromptsubmit_allows_curl_pipe_bash(
