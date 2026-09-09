@@ -570,12 +570,6 @@ def test_install_verify_and_exercise_ide_integration(
                 project_dir=str(cloud_project),
             )
             assert success, f"cursor/project-setup: {message}"
-            _install_mcp_config(
-                setup,
-                "cursor",
-                scope="project",
-                project_dir=str(cloud_project),
-            )
 
         project_verification = setup.verify_ide_setup(
             "cursor", scope="project", project_dir=str(cloud_project)
@@ -585,7 +579,8 @@ def test_install_verify_and_exercise_ide_integration(
             f"{json.dumps(project_verification, sort_keys=True)}"
         )
         assert (cloud_project / ".cursor" / "hooks.json").is_file()
-        assert (cloud_project / ".cursor" / "mcp.json").is_file()
+        assert project_verification["mcp_status"] == "external"
+        assert not (cloud_project / ".cursor" / "mcp.json").exists()
 
     if setup.IDE_CONFIGS[ide_type].get("mcp_only"):
         assert verification["events"] == {}

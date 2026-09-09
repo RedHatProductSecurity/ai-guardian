@@ -13,7 +13,7 @@ changing an integration.
 | Agent | Setup Command | Hooks | MCP | Status |
 |-------|--------------|-------|-----|--------|
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
-| Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`) | **Complete locally; project setup available for cloud workspaces** |
+| Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`); Cloud Agents use dashboard/API MCP | **Complete locally; project hooks available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
 | OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
@@ -460,7 +460,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Cursor desktop / local CLI hooks | `~/.cursor/hooks.json` (AI Guardian install target) |
 | Cursor project hooks (explicit cloud setup target) | `<project>/.cursor/hooks.json` |
 | Cursor desktop / local CLI MCP | `~/.cursor/mcp.json` (AI Guardian install target) |
-| Cursor project MCP (explicit cloud setup target) | `<project>/.cursor/mcp.json` |
+| Cursor local project MCP (managed by Cursor, not Cloud setup) | `<project>/.cursor/mcp.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
 | OpenAI Codex | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
@@ -495,9 +495,11 @@ ai-guardian setup --ide cursor --project /path/to/workspace
 The tray exposes the same operation as **Cursor Cloud (project setup)...**
 under **Manual setup (specific IDE)** and asks the user to select the project
 directory before launching setup. This explicit path creates or updates only
-that workspace's `.cursor/hooks.json` and `.cursor/mcp.json`; it does not
-redirect ordinary desktop/CLI setup away from the user files. Enterprise/team
-hooks remain an upstream deployment option outside this local project flow.
+that workspace's `.cursor/hooks.json`; it does not redirect ordinary
+desktop/CLI setup away from the user files. Cursor Cloud MCP registration is
+managed through Cursor's Cloud Agents dashboard/team settings or API, not the
+project `.cursor/mcp.json`. Enterprise/team hooks remain an upstream
+deployment option outside this local project flow.
 
 See the upstream [Cursor Hooks documentation](https://cursor.com/docs/hooks)
 for the event list, command-hook protocol, and cloud-agent scope rules.

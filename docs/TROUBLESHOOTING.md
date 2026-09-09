@@ -530,7 +530,10 @@ The tray's **Check hooks/MCP installation...** action and `ai-guardian doctor`
 report the user installation scope separately from project-level Cursor files.
 For Cursor Cloud, use **Cursor Cloud (project setup)...** and select the
 workspace, or run `ai-guardian setup --ide cursor --project DIR`; this explicit
-flow writes `<DIR>/.cursor/hooks.json` and `<DIR>/.cursor/mcp.json`.
+flow writes only `<DIR>/.cursor/hooks.json`. Configure MCP for Cloud Agents in
+Cursor's dashboard/team settings or through the Cloud Agents API. A project
+`.cursor/mcp.json` remains a valid local Cursor configuration, but is not a
+Cloud Agent registration.
 
 ---
 

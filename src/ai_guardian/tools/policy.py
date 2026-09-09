@@ -724,7 +724,9 @@ class ToolPolicyChecker:
         """
         try:
             tool_name = None
-            tool_input = {}
+            # Cursor event-based hooks may provide tool_input at the payload
+            # root without a nested ``tool`` object.
+            tool_input = hook_data.get("tool_input", {})
 
             # Claude Code format: tool_use.name + tool_use.input or tool_use.parameters
             if "tool_use" in hook_data and isinstance(hook_data["tool_use"], dict):
@@ -758,9 +760,19 @@ class ToolPolicyChecker:
             if isinstance(tool_input, str):
                 try:
                     decoded_input = json.loads(tool_input)
-                except (TypeError, json.JSONDecodeError):
-                    decoded_input = {}
-                tool_input = decoded_input if isinstance(decoded_input, dict) else {}
+                except (TypeError, json.JSONDecodeError) as exc:
+                    logger.warning(
+                        "Invalid JSON tool_input for %s; blocking policy evaluation",
+                        tool_name or "unknown tool",
+                    )
+                    raise ValueError("tool_input must be valid JSON") from exc
+                if not isinstance(decoded_input, dict):
+                    logger.warning(
+                        "Non-object JSON tool_input for %s; blocking policy evaluation",
+                        tool_name or "unknown tool",
+                    )
+                    raise ValueError("tool_input must decode to an object")
+                tool_input = decoded_input
 
             # Cursor/Windsurf: synthesize from event-based hook names
             if not tool_name:
@@ -774,7 +786,6 @@ class ToolPolicyChecker:
                         tool_input = {"file_path": file_path}
                 elif effective_event in ("beforeshellexecution",):
                     tool_name = "Bash"
-                    tool_input = hook_data.get("tool_input") or {}
                     if not tool_input and hook_data.get("command"):
                         tool_input = {"command": hook_data["command"]}
                 elif effective_event in ("beforetabfileread",):

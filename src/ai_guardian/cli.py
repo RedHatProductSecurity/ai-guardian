@@ -379,7 +379,8 @@ def main():
             dest="project_dir",
             metavar="DIR",
             help=(
-                "For Cursor Cloud: install hooks and MCP in DIR/.cursor. "
+                "For Cursor Cloud: install hooks in DIR/.cursor; configure "
+                "MCP through Cursor's dashboard/team settings or API. "
                 "Default setup targets the local user configuration."
             ),
         )

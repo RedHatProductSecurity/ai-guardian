@@ -553,4 +553,6 @@ not identify the source IDE in each row.
 protocol. AI Guardian installs the managed hook set and MCP registration in the
 user-level Cursor configuration by default. Use the explicit Cursor Cloud
 project setup flow (`ai-guardian setup --ide cursor --project DIR`, or the tray
-directory picker) when the remote run needs `<DIR>/.cursor` configuration.
+directory picker) when the remote run needs `<DIR>/.cursor/hooks.json`.
+Configure Cursor Cloud MCP separately through Cursor's dashboard/team settings
+or Cloud Agents API; `<DIR>/.cursor/mcp.json` is for local Cursor workspaces.

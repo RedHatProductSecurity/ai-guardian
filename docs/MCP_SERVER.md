@@ -21,15 +21,20 @@ ai-guardian setup --ide cursor
 
 The MCP server is installed by default during setup. Use `--no-mcp` to skip.
 Cursor desktop and the local Cursor CLI share the local user configuration
-(`~/.cursor/hooks.json` and `~/.cursor/mcp.json`). For a Cursor Cloud workspace,
-select the project explicitly; this writes only that workspace's files:
+(`~/.cursor/hooks.json` and `~/.cursor/mcp.json`). A project
+`.cursor/mcp.json` is also supported for local Cursor workspaces, but it is not
+the MCP registration mechanism for Cursor Cloud Agents. Cloud MCP servers must
+be configured through Cursor's Cloud Agents dashboard/team settings or supplied
+through the Cloud Agents API. For a Cursor Cloud workspace, select the project
+explicitly to install only the project hooks:
 
 ```bash
 ai-guardian setup --ide cursor --project /path/to/workspace
 ```
 
-The tray exposes the same operation as **Cursor Cloud (project setup)...**.
-Without `--project`, setup remains user/desktop-scoped.
+The tray exposes the same operation as **Cursor Cloud (project setup)...**;
+it does not modify the project's `.cursor/mcp.json`. Without `--project`, setup
+remains user/desktop-scoped.
 
 ### Manual setup
 

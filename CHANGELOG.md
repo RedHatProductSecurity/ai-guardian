@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Cursor Cloud setup review fixes**: Keep cloud MCP registration separate from
+  local `.cursor/mcp.json`, recognize effective project hooks in MCP health
+  checks, fail closed on malformed Cursor tool inputs, preserve decoded shell
+  parameters, and keep native tray dismissal from submitting selections.
+
 ### Added
 
 - **Cursor desktop/CLI hooks and MCP integration**: Normalize Cursor's six

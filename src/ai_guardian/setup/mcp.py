@@ -176,6 +176,28 @@ def verify_cursor_mcp_config(
     scope: str = "auto", project_dir: Optional[str] = None
 ) -> Dict:
     """Return JSON-safe health information for Cursor MCP layers."""
+    if scope == "project":
+        # Cursor Cloud Agents do not read a developer's local project MCP
+        # file. Cloud MCP servers are configured in Cursor's dashboard/team
+        # settings or supplied through the Cloud Agents API, so there is no
+        # local file that this verifier can truthfully validate.
+        return {
+            "mcp_installed": None,
+            "mcp_status": "external",
+            "mcp_registration": "cursor-cloud",
+            "mcp_config_path": None,
+            "effective_mcp_config_path": None,
+            "config_scopes": [
+                {
+                    "scope": "project",
+                    "config_path": None,
+                    "exists": None,
+                    "configured": None,
+                    "status": "external",
+                }
+            ],
+        }
+
     if scope == "auto":
         paths = [
             ("user", get_mcp_config_path("cursor", scope="user")),
@@ -219,6 +241,7 @@ def verify_cursor_mcp_config(
     return {
         "mcp_installed": bool(configured_layers),
         "mcp_status": "healthy" if configured_layers else "missing",
+        "mcp_registration": "local",
         "mcp_config_path": user_path if scope == "auto" else effective_path,
         "effective_mcp_config_path": effective_path,
         "config_scopes": config_scopes,
@@ -422,6 +445,12 @@ def _install_mcp_config(
                 )
                 return
             project_dir = str(project_path.resolve())
+            print(
+                "  MCP: Cursor Cloud MCP is managed by the Cursor dashboard/team "
+                "settings or Cloud Agents API; project .cursor/mcp.json was "
+                "left unchanged"
+            )
+            return
         else:
             project_dir = None
 
@@ -567,6 +596,16 @@ def _remove_mcp_config(
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
         return
+
+    if ide_type == "cursor":
+        if project_dir and scope == "user":
+            scope = "project"
+        if scope == "project":
+            print(
+                "  MCP: Cursor Cloud MCP is managed by the Cursor dashboard/team "
+                "settings or Cloud Agents API; no project MCP file was changed"
+            )
+            return
 
     config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
     if config_path is None:
