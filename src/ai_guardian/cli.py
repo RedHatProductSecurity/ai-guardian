@@ -375,6 +375,15 @@ def main():
             help="Skip MCP server installation (MCP is installed by default)",
         )
         setup_parser.add_argument(
+            "--project",
+            dest="project_dir",
+            metavar="DIR",
+            help=(
+                "For Cursor Cloud: install hooks and MCP in DIR/.cursor. "
+                "Default setup targets the local user configuration."
+            ),
+        )
+        setup_parser.add_argument(
             "--rules",
             action="store_true",
             default=None,
@@ -1543,6 +1552,8 @@ def main():
                 list_profiles=args.list_profiles,
                 no_mcp=args.no_mcp or None,
                 rules=args.rules if args.rules else None,
+                scope="project" if args.project_dir else "user",
+                project_dir=args.project_dir,
             )
             return 0 if success else 1
 

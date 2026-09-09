@@ -359,6 +359,32 @@ class TrayMenuBuilder:
             set_working_dir(target.name, chosen)
             self._tray._refresh_event.set()
 
+    def _mk_cursor_cloud_setup_action(self):
+        """Create a handler that selects a workspace for Cursor Cloud setup."""
+
+        def action(_, __):
+            current = None
+            if self._tray._targets:
+                current = getattr(self._tray._targets[0], "working_dir", None)
+            threading.Thread(
+                target=self._pick_cursor_cloud_project,
+                args=(current,),
+                daemon=True,
+                name="cursor-cloud-project-picker",
+            ).start()
+
+        return action
+
+    def _pick_cursor_cloud_project(self, current=None):
+        """Select a workspace, then launch explicit Cursor project setup."""
+        from ai_guardian.daemon.working_dir import choose_directory
+
+        chosen = choose_directory(
+            current, title="Choose Cursor Cloud project directory"
+        )
+        if chosen:
+            tray_menu.launch_ide_setup("cursor", scope="project", project_dir=chosen)
+
     def _apply_working_dirs(self):
         """Populate target.working_dir from persisted state after discovery."""
         from ai_guardian.daemon.working_dir import get_working_dir
@@ -1485,9 +1511,17 @@ class TrayMenuBuilder:
             pystray.MenuItem("Manual setup (specific IDE)", None),
         ]
         for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items():
+            ide_label = "Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"]
             ide_items.append(
-                pystray.MenuItem(f"  {ide_cfg['name']}", _mk_ide_action(ide_key))
+                pystray.MenuItem(f"  {ide_label}", _mk_ide_action(ide_key))
             )
+            if ide_key == "cursor":
+                ide_items.append(
+                    pystray.MenuItem(
+                        "  Cursor Cloud (project setup)...",
+                        self._mk_cursor_cloud_setup_action(),
+                    )
+                )
         ide_items.extend(
             [
                 pystray.Menu.SEPARATOR,

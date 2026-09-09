@@ -950,8 +950,49 @@ class Doctor:
             config_path = Path(setup.get_config_path(ide_type)).expanduser()
             ide_name = setup.IDE_CONFIGS[ide_type]["name"]
 
-            if not config_path.exists():
+            cursor_layers = []
+            if ide_type == "cursor":
+                cursor_layers = setup.get_cursor_config_layers()
+
+            if not config_path.exists() and not any(
+                layer.get("exists") for layer in cursor_layers
+            ):
                 results.append(f"{ide_name}: not installed (no config)")
+                continue
+
+            if ide_type == "cursor":
+                verification = setup.verify_ide_setup(ide_type)
+                events = verification.get("events", {})
+                hook_count = sum(status == "healthy" for status in events.values())
+                total = len(setup.expected_hook_manifest("cursor"))
+                effective_events = verification.get("effective_events", {})
+                effective_hook_count = (
+                    sum(status == "healthy" for status in effective_events.values())
+                    if isinstance(effective_events, dict)
+                    else hook_count
+                )
+                installation_scope = verification.get("installation_scope", "user")
+                effective_scope = verification.get("effective_scope", "none")
+                mcp_status = verification.get("mcp_status", "missing")
+                effective_mcp_status = verification.get(
+                    "effective_mcp_status", mcp_status
+                )
+                scope_detail = installation_scope
+                if effective_scope != installation_scope:
+                    scope_detail += f"; effective: {effective_scope}"
+                hook_detail = f"{hook_count}/{total} hooks"
+                if effective_hook_count != hook_count:
+                    hook_detail += f"; effective: {effective_hook_count}/{total}"
+                mcp_detail = f"MCP: {mcp_status}"
+                if effective_mcp_status != mcp_status:
+                    mcp_detail += f"; effective: {effective_mcp_status}"
+                results.append(
+                    f"{ide_name}: {hook_detail} (scope: {scope_detail}); "
+                    f"{mcp_detail}"
+                )
+                any_configured = True
+                if verification.get("healthy") is not True or hook_count < total:
+                    all_configured = False
                 continue
 
             configured, detail = setup.check_hooks_for_ide(ide_type)
@@ -959,20 +1000,13 @@ class Doctor:
             if configured:
                 if ide_type == "claude":
                     hook_count = self._count_claude_hooks(config_path)
-                    results.append(f"{ide_name}: {hook_count}/5 hooks")
-                    if hook_count < 5:
+                    total = len(setup.expected_hook_manifest("claude"))
+                    results.append(f"{ide_name}: {hook_count}/{total} hooks")
+                    if hook_count < total:
                         all_configured = False
                 elif ide_type == "codex":
                     hook_count = self._count_codex_hooks(config_path)
                     total = len(setup.expected_hook_manifest("codex"))
-                    results.append(f"{ide_name}: {hook_count}/{total} hooks")
-                    if hook_count < total:
-                        all_configured = False
-                elif ide_type == "cursor":
-                    from ai_guardian.constants import CURSOR_HOOK_EVENTS
-
-                    hook_count = self._count_cursor_hooks(config_path)
-                    total = len(CURSOR_HOOK_EVENTS)
                     results.append(f"{ide_name}: {hook_count}/{total} hooks")
                     if hook_count < total:
                         all_configured = False
@@ -981,6 +1015,8 @@ class Doctor:
                 any_configured = True
             else:
                 results.append(detail)
+                if "needs attention" in detail:
+                    any_configured = True
                 all_configured = False
 
         detail_str = "; ".join(results)
@@ -1007,17 +1043,10 @@ class Doctor:
             )
 
     def _count_claude_hooks(self, config_path: Path) -> int:
-        from ai_guardian.constants import HookEvent
+        from ai_guardian.setup import IDESetup
 
         return self._count_nested_hooks(
-            config_path,
-            [
-                HookEvent.PROMPT.display_name,
-                HookEvent.PRE_TOOL_USE.display_name,
-                HookEvent.POST_TOOL_USE.display_name,
-                HookEvent.SESSION_END.display_name,
-                HookEvent.POST_COMPACT.display_name,
-            ],
+            config_path, IDESetup().expected_hook_manifest("claude")
         )
 
     def _count_codex_hooks(self, config_path: Path) -> int:
@@ -1053,15 +1082,15 @@ class Doctor:
             return 0
 
     def _count_cursor_hooks(self, config_path: Path) -> int:
-        from ai_guardian.constants import CURSOR_HOOK_EVENTS
         from ai_guardian.setup import _is_ai_guardian_command
+        from ai_guardian.setup import IDESetup
 
         try:
             with open(config_path) as f:
                 config = json.load(f)
             hooks = config.get("hooks", {})
             count = 0
-            for hook_name in CURSOR_HOOK_EVENTS:
+            for hook_name in IDESetup().expected_hook_manifest("cursor"):
                 if hook_name in hooks:
                     hook_list = hooks[hook_name]
                     if isinstance(hook_list, list):

@@ -270,6 +270,8 @@ def _assert_mcp_registration(ide_type: str) -> None:
     else:
         assert entry.get("args") == ["mcp-server"]
         assert entry.get("command"), f"{ide_type}/mcp-config: command missing"
+        if ide_type == "cursor":
+            assert entry.get("type") == "stdio"
 
 
 def _json_event_value(config: Dict[str, Any], ide_type: str, event_name: str) -> Any:
@@ -475,6 +477,7 @@ def _contains_transform(value: Any) -> bool:
             for key in (
                 "updatedToolOutput",
                 "updatedMCPToolOutput",
+                "updated_mcp_tool_output",
                 "modifiedToolOutput",
                 "modifiedResult",
             )
@@ -553,6 +556,37 @@ def test_install_verify_and_exercise_ide_integration(
     setup, verification = _install_and_verify(ide_type)
     _assert_mcp_registration(ide_type)
 
+    if ide_type == "cursor":
+        cloud_project = isolated_ide_environment["project"] / "cloud-project"
+        cloud_project.mkdir()
+        with (
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            success, message = setup.setup_ide_hooks(
+                "cursor",
+                force=True,
+                scope="project",
+                project_dir=str(cloud_project),
+            )
+            assert success, f"cursor/project-setup: {message}"
+            _install_mcp_config(
+                setup,
+                "cursor",
+                scope="project",
+                project_dir=str(cloud_project),
+            )
+
+        project_verification = setup.verify_ide_setup(
+            "cursor", scope="project", project_dir=str(cloud_project)
+        )
+        assert project_verification["healthy"], (
+            "cursor/project-verification: "
+            f"{json.dumps(project_verification, sort_keys=True)}"
+        )
+        assert (cloud_project / ".cursor" / "hooks.json").is_file()
+        assert (cloud_project / ".cursor" / "mcp.json").is_file()
+
     if setup.IDE_CONFIGS[ide_type].get("mcp_only"):
         assert verification["events"] == {}
         return
@@ -568,6 +602,14 @@ def test_install_verify_and_exercise_ide_integration(
     if platform.system() == "Windows":
         return
 
+    if not setup.IDE_CONFIGS[ide_type].get("script_based"):
+        managed_events = set(setup.expected_hook_manifest(ide_type))
+        for event_name in REPRESENTATIVE_EVENTS[ide_type].values():
+            assert event_name in managed_events, (
+                f"{ide_type}/{event_name}: representative test event is not "
+                "in the managed hook manifest"
+            )
+
     for case_name, event_name in REPRESENTATIVE_EVENTS[ide_type].items():
         if setup.IDE_CONFIGS[ide_type].get("script_based"):
             command: Union[str, List[str]] = [
@@ -582,3 +624,39 @@ def test_install_verify_and_exercise_ide_integration(
             command,
             isolated_ide_environment,
         )
+
+    if ide_type == "cursor":
+        # These events are adapter-recognized upstream events, not managed
+        # AI Guardian hooks. Invoke the same installed command through a
+        # managed hook to verify normalization without adding them to setup's
+        # required manifest.
+        cursor_command = _command_for_event(setup, ide_type, "beforeSubmitPrompt")
+        mcp_command = cursor_command
+        mcp_result = _run_command(
+            mcp_command,
+            {
+                "cursor_version": "synthetic",
+                "hook_event_name": "beforeMCPExecution",
+                "mcp_server_name": "synthetic-server",
+                "tool_name": "read_file",
+                "tool_input": {"path": "README.md"},
+            },
+            isolated_ide_environment,
+        )
+        assert mcp_result.returncode == 0
+        assert _json_output(mcp_result).get("permission") == "allow"
+
+        failure_command = cursor_command
+        failure_result = _run_command(
+            failure_command,
+            {
+                "cursor_version": "synthetic",
+                "hook_event_name": "postToolUseFailure",
+                "mcp_server_name": "synthetic-server",
+                "tool_name": "read_file",
+                "error_message": "synthetic failure detail",
+            },
+            isolated_ide_environment,
+        )
+        assert failure_result.returncode == 0
+        assert _json_output(failure_result) == {}

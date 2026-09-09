@@ -337,10 +337,14 @@ def _verify_local_ide_hooks() -> dict:
         from ai_guardian.setup.hooks import IDESetup
 
         setup = IDESetup()
-        results = {
-            ide_type: setup.verify_hooks_for_ide(ide_type)
-            for ide_type in setup.list_detected_ides()
-        }
+        results = {}
+        for ide_type in setup.list_detected_ides():
+            verifier = (
+                setup.verify_ide_setup
+                if ide_type == "cursor"
+                else setup.verify_hooks_for_ide
+            )
+            results[ide_type] = verifier(ide_type)
         for ide_type, status in results.items():
             if not status["healthy"]:
                 logger.info(

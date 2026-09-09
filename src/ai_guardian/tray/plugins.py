@@ -1036,102 +1036,383 @@ def show_action_dialog(
     title: str,
     message: str,
     action_label: str,
-    dismiss_label: str,
+    dismiss_label: Optional[str],
     snooze_options: Iterable[str] = (),
-) -> Optional[str]:
+    ide_choices: Iterable[Dict[str, str]] = (),
+    profile_choices: Iterable[Dict[str, str]] = (),
+) -> Optional[object]:
     """Show an actionable native prompt on macOS.
 
     This is the last-resort UI for prompts invoked from the macOS tray.  A
     tray process cannot reliably bring a Tkinter window to the foreground, so
-    the prompt uses the native AppleScript dialog when the normal browser or
-    terminal UI tiers are unavailable.
+    the prompt uses native Cocoa controls when the normal UI tiers are
+    unavailable.
 
     Returns ``"action"``, ``"dismiss"``, or ``"snooze_<option>"`` for a
-    completed prompt.  Returns ``None`` when the native prompt could not be
-    launched.
+    simple prompt.  A prompt with IDE or profile choices returns the same
+    structured mapping as the other proactive-prompt UI implementations.
+    Returns ``None`` when the native prompt could not be launched.
     """
-    import subprocess
-
     if platform.system() != "Darwin":
         return None
 
-    options = tuple(str(option) for option in snooze_options if option)
-    later_labels = tuple(f"Later ({option})" for option in options)
-    if len(later_labels) > 1:
-        # AppleScript display dialogs accept at most three buttons. Keep the
-        # primary action and dismiss controls visible, then use a list picker
-        # for the complete snooze range.
-        snooze_button_label = "Later..."
-    elif later_labels:
-        snooze_button_label = later_labels[0]
-    else:
-        snooze_button_label = None
+    ide_choices = tuple(
+        choice
+        for choice in ide_choices
+        if isinstance(choice, dict) and choice.get("ide")
+    )
+    profile_choices = tuple(
+        choice
+        for choice in profile_choices
+        if isinstance(choice, dict)
+        and (choice.get("profile") is not None or choice.get("name"))
+    )
+    result = _show_native_choice_dialog(
+        title,
+        message,
+        action_label,
+        dismiss_label,
+        snooze_options,
+        ide_choices,
+        profile_choices,
+    )
+    if ide_choices or profile_choices:
+        return result
+    if isinstance(result, dict):
+        return result.get("result", "dismiss")
+    return result
 
-    button_labels = (action_label,)
-    if snooze_button_label:
-        button_labels += (snooze_button_label,)
-    button_labels += (dismiss_label,)
+
+def _show_native_choice_dialog(
+    title: str,
+    message: str,
+    action_label: str,
+    dismiss_label: Optional[str],
+    snooze_options: Iterable[str],
+    ide_choices: Iterable[Dict[str, str]],
+    profile_choices: Iterable[Dict[str, str]],
+) -> Optional[object]:
+    """Show a structured proactive prompt using native macOS controls.
+
+    AppleScript's ``display dialog`` has no checkbox or combobox controls.
+    Use a small native Cocoa accessory view for the macOS fallback so the
+    primary action, per-IDE checkboxes, and snooze selector are visible in the
+    same dialog.  If the Cocoa bridge cannot be started, return without
+    opening secondary legacy dialogs.
+    """
+    ide_choices = tuple(ide_choices)
+    profile_choices = tuple(profile_choices)
+    cocoa_result = _show_native_cocoa_choice_dialog(
+        title,
+        message,
+        action_label,
+        dismiss_label,
+        snooze_options,
+        ide_choices,
+        profile_choices,
+    )
+    if cocoa_result is not None:
+        return cocoa_result
+
+    logger.warning(
+        "Native macOS setup prompt unavailable; no secondary dialogs will be shown"
+    )
+    return None
+
+
+def _show_native_cocoa_choice_dialog(
+    title: str,
+    message: str,
+    action_label: str,
+    dismiss_label: Optional[str],
+    snooze_options: Iterable[str],
+    ide_choices: Iterable[Dict[str, str]],
+    profile_choices: Iterable[Dict[str, str]],
+) -> Optional[object]:
+    """Show the structured prompt with native Cocoa controls on macOS."""
+    import subprocess
+
+    ide_choices = tuple(ide_choices)
+    profile_choices = tuple(profile_choices)
+    options = tuple(str(option) for option in snooze_options if option)
+    payload = {
+        "title": title,
+        "message": message,
+        "action_label": action_label,
+        "dismiss_label": dismiss_label,
+        "snooze_options": options,
+        "ide_choices": ide_choices,
+        "profile_choices": profile_choices,
+    }
+    payload_script = json.dumps(payload, ensure_ascii=False)
+
+    # This is intentionally self-contained: the tray can invoke it through
+    # the system-provided JXA runtime without adding a PyObjC dependency.
+    script = r"""
+ObjC.import("Cocoa");
+ObjC.import("AppKit");
+
+var payload = PAYLOAD;
+
+function rect(x, y, width, height) {
+    return $.NSMakeRect(x, y, width, height);
+}
+
+function addLabel(view, text, x, y, width, height, size) {
+    var field = $.NSTextField.alloc.initWithFrame(rect(x, y, width, height));
+    field.setStringValue(String(text));
+    field.setBezeled(false);
+    field.setDrawsBackground(false);
+    field.setEditable(false);
+    field.setSelectable(true);
+    field.setFont($.NSFont.systemFontOfSize(size || 13));
+    view.addSubview(field);
+    return field;
+}
+
+function addCheckbox(view, x, y, checked) {
+    var checkbox = $.NSButton.alloc.initWithFrame(rect(x, y, 22, 22));
+    checkbox.setButtonType(3);
+    checkbox.setTitle("");
+    checkbox.setState(checked ? 1 : 0);
+    view.addSubview(checkbox);
+    return checkbox;
+}
+
+function addPopup(view, values, x, y, width) {
+    var popup = $.NSPopUpButton.alloc.initWithFramePullsDown(
+        rect(x, y, width, 24), false
+    );
+    values.forEach(function(value) {
+        popup.addItemWithTitle(String(value));
+    });
+    if (values.length > 0) {
+        popup.selectItemAtIndex(0);
+    }
+    view.addSubview(popup);
+    return popup;
+}
+
+var checkboxPairs = [];
+ObjC.registerSubclass({
+    name: "AIGuardianCheckboxTarget",
+    superclass: "NSObject",
+    methods: {
+        "checkboxChanged:": {
+            types: ["void", ["id"]],
+            implementation: function(sender) {
+                var tag = Number(sender.tag);
+                var index = Math.floor(tag / 2);
+                var pair = checkboxPairs[index];
+                if (!pair) {
+                    return;
+                }
+                if (Number(sender.state) === 1) {
+                    if (tag % 2 === 0) {
+                        pair.never.setState(0);
+                    } else {
+                        pair.install.setState(0);
+                    }
+                } else if (
+                    Number(pair.install.state) === 0 &&
+                    Number(pair.never.state) === 0
+                ) {
+                    sender.setState(1);
+                }
+            },
+        },
+    },
+});
+
+function selectedProfile(profilePopup) {
+    if (payload.profile_choices.length === 0) {
+        return null;
+    }
+    var index = Number(profilePopup.indexOfSelectedItem);
+    if (index < 0 || index >= payload.profile_choices.length) {
+        return null;
+    }
+    return payload.profile_choices[index].profile;
+}
+
+function showDialog() {
+    var app = $.NSApplication.sharedApplication;
+    app.setActivationPolicy(0);
+    app.activateIgnoringOtherApps(true);
+
+    var rowHeight = 28;
+    var profileHeight = payload.profile_choices.length > 0 ? 52 : 0;
+    var tableHeight = payload.ide_choices.length > 0
+        ? 42 + payload.ide_choices.length * rowHeight
+        : 0;
+    var footerHeight = payload.snooze_options.length > 0 ? 48 : 16;
+    var accessoryHeight = profileHeight + tableHeight + footerHeight;
+    var accessoryWidth = 820;
+    var accessory = $.NSView.alloc.initWithFrame(
+        rect(0, 0, accessoryWidth, accessoryHeight)
+    );
+    var cursor = accessoryHeight - 26;
+    var profilePopup = null;
+    var checkboxTarget = $.AIGuardianCheckboxTarget.alloc.init;
+
+    if (payload.profile_choices.length > 0) {
+        addLabel(accessory, "Security profile", 0, cursor, 160, 22, 13);
+        var profileNames = payload.profile_choices.map(function(choice) {
+            var label = choice.name || choice.profile || "";
+            if (choice.description) {
+                label += " — " + choice.description;
+            }
+            return label;
+        });
+        profilePopup = addPopup(accessory, profileNames, 170, cursor - 2, 620);
+        var standardIndex = payload.profile_choices.findIndex(function(choice) {
+            return choice.profile === "@standard";
+        });
+        if (standardIndex >= 0) {
+            profilePopup.selectItemAtIndex(standardIndex);
+        }
+        cursor -= profileHeight;
+    }
+
+    var controls = [];
+    if (payload.ide_choices.length > 0) {
+        addLabel(accessory, "Integration", 0, cursor, 600, 22, 13);
+        addLabel(accessory, "Install now", 625, cursor, 100, 22, 13);
+        addLabel(accessory, "Never install", 735, cursor, 100, 22, 13);
+        cursor -= rowHeight;
+        payload.ide_choices.forEach(function(choice) {
+            var label = choice.name || choice.ide || "";
+            if (choice.detail) {
+                label += " — " + choice.detail;
+            }
+            addLabel(accessory, label, 0, cursor, 600, 22, 12);
+            var install = addCheckbox(accessory, 665, cursor, true);
+            var never = addCheckbox(accessory, 775, cursor, false);
+            var pairIndex = controls.length;
+            install.setTag(pairIndex * 2);
+            never.setTag(pairIndex * 2 + 1);
+            install.setTarget(checkboxTarget);
+            never.setTarget(checkboxTarget);
+            install.setAction("checkboxChanged:");
+            never.setAction("checkboxChanged:");
+            checkboxPairs.push({install: install, never: never});
+            controls.push({
+                key: choice.ide,
+                install: install,
+                never: never,
+            });
+            cursor -= rowHeight;
+        });
+    }
+
+    var snoozePopup = null;
+    if (payload.snooze_options.length > 0) {
+        addLabel(accessory, "Later", 0, 12, 80, 22, 13);
+        snoozePopup = addPopup(accessory, payload.snooze_options, 90, 10, 170);
+    }
+
+    var alert = $.NSAlert.alloc.init;
+    var hasDismiss = payload.dismiss_label !== null &&
+        String(payload.dismiss_label).length > 0;
+    alert.setMessageText(String(payload.title));
+    alert.setInformativeText(String(payload.message));
+    alert.addButtonWithTitle(String(payload.action_label));
+    if (payload.snooze_options.length > 0) {
+        alert.addButtonWithTitle("Later");
+    }
+    if (hasDismiss) {
+        alert.addButtonWithTitle(String(payload.dismiss_label));
+    }
+    alert.setAccessoryView(accessory);
+    app.activateIgnoringOtherApps(true);
+    var alertWindow = alert.window;
+    if (alertWindow) {
+        alertWindow.setLevel(3);
+        alertWindow.makeKeyAndOrderFront(null);
+    }
+    var response = Number(alert.runModal);
+    var firstButton = 1000;
+    var secondButton = 1001;
+    var dismissButton = payload.snooze_options.length > 0 ? 1002 : 1001;
+
+    if (payload.snooze_options.length > 0 && response === secondButton) {
+        var snoozeIndex = Number(snoozePopup.indexOfSelectedItem);
+        return {
+            result: "snooze_" + payload.snooze_options[snoozeIndex],
+            install: [],
+            never: [],
+        };
+    }
+
+    if (hasDismiss && response === dismissButton) {
+        var structured =
+            payload.ide_choices.length > 0 || payload.profile_choices.length > 0;
+        return {
+            result: structured ? "action" : "dismiss",
+            install: [],
+            never: structured
+                ? payload.ide_choices.map(function(choice) {
+                      return choice.ide;
+                  })
+                : [],
+            profile: payload.profile_choices.length > 0 ? null : undefined,
+        };
+    }
+    if (response !== firstButton) {
+        return {result: "dismiss", install: [], never: []};
+    }
+
+    var install = [];
+    var never = [];
+    controls.forEach(function(control) {
+        var isNever = Number(control.never.state) === 1;
+        var isInstall = Number(control.install.state) === 1;
+        if (isNever) {
+            never.push(control.key);
+        } else if (isInstall) {
+            install.push(control.key);
+        }
+    });
+    var result = {
+        result: "action",
+        install: install,
+        never: never,
+    };
+    if (payload.profile_choices.length > 0) {
+        result.profile = selectedProfile(profilePopup);
+    }
+    return result;
+}
+
+JSON.stringify(showDialog());
+""".replace("PAYLOAD", payload_script)
 
     try:
-        from ai_guardian.daemon.multi_client import _escape_for_applescript
-
-        msg = (
-            _escape_for_applescript(message)
-            .replace("\r", "")
-            .replace("\n", '" & return & "')
-        )
-        ttl = _escape_for_applescript(title).replace("\r", "").replace("\n", " ")
-        buttons = ", ".join(
-            f'"{_escape_for_applescript(label)}"' for label in button_labels
-        )
-        action = _escape_for_applescript(action_label)
-        snooze_flow = ""
-        if len(later_labels) > 1:
-            snooze_items = ", ".join(
-                f'"{_escape_for_applescript(label)}"' for label in later_labels
-            )
-            snooze_button = _escape_for_applescript(snooze_button_label)
-            snooze_flow = (
-                f'    if selected_button is "{snooze_button}" then\n'
-                f"        set snooze_result to choose from list {{{snooze_items}}} "
-                f'with prompt "Choose a snooze duration:" with title "{ttl}" '
-                'OK button name "Snooze" cancel button name "Cancel"\n'
-                "        if snooze_result is false then\n"
-                '            return "dismiss"\n'
-                "        end if\n"
-                "        return item 1 of snooze_result\n"
-                "    end if\n"
-            )
-        script = (
-            "try\n"
-            f'    set dialog_result to display dialog "{msg}" with title "{ttl}" '
-            f'buttons {{{buttons}}} default button "{action}"\n'
-            "    set selected_button to button returned of dialog_result\n"
-            f"{snooze_flow}"
-            "    return selected_button\n"
-            "on error number -128\n"
-            '    return ""\n'
-            "end try"
-        )
         result = subprocess.run(
-            ["osascript", "-e", script],
+            ["osascript", "-l", "JavaScript", "-e", script],
             capture_output=True,
             text=True,
             timeout=3600,
         )
-        if not _subprocess_succeeded(result, "macOS action dialog"):
+        if not _subprocess_succeeded(result, "macOS Cocoa choice dialog"):
+            logger.warning(
+                "macOS Cocoa choice dialog failed: %s",
+                (result.stderr or "").strip(),
+            )
             return None
-
-        selected = (result.stdout or "").strip()
-        if selected.startswith("button returned:"):
-            selected = selected.split(":", 1)[1].strip()
-        if selected == action_label:
-            return "action"
-        if selected in later_labels:
-            return f"snooze_{options[later_labels.index(selected)]}"
-        return "dismiss"
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
-        logger.warning("macOS action dialog could not be shown")
+        output = (result.stdout or "").strip().splitlines()
+        if not output:
+            logger.warning("macOS Cocoa choice dialog returned no result")
+            return None
+        value = json.loads(output[-1])
+        return value if isinstance(value, dict) else None
+    except (
+        json.JSONDecodeError,
+        subprocess.TimeoutExpired,
+        OSError,
+        FileNotFoundError,
+    ) as exc:
+        logger.warning("macOS Cocoa choice dialog could not be shown: %s", exc)
         return None
 
 

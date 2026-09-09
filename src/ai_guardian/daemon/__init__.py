@@ -194,6 +194,14 @@ def is_mcp_installed():
             continue
 
     try:
+        from ai_guardian.setup.mcp import verify_cursor_mcp_config
+
+        if verify_cursor_mcp_config(scope="auto").get("mcp_installed") is True:
+            return True
+    except Exception:
+        pass  # intentionally silent — MCP status is best-effort
+
+    try:
         from ai_guardian.setup.mcp import is_codex_mcp_configured
 
         if is_codex_mcp_configured():

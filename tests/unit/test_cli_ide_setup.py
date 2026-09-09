@@ -78,3 +78,50 @@ def test_ide_setup_reset_is_registered():
     assert args.ide_setup_command == "reset"
     assert args.ide_type == "claude"
     assert args.json_output is True
+
+
+def test_cursor_project_setup_option_reaches_setup_orchestrator():
+    from ai_guardian.cli import main
+
+    with (
+        patch(
+            "sys.argv",
+            [
+                "ai-guardian",
+                "setup",
+                "--ide",
+                "cursor",
+                "--project",
+                "/tmp/cloud-project",
+                "--yes",
+            ],
+        ),
+        patch("ai_guardian.cli._ensure_daemon_started"),
+        patch("ai_guardian.setup.setup_hooks", return_value=True) as setup_hooks,
+    ):
+        assert main() == 0
+
+    setup_hooks.assert_called_once_with(
+        ide_type="cursor",
+        remote_config_url=None,
+        dry_run=False,
+        force=False,
+        interactive=False,
+        migrate_pattern_server=False,
+        create_config=False,
+        permissive=False,
+        pre_commit=False,
+        log_violations=False,
+        auto_install_hooks=False,
+        uninstall_hooks=False,
+        install_scanner=None,
+        use_pinned=False,
+        json_output=False,
+        profile=None,
+        save_profile=None,
+        list_profiles=False,
+        no_mcp=None,
+        rules=None,
+        scope="project",
+        project_dir="/tmp/cloud-project",
+    )

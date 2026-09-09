@@ -86,6 +86,38 @@ class HookInputParsingTests(TestCase):
 
         assert result["exit_code"] == 0, "Normal Bash command should be allowed"
 
+    def test_cursor_post_tool_failure_returns_empty_safe_response(self):
+        """Cursor failure hooks must not echo potentially sensitive errors."""
+        from ai_guardian.hook_processing import process_hook_data
+
+        result = process_hook_data(
+            {
+                "cursor_version": "0.50.0",
+                "hook_event_name": "postToolUseFailure",
+                "error_message": "synthetic failure detail",
+                "tool_name": "mcp__filesystem__read_file",
+            }
+        )
+
+        assert json.loads(result["output"]) == {}
+        assert "synthetic failure detail" not in result["output"]
+
+    def test_cursor_mcp_result_is_extractable_for_post_scan(self):
+        """Cursor MCP JSON-stringified output reaches the shared scanner."""
+        from ai_guardian.hook_processing import extract_tool_result
+
+        output, tool_name = extract_tool_result(
+            {
+                "hook_event_name": "postToolUse",
+                "mcp_server_name": "filesystem",
+                "tool_name": "read_file",
+                "tool_output": '{"content": "synthetic output"}',
+            }
+        )
+
+        assert tool_name == "mcp__filesystem__read_file"
+        assert output == '{"content": "synthetic output"}'
+
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_posttooluse_hook_processing(

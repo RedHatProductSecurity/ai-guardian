@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian.config.utils import get_config_dir
-from ai_guardian.constants import CRUSH_HOOK_EVENTS, CURSOR_HOOK_EVENTS, HookEvent
+from ai_guardian.constants import (
+    CRUSH_MANAGED_HOOK_EVENTS,
+    HookEvent,
+    MANAGED_HOOK_EVENTS_BY_IDE,
+)
 from ai_guardian.setup.utils import (
     _create_vbs_wrapper,
     _is_ai_guardian_command,
@@ -20,17 +24,6 @@ from ai_guardian.setup.utils import (
     _strip_jsonc_comments,
     _substitute_command,
     _upgrade_ide_flag,
-)
-
-# These are the Codex hooks AI Guardian installs and verifies. Codex exposes
-# additional lifecycle events, but they are not part of the managed setup
-# contract and therefore are not installed or counted here.
-CODEX_MANAGED_HOOK_EVENTS = (
-    HookEvent.PROMPT.display_name,
-    HookEvent.PRE_TOOL_USE.display_name,
-    HookEvent.POST_TOOL_USE.display_name,
-    HookEvent.SESSION_END.display_name,
-    HookEvent.POST_COMPACT.display_name,
 )
 
 
@@ -118,11 +111,17 @@ class IDESetup:
             "config_filename": "hooks.json",
             "hooks": {
                 "version": 1,
-                "beforeSubmitPrompt": [{"command": "ai-guardian"}],
-                "beforeReadFile": [{"command": "ai-guardian"}],
-                "beforeShellExecution": [{"command": "ai-guardian"}],
+                # Security decision hooks fail closed on timeout, process
+                # failure, or invalid JSON.  Observation/post hooks remain
+                # fail open because Cursor provides no decision channel for
+                # those events.
+                "beforeSubmitPrompt": [{"command": "ai-guardian", "failClosed": True}],
+                "beforeReadFile": [{"command": "ai-guardian", "failClosed": True}],
+                "beforeShellExecution": [
+                    {"command": "ai-guardian", "failClosed": True}
+                ],
+                "preToolUse": [{"command": "ai-guardian", "failClosed": True}],
                 "afterShellExecution": [{"command": "ai-guardian"}],
-                "preToolUse": [{"command": "ai-guardian"}],
                 "postToolUse": [{"command": "ai-guardian"}],
             },
         },
@@ -366,7 +365,7 @@ class IDESetup:
                             "timeout": 30,
                         }
                     ]
-                    for event in CRUSH_HOOK_EVENTS
+                    for event in CRUSH_MANAGED_HOOK_EVENTS
                 }
             },
         },
@@ -393,7 +392,38 @@ class IDESetup:
             return os.path.join(claude_config_dir, "settings.json")
         return "~/.claude/settings.json"
 
-    def get_config_path(self, ide_type: str) -> str:
+    @staticmethod
+    def _cursor_project_root(cwd: Optional[str] = None) -> Path:
+        """Resolve the workspace root used by Cursor project config files."""
+        current = Path(cwd or os.getcwd()).expanduser().resolve()
+        for candidate in (current, *current.parents):
+            if (candidate / ".git").exists():
+                return candidate
+        for candidate in (current, *current.parents):
+            if (candidate / ".cursor").is_dir():
+                return candidate
+        return current
+
+    def get_cursor_config_layers(
+        self, cwd: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Return Cursor's user and project hook configuration layers."""
+        user_path = Path(self.get_config_path("cursor", scope="user")).expanduser()
+        project_root = self._cursor_project_root(cwd)
+        project_path = project_root / ".cursor" / "hooks.json"
+        layers = [{"scope": "user", "path": str(user_path)}]
+        if project_path != user_path:
+            layers.append({"scope": "project", "path": str(project_path)})
+        for layer in layers:
+            layer["exists"] = Path(layer["path"]).is_file()
+        return layers
+
+    def get_config_path(
+        self,
+        ide_type: str,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
+    ) -> str:
         """
         Get IDE config path, respecting IDE-specific environment variables.
 
@@ -402,12 +432,21 @@ class IDESetup:
 
         Args:
             ide_type: IDE type ('claude' or 'cursor')
+            scope: Cursor configuration scope ('user' or 'project'). Other
+                integrations retain their existing path behavior.
+            project_dir: Workspace directory for Cursor project scope.
 
         Returns:
             str: Path to IDE config file, or None if IDE type unknown
         """
         if ide_type not in self.IDE_CONFIGS:
             return None
+
+        if ide_type == "cursor" and scope == "project":
+            project_root = self._cursor_project_root(project_dir)
+            return str(project_root / ".cursor" / "hooks.json")
+        if ide_type == "cursor" and scope not in ("user", "auto"):
+            raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
 
         ide_config = self.IDE_CONFIGS[ide_type]
         base_config_path = ide_config["config_path"]
@@ -547,7 +586,11 @@ class IDESetup:
         return not ide_config.get("mcp_only", False)
 
     def check_hooks_for_ide(
-        self, ide_type: str, integrity: bool = False
+        self,
+        ide_type: str,
+        integrity: bool = False,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """Check if hooks are configured for a specific IDE.
 
@@ -562,26 +605,45 @@ class IDESetup:
         if ide_config.get("mcp_only"):
             return True, f"{ide_name}: MCP-only (no hooks needed)"
 
-        config_path_str = self.get_config_path(ide_type)
+        if ide_type == "cursor":
+            config_path_str = self.get_config_path(
+                ide_type, scope=scope, project_dir=project_dir
+            )
+        else:
+            config_path_str = self.get_config_path(ide_type)
         if not config_path_str:
             return False, f"{ide_name}: no config path"
 
         config_path = Path(config_path_str).expanduser()
         if not integrity:
-            if ide_type == "codex":
-                verification = self.verify_hooks_for_ide(ide_type)
-                if verification["healthy"]:
-                    return True, f"{ide_name}: configured"
-                diagnostics = verification.get("diagnostics", [])
-                if diagnostics:
-                    return False, f"{ide_name}: needs attention ({diagnostics[0]})"
             if self.check_hooks_configured(config_path, ide_type):
                 return True, f"{ide_name}: configured"
-            return False, f"{ide_name}: not configured"
+            verification = self.verify_hooks_for_ide(
+                ide_type, scope=scope, project_dir=project_dir
+            )
+            diagnostics = verification.get("diagnostics", [])
+            if diagnostics:
+                return False, f"{ide_name}: needs attention ({diagnostics[0]})"
+            if verification["events"] and all(
+                status == "missing" for status in verification["events"].values()
+            ):
+                return False, f"{ide_name}: not configured"
+            attention = [
+                name
+                for name, status in verification["events"].items()
+                if status != "healthy"
+            ]
+            attention.extend(
+                f"obsolete:{name}" for name in verification.get("obsolete", [])
+            )
+            detail = ", ".join(attention) or "configuration unreadable"
+            return False, f"{ide_name}: needs attention ({detail})"
         verification = (
-            self.verify_ide_setup(ide_type)
+            self.verify_ide_setup(ide_type, scope=scope, project_dir=project_dir)
             if integrity
-            else self.verify_hooks_for_ide(ide_type)
+            else self.verify_hooks_for_ide(
+                ide_type, scope=scope, project_dir=project_dir
+            )
         )
         if verification["healthy"]:
             return True, f"{ide_name}: configured"
@@ -605,12 +667,12 @@ class IDESetup:
         return False, f"{ide_name}: needs attention ({detail})"
 
     def expected_hook_manifest(self, ide_type: str) -> Dict[str, str]:
-        """Return the canonical hook events owned by an IDE adapter.
+        """Return the canonical hook events managed by an IDE adapter.
 
-        The manifest is derived from ``IDE_CONFIGS`` so setup and verification
-        cannot silently drift apart when a new event is added to an adapter.
-        Values identify the ownership category and are intentionally stable for
-        callers that want to render diagnostics.
+        ``MANAGED_HOOK_EVENTS_BY_IDE`` is the single source of truth for the
+        required event list. ``IDE_CONFIGS`` supplies only the host-specific
+        command schema and response details. Values identify the ownership
+        category and are intentionally stable for diagnostic callers.
         """
         config = self.IDE_CONFIGS.get(ide_type, {})
         if config.get("mcp_only"):
@@ -619,11 +681,19 @@ class IDESetup:
             return {"plugin": "plugin"}
         if config.get("extension_based"):
             return {"extension": "extension"}
-        if config.get("script_based") or ide_type in ("cline", "zoocode", "kiro"):
-            return {name: "script" for name in config.get("hook_scripts", [])}
+        managed_events = MANAGED_HOOK_EVENTS_BY_IDE.get(ide_type)
+        if managed_events is not None:
+            kind = (
+                "script"
+                if config.get("script_based")
+                or ide_type in ("cline", "zoocode", "kiro")
+                else "event"
+            )
+            return {name: kind for name in managed_events}
+
+        # Preserve a useful fallback for third-party/test configurations that
+        # are supplied dynamically rather than registered in the manifest.
         hooks = config.get("hooks", {})
-        if ide_type == "codex":
-            return {name: "event" for name in CODEX_MANAGED_HOOK_EVENTS}
         if ide_type in ("windsurf", "augment", "crush"):
             hooks = hooks.get("hooks", hooks)
         if ide_type == "gemini":
@@ -669,7 +739,36 @@ class IDESetup:
             and f"--ide {ide_type}" in value
         )
 
-    def verify_hooks_for_ide(self, ide_type: str) -> Dict[str, Any]:
+    @staticmethod
+    def _installed_hook_map(config: Dict[str, Any], ide_type: str) -> Dict[str, Any]:
+        """Normalize an installed config to the manifest's event map.
+
+        The managed event manifest is shared across setup and verification,
+        while each host uses a different JSON shape.  Keeping this schema
+        normalization here prevents individual adapter branches from growing
+        their own, potentially divergent event lists.
+        """
+        installed_hooks: Any = config.get("hooks", {})
+        if ide_type == "copilot":
+            installed_hooks = config
+        elif ide_type == "gemini":
+            entries = installed_hooks if isinstance(installed_hooks, list) else []
+            installed_hooks = {
+                str(entry.get("event")): entry
+                for entry in entries
+                if isinstance(entry, dict) and entry.get("event")
+            }
+        elif ide_type in ("windsurf", "augment", "crush"):
+            if isinstance(installed_hooks, dict):
+                installed_hooks = installed_hooks.get("hooks", installed_hooks)
+        return installed_hooks if isinstance(installed_hooks, dict) else {}
+
+    def verify_hooks_for_ide(
+        self,
+        ide_type: str,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Compare an installed adapter configuration with its hook manifest.
 
         The result is deliberately JSON-serializable for CLI, tray, and REST
@@ -681,7 +780,10 @@ class IDESetup:
         config = self.IDE_CONFIGS.get(ide_type, {})
         result: Dict[str, Any] = {
             "ide": ide_type,
-            "config_path": self.get_config_path(ide_type),
+            "config_path": self.get_config_path(
+                ide_type, scope=scope, project_dir=project_dir
+            ),
+            "scope": scope,
             "healthy": True,
             "events": {},
             "obsolete": [],
@@ -693,7 +795,13 @@ class IDESetup:
                 for layer in result["config_layers"]
                 if layer["parse_error"]
             ]
-            target_dir = str(Path(self.get_config_path(ide_type)).expanduser().parent)
+            target_dir = str(
+                Path(
+                    self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
+                )
+                .expanduser()
+                .parent
+            )
             if any(
                 layer["directory"] == target_dir and layer["inline_hooks"]
                 for layer in result["config_layers"]
@@ -704,7 +812,9 @@ class IDESetup:
         if config.get("mcp_only"):
             return result
 
-        path = Path(self.get_config_path(ide_type)).expanduser()
+        path = Path(
+            self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
+        ).expanduser()
         if config.get("plugin_file"):
             plugin_file = path / "ai-guardian.ts"
             try:
@@ -775,19 +885,7 @@ class IDESetup:
         except (OSError, json.JSONDecodeError):
             installed = {}
 
-        installed_hooks = installed.get("hooks", {})
-        if ide_type == "copilot":
-            # Copilot's hooks.json schema stores hook events at the config
-            # document root rather than under a top-level ``hooks`` object.
-            installed_hooks = installed
-        elif ide_type == "gemini":
-            installed_hooks = {
-                str(entry.get("event")): entry
-                for entry in installed_hooks
-                if isinstance(entry, dict) and entry.get("event")
-            }
-        elif ide_type == "windsurf":
-            installed_hooks = installed_hooks.get("hooks", installed_hooks)
+        installed_hooks = self._installed_hook_map(installed, ide_type)
 
         for event_name in manifest:
             value = (
@@ -817,7 +915,105 @@ class IDESetup:
             result["healthy"] = False
         return result
 
-    def verify_ide_setup(self, ide_type: str) -> Dict[str, Any]:
+    def _verify_cursor_effective_setup(
+        self, project_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Verify Cursor's layered hook and MCP configuration.
+
+        Cursor loads matching user and project hook files.  A healthy event in
+        either layer is therefore effective for the current workspace, while
+        the individual layer results remain available for tray diagnostics.
+        """
+        layers = self.get_cursor_config_layers(project_dir)
+        layer_results = [
+            self.verify_hooks_for_ide(
+                "cursor", scope=layer["scope"], project_dir=project_dir
+            )
+            for layer in layers
+        ]
+        manifest = self.expected_hook_manifest("cursor")
+        effective_events = {}
+        for event_name in manifest:
+            statuses = [
+                result.get("events", {}).get(event_name) for result in layer_results
+            ]
+            if "healthy" in statuses:
+                effective_events[event_name] = "healthy"
+            elif "changed" in statuses:
+                effective_events[event_name] = "changed"
+            else:
+                effective_events[event_name] = "missing"
+
+        configured_scopes = []
+        for layer, result in zip(layers, layer_results):
+            layer_events = result.get("events", {})
+            if any(
+                status != "missing" for status in layer_events.values()
+            ) or result.get("obsolete"):
+                configured_scopes.append(layer["scope"])
+
+        obsolete = sorted(
+            {event for result in layer_results for event in result.get("obsolete", [])}
+        )
+        effective_hooks_healthy = (
+            all(status == "healthy" for status in effective_events.values())
+            and not obsolete
+        )
+        user_result = next(
+            (
+                result
+                for layer, result in zip(layers, layer_results)
+                if layer.get("scope") == "user"
+            ),
+            {"events": {}, "healthy": False},
+        )
+        user_events = user_result.get("events", {})
+        if not isinstance(user_events, dict):
+            user_events = {}
+        user_hooks_healthy = user_result.get("healthy") is True
+
+        from ai_guardian.setup.mcp import verify_cursor_mcp_config
+
+        mcp = verify_cursor_mcp_config(scope="auto", project_dir=project_dir)
+        mcp_layers = mcp.get("config_scopes", [])
+        user_mcp = next(
+            (layer for layer in mcp_layers if layer.get("scope") == "user"),
+            {},
+        )
+        user_mcp_installed = user_mcp.get("configured") is True
+        effective_scope = "+".join(configured_scopes) or "none"
+        combined = {
+            "ide": "cursor",
+            "config_path": self.get_config_path("cursor", scope="user"),
+            "scope": "auto",
+            "installation_scope": "user",
+            "effective_scope": effective_scope,
+            "config_scopes": layer_results,
+            # The default health target remains the user/desktop layer so a
+            # project file cannot silently change local setup status. Callers
+            # that explicitly select ``scope="project"`` receive project-only
+            # health from ``verify_ide_setup`` below.
+            "healthy": user_hooks_healthy and user_mcp_installed,
+            "hooks_healthy": user_hooks_healthy,
+            "events": user_events,
+            "effective_events": effective_events,
+            "obsolete": obsolete,
+            "effective_hooks_healthy": effective_hooks_healthy,
+            "mcp_config_path": user_mcp.get("config_path", mcp.get("mcp_config_path")),
+            "mcp_config_scopes": mcp_layers,
+            "mcp_installed": user_mcp_installed,
+            "mcp_status": "healthy" if user_mcp_installed else "missing",
+            "effective_mcp_installed": mcp.get("mcp_installed", False),
+            "effective_mcp_status": mcp.get("mcp_status", "missing"),
+        }
+        return combined
+
+    def verify_ide_setup(
+        self,
+        ide_type: str,
+        scope: str = "auto",
+        project_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Verify hooks and any required global MCP registration for an IDE.
 
         Hook verification remains available separately because several callers
@@ -825,9 +1021,33 @@ class IDESetup:
         state use this combined result so Codex can report healthy hooks with a
         missing user-level MCP registration as incomplete setup.
         """
-        verification = self.verify_hooks_for_ide(ide_type)
-        if not isinstance(verification, dict) or ide_type != "codex":
+        if ide_type == "cursor" and scope == "auto":
+            return self._verify_cursor_effective_setup(project_dir)
+
+        verification = self.verify_hooks_for_ide(
+            ide_type, scope=scope, project_dir=project_dir
+        )
+        if not isinstance(verification, dict) or ide_type not in ("codex", "cursor"):
             return verification
+
+        if ide_type == "cursor":
+            from ai_guardian.setup.mcp import verify_cursor_mcp_config
+
+            mcp = verify_cursor_mcp_config(scope=scope, project_dir=project_dir)
+            combined = dict(verification)
+            combined["hooks_healthy"] = verification.get("healthy") is True
+            combined.update(
+                {
+                    "mcp_config_path": mcp.get("mcp_config_path"),
+                    "mcp_config_scopes": mcp.get("config_scopes", []),
+                    "mcp_installed": mcp.get("mcp_installed", False),
+                    "mcp_status": mcp.get("mcp_status", "missing"),
+                }
+            )
+            combined["healthy"] = (
+                combined["hooks_healthy"] and combined["mcp_installed"]
+            )
+            return combined
 
         from ai_guardian.setup.mcp import (
             get_codex_mcp_config_path,
@@ -965,6 +1185,13 @@ class IDESetup:
         detected_ides = []
 
         for ide_type in self.IDE_CONFIGS.keys():
+            if ide_type == "cursor":
+                if any(
+                    Path(layer["path"]).expanduser().parent.exists()
+                    for layer in self.get_cursor_config_layers()
+                ):
+                    detected_ides.append(ide_type)
+                continue
             raw_path = self.get_config_path(ide_type)
             if not raw_path:
                 continue
@@ -989,6 +1216,13 @@ class IDESetup:
         """
         detected = []
         for ide_type in self.IDE_CONFIGS.keys():
+            if ide_type == "cursor":
+                if any(
+                    Path(layer["path"]).expanduser().parent.is_dir()
+                    for layer in self.get_cursor_config_layers()
+                ):
+                    detected.append(ide_type)
+                continue
             raw_path = self.get_config_path(ide_type)
             if not raw_path:
                 continue
@@ -1011,6 +1245,12 @@ class IDESetup:
             return False
 
         config_path = Path(raw_path).expanduser()
+
+        if ide_type == "cursor":
+            return any(
+                Path(layer["path"]).expanduser().parent.is_dir()
+                for layer in self.get_cursor_config_layers()
+            )
 
         # Crush uses a project-local file. Its parent is always '.', so only
         # the file itself is valid evidence.
@@ -1092,14 +1332,7 @@ class IDESetup:
             if "hooks" not in existing_config:
                 existing_config["hooks"] = {}
 
-            for hook_name in [
-                HookEvent.SESSION_START.display_name,
-                HookEvent.PROMPT.display_name,
-                HookEvent.PRE_TOOL_USE.display_name,
-                HookEvent.POST_TOOL_USE.display_name,
-                HookEvent.SESSION_END.display_name,
-                HookEvent.POST_COMPACT.display_name,
-            ]:
+            for hook_name in self.expected_hook_manifest("claude"):
                 if hook_name not in ai_guardian_hooks:
                     continue
 
@@ -1175,7 +1408,7 @@ class IDESetup:
                 existing_config["version"] = 1
 
             # Merge all Cursor hooks, preserving other extensions' hooks
-            for hook_name in CURSOR_HOOK_EVENTS:
+            for hook_name in self.expected_hook_manifest("cursor"):
                 if hook_name not in ai_guardian_hooks:
                     continue
                 if hook_name not in existing_config["hooks"]:
@@ -1215,7 +1448,8 @@ class IDESetup:
             if not isinstance(existing_config["hooks"], dict):
                 existing_config["hooks"] = {}
 
-            for hook_name, template_entries in ai_guardian_hooks.items():
+            for hook_name in self.expected_hook_manifest("codex"):
+                template_entries = ai_guardian_hooks.get(hook_name)
                 if not isinstance(template_entries, list) or not template_entries:
                     continue
 
@@ -1286,17 +1520,7 @@ class IDESetup:
             if "hooks" not in existing_config:
                 existing_config["hooks"] = {}
 
-            windsurf_events = [
-                "pre_user_prompt",
-                "pre_run_command",
-                "post_run_command",
-                "pre_read_code",
-                "post_read_code",
-                "pre_write_code",
-                "post_write_code",
-                "pre_mcp_tool_use",
-                "post_mcp_tool_use",
-            ]
+            windsurf_events = self.expected_hook_manifest("windsurf")
             template_hooks = ai_guardian_hooks.get("hooks", ai_guardian_hooks)
             for event_name in windsurf_events:
                 if event_name in template_hooks:
@@ -1308,7 +1532,12 @@ class IDESetup:
             if "hooks" not in existing_config:
                 existing_config["hooks"] = []
 
-            template_hooks = ai_guardian_hooks.get("hooks", [])
+            managed_events = set(self.expected_hook_manifest("gemini"))
+            template_hooks = [
+                hook
+                for hook in ai_guardian_hooks.get("hooks", [])
+                if isinstance(hook, dict) and hook.get("event") in managed_events
+            ]
 
             other_hooks = [
                 h
@@ -1340,10 +1569,7 @@ class IDESetup:
                 existing_config["hooks"] = {}
 
             template_hooks = ai_guardian_hooks.get("hooks", ai_guardian_hooks)
-            for hook_name in [
-                HookEvent.PRE_TOOL_USE.display_name,
-                HookEvent.POST_TOOL_USE.display_name,
-            ]:
+            for hook_name in self.expected_hook_manifest("augment"):
                 if hook_name not in template_hooks:
                     continue
 
@@ -1404,7 +1630,7 @@ class IDESetup:
                 existing_config["hooks"] = {}
 
             template_hooks = ai_guardian_hooks.get("hooks", ai_guardian_hooks)
-            for event_name in CRUSH_HOOK_EVENTS:
+            for event_name in self.expected_hook_manifest("crush"):
                 if event_name not in template_hooks:
                     continue
                 if event_name not in existing_config["hooks"]:
@@ -1493,7 +1719,9 @@ class IDESetup:
             if ide_type in ("cline", "zoocode", "kiro"):
                 hooks_dir = config_path if config_path.is_dir() else config_path.parent
                 ide_config = self.IDE_CONFIGS.get(ide_type, {})
-                for script_name in ide_config.get("hook_scripts", []):
+                configured = set()
+                managed_scripts = self.expected_hook_manifest(ide_type)
+                for script_name in managed_scripts:
                     candidates = [hooks_dir / script_name]
                     if platform.system() == "Windows":
                         candidates.append(hooks_dir / f"{script_name}.bat")
@@ -1503,132 +1731,22 @@ class IDESetup:
                             try:
                                 content = script_path.read_text(encoding="utf-8")
                                 if "ai-guardian" in content:
-                                    return True
+                                    configured.add(script_name)
+                                    break
                             except Exception:
                                 pass  # intentionally silent — best-effort operation
-                return False
+                return len(configured) == len(managed_scripts)
 
             with open(config_path, "r", encoding="utf-8") as f:
                 config = json.load(f)
 
-            if ide_type in ("claude", "codex"):
-                hooks = config.get("hooks", {})
-                hook_names = (
-                    self.expected_hook_manifest(ide_type)
-                    if ide_type == "codex"
-                    else {
-                        HookEvent.PROMPT.display_name,
-                        HookEvent.PRE_TOOL_USE.display_name,
-                        HookEvent.POST_TOOL_USE.display_name,
-                        HookEvent.SESSION_END.display_name,
-                        HookEvent.POST_COMPACT.display_name,
-                    }
+            manifest = self.expected_hook_manifest(ide_type)
+            if manifest:
+                installed_hooks = self._installed_hook_map(config, ide_type)
+                return all(
+                    self._contains_owned_command(installed_hooks.get(event_name))
+                    for event_name in manifest
                 )
-                for hook_name in hook_names:
-                    if hook_name in hooks:
-                        hook_list = hooks[hook_name]
-                        if isinstance(hook_list, list):
-                            for hook_entry in hook_list:
-                                if (
-                                    isinstance(hook_entry, dict)
-                                    and "hooks" in hook_entry
-                                ):
-                                    for h in hook_entry["hooks"]:
-                                        if isinstance(
-                                            h, dict
-                                        ) and _is_ai_guardian_command(
-                                            h.get("command", "")
-                                        ):
-                                            return True
-
-            elif ide_type == "cursor":
-                hooks = config.get("hooks", {})
-                # Check if any Cursor hooks contain ai-guardian
-                for hook_name in CURSOR_HOOK_EVENTS:
-                    if hook_name in hooks:
-                        hook_list = hooks[hook_name]
-                        if isinstance(hook_list, list):
-                            for h in hook_list:
-                                if isinstance(h, dict) and _is_ai_guardian_command(
-                                    h.get("command", "")
-                                ):
-                                    return True
-
-            elif ide_type == "copilot":
-                # Copilot stores its hook events at the document root.
-                for hook_name in ("userPromptSubmitted", "preToolUse"):
-                    hook_list = config.get(hook_name, [])
-                    if isinstance(hook_list, list):
-                        for h in hook_list:
-                            if isinstance(h, dict) and _is_ai_guardian_command(
-                                h.get("command", "")
-                            ):
-                                return True
-
-            elif ide_type == "windsurf":
-                hooks = config.get("hooks", {})
-                for event_name in [
-                    "pre_user_prompt",
-                    "pre_run_command",
-                    "pre_read_code",
-                    "pre_write_code",
-                    "pre_mcp_tool_use",
-                    "post_run_command",
-                    "post_read_code",
-                    "post_write_code",
-                    "post_mcp_tool_use",
-                ]:
-                    if event_name in hooks:
-                        hook_list = hooks[event_name]
-                        if isinstance(hook_list, list):
-                            for h in hook_list:
-                                if isinstance(h, dict) and _is_ai_guardian_command(
-                                    h.get("command", "")
-                                ):
-                                    return True
-
-            elif ide_type == "gemini":
-                hooks = config.get("hooks", [])
-                if isinstance(hooks, list):
-                    for h in hooks:
-                        if isinstance(h, dict) and _is_ai_guardian_command(
-                            h.get("command", "")
-                        ):
-                            return True
-
-            elif ide_type == "augment":
-                hooks = config.get("hooks", {})
-                for hook_name in [
-                    HookEvent.PRE_TOOL_USE.display_name,
-                    HookEvent.POST_TOOL_USE.display_name,
-                ]:
-                    if hook_name in hooks:
-                        hook_list = hooks[hook_name]
-                        if isinstance(hook_list, list):
-                            for hook_entry in hook_list:
-                                if (
-                                    isinstance(hook_entry, dict)
-                                    and "hooks" in hook_entry
-                                ):
-                                    for h in hook_entry["hooks"]:
-                                        if isinstance(
-                                            h, dict
-                                        ) and _is_ai_guardian_command(
-                                            h.get("command", "")
-                                        ):
-                                            return True
-
-            elif ide_type == "crush":
-                hooks = config.get("hooks", {})
-                for event_name in CRUSH_HOOK_EVENTS:
-                    if event_name in hooks:
-                        hook_list = hooks[event_name]
-                        if isinstance(hook_list, list):
-                            for h in hook_list:
-                                if isinstance(h, dict) and _is_ai_guardian_command(
-                                    h.get("command", "")
-                                ):
-                                    return True
 
             return False
 
@@ -1658,7 +1776,7 @@ class IDESetup:
             tuple: (success: bool, message: str)
         """
         ide_name = ide_config["name"]
-        hook_scripts = ide_config.get("hook_scripts", [])
+        hook_scripts = tuple(self.expected_hook_manifest(ide_type))
         is_windows = platform.system() == "Windows"
 
         abs_path = _resolve_binary_path()
@@ -1893,7 +2011,12 @@ class IDESetup:
         return True, message
 
     def setup_ide_hooks(
-        self, ide_type: str, dry_run: bool = False, force: bool = False
+        self,
+        ide_type: str,
+        dry_run: bool = False,
+        force: bool = False,
+        scope: str = "user",
+        project_dir: Optional[str] = None,
     ) -> Tuple[bool, str]:
         """
         Setup IDE hooks for the specified IDE.
@@ -1902,6 +2025,9 @@ class IDESetup:
             ide_type: IDE type ('claude' or 'cursor')
             dry_run: If True, show what would be changed without applying
             force: If True, overwrite existing hooks
+            scope: Cursor setup scope. Defaults to ``user``; ``project`` is
+                used only for an explicitly selected Cursor Cloud workspace.
+            project_dir: Existing workspace directory for Cursor project setup.
 
         Returns:
             tuple: (success: bool, message: str)
@@ -1909,6 +2035,28 @@ class IDESetup:
         try:
             if ide_type not in self.IDE_CONFIGS:
                 return False, f"Unknown IDE type: {ide_type}"
+
+            if ide_type == "cursor":
+                if project_dir and scope == "user":
+                    scope = "project"
+                if scope not in ("user", "project"):
+                    return False, "Cursor setup scope must be 'user' or 'project'."
+                if scope == "project":
+                    if not project_dir:
+                        return (
+                            False,
+                            "Cursor project setup requires a project directory.",
+                        )
+                    project_path = Path(project_dir).expanduser()
+                    if not project_path.is_dir():
+                        return (
+                            False,
+                            "Cursor project directory does not exist or is not "
+                            f"a directory: {project_path}",
+                        )
+                    project_dir = str(project_path.resolve())
+                else:
+                    project_dir = None
 
             # Dummy agent fires hooks internally — no config file to write.
             if ide_type == "dummy-agent":
@@ -1923,7 +2071,9 @@ class IDESetup:
                 return False, "ai-guardian binary not found in PATH"
 
             ide_config = self.IDE_CONFIGS[ide_type]
-            config_path = Path(self.get_config_path(ide_type)).expanduser()
+            config_path = Path(
+                self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
+            ).expanduser()
             ide_name = ide_config["name"]
 
             if ide_config.get("mcp_only"):
@@ -1938,13 +2088,11 @@ class IDESetup:
             # Check if hooks already configured
             if not force:
                 if self.expected_hook_manifest(ide_type):
-                    verification = self.verify_hooks_for_ide(ide_type)
+                    verification = self.verify_hooks_for_ide(
+                        ide_type, scope=scope, project_dir=project_dir
+                    )
                     already_configured = not verification.get("diagnostics") and (
-                        verification["healthy"]
-                        or not any(
-                            status == "missing"
-                            for status in verification["events"].values()
-                        )
+                        verification.get("healthy") is True
                     )
                 else:
                     already_configured = self.check_hooks_configured(
@@ -2015,10 +2163,8 @@ class IDESetup:
             elif ide_type == "copilot":
                 # GitHub Copilot: merge hooks at top level
                 merged_config = existing_config.copy()
-                merged_config["userPromptSubmitted"] = resolved_hooks[
-                    "userPromptSubmitted"
-                ]
-                merged_config["preToolUse"] = resolved_hooks["preToolUse"]
+                for event_name in self.expected_hook_manifest("copilot"):
+                    merged_config[event_name] = resolved_hooks[event_name]
                 # Fall through to common config-write path (don't return early)
             elif ide_type == "codex":
                 merged_config, hook_warnings = self.merge_hooks(

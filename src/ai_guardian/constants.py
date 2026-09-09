@@ -88,6 +88,12 @@ class HookEvent(str, Enum):
     POST_COMPACT = "postcompact"
     SUBAGENT_START = "subagentstart"
     SUBAGENT_STOP = "subagentstop"
+    POST_TOOL_USE_FAILURE = "posttoolusefailure"
+    AFTER_FILE_EDIT = "afterfileedit"
+    AFTER_TAB_FILE_EDIT = "aftertabfileedit"
+    AFTER_AGENT_RESPONSE = "afteragentresponse"
+    AFTER_AGENT_THOUGHT = "afteragentthought"
+    WORKSPACE_OPEN = "workspaceopen"
 
     @property
     def display_name(self) -> str:
@@ -117,6 +123,12 @@ _DISPLAY_NAMES = {
     HookEvent.POST_COMPACT: "PostCompact",
     HookEvent.SUBAGENT_START: "SubagentStart",
     HookEvent.SUBAGENT_STOP: "SubagentStop",
+    HookEvent.POST_TOOL_USE_FAILURE: "PostToolUseFailure",
+    HookEvent.AFTER_FILE_EDIT: "AfterFileEdit",
+    HookEvent.AFTER_TAB_FILE_EDIT: "AfterTabFileEdit",
+    HookEvent.AFTER_AGENT_RESPONSE: "AfterAgentResponse",
+    HookEvent.AFTER_AGENT_THOUGHT: "AfterAgentThought",
+    HookEvent.WORKSPACE_OPEN: "WorkspaceOpen",
 }
 
 ALL_HOOK_EVENT_DISPLAY_NAMES = frozenset(_DISPLAY_NAMES.values())
@@ -130,16 +142,118 @@ AUGMENT_TOOL_MAP = {
     "remove-files": "Delete",
 }
 
-CURSOR_HOOK_EVENTS = (
+# AI Guardian's required hook manifest is the single source of truth used by
+# setup, verification, doctor, tray health, and integration tests.  These are
+# the events AI Guardian installs for each command-hook adapter; host events
+# outside these tuples are not AI Guardian hooks.
+CLAUDE_MANAGED_HOOK_EVENTS = (
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "SessionEnd",
+    "PostCompact",
+)
+
+CURSOR_MANAGED_HOOK_EVENTS = (
     "beforeSubmitPrompt",
     "beforeReadFile",
     "beforeShellExecution",
-    "afterShellExecution",
     "preToolUse",
+    "afterShellExecution",
     "postToolUse",
 )
 
-CRUSH_HOOK_EVENTS = ("PreToolUse",)
+COPILOT_MANAGED_HOOK_EVENTS = ("userPromptSubmitted", "preToolUse")
+
+CODEX_MANAGED_HOOK_EVENTS = (
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "PostCompact",
+    "SessionEnd",
+)
+
+WINDSURF_MANAGED_HOOK_EVENTS = (
+    "pre_user_prompt",
+    "pre_run_command",
+    "post_run_command",
+    "pre_read_code",
+    "post_read_code",
+    "pre_write_code",
+    "post_write_code",
+    "pre_mcp_tool_use",
+    "post_mcp_tool_use",
+)
+
+GEMINI_MANAGED_HOOK_EVENTS = (
+    "SessionStart",
+    "BeforeAgent",
+    "BeforeTool",
+    "AfterTool",
+)
+
+CLINE_MANAGED_HOOK_EVENTS = ("PreToolUse", "PostToolUse", "UserPromptSubmit")
+ZOOCODE_MANAGED_HOOK_EVENTS = CLINE_MANAGED_HOOK_EVENTS
+KIRO_MANAGED_HOOK_EVENTS = ("PreToolUse", "PostToolUse", "PromptSubmit")
+AUGMENT_MANAGED_HOOK_EVENTS = ("PreToolUse", "PostToolUse")
+CRUSH_MANAGED_HOOK_EVENTS = ("PreToolUse",)
+AIDERDESK_MANAGED_HOOK_EVENTS = ()
+OPENCLAW_MANAGED_HOOK_EVENTS = ()
+OPENCODE_MANAGED_HOOK_EVENTS = ()
+JUNIE_MANAGED_HOOK_EVENTS = ()
+DUMMY_AGENT_MANAGED_HOOK_EVENTS = ()
+
+MANAGED_HOOK_EVENTS_BY_IDE = {
+    "claude": CLAUDE_MANAGED_HOOK_EVENTS,
+    "cursor": CURSOR_MANAGED_HOOK_EVENTS,
+    "copilot": COPILOT_MANAGED_HOOK_EVENTS,
+    "codex": CODEX_MANAGED_HOOK_EVENTS,
+    "windsurf": WINDSURF_MANAGED_HOOK_EVENTS,
+    "gemini": GEMINI_MANAGED_HOOK_EVENTS,
+    "cline": CLINE_MANAGED_HOOK_EVENTS,
+    "zoocode": ZOOCODE_MANAGED_HOOK_EVENTS,
+    "kiro": KIRO_MANAGED_HOOK_EVENTS,
+    "augment": AUGMENT_MANAGED_HOOK_EVENTS,
+    "crush": CRUSH_MANAGED_HOOK_EVENTS,
+    "aiderdesk": AIDERDESK_MANAGED_HOOK_EVENTS,
+    "openclaw": OPENCLAW_MANAGED_HOOK_EVENTS,
+    "opencode": OPENCODE_MANAGED_HOOK_EVENTS,
+    "junie": JUNIE_MANAGED_HOOK_EVENTS,
+    "dummy-agent": DUMMY_AGENT_MANAGED_HOOK_EVENTS,
+}
+
+# Cursor's adapter recognizes the complete upstream event vocabulary. This is
+# deliberately not the AI Guardian installation manifest: the managed set is
+# separate from this adapter vocabulary. Events below the managed set are
+# simply upstream events that a user may already have configured; they are not
+# AI Guardian hooks and must never be reported as missing setup.
+CURSOR_RECOGNIZED_HOOK_EVENTS = (
+    *CURSOR_MANAGED_HOOK_EVENTS,
+    "beforeTabFileRead",
+    "beforeMCPExecution",
+    "afterMCPExecution",
+    "postToolUseFailure",
+    "subagentStart",
+    "sessionStart",
+    "sessionEnd",
+    "subagentStop",
+    "preCompact",
+    "stop",
+    "afterAgentResponse",
+    "afterAgentThought",
+    "afterFileEdit",
+    "afterTabFileEdit",
+    "workspaceOpen",
+)
+
+# Keep the historical name as an alias for callers that only need the
+# adapter-recognized Cursor vocabulary. It is not a managed-hook manifest.
+CURSOR_HOOK_EVENTS = CURSOR_RECOGNIZED_HOOK_EVENTS
+
+# Historical compatibility alias; new setup/health code uses the explicit
+# managed name above.
+CRUSH_HOOK_EVENTS = CRUSH_MANAGED_HOOK_EVENTS
 
 VIOLATION_FILTER_TYPES = [
     (

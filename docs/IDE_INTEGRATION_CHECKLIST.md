@@ -27,9 +27,14 @@ one integration mode.
 
 - [ ] Choose a stable CLI key and display name. Keep aliases consistent with
   the agent's documented name.
-- [ ] Record the supported agent versions, operating systems, installation
-  scope (user or project), and the upstream documentation used for the
-  integration.
+- [ ] Record the supported agent versions, operating systems, and installation
+  scope. AI Guardian installs hooks and MCP at the local user/desktop level by
+  default. Project-level files are read-only discovery/health inputs unless an
+  explicit, user-selected project setup flow is part of the supported design.
+- [ ] If the agent has local and remote/cloud execution modes, document each
+  configuration layer separately. Never imply that a local user config protects
+  a remote run; provide an explicit project/team/enterprise target when the
+  upstream contract requires one.
 - [ ] Review the agent's hook, plugin, extension, MCP, and transcript
   contracts as applicable. Record upstream links and the applicable license
   decision before distributing integration code.
@@ -72,8 +77,11 @@ one integration mode.
 - [ ] Add or update the entry in `IDESetup.IDE_CONFIGS` in
   `src/ai_guardian/setup/hooks.py`, including display name, config path,
   environment override, hook schema, and script/plugin/extension flags.
-- [ ] Define the expected hook manifest and verify that setup, verification,
-  and reconciliation agree about the installed events.
+- [ ] Define the required managed-hook manifest once in
+  `MANAGED_HOOK_EVENTS_BY_IDE` and verify that setup, verification,
+  reconciliation, doctor, tray health, and integration tests all consume it.
+  Keep upstream events that an adapter can recognize but AI Guardian does not
+  install separate from this manifest; they must not be reported as missing.
 - [ ] Confirm `--ide <key>`, auto-detection, dry-run, forced update, and hook
   verification behavior for the integration.
 - [ ] Preserve unrelated configuration and existing user-owned hooks during
@@ -93,6 +101,21 @@ one integration mode.
   installer scripts when fresh installation should discover the agent.
 - [ ] Update console, tray, or status surfaces only when the integration adds
   a user-visible status or setup flow.
+- [ ] Trace every setup and health entry point, not only the setup function:
+  tray **Check hooks/MCP installation...**, tray **Manual setup (specific
+  IDE** (including any explicit remote/project variant), `ai-guardian doctor`,
+  `ai-guardian ide-setup`, and any REST/daemon setup-state view. They must use
+  the same verification result, preserve the user installation scope by
+  default, inspect effective user/project scope without silently modifying
+  project files, and report incomplete hook or MCP state consistently.
+- [ ] For proactive tray setup prompts, verify that Tkinter/Linux and the
+  macOS native fallback expose the same per-integration install/never choices,
+  a `Submit` action (without a redundant global Never button), visible snooze
+  selection, and dismissal semantics. Verify that the native macOS path
+  foregrounds one dialog and has no legacy multi-dialog fallback cascade.
+  Ensure a startup check and a manual check cannot show competing snapshots or
+  duplicate prompts; verify that an expired snooze and a newly detected
+  integration both re-enter the automatic prompt flow.
 
 ## 3. Tests and validation
 
@@ -208,6 +231,11 @@ expand it when a shared component is touched:
   shared adapter or hook-processing code.
 - [ ] Re-check every row in the support matrix affected by the change, rather
   than updating only the Supported Agents table.
+- [ ] Re-check independent health renderers and launchers (doctor and tray
+  menu actions) when setup paths, config scopes, or MCP registration change.
+  Verify that setup remains user/desktop-scoped by default even when a
+  project-level configuration is present, and test every explicit project
+  setup action (CLI flag, directory picker, and resulting config paths).
 - [ ] Re-run the manual acceptance items for installation, verification, and
   the affected user-visible behavior.
 - [ ] Update the confidence level and release-readiness coverage when the

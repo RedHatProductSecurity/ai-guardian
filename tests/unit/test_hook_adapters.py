@@ -443,6 +443,58 @@ class TestNormalization:
         assert n.event == HookEvent.POST_TOOL_USE
         assert n.tool_name == "Bash"
 
+    def test_cursor_before_tab_file_read_uses_file_decision_contract(self):
+        data = {
+            "cursor_version": "0.50.0",
+            "hook_event_name": "beforeTabFileRead",
+            "file_path": "/tmp/tab.py",
+            "content": "print('hello')",
+        }
+        n = CursorAdapter().normalize_input(data)
+        assert n.event == HookEvent.BEFORE_READ_FILE
+        assert n.tool_name == "Read"
+        assert n.file_path == "/tmp/tab.py"
+        assert n.tool_input["content"] == "print('hello')"
+
+    def test_cursor_mcp_events_normalize_server_and_string_input(self):
+        data = {
+            "cursor_version": "0.50.0",
+            "hook_event_name": "beforeMCPExecution",
+            "mcp_server_name": "filesystem",
+            "tool_name": "read_file",
+            "tool_input": '{"path": "/tmp/example.txt"}',
+        }
+        n = CursorAdapter().normalize_input(data)
+        assert n.event == HookEvent.PRE_TOOL_USE
+        assert n.tool_name == "mcp__filesystem__read_file"
+        assert n.tool_input == {"path": "/tmp/example.txt"}
+
+    def test_cursor_subagent_start_is_a_decision_event(self):
+        data = {
+            "cursor_version": "0.50.0",
+            "hook_event_name": "subagentStart",
+            "subagent_id": "agent-1",
+            "subagent_type": "worker",
+            "task": "inspect the repository",
+        }
+        n = CursorAdapter().normalize_input(data)
+        assert n.event == HookEvent.SUBAGENT_START
+        assert n.tool_name == "Task"
+        assert n.tool_input == {
+            "subagent_id": "agent-1",
+            "subagent_type": "worker",
+            "task": "inspect the repository",
+        }
+
+    def test_cursor_post_tool_failure_does_not_echo_error(self):
+        result = CursorAdapter().format_response(
+            has_secrets=True,
+            error_message="sensitive tool failure details",
+            hook_event=HookEvent.POST_TOOL_USE_FAILURE,
+        )
+        assert json.loads(result["output"]) == {}
+        assert "sensitive tool failure details" not in result["output"]
+
     def test_cursor_shell_command_extracted_from_top_level(self):
         data = {
             "hook_name": "beforeShellExecution",
@@ -980,6 +1032,16 @@ class TestModifiedOutputDelivery:
         )
         data = json.loads(result["output"])
         assert data["modifiedToolOutput"] == "redacted content"
+
+    def test_cursor_mcp_modified_output_uses_documented_field(self):
+        result = CursorAdapter().format_response(
+            has_secrets=False,
+            hook_event=HookEvent.POST_TOOL_USE,
+            modified_output="redacted content",
+            tool_name="mcp__filesystem__read_file",
+        )
+        data = json.loads(result["output"])
+        assert data["updated_mcp_tool_output"] == {"modified": "redacted content"}
 
     def test_cline_modified_output(self):
         result = ClineAdapter().format_response(

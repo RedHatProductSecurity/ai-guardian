@@ -1149,27 +1149,27 @@ class TestShowDialog:
 
 class TestShowActionDialog:
     @pytest.mark.parametrize(
-        ("snooze_options", "stdout", "expected", "button_labels", "list_labels"),
+        ("snooze_options", "stdout", "expected"),
         [
-            ((), "Set Up Now\n", "action", ("Set Up Now", "Cancel"), ()),
+            (
+                (),
+                '{"result":"action","install":[],"never":[]}',
+                "action",
+            ),
             (
                 ("1h",),
-                "Later (1h)\n",
+                '{"result":"snooze_1h","install":[],"never":[]}',
                 "snooze_1h",
-                ("Set Up Now", "Later (1h)", "Cancel"),
-                (),
             ),
             (
                 ("1h", "6h", "1d", "1w"),
-                "Later (6h)\n",
+                '{"result":"snooze_6h","install":[],"never":[]}',
                 "snooze_6h",
-                ("Set Up Now", "Later...", "Cancel"),
-                ("Later (1h)", "Later (6h)", "Later (1d)", "Later (1w)"),
             ),
         ],
     )
-    def test_macos_limits_buttons_and_preserves_snooze_options(
-        self, snooze_options, stdout, expected, button_labels, list_labels
+    def test_macos_uses_one_native_prompt_and_preserves_snooze_options(
+        self, snooze_options, stdout, expected
     ):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
@@ -1185,19 +1185,12 @@ class TestShowActionDialog:
                 )
 
         assert result == expected
-        script = mock_run.call_args[0][0][2]
-        assert "display dialog" in script
-        button_block = script.split("buttons {", 1)[1].split("} default button", 1)[0]
-        assert button_block.count('"') // 2 == len(button_labels)
-        assert len(button_labels) <= 3
-        for label in button_labels:
-            assert f'"{label}"' in button_block
-        if list_labels:
-            assert "choose from list" in script
-            for label in list_labels:
-                assert f'"{label}"' in script
-        else:
-            assert "choose from list" not in script
+        command = mock_run.call_args.args[0]
+        assert command[:3] == ["osascript", "-l", "JavaScript"]
+        script = command[4]
+        assert "NSAlert" in script
+        assert "NSPopUpButton" in script
+        assert "display dialog" not in script
 
     def test_macos_returns_none_on_nonzero_exit(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
@@ -1207,6 +1200,64 @@ class TestShowActionDialog:
                 assert (
                     show_action_dialog("Title", "Message", "Continue", "Cancel") is None
                 )
+                mock_run.assert_called_once()
+
+    def test_macos_structured_prompt_uses_checkbox_accessory_and_snooze_popup(self):
+        native_result = {
+            "result": "action",
+            "install": ["claude"],
+            "never": ["cursor"],
+            "profile": "@standard",
+        }
+        with mock.patch("ai_guardian.tray.plugins.platform") as platform_mock:
+            platform_mock.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = json.dumps(native_result) + "\n"
+                result = show_action_dialog(
+                    "Set Up AI Guardian",
+                    "Hooks are missing.",
+                    "Submit",
+                    None,
+                    snooze_options=("1h", "6h", "1d", "1w"),
+                    ide_choices=(
+                        {
+                            "ide": "claude",
+                            "name": "Claude Code",
+                            "detail": "PreToolUse (missing)",
+                        },
+                        {
+                            "ide": "cursor",
+                            "name": "Cursor IDE/CLI",
+                            "detail": "PreToolUse (missing)",
+                        },
+                    ),
+                    profile_choices=(
+                        {
+                            "profile": "@standard",
+                            "name": "Standard",
+                            "description": "Recommended",
+                        },
+                    ),
+                )
+
+        assert result == native_result
+        command = mock_run.call_args.args[0]
+        assert command[:3] == ["osascript", "-l", "JavaScript"]
+        script = command[4]
+        assert "NSButton" in script
+        assert "NSPopUpButton" in script
+        assert "Install now" in script
+        assert "Never install" in script
+        assert '"dismiss_label": null' in script
+        assert "if (hasDismiss)" in script
+        assert "function showDialog()" in script
+        assert "function run()" not in script
+        assert "Number(alert.runModal)" in script
+        assert "alert.runModal()" not in script
+        assert "alertWindow.makeKeyAndOrderFront" in script
+        assert "Number(control.never.state)" in script
+        assert "Number(control.install.state)" in script
 
 
 class TestPluginTags:

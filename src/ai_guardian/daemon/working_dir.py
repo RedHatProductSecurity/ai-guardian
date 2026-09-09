@@ -99,11 +99,15 @@ def shorten_path(path: str) -> str:
     return path
 
 
-def choose_directory(current: Optional[str] = None) -> Optional[str]:
+def choose_directory(
+    current: Optional[str] = None,
+    title: str = "Choose Working Directory",
+) -> Optional[str]:
     """Open an OS-native directory picker dialog.
 
     Args:
         current: Directory to start from (shown as default).
+        title: Dialog title/description.
 
     Returns:
         Selected directory path, or None if cancelled.
@@ -111,24 +115,29 @@ def choose_directory(current: Optional[str] = None) -> Optional[str]:
     system = platform.system()
     try:
         if system == "Darwin":
-            return _choose_directory_macos(current)
+            return _choose_directory_macos(current, title)
         elif system == "Linux":
-            return _choose_directory_linux(current)
+            return _choose_directory_linux(current, title)
         elif system == "Windows":
-            return _choose_directory_windows(current)
+            return _choose_directory_windows(current, title)
     except (subprocess.TimeoutExpired, OSError, FileNotFoundError) as e:
         logger.debug("Directory picker failed: %s", e)
     return None
 
 
-def _choose_directory_macos(current: Optional[str] = None) -> Optional[str]:
+def _choose_directory_macos(
+    current: Optional[str] = None,
+    title: str = "Choose Working Directory",
+) -> Optional[str]:
+    from ai_guardian.daemon.multi_client import _escape_for_applescript
+
+    escaped_title = _escape_for_applescript(title)
+    prompt_clause = f' with prompt "{escaped_title}"'
     default_clause = ""
     if current:
-        from ai_guardian.daemon.multi_client import _escape_for_applescript
-
         escaped = _escape_for_applescript(current)
         default_clause = f' default location POSIX file "{escaped}"'
-    script = f"POSIX path of (choose folder{default_clause})"
+    script = f"POSIX path of (choose folder{prompt_clause}{default_clause})"
     result = subprocess.run(
         ["osascript", "-e", script],
         capture_output=True,
@@ -141,7 +150,10 @@ def _choose_directory_macos(current: Optional[str] = None) -> Optional[str]:
     return chosen or None
 
 
-def _choose_directory_linux(current: Optional[str] = None) -> Optional[str]:
+def _choose_directory_linux(
+    current: Optional[str] = None,
+    title: str = "Choose Working Directory",
+) -> Optional[str]:
     from ai_guardian.tray.plugins import _find_icon
 
     cmd = [
@@ -149,7 +161,7 @@ def _choose_directory_linux(current: Optional[str] = None) -> Optional[str]:
         "--file-selection",
         "--directory",
         "--title",
-        "Choose Working Directory",
+        title,
     ]
     icon_path = _find_icon("ai-guardian-320.png")
     if icon_path:
@@ -163,14 +175,18 @@ def _choose_directory_linux(current: Optional[str] = None) -> Optional[str]:
     return chosen or None
 
 
-def _choose_directory_windows(current: Optional[str] = None) -> Optional[str]:
+def _choose_directory_windows(
+    current: Optional[str] = None,
+    title: str = "Choose Working Directory",
+) -> Optional[str]:
     start = ""
     if current:
         start = current.replace("'", "''")
+    description = title.replace("'", "''")
     ps = (
         "[System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms') | Out-Null; "
         "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
-        "$d.Description = 'Choose Working Directory'; "
+        f"$d.Description = '{description}'; "
         f"$d.SelectedPath = '{start}'; "
         "$d.ShowNewFolderButton = $true; "
         "if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath } else { '' }"

@@ -514,6 +514,24 @@ ai-guardian setup --ide claude --uninstall-ide cursor
 ai-guardian setup --ide cursor --uninstall-ide claude
 ```
 
+### Cursor CLI/desktop setup scope
+
+AI Guardian installs Cursor hooks and MCP globally for the local desktop/user
+account:
+
+```text
+~/.cursor/hooks.json
+~/.cursor/mcp.json
+```
+
+Run `ai-guardian setup --ide cursor` or use the tray's **Manual setup
+(specific IDE)** → **Cursor IDE/CLI** entry for local desktop and CLI sessions.
+The tray's **Check hooks/MCP installation...** action and `ai-guardian doctor`
+report the user installation scope separately from project-level Cursor files.
+For Cursor Cloud, use **Cursor Cloud (project setup)...** and select the
+workspace, or run `ai-guardian setup --ide cursor --project DIR`; this explicit
+flow writes `<DIR>/.cursor/hooks.json` and `<DIR>/.cursor/mcp.json`.
+
 ---
 
 ## Known Claude Code Limitations

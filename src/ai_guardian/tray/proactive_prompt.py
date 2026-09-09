@@ -354,7 +354,7 @@ class ProactivePromptDialog:
         title: str,
         message: str,
         action_label: str,
-        dismiss_label: str,
+        dismiss_label: Optional[str],
         snooze_options: Optional[Iterable[str]] = None,
         ide_choices: Optional[Iterable[Dict[str, str]]] = None,
         profile_choices: Optional[Iterable[Dict[str, str]]] = None,
@@ -468,7 +468,7 @@ class ProactivePromptDialog:
         logger.info("%s: %s", self.title, self.message)
         return "dismiss"
 
-    def _show_native_fallback(self) -> Optional[str]:
+    def _show_native_fallback(self) -> Optional[object]:
         """Show an actionable native fallback when tray UI tiers fail."""
         from ai_guardian.tray.plugins import show_action_dialog
 
@@ -478,6 +478,8 @@ class ProactivePromptDialog:
             self.action_label,
             self.dismiss_label,
             self.snooze_options,
+            ide_choices=self.ide_choices,
+            profile_choices=self._profile_options(),
         )
 
     def _show_tkinter_subprocess(self) -> Optional[object]:
@@ -568,6 +570,14 @@ class ProactivePromptDialog:
         return self._ide_selection_result(
             "action",
             (choice["ide"] for choice in self.ide_choices),
+        )
+
+    def _never_ide_selection(self):
+        """Return a completed selection that excludes every displayed IDE."""
+        return self._ide_selection_result(
+            "action",
+            never=(choice["ide"] for choice in self.ide_choices),
+            profile=(None if self._profile_options() else _PROFILE_NOT_SELECTED),
         )
 
     def _show_ide_choices_tkinter(self):
@@ -667,9 +677,13 @@ class ProactivePromptDialog:
                     value, install, never, profile
                 )
             else:
-                result["value"] = self._ide_selection_result(
-                    value,
-                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                result["value"] = (
+                    self._never_ide_selection()
+                    if value == "never"
+                    else self._ide_selection_result(
+                        value,
+                        profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                    )
                 )
             root.destroy()
 
@@ -689,16 +703,21 @@ class ProactivePromptDialog:
                 text="Later",
                 command=lambda: choose("snooze_" + snooze.get()),
             ).grid(row=button_row, column=2, padx=(0, 8), pady=(14, 0), sticky="w")
-        ttk.Button(
-            frame,
-            text=self.dismiss_label,
-            command=lambda: choose("dismiss"),
-        ).grid(row=button_row + 1, column=0, pady=(8, 0), sticky="w")
+        if self.dismiss_label:
+            ttk.Button(
+                frame,
+                text=self.dismiss_label,
+                command=lambda: choose(
+                    "never" if self.dismiss_label == "Never" else "dismiss"
+                ),
+            ).grid(row=button_row + 1, column=0, pady=(8, 0), sticky="w")
         root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
         root.bind("<Escape>", lambda _event: choose("dismiss"))
         root.lift()
+        root.focus_force()
         root.attributes("-topmost", True)
-        root.after(100, lambda: root.attributes("-topmost", False))
+        root.after(50, root.focus_force)
+        root.after(150, lambda: root.attributes("-topmost", False))
         root.mainloop()
         return result["value"]
 
@@ -737,9 +756,13 @@ class ProactivePromptDialog:
                     value, install, never, profile
                 )
             else:
-                result["value"] = self._ide_selection_result(
-                    value,
-                    profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                result["value"] = (
+                    self._never_ide_selection()
+                    if value == "never"
+                    else self._ide_selection_result(
+                        value,
+                        profile=(None if profile_options else _PROFILE_NOT_SELECTED),
+                    )
                 )
             done.set()
             app.shutdown()
@@ -789,7 +812,13 @@ class ProactivePromptDialog:
                         f"Later ({option})",
                         on_click=lambda option=option: choose(f"snooze_{option}"),
                     )
-                ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
+                if self.dismiss_label:
+                    ui.button(
+                        self.dismiss_label,
+                        on_click=lambda: choose(
+                            "never" if self.dismiss_label == "Never" else "dismiss"
+                        ),
+                    )
 
         ui.run(
             title=self.title,
@@ -856,7 +885,15 @@ class ProactivePromptDialog:
                         yield Button(dialog.action_label, id="action")
                         for index, option in enumerate(dialog.snooze_options):
                             yield Button(f"Later ({option})", id=f"snooze-{index}")
-                        yield Button(dialog.dismiss_label, id="dismiss")
+                        if dialog.dismiss_label:
+                            yield Button(
+                                dialog.dismiss_label,
+                                id=(
+                                    "never"
+                                    if dialog.dismiss_label == "Never"
+                                    else "dismiss"
+                                ),
+                            )
 
             def _selection(self):
                 install = []
@@ -901,11 +938,17 @@ class ProactivePromptDialog:
                         ),
                     )
                 else:
-                    value = dialog._ide_selection_result(
-                        "dismiss",
-                        profile=(
-                            None if dialog._profile_options() else _PROFILE_NOT_SELECTED
-                        ),
+                    value = (
+                        dialog._never_ide_selection()
+                        if button_id == "never"
+                        else dialog._ide_selection_result(
+                            "dismiss",
+                            profile=(
+                                None
+                                if dialog._profile_options()
+                                else _PROFILE_NOT_SELECTED
+                            ),
+                        )
                     )
                 self.result = value
                 self.exit()
@@ -948,14 +991,17 @@ class ProactivePromptDialog:
                 text="Later",
                 command=lambda: choose("snooze_" + snooze.get()),
             ).grid(row=1, column=2, padx=(0, 8))
-        ttk.Button(
-            frame, text=self.dismiss_label, command=lambda: choose("dismiss")
-        ).grid(row=1, column=3)
+        if self.dismiss_label:
+            ttk.Button(
+                frame, text=self.dismiss_label, command=lambda: choose("dismiss")
+            ).grid(row=1, column=3)
         root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
         root.bind("<Escape>", lambda _event: choose("dismiss"))
         root.lift()
+        root.focus_force()
         root.attributes("-topmost", True)
-        root.after(100, lambda: root.attributes("-topmost", False))
+        root.after(50, root.focus_force)
+        root.after(150, lambda: root.attributes("-topmost", False))
         root.mainloop()
         return result["value"]
 
@@ -980,7 +1026,8 @@ class ProactivePromptDialog:
                         f"Later ({option})",
                         on_click=lambda option=option: choose(f"snooze_{option}"),
                     )
-                ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
+                if self.dismiss_label:
+                    ui.button(self.dismiss_label, on_click=lambda: choose("dismiss"))
 
         ui.run(
             title=self.title,
@@ -1008,7 +1055,15 @@ class ProactivePromptDialog:
                         yield Button(dialog.action_label, id="action")
                         for index, option in enumerate(dialog.snooze_options):
                             yield Button(f"Later ({option})", id=f"snooze_{index}")
-                        yield Button(dialog.dismiss_label, id="dismiss")
+                        if dialog.dismiss_label:
+                            yield Button(
+                                dialog.dismiss_label,
+                                id=(
+                                    "never"
+                                    if dialog.dismiss_label == "Never"
+                                    else "dismiss"
+                                ),
+                            )
 
             def on_button_pressed(self, event: Button.Pressed) -> None:
                 button_id = event.button.id or "dismiss"

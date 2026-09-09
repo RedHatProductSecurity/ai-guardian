@@ -923,6 +923,17 @@ def extract_tool_result(hook_data):
                 logger.info(
                     f"extract_tool_result: tool_name from tool_use.name = {tool_name}"
                 )
+        # Cursor MCP hooks provide the server and tool separately.  Use the
+        # same composite identifier as the permission pipeline so ignore rules
+        # and violation records correlate across before/after hooks.
+        if not tool_name and hook_data.get("mcp_server_name"):
+            tool_name = f"mcp__{hook_data['mcp_server_name']}__unknown"
+        elif (
+            hook_data.get("mcp_server_name")
+            and tool_name
+            and not str(tool_name).startswith("mcp__")
+        ):
+            tool_name = f"mcp__{hook_data['mcp_server_name']}__{tool_name}"
         if not tool_name:
             tool_name = "unknown"
             logger.info("extract_tool_result: tool_name defaulted to 'unknown'")
@@ -938,6 +949,20 @@ def extract_tool_result(hook_data):
             return None, tool_name
 
         output = None
+
+        def _cursor_result_value(value):
+            """Convert Cursor's JSON-stringified result to scanable text."""
+            if isinstance(value, str):
+                return value
+            if isinstance(value, (dict, list)):
+                for key in ("output", "content", "result", "stdout", "stderr"):
+                    if isinstance(value, dict) and value.get(key) is not None:
+                        selected = value[key]
+                        if isinstance(selected, (dict, list)):
+                            return json.dumps(selected, ensure_ascii=False)
+                        return str(selected)
+                return json.dumps(value, ensure_ascii=False)
+            return str(value) if value is not None else None
 
         # Claude Code format: tool_response field
         if "tool_response" in hook_data:
@@ -970,6 +995,17 @@ def extract_tool_result(hook_data):
             elif isinstance(tool_response, str):
                 # Direct string response
                 output = tool_response
+
+        # Cursor PostToolUse/afterMCPExecution uses tool_output or
+        # result_json.  Both may be JSON strings; scan the complete value when
+        # it has no conventional output field so MCP data cannot hide from the
+        # post-tool scanner.
+        if output is None:
+            for key in ("tool_output", "result_json"):
+                if key in hook_data:
+                    output = _cursor_result_value(hook_data.get(key))
+                    if output is not None:
+                        break
 
         # Fallback: check for direct output field
         if not output and "output" in hook_data:
@@ -1822,9 +1858,12 @@ def _process_hook_data(hook_data, daemon_state=None):
 
         # Handle session lifecycle events — early return, no scanning
         if hook_event == HookEvent.SESSION_END:
-            return _handle_session_end(
+            result = _handle_session_end(
                 hook_data, daemon_state, hook_session_id, adapter
             )
+            if ide_type == IDEType.CURSOR:
+                result["output"] = "{}"
+            return result
 
         if hook_event == HookEvent.POST_COMPACT:
             try:
@@ -1849,13 +1888,24 @@ def _process_hook_data(hook_data, daemon_state=None):
             HookEvent.PRE_COMPACT,
             HookEvent.STOP,
             HookEvent.INTERRUPT,
-            HookEvent.SUBAGENT_START,
             HookEvent.SUBAGENT_STOP,
+            HookEvent.POST_TOOL_USE_FAILURE,
+            HookEvent.AFTER_FILE_EDIT,
+            HookEvent.AFTER_TAB_FILE_EDIT,
+            HookEvent.AFTER_AGENT_RESPONSE,
+            HookEvent.AFTER_AGENT_THOUGHT,
+            HookEvent.WORKSPACE_OPEN,
         ):
             # Codex exposes these lifecycle notifications, but they do not
             # provide a security-enforceable content or permission decision.
             # Keep the hooks installed and observable without treating them as
             # prompts or tool calls.
+            # Cursor command hooks use JSON responses.  The lifecycle events
+            # above do not expose a decision/output channel, so acknowledge
+            # them with an empty object without echoing event payloads such as
+            # MCP errors or agent content.
+            if ide_type == IDEType.CURSOR:
+                return {"output": "{}", "exit_code": 0}
             return {"output": None, "exit_code": 0}
 
         # SESSION_START: agents that fire a dedicated session-open event (e.g. Gemini CLI
@@ -1976,6 +2026,7 @@ def _process_hook_data(hook_data, daemon_state=None):
         if hook_event in (
             HookEvent.PRE_TOOL_USE,
             HookEvent.BEFORE_READ_FILE,
+            HookEvent.SUBAGENT_START,
             HookEvent.PERMISSION_REQUEST,
         ):
             tool_name = normalized.tool_name
@@ -2001,6 +2052,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             in (
                 HookEvent.PRE_TOOL_USE,
                 HookEvent.BEFORE_READ_FILE,
+                HookEvent.SUBAGENT_START,
                 HookEvent.PERMISSION_REQUEST,
             )
             and HAS_TOOL_POLICY
@@ -2202,6 +2254,7 @@ def _process_hook_data(hook_data, daemon_state=None):
         if hook_event in (
             HookEvent.PRE_TOOL_USE,
             HookEvent.BEFORE_READ_FILE,
+            HookEvent.SUBAGENT_START,
             HookEvent.PERMISSION_REQUEST,
         ):
             # PreToolUse, PermissionRequest, or beforeReadFile hook
