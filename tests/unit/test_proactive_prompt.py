@@ -255,6 +255,49 @@ def test_tkinter_subprocess_failure_returns_none_for_fallback():
         assert dialog._show_tkinter_subprocess() is None
 
 
+def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    failed = SimpleNamespace(returncode=1, stdout="", stderr="Tk failed")
+    with (
+        patch("platform.system", return_value="Darwin"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._nicegui_available"
+        ) as nicegui_available,
+        patch(
+            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
+        ),
+        patch("subprocess.run", return_value=failed) as subprocess_run,
+        patch.object(
+            dialog, "_show_native_fallback", return_value="action"
+        ) as fallback,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
+    subprocess_run.assert_called_once()
+    fallback.assert_called_once_with()
+    nicegui_available.assert_not_called()
+
+
+def test_tkinter_subprocess_failure_logs_complete_diagnostic(caplog):
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    diagnostic = "Traceback (most recent call last):\n" + ("diagnostic detail\n" * 100)
+    failed = SimpleNamespace(returncode=1, stdout="", stderr=diagnostic)
+
+    with (
+        caplog.at_level("WARNING", logger="ai_guardian.tray.proactive_prompt"),
+        patch("subprocess.run", return_value=failed),
+    ):
+        assert dialog._show_tkinter_subprocess() is None
+
+    assert diagnostic in caplog.text
+
+
 def test_prompt_falls_back_to_headless_when_ui_unavailable():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (

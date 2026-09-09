@@ -19,7 +19,8 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
 
     Expected User Experience:
     - User sees "Set Up AI Guardian".
-    - User can choose "Set Up Now", "Later", or "Don't Ask Again".
+    - User can choose "Set Up Now", choose a snooze duration via "Later...",
+      or "Don't Ask Again".
     - Remote-only daemon targets do not show this prompt.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])

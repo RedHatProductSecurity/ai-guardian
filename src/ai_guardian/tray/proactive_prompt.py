@@ -529,7 +529,7 @@ class ProactivePromptDialog:
                     else value
                 )
             stderr = (result.stderr or "").strip()
-            detail = f": {stderr[:500]}" if stderr else ""
+            detail = f": {stderr}" if stderr else ""
             logger.warning(
                 "Tkinter proactive prompt exited with code %s%s",
                 result.returncode,

@@ -74,6 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **macOS proactive prompt fallback**: Keep native AppleScript dialogs within
+  the three-button limit while preserving all snooze durations through a
+  platform-compatible list picker, and retain complete Tkinter failure
+  diagnostics (#2268)
+
 - **Codex PostToolUse fail-open output**: Emit valid JSON when an unexpected
   hook-processing error occurs, while preserving fail-open behavior (#2267)
 
