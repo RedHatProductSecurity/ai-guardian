@@ -24,6 +24,7 @@ from ai_guardian.hook_processing import (
     process_hook_input,
     HAS_VIOLATION_LOGGER,
 )
+from ai_guardian.hook_adapters import CodexAdapter, detect_adapter
 from ai_guardian.cli_handlers import (
     _handle_violations_command,
     _get_client_timeout,
@@ -50,6 +51,22 @@ def _is_stop_requested():
     except Exception:
         pass  # intentionally silent — optional dependency
     return False
+
+
+def _is_codex_post_tool_use(hook_data):
+    """Return whether a hook payload requires a JSON PostToolUse response."""
+    if not isinstance(hook_data, dict):
+        return False
+
+    event_name = hook_data.get("hook_event_name") or hook_data.get("hookEventName", "")
+    if event_name != "PostToolUse":
+        return False
+
+    try:
+        return isinstance(detect_adapter(hook_data), CodexAdapter)
+    except Exception as e:
+        logger.debug("Unable to identify Codex PostToolUse response: %s", e)
+        return False
 
 
 def _ensure_daemon_started():
@@ -2402,9 +2419,14 @@ def main():
         else:
             response = process_hook_input()
 
-    # Output JSON to stdout if needed (for Cursor)
-    if response.get("output"):
-        print(response["output"], flush=True)  # Force flush for Cursor
+    # Output JSON to stdout if needed (for Cursor). Codex requires a JSON
+    # response for PostToolUse even when processing fails open; keep this
+    # boundary fallback for responses from an older or unavailable daemon.
+    output = response.get("output")
+    if not output and _is_codex_post_tool_use(hook_data):
+        output = "{}"
+    if output:
+        print(output, flush=True)  # Force flush for Cursor
         sys.stdout.flush()  # Explicit flush for compatibility
 
     # Exit with appropriate code
