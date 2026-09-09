@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **First-run tray security profile onboarding**: When no global
+  `ai-guardian.json` exists, automatic IDE setup offers the built-in security
+  profiles with `@standard` recommended by default, an explicit skip option,
+  and profile-before-hook setup ordering without overwriting existing config
+  (#2262)
+
 - **Global Codex MCP registration and setup checks**: Register AI Guardian in
   Codex's user-level `config.toml` (respecting `CODEX_HOME`), preserve existing
   configuration, migrate stale project-root entries, and distinguish missing
