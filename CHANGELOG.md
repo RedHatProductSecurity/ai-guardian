@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `context.ide_type` for Codex and other integrations that share Claude Code's
   response protocol, while preserving existing response formatting (#2276).
 
+- **Gemini/Antigravity setup detection**: Require an agent-specific config file
+  or executable before treating shared `.gemini` directories as installed,
+  preventing false proactive setup prompts.
+
 - **Daemon startup recovery**: Serialize stale-state cleanup, write PID files
   atomically, preserve responsive sockets when PID state is missing or corrupt,
   and allow reset to recover a daemon using its startup lock.

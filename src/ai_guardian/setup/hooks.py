@@ -256,6 +256,7 @@ class IDESetup:
         "gemini": {
             "name": "Google Gemini CLI",
             "mcp_client_name": "gemini-cli",
+            "executable": "gemini",
             "config_path": "~/.gemini/settings.json",
             "config_dir_env_var": None,
             "config_filename": "settings.json",
@@ -274,6 +275,7 @@ class IDESetup:
         "antigravity": {
             "name": "Antigravity CLI",
             "mcp_client_name": "antigravity",
+            "executable": "agy",
             "config_path": "~/.gemini/config/hooks.json",
             "config_dir_env_var": None,
             "config_filename": "hooks.json",
@@ -1296,6 +1298,10 @@ class IDESetup:
                 ):
                     detected_ides.append(ide_type)
                 continue
+            if self.IDE_CONFIGS[ide_type].get("executable"):
+                if self._ide_has_install_evidence(ide_type):
+                    detected_ides.append(ide_type)
+                continue
             raw_path = self.get_config_path(ide_type)
             if not raw_path:
                 continue
@@ -1325,6 +1331,10 @@ class IDESetup:
                     Path(layer["path"]).expanduser().parent.is_dir()
                     for layer in self.get_cursor_config_layers()
                 ):
+                    detected.append(ide_type)
+                continue
+            if self.IDE_CONFIGS[ide_type].get("executable"):
+                if self._ide_has_install_evidence(ide_type):
                     detected.append(ide_type)
                 continue
             raw_path = self.get_config_path(ide_type)
@@ -1360,6 +1370,10 @@ class IDESetup:
         # the file itself is valid evidence.
         if ide_type == "crush":
             return config_path.is_file()
+
+        executable = self.IDE_CONFIGS.get(ide_type, {}).get("executable")
+        if executable:
+            return config_path.is_file() or shutil.which(executable) is not None
 
         # For file, plugin, extension, and script integrations, the parent is
         # the IDE's configuration directory. Requiring it to exist avoids
