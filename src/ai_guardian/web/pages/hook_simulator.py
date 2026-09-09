@@ -8,7 +8,7 @@ from unittest import mock as mock_patch
 
 from nicegui import run, ui
 
-from ai_guardian.constants import HookEvent
+from ai_guardian.constants import CODEX_DISPLAY_NAME, HookEvent
 from ai_guardian.logging_utils import quiet_logging
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.tui.hook_simulator import (
@@ -23,7 +23,7 @@ IDE_OPTIONS = [
     ("Claude Code", "claude"),
     ("Cline / ZooCode", "cline"),
     ("Crush", "crush"),
-    ("Codex", "codex"),
+    (CODEX_DISPLAY_NAME, "codex"),
     ("Cursor", "cursor"),
     ("Gemini CLI", "gemini"),
     ("GitHub Copilot", "copilot"),

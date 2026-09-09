@@ -15,7 +15,7 @@ changing an integration.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`); Cloud Agents use dashboard/API MCP | **Complete locally; project hooks available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
+| OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -34,7 +34,7 @@ changing an integration.
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
+| OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
@@ -59,7 +59,7 @@ integration guides.
 | Claude Code | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported |
 | Cursor desktop / local CLI | Command hooks | 6 managed Cursor events; other upstream events are normalized when explicitly configured | Supported |
 | GitHub Copilot | Command hooks | UserPromptSubmit, PreToolUse | Supported |
-| OpenAI Codex | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
+| OpenAI Codex (CLI + Desktop) | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
 | Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
 | Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
@@ -211,7 +211,7 @@ environment should provide `run_id` in their hook events when supported.
 
 Agents not listed above do not have transcript scanning support.
 
-### OpenAI Codex and ChatGPT desktop
+### OpenAI Codex (CLI + Desktop)
 
 AI Guardian supports the documented Codex hook interface used by Codex CLI and
 Codex mode in ChatGPT desktop. The official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
@@ -406,7 +406,7 @@ hook_adapters/
 ├── claude_code.py       # Claude Code (default fallback)
 ├── cursor.py            # Cursor IDE
 ├── copilot.py           # GitHub Copilot
-├── codex.py             # OpenAI Codex (extends ClaudeCodeAdapter)
+├── codex.py             # OpenAI Codex (CLI + Desktop) (extends ClaudeCodeAdapter)
 ├── windsurf.py          # Windsurf (extends ClaudeCodeAdapter)
 ├── gemini.py            # Google Gemini CLI
 ├── cline.py             # Cline / ZooCode
@@ -472,7 +472,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Cursor desktop / local CLI MCP | `~/.cursor/mcp.json` (AI Guardian install target) |
 | Cursor local project MCP (managed by Cursor, not Cloud setup) | `<project>/.cursor/mcp.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
-| OpenAI Codex | `~/.codex/hooks.json` |
+| OpenAI Codex (CLI + Desktop) | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
 | Gemini CLI | `~/.gemini/settings.json` |
 | Cline / ZooCode | `.clinerules/hooks/` (scripts) |

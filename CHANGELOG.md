@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Codex integration display name**: Rename setup, tray, doctor, and support
+  labels to `OpenAI Codex (CLI + Desktop)` while preserving the internal
+  `codex` identity, configuration paths, hook counts, and MCP status (#2275).
+
 ### Fixed
 
 - **Hook violation attribution**: Record the actual agent identity in

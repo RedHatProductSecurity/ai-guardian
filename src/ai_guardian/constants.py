@@ -6,6 +6,8 @@ typos and provide IDE discoverability.
 
 from enum import Enum
 
+CODEX_DISPLAY_NAME = "OpenAI Codex (CLI + Desktop)"
+
 
 class ActionMode(str, Enum):
     """Action modes for security policy enforcement."""

@@ -604,12 +604,24 @@ class TestCheckHooks:
                 "ai_guardian.setup.IDESetup.get_config_path",
                 return_value=str(hooks_path),
             ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.verify_ide_setup",
+                return_value={
+                    "healthy": True,
+                    "events": {
+                        event: "healthy"
+                        for event in IDESetup().expected_hook_manifest("codex")
+                    },
+                    "obsolete": [],
+                    "mcp_status": "healthy",
+                },
+            ),
         ):
             doctor = Doctor()
             result = doctor.check_hooks()
 
         assert result.status == CheckStatus.PASS
-        assert "5/5" in result.message
+        assert "OpenAI Codex (CLI + Desktop): 5/5 hooks; MCP: healthy" in result.message
 
     def test_missing_config_file_not_failure(self, _isolate_config_dir, tmp_path):
         """IDE detected but config file missing → not FAIL (e.g. Crush on CI)."""

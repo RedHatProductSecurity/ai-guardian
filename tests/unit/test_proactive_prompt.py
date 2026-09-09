@@ -657,7 +657,7 @@ def test_ide_health_notification_explains_configured_and_pending_counts():
         "IDE/CLI health check: 2 configured, 1 need setup.\n\n"
         "Configured:\n"
         "• Claude Code\n"
-        "• OpenAI Codex\n\n"
+        "• OpenAI Codex (CLI + Desktop)\n\n"
         "Needs setup:\n"
         "• Cursor IDE/CLI",
     )
@@ -889,7 +889,10 @@ def test_codex_setup_result_reports_managed_hook_count():
             ]
         )
 
-    assert "[PASS] OpenAI Codex: 5/5 hooks configured" in notify.call_args.args[1]
+    assert (
+        "[PASS] OpenAI Codex (CLI + Desktop): 5/5 hooks configured"
+        in notify.call_args.args[1]
+    )
 
 
 def test_setup_result_uses_final_verification_health_over_setup_return():

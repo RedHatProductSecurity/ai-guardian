@@ -640,7 +640,7 @@ class TestNormalization:
 
     def test_codex_shares_claude_format(self):
         adapter = CodexAdapter()
-        assert adapter.name == "OpenAI Codex"
+        assert adapter.name == "OpenAI Codex (CLI + Desktop)"
         assert adapter.ide_type == IDEType.CLAUDE_CODE
         assert adapter.agent_type == "codex"
 

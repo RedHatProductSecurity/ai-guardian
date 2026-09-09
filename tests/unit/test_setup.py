@@ -3894,10 +3894,12 @@ class TestMcpDefaultOn:
         """A second setup run can repair Codex MCP without rewriting hooks."""
         with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
             mock_instance = MockSetup.return_value
-            mock_instance.IDE_CONFIGS = {"codex": {"name": "OpenAI Codex"}}
+            mock_instance.IDE_CONFIGS = {
+                "codex": {"name": "OpenAI Codex (CLI + Desktop)"}
+            }
             mock_instance.setup_ide_hooks.return_value = (
                 False,
-                "ai-guardian hooks already configured for OpenAI Codex.",
+                "ai-guardian hooks already configured for OpenAI Codex (CLI + Desktop).",
             )
             mock_instance.verify_hooks_for_ide.return_value = {"healthy": True}
 

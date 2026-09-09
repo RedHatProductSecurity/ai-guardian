@@ -1,4 +1,4 @@
-"""OpenAI Codex hook adapter.
+"""OpenAI Codex (CLI + Desktop) hook adapter.
 
 Codex uses the same PascalCase format and JSON response structure as
 Claude Code, so this adapter extends BaseAgentAdapter.
@@ -11,11 +11,12 @@ import glob
 import os
 from typing import ClassVar, Dict, FrozenSet, List
 
+from ai_guardian.constants import CODEX_DISPLAY_NAME
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
 
 
 class CodexAdapter(BaseAgentAdapter):
-    """Adapter for OpenAI Codex.
+    """Adapter for OpenAI Codex (CLI + Desktop).
 
     Codex shares Claude Code's hook format (PascalCase events, same
     JSON response structure). Codex command hooks include the documented
@@ -47,7 +48,7 @@ class CodexAdapter(BaseAgentAdapter):
 
     @property
     def name(self) -> str:
-        return "OpenAI Codex"
+        return CODEX_DISPLAY_NAME
 
     @classmethod
     def can_handle(cls, hook_data: Dict) -> bool:

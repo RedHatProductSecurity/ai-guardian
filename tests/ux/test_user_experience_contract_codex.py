@@ -1,4 +1,4 @@
-"""User experience contracts for OpenAI Codex hook responses."""
+"""User experience contracts for OpenAI Codex (CLI + Desktop) hook responses."""
 
 import json
 from io import StringIO
