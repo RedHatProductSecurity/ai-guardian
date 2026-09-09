@@ -10,6 +10,7 @@ import os
 from typing import Dict, Optional
 
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
+from ai_guardian.hook_adapters.antigravity import AntigravityAdapter
 from ai_guardian.hook_adapters.cline import ClineAdapter
 from ai_guardian.hook_adapters.gemini import GeminiCLIAdapter
 from ai_guardian.hook_adapters.windsurf import WindsurfAdapter
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Ordered by detection specificity: most unique fields first.
 # Claude Code is last because it is the default fallback.
 ADAPTER_CLASSES = [
+    AntigravityAdapter,  # conversationId + workspacePaths (camelCase protojson)
     ClineAdapter,  # clineVersion field
     GeminiCLIAdapter,  # transcript_path field
     WindsurfAdapter,  # agent_action_name field
@@ -66,6 +68,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         ClineAdapter,
         KiroAdapter,
         AugmentAdapter,
+        AntigravityAdapter,
         OpenCodeAdapter,
         CrushAdapter,
         JunieAdapter,
@@ -152,6 +155,7 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.GEMINI_CLI: "gemini",
         IDEType.CLINE: "cline",
         IDEType.KIRO: "kiro",
+        IDEType.ANTIGRAVITY: "antigravity",
     }
     adapter_cls = ADAPTERS_BY_IDE_TYPE.get(
         _IDE_KEY_BY_TYPE.get(ide_type, ""), BaseAgentAdapter
@@ -175,6 +179,7 @@ __all__ = [
     "ClineAdapter",
     "KiroAdapter",
     "AugmentAdapter",
+    "AntigravityAdapter",
     "OpenCodeAdapter",
     "CrushAdapter",
     "JunieAdapter",
