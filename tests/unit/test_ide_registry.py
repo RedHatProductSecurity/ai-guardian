@@ -244,6 +244,9 @@ def test_registered_hook_adapters_cover_response_contract(ide_type):
 
     blocked = responses[1]
     assert blocked.get("_blocked") is True, ide_type
-    assert "synthetic-redacted-output" in str(responses[-1]), ide_type
+    if integration.post_output_transform:
+        assert "synthetic-redacted-output" in str(responses[-1]), ide_type
+    else:
+        assert "synthetic-redacted-output" not in str(responses[-1]), ide_type
     if isinstance(responses[0]["output"], str):
         json.loads(responses[0]["output"])
