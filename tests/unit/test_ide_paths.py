@@ -3,6 +3,7 @@
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -43,6 +44,11 @@ IDE_ENV_VARS = (
     "CRUSH_GLOBAL_CONFIG",
     "HOME",
     "USERPROFILE",
+)
+
+BASH_INSTALLER_TEST = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="install.sh is POSIX-only; Windows installer coverage uses install.ps1",
 )
 
 
@@ -302,6 +308,7 @@ def test_supply_chain_paths_follow_relocated_hook_and_plugin_homes(
     assert scanner.is_agent_config(str(opencode_home / "plugins" / "third-party.ts"))
 
 
+@BASH_INSTALLER_TEST
 def test_installer_detection_uses_relocated_directories(tmp_path):
     script = Path(__file__).parents[2] / "install.sh"
     content = script.read_text(encoding="utf-8")
@@ -355,6 +362,7 @@ def test_installer_detection_uses_relocated_directories(tmp_path):
     ]
 
 
+@BASH_INSTALLER_TEST
 def test_installer_detection_uses_explicit_config_files(tmp_path):
     script = Path(__file__).parents[2] / "install.sh"
     content = script.read_text(encoding="utf-8")

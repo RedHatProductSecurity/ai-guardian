@@ -114,6 +114,32 @@ uv run --extra dev python -m pytest tests/unit/test_<related>.py -v
 uv run --extra dev python -m pytest tests/unit/ -k "test_something" -v
 ```
 
+#### Cross-platform installer tests (Windows/WSL)
+
+`install.sh` is the POSIX installer and `install.ps1` is the Windows
+installer. Tests that execute `install.sh` through a Bash subprocess MUST be
+skipped when `sys.platform == "win32"`; keep the PowerShell installer tests
+active on Windows.
+
+Do not use `shutil.which("bash")` as the Windows guard. On GitHub-hosted
+Windows runners, `bash.exe` can be the WSL launcher even when no WSL
+distribution is installed, causing errors such as “Windows Subsystem for
+Linux has no installed distributions.” A Bash executable being discoverable
+does not mean that a usable POSIX environment is available.
+
+Use a platform marker for Bash-only tests, for example:
+
+```python
+BASH_INSTALLER_TEST = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason="install.sh is POSIX-only; Windows installer coverage uses install.ps1",
+)
+```
+
+On POSIX runners, run the Bash tests normally. A missing or unusable shell on
+those runners is an explicit test-environment problem, not a reason to make
+Windows invoke WSL.
+
 Or using pip:
 
 ```bash
