@@ -7,6 +7,7 @@ import re
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
 from ai_guardian.setup.utils import (
     _resolve_binary_path,
     _resolve_opencode_config,
@@ -114,10 +115,7 @@ def get_codex_mcp_config_path() -> Path:
     ``.codex/config.toml`` files are intentionally not returned here: AI
     Guardian installs its MCP server in the global user layer.
     """
-    codex_home = os.environ.get("CODEX_HOME")
-    if codex_home:
-        return Path(codex_home).expanduser() / "config.toml"
-    return Path.home() / ".codex" / "config.toml"
+    return resolve_ide_mcp_path("codex", "~/.codex/config.toml")
 
 
 def _cursor_project_root(cwd: Optional[str] = None) -> Path:
@@ -145,9 +143,15 @@ def get_mcp_config_path(
     if not mcp_ide:
         return None
 
+    if ide_type == "copilot":
+        return resolve_ide_mcp_path(ide_type, None)
+
     config_file = mcp_ide.get("config_file", "")
     if not config_file:
         return None
+    if ide_type == "crush" and scope == "project":
+        project_root = Path(project_dir).expanduser() if project_dir else Path.cwd()
+        return project_root / ".crush.json"
     if ide_type == "cursor":
         if scope == "project":
             # The explicit project argument is the selected workspace. Avoid
@@ -164,7 +168,7 @@ def get_mcp_config_path(
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
     if ide_type == "opencode":
         return _resolve_opencode_config()
-    return Path(config_file).expanduser()
+    return resolve_ide_mcp_path(ide_type, config_file)
 
 
 def _cursor_mcp_entry_exists(path: Path) -> bool:
@@ -523,7 +527,11 @@ def _install_mcp_config(
 
     # Warn if MCP entry exists in settings.json (hooks file) for Claude
     if ide_type == "claude":
-        settings_path = Path("~/.claude/settings.json").expanduser()
+        settings_path = Path(
+            resolve_ide_config_path(
+                "claude", "~/.claude/settings.json", filename="settings.json"
+            )
+        ).expanduser()
         try:
             if settings_path.exists():
                 with open(settings_path, "r") as f:
@@ -532,7 +540,7 @@ def _install_mcp_config(
                     print(
                         "  MCP: Warning: ai-guardian MCP entry found in "
                         f"{settings_path} (hooks file).\n"
-                        "  MCP servers should be in ~/.claude.json. "
+                        f"  MCP servers should be in {config_path}. "
                         "Remove the entry from settings.json to avoid conflicts."
                     )
         except (json.JSONDecodeError, OSError) as e:

@@ -183,15 +183,49 @@ def is_mcp_installed():
     import json
     from pathlib import Path
 
-    for config_file, key in _IDE_MCP_CONFIGS:
+    def has_mcp_entry(path, key):
         try:
-            path = Path(config_file).expanduser()
-            if path.exists():
-                config = json.loads(path.read_text(encoding="utf-8"))
-                if "ai-guardian" in config.get(key, {}):
-                    return True
-        except Exception:
-            continue
+            if not path.is_file():
+                return False
+            raw = path.read_text(encoding="utf-8")
+            if path.suffix.lower() == ".jsonc":
+                from ai_guardian.setup.mcp import _strip_jsonc_comments
+
+                raw = _strip_jsonc_comments(raw)
+            config = json.loads(raw)
+            if not isinstance(config, dict):
+                return False
+            return "ai-guardian" in config.get(key, {})
+        except (OSError, TypeError, ValueError):
+            return False
+
+    try:
+        from ai_guardian.ide_paths import resolve_ide_config_path
+        from ai_guardian.setup.mcp import (
+            _MCP_IDE_CONFIGS,
+            get_mcp_config_path,
+        )
+
+        claude_settings = Path(
+            resolve_ide_config_path(
+                "claude", "~/.claude/settings.json", filename="settings.json"
+            )
+        ).expanduser()
+        if has_mcp_entry(claude_settings, "mcpServers"):
+            return True
+
+        for ide_type, ide_config in _MCP_IDE_CONFIGS.items():
+            if ide_type in ("codex", "cursor"):
+                continue
+            path = get_mcp_config_path(ide_type)
+            if path is not None and has_mcp_entry(path, ide_config["config_key"]):
+                return True
+    except ImportError:
+        # Keep the daemon's health check usable if optional setup modules are
+        # unavailable in a minimal installation.
+        for config_file, key in _IDE_MCP_CONFIGS:
+            if has_mcp_entry(Path(config_file).expanduser(), key):
+                return True
 
     try:
         from ai_guardian.setup.mcp import verify_cursor_mcp_config

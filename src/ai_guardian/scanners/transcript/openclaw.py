@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Dict, List, Optional
 
+from ai_guardian.ide_paths import get_ide_home
 from ai_guardian.scanners.transcript.base import TranscriptAdapter
 from ai_guardian.scanners.transcript.common import (
     _discover_path,
@@ -24,9 +25,15 @@ logger = logging.getLogger(__name__)
 def get_openclaw_transcripts_dir() -> Optional[str]:
     """Find the OpenClaw transcripts directory.
 
-    Checks ``OPENCLAW_STATE_DIR`` env var first, then the default
+    Checks OpenClaw's relocated state/home directory first, then the default
     ``~/.openclaw/transcripts`` path.
     """
+    relocated_home = get_ide_home("openclaw")
+    if relocated_home:
+        relocated = relocated_home / "transcripts"
+        if relocated.is_dir():
+            return str(relocated)
+
     return _discover_path("OPENCLAW_STATE_DIR", "~/.openclaw/transcripts")
 
 

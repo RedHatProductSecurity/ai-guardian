@@ -415,6 +415,12 @@ The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *dur
 | `AI_GUARDIAN_IDE_TYPE` | Override IDE auto-detection | Auto-detect |
 | `AI_GUARDIAN_PATTERN_TOKEN` | Default pattern server auth token (all sections) | None |
 
+IDE-specific homes such as `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
+`CURSOR_CONFIG_DIR`, `COPILOT_HOME`, and `GEMINI_CLI_HOME` are honored by setup,
+MCP registration, verification, and supported session discovery. See the
+[IDE-specific path reference](docs/AGENT_SUPPORT.md#ide-specific-home-and-configuration-paths)
+for the complete variable list, precedence rules, and project-local behavior.
+
 Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`, `config_file_scanning`) can use its own pattern server with independent auth via `token_env` or `token_file`. See [docs/PATTERN_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers).
 
 ## Requirements

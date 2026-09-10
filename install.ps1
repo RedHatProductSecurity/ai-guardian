@@ -146,19 +146,19 @@ function Detect-InstalledAgents {
     $claudeDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME ".claude" }
     if (Test-Path $claudeDir -PathType Container) { $agents += "claude" }
 
-    $cursorDir = Join-Path $HOME ".cursor"
+    $cursorDir = if ($env:CURSOR_CONFIG_DIR) { $env:CURSOR_CONFIG_DIR } else { Join-Path $HOME ".cursor" }
     if (Test-Path $cursorDir -PathType Container) { $agents += "cursor" }
 
-    $copilotDir = Join-Path $HOME ".github\hooks"
+    $copilotDir = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME ".github\hooks" }
     if (Test-Path $copilotDir -PathType Container) { $agents += "copilot" }
 
-    $codexDir = Join-Path $HOME ".codex"
+    $codexDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
     if (Test-Path $codexDir -PathType Container) { $agents += "codex" }
 
     $windsurfDir = Join-Path $HOME ".codeium\windsurf"
     if (Test-Path $windsurfDir -PathType Container) { $agents += "windsurf" }
 
-    $geminiDir = Join-Path $HOME ".gemini"
+    $geminiDir = if ($env:GEMINI_CLI_HOME) { $env:GEMINI_CLI_HOME } else { Join-Path $HOME ".gemini" }
     if (Test-Path $geminiDir -PathType Container) { $agents += "gemini" }
 
     $augmentDir = Join-Path $HOME ".augment"
@@ -169,26 +169,45 @@ function Detect-InstalledAgents {
     # for automatic setup and leave an explicit -IDE zoocode path available
     # when the project is known to use ZooCode.
     $clineDir = Join-Path (Get-Location) ".clinerules"
-    if (Test-Path $clineDir -PathType Container) { $agents += "cline" }
+    if (Test-Path $clineDir -PathType Container) {
+        $agents += "cline"
+    } elseif ($env:CLINE_DATA_DIR -or $env:CLINE_STORAGE_DIR) {
+        $clineHome = if ($env:CLINE_DATA_DIR) { $env:CLINE_DATA_DIR } else { $env:CLINE_STORAGE_DIR }
+        if (Test-Path $clineHome -PathType Container) {
+            $agents += "cline"
+        }
+    }
 
     $kiroProjectDir = Join-Path (Get-Location) ".kiro"
-    if (Test-Path $kiroProjectDir -PathType Container) { $agents += "kiro" }
+    if (Test-Path $kiroProjectDir -PathType Container) {
+        $agents += "kiro"
+    } elseif ($env:KIRO_HOME -and (Test-Path $env:KIRO_HOME -PathType Container)) {
+        $agents += "kiro"
+    }
 
     $junieProjectDir = Join-Path (Get-Location) ".junie"
-    if (Test-Path $junieProjectDir -PathType Container) { $agents += "junie" }
+    if (Test-Path $junieProjectDir -PathType Container) {
+        $agents += "junie"
+    } elseif ($env:JUNIE_HOME -and (Test-Path $env:JUNIE_HOME -PathType Container)) {
+        $agents += "junie"
+    }
 
     $crushProjectFile = Join-Path (Get-Location) ".crush.json"
-    if (Test-Path $crushProjectFile -PathType Leaf) { $agents += "crush" }
+    if (Test-Path $crushProjectFile -PathType Leaf) {
+        $agents += "crush"
+    } elseif ($env:CRUSH_GLOBAL_CONFIG -and (Test-Path $env:CRUSH_GLOBAL_CONFIG -PathType Leaf)) {
+        $agents += "crush"
+    }
 
     # Plugin/extension agents are detected from their parent configuration
     # directory so the installer can create the integration on first setup.
-    $opencodeDir = Join-Path $HOME ".config\opencode"
+    $opencodeDir = if ($env:OPENCODE_CONFIG) { Split-Path -Parent $env:OPENCODE_CONFIG } elseif ($env:OPENCODE_CONFIG_DIR) { $env:OPENCODE_CONFIG_DIR } else { Join-Path $HOME ".config\opencode" }
     if (Test-Path $opencodeDir -PathType Container) { $agents += "opencode" }
 
-    $aiderdeskDir = Join-Path $HOME ".aider-desk\extensions"
+    $aiderdeskDir = if ($env:AIDER_DESK_DIR) { $env:AIDER_DESK_DIR } elseif ($env:AIDER_DESK_HOME_DIR) { $env:AIDER_DESK_HOME_DIR } else { Join-Path $HOME ".aider-desk\extensions" }
     if (Test-Path $aiderdeskDir -PathType Container) { $agents += "aiderdesk" }
 
-    $openclawDir = Join-Path $HOME ".openclaw\plugins"
+    $openclawDir = if ($env:OPENCLAW_CONFIG_PATH) { Split-Path -Parent $env:OPENCLAW_CONFIG_PATH } elseif ($env:OPENCLAW_STATE_DIR) { $env:OPENCLAW_STATE_DIR } elseif ($env:OPENCLAW_HOME) { $env:OPENCLAW_HOME } else { Join-Path $HOME ".openclaw\plugins" }
     if (Test-Path $openclawDir -PathType Container) { $agents += "openclaw" }
 
     return $agents

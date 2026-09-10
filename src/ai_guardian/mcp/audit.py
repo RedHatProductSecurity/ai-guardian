@@ -225,7 +225,12 @@ class MCPAuditor:
                     mcp_key = "mcp_servers"
                 else:
                     with open(path, "r") as f:
-                        data = json.load(f)
+                        raw = f.read()
+                    if path.suffix.lower() == ".jsonc":
+                        from ai_guardian.setup.mcp import _strip_jsonc_comments
+
+                        raw = _strip_jsonc_comments(raw)
+                    data = json.loads(raw)
                     mcp_key = "mcpServers"
             except (json.JSONDecodeError, OSError, ValueError):
                 logger.debug("Could not read %s", path)
@@ -288,56 +293,61 @@ class MCPAuditor:
         supported IDE is covered automatically.
         """
         paths = []
+        seen = set()
 
-        # Claude Code: extra paths not in _MCP_IDE_CONFIGS
-        claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR", "")
-        if claude_config_dir:
-            paths.append(os.path.join(claude_config_dir, "settings.json"))
-        paths.append("~/.claude/settings.json")
+        def add_path(path, only_existing: bool = False) -> None:
+            """Add one path once, comparing expanded paths but preserving text."""
+            if path is None:
+                return
+            candidate = Path(path).expanduser()
+            if only_existing and not candidate.exists():
+                return
+            key = os.path.normcase(str(candidate))
+            if key not in seen:
+                seen.add(key)
+                paths.append(str(path))
 
-        # Project-local Claude config
-        project_local = Path.cwd() / ".claude" / "settings.json"
-        if project_local.exists():
-            paths.append(str(project_local))
-
-        # All IDE configs from the canonical registry
+        # Claude's settings file is a hook configuration, not an MCP config,
+        # but older installations may contain MCP entries there and the audit
+        # must continue to report them.
         try:
             from ai_guardian.setup.mcp import (
                 _MCP_IDE_CONFIGS,
                 get_codex_mcp_config_path,
+                get_mcp_config_path,
+            )
+            from ai_guardian.ide_paths import resolve_ide_config_path
+
+            add_path(
+                resolve_ide_config_path(
+                    "claude", "~/.claude/settings.json", filename="settings.json"
+                )
             )
 
-            paths.append(str(get_codex_mcp_config_path()))
+            add_path(get_codex_mcp_config_path())
 
-            seen = set()
-            for ide_type, ide_cfg in _MCP_IDE_CONFIGS.items():
+            for ide_type in _MCP_IDE_CONFIGS:
                 if ide_type == "codex":
                     continue
-                cfg_file = ide_cfg.get("config_file")
-                if cfg_file and cfg_file not in seen:
-                    seen.add(cfg_file)
-                    expanded = os.path.expanduser(cfg_file)
-                    if os.path.isabs(expanded):
-                        paths.append(cfg_file)
-                    else:
-                        local = Path.cwd() / cfg_file
-                        if local.exists():
-                            paths.append(str(local))
+                add_path(
+                    get_mcp_config_path(ide_type), only_existing=ide_type == "crush"
+                )
 
             project_codex = Path.cwd() / ".codex" / "config.toml"
             if project_codex.exists():
-                paths.append(str(project_codex))
+                add_path(project_codex)
         except ImportError:
             # Fallback: hardcoded paths if setup module unavailable
-            paths.append("~/.claude.json")
-            paths.append("~/.cursor/mcp.json")
-            paths.append("~/.windsurf/mcp.json")
-            paths.append("~/.codex/config.toml")
+            add_path("~/.claude/settings.json")
+            add_path("~/.claude.json")
+            add_path("~/.cursor/mcp.json")
+            add_path("~/.windsurf/mcp.json")
+            add_path("~/.codex/config.toml")
 
         # VS Code / Copilot — project-local MCP config (not in _MCP_IDE_CONFIGS)
         vscode_mcp = Path.cwd() / ".vscode" / "mcp.json"
         if vscode_mcp.exists():
-            paths.append(str(vscode_mcp))
+            add_path(vscode_mcp)
 
         return paths
 
@@ -719,6 +729,38 @@ class MCPAuditor:
     def ide_label(config_path: str) -> str:
         """Map a config file path to a human-readable IDE name."""
         p = config_path.replace("\\", "/")
+        try:
+            from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS, get_mcp_config_path
+            from ai_guardian.ide_paths import resolve_ide_config_path
+
+            target = Path(config_path).expanduser()
+            claude_settings = resolve_ide_config_path(
+                "claude", "~/.claude/settings.json", filename="settings.json"
+            )
+            if target == Path(claude_settings).expanduser():
+                return "Claude"
+            for ide_type in _MCP_IDE_CONFIGS:
+                expected = get_mcp_config_path(ide_type)
+                if expected is not None and target == expected.expanduser():
+                    return {
+                        "claude": "Claude",
+                        "cursor": "Cursor",
+                        "copilot": "GitHub Copilot",
+                        "codex": CODEX_DISPLAY_NAME,
+                        "windsurf": "Windsurf",
+                        "gemini": "Gemini CLI",
+                        "cline": "Cline",
+                        "zoocode": "ZooCode",
+                        "augment": "Augment",
+                        "kiro": "Kiro",
+                        "junie": "Junie",
+                        "aiderdesk": "AiderDesk",
+                        "openclaw": "OpenClaw",
+                        "opencode": "OpenCode",
+                        "crush": "Crush",
+                    }.get(ide_type, "Unknown")
+        except (ImportError, OSError, TypeError, ValueError):
+            pass  # intentionally silent — label lookup is best-effort
         if ".claude.json" in p or ".claude/settings.json" in p or ".claude/" in p:
             return "Claude"
         if ".cursor/" in p:

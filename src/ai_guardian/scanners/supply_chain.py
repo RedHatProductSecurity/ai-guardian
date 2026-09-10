@@ -20,6 +20,12 @@ import re
 from typing import Any, Dict, List, Optional, Tuple
 
 from ai_guardian.config.utils import is_feature_enabled
+from ai_guardian.ide_paths import (
+    get_explicit_ide_config_path,
+    resolve_ide_config_path,
+    resolve_ide_mcp_path,
+    resolve_opencode_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +57,85 @@ SELF_ALLOWLIST = [
     "ai-guardian.ts",
     "ai-guardian/index.ts",
 ]
+
+
+def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
+    """Return default and relocated agent config/plugin path patterns.
+
+    The static patterns remain the compatibility baseline. Dynamic paths add
+    the user-level locations selected by documented IDE environment variables
+    so supply-chain checks follow setup and MCP verification.
+    """
+    paths: List[str] = []
+
+    def add(path: Optional[str]) -> None:
+        if not path:
+            return
+        expanded = os.path.expanduser(str(path)).replace("\\", "/")
+        if expanded not in paths:
+            paths.append(expanded)
+
+    home = os.path.expanduser("~").replace("\\", "/")
+    patterns = AGENT_CONFIG_PATHS_HOME + (PLUGIN_PATHS_HOME if include_plugins else [])
+    for pattern in patterns:
+        add(f"{home}/{pattern}")
+
+    hook_specs = (
+        ("claude", "~/.claude/settings.json", "settings.json", ()),
+        ("claude", "~/.claude/settings.local.json", "settings.local.json", ()),
+        ("cursor", "~/.cursor/hooks.json", "hooks.json", ()),
+        ("copilot", "~/.github/hooks/hooks.json", "hooks.json", ("hooks",)),
+        ("codex", "~/.codex/hooks.json", "hooks.json", ()),
+        ("gemini", "~/.gemini/settings.json", "settings.json", ()),
+    )
+    for ide_type, default_path, filename, env_subdir in hook_specs:
+        add(
+            resolve_ide_config_path(
+                ide_type,
+                default_path,
+                filename=filename,
+                env_subdir=env_subdir,
+            )
+        )
+
+    if include_plugins:
+        plugin_specs = (
+            ("opencode", "~/.config/opencode/plugins", "*.ts", ("plugins",)),
+            ("aiderdesk", "~/.aider-desk/extensions", "*/index.ts", ("extensions",)),
+            ("openclaw", "~/.openclaw/plugins", "*/index.ts", ("plugins",)),
+        )
+        for ide_type, default_path, filename, env_subdir in plugin_specs:
+            add(
+                resolve_ide_config_path(
+                    ide_type,
+                    default_path,
+                    filename=filename,
+                    env_subdir=env_subdir,
+                )
+            )
+
+    mcp_specs = (
+        ("claude", "~/.claude.json"),
+        ("cursor", "~/.cursor/mcp.json"),
+        ("codex", "~/.codex/config.toml"),
+        ("windsurf", "~/.windsurf/mcp.json"),
+        ("gemini", "~/.gemini/settings.json"),
+        ("cline", "~/.cline/mcp_settings.json"),
+        ("zoocode", "~/.cline/mcp_settings.json"),
+        ("augment", "~/.augment/settings.json"),
+        ("kiro", "~/.kiro/settings.json"),
+        ("junie", "~/.junie/mcp.json"),
+        ("aiderdesk", "~/.aider-desk/settings.json"),
+        ("openclaw", "~/.openclaw/settings.json"),
+    )
+    for ide_type, default_path in mcp_specs:
+        add(str(resolve_ide_mcp_path(ide_type, default_path) or ""))
+    add(str(resolve_opencode_config()))
+
+    add(str(get_explicit_ide_config_path("openclaw") or ""))
+    add(str(get_explicit_ide_config_path("crush") or ""))
+    return paths
+
 
 _PATTERN_CATEGORIES = {
     "download_and_execute": [
@@ -224,22 +309,13 @@ class SupplyChainScanner:
         if not file_path:
             return False
 
-        for pattern in AGENT_CONFIG_PATHS_HOME:
-            home = os.path.expanduser("~").replace("\\", "/")
-            full_pattern = f"{home}/{pattern}"
-            if _matches_path_pattern(file_path, full_pattern):
+        for pattern in get_agent_config_paths(include_plugins=self.scan_plugins):
+            if _matches_path_pattern(file_path, pattern):
                 return True
 
         for pattern in AGENT_CONFIG_PATHS_PROJECT:
             if _matches_path_pattern(file_path, pattern):
                 return True
-
-        if self.scan_plugins:
-            for pattern in PLUGIN_PATHS_HOME:
-                home = os.path.expanduser("~").replace("\\", "/")
-                full_pattern = f"{home}/{pattern}"
-                if _matches_path_pattern(file_path, full_pattern):
-                    return True
 
         return False
 

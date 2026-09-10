@@ -1221,23 +1221,11 @@ class FileScanner:
     def scan_agent_configs(self) -> None:
         """Scan known agent configuration files for supply chain threats."""
         import glob as glob_mod
-        from ai_guardian.scanners.supply_chain import (
-            AGENT_CONFIG_PATHS_HOME,
-            PLUGIN_PATHS_HOME,
-        )
+        from ai_guardian.scanners.supply_chain import get_agent_config_paths
 
-        home = os.path.expanduser("~")
         paths_to_scan = []
 
-        for rel_path in AGENT_CONFIG_PATHS_HOME:
-            full = os.path.join(home, rel_path)
-            if "*" in full:
-                paths_to_scan.extend(glob_mod.glob(full))
-            elif os.path.isfile(full):
-                paths_to_scan.append(full)
-
-        for rel_path in PLUGIN_PATHS_HOME:
-            full = os.path.join(home, rel_path)
+        for full in get_agent_config_paths():
             if "*" in full:
                 paths_to_scan.extend(glob_mod.glob(full))
             elif os.path.isfile(full):

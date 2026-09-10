@@ -6,6 +6,8 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ai_guardian.ide_paths import resolve_ide_session_dir
+
 TITLE_MAX_LENGTH = 80
 
 
@@ -290,8 +292,12 @@ class SessionAdapter:
         if not info:
             return None
 
+        env_keys = []
         env_key = info.get("env", "")
         if env_key:
+            env_keys.append(env_key)
+        env_keys.extend(info.get("env_aliases", ()))
+        for env_key in env_keys:
             env_val = os.environ.get(env_key, "")
             if env_val:
                 return Path(os.path.expandvars(env_val)).expanduser()
@@ -305,6 +311,13 @@ class SessionAdapter:
 
         default = info.get(key, "")
         if default:
+            home_ide = info.get("home_ide")
+            if home_ide:
+                return resolve_ide_session_dir(
+                    home_ide,
+                    default,
+                    subdir=tuple(info.get("home_subdir", ())),
+                )
             return Path(os.path.expandvars(default)).expanduser()
 
         return None

@@ -38,6 +38,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **IDE-specific home directory support (#2288)**: Centralize documented
+  environment-variable path resolution across hook setup, MCP registration and
+  audit, verification, session discovery, plugin/extension paths, and both
+  installers. Preserve project-local targets and existing defaults, including
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME`; document precedence and supported
+  variables in the agent support reference.
+
 - **Cursor desktop/CLI hooks and MCP integration**: Normalize Cursor's six
   managed command-hook events, recognize additional upstream MCP/failure
   payloads without treating them as required setup, install local desktop
