@@ -84,8 +84,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, while keeping setup focused on its five managed hooks; add layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
 
 - **Per-IDE hook E2E matrix**: Add isolated setup, verification, MCP-registration,
-  and representative runtime checks for every supported external integration;
-  release readiness now reports failures by IDE and hook event (#2248)
+  and managed-lifecycle runtime checks for every supported external integration;
+  the canonical IDE registry keeps adapter, setup, installer, documentation,
+  and release-readiness matrices synchronized (#2248, #2286)
 
 ### Documentation
 
@@ -95,8 +96,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **IDE/agent integration checklist**: Consolidated implementation, setup,
   testing, manual acceptance, documentation, and release-readiness guidance
-  in `docs/IDE_INTEGRATION_CHECKLIST.md` and linked it from the support and
-  contributor documentation.
+  in `docs/IDE_INTEGRATION_CHECKLIST.md`; added the mandatory onboarding test
+  gate and coverage-to-test matrix for every supported IDE.
 
 - **Proactive upgrade prompt**: Show a local tray popup for available releases with Upgrade Now, snooze, and version-specific dismissal actions (#2218)
 

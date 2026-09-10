@@ -8,6 +8,8 @@ import sys
 
 import pytest
 
+from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
+
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "install.sh"
 PS1_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "install.ps1"
 
@@ -66,7 +68,7 @@ class TestInstallScriptHelp:
         assert "--version" in help_output
 
     def test_help_lists_ide_choices(self, help_output):
-        for ide in ("claude", "cursor", "copilot", "codex", "windsurf"):
+        for ide in SUPPORTED_IDE_TYPES:
             assert ide in help_output
 
     def test_help_shows_usage(self, help_output):
@@ -192,6 +194,10 @@ class TestInstallScriptAgentDetection:
             ".codeium/windsurf",
             ".gemini",
             ".augment",
+            ".clinerules",
+            ".kiro",
+            ".junie",
+            ".crush.json",
             ".config/opencode",
             ".aider-desk/extensions",
             ".openclaw/plugins",
@@ -274,11 +280,15 @@ class TestInstallPs1:
             "$windsurfDir",
             "$geminiDir",
             "$augmentDir",
+            "$clineDir",
+            "$kiroProjectDir",
+            "$junieProjectDir",
             "$opencodeDir",
             "$aiderdeskDir",
             "$openclawDir",
         ):
             assert f"Test-Path {config_dir} -PathType Container" in content
+        assert "Test-Path $crushProjectFile -PathType Leaf" in content
 
     @pytest.mark.skipif(
         shutil.which("pwsh") is None,

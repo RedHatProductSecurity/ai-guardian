@@ -150,7 +150,16 @@ def get_mcp_config_path(
         return None
     if ide_type == "cursor":
         if scope == "project":
-            return _cursor_project_root(project_dir) / ".cursor" / "mcp.json"
+            # The explicit project argument is the selected workspace. Avoid
+            # walking parents, where an unrelated .cursor directory could
+            # redirect a project-scoped health lookup. A missing argument is
+            # retained for effective-scope discovery from the current cwd.
+            project_root = (
+                Path(project_dir).expanduser().resolve()
+                if project_dir
+                else _cursor_project_root()
+            )
+            return project_root / ".cursor" / "mcp.json"
         if scope not in ("user", "auto"):
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
     if ide_type == "opencode":

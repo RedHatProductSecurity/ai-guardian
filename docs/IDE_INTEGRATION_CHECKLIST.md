@@ -9,6 +9,16 @@ MCP-only integrations, transcript readers, and the dummy-agent test harness.
 Mark an item complete only when it is applicable and verified; record the
 reason for items that do not apply in the issue or pull request.
 
+The canonical production registry is
+[`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
+keys are `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`,
+`zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, and
+`junie`. Add a new IDE there first. The parity contract in
+[`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
+requires setup, adapter aliases, MCP/rules capability, transcript/session
+registries, installer text, support documentation, and the release-readiness
+matrices to stay synchronized.
+
 ## Support model
 
 Classify the integration before making changes. An agent can have more than
@@ -133,6 +143,62 @@ availability does not imply hook enforcement.
 Run directly related unit tests locally. The full suite, integration tests,
 and dummy-agent scenarios are exercised by CI according to `AGENTS.md`.
 
+### Required onboarding test gate
+
+Every new IDE must have an explicit test or a documented, tested exclusion for
+each applicable row below. A shared parametrized test is sufficient when the
+behavior is truly identical, but the test output and evidence must identify the
+new IDE. “The adapter is similar to another IDE” is not an exclusion. Keep
+fixtures synthetic and isolated from the user's configuration.
+
+| Test group | Tests that must be implemented | Minimum scenarios and evidence |
+|------------|--------------------------------|--------------------------------|
+| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` only when a new capability shape needs a contract | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, and release-readiness/docs/installer parity must pass |
+| Adapter detection and normalization | Focused adapter unit tests plus shared registry/precedence tests | Explicit `--ide` and environment-alias detection, auto-detection precedence, every supported lifecycle event, tool-name mapping, missing fields, wrong types, malformed JSON, and unknown events normalize safely or return the documented error |
+| Response contract | Adapter and hook-pipeline tests | Benign allow, security block, warning/log-only, post-tool redaction/output transform, user-facing and agent-facing fields, exit codes, stdout/stderr shape, invalid response handling, timeout, missing executable, non-zero process failure, and fail-open/fail-closed behavior |
+| Hook lifecycle and UX | `tests/unit/test_hook_processing.py` and an applicable `tests/ux/` contract | Invoke every event AI Guardian installs. Test clean input, a blockable threat, warning, output transformation, malformed input, and the exact permission/message flow. If the upstream exposes an event that AI Guardian does not install, record the exclusion and test that it is not reported as missing |
+| Setup and configuration reconciliation | Setup unit tests, including shared `tests/unit/test_setup.py` coverage | Fresh setup, pre-existing config, unrelated user hooks/settings preserved, repeated setup idempotence, removed or drifted AI Guardian entry restored, `--force`, dry-run, custom paths/environment variables, permissions, and upgrade from the prior config shape |
+| Scope and health | Setup verification, doctor, tray, and REST/daemon health tests where exposed | User/desktop scope, explicit project scope, cloud/team/API scope, MCP-only behavior, missing or partial installation, verification, doctor output, tray **Check hooks/MCP installation...**, manual setup, and no silent project-file mutation |
+| MCP registration and advisor | MCP setup/server integration tests when MCP is supported | Fresh registration, existing server merge, duplicate/idempotent registration, malformed config, custom scope/path, unrelated entries preserved, registration health, and advisory-only behavior for MCP-only integrations. Document and test N/A when the host has no MCP path |
+| Transcript scanning | A focused transcript test module for every declared format/path branch | Format parsing, default and explicit path discovery, malformed/truncated records, incremental offsets, duplicate suppression, append, rotation/truncation, multiple sessions, and safe behavior when the transcript is unavailable. Document why no transcript exists when unsupported |
+| Plugin/extension bridge | Bridge/setup tests and generated-source contract | Install, update, removal/reconciliation, package/manifest registration, command/environment propagation, every bridge lifecycle callback, response conversion, and runtime smoke test when the host SDK is available. Structural CI coverage is required when the SDK is not a dependency |
+| Auto-detection and installers | `tests/unit/test_auto_setup.py`/CLI tests and `tests/test_install_script.py` | Fresh unconfigured IDE marker discovery, explicit `--ide`, repeated installer runs, `--no-setup`, `--dry-run`, help/choice text, Linux/macOS shell behavior, Windows PowerShell structure, and failure reporting without claiming a successful setup |
+| Platform and process behavior | OS-parametrized tests or a documented CI contract | Linux and macOS path/permission/process behavior, Windows path/quoting/`.bat` or PowerShell generation and runtime when available, executable resolution, timeout, signal/non-zero exit, and platform-specific upstream exclusions |
+| Isolated E2E and release gate | Add the IDE to `tests/integration/test_ide_hooks_e2e.py` through the registry and to release-readiness | Temporary HOME/project/config, setup and verification, MCP/bridge health, every installed event with allow/block/post cases, project/cloud checks, and a matrix job that names the IDE/event on failure |
+
+For hook-capable integrations, the required event cases are: allow, block,
+warning, redaction/output transform, malformed input, timeout/process failure,
+and response-contract assertions. For script, plugin, or extension bridges,
+exercise the equivalent host callback or generated command boundary. For
+MCP-only integrations, replace enforcement cases with registration, advisor,
+health, and explicit “no hook enforcement” assertions. For a shared adapter
+(Cline/ZooCode or Kiro/AiderDesk/OpenClaw), retain one row and one evidence
+set per public IDE key so aliases cannot hide a missing setup or documentation
+path.
+
+### Minimum test-file inventory
+
+The onboarding pull request should link the applicable cases in this inventory:
+
+- [ ] `tests/unit/test_ide_registry.py` — canonical row and parity checks.
+- [ ] `tests/unit/test_<ide>_support.py` or the existing adapter support file —
+  detection, normalization, lifecycle mapping, response contract, malformed
+  input, timeout/process failure, and platform-specific behavior.
+- [ ] `tests/unit/test_setup.py` or a focused setup file — fresh/merge/
+  idempotence/reconciliation, verification, project/cloud scope, and MCP/rules.
+- [ ] `tests/unit/test_<ide>_transcript.py` — every transcript format and path
+  branch, incremental/duplicate/rotation behavior; record a tested exclusion
+  when no transcript is supported.
+- [ ] `tests/unit/test_auto_setup.py`, `tests/unit/test_cli_ide_setup.py`,
+  and `tests/test_install_script.py` — applicable discovery, installer, and
+  command-line behavior.
+- [ ] `tests/unit/test_hook_processing.py` and `tests/ux/` — shared pipeline,
+  exact user/agent messages, permission flow, and any new security behavior.
+- [ ] `tests/integration/test_ide_hooks_e2e.py` — isolated setup, verification,
+  all managed events, response cases, and bridge/MCP health.
+- [ ] `.github/workflows/release-readiness.yml` — setup and E2E matrix entries,
+  synchronized with the canonical registry.
+
 | Behavior | Minimum evidence | Common test locations |
 |----------|------------------|-----------------------|
 | Detection and normalization | Agent-shaped input selects the intended adapter and produces canonical fields | `tests/unit/test_hook_adapters.py`, `tests/unit/test_<agent>_support.py` |
@@ -168,9 +234,12 @@ Complete the applicable checks:
 ### Isolated IDE hook matrix
 
 `tests/integration/test_ide_hooks_e2e.py` installs each supported external IDE
-integration into a temporary home and project, verifies the generated hook
-manifest and MCP registration, and invokes representative allow, directory
-block, and post-output redaction paths where the host exposes command hooks.
+integration from the canonical registry into a temporary home and project,
+verifies the generated hook manifest and MCP registration, and invokes every
+managed lifecycle event with its registry-defined allow, directory-block, and
+post-output-redaction cases where the host exposes command hooks. Malformed
+input, timeout/process failure, and the complete response contract are covered
+by the focused adapter and hook-pipeline tests listed above.
 For Cursor, the local matrix verifies user-level MCP registration separately
 from the cloud-project hook flow; project setup must not create a local MCP
 file because Cloud Agent MCP is externally registered.

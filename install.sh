@@ -33,8 +33,8 @@ Options:
     --ide NAME          Setup hooks for a specific IDE; when omitted, detect
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, codex, windsurf,
-                                 gemini, cline, zoocode, augment, kiro, junie,
-                                 aiderdesk, opencode
+                                 gemini, cline, zoocode, kiro, aiderdesk,
+                                 openclaw, opencode, augment, crush, junie
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
@@ -96,6 +96,15 @@ detect_installed_agents() {
     [ -d "$HOME/.codeium/windsurf" ] && agents+=("windsurf")
     [ -d "$HOME/.gemini" ] && agents+=("gemini")
     [ -d "$HOME/.augment" ] && agents+=("augment")
+
+    # Project-local integrations are detected from their marker directory or
+    # file. Cline and ZooCode share the .clinerules hook layout; select Cline
+    # for automatic setup and leave an explicit --ide zoocode path available
+    # when the project is known to use ZooCode.
+    [ -d ".clinerules" ] && agents+=("cline")
+    [ -d ".kiro" ] && agents+=("kiro")
+    [ -d ".junie" ] && agents+=("junie")
+    [ -f ".crush.json" ] && agents+=("crush")
 
     # Plugin/extension agents are detected from their parent configuration
     # directory so the installer can create the integration on first setup.

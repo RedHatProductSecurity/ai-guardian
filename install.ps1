@@ -13,7 +13,7 @@
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, codex, windsurf, gemini, cline,
-             zoocode, augment, kiro, junie, aiderdesk, opencode
+             zoocode, kiro, aiderdesk, openclaw, opencode, augment, crush, junie
 
 .PARAMETER Profile
     Security profile: @minimal, @standard (default), @strict
@@ -163,6 +163,22 @@ function Detect-InstalledAgents {
 
     $augmentDir = Join-Path $HOME ".augment"
     if (Test-Path $augmentDir -PathType Container) { $agents += "augment" }
+
+    # Project-local integrations are detected from their marker directory or
+    # file. Cline and ZooCode share the .clinerules hook layout; select Cline
+    # for automatic setup and leave an explicit -IDE zoocode path available
+    # when the project is known to use ZooCode.
+    $clineDir = Join-Path (Get-Location) ".clinerules"
+    if (Test-Path $clineDir -PathType Container) { $agents += "cline" }
+
+    $kiroProjectDir = Join-Path (Get-Location) ".kiro"
+    if (Test-Path $kiroProjectDir -PathType Container) { $agents += "kiro" }
+
+    $junieProjectDir = Join-Path (Get-Location) ".junie"
+    if (Test-Path $junieProjectDir -PathType Container) { $agents += "junie" }
+
+    $crushProjectFile = Join-Path (Get-Location) ".crush.json"
+    if (Test-Path $crushProjectFile -PathType Leaf) { $agents += "crush" }
 
     # Plugin/extension agents are detected from their parent configuration
     # directory so the installer can create the integration on first setup.

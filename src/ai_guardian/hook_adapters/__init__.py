@@ -23,6 +23,7 @@ from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
 from ai_guardian.hook_adapters.crush import CrushAdapter
 from ai_guardian.hook_adapters.junie import JunieAdapter
 from ai_guardian.hook_adapters.dummy_agent import DummyAgentAdapter
+from ai_guardian.ide_registry import ALL_IDE_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,38 @@ _ENV_ALIAS_MAP: Dict[str, type] = {}
 for _cls in ADAPTER_CLASSES + [CodexAdapter, JunieAdapter, DummyAgentAdapter]:
     for _alias in _cls.ENV_ALIASES:
         _ENV_ALIAS_MAP[_alias] = _cls
+
+# The cross-cutting IDE registry is the source of truth for the public IDE
+# keys.  Keep a direct lookup for callers that need an adapter for a known key
+# without going through the legacy IDEType enum.  Multiple keys may point to
+# one adapter class by design (for example Cline/ZooCode).
+_ADAPTER_CLASSES_BY_NAME = {
+    cls.__name__: cls
+    for cls in (
+        BaseAgentAdapter,
+        CursorAdapter,
+        CopilotAdapter,
+        CodexAdapter,
+        WindsurfAdapter,
+        GeminiCLIAdapter,
+        ClineAdapter,
+        KiroAdapter,
+        AugmentAdapter,
+        OpenCodeAdapter,
+        CrushAdapter,
+        JunieAdapter,
+        DummyAgentAdapter,
+    )
+}
+ADAPTERS_BY_IDE_TYPE: Dict[str, type] = {
+    integration.key: _ADAPTER_CLASSES_BY_NAME[integration.adapter_class]
+    for integration in ALL_IDE_REGISTRY
+}
+
+for _integration in ALL_IDE_REGISTRY:
+    _adapter_cls = ADAPTERS_BY_IDE_TYPE[_integration.key]
+    for _alias in _integration.adapter_aliases:
+        _ENV_ALIAS_MAP.setdefault(_alias, _adapter_cls)
 
 
 def detect_adapter(hook_data: Dict) -> HookAdapter:
@@ -112,16 +145,17 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
     """
     from ai_guardian.response_format import IDEType
 
-    _IDE_TYPE_MAP = {
-        IDEType.CLAUDE_CODE: BaseAgentAdapter,
-        IDEType.CURSOR: CursorAdapter,
-        IDEType.GITHUB_COPILOT: CopilotAdapter,
-        IDEType.GEMINI_CLI: GeminiCLIAdapter,
-        IDEType.CLINE: ClineAdapter,
-        IDEType.KIRO: KiroAdapter,
-        IDEType.UNKNOWN: BaseAgentAdapter,
+    _IDE_KEY_BY_TYPE = {
+        IDEType.CLAUDE_CODE: "claude",
+        IDEType.CURSOR: "cursor",
+        IDEType.GITHUB_COPILOT: "copilot",
+        IDEType.GEMINI_CLI: "gemini",
+        IDEType.CLINE: "cline",
+        IDEType.KIRO: "kiro",
     }
-    adapter_cls = _IDE_TYPE_MAP.get(ide_type, BaseAgentAdapter)
+    adapter_cls = ADAPTERS_BY_IDE_TYPE.get(
+        _IDE_KEY_BY_TYPE.get(ide_type, ""), BaseAgentAdapter
+    )
     if ide_type == IDEType.UNKNOWN:
         return BaseAgentAdapter(agent_type="unknown")
     return adapter_cls()
@@ -146,4 +180,5 @@ __all__ = [
     "JunieAdapter",
     "DummyAgentAdapter",
     "ADAPTER_CLASSES",
+    "ADAPTERS_BY_IDE_TYPE",
 ]

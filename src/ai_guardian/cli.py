@@ -13,6 +13,7 @@ from pathlib import Path
 
 from ai_guardian import __version__
 from ai_guardian.constants import ViolationType
+from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
 
 from ai_guardian.config.loaders import (
     _load_config_file,
@@ -238,23 +239,7 @@ def main():
         )
         parser.add_argument(
             "--ide",
-            choices=[
-                "claude",
-                "cursor",
-                "copilot",
-                "codex",
-                "windsurf",
-                "gemini",
-                "cline",
-                "zoocode",
-                "augment",
-                "kiro",
-                "junie",
-                "aiderdesk",
-                "openclaw",
-                "opencode",
-                "crush",
-            ],
+            choices=SUPPORTED_IDE_TYPES,
             help="Specify IDE adapter for hook processing (auto-detected if not provided)",
         )
 
@@ -275,23 +260,7 @@ def main():
         )
         setup_parser.add_argument(
             "--ide",
-            choices=[
-                "claude",
-                "cursor",
-                "copilot",
-                "codex",
-                "windsurf",
-                "gemini",
-                "cline",
-                "zoocode",
-                "augment",
-                "kiro",
-                "junie",
-                "aiderdesk",
-                "openclaw",
-                "opencode",
-                "crush",
-            ],
+            choices=SUPPORTED_IDE_TYPES,
             help="Specify IDE type (auto-detected if not provided)",
         )
         setup_parser.add_argument(
