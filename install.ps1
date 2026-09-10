@@ -162,7 +162,8 @@ function Detect-InstalledAgents {
     if (Test-Path $geminiDir -PathType Container) { $agents += "gemini" }
 
     $antigravityDir = Join-Path $HOME ".gemini\config"
-    if (Test-Path $antigravityDir -PathType Container) { $agents += "antigravity" }
+    $antigravityHooks = Join-Path $antigravityDir "hooks.json"
+    if ((Test-Path $antigravityHooks -PathType Leaf) -or (Get-Command agy -ErrorAction SilentlyContinue)) { $agents += "antigravity" }
 
     $augmentDir = Join-Path $HOME ".augment"
     if (Test-Path $augmentDir -PathType Container) { $agents += "augment" }

@@ -39,6 +39,7 @@ class IDEIntegration:
     event_cases: Tuple[Tuple[str, Tuple[str, ...]], ...] = ()
     rules_supported: bool = False
     project_scope: bool = False
+    post_output_transform: bool = True
     platform_contract: str = "all supported platforms"
     external: bool = True
 
@@ -201,6 +202,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("PostToolUse", ("allow",)),
             ("PreInvocation", ("allow",)),
         ),
+        post_output_transform=False,
         platform_contract="Antigravity CLI; PostToolUse has no output transform surface",
     ),
     IDEIntegration(

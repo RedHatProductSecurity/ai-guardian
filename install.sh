@@ -95,7 +95,7 @@ detect_installed_agents() {
     [ -d "$HOME/.codex" ] && agents+=("codex")
     [ -d "$HOME/.codeium/windsurf" ] && agents+=("windsurf")
     [ -d "$HOME/.gemini" ] && agents+=("gemini")
-    [ -d "$HOME/.gemini/config" ] && agents+=("antigravity")
+    { [ -f "$HOME/.gemini/config/hooks.json" ] || command -v agy >/dev/null 2>&1; } && agents+=("antigravity")
     [ -d "$HOME/.augment" ] && agents+=("augment")
 
     # Project-local integrations are detected from their marker directory or
