@@ -613,7 +613,9 @@ class TrayHealthMonitor:
         return IDESetup.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
 
     @staticmethod
-    def _notify_ide_check_result(installed, unconfigured=None, statuses=None):
+    def _notify_ide_check_result(
+        installed, unconfigured=None, statuses=None, excluded=None
+    ):
         """Tell the user the result of an IDE configuration check."""
         if installed is None:
             TrayHealthMonitor._notify_user(
@@ -629,6 +631,10 @@ class TrayHealthMonitor:
             return
 
         statuses = statuses if isinstance(statuses, dict) else {}
+        excluded = {ide for ide in (excluded or ()) if isinstance(ide, str)}
+        raw_unconfigured = [ide for ide in (unconfigured or ()) if isinstance(ide, str)]
+        excluded_unconfigured = excluded.intersection(raw_unconfigured)
+        unconfigured = [ide for ide in raw_unconfigured if ide not in excluded]
 
         def _label(ide):
             name = TrayHealthMonitor._ide_display_name(ide)
@@ -647,39 +653,28 @@ class TrayHealthMonitor:
                 mcp_status = status.get("mcp_status")
                 if mcp_status and mcp_status != "healthy":
                     details.append(f"MCP: {mcp_status}")
-            if ide == "codex":
-                details.append(CODEX_COVERAGE_NOTE)
             return f"{name} ({'; '.join(details)})" if details else name
 
-        names = [_label(ide) for ide in installed]
         if unconfigured:
             unconfigured_names = [_label(ide) for ide in unconfigured]
-            unconfigured_set = set(unconfigured)
-            configured_names = [
-                _label(ide) for ide in installed if ide not in unconfigured_set
-            ]
-            lines = [
-                "IDE/CLI health check: "
-                f"{len(configured_names)} configured, "
-                f"{len(unconfigured_names)} need setup.",
-            ]
-            if configured_names:
-                lines.extend(
-                    ["", "Configured:"] + [f"• {name}" for name in configured_names]
-                )
-            lines.extend(
-                ["", "Needs setup:"] + [f"• {name}" for name in unconfigured_names]
-            )
             TrayHealthMonitor._notify_user(
-                "AI Guardian",
-                "\n".join(lines),
+                "AI Guardian warning",
+                "IDE/CLI integrations need setup: " + ", ".join(unconfigured_names),
             )
             return
 
+        if excluded_unconfigured:
+            TrayHealthMonitor._notify_user(
+                "AI Guardian",
+                "No additional IDE/CLI integrations need setup.",
+            )
+            return
+
+        # Healthy integrations do not need space in the notification. Keeping
+        # this success result short also avoids macOS banner truncation.
         TrayHealthMonitor._notify_user(
             "AI Guardian",
-            "All installed IDE/CLI integrations are configured:\n"
-            + "\n".join(f"• {name}" for name in names),
+            "All installed IDE/CLI integrations are configured.",
         )
 
     @staticmethod
@@ -873,11 +868,17 @@ class TrayHealthMonitor:
         )
         if not isinstance(snapshot_integrations, dict):
             snapshot_integrations = {}
+        setup_exclusions = (
+            self._ide_setup_state.get_ide_setup_exclusions()
+            if self._ide_setup_state is not None
+            else set()
+        )
         if manual or report_result:
             TrayHealthMonitor._notify_ide_check_result(
                 installed,
                 unconfigured=unconfigured,
                 statuses=snapshot_integrations,
+                excluded=setup_exclusions,
             )
         if not unconfigured:
             return

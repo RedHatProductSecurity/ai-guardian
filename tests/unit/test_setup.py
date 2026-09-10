@@ -1628,6 +1628,17 @@ class TestCodexSetup:
             tmp_path / "codex" / "hooks.json"
         )
 
+    def test_list_installed_ides_detects_codex_home(self, monkeypatch, tmp_path):
+        """A fresh Codex config directory is installation evidence."""
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        setup = IDESetup()
+        setup.IDE_CONFIGS = {"codex": IDESetup.IDE_CONFIGS["codex"]}
+
+        assert setup.list_installed_ides() == ["codex"]
+
     def test_codex_config_layers_report_user_and_project(self, monkeypatch, tmp_path):
         codex_home = tmp_path / "codex"
         project = tmp_path / "project"

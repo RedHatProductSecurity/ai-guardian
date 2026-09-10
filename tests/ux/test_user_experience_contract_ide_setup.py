@@ -306,6 +306,70 @@ def test_manual_health_check_works_without_daemon_for_multiple_ides():
     )
 
 
+def test_manual_health_check_lists_codex_only_in_notification():
+    """
+    USER EXPERIENCE: Unconfigured Codex-only health check -> warn about Codex.
+
+    Scenario:
+    1. The tray discovers only OpenAI Codex (CLI + Desktop).
+    2. The user selects Check hooks/MCP installation.
+    3. Codex needs AI Guardian setup.
+
+    Expected User Experience:
+    - The warning explicitly names the Codex integration.
+    - Healthy integrations do not make the warning longer.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(monitor, "_get_installed_ides", return_value=["codex"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with(
+        "AI Guardian warning",
+        "IDE/CLI integrations need setup: OpenAI Codex (CLI + Desktop)",
+    )
+
+
+def test_manual_health_check_lists_mixed_claude_cursor_and_codex():
+    """
+    USER EXPERIENCE: Mixed manual health check -> warn only about pending setup.
+
+    Scenario:
+    1. Claude Code, Cursor, and OpenAI Codex are installed.
+    2. Cursor needs setup while Claude Code and Codex are configured.
+    3. The user runs the manual health check.
+
+    Expected User Experience:
+    - The warning names only the integration that needs setup.
+    - Healthy integrations are omitted to keep the notification short.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
+        patch.object(
+            monitor,
+            "_get_installed_ides",
+            return_value=["claude", "cursor", "codex"],
+        ),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["cursor"]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with(
+        "AI Guardian warning",
+        "IDE/CLI integrations need setup: Cursor IDE/CLI",
+    )
+
+
 def test_manual_health_check_falls_back_to_visible_dialog_when_notification_fails():
     """
     USER EXPERIENCE: macOS notification failure -> visible health result.
@@ -321,7 +385,7 @@ def test_manual_health_check_falls_back_to_visible_dialog_when_notification_fail
     """
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
@@ -349,7 +413,7 @@ def test_manual_health_check_does_not_open_popup_when_notification_succeeds():
     """
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch("platform.system", return_value="Darwin"),
@@ -382,7 +446,7 @@ def test_linux_health_and_prompt_fallbacks_remain_visible_and_actionable():
     """
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch("platform.system", return_value="Linux"),
@@ -468,7 +532,7 @@ def test_startup_health_check_reports_result_once():
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
