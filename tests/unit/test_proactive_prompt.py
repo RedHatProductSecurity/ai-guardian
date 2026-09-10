@@ -184,6 +184,7 @@ def test_prompt_uses_tkinter_first():
 def test_tray_prompt_uses_tkinter_subprocess():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
+        patch("platform.system", return_value="Darwin"),
         patch(
             "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
         ),
@@ -194,6 +195,27 @@ def test_tray_prompt_uses_tkinter_subprocess():
     ):
         assert dialog.show(tray_safe=True) == "action"
     show.assert_called_once_with()
+
+
+def test_linux_tray_prompt_uses_in_process_tkinter():
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch.object(dialog, "_show_tkinter", return_value="action") as tkinter,
+        patch.object(dialog, "_show_tkinter_subprocess") as subprocess_tkinter,
+        patch.object(dialog, "_show_native_fallback", return_value=None) as native,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
+    native.assert_called_once_with()
+    tkinter.assert_called_once_with()
+    subprocess_tkinter.assert_not_called()
 
 
 def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailable():
@@ -220,6 +242,31 @@ def test_tray_prompt_uses_native_fallback_on_macos_when_foreground_ui_unavailabl
         assert dialog.show(tray_safe=True) == "action"
 
     tkinter.assert_not_called()
+    fallback.assert_called_once_with()
+
+
+def test_linux_tray_prompt_uses_native_fallback_when_ui_tiers_fail():
+    dialog = ProactivePromptDialog("Title", "Message", "Set Up", "Cancel")
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=False
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=False
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._textual_available", return_value=False
+        ),
+        patch.object(
+            dialog, "_show_native_fallback", return_value="action"
+        ) as fallback,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
     fallback.assert_called_once_with()
 
 

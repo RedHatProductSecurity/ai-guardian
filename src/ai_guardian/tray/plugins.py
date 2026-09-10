@@ -944,6 +944,47 @@ def _find_icon(filename: str) -> str:
     return ""
 
 
+def _ui_environment_context() -> str:
+    """Return non-sensitive desktop-session context for UI diagnostics."""
+    display = "set" if os.environ.get("DISPLAY") else "unset"
+    wayland_display = "set" if os.environ.get("WAYLAND_DISPLAY") else "unset"
+    dbus_session = "set" if os.environ.get("DBUS_SESSION_BUS_ADDRESS") else "unset"
+    session_type = os.environ.get("XDG_SESSION_TYPE") or "unknown"
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP") or "unknown"
+    return ", ".join(
+        (
+            f"platform={platform.system()}",
+            f"DISPLAY={display}",
+            f"WAYLAND_DISPLAY={wayland_display}",
+            f"DBUS_SESSION_BUS_ADDRESS={dbus_session}",
+            f"XDG_SESSION_TYPE={session_type}",
+            f"XDG_CURRENT_DESKTOP={desktop}",
+        )
+    )
+
+
+def _linux_dialog_provider_order() -> Tuple[str, str]:
+    """Return native Linux dialog providers in desktop-aware order.
+
+    KDE/Plasma exposes ``kdialog`` while GNOME and most other Linux desktops
+    commonly expose ``zenity``. Both providers can operate on X11 or Wayland,
+    so the display-server type is diagnostic context rather than a hardcoded
+    provider choice. The second provider remains a portable fallback.
+    """
+    current_desktop = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
+    if current_desktop:
+        if "kde" in current_desktop or "plasma" in current_desktop:
+            return ("kdialog", "zenity")
+        return ("zenity", "kdialog")
+
+    desktop = " ".join(
+        os.environ.get(name, "") for name in ("XDG_SESSION_DESKTOP", "DESKTOP_SESSION")
+    ).lower()
+    if os.environ.get("KDE_FULL_SESSION") or "kde" in desktop or "plasma" in desktop:
+        return ("kdialog", "zenity")
+    return ("zenity", "kdialog")
+
+
 def _subprocess_succeeded(result, operation: str) -> bool:
     """Return whether a UI subprocess completed successfully.
 
@@ -960,10 +1001,11 @@ def _subprocess_succeeded(result, operation: str) -> bool:
     if isinstance(stderr, str) and stderr.strip():
         detail = f": {stderr.strip().replace(chr(10), ' ')[:200]}"
     logger.warning(
-        "%s failed with exit code %s%s",
+        "%s failed with exit code %s%s (%s)",
         operation,
         returncode,
         detail,
+        _ui_environment_context(),
     )
     return False
 
@@ -1006,12 +1048,42 @@ def show_dialog(title: str, message: str) -> bool:
             png_path = _find_icon("ai-guardian-320.png")
             if png_path:
                 icon_args = ["--icon-name", png_path]
-            result = subprocess.run(
-                ["zenity", "--info", "--title", title, "--text", message] + icon_args,
-                capture_output=True,
-                text=True,
-                timeout=30,
+            commands = {
+                "zenity": [
+                    "zenity",
+                    "--info",
+                    "--title",
+                    title,
+                    "--text",
+                    message,
+                ]
+                + icon_args,
+                "kdialog": ["kdialog", "--title", title, "--msgbox", message],
+            }
+            for provider in _linux_dialog_provider_order():
+                command = commands[provider]
+                try:
+                    result = subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                except (subprocess.TimeoutExpired, OSError) as exc:
+                    logger.warning(
+                        "Linux dialog command %s could not start: %s (%s)",
+                        command[0],
+                        type(exc).__name__,
+                        _ui_environment_context(),
+                    )
+                    continue
+                if _subprocess_succeeded(result, f"Linux {command[0]} dialog"):
+                    return True
+            logger.warning(
+                "Linux dialog fallback unavailable after trying zenity and kdialog (%s)",
+                _ui_environment_context(),
             )
+            return False
         elif system == "Windows":
             ttl = title.replace("'", "''")
             msg = message.replace("'", "''")
@@ -1028,8 +1100,156 @@ def show_dialog(title: str, message: str) -> bool:
         else:
             return False
         return _subprocess_succeeded(result, f"{system} dialog")
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning(
+            "%s dialog could not be shown: %s (%s)",
+            system,
+            type(exc).__name__,
+            _ui_environment_context(),
+        )
         return False
+
+
+def _linux_action_result(
+    result: str,
+    ide_choices: Iterable[Dict[str, str]],
+    profile_choices: Iterable[Dict[str, str]],
+    dismiss_label: Optional[str],
+) -> object:
+    """Convert a simple Linux native result to the structured prompt shape."""
+    ide_choices = tuple(ide_choices)
+    profile_choices = tuple(profile_choices)
+    if not ide_choices and not profile_choices:
+        return result
+
+    value = {
+        "result": result,
+        "install": [],
+        "never": [],
+    }
+    if profile_choices:
+        profile = next(
+            (
+                choice.get("profile")
+                for choice in profile_choices
+                if choice.get("profile") == "@standard"
+            ),
+            None,
+        )
+        if profile is None:
+            profile = next(
+                (
+                    choice.get("profile")
+                    for choice in profile_choices
+                    if choice.get("profile") is not None
+                ),
+                None,
+            )
+        value["profile"] = profile
+
+    if result == "action":
+        value["install"] = [choice["ide"] for choice in ide_choices]
+    elif result == "dismiss" and dismiss_label == "Never":
+        value["result"] = "action"
+        value["never"] = [choice["ide"] for choice in ide_choices]
+    return value
+
+
+def _show_linux_action_dialog(
+    title: str,
+    message: str,
+    action_label: str,
+    dismiss_label: Optional[str],
+    snooze_options: Iterable[str],
+    ide_choices: Iterable[Dict[str, str]],
+    profile_choices: Iterable[Dict[str, str]],
+) -> Optional[object]:
+    """Show a simple actionable prompt using zenity or kdialog on Linux."""
+    import subprocess
+
+    options = tuple(str(option) for option in snooze_options if option)
+    later_labels = {f"Later ({option})": f"snooze_{option}" for option in options}
+    zenity_command = [
+        "zenity",
+        "--question",
+        "--title",
+        title,
+        "--text",
+        message,
+        "--ok-label",
+        action_label,
+        "--cancel-label",
+        dismiss_label or "Cancel",
+    ]
+    for label in later_labels:
+        zenity_command.extend(["--extra-button", label])
+    commands = {
+        "zenity": zenity_command,
+        "kdialog": [
+            "kdialog",
+            "--title",
+            title,
+            "--yesno",
+            message,
+            "--yes-label",
+            action_label,
+            "--no-label",
+            dismiss_label or "Cancel",
+        ],
+    }
+
+    for provider in _linux_dialog_provider_order():
+        command = commands[provider]
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=3600,
+            )
+        except (subprocess.TimeoutExpired, OSError) as exc:
+            logger.warning(
+                "Linux proactive prompt command %s could not start: %s (%s)",
+                command[0],
+                type(exc).__name__,
+                _ui_environment_context(),
+            )
+            continue
+
+        returncode = getattr(result, "returncode", 0)
+        stderr = getattr(result, "stderr", "")
+        stderr = stderr.strip() if isinstance(stderr, str) else ""
+        if not isinstance(returncode, int) or returncode == 0:
+            stdout = getattr(result, "stdout", "")
+            stdout = stdout.strip() if isinstance(stdout, str) else ""
+            return _linux_action_result(
+                later_labels.get(stdout, "action"),
+                ide_choices,
+                profile_choices,
+                dismiss_label,
+            )
+        if returncode == 1 and not stderr:
+            return _linux_action_result(
+                "dismiss",
+                ide_choices,
+                profile_choices,
+                dismiss_label,
+            )
+
+        detail = f": {stderr[:200].replace(chr(10), ' ')}" if stderr else ""
+        logger.warning(
+            "Linux proactive prompt command %s failed with exit code %s%s (%s)",
+            command[0],
+            returncode,
+            detail,
+            _ui_environment_context(),
+        )
+
+    logger.warning(
+        "Linux native proactive prompt unavailable after trying zenity and kdialog (%s)",
+        _ui_environment_context(),
+    )
+    return None
 
 
 def show_action_dialog(
@@ -1041,20 +1261,19 @@ def show_action_dialog(
     ide_choices: Iterable[Dict[str, str]] = (),
     profile_choices: Iterable[Dict[str, str]] = (),
 ) -> Optional[object]:
-    """Show an actionable native prompt on macOS.
+    """Show an actionable native prompt on macOS or Linux.
 
-    This is the last-resort UI for prompts invoked from the macOS tray.  A
-    tray process cannot reliably bring a Tkinter window to the foreground, so
-    the prompt uses native Cocoa controls when the normal UI tiers are
-    unavailable.
+    This is the last-resort UI for prompts invoked from a tray.  macOS uses
+    native Cocoa controls. Linux uses a question dialog from zenity or
+    kdialog; structured Linux prompts use their default install/profile
+    choices because those tools do not provide the same combined controls.
 
     Returns ``"action"``, ``"dismiss"``, or ``"snooze_<option>"`` for a
     simple prompt.  A prompt with IDE or profile choices returns the same
     structured mapping as the other proactive-prompt UI implementations.
     Returns ``None`` when the native prompt could not be launched.
     """
-    if platform.system() != "Darwin":
-        return None
+    system = platform.system()
 
     ide_choices = tuple(
         choice
@@ -1067,6 +1286,18 @@ def show_action_dialog(
         if isinstance(choice, dict)
         and (choice.get("profile") is not None or choice.get("name"))
     )
+    if system == "Linux":
+        return _show_linux_action_dialog(
+            title,
+            message,
+            action_label,
+            dismiss_label,
+            snooze_options,
+            ide_choices,
+            profile_choices,
+        )
+    if system != "Darwin":
+        return None
     result = _show_native_choice_dialog(
         title,
         message,
@@ -1488,7 +1719,13 @@ def send_notification(title: str, message: str) -> bool:
         else:
             return False
         return _subprocess_succeeded(result, f"{system} notification")
-    except (subprocess.TimeoutExpired, OSError, FileNotFoundError):
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        logger.warning(
+            "%s notification could not be shown: %s (%s)",
+            system,
+            type(exc).__name__,
+            _ui_environment_context(),
+        )
         return False
 
 

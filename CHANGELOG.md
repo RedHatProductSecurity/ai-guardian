@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Linux tray UI fallbacks (#2269)**: Prefer the detected native desktop
+  dialog provider, keep Tkinter in-process on Linux, and fall through to
+  NiceGUI or Textual when native UI tiers fail; UI diagnostics now include
+  non-sensitive session context without logging prompt contents.
+
 - **Hook violation attribution**: Record the actual agent identity in
   `context.ide_type` for Codex and other integrations that share Claude Code's
   response protocol, while preserving existing response formatting (#2276).

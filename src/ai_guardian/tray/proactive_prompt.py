@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Dict, Iterable, Optional, Set
 
 from ai_guardian.tui.display import (
+    _ensure_tcl_library,
     _nicegui_available,
     _textual_available,
     _tkinter_available,
@@ -35,6 +36,25 @@ IDE_SETUP_STATUS_KEY = "ide_setup_status"
 IDE_SETUP_KEY_PREFIX = "ide_setup_"
 
 _PROFILE_NOT_SELECTED = object()
+
+
+def _prompt_environment_context(system: str) -> str:
+    """Return non-sensitive desktop-session context for prompt diagnostics."""
+    display = "set" if os.environ.get("DISPLAY") else "unset"
+    wayland_display = "set" if os.environ.get("WAYLAND_DISPLAY") else "unset"
+    dbus_session = "set" if os.environ.get("DBUS_SESSION_BUS_ADDRESS") else "unset"
+    session_type = os.environ.get("XDG_SESSION_TYPE") or "unknown"
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP") or "unknown"
+    return ", ".join(
+        (
+            f"platform={system}",
+            f"DISPLAY={display}",
+            f"WAYLAND_DISPLAY={wayland_display}",
+            f"DBUS_SESSION_BUS_ADDRESS={dbus_session}",
+            f"XDG_SESSION_TYPE={session_type}",
+            f"XDG_CURRENT_DESKTOP={desktop}",
+        )
+    )
 
 
 def _state_path() -> Path:
@@ -344,9 +364,12 @@ def reset_ide_setup_state(
 class ProactivePromptDialog:
     """Prompt with action, snooze, and dismiss choices.
 
-    The UI cascade is tkinter, NiceGUI, Textual, then a log-only fallback.
-    show returns a stable string for ordinary prompts. When IDE or profile
-    choices are provided it returns a mapping containing the selected values.
+    The normal UI cascade is Tkinter, NiceGUI, Textual, then a log-only
+    fallback. Tray-safe Linux prompts add the desktop-native dialog tier
+    first; if it is unavailable, they continue through Tkinter, NiceGUI, and
+    Textual. ``show`` returns a stable string for ordinary prompts. When IDE
+    or profile choices are provided it returns a mapping containing the
+    selected values.
     """
 
     def __init__(
@@ -413,11 +436,31 @@ class ProactivePromptDialog:
     def show(self, tray_safe: bool = False) -> object:
         import platform
 
+        system = platform.system()
         preferred = get_preferred_ui()
         if preferred == "auto":
             tiers = ["tkinter", "nicegui", "textual"]
         else:
             tiers = [preferred]
+
+        # On Linux, prefer a desktop-native prompt when the tray is running
+        # in a graphical session. The native provider is selected by the
+        # desktop/session environment and falls through to Tkinter, NiceGUI,
+        # and Textual when it is unavailable.
+        native_attempted = False
+        if tray_safe and system == "Linux" and preferred == "auto":
+            native_attempted = True
+            try:
+                result = self._show_native_fallback()
+                if result is not None:
+                    return result
+            except Exception as exc:
+                logger.warning(
+                    "Native Linux proactive prompt failed; trying the next "
+                    "fallback: %s (%s)",
+                    exc,
+                    _prompt_environment_context(system),
+                )
 
         # pystray owns an NSApplication with accessory activation policy on
         # modern macOS.  Keep the prompt outside that process by using the
@@ -425,7 +468,7 @@ class ProactivePromptDialog:
         # starting it in the tray worker can open a browser against the
         # default web-console port before its page is ready, producing an
         # Internal Server Error instead of a setup prompt.
-        if tray_safe and platform.system() == "Darwin":
+        if tray_safe and system == "Darwin":
             if preferred == "auto":
                 tiers = ["tkinter", "textual"]
             elif preferred == "nicegui":
@@ -438,7 +481,7 @@ class ProactivePromptDialog:
         for tier in tiers:
             try:
                 if tier == "tkinter" and _tkinter_available():
-                    if tray_safe:
+                    if tray_safe and system == "Darwin":
                         result = self._show_tkinter_subprocess()
                         if result is not None:
                             return result
@@ -455,15 +498,27 @@ class ProactivePromptDialog:
                         return self._show_ide_choices_textual()
                     return self._show_textual()
             except Exception as exc:
-                logger.debug("Proactive %s prompt unavailable: %s", tier, exc)
+                logger.warning(
+                    "Proactive %s prompt unavailable on %s; trying the next "
+                    "fallback: %s (%s)",
+                    tier,
+                    system,
+                    exc,
+                    _prompt_environment_context(system),
+                )
 
-        if tray_safe and platform.system() == "Darwin" and preferred != "headless":
+        if (
+            tray_safe
+            and system in {"Darwin", "Linux"}
+            and preferred != "headless"
+            and not native_attempted
+        ):
             try:
                 result = self._show_native_fallback()
                 if result is not None:
                     return result
             except Exception as exc:
-                logger.warning("Native macOS proactive prompt failed: %s", exc)
+                logger.warning("Native %s proactive prompt failed: %s", system, exc)
 
         logger.info("%s: %s", self.title, self.message)
         return "dismiss"
@@ -484,6 +539,7 @@ class ProactivePromptDialog:
 
     def _show_tkinter_subprocess(self) -> Optional[object]:
         """Show Tkinter dialog outside tray process (macOS pystray safety)."""
+        import platform
         import subprocess
         import sys
 
@@ -533,9 +589,10 @@ class ProactivePromptDialog:
             stderr = (result.stderr or "").strip()
             detail = f": {stderr}" if stderr else ""
             logger.warning(
-                "Tkinter proactive prompt exited with code %s%s",
+                "Tkinter proactive prompt exited with code %s%s\nDesktop session: %s",
                 result.returncode,
                 detail,
+                _prompt_environment_context(platform.system()),
             )
         except (
             OSError,
@@ -543,7 +600,11 @@ class ProactivePromptDialog:
             json.JSONDecodeError,
             subprocess.TimeoutExpired,
         ) as exc:
-            logger.warning("Tkinter proactive prompt failed: %s", exc)
+            logger.warning(
+                "Tkinter proactive prompt failed: %s (%s)",
+                exc,
+                _prompt_environment_context(platform.system()),
+            )
         return None
 
     def _ide_selection_result(
@@ -583,6 +644,8 @@ class ProactivePromptDialog:
     def _show_ide_choices_tkinter(self):
         import tkinter as tk
         from tkinter import ttk
+
+        _ensure_tcl_library()
 
         result = {"value": self._ide_selection_result("dismiss")}
         root = tk.Tk()
@@ -961,6 +1024,8 @@ class ProactivePromptDialog:
     def _show_tkinter(self) -> str:
         import tkinter as tk
         from tkinter import ttk
+
+        _ensure_tcl_library()
 
         result = {"value": "dismiss"}
         root = tk.Tk()
