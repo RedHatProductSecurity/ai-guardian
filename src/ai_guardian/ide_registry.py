@@ -39,6 +39,7 @@ class IDEIntegration:
     event_cases: Tuple[Tuple[str, Tuple[str, ...]], ...] = ()
     rules_supported: bool = False
     project_scope: bool = False
+    post_output_transform: bool = True
     platform_contract: str = "all supported platforms"
     external: bool = True
 
@@ -183,6 +184,26 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("BeforeTool", ("allow", "block")),
             ("AfterTool", ("post",)),
         ),
+    ),
+    IDEIntegration(
+        "antigravity",
+        "Antigravity CLI",
+        "AntigravityAdapter",
+        ("antigravity", "agy"),
+        "command-hooks",
+        "local",
+        (),
+        "none",
+        (
+            ("PreToolUse", ("allow", "block")),
+            # Antigravity's PostToolUse payload has no tool output, so the
+            # event is exercised as a clean observation rather than a
+            # redaction case.
+            ("PostToolUse", ("allow",)),
+            ("PreInvocation", ("allow",)),
+        ),
+        post_output_transform=False,
+        platform_contract="Antigravity CLI; PostToolUse has no output transform surface",
     ),
     IDEIntegration(
         "cline",

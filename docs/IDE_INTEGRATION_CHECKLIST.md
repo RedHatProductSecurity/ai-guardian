@@ -11,9 +11,9 @@ reason for items that do not apply in the issue or pull request.
 
 The canonical production registry is
 [`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
-keys are `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`,
-`zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, and
-`junie`. Add a new IDE there first. The parity contract in
+keys are `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`,
+`antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`,
+`augment`, `crush`, and `junie`. Add a new IDE there first. The parity contract in
 [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
 requires setup, adapter aliases, MCP/rules capability, transcript/session
 registries, installer text, support documentation, and the release-readiness

@@ -29,6 +29,38 @@ from ai_guardian.setup.utils import (
 )
 
 
+def _tag_antigravity_events(template_hooks: Dict) -> Dict:
+    """Append ``--hook-event <Event>`` to each Antigravity hook command.
+
+    Antigravity does not name the event in the hook payload, and its
+    PreToolUse and PostToolUse payloads are near-identical.  Declaring the
+    event on the command line makes resolution exact, and — unlike an
+    environment variable — it is stamped into the hook data so it survives
+    forwarding to the daemon, which runs as a separate long-lived process.
+    """
+    tagged = deepcopy(template_hooks)
+    for hook_spec in tagged.values():
+        if not isinstance(hook_spec, dict):
+            continue
+        for event_name, entries in hook_spec.items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if not isinstance(entry, dict):
+                    continue
+                handlers = entry.get("hooks") if "hooks" in entry else [entry]
+                for handler in handlers:
+                    if not isinstance(handler, dict):
+                        continue
+                    command = handler.get("command", "")
+                    if command and "--hook-event" not in command:
+                        handler["command"] = f"{command} --hook-event {event_name}"
+    return tagged
+
+
+ANTIGRAVITY_HOOK_NAME = "ai-guardian"
+
+
 class IDESetup:
     """Handle IDE hook setup and configuration."""
 
@@ -224,6 +256,7 @@ class IDESetup:
         "gemini": {
             "name": "Google Gemini CLI",
             "mcp_client_name": "gemini-cli",
+            "executable": "gemini",
             "config_path": "~/.gemini/settings.json",
             "config_dir_env_var": None,
             "config_filename": "settings.json",
@@ -237,6 +270,50 @@ class IDESetup:
                     {"event": "BeforeTool", "matcher": ".*", "command": "ai-guardian"},
                     {"event": "AfterTool", "matcher": ".*", "command": "ai-guardian"},
                 ]
+            },
+        },
+        "antigravity": {
+            "name": "Antigravity CLI",
+            "mcp_client_name": "antigravity",
+            "executable": "agy",
+            "config_path": "~/.gemini/config/hooks.json",
+            "config_dir_env_var": None,
+            "config_filename": "hooks.json",
+            # Antigravity hooks.json is keyed by hook NAME, each mapping to its
+            # event config. All ai-guardian handlers live under one key, so
+            # merging never disturbs other tools' hooks.
+            # PostToolUse receives no tool output (only stepIdx/error), so
+            # output scanning is limited to what the transcript provides.
+            "hooks": {
+                "ai-guardian": {
+                    "PreToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                    "timeout": 300,
+                                }
+                            ],
+                        }
+                    ],
+                    "PostToolUse": [
+                        {
+                            "matcher": "*",
+                            "hooks": [
+                                {
+                                    "type": "command",
+                                    "command": "ai-guardian",
+                                    "timeout": 60,
+                                }
+                            ],
+                        }
+                    ],
+                    "PreInvocation": [
+                        {"type": "command", "command": "ai-guardian", "timeout": 60}
+                    ],
+                }
             },
         },
         "cline": {
@@ -772,6 +849,11 @@ class IDESetup:
         elif ide_type in ("windsurf", "augment", "crush"):
             if isinstance(installed_hooks, dict):
                 installed_hooks = installed_hooks.get("hooks", installed_hooks)
+        elif ide_type == "antigravity":
+            # Antigravity's hooks.json is keyed by hook name at the document
+            # root; only AI Guardian's owned block belongs to this manifest.
+            owned = config.get(ANTIGRAVITY_HOOK_NAME, {})
+            installed_hooks = owned if isinstance(owned, dict) else {}
         return installed_hooks if isinstance(installed_hooks, dict) else {}
 
     def verify_hooks_for_ide(
@@ -1089,7 +1171,12 @@ class IDESetup:
     ) -> List[str]:
         """Remove obsolete AI Guardian entries while retaining other hooks."""
         manifest = self.expected_hook_manifest(ide_type)
-        hooks = config if ide_type == "copilot" else config.get("hooks", {})
+        if ide_type == "antigravity":
+            hooks = config.get(ANTIGRAVITY_HOOK_NAME, {})
+        elif ide_type == "copilot":
+            hooks = config
+        else:
+            hooks = config.get("hooks", {})
         if ide_type in ("windsurf", "augment", "crush") and isinstance(hooks, dict):
             hooks = hooks.get("hooks", hooks)
         if not isinstance(hooks, dict):
@@ -1211,6 +1298,10 @@ class IDESetup:
                 ):
                     detected_ides.append(ide_type)
                 continue
+            if self.IDE_CONFIGS[ide_type].get("executable"):
+                if self._ide_has_install_evidence(ide_type):
+                    detected_ides.append(ide_type)
+                continue
             raw_path = self.get_config_path(ide_type)
             if not raw_path:
                 continue
@@ -1240,6 +1331,10 @@ class IDESetup:
                     Path(layer["path"]).expanduser().parent.is_dir()
                     for layer in self.get_cursor_config_layers()
                 ):
+                    detected.append(ide_type)
+                continue
+            if self.IDE_CONFIGS[ide_type].get("executable"):
+                if self._ide_has_install_evidence(ide_type):
                     detected.append(ide_type)
                 continue
             raw_path = self.get_config_path(ide_type)
@@ -1275,6 +1370,10 @@ class IDESetup:
         # the file itself is valid evidence.
         if ide_type == "crush":
             return config_path.is_file()
+
+        executable = self.IDE_CONFIGS.get(ide_type, {}).get("executable")
+        if executable:
+            return config_path.is_file() or shutil.which(executable) is not None
 
         # For file, plugin, extension, and script integrations, the parent is
         # the IDE's configuration directory. Requiring it to exist avoids
@@ -1641,6 +1740,29 @@ class IDESetup:
 
                 matched_entry["hooks"] = [ai_guardian_hook] + other_hooks_list
                 existing_config["hooks"][hook_name][matched_idx] = matched_entry
+
+            return existing_config, warnings
+
+        elif ide_type == "antigravity":
+            # hooks.json is keyed by hook name; ai-guardian owns its own key,
+            # so other tools' hooks are left untouched.
+            template_hooks = ai_guardian_hooks.get("hooks", ai_guardian_hooks)
+            template_hooks = _tag_antigravity_events(template_hooks)
+            for hook_name, hook_spec in template_hooks.items():
+                existing_config[hook_name] = hook_spec
+
+            other_names = [
+                name
+                for name in existing_config
+                if name not in template_hooks
+                and isinstance(existing_config[name], dict)
+            ]
+            if other_names:
+                warnings.append(
+                    f"⚠️  Found other hooks [{', '.join(other_names)}]. "
+                    f"Antigravity merges same-event hooks in unspecified order — "
+                    f"ai-guardian warnings may not display first."
+                )
 
             return existing_config, warnings
 
@@ -2205,6 +2327,10 @@ class IDESetup:
                     existing_config, resolved_hooks, ide_type
                 )
             elif ide_type == "augment":
+                merged_config, hook_warnings = self.merge_hooks(
+                    existing_config, resolved_hooks, ide_type
+                )
+            elif ide_type == "antigravity":
                 merged_config, hook_warnings = self.merge_hooks(
                     existing_config, resolved_hooks, ide_type
                 )
