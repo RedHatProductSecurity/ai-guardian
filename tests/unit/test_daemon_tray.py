@@ -949,7 +949,7 @@ class TestIDESetupMenu:
         )
         tray._health._on_startup_ide_setup.assert_called_once_with()
 
-    def test_build_ide_setup_menu_has_all_supported_ides(self):
+    def test_build_ide_setup_menu_has_all_user_facing_ides(self):
         from ai_guardian.setup import IDESetup
 
         tray = DaemonTray(
@@ -974,13 +974,59 @@ class TestIDESetupMenu:
             assert "Manual setup (specific IDE)" in item_names
             assert "  Create Config..." in item_names
             assert "  Cursor Cloud (project setup)..." in item_names
-            for ide_cfg in IDESetup.IDE_CONFIGS.values():
+            assert "  Dummy Agent" not in item_names
+            for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items():
+                if ide_key == "dummy-agent":
+                    continue
                 expected_name = (
                     "Cursor IDE/CLI"
                     if ide_cfg.get("mcp_client_name") == "cursor"
                     else ide_cfg["name"]
                 )
                 assert f"  {expected_name}" in item_names
+
+    def test_build_ide_setup_menu_sorts_ides_and_keeps_cursor_cloud_adjacent(self):
+        from ai_guardian.setup import IDESetup
+
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        with (
+            mock.patch("ai_guardian.tray.app.pystray", create=True) as mock_pystray,
+            mock.patch("ai_guardian.tray.menu_builder.pystray", new=mock_pystray),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            tray._menu._build_ide_setup_menu_items()
+
+            item_names = [call[0][0] for call in mock_pystray.MenuItem.call_args_list]
+
+        indented_names = [name for name in item_names if name.startswith("  ")]
+        primary_names = [
+            name[2:]
+            for name in indented_names
+            if name
+            not in {
+                "  Cursor Cloud (project setup)...",
+                "  Create Config...",
+            }
+        ]
+        expected_names = sorted(
+            [
+                ("Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"])
+                for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items()
+                if ide_key != "dummy-agent"
+            ],
+            key=str.casefold,
+        )
+
+        assert primary_names == expected_names
+        cursor_index = indented_names.index("  Cursor IDE/CLI")
+        assert indented_names[cursor_index + 1] == ("  Cursor Cloud (project setup)...")
 
     def test_cursor_cloud_setup_picks_project_before_launching(self):
         tray = DaemonTray(
