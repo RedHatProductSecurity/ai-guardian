@@ -1510,8 +1510,20 @@ class TrayMenuBuilder:
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("Manual setup (specific IDE)", None),
         ]
-        for ide_key, ide_cfg in IDESetup.IDE_CONFIGS.items():
-            ide_label = "Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"]
+
+        def _ide_display_name(ide_key, ide_cfg):
+            return "Cursor IDE/CLI" if ide_key == "cursor" else ide_cfg["name"]
+
+        # Dummy Agent is an internal hook-testing harness, not a user-facing
+        # IDE/CLI integration with a manual setup flow.
+        manual_setup_configs = [
+            item for item in IDESetup.IDE_CONFIGS.items() if item[0] != "dummy-agent"
+        ]
+        for ide_key, ide_cfg in sorted(
+            manual_setup_configs,
+            key=lambda item: _ide_display_name(*item).casefold(),
+        ):
+            ide_label = _ide_display_name(ide_key, ide_cfg)
             ide_items.append(
                 pystray.MenuItem(f"  {ide_label}", _mk_ide_action(ide_key))
             )
