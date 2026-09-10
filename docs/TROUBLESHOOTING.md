@@ -230,6 +230,35 @@ uv tool install ai-guardian --python 3.13
 
 Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this automatically.
 
+### Linux Tray Health or Setup Prompt Has No Visible Result
+
+**Symptom:** The tray log reports that `notify-send`, Tkinter, or a native
+dialog failed, and the health result or setup prompt is not visible.
+
+**Cause:** Linux notifications use the logged-in desktop session's D-Bus
+notification service. Native dialogs also require a graphical session and an
+installed provider. AI Guardian prefers `kdialog` for KDE/Plasma sessions and
+`zenity` for GNOME and other Linux desktops, then tries the other provider;
+both providers can work over X11 or Wayland. Linux tray prompts then fall
+through to in-process Tkinter, NiceGUI in the browser, and Textual in a TTY.
+
+Check the session and available providers from the same environment that
+launches the tray:
+
+```bash
+printf 'DISPLAY=%s WAYLAND_DISPLAY=%s DBUS_SESSION_BUS_ADDRESS=%s\n' \
+  "${DISPLAY:+set}" "${WAYLAND_DISPLAY:+set}" "${DBUS_SESSION_BUS_ADDRESS:+set}"
+printf 'XDG_SESSION_TYPE=%s XDG_CURRENT_DESKTOP=%s\n' \
+  "${XDG_SESSION_TYPE:-unknown}" "${XDG_CURRENT_DESKTOP:-unknown}"
+command -v notify-send zenity kdialog
+```
+
+If the tray was launched by SSH, a system service, or outside the graphical
+login, start it from the logged-in desktop session so the notification and
+dialog providers can reach the user's display. If Tkinter fails to initialize,
+the log includes the provider, exit status, and non-sensitive display/session
+context; `ai-guardian doctor` can provide additional installation details.
+
 ### tkinter Crashes with SIGABRT on macOS
 
 **Symptom:** The tray popup crashes immediately with a `SIGABRT` or `NSInvalidArgumentException` on macOS.

@@ -7,7 +7,10 @@ from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
-from ai_guardian.tray.proactive_prompt import ProactivePromptState
+from ai_guardian.tray.proactive_prompt import (
+    ProactivePromptDialog,
+    ProactivePromptState,
+)
 
 
 def test_local_daemon_prompts_for_installed_unconfigured_ide():
@@ -359,6 +362,67 @@ def test_manual_health_check_does_not_open_popup_when_notification_succeeds():
         monitor._check_ide_setup_notification(manual=True)
 
     dialog.assert_not_called()
+
+
+def test_linux_health_and_prompt_fallbacks_remain_visible_and_actionable():
+    """
+    USER EXPERIENCE: Linux UI transport failure -> visible/actionable fallback.
+
+    Scenario:
+    1. A graphical Linux tray health check cannot deliver its notification.
+    2. The tray uses the native modal dialog for the health result.
+    3. A setup prompt's native and Tkinter tiers are unavailable.
+    4. The browser tier remains available and returns the setup action.
+
+    Expected User Experience:
+    - The health result is shown in a modal dialog instead of being lost.
+    - The setup prompt reaches the browser fallback instead of dismissing
+      without an actionable result.
+    - No platform-specific Linux desktop is required by the fallback order.
+    """
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch.object(monitor, "_get_installed_ides", return_value=["claude"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=[]),
+        patch(
+            "ai_guardian.tray.plugins.send_notification", return_value=False
+        ) as notify,
+        patch("ai_guardian.tray.plugins.show_dialog", return_value=True) as dialog,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with("AI Guardian", message)
+    dialog.assert_called_once_with("AI Guardian", message)
+
+    prompt = ProactivePromptDialog("Set Up", "Hooks are missing.", "Set Up", "Cancel")
+    with (
+        patch("platform.system", return_value="Linux"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._nicegui_available", return_value=True
+        ),
+        patch.object(prompt, "_show_native_fallback", return_value=None) as native,
+        patch.object(
+            prompt, "_show_tkinter", side_effect=RuntimeError("Tk failed")
+        ) as tkinter,
+        patch.object(prompt, "_show_nicegui", return_value="action") as browser,
+        patch.object(prompt, "_show_textual") as textual,
+    ):
+        assert prompt.show(tray_safe=True) == "action"
+
+    native.assert_called_once_with()
+    tkinter.assert_called_once_with()
+    browser.assert_called_once_with()
+    textual.assert_not_called()
 
 
 def test_cursor_health_reports_user_install_scope_and_project_effective_scope():

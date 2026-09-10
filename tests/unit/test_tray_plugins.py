@@ -17,6 +17,7 @@ from ai_guardian.tray.plugins import (
     find_project_plugins_dir,
     load_merged_plugins,
     load_plugins,
+    _linux_dialog_provider_order,
     plugins_to_dict,
     resolve_command,
     show_action_dialog,
@@ -928,6 +929,37 @@ class TestSendNotification:
                     assert "--icon" in args
                     assert "/path/to/icon.png" in args
 
+    def test_linux_dialog_falls_back_to_kdialog_when_zenity_fails(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                failed = mock.Mock(returncode=1, stderr="cannot open display")
+                succeeded = mock.Mock(returncode=0, stderr="")
+                with mock.patch(
+                    "subprocess.run", side_effect=[failed, succeeded]
+                ) as mock_run:
+                    assert show_dialog("Title", "Hello") is True
+
+        assert mock_run.call_count == 2
+        assert mock_run.call_args_list[0].args[0][0] == "zenity"
+        assert mock_run.call_args_list[1].args[0][0] == "kdialog"
+
+    def test_linux_dialog_failure_logs_desktop_context_without_message(self, caplog):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with (
+                mock.patch("subprocess.run", side_effect=FileNotFoundError),
+                caplog.at_level("WARNING", logger="ai_guardian.tray.plugins"),
+            ):
+                assert show_dialog("Sensitive title", "Sensitive message") is False
+
+        assert "Linux dialog fallback unavailable" in caplog.text
+        assert "DISPLAY=" in caplog.text
+        assert "Sensitive title" not in caplog.text
+        assert "Sensitive message" not in caplog.text
+
     def test_linux_no_icon_when_not_found(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
@@ -1067,6 +1099,28 @@ class TestDictToPlugins:
 
 
 class TestShowDialog:
+    def test_linux_provider_order_prefers_kdialog_on_kde_wayland(self):
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "XDG_CURRENT_DESKTOP": "KDE",
+                "XDG_SESSION_TYPE": "wayland",
+            },
+            clear=False,
+        ):
+            assert _linux_dialog_provider_order() == ("kdialog", "zenity")
+
+    def test_linux_provider_order_prefers_zenity_on_gnome_x11(self):
+        with mock.patch.dict(
+            "os.environ",
+            {
+                "XDG_CURRENT_DESKTOP": "GNOME",
+                "XDG_SESSION_TYPE": "x11",
+            },
+            clear=False,
+        ):
+            assert _linux_dialog_provider_order() == ("zenity", "kdialog")
+
     def test_macos_uses_osascript(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
@@ -1081,8 +1135,11 @@ class TestShowDialog:
     def test_linux_uses_zenity(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
-            with mock.patch("subprocess.run") as mock_run:
-                result = show_dialog("Test Title", "Hello")
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                with mock.patch("subprocess.run") as mock_run:
+                    result = show_dialog("Test Title", "Hello")
                 assert result is True
                 mock_run.assert_called_once()
                 args = mock_run.call_args[0][0]
@@ -1148,6 +1205,92 @@ class TestShowDialog:
 
 
 class TestShowActionDialog:
+    def test_linux_uses_zenity_question(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                with mock.patch("subprocess.run") as mock_run:
+                    mock_run.return_value.returncode = 0
+                    mock_run.return_value.stdout = ""
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Cancel",
+                        snooze_options=("1h", "6h"),
+                    )
+
+        assert result == "action"
+        command = mock_run.call_args.args[0]
+        assert command[:2] == ["zenity", "--question"]
+        assert "--ok-label" in command
+        assert "Set Up Now" in command
+        assert "--extra-button" in command
+        assert "Later (1h)" in command
+
+    def test_linux_structured_prompt_uses_safe_default_choices(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                with mock.patch("subprocess.run") as mock_run:
+                    mock_run.return_value.returncode = 0
+                    mock_run.return_value.stdout = ""
+                    result = show_action_dialog(
+                        "Set Up AI Guardian",
+                        "Hooks are missing.",
+                        "Set Up Now",
+                        "Cancel",
+                        ide_choices=(
+                            {"ide": "claude", "name": "Claude Code"},
+                            {"ide": "cursor", "name": "Cursor IDE"},
+                        ),
+                        profile_choices=(
+                            {"profile": "@standard", "name": "Standard"},
+                            {"profile": None, "name": "Skip"},
+                        ),
+                    )
+
+        assert result == {
+            "result": "action",
+            "install": ["claude", "cursor"],
+            "never": [],
+            "profile": "@standard",
+        }
+
+    def test_linux_action_prompt_falls_back_to_kdialog(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch.dict(
+                "os.environ", {"XDG_CURRENT_DESKTOP": "GNOME"}, clear=False
+            ):
+                failed = mock.Mock(returncode=2, stderr="cannot open display")
+                succeeded = mock.Mock(returncode=0, stdout="")
+                with mock.patch(
+                    "subprocess.run", side_effect=[failed, succeeded]
+                ) as mock_run:
+                    assert (
+                        show_action_dialog("Title", "Message", "Continue", "Cancel")
+                        == "action"
+                    )
+
+        assert mock_run.call_args_list[0].args[0][0] == "zenity"
+        assert mock_run.call_args_list[1].args[0][0] == "kdialog"
+
+    def test_linux_action_prompt_returns_dismiss_on_cancel(self):
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Linux"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 1
+                mock_run.return_value.stderr = ""
+                assert (
+                    show_action_dialog("Title", "Message", "Continue", "Cancel")
+                    == "dismiss"
+                )
+
     @pytest.mark.parametrize(
         ("snooze_options", "stdout", "expected"),
         [
