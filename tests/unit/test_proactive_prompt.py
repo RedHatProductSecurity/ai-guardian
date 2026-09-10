@@ -92,6 +92,42 @@ def test_sync_ide_setup_state_records_current_reality_and_keeps_history(tmp_path
     assert saved["ide_setup_status"] == snapshot
 
 
+def test_sync_ide_setup_state_replaces_stale_snapshot_with_new_codex(tmp_path):
+    class FakeIDESetup:
+        IDE_CONFIGS = {"claude": {"name": "Claude Code"}, "codex": {"name": "Codex"}}
+
+        def list_installed_ides(self):
+            return ["codex"]
+
+        def verify_hooks_for_ide(self, ide_type):
+            return {
+                "ide": ide_type,
+                "healthy": True,
+                "events": {"PreToolUse": "healthy"},
+                "obsolete": [],
+            }
+
+    state = ProactivePromptState(tmp_path / "proactive_prompts.json")
+    state.save(
+        {
+            "ide_setup_status": {
+                "installed": ["claude"],
+                "configured": ["claude"],
+                "needs_setup": [],
+                "integrations": {
+                    "claude": {"healthy": True, "events": {}, "obsolete": []}
+                },
+            }
+        }
+    )
+
+    snapshot = sync_ide_setup_state(state=state, setup=FakeIDESetup())
+
+    assert snapshot["installed"] == ["codex"]
+    assert snapshot["configured"] == ["codex"]
+    assert snapshot["needs_setup"] == []
+
+
 def test_sync_ide_setup_state_skips_never_install_when_requested(tmp_path):
     class FakeIDESetup:
         IDE_CONFIGS = {
@@ -689,11 +725,28 @@ def test_manual_ide_check_reports_all_configured():
 
     notify.assert_called_once_with(
         "AI Guardian",
-        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+        "All installed IDE/CLI integrations are configured.",
     )
 
 
-def test_ide_health_notification_explains_configured_and_pending_counts():
+def test_manual_ide_check_reports_unconfigured_codex_as_warning():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_get_installed_ides", return_value=["codex"]),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
+        patch("ai_guardian.tray.plugins.send_notification") as notify,
+    ):
+        monitor._check_ide_setup_notification(manual=True)
+
+    notify.assert_called_once_with(
+        "AI Guardian warning",
+        "IDE/CLI integrations need setup: OpenAI Codex (CLI + Desktop)",
+    )
+
+
+def test_ide_health_notification_lists_only_pending_integrations():
     with patch("ai_guardian.tray.plugins.send_notification") as notify:
         TrayHealthMonitor._notify_ide_check_result(
             ["claude", "cursor", "codex"],
@@ -701,13 +754,22 @@ def test_ide_health_notification_explains_configured_and_pending_counts():
         )
 
     notify.assert_called_once_with(
+        "AI Guardian warning",
+        "IDE/CLI integrations need setup: Cursor IDE/CLI",
+    )
+
+
+def test_ide_health_notification_omits_never_install_integrations():
+    with patch("ai_guardian.tray.plugins.send_notification") as notify:
+        TrayHealthMonitor._notify_ide_check_result(
+            ["claude", "cursor"],
+            unconfigured=["cursor"],
+            excluded=["cursor"],
+        )
+
+    notify.assert_called_once_with(
         "AI Guardian",
-        "IDE/CLI health check: 2 configured, 1 need setup.\n\n"
-        "Configured:\n"
-        "• Claude Code\n"
-        f"• OpenAI Codex (CLI + Desktop) ({CODEX_COVERAGE_NOTE})\n\n"
-        "Needs setup:\n"
-        "• Cursor IDE/CLI",
+        "No additional IDE/CLI integrations need setup.",
     )
 
 
@@ -727,18 +789,18 @@ def test_manual_ide_check_falls_back_to_dialog_when_notification_fails():
 
     notify.assert_called_once_with(
         "AI Guardian",
-        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+        "All installed IDE/CLI integrations are configured.",
     )
     dialog.assert_called_once_with(
         "AI Guardian",
-        "All installed IDE/CLI integrations are configured:\n• Claude Code",
+        "All installed IDE/CLI integrations are configured.",
     )
 
 
 def test_manual_ide_check_does_not_open_popup_when_notification_succeeds():
     tray = SimpleNamespace(_standalone=False, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch("platform.system", return_value="Darwin"),
@@ -808,7 +870,7 @@ def test_overlapping_startup_and_manual_ide_checks_are_deduplicated():
 def test_startup_ide_check_reports_health_result_once():
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
-    message = "All installed IDE/CLI integrations are configured:\n• Claude Code"
+    message = "All installed IDE/CLI integrations are configured."
 
     with (
         patch.object(monitor, "_refresh_ide_setup_state", return_value=None),
