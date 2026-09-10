@@ -445,7 +445,15 @@ class IDESetup:
             return None
 
         if ide_type == "cursor" and scope == "project":
-            project_root = self._cursor_project_root(project_dir)
+            # An explicit project target is already the workspace selected by
+            # the caller. Do not walk arbitrary parents looking for a
+            # similarly named .cursor directory: a shared parent (for
+            # example /tmp in an isolated test) must not redirect writes.
+            project_root = (
+                Path(project_dir).expanduser().resolve()
+                if project_dir
+                else self._cursor_project_root()
+            )
             return str(project_root / ".cursor" / "hooks.json")
         if ide_type == "cursor" and scope not in ("user", "auto"):
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")

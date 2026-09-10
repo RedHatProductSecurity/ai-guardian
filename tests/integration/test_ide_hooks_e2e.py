@@ -1,7 +1,7 @@
 """Isolated end-to-end checks for every supported IDE integration.
 
 The command-hook integrations are installed into a temporary home/project and
-their generated commands are invoked with representative allow, block, and
+every managed lifecycle event is invoked with the applicable allow, block, or
 post-tool-output payloads. Plugin and extension integrations are verified at
 the generated-source boundary because their host runtimes are not available in
 this repository's test environment. Junie is verified as MCP-only.
@@ -31,78 +31,15 @@ from ai_guardian.setup import (
 )
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.setup.utils import _resolve_opencode_config, _strip_jsonc_comments
+from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES, get_e2e_event_cases
 
-EXTERNAL_IDES = (
-    "claude",
-    "cursor",
-    "copilot",
-    "codex",
-    "windsurf",
-    "gemini",
-    "cline",
-    "zoocode",
-    "kiro",
-    "aiderdesk",
-    "openclaw",
-    "opencode",
-    "augment",
-    "crush",
-    "junie",
-)
+EXTERNAL_IDES = SUPPORTED_IDE_TYPES
 
 POST_OUTPUT_MARKER = "E2E_GUARDIAN_MARKER_A1B2C3D4E5F6G7H8"
 POST_OUTPUT_PATTERN = r"E2E_GUARDIAN_MARKER_[A-Z0-9]{16}"
 
 
-# The event selected for each representative path is the event that the
-# generated configuration actually wires. Entries absent from an IDE's native
-# contract are intentionally omitted (for example, Copilot's setup currently
-# has no PostToolUse hook and Crush currently has PreToolUse only).
-REPRESENTATIVE_EVENTS = {
-    "claude": {
-        "allow": "UserPromptSubmit",
-        "block": "PreToolUse",
-        "post": "PostToolUse",
-    },
-    "cursor": {
-        "allow": "beforeSubmitPrompt",
-        "block": "beforeReadFile",
-        "post": "afterShellExecution",
-    },
-    "copilot": {"allow": "userPromptSubmitted", "block": "preToolUse"},
-    "codex": {
-        "allow": "UserPromptSubmit",
-        "block": "PreToolUse",
-        "post": "PostToolUse",
-    },
-    "windsurf": {
-        "allow": "pre_user_prompt",
-        "block": "pre_read_code",
-        "post": "post_run_command",
-    },
-    "gemini": {
-        "allow": "BeforeAgent",
-        "block": "BeforeTool",
-        "post": "AfterTool",
-    },
-    "cline": {
-        "allow": "UserPromptSubmit",
-        "block": "PreToolUse",
-        "post": "PostToolUse",
-    },
-    "zoocode": {
-        "allow": "UserPromptSubmit",
-        "block": "PreToolUse",
-        "post": "PostToolUse",
-    },
-    "kiro": {
-        "allow": "prompt_submit",
-        "block": "pre_tool_use",
-        "post": "post_tool_use",
-    },
-    "augment": {"block": "PreToolUse", "post": "PostToolUse"},
-    "crush": {"allow": "PreToolUse", "block": "PreToolUse"},
-}
+EVENT_CASES = {ide_type: get_e2e_event_cases(ide_type) for ide_type in EXTERNAL_IDES}
 
 
 def _selected_ides() -> Tuple[str, ...]:
@@ -353,12 +290,20 @@ def _payload(
     elif ide_type == "augment":
         payload["is_mcp_tool"] = False
 
+    payload_event_name = event_name
+    if ide_type == "kiro":
+        payload_event_name = {
+            "PromptSubmit": "prompt_submit",
+            "PreToolUse": "pre_tool_use",
+            "PostToolUse": "post_tool_use",
+        }.get(event_name, event_name)
+
     if ide_type == "crush":
-        payload["event"] = event_name
+        payload["event"] = payload_event_name
     elif ide_type == "windsurf":
-        payload["agent_action_name"] = event_name
+        payload["agent_action_name"] = payload_event_name
     else:
-        payload["hook_event_name"] = event_name
+        payload["hook_event_name"] = payload_event_name
 
     if case_name == "allow":
         if ide_type == "crush":
@@ -374,12 +319,22 @@ def _payload(
 
     if case_name == "block":
         if ide_type == "cursor":
-            payload.update(
-                {
-                    "file_path": str(blocked_file),
-                    "content": "safe synthetic fixture",
-                }
-            )
+            if event_name == "beforeShellExecution":
+                command = f"cat {blocked_file}"
+                payload.update(
+                    {
+                        "command": command,
+                        "tool_input": {"command": command},
+                    }
+                )
+            else:
+                payload.update(
+                    {
+                        "tool_name": "Read",
+                        "file_path": str(blocked_file),
+                        "content": "safe synthetic fixture",
+                    }
+                )
         elif ide_type == "copilot":
             payload.update(
                 {
@@ -599,26 +554,27 @@ def test_install_verify_and_exercise_ide_integration(
 
     if not setup.IDE_CONFIGS[ide_type].get("script_based"):
         managed_events = set(setup.expected_hook_manifest(ide_type))
-        for event_name in REPRESENTATIVE_EVENTS[ide_type].values():
+        for event_name in EVENT_CASES[ide_type]:
             assert event_name in managed_events, (
-                f"{ide_type}/{event_name}: representative test event is not "
+                f"{ide_type}/{event_name}: E2E test event is not "
                 "in the managed hook manifest"
             )
 
-    for case_name, event_name in REPRESENTATIVE_EVENTS[ide_type].items():
-        if setup.IDE_CONFIGS[ide_type].get("script_based"):
-            command: Union[str, List[str]] = [
-                str(_script_for_event(setup, ide_type, case_name))
-            ]
-        else:
-            command = _command_for_event(setup, ide_type, event_name)
-        _assert_runtime_case(
-            ide_type,
-            case_name,
-            event_name,
-            command,
-            isolated_ide_environment,
-        )
+    for event_name, cases in EVENT_CASES[ide_type].items():
+        for case_name in cases:
+            if setup.IDE_CONFIGS[ide_type].get("script_based"):
+                command: Union[str, List[str]] = [
+                    str(_script_for_event(setup, ide_type, case_name))
+                ]
+            else:
+                command = _command_for_event(setup, ide_type, event_name)
+            _assert_runtime_case(
+                ide_type,
+                case_name,
+                event_name,
+                command,
+                isolated_ide_environment,
+            )
 
     if ide_type == "cursor":
         # These events are adapter-recognized upstream events, not managed

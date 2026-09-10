@@ -191,9 +191,38 @@ jobs:
           python -m pip install --upgrade pip
           pip install .
 
+      - name: Verify supported IDE registry parity
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
+
+          workflow = Path(".github/workflows/release-readiness.yml").read_text()
+          ide_job_header = "  " + "ide-hook-e2e:"
+          setup_section = workflow.split(ide_job_header, 1)[0]
+          setup_match = re.search(r'\bIDES="([^"]+)"', setup_section)
+          assert setup_match, "release-readiness setup list is missing"
+          setup_ids = tuple(setup_match.group(1).split())
+
+          matrix_section = workflow.split(ide_job_header, 1)[1].split(
+              "\n    steps:", 1
+          )[0]
+          matrix_values = matrix_section.split("        ide:\n", 1)[1]
+          matrix_ids = tuple(
+              re.findall(r"^\s+- ([a-z0-9-]+)$", matrix_values, re.MULTILINE)
+          )
+
+          expected = tuple(SUPPORTED_IDE_TYPES)
+          assert setup_ids == expected, (setup_ids, expected)
+          assert matrix_ids == expected, (matrix_ids, expected)
+          print(f"Canonical IDE registry verified: {', '.join(expected)}")
+          PY
+
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot gemini codex windsurf cline zoocode augment kiro aiderdesk openclaw opencode crush junie"
+          IDES="claude cursor copilot codex windsurf gemini cline zoocode kiro aiderdesk openclaw opencode augment crush junie"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"

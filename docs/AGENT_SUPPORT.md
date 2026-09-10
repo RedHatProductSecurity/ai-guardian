@@ -8,6 +8,13 @@ supports and where known limitations remain. Use the
 implementation, test, documentation, and release workflow when adding or
 changing an integration.
 
+The canonical cross-cutting registry is
+[`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). The executable
+parity contract in [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py)
+checks that this support list agrees with adapter aliases, setup modes,
+managed events, MCP/rules and transcript/session registries, installer
+surfaces, and release-readiness matrices.
+
 ### Codex and ChatGPT desktop scope
 
 `OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the
@@ -40,6 +47,43 @@ upstream distinction.
 | OpenCode | `--ide opencode` | Plugin | N/A | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
+
+## Coverage-to-test matrix
+
+This matrix is keyed by the canonical registry rather than by display-name
+groupings. Shared implementations still have one row per public key, so a
+Cline/ZooCode or Kiro/AiderDesk/OpenClaw change cannot hide a missing setup,
+health, or documentation path. The common hook contract includes allow, block,
+warning, output transformation, malformed input, timeout/process failure, and
+response-shape assertions where the host exposes that surface. The isolated
+E2E test invokes every managed event; plugin/extension rows use generated
+bridge contracts because their host SDKs are not repository dependencies.
+
+| Registry key | Adapter/setup evidence | Transcript/session evidence | E2E and scope evidence |
+|---|---|---|---|
+| `claude` | Shared adapter, setup merge/reconciliation, hook pipeline, UX setup contracts | JSONL path supplied by hook; browser session adapter | Isolated all-managed-event matrix; user scope and doctor/tray health |
+| `cursor` | Dedicated adapter, six managed events, fail-closed decision hooks, project/cloud setup | Cursor SQLite; browser session adapter | Isolated event matrix plus recognized-event/failure checks; user vs project/cloud MCP scope |
+| `copilot` | Dedicated adapter, prompt/pre-tool response contract and no-local-MCP boundary | Copilot CLI JSONL and VS Code delta journal; browser session adapter | Isolated managed-event matrix; command-hook health |
+| `codex` | Dedicated adapter, five managed events, layered config/MCP reconciliation, Codex UX contracts | Codex JSONL default-path discovery; browser session adapter | Isolated event matrix; CLI/desktop Codex-mode scope explicitly separated from regular ChatGPT |
+| `windsurf` | Dedicated adapter and nine managed command-hook events | Windsurf JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook process I/O |
+| `gemini` | Dedicated adapter, SessionStart/BeforeAgent/BeforeTool/AfterTool mapping | Explicit-path JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook health |
+| `cline` | Cline adapter and script-hook setup/reconciliation | Cline JSON-array transcript; shared Cline session adapter | Isolated script-event matrix; project-local hook scope |
+| `zoocode` | ZooCode key mapped to the shared Cline adapter and script contract | Shared Cline JSON-array/session evidence | Isolated script-event matrix; explicit alias and shared-layout coverage |
+| `kiro` | Dedicated Kiro adapter and script-hook setup/reconciliation | Kiro JSONL; browser session adapter | Isolated script-event matrix; project-local hook scope |
+| `aiderdesk` | Extension bridge/package registration and shared Kiro response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
+| `openclaw` | Plugin bridge/package registration, rules setup, and shared Kiro response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
+| `opencode` | Plugin bridge, SQLite/session setup, and Claude-compatible response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
+| `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
+| `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
+| `junie` | MCP/rules setup and explicit no-hook adapter placeholder | No transcript/session adapter | Isolated MCP-only registration/health boundary; advisory, non-enforcing behavior |
+
+The implementation checklist defines the minimum tests that must be added for
+future integrations. For this repository, the main evidence paths are
+`tests/unit/test_ide_registry.py`, `tests/unit/test_hook_adapters.py`,
+`tests/unit/test_setup.py`, the per-agent support/transcript tests,
+`tests/unit/test_auto_setup.py`, `tests/unit/test_cli_ide_setup.py`,
+`tests/test_install_script.py`, `tests/ux/`, and
+`tests/integration/test_ide_hooks_e2e.py`.
 
 ## Hook Capability Matrix
 
@@ -224,7 +268,6 @@ environment should provide `run_id` in their hook events when supported.
 | Kiro | JSONL | `~/.kiro/sessions/cli/{session_id}.jsonl` |
 | AiderDesk | Markdown | `.aider.chat.history.md` (project root) |
 | OpenClaw | JSONL | `~/.openclaw/transcripts/YYYY-MM-DD/{session}/transcript.jsonl` |
-| Copilot Chat (VS Code) | JSONL delta journal | `workspaceStorage/*/chatSessions/*.jsonl` |
 
 Agents not listed above do not have transcript scanning support.
 
@@ -486,7 +529,7 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`, `zoocode`, `kiro`, `augment`, `aiderdesk`, `openclaw`, `opencode`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, `junie`
 
 ### Config File Locations
 
@@ -504,6 +547,8 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `clin
 | Cline / ZooCode | `.clinerules/hooks/` (scripts) |
 | Kiro | `.kiro/hooks/` (scripts) |
 | Augment Code | `~/.augment/settings.json` |
+| AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension) |
+| OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin) |
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
 | Junie | `.junie/guidelines` (MCP only) |
