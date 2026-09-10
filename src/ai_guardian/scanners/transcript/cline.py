@@ -12,6 +12,7 @@ import os
 import sys
 from typing import Dict, List, Optional, Tuple
 
+from ai_guardian.ide_paths import get_ide_home
 from ai_guardian.scanners.transcript.base import TranscriptAdapter
 from ai_guardian.scanners.transcript.common import (
     _get_most_recent_entry,
@@ -27,9 +28,10 @@ HISTORY_FILENAME = "api_conversation_history.json"
 def get_cline_storage_dir() -> Optional[str]:
     """Find the Cline tasks directory.
 
-    Checks ``CLINE_STORAGE_DIR`` env var first, then platform-specific defaults.
+    Checks the explicit storage/data directories first, then platform-specific
+    VS Code storage defaults.
     """
-    custom = os.environ.get("CLINE_STORAGE_DIR")
+    custom = os.environ.get("CLINE_STORAGE_DIR") or os.environ.get("CLINE_DATA_DIR")
     if custom:
         tasks = (
             custom
@@ -38,6 +40,12 @@ def get_cline_storage_dir() -> Optional[str]:
         )
         if os.path.isdir(tasks):
             return tasks
+
+    relocated_home = get_ide_home("cline")
+    if relocated_home:
+        relocated_tasks = relocated_home / "tasks"
+        if relocated_tasks.is_dir():
+            return str(relocated_tasks)
 
     ext_id = "saoudrizwan.claude-dev"
     if sys.platform == "darwin":

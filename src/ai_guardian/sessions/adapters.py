@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ai_guardian.ide_paths import get_ide_home
 from ai_guardian.sessions.base import (
     SessionAdapter,
     StepCollector,
@@ -29,7 +30,8 @@ logger = logging.getLogger(__name__)
 class ClaudeSessionAdapter(SessionAdapter):
     name = "claude"
     session_dirs = {
-        "env": "CLAUDE_CONFIG_DIR",
+        "home_ide": "claude",
+        "home_subdir": ("projects",),
         "default_mac": "~/.claude/projects",
         "default_linux": "~/.claude/projects",
         "default_win": "~/.claude/projects",
@@ -803,7 +805,8 @@ class CopilotSessionAdapter(SessionAdapter):
 class CodexSessionAdapter(SessionAdapter):
     name = "codex"
     session_dirs = {
-        "env": "CODEX_HOME",
+        "home_ide": "codex",
+        "home_subdir": ("sessions",),
         "default_mac": "~/.codex/sessions",
         "default_linux": "~/.codex/sessions",
         "default_win": "~/.codex/sessions",
@@ -1241,7 +1244,8 @@ class CodexSessionAdapter(SessionAdapter):
 class GeminiSessionAdapter(SessionAdapter):
     name = "gemini"
     session_dirs = {
-        "env": "GEMINI_CLI_HOME",
+        "home_ide": "gemini",
+        "home_subdir": ("tmp",),
         "default_mac": "~/.gemini/tmp",
         "default_linux": "~/.gemini/tmp",
         "default_win": "~/.gemini/tmp",
@@ -1379,6 +1383,7 @@ class ClineSessionAdapter(SessionAdapter):
     name = "cline"
     session_dirs = {
         "env": "CLINE_STORAGE_DIR",
+        "env_aliases": ("CLINE_DATA_DIR",),
         "default_mac": "~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev",
         "default_linux": "~/.config/Code/User/globalStorage/saoudrizwan.claude-dev",
         "default_win": "%APPDATA%/Code/User/globalStorage/saoudrizwan.claude-dev",
@@ -1388,7 +1393,9 @@ class ClineSessionAdapter(SessionAdapter):
         sessions = []
 
         search_dirs = []
-        cline_home = Path("~/.cline/data/tasks").expanduser()
+        cline_home = (
+            get_ide_home("cline") or Path("~/.cline/data").expanduser()
+        ) / "tasks"
         if cline_home.is_dir():
             search_dirs.append(cline_home)
 
@@ -1633,6 +1640,8 @@ class KiroSessionAdapter(SessionAdapter):
     name = "kiro"
     session_dirs = {
         "env": "KIRO_SESSIONS_DIR",
+        "home_ide": "kiro",
+        "home_subdir": ("sessions", "cli"),
         "default_mac": "~/.kiro/sessions/cli",
         "default_linux": "~/.kiro/sessions/cli",
         "default_win": "~/.kiro/sessions/cli",

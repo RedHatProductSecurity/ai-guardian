@@ -14,6 +14,7 @@ from typing import ClassVar, Dict, List, Optional
 
 from ai_guardian.constants import HookEvent
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
+from ai_guardian.ide_paths import get_ide_home
 
 logger = logging.getLogger(__name__)
 
@@ -51,8 +52,15 @@ class CopilotAdapter(HookAdapter):
 
     def get_default_transcript_paths(self) -> List[str]:
         """Return Copilot CLI transcript path if it exists."""
-        if os.path.isfile(self.TRANSCRIPT_PATH):
-            return [self.TRANSCRIPT_PATH]
+        transcript_path = self.TRANSCRIPT_PATH
+        if transcript_path == os.path.expanduser(
+            "~/.copilot/session-state/events.jsonl"
+        ):
+            copilot_home = get_ide_home("copilot")
+            if copilot_home is not None:
+                transcript_path = str(copilot_home / "session-state" / "events.jsonl")
+        if os.path.isfile(transcript_path):
+            return [transcript_path]
         return []
 
     def normalize_input(self, hook_data: Dict) -> NormalizedHookInput:

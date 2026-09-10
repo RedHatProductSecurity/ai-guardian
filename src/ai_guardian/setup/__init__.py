@@ -152,7 +152,7 @@ def setup_hooks(
     Setup IDE hooks with optional remote config and default config creation.
 
     Args:
-        ide_type: IDE type ('claude' or 'cursor') or None for auto-detect
+        ide_type: Supported IDE type or None for auto-detect
         remote_config_url: Optional remote config URL to add
         dry_run: If True, show what would be changed without applying
         force: If True, overwrite existing hooks

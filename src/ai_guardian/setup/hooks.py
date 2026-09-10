@@ -18,6 +18,7 @@ from ai_guardian.constants import (
     HookEvent,
     MANAGED_HOOK_EVENTS_BY_IDE,
 )
+from ai_guardian.ide_paths import resolve_ide_config_path
 from ai_guardian.setup.utils import (
     _create_vbs_wrapper,
     _is_ai_guardian_command,
@@ -109,7 +110,7 @@ class IDESetup:
             "name": "Cursor IDE",
             "mcp_client_name": "cursor",
             "config_path": "~/.cursor/hooks.json",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "CURSOR_CONFIG_DIR",
             "config_filename": "hooks.json",
             "hooks": {
                 "version": 1,
@@ -131,7 +132,7 @@ class IDESetup:
             "name": "GitHub Copilot",
             "mcp_client_name": "github-copilot",
             "config_path": "~/.github/hooks/hooks.json",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "COPILOT_HOME",
             "config_filename": "hooks.json",
             "hooks": {
                 "userPromptSubmitted": [{"command": "ai-guardian"}],
@@ -225,7 +226,7 @@ class IDESetup:
             "name": "Google Gemini CLI",
             "mcp_client_name": "gemini-cli",
             "config_path": "~/.gemini/settings.json",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "GEMINI_CLI_HOME",
             "config_filename": "settings.json",
             "hooks": {
                 "hooks": [
@@ -289,14 +290,14 @@ class IDESetup:
         "aiderdesk": {
             "name": "AiderDesk",
             "config_path": "~/.aider-desk/extensions/ai-guardian",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "AIDER_DESK_DIR",
             "config_filename": None,
             "extension_based": True,
         },
         "openclaw": {
             "name": "OpenClaw",
             "config_path": "~/.openclaw/plugins/ai-guardian",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "OPENCLAW_STATE_DIR",
             "config_filename": None,
             "extension_based": True,
         },
@@ -304,7 +305,7 @@ class IDESetup:
             "name": "OpenCode",
             "mcp_client_name": "opencode",
             "config_path": "~/.config/opencode/plugins",
-            "config_dir_env_var": None,
+            "config_dir_env_var": "OPENCODE_CONFIG_DIR",
             "config_filename": None,
             "plugin_file": True,
         },
@@ -384,15 +385,16 @@ class IDESetup:
     @staticmethod
     def get_claude_config_path() -> str:
         """
-        Get Claude Code config path, respecting CLAUDE_CONFIG_DIR environment variable.
+        Get Claude Code config path, respecting ``CLAUDE_CONFIG_DIR``.
 
         Returns:
             str: Path to Claude Code settings.json
         """
-        claude_config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
-        if claude_config_dir:
-            return os.path.join(claude_config_dir, "settings.json")
-        return "~/.claude/settings.json"
+        return resolve_ide_config_path(
+            "claude",
+            "~/.claude/settings.json",
+            filename="settings.json",
+        )
 
     @staticmethod
     def _cursor_project_root(cwd: Optional[str] = None) -> Path:
@@ -433,13 +435,15 @@ class IDESetup:
         to customize the config directory location (e.g., CLAUDE_CONFIG_DIR).
 
         Args:
-            ide_type: IDE type ('claude' or 'cursor')
+            ide_type: IDE type from ``IDE_CONFIGS``
             scope: Cursor configuration scope ('user' or 'project'). Other
                 integrations retain their existing path behavior.
             project_dir: Workspace directory for Cursor project scope.
 
         Returns:
-            str: Path to IDE config file, or None if IDE type unknown
+            str: Path to IDE config file, or None if IDE type unknown. User
+                home variables are applied only to user-level integrations;
+                project-local integrations keep their repository paths.
         """
         if ide_type not in self.IDE_CONFIGS:
             return None
@@ -461,19 +465,42 @@ class IDESetup:
         ide_config = self.IDE_CONFIGS[ide_type]
         base_config_path = ide_config["config_path"]
 
-        # Check if this IDE supports a custom config directory via env var
-        # Only use env var if the config_path is still the default value
-        env_var_name = ide_config.get("config_dir_env_var")
-        if env_var_name:
-            default_path = ide_config["config_path"]
-            if base_config_path == default_path:
-                # Check environment variable
-                custom_config_dir = os.environ.get(env_var_name)
-                if custom_config_dir:
-                    config_filename = ide_config.get("config_filename", "settings.json")
-                    return os.path.join(custom_config_dir, config_filename)
-
-        return base_config_path
+        # Only user-level setup targets use IDE home variables.  Cline,
+        # ZooCode, Kiro, Junie, and Crush intentionally retain project-local
+        # setup paths even when those products expose a separate global home.
+        allow_env = ide_type not in ("cline", "zoocode", "kiro", "junie", "crush")
+        config_filename = ide_config.get("config_filename")
+        if ide_type == "opencode":
+            return resolve_ide_config_path(
+                ide_type,
+                base_config_path,
+                env_subdir=("plugins",),
+            )
+        if ide_type == "aiderdesk":
+            return resolve_ide_config_path(
+                ide_type,
+                base_config_path,
+                env_subdir=("extensions", "ai-guardian"),
+            )
+        if ide_type == "openclaw":
+            return resolve_ide_config_path(
+                ide_type,
+                base_config_path,
+                env_subdir=("plugins", "ai-guardian"),
+            )
+        if ide_type == "copilot":
+            return resolve_ide_config_path(
+                ide_type,
+                base_config_path,
+                filename=config_filename,
+                env_subdir=("hooks",),
+            )
+        return resolve_ide_config_path(
+            ide_type,
+            base_config_path,
+            filename=config_filename,
+            allow_env=allow_env,
+        )
 
     def __init__(self):
         """Initialize IDE setup manager."""

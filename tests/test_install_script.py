@@ -270,6 +270,29 @@ class TestInstallPs1:
         content = PS1_SCRIPT.read_text()
         assert "Detect-InstalledAgents" in content
 
+    def test_ps1_detection_honors_ide_home_variables(self):
+        content = PS1_SCRIPT.read_text()
+        for env_var in (
+            "CLAUDE_CONFIG_DIR",
+            "CURSOR_CONFIG_DIR",
+            "COPILOT_HOME",
+            "CODEX_HOME",
+            "GEMINI_CLI_HOME",
+            "CLINE_DATA_DIR",
+            "CLINE_STORAGE_DIR",
+            "KIRO_HOME",
+            "JUNIE_HOME",
+            "OPENCODE_CONFIG_DIR",
+            "OPENCODE_CONFIG",
+            "AIDER_DESK_DIR",
+            "AIDER_DESK_HOME_DIR",
+            "OPENCLAW_STATE_DIR",
+            "OPENCLAW_HOME",
+            "OPENCLAW_CONFIG_PATH",
+            "CRUSH_GLOBAL_CONFIG",
+        ):
+            assert f"$env:{env_var}" in content
+
     def test_ps1_detects_unconfigured_ide_directories(self):
         content = PS1_SCRIPT.read_text()
         for config_dir in (

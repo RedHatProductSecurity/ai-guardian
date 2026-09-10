@@ -90,27 +90,84 @@ detect_installed_agents() {
     # the case this installer must configure.
     local claude_dir="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
     [ -d "$claude_dir" ] && agents+=("claude")
-    [ -d "$HOME/.cursor" ] && agents+=("cursor")
-    [ -d "$HOME/.github/hooks" ] && agents+=("copilot")
-    [ -d "$HOME/.codex" ] && agents+=("codex")
+
+    if [ -n "${CURSOR_CONFIG_DIR:-}" ]; then
+        [ -d "$CURSOR_CONFIG_DIR" ] && agents+=("cursor")
+    elif [ -d "$HOME/.cursor" ]; then
+        agents+=("cursor")
+    fi
+
+    if [ -n "${COPILOT_HOME:-}" ]; then
+        [ -d "$COPILOT_HOME" ] && agents+=("copilot")
+    elif [ -d "$HOME/.github/hooks" ]; then
+        agents+=("copilot")
+    fi
+
+    local codex_dir="${CODEX_HOME:-$HOME/.codex}"
+    [ -d "$codex_dir" ] && agents+=("codex")
     [ -d "$HOME/.codeium/windsurf" ] && agents+=("windsurf")
-    [ -d "$HOME/.gemini" ] && agents+=("gemini")
+    if [ -n "${GEMINI_CLI_HOME:-}" ]; then
+        [ -d "$GEMINI_CLI_HOME" ] && agents+=("gemini")
+    elif [ -d "$HOME/.gemini" ]; then
+        agents+=("gemini")
+    fi
     [ -d "$HOME/.augment" ] && agents+=("augment")
 
     # Project-local integrations are detected from their marker directory or
     # file. Cline and ZooCode share the .clinerules hook layout; select Cline
     # for automatic setup and leave an explicit --ide zoocode path available
     # when the project is known to use ZooCode.
-    [ -d ".clinerules" ] && agents+=("cline")
-    [ -d ".kiro" ] && agents+=("kiro")
-    [ -d ".junie" ] && agents+=("junie")
-    [ -f ".crush.json" ] && agents+=("crush")
+    if [ -d ".clinerules" ]; then
+        agents+=("cline")
+    elif [ -n "${CLINE_DATA_DIR:-}" ] || [ -n "${CLINE_STORAGE_DIR:-}" ]; then
+        local cline_home="${CLINE_DATA_DIR:-${CLINE_STORAGE_DIR}}"
+        [ -d "$cline_home" ] && agents+=("cline")
+    fi
+    if [ -d ".kiro" ]; then
+        agents+=("kiro")
+    elif [ -n "${KIRO_HOME:-}" ]; then
+        [ -d "$KIRO_HOME" ] && agents+=("kiro")
+    fi
+    if [ -d ".junie" ]; then
+        agents+=("junie")
+    elif [ -n "${JUNIE_HOME:-}" ]; then
+        [ -d "$JUNIE_HOME" ] && agents+=("junie")
+    fi
+    if [ -f ".crush.json" ]; then
+        agents+=("crush")
+    elif [ -n "${CRUSH_GLOBAL_CONFIG:-}" ]; then
+        [ -f "$CRUSH_GLOBAL_CONFIG" ] && agents+=("crush")
+    fi
 
     # Plugin/extension agents are detected from their parent configuration
     # directory so the installer can create the integration on first setup.
-    [ -d "$HOME/.config/opencode" ] && agents+=("opencode")
-    [ -d "$HOME/.aider-desk/extensions" ] && agents+=("aiderdesk")
-    [ -d "$HOME/.openclaw/plugins" ] && agents+=("openclaw")
+    if [ -n "${OPENCODE_CONFIG:-}" ]; then
+        local opencode_config_dir
+        opencode_config_dir="$(dirname "$OPENCODE_CONFIG")"
+        [ -d "$opencode_config_dir" ] && agents+=("opencode")
+    else
+        local opencode_dir="${OPENCODE_CONFIG_DIR:-$HOME/.config/opencode}"
+        [ -d "$opencode_dir" ] && agents+=("opencode")
+    fi
+
+    if [ -n "${AIDER_DESK_DIR:-}" ] || [ -n "${AIDER_DESK_HOME_DIR:-}" ]; then
+        local aiderdesk_dir="${AIDER_DESK_DIR:-${AIDER_DESK_HOME_DIR}}"
+        [ -d "$aiderdesk_dir" ] && agents+=("aiderdesk")
+    elif [ -d "$HOME/.aider-desk/extensions" ]; then
+        agents+=("aiderdesk")
+    fi
+
+    if [ -n "${OPENCLAW_CONFIG_PATH:-}" ]; then
+        local openclaw_config_dir
+        openclaw_config_dir="$(dirname "$OPENCLAW_CONFIG_PATH")"
+        [ -d "$openclaw_config_dir" ] && agents+=("openclaw")
+    elif [ -n "${OPENCLAW_STATE_DIR:-}" ]; then
+        [ -d "$OPENCLAW_STATE_DIR" ] && agents+=("openclaw")
+    elif [ -n "${OPENCLAW_HOME:-}" ]; then
+        [ -d "$OPENCLAW_HOME" ] && agents+=("openclaw")
+    elif [ -d "$HOME/.openclaw/plugins" ]; then
+        agents+=("openclaw")
+    fi
 
     echo "${agents[@]}"
 }

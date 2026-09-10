@@ -10,6 +10,7 @@ import logging
 import os
 from typing import Dict, List, Optional
 
+from ai_guardian.ide_paths import get_ide_home
 from ai_guardian.scanners.transcript.base import TranscriptAdapter
 from ai_guardian.scanners.transcript.common import (
     _discover_path,
@@ -23,9 +24,19 @@ logger = logging.getLogger(__name__)
 def get_kiro_sessions_dir() -> Optional[str]:
     """Find the Kiro CLI sessions directory.
 
-    Checks ``KIRO_SESSIONS_DIR`` env var first, then the default
-    ``~/.kiro/sessions/cli`` path.
+    Checks ``KIRO_SESSIONS_DIR`` first, then the relocated ``KIRO_HOME``
+    session directory, and finally the default path.
     """
+    custom = os.environ.get("KIRO_SESSIONS_DIR")
+    if custom and os.path.isdir(custom):
+        return custom
+
+    relocated_home = get_ide_home("kiro")
+    if relocated_home:
+        relocated = relocated_home / "sessions" / "cli"
+        if relocated.is_dir():
+            return str(relocated)
+
     return _discover_path("KIRO_SESSIONS_DIR", "~/.kiro/sessions/cli")
 
 

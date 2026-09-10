@@ -6,6 +6,8 @@ import shutil
 from pathlib import Path
 from typing import Dict, Optional
 
+from ai_guardian.ide_paths import resolve_opencode_config
+
 
 def _resolve_binary_path() -> str:
     """Resolve absolute path to ai-guardian binary at setup time.
@@ -196,11 +198,7 @@ def _strip_jsonc_comments(text: str) -> str:
 def _resolve_opencode_config() -> Path:
     """Find existing OpenCode config or return default path.
 
-    Priority: opencode.json (if exists) > opencode.jsonc (if exists) > new opencode.jsonc.
+    Delegates to the canonical IDE path resolver so ``OPENCODE_CONFIG`` and
+    ``OPENCODE_CONFIG_DIR`` are applied consistently by setup and MCP code.
     """
-    base = Path("~/.config/opencode").expanduser()
-    for name in ("opencode.json", "opencode.jsonc"):
-        candidate = base / name
-        if candidate.exists():
-            return candidate
-    return base / "opencode.jsonc"
+    return resolve_opencode_config()

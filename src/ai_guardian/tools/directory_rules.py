@@ -23,6 +23,12 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Set
 
+from ai_guardian.ide_paths import (
+    get_active_ide_home_env_var,
+    get_ide_home,
+    resolve_ide_skill_dir,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -165,11 +171,11 @@ class DirectoryRuleGenerator:
         Get list of skill directories to scan.
 
         Supports multiple IDE agents:
-        - Claude Code: ./.claude/skills, ~/.claude/skills, $CLAUDE_CONFIG_DIR/skills
+        - Project-local skill directories remain rooted in the current project
+        - User-level skill directories follow the canonical IDE home variables
         - Claude Code plugins: ~/.claude/plugins/cache/*/*/*/skills
-        - Cursor: ./.cursor/skills, ~/.cursor/skills
-        - VSCode/Copilot: ./.vscode/skills, ~/.vscode/skills
-        - Windsurf: ./.windsurf/skills, ~/.windsurf/skills
+        - Windsurf keeps its existing default paths because no documented home
+          relocation variable is available
 
         Args:
             auto_config: auto_directory_rules configuration
@@ -194,24 +200,54 @@ class DirectoryRuleGenerator:
                 Path.home() / ".windsurf" / "skills",
             ]
 
-            # Plugin cache directories (skills installed via plugins)
-            # Structure: ~/.claude/plugins/cache/<marketplace>/<plugin>/<hash>/skills/
-            plugin_cache = Path.home() / ".claude" / "plugins" / "cache"
-            if plugin_cache.is_dir():
-                try:
-                    for skills_dir in plugin_cache.glob("*/*/*/skills"):
-                        if skills_dir.is_dir():
-                            candidate_dirs.append(skills_dir)
-                except Exception as e:
-                    logger.warning(f"Error scanning plugin cache {plugin_cache}: {e}")
-
-            # Add IDE-specific config directories from environment
-            # Claude Code
-            claude_config = os.environ.get("CLAUDE_CONFIG_DIR")
-            if claude_config:
-                validated = self._validate_env_path("CLAUDE_CONFIG_DIR", claude_config)
+            # Add user skill locations for relocated IDE homes. Keep the
+            # historical default list above unchanged when no relocation is
+            # configured, while validating environment-provided paths before
+            # they become scanner inputs.
+            user_skill_defaults = {
+                "claude": "~/.claude/skills",
+                "cursor": "~/.cursor/skills",
+                "codex": "~/.codex/skills",
+                "copilot": "~/.vscode/skills",
+                "gemini": "~/.gemini/skills",
+                "cline": "~/.cline/skills",
+                "zoocode": "~/.cline/skills",
+                "kiro": "~/.kiro/skills",
+                "junie": "~/.junie/skills",
+                "aiderdesk": "~/.aider-desk/skills",
+                "openclaw": "~/.openclaw/skills",
+                "opencode": "~/.config/opencode/skills",
+                "augment": "~/.augment/skills",
+            }
+            for ide_type, default_skill_dir in user_skill_defaults.items():
+                env_var = get_active_ide_home_env_var(ide_type)
+                if not env_var:
+                    continue
+                env_value = os.environ.get(env_var, "")
+                validated = self._validate_env_path(env_var, env_value)
                 if validated:
-                    candidate_dirs.append(validated / "skills")
+                    candidate_dirs.append(
+                        resolve_ide_skill_dir(ide_type, default_skill_dir)
+                    )
+
+            # Plugin cache directories (skills installed via plugins). Check
+            # both the historical cache and a relocated Claude cache.
+            plugin_caches = [Path.home() / ".claude" / "plugins" / "cache"]
+            relocated_claude = get_ide_home("claude")
+            if relocated_claude:
+                relocated_cache = relocated_claude / "plugins" / "cache"
+                if relocated_cache not in plugin_caches:
+                    plugin_caches.append(relocated_cache)
+            for plugin_cache in plugin_caches:
+                if plugin_cache.is_dir():
+                    try:
+                        for skills_dir in plugin_cache.glob("*/*/*/skills"):
+                            if skills_dir.is_dir():
+                                candidate_dirs.append(skills_dir)
+                    except OSError as exc:
+                        logger.warning(
+                            "Error scanning plugin cache %s: %s", plugin_cache, exc
+                        )
 
             # Cursor (uses CURSOR_PROJECT_PATH for project root)
             cursor_project = os.environ.get("CURSOR_PROJECT_PATH")

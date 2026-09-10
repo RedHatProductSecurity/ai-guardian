@@ -48,6 +48,47 @@ upstream distinction.
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
 
+## IDE-specific home and configuration paths
+
+AI Guardian resolves user-level setup, MCP registration, verification, audit,
+and supported session paths from the same environment-variable rules. An
+explicit complete-file variable has priority over a home-directory variable;
+the first variable listed for an integration wins. A project-scoped operation
+always remains project-local, even when the IDE also supports a relocated user
+home. With no variables set, the existing defaults below are unchanged.
+
+| Integration | User-home or file variables | Relocated user-level targets | Project/local behavior |
+|---|---|---|---|
+| Claude Code | `CLAUDE_CONFIG_DIR` | Hooks: `<dir>/settings.json`; MCP: `<dir>/.claude.json`; sessions: `<dir>/projects` | Project `.claude/` and `.mcp.json` paths are not redirected |
+| OpenAI Codex | `CODEX_HOME` | Hooks: `<dir>/hooks.json`; MCP: `<dir>/config.toml`; sessions: `<dir>/sessions` | Project `.codex/` layers remain project-local |
+| Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
+| GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
+| Gemini CLI | `GEMINI_CLI_HOME` | The effective `.gemini` home is `<dir>/.gemini`; hooks/settings: `<dir>/.gemini/settings.json`; sessions: `<dir>/.gemini/tmp` | Project `.gemini/` paths are not redirected |
+| Cline / ZooCode | `CLINE_DATA_DIR` for user MCP; `CLINE_STORAGE_DIR` remains a transcript/storage alias | MCP: `<dir>/mcp_settings.json` | Hook setup remains project-local at `.clinerules/hooks` |
+| Kiro | `KIRO_HOME` | MCP: `<dir>/settings/mcp.json`; CLI sessions: `<dir>/sessions/cli` | Hook setup remains project-local at `.kiro/hooks`; the historical no-env MCP default is retained |
+| Junie | `JUNIE_HOME` | MCP: `<dir>/mcp.json` | Guidelines remain project-local at `.junie/guidelines`; `JUNIE_CONFIG_LOCATION` is an additive upstream search path, not a replacement selected by AI Guardian |
+| AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
+| OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
+| OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins` | Project-local config remains project-local |
+| Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
+| Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
+| Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
+
+These names follow the upstream contracts for [Claude](https://code.claude.com/docs/en/env-vars),
+[Codex](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs),
+[Cursor](https://prod.cursor.com/docs/cli/reference/configuration),
+[Copilot CLI](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference),
+[Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md),
+[Kiro](https://kiro.dev/docs/cli/reference/settings/),
+[Junie](https://junie.jetbrains.com/docs/environment-variables.html),
+[Cline](https://github.com/cline/cline/blob/main/docs/cli/cli-reference.mdx),
+[OpenClaw](https://github.com/openclaw/openclaw/blob/main/docs/help/environment.md),
+and [OpenCode](https://dev.opencode.ai/docs/config). The
+[AiderDesk release notes](https://github.com/hotovo/aider-desk/releases) and
+[Crush repository](https://github.com/charmbracelet/crush) document their
+custom directory/configuration variables. Integrations without a documented
+relocation variable deliberately keep their existing defaults.
+
 ## Coverage-to-test matrix
 
 This matrix is keyed by the canonical registry rather than by display-name

@@ -16,6 +16,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from ai_guardian.ide_paths import get_active_ide_home_env_var, resolve_ide_skill_dir
+
 logger = logging.getLogger(__name__)
 
 
@@ -430,10 +432,10 @@ class ConfigDisplay:
         Get list of skill directories to scan.
 
         Supports multiple IDE agents:
-        - Claude Code: ./.claude/skills, ~/.claude/skills, $CLAUDE_CONFIG_DIR/skills
-        - Cursor: ./.cursor/skills, ~/.cursor/skills
-        - VSCode/Copilot: ./.vscode/skills, ~/.vscode/skills
-        - Windsurf: ./.windsurf/skills, ~/.windsurf/skills
+        - Project-local skill directories remain rooted in the current project
+        - User-level skill directories follow the canonical IDE home variables
+        - Windsurf keeps its existing default paths because no documented home
+          relocation variable is available
 
         Args:
             auto_config: auto_directory_rules configuration
@@ -458,15 +460,30 @@ class ConfigDisplay:
                 str(Path.home() / ".windsurf" / "skills"),
             ]
 
-            # Add IDE-specific config directories from environment
-            import os
-
-            # Claude Code
-            claude_config = os.environ.get("CLAUDE_CONFIG_DIR")
-            if claude_config:
-                dirs.append(str(Path(claude_config) / "skills"))
+            # Add relocated user skill directories without changing the
+            # historical default list when no IDE home variable is set.
+            user_skill_defaults = {
+                "claude": "~/.claude/skills",
+                "cursor": "~/.cursor/skills",
+                "codex": "~/.codex/skills",
+                "copilot": "~/.vscode/skills",
+                "gemini": "~/.gemini/skills",
+                "cline": "~/.cline/skills",
+                "zoocode": "~/.cline/skills",
+                "kiro": "~/.kiro/skills",
+                "junie": "~/.junie/skills",
+                "aiderdesk": "~/.aider-desk/skills",
+                "openclaw": "~/.openclaw/skills",
+                "opencode": "~/.config/opencode/skills",
+                "augment": "~/.augment/skills",
+            }
+            for ide_type, default_skill_dir in user_skill_defaults.items():
+                if get_active_ide_home_env_var(ide_type):
+                    dirs.append(str(resolve_ide_skill_dir(ide_type, default_skill_dir)))
 
             # Cursor
+            import os
+
             cursor_project = os.environ.get("CURSOR_PROJECT_PATH")
             if cursor_project:
                 dirs.append(str(Path(cursor_project) / ".cursor" / "skills"))

@@ -13,6 +13,7 @@ from typing import ClassVar, Dict, FrozenSet, List
 
 from ai_guardian.constants import CODEX_DISPLAY_NAME
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
+from ai_guardian.ide_paths import get_ide_home
 
 
 class CodexAdapter(BaseAgentAdapter):
@@ -94,10 +95,16 @@ class CodexAdapter(BaseAgentAdapter):
         Returns all JSONL files sorted by modification time (most recent first)
         so the caller can scan the active session.
         """
-        if not os.path.isdir(self.SESSIONS_DIR):
+        sessions_dir = self.SESSIONS_DIR
+        if sessions_dir == os.path.expanduser("~/.codex/sessions"):
+            codex_home = get_ide_home("codex")
+            if codex_home is not None:
+                sessions_dir = str(codex_home / "sessions")
+
+        if not os.path.isdir(sessions_dir):
             return []
 
-        pattern = os.path.join(self.SESSIONS_DIR, "**", "*.jsonl")
+        pattern = os.path.join(sessions_dir, "**", "*.jsonl")
         files = glob.glob(pattern, recursive=True)
         if not files:
             return []

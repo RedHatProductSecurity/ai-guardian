@@ -42,7 +42,7 @@
                   }
                 }
               ],
-              "description": "Skill directories to scan for auto-generation. Default: 'auto' scans standard locations (./.claude/skills, ~/.claude/skills, $CLAUDE_CONFIG_DIR/skills). Can also provide explicit array of paths.",
+              "description": "Skill directories to scan for auto-generation. Default: 'auto' scans project-local and standard user locations, including relocated IDE homes selected by their documented environment variables. Can also provide explicit array of paths.",
               "default": "auto"
             },
             "allow_symlinks": {
