@@ -8,10 +8,10 @@
 #
 # Build from the repository root with the container directory as context:
 #   podman build -f container/Dockerfile.openshell \
-#       -t localhost/ai-guardian:openshell container/
+#       -t localhost/ai-guardian-openshell:latest container/
 #
 # Run with the OpenShell launcher:
-#   ./container/openshell.sh --base localhost/ai-guardian:openshell
+#   ./container/openshell.sh --base localhost/ai-guardian-openshell:latest
 
 # Keep rebuilds reproducible: update this digest deliberately after reviewing
 # the new OpenShell Community base and rerunning the image smoke tests.

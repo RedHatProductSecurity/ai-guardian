@@ -83,10 +83,10 @@ For a new CLI-capable integration, complete the applicable items below:
   Build the image locally, run the CLI's version check, and smoke-test a
   disposable OpenShell sandbox with the selected provider and policy.
 - [ ] Verify `.github/workflows/build-container.yml` publishes the refreshed
-  OpenShell image to the primary Quay repository, with the correct `openshell`
-  tag behavior, and does not mirror the OpenShell image to the legacy
-  repository. Record the image digest and CLI versions in the issue or pull
-  request.
+  OpenShell image to the dedicated primary Quay repository, with the correct
+  `latest`/version tag behavior, and does not mirror the OpenShell image to the
+  legacy repository. Record the image digest and CLI versions in the issue or
+  pull request.
 - [ ] Update `container/README.md`, `README.md`, and the applicable support or
   license tables so bundled, runtime-only, and GUI/editor-only status agrees
   across the normal container and OpenShell targets.

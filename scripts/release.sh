@@ -174,6 +174,12 @@ NEW_VERSION=$($HELPER calc-version "$LAST_RELEASED" "$RELEASE_TYPE")
 [[ -z "$NEW_VERSION" ]] && die "Could not calculate next version"
 info "New version: $NEW_VERSION"
 
+CONTAINER_IMAGES=$($HELPER container-images "$NEW_VERSION")
+NORMAL_CONTAINER_IMAGE=$(printf '%s\n' "$CONTAINER_IMAGES" | sed -n 's/^normal: //p')
+OPENSHELL_CONTAINER_IMAGE=$(printf '%s\n' "$CONTAINER_IMAGES" | sed -n 's/^openshell: //p')
+[[ -z "$NORMAL_CONTAINER_IMAGE" || -z "$OPENSHELL_CONTAINER_IMAGE" ]] && \
+    die "Could not determine release container image references"
+
 # Extract major.minor for branch name
 MAJOR=$(echo "$NEW_VERSION" | cut -d. -f1)
 MINOR=$(echo "$NEW_VERSION" | cut -d. -f2)
@@ -425,7 +431,8 @@ if $DRY_RUN; then
     echo "[dry-run] gh run watch (publish workflow)"
     echo "[dry-run] gh run watch (build-container workflow)"
     echo "[dry-run] pip install --dry-run ai-guardian==${NEW_VERSION}"
-    echo "[dry-run] docker manifest inspect quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}"
+    echo "[dry-run] docker manifest inspect ${NORMAL_CONTAINER_IMAGE}"
+    echo "[dry-run] docker manifest inspect ${OPENSHELL_CONTAINER_IMAGE}"
     echo "[dry-run] Verify https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 else
     info "Waiting for publish workflow..."
@@ -450,10 +457,16 @@ else
     fi
 
     info "Verifying container image..."
-    if docker manifest inspect "quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}" >/dev/null 2>&1; then
-        info "Container: quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION} available"
+    if docker manifest inspect "$NORMAL_CONTAINER_IMAGE" >/dev/null 2>&1; then
+        info "Container: ${NORMAL_CONTAINER_IMAGE} available"
     else
-        warn "Container verification failed — image may not be available yet"
+        warn "Normal container verification failed — image may not be available yet"
+    fi
+
+    if docker manifest inspect "$OPENSHELL_CONTAINER_IMAGE" >/dev/null 2>&1; then
+        info "OpenShell container: ${OPENSHELL_CONTAINER_IMAGE} available"
+    else
+        warn "OpenShell container verification failed — image may not be available yet"
     fi
 
     info "Waiting for versioned documentation..."
@@ -525,7 +538,8 @@ echo "  Version: ${NEW_VERSION}"
 echo "  Tag: ${TAG_NAME}"
 echo "  PyPI: https://pypi.org/project/ai-guardian/${NEW_VERSION}/"
 echo "  GitHub: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/${TAG_NAME}"
-echo "  Container: quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}"
+echo "  Container: ${NORMAL_CONTAINER_IMAGE}"
+echo "  OpenShell: ${OPENSHELL_CONTAINER_IMAGE}"
 echo "  Docs: https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 echo "  Docs (stable): https://ai-guardian.readthedocs.io/en/stable/"
 echo "  Docs (latest): https://ai-guardian.readthedocs.io/en/latest/"

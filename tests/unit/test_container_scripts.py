@@ -222,17 +222,21 @@ class TestContainerLaunchers:
         assert "quay.io/redhatproductsecurity/ai-guardian" not in workflow
         assert "quay.io/itdove" not in workflow
 
-    def test_container_build_publishes_openshell_only_to_primary_registry(self):
+    def test_container_build_publishes_openshell_to_dedicated_primary_registry(self):
         workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
         openshell_section = workflow.split(
             "# --- Legacy mirror outputs for downstream jobs ---", 1
         )[0]
 
-        assert "openshell_tag=openshell" in openshell_section
+        assert "openshell_tag=latest" in openshell_section
         assert "file: container/Dockerfile.openshell" in openshell_section
         assert (
-            "tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.openshell_tag }}"
+            "tags: quay.io/redhatproductsecurity/ai-guardian-openshell:${{ steps.params.outputs.openshell_tag }}"
             in openshell_section
+        )
+        assert (
+            "tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.openshell_tag }}"
+            not in openshell_section
         )
         assert "quay.io/itdove" not in openshell_section
 
@@ -456,7 +460,10 @@ class TestContainerLaunchers:
         create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
         exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
         assert create_args[:3] == ["sandbox", "create", "--from"]
-        assert create_args[3] == "quay.io/redhatproductsecurity/ai-guardian:openshell"
+        assert (
+            create_args[3]
+            == "quay.io/redhatproductsecurity/ai-guardian-openshell:latest"
+        )
         assert "--no-auto-providers" in create_args
         assert "--detach" in create_args
         assert "--forward" not in create_args

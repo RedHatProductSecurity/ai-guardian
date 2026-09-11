@@ -25,13 +25,18 @@ try:
     skills_path = project_root / ".claude" / "skills" / "release"
 
     sys.path.insert(0, str(skills_path))
-    from release_helper import ReleaseHelper, CursorHookVerifier
+    from release_helper import (
+        CursorHookVerifier,
+        ReleaseHelper,
+        get_container_image_references,
+    )
 
     RELEASE_HELPER_AVAILABLE = True
 except (ImportError, ModuleNotFoundError):
     RELEASE_HELPER_AVAILABLE = False
     ReleaseHelper = None
     CursorHookVerifier = None
+    get_container_image_references = None
 
 # Skip all tests if release_helper is not available
 pytestmark = pytest.mark.skipif(
@@ -181,6 +186,20 @@ def test_calculate_next_version_test():
 
         next_ver = helper.calculate_next_version("1.2.0-dev", "test")
         assert next_ver == "1.2.0-test1"
+
+
+def test_get_container_image_references_uses_dedicated_openshell_repository():
+    """Versioned releases use separate normal and OpenShell repositories."""
+    assert get_container_image_references("1.2.0") == {
+        "normal": "quay.io/redhatproductsecurity/ai-guardian:1.2.0",
+        "openshell": "quay.io/redhatproductsecurity/ai-guardian-openshell:1.2.0",
+    }
+
+
+def test_get_container_image_references_rejects_non_release_versions():
+    """Container release tags must be stable semantic versions."""
+    with pytest.raises(ValueError):
+        get_container_image_references("1.2.0-dev")
 
 
 def test_update_changelog():

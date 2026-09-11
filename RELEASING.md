@@ -14,7 +14,7 @@ scripts/release.sh --dry-run minor    # preview without executing
 scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 ```
 
-The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
+The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, verification of both container repositories, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
 
 **Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
 
@@ -322,11 +322,16 @@ git push origin v1.0.0
 
 **Important:** Pushing the tag will automatically trigger two GitHub Actions workflows:
 1. **Publish Package** — builds and publishes to PyPI, creates a GitHub Release
-2. **Build Container Image** — builds and pushes `quay.io/redhatproductsecurity/ai-guardian:<version>`
+2. **Build Container Images** — builds and pushes the normal image to
+   `quay.io/redhatproductsecurity/ai-guardian:<version>` and the dedicated
+   OpenShell image to `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>`
 
 The Read the Docs GitHub integration also builds the activated version tag. This requires the one-time SemVer tag activation rule described above.
 
-Note: `:latest` tracks the main branch (updated on every merge), not releases.
+Note: `:latest` tracks the main branch (updated on every merge), not releases,
+in both primary Quay repositories. The OpenShell image has its own repository;
+it is not represented by an `openshell` tag in the normal image repository and
+is not mirrored to `quay.io/itdove`.
 
 #### 7. Verify GitHub Actions Workflows
 
@@ -341,6 +346,9 @@ After pushing the tag:
    ```bash
    podman pull quay.io/redhatproductsecurity/ai-guardian:<version>
    podman run -it quay.io/redhatproductsecurity/ai-guardian:<version> ai-guardian --version
+   podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:<version>
+   podman run --rm --entrypoint /usr/local/bin/claude \
+       quay.io/redhatproductsecurity/ai-guardian-openshell:<version> --version
    ```
 7. Verify the versioned documentation at `https://ai-guardian.readthedocs.io/en/v<version>/`
 
@@ -657,6 +665,9 @@ Use this checklist for each release:
 - [ ] Verify package published to PyPI
 - [ ] Verify GitHub Release created
 - [ ] Test installation from PyPI: `uv tool install ai-guardian` (or `pip install ai-guardian`)
+- [ ] Verify `quay.io/redhatproductsecurity/ai-guardian:<version>` is available
+- [ ] Verify `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>` is available
+- [ ] Confirm the OpenShell image was not mirrored to `quay.io/itdove`
 - [ ] Verify versioned documentation published on Read the Docs
 
 ### Post-Release

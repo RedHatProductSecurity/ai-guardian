@@ -7,12 +7,13 @@ bundled; GUI-only integrations receive their hooks when the container starts.
 OpenShell uses a separate image definition, `Dockerfile.openshell`, based on
 the [OpenShell Community sandbox base image](https://github.com/NVIDIA/OpenShell-Community/tree/main/sandboxes/base).
 That base supplies the OpenShell-compatible filesystem layout, networking
-tools, and agent runtime. The dedicated OpenShell image is published as
-`quay.io/redhatproductsecurity/ai-guardian:openshell` on successful merges and
-as `:openshell-<version>` for releases. Build it locally only when testing a
-change to the image; `openshell.sh` uses the published OpenShell tag by
-default. The OpenShell image is published only to the primary Quay repository,
-not to the legacy `itdove` repository.
+tools, and agent runtime. The dedicated OpenShell image is published in its
+own primary Quay repository as
+`quay.io/redhatproductsecurity/ai-guardian-openshell:latest` on successful
+merges and as `:<version>` for releases. Build it locally only when testing a
+change to the image; `openshell.sh` uses the published OpenShell image by
+default. The OpenShell image is not published in the normal image repository
+or mirrored to the legacy `itdove` repository.
 The normal UBI image remains published to
 [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian)
 on every merge and release.
@@ -68,9 +69,9 @@ podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.17.1-py3-none-any.whl
 # Multi-arch
 podman build --platform linux/amd64,linux/arm64 -t ai-guardian container/
 
-# Dedicated OpenShell BYOC image (the launcher uses the published tag by default)
+# Dedicated OpenShell BYOC image (the launcher uses the published image by default)
 podman build -f container/Dockerfile.openshell \
-    -t localhost/ai-guardian:openshell container/
+    -t localhost/ai-guardian-openshell:latest container/
 ```
 
 ## Run
@@ -103,19 +104,19 @@ than the normal UBI image. Build it once from the repository root:
 
 ```bash
 podman build -f container/Dockerfile.openshell \
-    -t localhost/ai-guardian:openshell container/
+    -t localhost/ai-guardian-openshell:latest container/
 ```
 
 To use that local build for one run, pass it explicitly:
 
 ```bash
-./container/openshell.sh --base localhost/ai-guardian:openshell
+./container/openshell.sh --base localhost/ai-guardian-openshell:latest
 ```
 
 The published image can be pulled explicitly as well:
 
 ```bash
-podman pull quay.io/redhatproductsecurity/ai-guardian:openshell
+podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ```
 
 Set `AI_GUARDIAN_OPEN_SHELL_IMAGE` to use another OpenShell-compatible image,
@@ -135,7 +136,7 @@ override is also possible:
 podman build \
     --build-arg BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:<reviewed-digest> \
     -f container/Dockerfile.openshell \
-    -t localhost/ai-guardian:openshell container/
+    -t localhost/ai-guardian-openshell:latest container/
 ```
 
 The pinned base includes older versions of some bundled Node-based CLIs, so
@@ -163,7 +164,7 @@ podman build -f container/Dockerfile.openshell \
     --build-arg CODEX_VERSION=0.154.0 \
     --build-arg OPENCODE_VERSION=1.18.30 \
     --build-arg COPILOT_VERSION=1.0.83 \
-    -t localhost/ai-guardian:openshell container/
+    -t localhost/ai-guardian-openshell:latest container/
 ```
 
 #### CLI scope and image contents
@@ -199,7 +200,7 @@ in this derived image, so the OpenShell image does not require the user to
 install it separately; users still need their own authorized account or API
 access. Review the exact package and base image notices before making a Quay
 repository public or redistributing the image. The build workflow deliberately
-publishes the OpenShell tag only to the primary Quay repository and does not
+publishes OpenShell only to the dedicated primary Quay repository and does not
 mirror it to `itdove`.
 For OpenShell installation and first-time setup, see the official
 [OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
