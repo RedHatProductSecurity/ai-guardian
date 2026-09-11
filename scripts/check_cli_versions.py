@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Check the pinned Node-based CLI versions in the OpenShell image.
+"""Check the pinned CLI versions in the OpenShell image.
 
 The OpenShell Dockerfile is the source of truth for the pinned versions.  This
-check reads its build arguments and compares them with the stable versions
-published in the npm registry.  It intentionally covers only the CLI packages
-that the derived image installs or overrides; GUI/editor integrations and
-native installers are outside this image-version check.
+check reads its build arguments and compares them with stable versions
+published in the npm registry or by Anthropic's native Claude release
+endpoint.  It intentionally covers only the CLI clients that the derived
+image installs or overrides; GUI/editor integrations are outside this
+image-version check.
 
 Exit codes:
     0: All registry checks succeeded and no newer versions were found.
@@ -26,20 +27,39 @@ import requests
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCKERFILE = REPOSITORY_ROOT / "container" / "Dockerfile.openshell"
 
-# Keep this mapping limited to packages whose versions are explicit Dockerfile
-# build arguments. Claude's native installer is intentionally not included.
+CLAUDE_RELEASE_URL = "https://downloads.claude.ai/claude-code-releases/latest"
+
+# Keep this mapping limited to clients whose versions are explicit Dockerfile
+# build arguments. The lookup value is either an npm package name or the
+# official Claude release endpoint.
 CLI_VERSION_SPECS = {
+    "CLAUDE_VERSION": {
+        "name": "Claude Code",
+        "package": "Claude Code native installer",
+        "lookup": CLAUDE_RELEASE_URL,
+        "source": "Anthropic release endpoint",
+        "registry": CLAUDE_RELEASE_URL,
+    },
     "CODEX_VERSION": {
         "package": "@openai/codex",
         "name": "Codex CLI",
+        "lookup": "@openai/codex",
+        "source": "npm registry",
+        "registry": "https://www.npmjs.com/package/%40openai/codex",
     },
     "OPENCODE_VERSION": {
         "package": "opencode-ai",
         "name": "OpenCode",
+        "lookup": "opencode-ai",
+        "source": "npm registry",
+        "registry": "https://www.npmjs.com/package/opencode-ai",
     },
     "COPILOT_VERSION": {
         "package": "@github/copilot",
         "name": "GitHub Copilot CLI",
+        "lookup": "@github/copilot",
+        "source": "npm registry",
+        "registry": "https://www.npmjs.com/package/%40github/copilot",
     },
 }
 
@@ -129,10 +149,33 @@ def get_latest_npm_version(package: str) -> Optional[str]:
     return version if isinstance(version, str) and version else None
 
 
+def get_latest_claude_version() -> Optional[str]:
+    """Return the stable Claude Code release from Anthropic's endpoint."""
+    try:
+        response = requests.get(
+            CLAUDE_RELEASE_URL,
+            headers={"Accept": "text/plain"},
+            timeout=10,
+        )
+        response.raise_for_status()
+        version = response.text.strip()
+    except (requests.RequestException, AttributeError):
+        return None
+
+    return version if _parse_semver(version) is not None else None
+
+
+def get_latest_cli_version(lookup: str) -> Optional[str]:
+    """Return the latest stable version for an npm or native CLI lookup."""
+    if lookup == CLAUDE_RELEASE_URL:
+        return get_latest_claude_version()
+    return get_latest_npm_version(lookup)
+
+
 def check_versions(
     dockerfile: Path = DEFAULT_DOCKERFILE,
     output_file: Optional[Path] = None,
-    version_lookup: Callable[[str], Optional[str]] = get_latest_npm_version,
+    version_lookup: Callable[[str], Optional[str]] = get_latest_cli_version,
 ) -> Tuple[Dict[str, dict], bool, bool]:
     """Check pinned versions and optionally write a JSON report.
 
@@ -147,7 +190,7 @@ def check_versions(
     print("Checking OpenShell CLI version updates...\n")
     for build_arg, spec in CLI_VERSION_SPECS.items():
         pinned_version = pinned_versions[build_arg]
-        latest_version = version_lookup(spec["package"])
+        latest_version = version_lookup(spec["lookup"])
         comparison = (
             compare_versions(pinned_version, latest_version)
             if latest_version is not None
@@ -166,13 +209,13 @@ def check_versions(
         results[build_arg] = {
             "name": spec["name"],
             "package": spec["package"],
+            "source": spec["source"],
             "build_arg": build_arg,
             "pinned_version": pinned_version,
             "latest_version": latest_version or "unknown",
             "is_outdated": status == "OUTDATED",
             "status": status,
-            "registry": "https://www.npmjs.com/package/"
-            + quote(spec["package"], safe=""),
+            "registry": spec["registry"],
         }
 
         print(f"Checking {spec['name']} ({spec['package']})...")
@@ -213,7 +256,7 @@ def main() -> int:
         return 2
 
     if has_errors:
-        print("\n⚠️  One or more npm version checks could not be completed")
+        print("\n⚠️  One or more CLI version checks could not be completed")
         return 2
     if has_updates:
         print("\n⚠️  New OpenShell CLI versions are available")

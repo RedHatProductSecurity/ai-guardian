@@ -72,7 +72,7 @@ jobs:
             const versions = JSON.parse(fs.readFileSync('cli-versions.json', 'utf8'));
             const updates = Object.values(versions)
               .filter(info => info.is_outdated)
-              .map(info => `- **${info.name}** (${info.package}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
+              .map(info => `- **${info.name}** (${info.package}; ${info.source}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
               .join('\n');
 
             await github.rest.issues.createComment({
@@ -97,7 +97,7 @@ jobs:
             const versions = JSON.parse(fs.readFileSync('cli-versions.json', 'utf8'));
             const updates = Object.values(versions)
               .filter(info => info.is_outdated)
-              .map(info => `- **${info.name}** (${info.package}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
+              .map(info => `- **${info.name}** (${info.package}; ${info.source}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
               .join('\n');
 
             const issue = await github.rest.issues.create({

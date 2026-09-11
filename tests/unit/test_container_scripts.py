@@ -195,6 +195,7 @@ class TestContainerLaunchers:
         assert "sandboxes/base:latest" not in dockerfile
         assert "FROM ${BASE_IMAGE}" in dockerfile
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
+        assert "ARG CLAUDE_VERSION=2.1.269" in dockerfile
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile
         assert "ARG OPENCODE_VERSION=1.18.30" in dockerfile
         assert "ARG COPILOT_VERSION=1.0.83" in dockerfile
@@ -202,6 +203,10 @@ class TestContainerLaunchers:
         assert '"@openai/codex@${CODEX_VERSION}"' in dockerfile
         assert '"opencode-ai@${OPENCODE_VERSION}"' in dockerfile
         assert '"@github/copilot@${COPILOT_VERSION}"' in dockerfile
+        assert "https://claude.ai/install.sh" in dockerfile
+        assert 'bash "$claude_install_script" "${CLAUDE_VERSION}"' in dockerfile
+        assert 'install -m 0755 "$claude_install_home/.local/bin/claude"' in dockerfile
+        assert "/usr/local/bin/claude --version" in dockerfile
         assert "&& opencode --version" in dockerfile
         assert "&& copilot --version" in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile

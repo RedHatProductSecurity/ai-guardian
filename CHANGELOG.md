@@ -90,9 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShell image publishing and CLI health monitoring**: Publish the
   dedicated OpenShell image to the primary Quay repository with separate
   `openshell` tags, without mirroring it to the legacy `itdove` repository.
-  Add a twice-monthly npm version check for the explicit Codex, OpenCode, and
-  GitHub Copilot pins, while keeping GUI integrations and native installers
-  outside the image-version check.
+  Add a twice-monthly version check for the explicit Claude, Codex, OpenCode,
+  and GitHub Copilot pins, using Anthropic's release endpoint for Claude and
+  npm for the Node clients, while keeping GUI integrations outside the
+  image-version check.
 
 - **IDE-specific home directory support (#2288)**: Centralize documented
   environment-variable path resolution across hook setup, MCP registration and

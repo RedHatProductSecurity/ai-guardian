@@ -16,6 +16,7 @@ def test_load_pinned_versions_reads_openshell_dockerfile():
     pinned = cli_versions.load_pinned_versions(cli_versions.DEFAULT_DOCKERFILE)
 
     assert pinned == {
+        "CLAUDE_VERSION": "2.1.269",
         "CODEX_VERSION": "0.154.0",
         "OPENCODE_VERSION": "1.18.30",
         "COPILOT_VERSION": "1.0.83",
@@ -38,6 +39,7 @@ def test_compare_versions(first, second, expected):
 
 def test_check_versions_writes_report_and_detects_updates(tmp_path):
     latest = {
+        cli_versions.CLAUDE_RELEASE_URL: "2.1.270",
         "@openai/codex": "0.155.0",
         "opencode-ai": "1.17.12",
         "@github/copilot": "1.0.83",
