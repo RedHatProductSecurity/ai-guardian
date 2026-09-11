@@ -144,19 +144,22 @@ versions:
 
 | Build argument | Package | Default |
 |----------------|---------|---------|
+| `CLAUDE_VERSION` | Claude Code native installer | `2.1.269` |
 | `CODEX_VERSION` | `@openai/codex` | `0.154.0` |
 | `OPENCODE_VERSION` | `opencode-ai` | `1.18.30` |
 | `COPILOT_VERSION` | `@github/copilot` | `1.0.83` |
 
 These are pinned rather than installed through a mutable `latest` tag so an
-image can be reproduced and rolled back. Claude Code remains supplied by the
-Community base's native installer and is not overridden by this Dockerfile.
-Override any individual version deliberately when testing another release.
-Rebuild the image and recreate the sandbox after changing one; existing
-sandboxes retain the client versions from their original image.
+image can be reproduced and rolled back. Claude Code is refreshed with
+Anthropic's native installer and copied to the same `/usr/local/bin/claude`
+path used by the Community base. Override any individual version deliberately
+when testing another release. Rebuild the image and recreate the sandbox after
+changing one; existing sandboxes retain the client versions from their
+original image.
 
 ```bash
 podman build -f container/Dockerfile.openshell \
+    --build-arg CLAUDE_VERSION=2.1.269 \
     --build-arg CODEX_VERSION=0.154.0 \
     --build-arg OPENCODE_VERSION=1.18.30 \
     --build-arg COPILOT_VERSION=1.0.83 \
@@ -173,12 +176,13 @@ agent selector contains only these eight CLI-capable integrations:
 container setup but are intentionally excluded from the OpenShell selector.
 
 The current OpenShell Community base supplies Claude, Codex, OpenCode, and
-Copilot. This derived image explicitly overrides the versions of the three
-npm CLIs shown above. Gemini, OpenClaw, Crush, and Kiro are not installed by
-this default image; selecting one requires a custom image that supplies its
-command, and Kiro retains its runtime consent flow. The version monitor checks
-only the three explicit npm pins, not GUI integrations or native installers.
-Only the selected CLI is configured by default; set
+Copilot. This derived image explicitly refreshes Claude and overrides the
+versions of the three npm CLIs shown above. Gemini, OpenClaw, Crush, and Kiro
+are not installed by this default image; selecting one requires a custom image
+that supplies its command, and Kiro retains its runtime consent flow. The
+version monitor checks all four explicit pins, using npm for the three Node
+clients and Anthropic's release endpoint for Claude. Only the selected CLI is
+configured by default; set
 `AI_GUARDIAN_SETUP_SCOPE=cli` when one sandbox will run multiple CLI agents.
 Other installed CLIs are not removed, but they still need a compatible
 provider and network policy before they are useful in the sandbox.
@@ -190,10 +194,13 @@ OpenShell Community repository is Apache-2.0, but its
 [third-party notices](https://github.com/NVIDIA/OpenShell-Community/blob/main/THIRD-PARTY-NOTICES)
 also cover inherited system components and their separate licenses. Codex is
 Apache-2.0 and OpenCode is MIT; GitHub Copilot and Claude Code remain subject
-to their own licenses and service terms. Review the exact package and base
-image notices before making a Quay repository public or redistributing the
-image. The build workflow deliberately publishes the OpenShell tag only to
-the primary Quay repository and does not mirror it to `itdove`.
+to their own licenses and service terms. Claude Code is bundled and refreshed
+in this derived image, so the OpenShell image does not require the user to
+install it separately; users still need their own authorized account or API
+access. Review the exact package and base image notices before making a Quay
+repository public or redistributing the image. The build workflow deliberately
+publishes the OpenShell tag only to the primary Quay repository and does not
+mirror it to `itdove`.
 For OpenShell installation and first-time setup, see the official
 [OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
 For policy fields and validation rules, see the official
