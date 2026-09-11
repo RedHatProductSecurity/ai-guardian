@@ -519,6 +519,155 @@ class TestDiscoverContainers:
         assert targets[0].port == 49600
 
     @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_openshell_forward_supplies_host_port(self):
+        container = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="openshell-container",
+            labels={
+                "ai-guardian.daemon": "true",
+                "openshell.managed": "true",
+                "openshell.ai/sandbox-name": "ag-codex-123456",
+            },
+            ports={"63152/tcp": None},
+        )
+        mock_client = mock.MagicMock()
+        mock_client.containers.list.return_value = [container]
+        mock_client.close = mock.MagicMock()
+
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(
+                d,
+                "_get_docker_clients",
+                return_value=[(mock_client, "podman")],
+            ),
+            mock.patch.object(
+                d,
+                "_get_openshell_forwards",
+                return_value={"ag-codex-123456": 55289},
+            ) as mock_forwards,
+            mock.patch.object(
+                d,
+                "_probe_daemon",
+                return_value={"paused": False, "name": "sandbox-codex"},
+            ),
+            mock.patch.object(d, "_sdk_exec_auth_token", return_value="daemon-token"),
+            mock.patch.object(d, "_sdk_exec_instance_name", return_value=None),
+        ):
+            targets = d.discover_containers()
+
+        assert len(targets) == 1
+        assert targets[0].port == 55289
+        assert targets[0].name == "sandbox-codex"
+        assert targets[0].auth_token == "daemon-token"
+        assert mock_forwards.call_count == 1
+
+    def test_parses_running_openshell_forwards(self, tmp_path):
+        containers = [
+            _make_mock_container(
+                labels={
+                    "ai-guardian.daemon": "true",
+                    "openshell.managed": "true",
+                }
+            )
+        ]
+        output = (
+            "SANDBOX         BIND      PORT     PID        STATUS\n"
+            "\x1b[32mag-codex-123456\x1b[0m 127.0.0.1 55289 1234 running\n"
+            "ag-codex-dead  127.0.0.1 55290 1235 dead\n"
+        )
+        with (
+            mock.patch("shutil.which", return_value="/usr/bin/openshell"),
+            mock.patch.dict(
+                os.environ,
+                {
+                    "AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(
+                        tmp_path / "no-recorded-forwards"
+                    )
+                },
+                clear=False,
+            ),
+            mock.patch(
+                "subprocess.run",
+                return_value=mock.MagicMock(returncode=0, stdout=output, stderr=""),
+            ) as mock_run,
+        ):
+            forwards = DaemonDiscovery._get_openshell_forwards(containers)
+
+        assert forwards == {"ag-codex-123456": 55289}
+        mock_run.assert_called_once_with(
+            ["openshell", "forward", "list"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+
+    def test_reads_live_recorded_openshell_service_forward(self, tmp_path):
+        state_dir = tmp_path / "openshell-forwards"
+        state_dir.mkdir()
+        (state_dir / "ag-codex-123456.json").write_text(
+            json.dumps(
+                {
+                    "sandbox_name": "ag-codex-123456",
+                    "host": "127.0.0.1",
+                    "port": 55289,
+                    "target_port": 63152,
+                    "pid": 1234,
+                }
+            ),
+            encoding="utf-8",
+        )
+        containers = [
+            _make_mock_container(
+                labels={
+                    "ai-guardian.daemon": "true",
+                    "openshell.managed": "true",
+                }
+            )
+        ]
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(state_dir)},
+                clear=False,
+            ),
+            mock.patch("shutil.which", return_value=None),
+            mock.patch("ai_guardian.daemon.discovery.is_pid_alive", return_value=True),
+        ):
+            forwards = DaemonDiscovery._get_openshell_forwards(containers)
+
+        assert forwards == {"ag-codex-123456": 55289}
+
+    def test_sdk_auth_token_from_openshell_home(self):
+        container = mock.MagicMock()
+        container.labels = {"openshell.managed": "true"}
+        container.exec_run.return_value = (0, b"openshell-daemon-token\n")
+
+        token = DaemonDiscovery._sdk_exec_auth_token(container)
+
+        assert token == "openshell-daemon-token"
+        assert container.exec_run.call_args_list == [
+            mock.call(
+                ["cat", "/sandbox/.local/state/ai-guardian/daemon.token"],
+                demux=False,
+            ),
+        ]
+
+    def test_sdk_auth_token_from_root_home_for_regular_container(self):
+        container = mock.MagicMock()
+        container.labels = {"ai-guardian.daemon": "true"}
+        container.exec_run.return_value = (0, b"root-daemon-token\n")
+
+        token = DaemonDiscovery._sdk_exec_auth_token(container)
+
+        assert token == "root-daemon-token"
+        container.exec_run.assert_called_once_with(
+            ["cat", "/root/.local/state/ai-guardian/daemon.token"],
+            demux=False,
+        )
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
     def test_multi_engine_discovery(self):
         podman_container = _make_mock_container(
             container_id="aaa111bbb222ccc333",

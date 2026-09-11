@@ -1,0 +1,5 @@
+# OpenClaw can use different model providers. There is no single safe default
+# endpoint set; attach a provider or add an explicit policy overlay.
+version: 1
+
+network_policies: {}

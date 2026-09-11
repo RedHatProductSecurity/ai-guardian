@@ -1219,6 +1219,8 @@ class TestConfigDirEnvironmentVariable:
         try:
             if "AI_GUARDIAN_CONFIG_DIR" in os.environ:
                 del os.environ["AI_GUARDIAN_CONFIG_DIR"]
+            if "AI_GUARDIAN_HOME" in os.environ:
+                del os.environ["AI_GUARDIAN_HOME"]
             if "XDG_CONFIG_HOME" in os.environ:
                 del os.environ["XDG_CONFIG_HOME"]
 

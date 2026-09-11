@@ -1,0 +1,28 @@
+# Gemini CLI network capability.
+# Vertex access is supplied by the google-vertex-ai provider when selected.
+version: 1
+
+network_policies:
+  gemini_api:
+    name: gemini-api
+    endpoints:
+      - host: generativelanguage.googleapis.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: cloudcode-pa.googleapis.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: oauth2.googleapis.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/gemini }
+      - { path: /usr/local/bin/gemini }
+      - { path: /usr/lib/node_modules/@google/** }

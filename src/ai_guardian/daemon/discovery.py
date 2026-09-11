@@ -15,6 +15,7 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass, field as dc_field
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 try:
@@ -34,6 +35,7 @@ except ImportError:
     HAS_K8S_SDK = False
 
 _CONTAINER_ID_RE = re.compile(r"^[a-fA-F0-9]{12,64}$")
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _K8S_LABEL_KEY_RE = re.compile(
     r"^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/)?"
     r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$"
@@ -88,6 +90,21 @@ from ai_guardian.daemon import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _get_openshell_forward_state_dir() -> Path:
+    """Return the host directory used by the OpenShell launcher for forwards."""
+    configured = os.environ.get("AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR")
+    if configured:
+        return Path(configured).expanduser()
+
+    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime_dir:
+        return Path(runtime_dir) / "ai-guardian" / "openshell-forwards"
+
+    from ai_guardian.config.utils import get_state_dir
+
+    return get_state_dir() / "openshell-forwards"
 
 
 def _find_service_port(ports, target_port: int) -> int:
@@ -383,7 +400,12 @@ class DaemonDiscovery:
             containers = client.containers.list(
                 filters={"label": "ai-guardian.daemon=true"}
             )
-            return self._sdk_containers_to_targets(engine, containers, rest_port)
+            return self._sdk_containers_to_targets(
+                engine,
+                containers,
+                rest_port,
+                self._get_openshell_forwards(containers),
+            )
         except Exception as e:
             logger.debug("SDK label discovery error: %s", e)
             return []
@@ -398,13 +420,113 @@ class DaemonDiscovery:
                 port_key = f"{rest_port}/tcp"
                 if port_key in ports and ports[port_key]:
                     matching.append(c)
-            return self._sdk_containers_to_targets(engine, matching, rest_port)
+            return self._sdk_containers_to_targets(
+                engine,
+                matching,
+                rest_port,
+                self._get_openshell_forwards(matching) if matching else {},
+            )
         except Exception as e:
             logger.debug("SDK port discovery error: %s", e)
             return []
 
-    def _sdk_containers_to_targets(self, engine, containers, rest_port):
+    @staticmethod
+    def _get_openshell_forwards(containers):
+        """Return active OpenShell host forwards for managed containers.
+
+        OpenShell sandboxes expose their daemon port through the gateway's
+        forwarding process rather than a normal container port binding. Only
+        invoke the optional CLI when the container list contains OpenShell
+        metadata, so ordinary Docker/Podman discovery remains unchanged.
+        """
+        if not any(
+            (c.labels or {}).get("openshell.managed") == "true" for c in containers
+        ):
+            return {}
+        forwards = {}
+
+        if shutil.which("openshell"):
+            try:
+                result = subprocess.run(
+                    ["openshell", "forward", "list"],
+                    capture_output=True,
+                    text=True,
+                    timeout=3,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                logger.debug("OpenShell forward discovery failed: %s", exc)
+            else:
+                if result.returncode != 0:
+                    logger.debug(
+                        "OpenShell forward discovery returned %s: %s",
+                        result.returncode,
+                        result.stderr.strip(),
+                    )
+                else:
+                    for raw_line in result.stdout.splitlines():
+                        line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
+                        fields = line.split()
+                        if len(fields) < 5 or fields[0].upper() == "SANDBOX":
+                            continue
+                        if fields[-1].lower() != "running":
+                            continue
+                        try:
+                            forwards[fields[0]] = int(fields[2])
+                        except (ValueError, IndexError):
+                            continue
+
+        # `forward service` creates a long-lived local process, but OpenShell
+        # 0.0.116 does not include that process in `forward list`. The launcher
+        # records its assigned host port so the tray/NiceGUI can discover it.
+        forwards.update(DaemonDiscovery._get_recorded_openshell_forwards())
+        return forwards
+
+    @staticmethod
+    def _get_recorded_openshell_forwards():
+        """Read live OpenShell service-forward records written by the launcher."""
+        state_dir = _get_openshell_forward_state_dir()
+        try:
+            state_paths = list(state_dir.glob("*.json"))
+        except OSError as exc:
+            logger.debug("OpenShell forward state discovery failed: %s", exc)
+            return {}
+
+        forwards = {}
+        for state_path in state_paths:
+            try:
+                data = json.loads(state_path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    continue
+                sandbox_name = data.get("sandbox_name")
+                host = data.get("host", "127.0.0.1")
+                port = int(data.get("port", 0))
+                pid = int(data.get("pid", 0))
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                logger.debug(
+                    "Ignoring invalid OpenShell forward state %s: %s",
+                    state_path,
+                    exc,
+                )
+                continue
+
+            if (
+                not isinstance(sandbox_name, str)
+                or not sandbox_name
+                or not isinstance(host, str)
+                or host not in {"127.0.0.1", "localhost", "::1"}
+                or not 1 <= port <= 65535
+                or pid <= 0
+                or not is_pid_alive(pid)
+            ):
+                continue
+            forwards[sandbox_name] = port
+        return forwards
+
+    def _sdk_containers_to_targets(
+        self, engine, containers, rest_port, openshell_forwards=None
+    ):
         """Convert SDK Container objects to DaemonTarget list."""
+        openshell_forwards = openshell_forwards or {}
         targets = []
         for c in containers:
             container_id = c.id
@@ -424,6 +546,9 @@ class DaemonDiscovery:
                 target_rest_port = rest_port
 
             host_port = self._sdk_find_host_port(c, target_rest_port)
+            if not host_port and labels.get("openshell.managed") == "true":
+                sandbox_name = labels.get("openshell.ai/sandbox-name")
+                host_port = openshell_forwards.get(sandbox_name, 0)
 
             status = "unknown"
             if host_port:
@@ -510,32 +635,72 @@ class DaemonDiscovery:
     @staticmethod
     def _sdk_exec_auth_token(container, timeout=3):
         """Read auto-generated auth token from container via SDK exec_run."""
-        try:
-            exit_code, output = container.exec_run(
-                [
-                    "cat",
-                    "/root/.local/state/ai-guardian/daemon.token",
-                ],
-                demux=False,
-            )
-            if exit_code == 0:
-                token = output.decode("utf-8", errors="replace").strip()
-                if token:
-                    return token
-        except Exception:
-            pass  # intentionally silent — best-effort operation
+        # Docker/Podman exec may run as root even when the container's main
+        # process runs as another user. OpenShell's sandbox image keeps HOME at
+        # /sandbox, so prefer that path for managed sandboxes. For ordinary
+        # containers retain the conventional root-first lookup.
+        token_paths = (
+            "/root/.local/state/ai-guardian/daemon.token",
+            "/sandbox/.local/state/ai-guardian/daemon.token",
+        )
+        labels = getattr(container, "labels", {}) or {}
+        if isinstance(labels, dict) and labels.get("openshell.managed") == "true":
+            token_paths = tuple(reversed(token_paths))
+
+        for token_path in token_paths:
+            try:
+                exit_code, output = container.exec_run(
+                    ["cat", token_path],
+                    demux=False,
+                )
+                if exit_code == 0:
+                    token = output.decode("utf-8", errors="replace").strip()
+                    if token:
+                        return token
+            except Exception:
+                pass  # intentionally silent — best-effort operation
 
         try:
             exit_code, output = container.exec_run(
                 [
                     "python3",
                     "-c",
-                    "from pathlib import Path; "
-                    "import os; "
-                    "d=os.environ.get('XDG_STATE_HOME') or "
-                    "str(Path.home()/'.local'/'state'); "
-                    "p=Path(d)/'ai-guardian'/'daemon.token'; "
-                    "print(p.read_text().strip() if p.exists() else '')",
+                    "import json, os\n"
+                    "from pathlib import Path\n"
+                    "state_paths = []\n"
+                    "state_dir = os.environ.get('AI_GUARDIAN_STATE_DIR')\n"
+                    "if state_dir:\n"
+                    "    state_paths.append(Path(state_dir) / 'daemon.token')\n"
+                    "state_home = os.environ.get('XDG_STATE_HOME')\n"
+                    "if state_home:\n"
+                    "    state_paths.append(Path(state_home) / 'ai-guardian' / 'daemon.token')\n"
+                    "state_paths.extend([\n"
+                    "    Path('/sandbox/.local/state/ai-guardian/daemon.token'),\n"
+                    "    Path('/root/.local/state/ai-guardian/daemon.token'),\n"
+                    "    Path.home() / '.local' / 'state' / 'ai-guardian' / 'daemon.token',\n"
+                    "])\n"
+                    "config_paths = [\n"
+                    "    Path('/sandbox/.config/ai-guardian/ai-guardian.json'),\n"
+                    "    Path('/root/.config/ai-guardian/ai-guardian.json'),\n"
+                    "]\n"
+                    "for path in state_paths:\n"
+                    "    try:\n"
+                    "        token = path.read_text(encoding='utf-8').strip()\n"
+                    "    except (OSError, UnicodeError):\n"
+                    "        continue\n"
+                    "    if token:\n"
+                    "        print(token)\n"
+                    "        break\n"
+                    "else:\n"
+                    "    for path in config_paths:\n"
+                    "        try:\n"
+                    "            config = json.loads(path.read_text(encoding='utf-8'))\n"
+                    "            token = config.get('daemon', {}).get('auth_token')\n"
+                    "        except (OSError, UnicodeError, json.JSONDecodeError, AttributeError):\n"
+                    "            continue\n"
+                    "        if isinstance(token, str) and token.strip():\n"
+                    "            print(token.strip())\n"
+                    "            break\n",
                 ],
                 demux=False,
             )

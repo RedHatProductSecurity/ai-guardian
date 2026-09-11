@@ -1,0 +1,124 @@
+# syntax=docker/dockerfile:1
+# AI Guardian OpenShell sandbox image
+#
+# This image is deliberately separate from container/Dockerfile. The normal
+# UBI image remains the supported Docker/Podman support container; this image
+# layers AI Guardian on top of the OpenShell Community base so its bundled
+# agent paths and default sandbox layout stay aligned with OpenShell.
+#
+# Build from the repository root with the container directory as context:
+#   podman build -f container/Dockerfile.openshell \
+#       -t localhost/ai-guardian:openshell container/
+#
+# Run with the OpenShell launcher:
+#   ./container/openshell.sh --base localhost/ai-guardian:openshell
+
+# Keep rebuilds reproducible: update this digest deliberately after reviewing
+# the new OpenShell Community base and rerunning the image smoke tests.
+ARG BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e
+FROM ${BASE_IMAGE}
+
+ARG AI_GUARDIAN_VERSION=1.17.1
+# Keep the OpenShell image's bundled Node-based clients current while making
+# every upgrade explicit and reproducible. Override an individual argument
+# deliberately when validating another release.
+ARG CODEX_VERSION=0.154.0
+ARG OPENCODE_VERSION=1.18.30
+ARG COPILOT_VERSION=1.0.83
+
+# The community base image already supplies the supported CLI agents, Node,
+# Git, gh, iproute2, users, and the default OpenShell policy. Install only
+# the AI Guardian runtime and its scanner engines here.
+USER root
+
+# Keep the complete system PATH during build-time scanner setup as well as at
+# runtime. The community base already includes utilities such as blkid under
+# /usr/sbin; omitting sbin here makes ONNX Runtime emit a misleading warning.
+ENV PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY vendor/ /tmp/ai-guardian-vendor/
+
+RUN set -eux; \
+    case "${AI_GUARDIAN_VERSION}" in \
+        *.whl) \
+            wheel="/tmp/ai-guardian-vendor/${AI_GUARDIAN_VERSION}"; \
+            test -f "$wheel"; \
+            uv pip install --python /sandbox/.venv/bin/python \
+                "$wheel" rapidocr-onnxruntime==1.4.4 ;; \
+        *) \
+            uv pip install --python /sandbox/.venv/bin/python \
+                "ai-guardian==${AI_GUARDIAN_VERSION}" \
+                rapidocr-onnxruntime==1.4.4 ;; \
+    esac; \
+    rm -rf /tmp/ai-guardian-vendor; \
+    ln -sf /sandbox/.venv/bin/ai-guardian /usr/local/bin/ai-guardian; \
+    ai-guardian --version
+
+# The pinned OpenShell base includes older versions of these Node-based
+# clients. Replace them in one layer so their model catalogs, protocol support,
+# and command paths stay aligned with the current CLI releases; the OpenShell
+# base image and its agent layout remain unchanged. Claude is installed by the
+# base image's native installer and is intentionally not overridden here.
+RUN npm install --global --prefix /usr --no-fund --no-audit \
+        "@openai/codex@${CODEX_VERSION}" \
+        "opencode-ai@${OPENCODE_VERSION}" \
+        "@github/copilot@${COPILOT_VERSION}" \
+    && codex --version \
+    && opencode --version \
+    && copilot --version
+
+# Avoid pulling X11 libraries into the headless support image through the
+# OCR dependency, matching the normal UBI image's runtime choice.
+RUN uv pip uninstall --python /sandbox/.venv/bin/python opencv-python || true \
+    && uv pip install --python /sandbox/.venv/bin/python opencv-python-headless
+
+# Install the same permissively licensed scanner engines as the normal image.
+# They are placed in /usr/local/bin, which is readable by the sandbox user and
+# covered by the OpenShell base image's /usr filesystem policy.
+RUN ai-guardian scanner install gitleaks --use-pinned \
+    && test -x /usr/local/bin/gitleaks \
+    && ai-guardian scanner install betterleaks --use-pinned \
+    && test -x /usr/local/bin/betterleaks
+
+# Keep all runtime state and configuration in the writable sandbox home. The
+# host configuration, when selected by openshell.sh, is uploaded separately.
+RUN mkdir -p \
+        /sandbox/.config/ai-guardian/profiles \
+        /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
+        /sandbox/.gemini /sandbox/.github/hooks \
+        /sandbox/.kiro /sandbox/.openclaw /sandbox/.cline \
+        /sandbox/.clinerules /sandbox/.junie /sandbox/.aider-desk \
+        /sandbox/.augment /sandbox/.crush \
+        /sandbox/.local/bin /sandbox/.local/state/ai-guardian \
+    && chown -R sandbox:sandbox \
+        /sandbox/.config /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
+        /sandbox/.gemini /sandbox/.github /sandbox/.kiro /sandbox/.openclaw \
+        /sandbox/.cline /sandbox/.clinerules /sandbox/.junie \
+        /sandbox/.aider-desk /sandbox/.augment /sandbox/.crush \
+        /sandbox/.local
+
+# OpenShell currently supplies a reduced PATH without /usr/sbin. ONNX Runtime
+# probes the container with blkid, so expose the base image's existing utility
+# through a directory that remains on OpenShell's PATH.
+RUN ln -sf /usr/sbin/blkid /usr/local/bin/blkid
+
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
+
+ARG AI_GUARDIAN_REST_PORT=63152
+ENV AI_GUARDIAN_REST_PORT=${AI_GUARDIAN_REST_PORT} \
+    AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian \
+    HOME=/sandbox \
+    PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+LABEL ai-guardian.daemon=true \
+      ai-guardian.support-image=true \
+      ai-guardian.openshell-base=true
+
+EXPOSE ${AI_GUARDIAN_REST_PORT}
+
+WORKDIR /sandbox
+USER sandbox
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+CMD ["bash", "-l"]

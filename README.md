@@ -161,38 +161,103 @@ curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/m
 
 ### Container
 
-A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
+A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with ai-guardian and the supported agent integrations. Redistributable headless CLIs are bundled; proprietary or GUI-only agents are configured at startup without being embedded:
 
 ```bash
-# Recommended — run.sh handles auth, port mapping, and ToS consent
+# Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
 curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/container/run.sh -o run.sh
 chmod +x run.sh
-ANTHROPIC_API_KEY=sk-ant-... ACCEPT_PROPRIETARY_TOS=true \
-    ./run.sh --ide claude --repo $(pwd)
+OPENAI_API_KEY=... \
+    ./run.sh --agent codex --repo $(pwd)
+
+# Optional OpenShell sandbox (published image; local build is also supported)
+podman pull quay.io/redhatproductsecurity/ai-guardian:openshell
+./container/openshell.sh --agent codex --repo $(pwd)
+
+# Or build and select a local OpenShell image
+podman build -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian:openshell container/
+./container/openshell.sh --base localhost/ai-guardian:openshell \
+    --agent codex --repo $(pwd)
+
+# Launch Codex directly instead of opening the shell
+./container/openshell.sh --agent codex --repo $(pwd) -- codex
 
 # Or manually with podman/docker
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 podman run -it -p 63152:63152 \
     -v $(pwd):/workspace:z \
-    -e AI_GUARDIAN_IDE=claude \
-    -e ANTHROPIC_API_KEY=sk-ant-... \
-    -e ACCEPT_PROPRIETARY_TOS=true \
+    -e AI_GUARDIAN_AGENT=codex \
+    -e OPENAI_API_KEY=<your-openai-key> \
     quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
-`ACCEPT_PROPRIETARY_TOS=true` accepts the [Claude Code Terms of Service](https://www.anthropic.com/legal/consumer-terms) and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.
+The OpenShell launcher asks OpenShell to allocate a free port by default
+(`--port 0`) and prints the assigned port in its startup output. Pass
+`--port N` when a stable port is needed for a tray target or another client.
+Forwarding is enabled by default
+for host tray/NiceGUI integration; use `--no-forward` when the host UI should
+not have a REST endpoint for the sandbox:
+
+```bash
+./container/openshell.sh --agent codex --no-forward
+# Equivalent environment setting:
+AI_GUARDIAN_OPEN_SHELL_FORWARD=false ./container/openshell.sh --agent codex
+```
+
+The sandbox remains usable from its shell, but the host tray/NiceGUI cannot
+discover or manage it without the forward.
+
+OpenShell must be installed and initialized on the host first, with a
+reachable gateway and configured compute driver; follow the
+[official OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+The quickstart installer can install and start a local gateway; verify it with
+`openshell status` before using the OpenShell launcher.
+When the gateway uses rootless Podman on Linux, start its API socket first with
+`systemctl --user enable --now podman.socket`; see the container guide for
+socket-path troubleshooting.
+
+The OpenShell launcher opens a shell by default. Its `--repo` option uploads an
+isolated snapshot rather than binding the host checkout; the shell starts in
+`/sandbox/repo`, and a read/write GitHub provider can push the sandbox copy
+without writing files back to the host. Pass `-- codex` to launch Codex
+directly instead of opening the shell.
+
+For Codex ChatGPT/OAuth credentials, enable OpenShell Providers v2 once on the
+active gateway:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+A Codex OAuth login does not require a separate API key after Providers v2 is
+enabled. Legacy Codex discovery requires `OPENAI_API_KEY` instead.
+The launcher converts the gateway-provided OAuth placeholders into Codex's
+native sandbox-local `auth.json`; real host tokens are not uploaded. When host
+files must be uploaded, the launcher uses a compatible staging flow and starts
+the selected agent with `sandbox exec` after setup.
+Inside OpenShell, the launcher sets Codex's sandbox-local
+`sandbox_mode = "danger-full-access"` so Codex does not create a nested
+bubblewrap sandbox. OpenShell remains the outer filesystem and network
+boundary; regular Docker/Podman launches retain Codex's normal inner sandbox.
+See the official [OpenShell Codex example](https://github.com/NVIDIA/OpenShell/blob/main/examples/agent-driven-policy-management/sandbox-agent.sh).
+
+For proprietary agents such as Claude Code, select the agent explicitly and
+review its terms before enabling the runtime consent flow. See the container
+guide for the supported agent matrix.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.16.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.16.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.17.1
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.17.1
 
 # Or build from source
 podman build -t ai-guardian container/
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude ai-guardian
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex ai-guardian
 ```
 
-See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, Vertex AI auth, and multi-arch details.
+See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for agent selection, host config/profile behavior, OpenShell, Vertex AI auth, and multi-arch details.
+The container guide also includes [read-only](container/openshell-github-readonly-policy.yaml) and [read/write](container/openshell-github-readwrite-policy.yaml) OpenShell policy overlays, selected-agent policy fragments, and provider setup.
 
 ### What Setup Does
 
@@ -269,7 +334,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands |
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
 | [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 14 AI coding agents with normalized input/output |
-| [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with all headless IDEs and scanners, published to quay.io |
+| [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
 | [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
 | [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
 | [Security SDK & REST API](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) | Programmatic security checking for Python agents and multi-language support |
@@ -410,14 +475,16 @@ The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *dur
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `AI_GUARDIAN_CONFIG_DIR` | Custom config directory | `~/.config/ai-guardian` |
+| `AI_GUARDIAN_HOME` | Compatibility alias for the config directory | `~/.config/ai-guardian` |
 | `AI_GUARDIAN_STATE_DIR` | State directory (logs, violations) | `~/.local/state/ai-guardian` |
 | `AI_GUARDIAN_CACHE_DIR` | Cache directory (patterns) | `~/.cache/ai-guardian` |
 | `AI_GUARDIAN_IDE_TYPE` | Override IDE auto-detection | Auto-detect |
 | `AI_GUARDIAN_PATTERN_TOKEN` | Default pattern server auth token (all sections) | None |
 
-IDE-specific homes such as `CLAUDE_CONFIG_DIR`, `CODEX_HOME`,
-`CURSOR_CONFIG_DIR`, `COPILOT_HOME`, and `GEMINI_CLI_HOME` are honored by setup,
-MCP registration, verification, and supported session discovery. See the
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`, `COPILOT_HOME`, and
+`GEMINI_CLI_HOME` are honored by setup, MCP registration, verification, and
+supported session discovery. `AI_GUARDIAN_CONFIG_DIR` takes precedence over
+`AI_GUARDIAN_HOME`, which takes precedence over XDG. See the
 [IDE-specific path reference](docs/AGENT_SUPPORT.md#ide-specific-home-and-configuration-paths)
 for the complete variable list, precedence rules, and project-local behavior.
 

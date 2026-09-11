@@ -1,0 +1,6 @@
+# Kiro has no bundled OpenShell provider profile in the supported gateway
+# matrix. Keep the selected-agent policy deny-by-default until an explicit
+# provider/profile and its endpoints are supplied.
+version: 1
+
+network_policies: {}

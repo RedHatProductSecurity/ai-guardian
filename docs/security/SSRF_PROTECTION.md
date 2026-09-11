@@ -617,7 +617,7 @@ User → Tool Executes → Network Call → Policy Engine → Block if violates 
 OpenShell uses declarative YAML for network policies:
 
 ```yaml
-# openshell-policy.yaml
+# openshell-github-readwrite-policy.yaml
 network:
   outbound:
     # Block metadata endpoints
@@ -651,7 +651,7 @@ network:
 docker pull ghcr.io/nvidia/openshell:latest
 
 # Run agent in OpenShell sandbox
-openshell run --policy openshell-policy.yaml -- claude-code
+openshell run --policy openshell-github-readwrite-policy.yaml -- claude-code
 ```
 
 ### Defense in Depth Strategy
