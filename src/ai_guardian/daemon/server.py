@@ -740,7 +740,20 @@ class DaemonServer:
             import socket as socket_mod
 
             self._name = full_cfg.get("name") or socket_mod.gethostname()
-            cfg_port = daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
+            env_port = os.environ.get("AI_GUARDIAN_REST_PORT")
+            try:
+                cfg_port = int(
+                    env_port
+                    if env_port is not None
+                    else daemon_cfg.get("rest_port", DEFAULT_REST_PORT)
+                )
+            except (TypeError, ValueError):
+                logger.warning(
+                    "Invalid AI_GUARDIAN_REST_PORT=%r; using default port %s",
+                    env_port,
+                    DEFAULT_REST_PORT,
+                )
+                cfg_port = DEFAULT_REST_PORT
 
             default_host = "127.0.0.1"
             if os.path.exists("/run/.containerenv"):

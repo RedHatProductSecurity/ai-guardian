@@ -1,0 +1,44 @@
+# GitHub Copilot CLI network capability.
+# Copilot credentials are supplied by the attached OpenShell provider.
+version: 1
+
+network_policies:
+  github_copilot:
+    name: github-copilot
+    endpoints:
+      - host: api.githubcopilot.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: api.individual.githubcopilot.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: api.business.githubcopilot.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: api.enterprise.githubcopilot.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: copilot-proxy.githubusercontent.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: telemetry.enterprise.githubcopilot.com
+        port: 443
+        allow_uninspected_credentials: true
+      - host: default.exp-tas.com
+        port: 443
+        allow_uninspected_credentials: true
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/copilot }
+      - { path: /usr/local/bin/copilot }
+      - { path: /usr/lib/node_modules/@github/copilot/node_modules/@github/**/copilot }

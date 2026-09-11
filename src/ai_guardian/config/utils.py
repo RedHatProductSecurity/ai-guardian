@@ -494,8 +494,9 @@ def get_config_dir() -> Path:
 
     Priority order:
     1. AI_GUARDIAN_CONFIG_DIR (direct override)
-    2. XDG_CONFIG_HOME/ai-guardian (XDG standard)
-    3. ~/.config/ai-guardian (default)
+    2. AI_GUARDIAN_HOME (explicit ai-guardian config directory alias)
+    3. XDG_CONFIG_HOME/ai-guardian (XDG standard)
+    4. ~/.config/ai-guardian (default)
 
     Returns:
         Path: Configuration directory path
@@ -506,6 +507,11 @@ def get_config_dir() -> Path:
         PosixPath('/custom/path')
 
         >>> del os.environ['AI_GUARDIAN_CONFIG_DIR']
+        >>> os.environ['AI_GUARDIAN_HOME'] = '/guardian/config'
+        >>> get_config_dir()
+        PosixPath('/guardian/config')
+
+        >>> del os.environ['AI_GUARDIAN_HOME']
         >>> os.environ['XDG_CONFIG_HOME'] = '/xdg/config'
         >>> get_config_dir()
         PosixPath('/xdg/config/ai-guardian')
@@ -519,12 +525,19 @@ def get_config_dir() -> Path:
     if config_dir:
         return Path(config_dir).expanduser()
 
-    # Priority 2: Check XDG_CONFIG_HOME
+    # Priority 2: AI_GUARDIAN_HOME is a compatibility alias for an explicit
+    # ai-guardian config directory.  Keep the more specific name above as
+    # the stronger override when both variables are present.
+    guardian_home = os.environ.get("AI_GUARDIAN_HOME")
+    if guardian_home:
+        return Path(guardian_home).expanduser()
+
+    # Priority 3: Check XDG_CONFIG_HOME
     config_home = os.environ.get("XDG_CONFIG_HOME")
     if config_home:
         return Path(config_home) / "ai-guardian"
 
-    # Priority 3: Default fallback (platform-specific)
+    # Priority 4: Default fallback (platform-specific)
     if platform.system() == "Windows":
         appdata = os.environ.get("APPDATA")
         if appdata:

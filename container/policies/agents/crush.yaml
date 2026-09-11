@@ -1,0 +1,31 @@
+# Crush network capability for the bundled/common provider endpoints.
+# Add a matching provider profile or policy overlay for other providers.
+version: 1
+
+network_policies:
+  deepinfra:
+    name: deepinfra
+    endpoints:
+      - host: api.deepinfra.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/crush }
+      - { path: /usr/local/bin/crush }
+      - { path: /sandbox/.crush/** }
+
+  nvidia:
+    name: nvidia
+    endpoints:
+      - host: integrate.api.nvidia.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/crush }
+      - { path: /usr/local/bin/crush }
+      - { path: /sandbox/.crush/** }

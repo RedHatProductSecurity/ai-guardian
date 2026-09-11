@@ -1,0 +1,30 @@
+# Claude Code network capability.
+# Google Vertex access is supplied by the google-vertex-ai provider when
+# Claude Code is configured for Vertex; it is intentionally not duplicated
+# here.
+version: 1
+
+network_policies:
+  claude_code:
+    name: claude-code
+    endpoints:
+      - host: api.anthropic.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: statsig.anthropic.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+      - host: sentry.io
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/claude }
+      - { path: /usr/local/bin/claude }
+      - { path: /sandbox/.local/bin/claude }

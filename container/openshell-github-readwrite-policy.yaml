@@ -1,0 +1,46 @@
+# Read/write GitHub capability for the AI Guardian OpenShell support image.
+#
+# This is the main policy overlay. The OpenShell launcher composes it with
+# policies/base.yaml and the selected agent fragment from policies/agents/.
+# Credentials are supplied separately by OpenShell providers.
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only: [/usr, /lib, /proc, /dev/urandom, /app, /etc, /var/log]
+  read_write: [/sandbox, /tmp, /dev/null]
+
+landlock:
+  compatibility: best_effort
+
+network_policies:
+  github_api:
+    name: github-api
+    endpoints:
+      - host: api.github.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        access: read-write
+    binaries:
+      - { path: /usr/bin/gh }
+      - { path: /usr/local/bin/gh }
+      - { path: /usr/bin/curl }
+      - { path: /usr/local/bin/curl }
+
+  github_git:
+    name: github-git
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        rules:
+          - allow: { method: GET, path: "/**/info/refs*" }
+          - allow: { method: POST, path: "/**/git-upload-pack" }
+          - allow: { method: POST, path: "/**/git-receive-pack" }
+    binaries:
+      - { path: /usr/bin/git }
+      - { path: /usr/local/bin/git }

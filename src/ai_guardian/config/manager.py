@@ -30,7 +30,8 @@ class ConfigManager:
 
     def __init__(self):
         """Initialize configuration manager."""
-        # Get config directory with priority: AI_GUARDIAN_CONFIG_DIR > XDG_CONFIG_HOME > default
+        # get_config_dir() applies the full priority order, including the
+        # AI_GUARDIAN_HOME compatibility alias.
         self.config_dir = get_config_dir()
         self.installation_config_path = self.config_dir / "config.toml"
         self.user_config_path = self.config_dir / "allowed-tools.toml"

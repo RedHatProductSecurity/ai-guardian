@@ -31,12 +31,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   atomically, preserve responsive sockets when PID state is missing or corrupt,
   and allow reset to recover a daemon using its startup lock.
 
+- **OpenShell daemon discovery**: Record dynamically assigned
+  `forward service` ports for tray/NiceGUI discovery, since OpenShell does not
+  expose those local service forwards through `openshell forward list`; ignore
+  records after their forward process exits.
+
+- **OpenShell daemon authentication**: Discover the generated REST token from
+  the OpenShell sandbox home as well as the conventional container paths, so
+  authenticated tray/NiceGUI requests can reach `/api/config` and control
+  endpoints.
+
+- **OpenShell Codex bootstrap**: Keep the synthetic local JWT minimal and free
+  of hard-coded subscription or account claims while real OAuth credentials
+  remain gateway-managed.
+
+- **OpenShell CLI parity**: Pin independently overridable Codex, OpenCode, and
+  GitHub Copilot CLI releases in the dedicated support image so their model
+  catalogs and protocol support do not lag behind the host clients shipped
+  outside OpenShell.
+
 - **Cursor Cloud setup review fixes**: Keep cloud MCP registration separate from
   local `.cursor/mcp.json`, recognize effective project hooks in MCP health
   checks, fail closed on malformed Cursor tool inputs, preserve decoded shell
   parameters, and keep native tray dismissal from submitting selections.
 
 ### Added
+
+- **OpenShell support image workflow (#2289)**: Add Codex-default Docker/Podman
+  and OpenShell launchers with runtime agent selection, selected-agent hook
+  setup, file-only host config sharing, profile isolation, a read-only
+  and read/write GitHub access policy example, an OpenShell upload-compatible staging flow,
+  secure Codex OAuth provider bridging, Providers v2 prerequisite diagnostics,
+  daemon REST forwarding/tray guidance with active OpenShell-forward discovery,
+  and `AI_GUARDIAN_HOME`
+  configuration-directory compatibility. The OpenShell launcher selects a
+  free REST port by default, accepts `--port N` for stable mappings, and offers
+  `--no-forward`/`AI_GUARDIAN_OPEN_SHELL_FORWARD=false` when host UI access is
+  not wanted. The
+  OpenShell uses a dedicated `Dockerfile.openshell` based on the OpenShell
+  Community sandbox image, while the normal UBI `Dockerfile` keeps its ordinary
+  Docker/Podman runtime layout. The OpenShell image inherits the community
+  base's agent paths, networking tools, and sandbox permissions, and bootstraps
+  Codex OAuth through placeholder-backed `auth.json` state without copying
+  host tokens. OpenShell Codex sessions use Codex's sandbox-local
+  `danger-full-access` mode so OpenShell remains the single outer sandbox.
+
+- **Targeted container setup**: Configure only the selected agent by default;
+  all-CLI and all-integration setup remain available through
+  `AI_GUARDIAN_SETUP_SCOPE`.
+
+- **OpenShell policy composition (#2289)**: Split the support-image network
+  policy into shared, GitHub-access, and selected-agent overlays. The
+  OpenShell launcher now composes only the selected CLI policy and accepts
+  repeatable `--policy` overlays, keeping unrelated agent egress disabled. The
+  launcher opens a shell by default so users can start and exit the selected
+  agent repeatedly within the same repository snapshot.
+
+- **OpenShell image publishing and CLI health monitoring**: Publish the
+  dedicated OpenShell image to the primary Quay repository with separate
+  `openshell` tags, without mirroring it to the legacy `itdove` repository.
+  Add a twice-monthly npm version check for the explicit Codex, OpenCode, and
+  GitHub Copilot pins, while keeping GUI integrations and native installers
+  outside the image-version check.
 
 - **IDE-specific home directory support (#2288)**: Centralize documented
   environment-variable path resolution across hook setup, MCP registration and

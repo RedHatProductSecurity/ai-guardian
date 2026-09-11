@@ -1,0 +1,37 @@
+# OpenAI Codex network capability.
+# Codex credentials are supplied by the attached OpenShell codex provider.
+version: 1
+
+network_policies:
+  codex_openai:
+    name: codex-openai
+    endpoints:
+      - host: api.openai.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        access: read-write
+      - host: auth.openai.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        access: read-write
+      - host: chatgpt.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        access: read-write
+      - host: ab.chatgpt.com
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        access: read-write
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/codex }
+      - { path: /usr/local/bin/codex }
+      - { path: /usr/lib/node_modules/@openai/** }

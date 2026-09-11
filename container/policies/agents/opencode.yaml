@@ -1,0 +1,50 @@
+# OpenCode network capability for the bundled/common provider endpoints.
+# OpenCode supports additional providers; add a matching provider profile or
+# policy overlay for any provider not listed here.
+version: 1
+
+network_policies:
+  deepinfra:
+    name: deepinfra
+    endpoints:
+      - host: api.deepinfra.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/opencode }
+      - { path: /usr/lib/node_modules/opencode-ai/bin/.opencode }
+      - { path: /usr/local/bin/opencode }
+      - { path: /sandbox/.opencode/bin/opencode }
+
+  nvidia:
+    name: nvidia
+    endpoints:
+      - host: integrate.api.nvidia.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/opencode }
+      - { path: /usr/lib/node_modules/opencode-ai/bin/.opencode }
+      - { path: /usr/local/bin/opencode }
+      - { path: /sandbox/.opencode/bin/opencode }
+
+  opencode_zen:
+    name: opencode-zen
+    endpoints:
+      - host: opencode.ai
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/opencode }
+      - { path: /usr/lib/node_modules/opencode-ai/bin/.opencode }
+      - { path: /usr/local/bin/opencode }
+      - { path: /sandbox/.opencode/bin/opencode }

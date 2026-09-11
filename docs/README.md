@@ -80,7 +80,7 @@ Run `mkdocs build` before submitting documentation changes. The generated `site/
 
 | Document | Description |
 |----------|-------------|
-| [Container Image](../container/README.md) | UBI-based image with all headless IDEs, published to quay.io |
+| [Container Image](../container/README.md) | UBI-based image with supported agent integrations, published to quay.io |
 
 ## Development
 

@@ -1134,6 +1134,27 @@ class TestRestApiHostResolution:
                 host = self._run_start_rest_api(server)
         assert host == "10.0.0.1"
 
+    def test_env_port_overrides_config(self, short_state_dir, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_REST_PORT", "63160")
+        server = DaemonServer(idle_timeout=5, enable_rest_api=False)
+        captured = {}
+
+        class FakeAPI:
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+            def start(self):
+                return captured["port"]
+
+        with mock.patch("ai_guardian.daemon.rest_api.DaemonRestAPI", FakeAPI):
+            with mock.patch(
+                "ai_guardian.config.loaders._load_config_file",
+                return_value=({"daemon": {"rest_port": 63152}}, None),
+            ):
+                server._start_rest_api()
+
+        assert captured["port"] == 63160
+
     def test_docker_container_detection(self, short_state_dir, monkeypatch):
         monkeypatch.delenv("AI_GUARDIAN_REST_HOST", raising=False)
         server = DaemonServer(idle_timeout=5, enable_rest_api=False)

@@ -1,0 +1,127 @@
+name: OpenShell CLI Version Health
+
+on:
+  schedule:
+    # Check the image's pinned terminal CLIs twice each month.
+    - cron: '0 9 1,15 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-versions:
+    name: Check OpenShell CLI Versions
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: python -m pip install requests
+
+      - name: Check pinned CLI versions
+        id: check-versions
+        continue-on-error: true
+        run: |
+          set +e
+          python scripts/check_cli_versions.py --output cli-versions.json
+          status=$?
+          echo "exit_code=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Fail when registry checks are unavailable
+        if: steps.check-versions.outputs.exit_code == '2'
+        run: exit 1
+
+      - name: Check for existing update issue
+        id: check-issue
+        if: steps.check-versions.outputs.exit_code == '1'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'openshell-cli-version-update',
+              state: 'open'
+            });
+
+            if (issues.length > 0) {
+              core.setOutput('exists', 'true');
+              core.setOutput('issue_number', issues[0].number);
+              console.log(`Found existing issue #${issues[0].number}`);
+            } else {
+              core.setOutput('exists', 'false');
+              console.log('No existing OpenShell CLI update issue found');
+            }
+
+      - name: Comment on existing update issue
+        if: steps.check-versions.outputs.exit_code == '1' && steps.check-issue.outputs.exists == 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const versions = JSON.parse(fs.readFileSync('cli-versions.json', 'utf8'));
+            const updates = Object.values(versions)
+              .filter(info => info.is_outdated)
+              .map(info => `- **${info.name}** (${info.package}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
+              .join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.check-issue.outputs.issue_number }},
+              body: `⏰ **Twice-monthly OpenShell CLI version check**
+
+            New versions are still available:
+
+            ${updates}
+
+            Checked: ${new Date().toISOString().split('T')[0]}`
+            });
+
+      - name: Create update issue
+        if: steps.check-versions.outputs.exit_code == '1' && steps.check-issue.outputs.exists == 'false'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const versions = JSON.parse(fs.readFileSync('cli-versions.json', 'utf8'));
+            const updates = Object.values(versions)
+              .filter(info => info.is_outdated)
+              .map(info => `- **${info.name}** (${info.package}): v${info.pinned_version} → v${info.latest_version} (build arg ${info.build_arg})`)
+              .join('\n');
+
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '📦 OpenShell CLI versions outdated - update recommended',
+              labels: ['openshell-cli-version-update', 'dependencies', 'maintenance'],
+              body: `## OpenShell CLI version health check
+
+            New stable versions are available for the CLI packages pinned by
+            container/Dockerfile.openshell:
+
+            ${updates}
+
+            ## Update procedure
+
+            1. Review the package release notes and license/terms.
+            2. Update the corresponding ARG *_VERSION in
+               container/Dockerfile.openshell.
+            3. Rebuild and smoke-test the OpenShell image.
+            4. Update container/README.md and CHANGELOG.md when appropriate.
+
+            Checked: ${new Date().toISOString()}
+            Workflow run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
+            console.log(`Created issue #${issue.data.number}`);

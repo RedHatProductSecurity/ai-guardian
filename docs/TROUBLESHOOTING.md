@@ -166,7 +166,7 @@ The daemon name is read from the **top-level** `name` field in `ai-guardian.json
 }
 ```
 
-The config file is located at `~/.config/ai-guardian/ai-guardian.json` by default (or `$XDG_CONFIG_HOME/ai-guardian/ai-guardian.json`).
+The config file is located at `~/.config/ai-guardian/ai-guardian.json` by default (or `$XDG_CONFIG_HOME/ai-guardian/ai-guardian.json`). Set `AI_GUARDIAN_CONFIG_DIR` or its compatibility alias `AI_GUARDIAN_HOME` to choose an explicit configuration directory.
 
 ### Daemon Started Before Config Is Written
 
@@ -626,5 +626,5 @@ For per-violation-type impact details, see [AGENT_SUPPORT.md — Known Limitatio
 | Violations | `~/.local/state/ai-guardian/violations.json` | Security violation audit log |
 
 Paths are governed by XDG conventions and can be overridden with environment variables:
-- `AI_GUARDIAN_CONFIG_DIR` or `XDG_CONFIG_HOME`
+- `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, or `XDG_CONFIG_HOME`
 - `AI_GUARDIAN_STATE_DIR` or `XDG_STATE_HOME`

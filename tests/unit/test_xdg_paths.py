@@ -110,6 +110,46 @@ class TestGetCacheDir:
         assert "~" not in str(result)
 
 
+class TestGetConfigDir:
+    """Tests for configuration-directory environment precedence."""
+
+    def test_ai_guardian_home_alias(self, tmp_path):
+        guardian_home = str(tmp_path / "guardian-config")
+        with mock.patch.dict(
+            os.environ, {"AI_GUARDIAN_HOME": guardian_home}, clear=False
+        ):
+            os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            os.environ.pop("XDG_CONFIG_HOME", None)
+            result = get_config_dir()
+        assert result == Path(guardian_home)
+
+    def test_config_dir_takes_precedence_over_ai_guardian_home(self, tmp_path):
+        direct = str(tmp_path / "direct")
+        guardian_home = str(tmp_path / "guardian-home")
+        with mock.patch.dict(
+            os.environ,
+            {
+                "AI_GUARDIAN_CONFIG_DIR": direct,
+                "AI_GUARDIAN_HOME": guardian_home,
+            },
+            clear=False,
+        ):
+            result = get_config_dir()
+        assert result == Path(direct)
+
+    def test_ai_guardian_home_takes_precedence_over_xdg(self, tmp_path):
+        guardian_home = str(tmp_path / "guardian-home")
+        xdg = str(tmp_path / "xdg")
+        with mock.patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_HOME": guardian_home, "XDG_CONFIG_HOME": xdg},
+            clear=False,
+        ):
+            os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            result = get_config_dir()
+        assert result == Path(guardian_home)
+
+
 class TestWindowsPaths:
     """Tests for Windows-native default paths (Issue #873)."""
 
@@ -118,6 +158,7 @@ class TestWindowsPaths:
         appdata = str(tmp_path / "AppData" / "Roaming")
         with mock.patch.dict(os.environ, {"APPDATA": appdata}, clear=False):
             os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            os.environ.pop("AI_GUARDIAN_HOME", None)
             os.environ.pop("XDG_CONFIG_HOME", None)
             result = get_config_dir()
         assert result == Path(appdata) / "ai-guardian"
@@ -153,6 +194,7 @@ class TestWindowsPaths:
     def test_config_dir_fallback_without_appdata(self, _mock_sys, tmp_path):
         with mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("AI_GUARDIAN_CONFIG_DIR", None)
+            os.environ.pop("AI_GUARDIAN_HOME", None)
             os.environ.pop("XDG_CONFIG_HOME", None)
             os.environ.pop("APPDATA", None)
             result = get_config_dir()

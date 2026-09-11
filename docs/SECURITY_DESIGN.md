@@ -87,7 +87,7 @@ Bash(command="mv .ai-read-deny .ai-read-deny.bak")
 AI Guardian's config directory is **always in the user's HOME directory**:
 - Default: `~/.config/ai-guardian/`
 - XDG: `$XDG_CONFIG_HOME/ai-guardian/`
-- Custom: `$AI_GUARDIAN_CONFIG_DIR`
+- Custom: `$AI_GUARDIAN_CONFIG_DIR` (or `$AI_GUARDIAN_HOME`)
 
 All paths resolve to the HOME directory, which is **always writable by the user** (and therefore by AI agents). Filesystem permissions cannot protect these files.
 
