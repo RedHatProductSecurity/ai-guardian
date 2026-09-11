@@ -8,6 +8,7 @@ This module provides automation utilities for release management:
 - Updates CHANGELOG.md with proper formatting
 - Validates version consistency
 - Calculates next version based on release type
+- Reports the versioned normal and OpenShell container image references
 
 Supports optional .release-config.json for custom configurations.
 """
@@ -19,6 +20,23 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Optional, List, Dict, Any
+
+
+NORMAL_CONTAINER_REPOSITORY = "quay.io/redhatproductsecurity/ai-guardian"
+OPENSHELL_CONTAINER_REPOSITORY = (
+    "quay.io/redhatproductsecurity/ai-guardian-openshell"
+)
+
+
+def get_container_image_references(version: str) -> Dict[str, str]:
+    """Return the versioned normal and OpenShell container image references."""
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise ValueError(f"Invalid release version for container images: {version}")
+
+    return {
+        "normal": f"{NORMAL_CONTAINER_REPOSITORY}:{version}",
+        "openshell": f"{OPENSHELL_CONTAINER_REPOSITORY}:{version}",
+    }
 
 
 class VersionFile:
@@ -815,6 +833,13 @@ def main():
         "--date", help="Release date (YYYY-MM-DD, default: today)"
     )
 
+    # Container image references
+    container_parser = subparsers.add_parser(
+        "container-images",
+        help="Print versioned normal and OpenShell container image references",
+    )
+    container_parser.add_argument("version", help="Release version (e.g., 1.2.0)")
+
     # Validate
     validate_parser = subparsers.add_parser("validate", help="Validate prerequisites")
     validate_parser.add_argument(
@@ -875,6 +900,15 @@ def main():
     elif args.command == "update-changelog":
         success = helper.update_changelog(args.version, args.date)
         sys.exit(0 if success else 1)
+
+    elif args.command == "container-images":
+        try:
+            for name, image in get_container_image_references(args.version).items():
+                print(f"{name}: {image}")
+        except ValueError as error:
+            print(f"Error: {error}", file=sys.stderr)
+            sys.exit(1)
+        sys.exit(0)
 
     elif args.command == "validate":
         valid, errors = helper.validate_prerequisites(args.type)

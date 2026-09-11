@@ -88,8 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   agent repeatedly within the same repository snapshot.
 
 - **OpenShell image publishing and CLI health monitoring**: Publish the
-  dedicated OpenShell image to the primary Quay repository with separate
-  `openshell` tags, without mirroring it to the legacy `itdove` repository.
+  dedicated OpenShell image to
+  `quay.io/redhatproductsecurity/ai-guardian-openshell` with `latest`/version
+  tags, without mirroring it to the legacy `itdove` repository. Release
+  automation verifies both the normal and OpenShell image repositories.
   Add a twice-monthly version check for the explicit Claude, Codex, OpenCode,
   and GitHub Copilot pins, using Anthropic's release endpoint for Claude and
   npm for the Node clients, while keeping GUI integrations outside the

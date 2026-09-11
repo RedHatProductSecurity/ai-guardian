@@ -41,3 +41,6 @@ def test_release_script_help_and_docs_verification_contract():
     assert "<minor|patch|major>" in help_result.stdout
     assert "https://ai-guardian.readthedocs.io/en/${TAG_NAME}/" in script
     assert "curl --fail --silent --location" in script
+    assert "quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}" not in script
+    assert "${NORMAL_CONTAINER_IMAGE}" in script
+    assert "${OPENSHELL_CONTAINER_IMAGE}" in script

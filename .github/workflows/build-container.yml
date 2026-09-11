@@ -1,13 +1,16 @@
 # GitHub Actions CI/CD - Build Container Image
-# Publishes to quay.io/redhatproductsecurity/ai-guardian:
+# Publishes the normal image to quay.io/redhatproductsecurity/ai-guardian:
 #   - :latest         on every successful merge to main  (triggered by Build Wheel)
 #   - :VERSION        on clean release tags (v1.2.3)
-#   - :openshell      OpenShell sandbox image on every successful merge to main
-#   - :openshell-VERSION  OpenShell sandbox image on clean release tags
+# Publishes the OpenShell image to quay.io/redhatproductsecurity/ai-guardian-openshell:
+#   - :latest         on every successful merge to main
+#   - :VERSION        on clean release tags (v1.2.3)
 #
 # Required secrets: QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (primary registry)
 #                   QUAY_USERNAME, QUAY_PASSWORD (legacy mirror — remove in v2.0, see #1774)
-# Required: quay.io/redhatproductsecurity/ai-guardian repo created and set to public
+# Required: both primary Quay repositories created and set to public:
+#           quay.io/redhatproductsecurity/ai-guardian
+#           quay.io/redhatproductsecurity/ai-guardian-openshell
 
 name: Build Container Image
 
@@ -42,7 +45,7 @@ jobs:
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "workflow_run" ]]; then
             echo "image_tag=latest" >> "$GITHUB_OUTPUT"
-            echo "openshell_tag=openshell" >> "$GITHUB_OUTPUT"
+            echo "openshell_tag=latest" >> "$GITHUB_OUTPUT"
             echo "wheel_source=artifact" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
 
@@ -53,7 +56,7 @@ jobs:
               echo "Skipping test tag: $TAG"
             else
               echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
-              echo "openshell_tag=openshell-${TAG}" >> "$GITHUB_OUTPUT"
+              echo "openshell_tag=${TAG}" >> "$GITHUB_OUTPUT"
               echo "wheel_source=build" >> "$GITHUB_OUTPUT"
               echo "skip=false" >> "$GITHUB_OUTPUT"
             fi
@@ -62,9 +65,9 @@ jobs:
             TAG="${{ github.event.inputs.image_tag }}"
             echo "image_tag=${TAG:-latest}" >> "$GITHUB_OUTPUT"
             if [[ -z "$TAG" || "$TAG" == "latest" ]]; then
-              echo "openshell_tag=openshell" >> "$GITHUB_OUTPUT"
+              echo "openshell_tag=latest" >> "$GITHUB_OUTPUT"
             else
-              echo "openshell_tag=openshell-${TAG#openshell-}" >> "$GITHUB_OUTPUT"
+              echo "openshell_tag=${TAG#openshell-}" >> "$GITHUB_OUTPUT"
             fi
             echo "wheel_source=build" >> "$GITHUB_OUTPUT"
             echo "skip=false" >> "$GITHUB_OUTPUT"
@@ -165,9 +168,9 @@ jobs:
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 
       # --- OpenShell sandbox image ---
-      # This image is deliberately published only to the primary Quay
+      # This image is deliberately published to its own primary Quay
       # repository. The legacy-mirror job below copies only the normal image
-      # tags and never receives this OpenShell tag.
+      # tags and never receives any OpenShell tag.
       - name: Build and push OpenShell sandbox image
         if: steps.params.outputs.skip != 'true'
         uses: docker/build-push-action@v7
@@ -176,7 +179,7 @@ jobs:
           file: container/Dockerfile.openshell
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.openshell_tag }}
+          tags: quay.io/redhatproductsecurity/ai-guardian-openshell:${{ steps.params.outputs.openshell_tag }}
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
 

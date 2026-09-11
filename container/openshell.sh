@@ -16,7 +16,7 @@ AGENT_POLICY_DIR="${AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR:-${SCRIPT_DIR}/polic
 # OpenShell uses a separate image because its community base image supplies
 # the agent binaries and filesystem layout expected by the gateway policy.
 # Keep AI_GUARDIAN_IMAGE as the explicit override for custom BYOC images.
-IMAGE="${AI_GUARDIAN_IMAGE:-${AI_GUARDIAN_OPEN_SHELL_IMAGE:-quay.io/redhatproductsecurity/ai-guardian:openshell}}"
+IMAGE="${AI_GUARDIAN_IMAGE:-${AI_GUARDIAN_OPEN_SHELL_IMAGE:-quay.io/redhatproductsecurity/ai-guardian-openshell:latest}}"
 IDE="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-codex}}"
 PROFILE="${AI_GUARDIAN_PROFILE:-}"
 REST_PORT="${AI_GUARDIAN_REST_PORT:-0}"

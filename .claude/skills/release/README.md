@@ -68,6 +68,9 @@ python .claude/skills/release/release_helper.py update-changelog "1.2.0" --date 
 
 # Validate prerequisites
 python .claude/skills/release/release_helper.py validate --type regular
+
+# Print the two versioned container images published for an AI Guardian release
+python .claude/skills/release/release_helper.py container-images 1.2.0
 ```
 
 ## Testing
@@ -119,6 +122,18 @@ The skill automatically detects and manages version files in your project:
 ```
 
 The helper script ensures all configured files are updated atomically, maintaining version consistency.
+
+## Container images
+
+AI Guardian releases publish two separate container products:
+
+- `quay.io/redhatproductsecurity/ai-guardian:<version>` — normal Docker/Podman image
+- `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>` — OpenShell sandbox image
+
+The OpenShell image uses its own repository and is not published with an
+`openshell` tag in the normal repository or mirrored to `quay.io/itdove`.
+The `container-images` helper command is the canonical way for release
+automation and maintainers to obtain both versioned references.
 
 ## Safety Features
 

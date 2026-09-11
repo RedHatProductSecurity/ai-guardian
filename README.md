@@ -171,13 +171,13 @@ OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
 # Optional OpenShell sandbox (published image; local build is also supported)
-podman pull quay.io/redhatproductsecurity/ai-guardian:openshell
+podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ./container/openshell.sh --agent codex --repo $(pwd)
 
 # Or build and select a local OpenShell image
 podman build -f container/Dockerfile.openshell \
-    -t localhost/ai-guardian:openshell container/
-./container/openshell.sh --base localhost/ai-guardian:openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+./container/openshell.sh --base localhost/ai-guardian-openshell:latest \
     --agent codex --repo $(pwd)
 
 # Launch Codex directly instead of opening the shell

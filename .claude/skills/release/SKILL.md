@@ -71,7 +71,7 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 11. Commit changes with proper commit message format
 12. TestPyPI verification (recommended — see TestPyPI Verification section below)
 13. Create tag and push
-14. Verify PyPI publication
+14. Verify PyPI publication and both versioned container images
 15. Provide post-release checklist
 
 ### Hotfix Release (`/release hotfix <tag>`)
@@ -430,6 +430,40 @@ Before creating the production tag, verify the package builds and renders correc
 
 **Why this matters**: PyPI does not allow re-uploading the same version. A README rendering bug or missing metadata on PyPI is permanent for that version — you'd need a patch release (X.Y.Z+1) to fix it.
 
+## Container Image Release Verification
+
+This repository publishes two different container products. The normal image
+and the OpenShell sandbox image use separate primary Quay repositories:
+
+- `quay.io/redhatproductsecurity/ai-guardian:<version>` — normal Docker/Podman
+  support image
+- `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>` — OpenShell
+  sandbox image
+
+The build workflow also updates `:latest` in each repository after a successful
+merge to `main`. The OpenShell image is never published as an `openshell` tag
+in the normal repository and is not copied to the legacy `itdove` repository.
+Use the release helper to print the canonical versioned references:
+
+```bash
+python .claude/skills/release/release_helper.py container-images X.Y.Z
+```
+
+After the production tag's `Build Container Image` workflow completes, verify
+both manifests and at least one runtime version from each image:
+
+```bash
+podman manifest inspect quay.io/redhatproductsecurity/ai-guardian:X.Y.Z
+podman manifest inspect quay.io/redhatproductsecurity/ai-guardian-openshell:X.Y.Z
+podman run --rm quay.io/redhatproductsecurity/ai-guardian:X.Y.Z ai-guardian --version
+podman run --rm --entrypoint /usr/local/bin/claude \
+    quay.io/redhatproductsecurity/ai-guardian-openshell:X.Y.Z --version
+```
+
+If the OpenShell repository has not been created or the workflow cannot push
+to it, stop the release and have a maintainer provision
+`quay.io/redhatproductsecurity/ai-guardian-openshell` before retrying.
+
 ## Git Operations
 
 **Branch Naming**:
@@ -460,16 +494,17 @@ Before creating the production tag, verify the package builds and renders correc
 1. [ ] Push tag: `git push origin vX.Y.Z`
 2. [ ] Monitor CI/CD pipeline (GitHub Actions, GitLab CI, etc.)
 3. [ ] Verify package publication (PyPI, npm, etc.)
-4. [ ] Verify release notes created
-5. [ ] Test installation from package registry
-6. [ ] Merge release branch back to main
-7. [ ] Bump version to next dev cycle (X.Y+1.0-dev)
-8. [ ] Ensure main branch `README.md` install URLs point to `main` (not a version tag — there is no PyPI release for dev versions)
-9. [ ] Push main branch
-10. [ ] (Hotfix only) Cherry-pick fix to main
-11. [ ] Generate combined docs export — run the shell one-liner from AGENTS.md "Generating Combined Documentation for LLM Upload" section to create `docs/notebooklm-export.md`
-12. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
-13. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
+4. [ ] Verify both versioned container images, including the dedicated OpenShell repository
+5. [ ] Verify release notes created
+6. [ ] Test installation from package registry
+7. [ ] Merge release branch back to main
+8. [ ] Bump version to next dev cycle (X.Y+1.0-dev)
+9. [ ] Ensure main branch `README.md` install URLs point to `main` (not a version tag — there is no PyPI release for dev versions)
+10. [ ] Push main branch
+11. [ ] (Hotfix only) Cherry-pick fix to main
+12. [ ] Generate combined docs export — run the shell one-liner from AGENTS.md "Generating Combined Documentation for LLM Upload" section to create `docs/notebooklm-export.md`
+13. [ ] Update NotebookLM sources — if the `notebooklm-mcp` MCP server is available, upload the generated `docs/notebooklm-export.md` and update other sources in the AI Guardian notebook using `source_add`
+14. [ ] Generate demo guide — create `X.Y-demo-guide.md` in the external docs directory (see AGENTS.md) documenting new features with step-by-step demonstrations for stakeholder walkthroughs
 
 **If you are NOT authorized:**
 - ❌ DO NOT push the tag
