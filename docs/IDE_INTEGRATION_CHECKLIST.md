@@ -39,6 +39,63 @@ ChatGPT desktop app. Regular ChatGPT mode is not currently protected by those
 Codex hooks. Shared MCP configuration must be documented independently; MCP
 availability does not imply hook enforcement.
 
+### OpenShell CLI onboarding gate
+
+OpenShell is a separate, terminal-first distribution target. Adding an
+integration to the canonical AI Guardian registry does not automatically add
+it to the OpenShell image or launcher. Before onboarding a new integration,
+classify whether it is a redistributable CLI, a runtime-installed CLI, or a
+GUI/editor-only integration. GUI/editor-only integrations must remain out of
+the OpenShell selector and image.
+
+For a new CLI-capable integration, complete the applicable items below:
+
+- [ ] Add the command to the OpenShell CLI selector in
+  `container/openshell.sh` and the selected-agent setup list in
+  `container/entrypoint.sh`. Verify the command mapping, startup environment,
+  home-directory variable, and selected-agent-only setup behavior.
+- [ ] Decide whether the CLI is legally and technically suitable for image
+  redistribution. Record the license, service terms, authentication model,
+  and any required runtime consent. Do not bundle a proprietary CLI merely
+  because it is supported by the normal container; use an explicit runtime
+  installation/consent flow when redistribution is not approved.
+- [ ] For a bundled CLI, add an explicit version `ARG` and build-time install
+  and `--version` verification to `container/Dockerfile.openshell`. Pin the
+  version rather than using a mutable `latest` tag, and preserve the normal
+  `container/Dockerfile` behavior unless that image is intentionally changing
+  too.
+- [ ] For a runtime-only CLI, keep it out of the OpenShell image and document
+  the runtime installer, consent, authentication, and custom-image boundary.
+  Do not add it to the bundled-image version pins until redistribution is
+  approved.
+- [ ] Add or update the selected-agent OpenShell policy in
+  `container/policies/agents/`, including provider/profile requirements and
+  the minimum egress needed by the CLI. Keep unrelated agent endpoints
+  disabled by default.
+- [ ] Extend `scripts/check_cli_versions.py` and
+  `tests/unit/test_cli_version_check.py` for every explicit bundled version.
+  Update `.github/workflows/cli-version-health.yml` so the twice-monthly
+  check reports the new package or official native release endpoint. A native
+  installer without a stable version source must be documented as an explicit
+  monitoring limitation.
+- [ ] Update `tests/unit/test_container_scripts.py` for image arguments,
+  installation, selector scope, policy composition, and workflow coverage.
+  Build the image locally, run the CLI's version check, and smoke-test a
+  disposable OpenShell sandbox with the selected provider and policy.
+- [ ] Verify `.github/workflows/build-container.yml` publishes the refreshed
+  OpenShell image to the primary Quay repository, with the correct `openshell`
+  tag behavior, and does not mirror the OpenShell image to the legacy
+  repository. Record the image digest and CLI versions in the issue or pull
+  request.
+- [ ] Update `container/README.md`, `README.md`, and the applicable support or
+  license tables so bundled, runtime-only, and GUI/editor-only status agrees
+  across the normal container and OpenShell targets.
+
+For an existing integration, re-run this gate whenever its CLI command,
+distribution model, version pin, provider, network policy, or OpenShell base
+image changes. Do not assume that updating the general IDE support matrix
+updates the OpenShell image or its health workflow.
+
 ## 1. Scope and capability record
 
 - [ ] Choose a stable CLI key and display name. Keep aliases consistent with
