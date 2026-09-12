@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Check the pinned CLI versions in the OpenShell image.
+"""Check the explicitly managed CLI versions in the OpenShell image.
 
 The OpenShell Dockerfile is the source of truth for the pinned versions.  This
 check reads its build arguments and compares them with stable versions
-published in the npm registry or by Anthropic's native Claude release
-endpoint.  It intentionally covers only the CLI clients that the derived
-image installs or overrides; GUI/editor integrations are outside this
+published in the npm registry.  It intentionally covers only the CLI clients
+that the derived image explicitly installs or overrides; clients inherited
+from the OpenShell base image and GUI/editor integrations are outside this
 image-version check.
 
 Exit codes:
@@ -27,19 +27,9 @@ import requests
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCKERFILE = REPOSITORY_ROOT / "container" / "Dockerfile.openshell"
 
-CLAUDE_RELEASE_URL = "https://downloads.claude.ai/claude-code-releases/latest"
-
 # Keep this mapping limited to clients whose versions are explicit Dockerfile
-# build arguments. The lookup value is either an npm package name or the
-# official Claude release endpoint.
+# build arguments.
 CLI_VERSION_SPECS = {
-    "CLAUDE_VERSION": {
-        "name": "Claude Code",
-        "package": "Claude Code native installer",
-        "lookup": CLAUDE_RELEASE_URL,
-        "source": "Anthropic release endpoint",
-        "registry": CLAUDE_RELEASE_URL,
-    },
     "CODEX_VERSION": {
         "package": "@openai/codex",
         "name": "Codex CLI",
@@ -53,13 +43,6 @@ CLI_VERSION_SPECS = {
         "lookup": "opencode-ai",
         "source": "npm registry",
         "registry": "https://www.npmjs.com/package/opencode-ai",
-    },
-    "COPILOT_VERSION": {
-        "package": "@github/copilot",
-        "name": "GitHub Copilot CLI",
-        "lookup": "@github/copilot",
-        "source": "npm registry",
-        "registry": "https://www.npmjs.com/package/%40github/copilot",
     },
 }
 
@@ -149,26 +132,8 @@ def get_latest_npm_version(package: str) -> Optional[str]:
     return version if isinstance(version, str) and version else None
 
 
-def get_latest_claude_version() -> Optional[str]:
-    """Return the stable Claude Code release from Anthropic's endpoint."""
-    try:
-        response = requests.get(
-            CLAUDE_RELEASE_URL,
-            headers={"Accept": "text/plain"},
-            timeout=10,
-        )
-        response.raise_for_status()
-        version = response.text.strip()
-    except (requests.RequestException, AttributeError):
-        return None
-
-    return version if _parse_semver(version) is not None else None
-
-
 def get_latest_cli_version(lookup: str) -> Optional[str]:
-    """Return the latest stable version for an npm or native CLI lookup."""
-    if lookup == CLAUDE_RELEASE_URL:
-        return get_latest_claude_version()
+    """Return the latest stable version for an npm package lookup."""
     return get_latest_npm_version(lookup)
 
 

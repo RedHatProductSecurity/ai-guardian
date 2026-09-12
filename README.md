@@ -179,6 +179,8 @@ podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ./container/openshell.sh --base localhost/ai-guardian-openshell:latest \
     --agent codex --repo $(pwd)
+# A source-wheel build is documented in container/README.md; it includes the
+# current development setup behavior instead of the stable PyPI fallback.
 
 # Launch Codex directly instead of opening the shell
 ./container/openshell.sh --agent codex --repo $(pwd) -- codex
