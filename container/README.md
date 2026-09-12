@@ -246,21 +246,15 @@ openshell --version
 openshell status
 ```
 
-On macOS, if the version remains old after updating, check which executable is
-being used with `which openshell`; the shell may still be finding an older
-installation first. Updating the AI Guardian branch does not update the
-OpenShell CLI or gateway, and provider profiles remain local to each gateway.
-
-For a local gateway on Linux, macOS, or WSL, install OpenShell with the
-official installer. It installs the CLI and gateway and starts the local
-gateway service:
+On Fedora/Linux, the installer provides the CLI and a systemd user service:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+systemctl --user status openshell-gateway
 openshell status
 ```
 
-On Linux, a gateway configured with the Podman compute driver also needs the
+If the Linux gateway uses rootless Podman, it also needs the
 rootless Podman API socket. Start it as the same user that runs the gateway:
 
 ```bash
@@ -269,6 +263,21 @@ test -S "${XDG_RUNTIME_DIR}/podman/podman.sock"
 systemctl --user restart openshell-gateway
 openshell status
 ```
+
+On macOS, the installer uses Homebrew and manages the gateway with a Homebrew
+service:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+brew services list
+brew services restart openshell
+openshell status
+```
+
+If macOS still reports an old version such as `0.0.23-dev`, check which
+executable is being used with `type -a openshell`; the shell may be finding an
+older installation first. Updating the AI Guardian branch does not update the
+OpenShell CLI or gateway, and provider profiles remain local to each gateway.
 
 If the gateway reports that `/run/user/<uid>/podman/podman.sock` is missing,
 the socket is stopped or the gateway is pinned to the wrong path. Omit
