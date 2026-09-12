@@ -556,9 +556,11 @@ _prepare_vertex_provider_credentials() {
 
 _cleanup_codex_file_credentials() {
     local env_name
-    for env_name in "${CODEX_FILE_VARS[@]}"; do
-        unset "$env_name"
-    done
+    if (( ${#CODEX_FILE_VARS[@]} > 0 )); then
+        for env_name in "${CODEX_FILE_VARS[@]}"; do
+            unset "$env_name"
+        done
+    fi
     CODEX_FILE_VARS=()
 }
 
@@ -566,9 +568,11 @@ _cleanup_provider_credentials() {
     local env_name
 
     _cleanup_codex_file_credentials
-    for env_name in "${PROVIDER_ENV_VARS[@]}"; do
-        unset "$env_name"
-    done
+    if (( ${#PROVIDER_ENV_VARS[@]} > 0 )); then
+        for env_name in "${PROVIDER_ENV_VARS[@]}"; do
+            unset "$env_name"
+        done
+    fi
     PROVIDER_ENV_VARS=()
 }
 
@@ -761,9 +765,13 @@ else
 fi
 [[ -n "$SANDBOX_NAME" ]] && openshell_args+=(--name "$SANDBOX_NAME")
 [[ -n "$POLICY_PATH" ]] && openshell_args+=(--policy "$POLICY_PATH")
-openshell_args+=("${PROVIDER_ARGS[@]}")
+if (( ${#PROVIDER_ARGS[@]} > 0 )); then
+    openshell_args+=("${PROVIDER_ARGS[@]}")
+fi
 openshell_args+=("${env_args[@]}")
-openshell_args+=("${upload_args[@]}")
+if (( ${#upload_args[@]} > 0 )); then
+    openshell_args+=("${upload_args[@]}")
+fi
 
 # OpenShell normally infers PTY allocation, but the staged upload path starts
 # the agent through a second relay where inference can be lost. Make the
@@ -773,6 +781,10 @@ openshell_args+=("${upload_args[@]}")
 TTY_ARGS=(--no-tty)
 if [[ -t 0 && -t 1 ]]; then
     TTY_ARGS=(--tty)
+fi
+EXEC_ARGS=("${TTY_ARGS[@]}")
+if (( ${#REPO_WORKDIR_ARGS[@]} > 0 )); then
+    EXEC_ARGS+=("${REPO_WORKDIR_ARGS[@]}")
 fi
 
 # OpenShell executes the command after the separator directly and does not
@@ -931,13 +943,13 @@ if [[ "$UPLOAD_REQUIRED" = "true" || "$FORWARD_ENABLED" = "true" ]]; then
         fi
         _print_forward_details
     fi
-    exec "$CONTAINER_CLI" sandbox exec --name "$SANDBOX_NAME" "${TTY_ARGS[@]}" "${REPO_WORKDIR_ARGS[@]}" -- "${agent_command[@]}"
+    exec "$CONTAINER_CLI" sandbox exec --name "$SANDBOX_NAME" "${EXEC_ARGS[@]}" -- "${agent_command[@]}"
 fi
 
 if [[ -n "$POLICY_TEMP_DIR" ]]; then
     # Do not exec here: the composed policy is a host-side temporary file and
     # must be removed after OpenShell has consumed it.
-    if "$CONTAINER_CLI" "${openshell_args[@]}" "${TTY_ARGS[@]}" "${REPO_WORKDIR_ARGS[@]}" -- "${agent_command[@]}"; then
+    if "$CONTAINER_CLI" "${openshell_args[@]}" "${EXEC_ARGS[@]}" -- "${agent_command[@]}"; then
         status=0
     else
         status=$?
@@ -946,4 +958,4 @@ if [[ -n "$POLICY_TEMP_DIR" ]]; then
     exit "$status"
 fi
 
-exec "$CONTAINER_CLI" "${openshell_args[@]}" "${TTY_ARGS[@]}" "${REPO_WORKDIR_ARGS[@]}" -- "${agent_command[@]}"
+exec "$CONTAINER_CLI" "${openshell_args[@]}" "${EXEC_ARGS[@]}" -- "${agent_command[@]}"
