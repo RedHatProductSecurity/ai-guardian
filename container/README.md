@@ -233,6 +233,24 @@ OpenShell prerequisites are:
 - A gateway compute driver configured for Docker, Podman, MicroVM, or
   Kubernetes.
 
+The launcher requires an OpenShell CLI and gateway new enough to support
+`sandbox create --env` and the upload-based staging workflow. An old
+development build such as `0.0.23-dev` is not compatible. Install or update
+OpenShell on the host, then refresh the shell command and verify both the
+client and gateway:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+hash -r
+openshell --version
+openshell status
+```
+
+On macOS, if the version remains old after updating, check which executable is
+being used with `which openshell`; the shell may still be finding an older
+installation first. Updating the AI Guardian branch does not update the
+OpenShell CLI or gateway, and provider profiles remain local to each gateway.
+
 For a local gateway on Linux, macOS, or WSL, install OpenShell with the
 official installer. It installs the CLI and gateway and starts the local
 gateway service:
