@@ -164,6 +164,28 @@ podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ```
 
+For development, build and launch the local image in one workflow from the
+repository root. The repository snapshot is uploaded to the sandbox, and the
+read/write GitHub policy is applied to the selected Codex agent:
+
+```bash
+podman build -f container/Dockerfile.openshell \
+    --build-arg CODEX_VERSION=0.154.0 \
+    -t localhost/ai-guardian-openshell:dev \
+    container/
+
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:dev \
+    --agent codex \
+    --policy ./container/openshell-github-readwrite-policy.yaml \
+    --provider ai-guardian-codex \
+    --repo .
+```
+
+Use a different `CODEX_VERSION` build argument when testing a specific Codex
+release. Rebuild the image and recreate the sandbox after changing the source
+wheel or a bundled CLI version.
+
 #### CLI scope and image contents
 
 AI Guardian has 15 public integrations. OpenShell is terminal-first, so its
