@@ -313,7 +313,7 @@ For a containerized gateway, see OpenShell's [container gateway
 guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
 ```bash
-./container/openshell.sh                             # opens a shell; Codex is selected
+./container/openshell.sh                             # opens a shell; Claude is selected
 ./container/openshell.sh --agent opencode --repo .
 ./container/openshell.sh --profile @strict --policy ./container/openshell-github-readwrite-policy.yaml
 ./container/openshell.sh --config-dir "$HOME/.config/ai-guardian"

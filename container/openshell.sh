@@ -17,7 +17,7 @@ AGENT_POLICY_DIR="${AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR:-${SCRIPT_DIR}/polic
 # the agent binaries and filesystem layout expected by the gateway policy.
 # Keep AI_GUARDIAN_IMAGE as the explicit override for custom BYOC images.
 IMAGE="${AI_GUARDIAN_IMAGE:-${AI_GUARDIAN_OPEN_SHELL_IMAGE:-quay.io/redhatproductsecurity/ai-guardian-openshell:latest}}"
-IDE="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-codex}}"
+IDE="${AI_GUARDIAN_AGENT:-${AI_GUARDIAN_IDE:-claude}}"
 PROFILE="${AI_GUARDIAN_PROFILE:-}"
 REST_PORT="${AI_GUARDIAN_REST_PORT:-0}"
 # OpenShell's create --forward option maps one port to the same port inside
@@ -101,7 +101,7 @@ _print_help() {
     echo "Usage: $0 [OPTIONS] [-- COMMAND...]"
     echo ""
     echo "Options:"
-    echo "  --agent, --ide NAME       Select a CLI agent (default: codex)"
+    echo "  --agent, --ide NAME       Select a CLI agent (default: claude)"
     echo "  --profile NAME             Use a bundled or custom security profile"
     echo "  --config-dir, --guardian-home DIR"
     echo "                             Host ai-guardian config directory"
