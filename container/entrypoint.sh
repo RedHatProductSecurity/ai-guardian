@@ -672,7 +672,9 @@ fi
 echo "  Profile:      ${PROFILE:-none (host/default config)}"
 echo "  Config:       $CONFIG_PATH"
 echo "  Config source: $CONFIG_SOURCE"
-if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ]; then
+    echo "  Auth:         OpenShell inference route"
+elif [ -n "${ANTHROPIC_API_KEY:-}" ]; then
     echo "  Auth:         Anthropic API key"
 elif [ -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]; then
     echo "  Auth:         Vertex AI"
