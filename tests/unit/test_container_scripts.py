@@ -55,7 +55,15 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "AI_GUARDIAN_PROFILE",
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_VERTEX_PROJECT_ID",
+        "VERTEX_AI_PROJECT_ID",
+        "VERTEX_AI_REGION",
+        "CLOUD_ML_REGION",
+        "AI_GUARDIAN_OPEN_SHELL_MODEL",
         "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_VERTEX_AI_TOKEN",
+        "VERTEX_AI_TOKEN",
+        "GOOGLE_VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
+        "VERTEX_AI_SERVICE_ACCOUNT_TOKEN",
         "CODEX_HOME",
         "CODEX_AUTH_ACCESS_TOKEN",
         "CODEX_AUTH_REFRESH_TOKEN",
@@ -91,6 +99,9 @@ if [ "$1" = "provider" ] && [ "$2" = "list-profiles" ]; then
     exit 0
 fi
 if [ "$1" = "provider" ] && [ "$2" = "get" ]; then
+    if [ "${FAKE_PROVIDER_EXISTS:-false}" = "true" ]; then
+        exit 0
+    fi
     exit 1
 fi
 if [ "$1" = "settings" ] && [ "$2" = "get" ]; then
@@ -771,18 +782,131 @@ class TestContainerLaunchers:
             "--type",
             "google-vertex-ai",
             "--from-gcloud-adc",
+            "--config",
+            "VERTEX_AI_PROJECT_ID=test-project",
+            "--config",
+            "VERTEX_AI_REGION=global",
+        ]
+        inference_args = _captured_args(
+            capture.with_name("openshell.args.inference.set")
+        )
+        assert inference_args == [
+            "inference",
+            "set",
+            "--provider",
+            "ai-guardian-google-vertex-ai",
+            "--model",
+            "claude-sonnet-4-6",
+            "--no-verify",
         ]
         create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
         assert "--no-auto-providers" in create_args
+        env_values = _openshell_env_values(create_args)
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in env_values
+        assert "ANTHROPIC_BASE_URL=https://inference.local" in env_values
+        assert "ANTHROPIC_API_KEY=unused" in env_values
         assert not any(
-            value.startswith("GOOGLE_APPLICATION_CREDENTIALS=")
-            for value in _openshell_env_values(create_args)
+            value.startswith("CLAUDE_CODE_USE_VERTEX=") for value in env_values
+        )
+        assert not any(
+            value.startswith("ANTHROPIC_VERTEX_PROJECT_ID=") for value in env_values
+        )
+        assert not any(value.startswith("CLOUD_ML_REGION=") for value in env_values)
+        assert not any(
+            value.startswith("GOOGLE_APPLICATION_CREDENTIALS=") for value in env_values
         )
         assert not any(
             str(adc_path) in value
             or value.endswith("/application_default_credentials.json")
             for value in _env_values(create_args, "--upload")
         )
+
+    def test_openshell_launcher_updates_existing_vertex_provider_and_route(
+        self, tmp_path
+    ):
+        capture = tmp_path / "openshell.args"
+        cli = _staging_openshell_script(tmp_path / "fake-openshell")
+        env = _launcher_env(tmp_path, cli, capture)
+        env["FAKE_PROVIDER_EXISTS"] = "true"
+        env["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-project"
+        env["CLOUD_ML_REGION"] = "us-central1"
+        env["AI_GUARDIAN_OPEN_SHELL_MODEL"] = "claude-opus-4-6"
+
+        result = subprocess.run(
+            [
+                "bash",
+                str(OPENSHELL_SCRIPT),
+                "--agent",
+                "claude",
+                "--name",
+                "vertex-existing",
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert not capture.with_name("openshell.args.provider.create").exists()
+        provider_args = _captured_args(
+            capture.with_name("openshell.args.provider.update")
+        )
+        assert provider_args == [
+            "provider",
+            "update",
+            "ai-guardian-google-vertex-ai",
+            "--config",
+            "VERTEX_AI_PROJECT_ID=test-project",
+            "--config",
+            "VERTEX_AI_REGION=us-central1",
+        ]
+        inference_args = _captured_args(
+            capture.with_name("openshell.args.inference.set")
+        )
+        assert inference_args == [
+            "inference",
+            "set",
+            "--provider",
+            "ai-guardian-google-vertex-ai",
+            "--model",
+            "claude-opus-4-6",
+            "--no-verify",
+        ]
+
+    def test_openshell_launcher_accepts_vertex_model_option(self, tmp_path):
+        home = tmp_path / "home"
+        adc_path = home / ".config" / "gcloud" / "application_default_credentials.json"
+        adc_path.parent.mkdir(parents=True)
+        adc_path.write_text("{}\n", encoding="utf-8")
+        capture = tmp_path / "openshell.args"
+        cli = _staging_openshell_script(tmp_path / "fake-openshell")
+        env = _launcher_env(tmp_path, cli, capture)
+        env["HOME"] = str(home)
+        env["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-project"
+
+        result = subprocess.run(
+            [
+                "bash",
+                str(OPENSHELL_SCRIPT),
+                "--agent",
+                "claude",
+                "--model",
+                "claude-haiku-4-5",
+                "--name",
+                "vertex-model",
+            ],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        inference_args = _captured_args(
+            capture.with_name("openshell.args.inference.set")
+        )
+        assert "claude-haiku-4-5" in inference_args
 
     def test_github_policy_allows_read_only_api_and_git_operations(self):
         policy = yaml.safe_load(GITHUB_POLICY.read_text(encoding="utf-8"))
@@ -1299,6 +1423,44 @@ fi
     }
     assert selected_agents == {"codex"}
     assert "Setup:        selected agent" in selected_result.stdout
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_reports_openshell_inference_auth(tmp_path):
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "claude",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "ANTHROPIC_API_KEY": "unused",
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Auth:         OpenShell inference route" in result.stdout
+    assert "Auth:         Anthropic API key" not in result.stdout
 
 
 @pytest.mark.skipif(

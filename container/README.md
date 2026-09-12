@@ -361,8 +361,10 @@ provider exists on the currently active gateway. Provider setup must be
 repeated for each gateway or laptop; `git pull` only updates the launcher and
 policy files.
 
-The `--provider` option is lookup-only: it attaches an existing provider
-instance and does not create one. To let the launcher create
+The `--provider` option attaches an existing provider instance and does not
+create one. In Claude Vertex mode, the launcher also refreshes that provider's
+project/region configuration and uses it for the workspace inference route.
+To let the launcher create
 `ai-guardian-codex` from local Codex credentials, omit `--provider` and ensure
 the active gateway lists the `codex` profile:
 
@@ -427,26 +429,53 @@ disabled and no explicit `--port`, the daemon uses sandbox-local port `63152`.
 #### Claude Code with Google Vertex AI
 
 To run Claude Code through Google Vertex AI, select Claude and provide a GCP
-project. The launcher automatically creates or reuses the gateway-local
-`ai-guardian-google-vertex-ai` provider; no GitHub policy is needed:
+project. The launcher automatically creates or updates the gateway-local
+`ai-guardian-google-vertex-ai` provider, including its required project and
+region configuration. No GitHub policy is needed for model inference:
 
 ```bash
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
 export CLOUD_ML_REGION=global
 
 ./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
     --agent claude \
+    --model claude-sonnet-4-6 \
     --repo .
 ```
 
-No separate Claude-Vertex policy file is required. The selected Claude agent
-policy covers Claude Code, while the `google-vertex-ai` provider supplies the
-Vertex endpoint and credential binding. Providers v2 must be enabled on the
-active gateway so the provider-owned network policy is included:
+Providers v2 must be enabled on the active gateway before the first launcher
+call so the provider-owned Vertex network policy is included:
 
 ```bash
 openshell settings set --global --key providers_v2_enabled --value true
 ```
+
+The launcher configures the workspace's OpenShell `inference.local` route and
+passes these sandbox-local variables:
+
+```text
+ANTHROPIC_BASE_URL=https://inference.local
+ANTHROPIC_API_KEY=unused
+```
+
+The key is only a placeholder; OpenShell strips it and uses the gateway's
+refreshed Vertex credential. From the resulting shell, start Claude with:
+
+```bash
+claude --bare
+```
+
+Do not set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox. That mode
+makes Claude try to discover GCP credentials directly inside the sandbox,
+where the host ADC file is intentionally not mounted. The OpenShell launcher
+uses gateway-managed inference instead. Use `--model MODEL` to select the
+gateway model; the default is `claude-sonnet-4-6`.
+
+This uses OpenShell's [Vertex provider](https://docs.nvidia.com/openshell/providers/google-vertex-ai)
+and [inference routing](https://docs.nvidia.com/openshell/sandboxes/inference-routing)
+features. The effective sandbox policy should show a provider-derived
+`_provider_ai_guardian_google_vertex_ai` entry for the Google Vertex hosts.
 
 Keep `--agent claude` when using Vertex AI. `claude` selects the Claude Code
 CLI; Vertex is the provider backend, not a separate agent, so
@@ -454,10 +483,10 @@ CLI; Vertex is the provider backend, not a separate agent, so
 `ai-guardian-google-vertex-ai`.
 
 The launcher uses Google Application Default Credentials (ADC) while creating
-the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account JSON
-file when it is not at the standard gcloud ADC location, or authenticate with
-gcloud first. The credential file is consumed for provider creation and is not
-uploaded into the sandbox:
+or refreshing the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a
+service-account JSON file when it is not at the standard gcloud ADC location,
+or authenticate with gcloud first. The credential file is consumed by the
+gateway and is not uploaded into the sandbox:
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
@@ -471,6 +500,30 @@ The active gateway must expose the `google-vertex-ai` provider profile. If the
 launcher reports that the profile is missing, update or reconfigure the
 active OpenShell gateway. For direct Anthropic access instead, use
 `ANTHROPIC_API_KEY` and omit the Vertex project variables.
+
+If a provider created by an older launcher shows no config keys, rerunning the
+launcher updates it with `VERTEX_AI_PROJECT_ID` and `VERTEX_AI_REGION`. The
+equivalent manual repair is:
+
+```bash
+openshell provider update ai-guardian-google-vertex-ai \
+    --config VERTEX_AI_PROJECT_ID="$ANTHROPIC_VERTEX_PROJECT_ID" \
+    --config VERTEX_AI_REGION="${CLOUD_ML_REGION:-global}"
+```
+
+The Vertex policy is separate from Claude plugin marketplace access. The
+default Claude policy intentionally does not allow GitHub. If the public
+Claude plugin marketplace is needed, add the read-only GitHub overlay; a
+read/write GitHub policy or GitHub credential provider is not required for
+the public catalog:
+
+```bash
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
+    --agent claude \
+    --policy ./container/openshell-github-readonly-policy.yaml \
+    --repo .
+```
 
 Claude's diagnostics may report that the first-party `api.anthropic.com`
 provider, Claude.ai OAuth, and Remote Control are unavailable. Those checks

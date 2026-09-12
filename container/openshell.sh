@@ -46,6 +46,9 @@ CODEX_SANDBOX_HOME="/sandbox/.codex"
 REPO_PATH=""
 CONFIG_DIR_OVERRIDE=""
 API_KEY="${ANTHROPIC_API_KEY:-}"
+VERTEX_PROJECT_ID="${ANTHROPIC_VERTEX_PROJECT_ID:-${VERTEX_AI_PROJECT_ID:-}}"
+VERTEX_REGION="${CLOUD_ML_REGION:-${VERTEX_AI_REGION:-global}}"
+INFERENCE_MODEL="${AI_GUARDIAN_OPEN_SHELL_MODEL:-claude-sonnet-4-6}"
 POLICY_PATH=""
 POLICY_INPUTS=()
 POLICY_DISPLAY="default (gateway/provider profiles)"
@@ -53,11 +56,13 @@ POLICY_TEMP_DIR=""
 SANDBOX_NAME=""
 REPO_WORKDIR_ARGS=()
 PROVIDER_ARGS=()
+EXPLICIT_PROVIDER_NAMES=()
 EXTRA_ARGS=()
 HAS_EXPLICIT_PROVIDER="false"
 AGENT_PROVIDER_ATTACHED="false"
 PROVIDER_ENV_VARS=()
 VERTEX_PROVIDER_REQUIRED="false"
+VERTEX_PROVIDER_NAME=""
 
 # OpenShell sandboxes are terminal-first.  Keep GUI/editor integrations out
 # of this selector even though the image entrypoint can configure their hooks.
@@ -109,6 +114,7 @@ _print_help() {
     echo "  --port PORT                Forward the daemon port (default: 0/free port)"
     echo "  --no-forward               Keep the daemon REST API inside the sandbox"
     echo "  --base, --image IMAGE      Select the BYOC image"
+    echo "  --model MODEL              OpenShell inference model for Vertex Claude"
     echo "  --policy FILE              Add a policy overlay (repeatable)"
     echo "  --name NAME                Name the sandbox"
     echo "  --provider NAME            Attach an OpenShell provider (repeatable)"
@@ -153,6 +159,11 @@ while [[ $# -gt 0 ]]; do
             IMAGE="$2"
             shift 2
             ;;
+        --model)
+            _require_option_value "$@"
+            INFERENCE_MODEL="$2"
+            shift 2
+            ;;
         --api-key)
             _require_option_value "$@"
             API_KEY="$2"
@@ -171,6 +182,7 @@ while [[ $# -gt 0 ]]; do
         --provider)
             _require_option_value "$@"
             PROVIDER_ARGS+=(--provider "$2")
+            EXPLICIT_PROVIDER_NAMES+=("$2")
             HAS_EXPLICIT_PROVIDER="true"
             AGENT_PROVIDER_ATTACHED="true"
             shift 2
@@ -606,6 +618,18 @@ _ensure_agent_provider() {
     AGENT_PROVIDER_ATTACHED="true"
 }
 
+_configure_vertex_provider() {
+    local provider_name="$1"
+
+    if ! "$CONTAINER_CLI" provider update "$provider_name" \
+        --config "VERTEX_AI_PROJECT_ID=${VERTEX_PROJECT_ID}" \
+        --config "VERTEX_AI_REGION=${VERTEX_REGION}"; then
+        echo "Error: unable to configure OpenShell Vertex AI provider '$provider_name'." >&2
+        echo "The provider requires VERTEX_AI_PROJECT_ID and VERTEX_AI_REGION." >&2
+        return 1
+    fi
+}
+
 _ensure_vertex_provider() {
     local provider_name="ai-guardian-google-vertex-ai"
     local profiles
@@ -620,6 +644,9 @@ _ensure_vertex_provider() {
 
     if "$CONTAINER_CLI" provider get "$provider_name" >/dev/null 2>&1; then
         echo "Using existing OpenShell provider: $provider_name"
+        if ! _configure_vertex_provider "$provider_name"; then
+            return 1
+        fi
     else
         if ! _prepare_vertex_provider_credentials; then
             return 1
@@ -629,14 +656,18 @@ _ensure_vertex_provider() {
             if ! "$CONTAINER_CLI" provider create \
                 --name "$provider_name" \
                 --type google-vertex-ai \
-                --from-gcloud-adc; then
+                --from-gcloud-adc \
+                --config "VERTEX_AI_PROJECT_ID=${VERTEX_PROJECT_ID}" \
+                --config "VERTEX_AI_REGION=${VERTEX_REGION}"; then
                 provider_status=1
             fi
         else
             if ! "$CONTAINER_CLI" provider create \
                 --name "$provider_name" \
                 --type google-vertex-ai \
-                --from-existing; then
+                --from-existing \
+                --config "VERTEX_AI_PROJECT_ID=${VERTEX_PROJECT_ID}" \
+                --config "VERTEX_AI_REGION=${VERTEX_REGION}"; then
                 provider_status=1
             fi
         fi
@@ -648,8 +679,23 @@ _ensure_vertex_provider() {
         fi
     fi
 
+    VERTEX_PROVIDER_NAME="$provider_name"
     PROVIDER_ARGS+=(--provider "$provider_name")
     AGENT_PROVIDER_ATTACHED="true"
+}
+
+_configure_vertex_inference() {
+    local provider_name="$1"
+
+    echo "Configuring OpenShell inference route: $provider_name / $INFERENCE_MODEL"
+    if ! "$CONTAINER_CLI" inference set \
+        --provider "$provider_name" \
+        --model "$INFERENCE_MODEL" \
+        --no-verify; then
+        echo "Error: unable to configure OpenShell inference for Vertex AI." >&2
+        echo "Verify the provider project/region and selected Vertex model." >&2
+        return 1
+    fi
 }
 
 env_args=(
@@ -683,12 +729,15 @@ fi
 # OpenShell discovers credentials from the host and injects them through
 # providers.  Never place credential values in sandbox --env or --upload
 # arguments.  --api-key is handled only while creating a provider below.
-if [[ "$IDE" = "claude" && -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]]; then
+# Vertex inference is routed through OpenShell's local privacy router. The
+# placeholder API key is deliberately non-secret; the router strips it and
+# supplies the gateway-managed provider credential upstream.
+if [[ "$IDE" = "claude" && -n "$VERTEX_PROJECT_ID" ]]; then
     VERTEX_PROVIDER_REQUIRED="true"
     env_args+=(
-        --env "CLAUDE_CODE_USE_VERTEX=1"
-        --env "ANTHROPIC_VERTEX_PROJECT_ID=${ANTHROPIC_VERTEX_PROJECT_ID}"
-        --env "CLOUD_ML_REGION=${CLOUD_ML_REGION:-global}"
+        --env "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true"
+        --env "ANTHROPIC_BASE_URL=https://inference.local"
+        --env "ANTHROPIC_API_KEY=unused"
     )
 fi
 
@@ -700,9 +749,18 @@ if [[ "$UPLOAD_REQUIRED" = "true" ]]; then
     env_args+=(--env "AI_GUARDIAN_OPEN_SHELL_STAGING=true")
 fi
 
-if [[ "$VERTEX_PROVIDER_REQUIRED" = "true" &&
-    "$HAS_EXPLICIT_PROVIDER" != "true" ]]; then
-    if ! _ensure_vertex_provider; then
+if [[ "$VERTEX_PROVIDER_REQUIRED" = "true" ]]; then
+    if [[ "$HAS_EXPLICIT_PROVIDER" = "true" ]]; then
+        VERTEX_PROVIDER_NAME="${EXPLICIT_PROVIDER_NAMES[0]}"
+        if ! _configure_vertex_provider "$VERTEX_PROVIDER_NAME"; then
+            exit 2
+        fi
+    else
+        if ! _ensure_vertex_provider; then
+            exit 2
+        fi
+    fi
+    if ! _configure_vertex_inference "$VERTEX_PROVIDER_NAME"; then
         exit 2
     fi
 fi

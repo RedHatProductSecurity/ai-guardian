@@ -228,6 +228,41 @@ isolated snapshot rather than binding the host checkout; the shell starts in
 without writing files back to the host. Pass `-- codex` to launch Codex
 directly instead of opening the shell.
 
+For Claude Code through Google Vertex AI, set the GCP project and launch with
+the OpenShell image. The launcher creates or updates the gateway provider,
+configures the workspace's `inference.local` route, and supplies Claude with a
+non-secret placeholder key; the host ADC file is consumed by the gateway and
+is not mounted into the sandbox:
+
+```bash
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --repo .
+```
+
+From the resulting shell, start Claude with `claude --bare`. Do not set
+`CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox; that direct-Vertex
+mode expects GCP credential discovery inside the sandbox. Use the launcher's
+`--model` option (default `claude-sonnet-4-6`) to select the gateway model.
+
+The Claude/Vertex policy does not grant GitHub access by default. If Claude
+plugins or the public Claude plugin marketplace are needed, add the
+read-only GitHub overlay; the read/write GitHub policy and GitHub provider are
+not required for the public catalog:
+
+```bash
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
+    --agent claude \
+    --policy ./container/openshell-github-readonly-policy.yaml \
+    --repo .
+```
+
 For Codex ChatGPT/OAuth credentials, enable OpenShell Providers v2 once on the
 active gateway:
 
