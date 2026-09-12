@@ -314,9 +314,9 @@ The OpenShell launcher opens `/bin/bash` by default. When `--repo` is supplied,
 the shell starts in the uploaded repository at `/sandbox/repo`; otherwise it
 starts in `/sandbox`. The selected `--agent` controls ai-guardian setup and
 automatic provider selection. When a `--policy` overlay is supplied, it also
-selects the matching agent policy fragment; without an overlay, OpenShell uses
-its default policy and attached provider profiles. The launcher does not start
-the CLI automatically.
+selects the matching agent policy fragment. Without an overlay, the launcher
+still applies the shared base policy and the selected agent policy, but no
+GitHub policy is added. The launcher does not start the CLI automatically.
 
 Provider profiles belong to the active OpenShell gateway; they are not stored
 in the repository, image, or Git branch. When `--provider` is omitted, the
@@ -507,8 +507,8 @@ in composable pieces:
   HTTPS `git clone`/`git fetch`/`git push`.
 - `policies/agents/<agent>.yaml`: the network capability for the selected CLI.
 
-When `--policy` is supplied, it may be repeated. The launcher composes one
-final policy in this order:
+When `--policy` is supplied, it may be repeated. The launcher always composes
+one final policy in this order:
 
 ```text
 policies/base.yaml
@@ -519,9 +519,9 @@ policies/base.yaml
 Only the selected agent fragment is added; the other agent policies are not
 enabled. YAML mappings are merged and lists are replaced by later overlays.
 The resulting temporary file is passed as the single OpenShell `--policy`
-argument and removed after OpenShell has consumed it. If no `--policy` is
-given, the launcher leaves policy selection to OpenShell's default policy and
-attached provider profiles.
+argument and removed after OpenShell has consumed it. If no `--policy` overlay
+is given, the result contains only the shared base policy and the selected
+agent policy; it does not grant GitHub access.
 
 The agent fragments are intentionally conservative. Kiro and OpenClaw have no
 single default LLM endpoint, while OpenCode and Crush support additional
