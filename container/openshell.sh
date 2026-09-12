@@ -222,12 +222,14 @@ if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
     EXTRA_ARGS=(/bin/bash)
 fi
 
-for policy_input in "${POLICY_INPUTS[@]}"; do
-    if [[ ! -f "$policy_input" ]]; then
-        echo "Error: OpenShell policy file not found: $policy_input" >&2
-        exit 2
-    fi
-done
+if (( ${#POLICY_INPUTS[@]} > 0 )); then
+    for policy_input in "${POLICY_INPUTS[@]}"; do
+        if [[ ! -f "$policy_input" ]]; then
+            echo "Error: OpenShell policy file not found: $policy_input" >&2
+            exit 2
+        fi
+    done
+fi
 
 _cleanup_composed_policy() {
     if [[ -n "$POLICY_TEMP_DIR" && -d "$POLICY_TEMP_DIR" ]]; then
