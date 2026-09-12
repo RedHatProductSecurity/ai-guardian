@@ -102,6 +102,10 @@ remains an alias for `--agent`. To opt into broader setup, set
 The OpenShell launcher uses the dedicated `Dockerfile.openshell` image rather
 than the normal UBI image. Build it once from the repository root:
 
+The normal `run.sh` container still defaults to Codex. The OpenShell launcher
+defaults to Claude, matching OpenShell's first-class default-policy coverage;
+select another agent explicitly with `--agent`.
+
 ```bash
 podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
