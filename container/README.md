@@ -140,30 +140,27 @@ podman build \
 ```
 
 The pinned base includes older versions of some bundled Node-based CLIs, so
-`Dockerfile.openshell` replaces them with explicit, independently overridable
-versions:
+`Dockerfile.openshell` replaces only Codex and OpenCode with explicit,
+independently overridable versions. Claude Code and GitHub Copilot remain
+inherited from the base image:
 
 | Build argument | Package | Default |
 |----------------|---------|---------|
-| `CLAUDE_VERSION` | Claude Code native installer | `2.1.269` |
 | `CODEX_VERSION` | `@openai/codex` | `0.154.0` |
 | `OPENCODE_VERSION` | `opencode-ai` | `1.18.30` |
-| `COPILOT_VERSION` | `@github/copilot` | `1.0.83` |
 
 These are pinned rather than installed through a mutable `latest` tag so an
-image can be reproduced and rolled back. Claude Code is refreshed with
-Anthropic's native installer and copied to the same `/usr/local/bin/claude`
-path used by the Community base. Override any individual version deliberately
-when testing another release. Rebuild the image and recreate the sandbox after
+image can be reproduced and rolled back. The Dockerfile verifies that Claude
+Code and GitHub Copilot are supplied by the base image but does not download,
+modify, or version-pin them. Override either managed version deliberately when
+testing another release. Rebuild the image and recreate the sandbox after
 changing one; existing sandboxes retain the client versions from their
 original image.
 
 ```bash
 podman build -f container/Dockerfile.openshell \
-    --build-arg CLAUDE_VERSION=2.1.269 \
     --build-arg CODEX_VERSION=0.154.0 \
     --build-arg OPENCODE_VERSION=1.18.30 \
-    --build-arg COPILOT_VERSION=1.0.83 \
     -t localhost/ai-guardian-openshell:latest container/
 ```
 
@@ -177,12 +174,11 @@ agent selector contains only these eight CLI-capable integrations:
 container setup but are intentionally excluded from the OpenShell selector.
 
 The current OpenShell Community base supplies Claude, Codex, OpenCode, and
-Copilot. This derived image explicitly refreshes Claude and overrides the
-versions of the three npm CLIs shown above. Gemini, OpenClaw, Crush, and Kiro
+Copilot. This derived image leaves Claude and Copilot unchanged and explicitly
+refreshes the two managed CLIs shown above. Gemini, OpenClaw, Crush, and Kiro
 are not installed by this default image; selecting one requires a custom image
 that supplies its command, and Kiro retains its runtime consent flow. The
-version monitor checks all four explicit pins, using npm for the three Node
-clients and Anthropic's release endpoint for Claude. Only the selected CLI is
+version monitor checks the two explicit npm pins. Only the selected CLI is
 configured by default; set
 `AI_GUARDIAN_SETUP_SCOPE=cli` when one sandbox will run multiple CLI agents.
 Other installed CLIs are not removed, but they still need a compatible
@@ -195,13 +191,13 @@ OpenShell Community repository is Apache-2.0, but its
 [third-party notices](https://github.com/NVIDIA/OpenShell-Community/blob/main/THIRD-PARTY-NOTICES)
 also cover inherited system components and their separate licenses. Codex is
 Apache-2.0 and OpenCode is MIT; GitHub Copilot and Claude Code remain subject
-to their own licenses and service terms. Claude Code is bundled and refreshed
-in this derived image, so the OpenShell image does not require the user to
-install it separately; users still need their own authorized account or API
-access. Review the exact package and base image notices before making a Quay
-repository public or redistributing the image. The build workflow deliberately
-publishes OpenShell only to the dedicated primary Quay repository and does not
-mirror it to `itdove`.
+to their own licenses and service terms. They are inherited unchanged from the
+base image, so the OpenShell Dockerfile does not download or modify them; users
+still need their own authorized account or API access. Review the exact
+package and base image notices before making a Quay repository public or
+redistributing the image. The build workflow deliberately publishes OpenShell
+only to the dedicated primary Quay repository and does not mirror it to
+`itdove`.
 For OpenShell installation and first-time setup, see the official
 [OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
 For policy fields and validation rules, see the official
@@ -400,6 +396,22 @@ time the image definition is updated. At startup, the entrypoint checks the
 installed package's advertised setup choices: integrations that exist only in
 a newer development checkout are reported as skipped, while selecting one of
 those integrations fails with a clear compatibility error.
+
+When building this image from the development checkout, pass the wheel built
+from the same checkout if you need unreleased setup behavior. The current
+development package registers Codex's AI Guardian MCP server in
+`$CODEX_HOME/config.toml`; older released packages may instead write the
+legacy `codex.json` file in the working directory. `ai-guardian setup` installs
+the MCP entry by default in both cases.
+
+```bash
+uv build --wheel
+cp dist/ai_guardian-*.whl container/vendor/
+podman build \
+    --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.18.0.dev0-py3-none-any.whl \
+    -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+```
 
 #### OpenShell policy composition
 

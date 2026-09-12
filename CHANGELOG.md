@@ -92,10 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `quay.io/redhatproductsecurity/ai-guardian-openshell` with `latest`/version
   tags, without mirroring it to the legacy `itdove` repository. Release
   automation verifies both the normal and OpenShell image repositories.
-  Add a twice-monthly version check for the explicit Claude, Codex, OpenCode,
-  and GitHub Copilot pins, using Anthropic's release endpoint for Claude and
-  npm for the Node clients, while keeping GUI integrations outside the
-  image-version check.
+  Add a twice-monthly version check for the explicit Codex and OpenCode pins
+  while keeping the inherited Claude Code and GitHub Copilot clients, plus
+  GUI integrations, outside the image-version check.
 
 - **IDE-specific home directory support (#2288)**: Centralize documented
   environment-variable path resolution across hook setup, MCP registration and

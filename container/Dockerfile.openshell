@@ -19,13 +19,11 @@ ARG BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63
 FROM ${BASE_IMAGE}
 
 ARG AI_GUARDIAN_VERSION=1.17.1
-# Keep the OpenShell image's bundled clients current while making every
-# upgrade explicit and reproducible. Override an individual argument
-# deliberately when validating another release.
-ARG CLAUDE_VERSION=2.1.269
+# Keep the OpenShell image's explicitly refreshed clients current while making
+# every upgrade reproducible. Claude Code and GitHub Copilot are inherited
+# unchanged from the OpenShell Community base image.
 ARG CODEX_VERSION=0.154.0
 ARG OPENCODE_VERSION=1.18.30
-ARG COPILOT_VERSION=1.0.83
 
 # The community base image already supplies the supported CLI agents, Node,
 # Git, gh, iproute2, users, and the default OpenShell policy. Install only
@@ -55,32 +53,22 @@ RUN set -eux; \
     ln -sf /sandbox/.venv/bin/ai-guardian /usr/local/bin/ai-guardian; \
     ai-guardian --version
 
-# The pinned OpenShell base includes older versions of its bundled clients.
-# Replace Claude with the exact native release selected above. Anthropic's
-# installer verifies the downloaded binary against its release manifest; the
-# temporary HOME keeps installer state out of the final image. The resulting
-# executable is copied to the same path used by the Community base image.
+# Keep the proprietary clients supplied by the base image available without
+# downloading or modifying them in this derived image.
 RUN set -eux; \
-    claude_install_home="$(mktemp -d)"; \
-    claude_install_script="$(mktemp)"; \
-    trap 'rm -rf "$claude_install_home" "$claude_install_script"' EXIT; \
-    export HOME="$claude_install_home"; \
-    curl -fsSL https://claude.ai/install.sh -o "$claude_install_script"; \
-    bash "$claude_install_script" "${CLAUDE_VERSION}"; \
-    test -x "$claude_install_home/.local/bin/claude"; \
-    install -m 0755 "$claude_install_home/.local/bin/claude" /usr/local/bin/claude; \
-    /usr/local/bin/claude --version
+    command -v claude; \
+    command -v copilot; \
+    claude --version; \
+    copilot --version
 
-# Replace the pinned base's Node-based clients in one layer so their model
+# Refresh only the explicitly managed Node-based clients so their model
 # catalogs, protocol support, and command paths stay aligned with the current
-# CLI releases; the OpenShell base image and its agent layout remain unchanged.
+# CLI releases; Claude and Copilot remain unchanged from the base image.
 RUN npm install --global --prefix /usr --no-fund --no-audit \
         "@openai/codex@${CODEX_VERSION}" \
         "opencode-ai@${OPENCODE_VERSION}" \
-        "@github/copilot@${COPILOT_VERSION}" \
     && codex --version \
-    && opencode --version \
-    && copilot --version
+    && opencode --version
 
 # Avoid pulling X11 libraries into the headless support image through the
 # OCR dependency, matching the normal UBI image's runtime choice.
