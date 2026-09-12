@@ -472,6 +472,12 @@ launcher reports that the profile is missing, update or reconfigure the
 active OpenShell gateway. For direct Anthropic access instead, use
 `ANTHROPIC_API_KEY` and omit the Vertex project variables.
 
+Claude's diagnostics may report that the first-party `api.anthropic.com`
+provider, Claude.ai OAuth, and Remote Control are unavailable. Those checks
+are for direct Anthropic/Claude.ai sessions and are expected when Claude is
+running through Vertex AI. The relevant test is whether Claude can complete a
+model request through the configured Vertex project.
+
 OpenShell discovers common agent credentials through its provider mechanism.
 An existing host `ai-guardian.json` is uploaded as a sandbox-local snapshot
 when no profile is selected; the host file is never written. A selected
