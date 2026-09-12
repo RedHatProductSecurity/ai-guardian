@@ -259,7 +259,9 @@ _compose_agent_policy() {
     fi
 
     composed_inputs+=("$POLICY_BASE")
-    composed_inputs+=("${POLICY_INPUTS[@]}")
+    if (( ${#POLICY_INPUTS[@]} > 0 )); then
+        composed_inputs+=("${POLICY_INPUTS[@]}")
+    fi
     composed_inputs+=("$agent_policy")
 
     if ! POLICY_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-openshell-policy.XXXXXX")"; then
@@ -276,10 +278,8 @@ _compose_agent_policy() {
     POLICY_DISPLAY="composed base + ${POLICY_INPUTS[*]} + ${IDE} agent policy"
 }
 
-if (( ${#POLICY_INPUTS[@]} > 0 )); then
-    if ! _compose_agent_policy; then
-        exit 2
-    fi
+if ! _compose_agent_policy; then
+    exit 2
 fi
 
 # Resolve the host ai-guardian configuration directory.  Agent-specific home

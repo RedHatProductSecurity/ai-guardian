@@ -556,6 +556,10 @@ class TestContainerLaunchers:
 
         assert result.returncode == 0, result.stderr
         assert "Command:  /bin/bash" in result.stdout
+        composed_policy = yaml.safe_load(
+            capture.with_name("openshell.args.policy.yaml").read_text(encoding="utf-8")
+        )
+        assert set(composed_policy["network_policies"]) == {"codex_openai"}
         exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
         assert exec_args[:8] == [
             "sandbox",
