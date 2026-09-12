@@ -417,6 +417,49 @@ The sandbox daemon still runs, but its REST API is not forwarded to the host
 and the tray/NiceGUI cannot discover or manage that sandbox. With forwarding
 disabled and no explicit `--port`, the daemon uses sandbox-local port `63152`.
 
+#### Claude Code with Google Vertex AI
+
+To run Claude Code through Google Vertex AI, select Claude and provide a GCP
+project. The launcher automatically creates or reuses the gateway-local
+`ai-guardian-google-vertex-ai` provider; no GitHub policy is needed:
+
+```bash
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+./container/openshell.sh \
+    --agent claude \
+    --repo .
+```
+
+No separate Claude-Vertex policy file is required. The selected Claude agent
+policy covers Claude Code, while the `google-vertex-ai` provider supplies the
+Vertex endpoint and credential binding. Providers v2 must be enabled on the
+active gateway so the provider-owned network policy is included:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+The launcher uses Google Application Default Credentials (ADC) while creating
+the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account JSON
+file when it is not at the standard gcloud ADC location, or authenticate with
+gcloud first. The credential file is consumed for provider creation and is not
+uploaded into the sandbox:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+./container/openshell.sh --agent claude --repo .
+```
+
+The active gateway must expose the `google-vertex-ai` provider profile. If the
+launcher reports that the profile is missing, update or reconfigure the
+active OpenShell gateway. For direct Anthropic access instead, use
+`ANTHROPIC_API_KEY` and omit the Vertex project variables.
+
 OpenShell discovers common agent credentials through its provider mechanism.
 An existing host `ai-guardian.json` is uploaded as a sandbox-local snapshot
 when no profile is selected; the host file is never written. A selected

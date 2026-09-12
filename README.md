@@ -251,6 +251,11 @@ the shared base policy and selected Codex policy automatically. Add the
 read-only or read/write GitHub policy only when the sandbox needs GitHub
 access.
 
+Claude Code can use Google Vertex AI by selecting `--agent claude` and setting
+`ANTHROPIC_VERTEX_PROJECT_ID`; the OpenShell launcher creates the required
+gateway provider from Google ADC credentials. See the container guide for the
+complete Vertex AI example.
+
 For proprietary agents such as Claude Code, select the agent explicitly and
 review its terms before enabling the runtime consent flow. See the container
 guide for the supported agent matrix.
