@@ -479,6 +479,17 @@ intentionally not mounted. The OpenShell launcher uses gateway-managed
 inference instead. Use `--model MODEL` to select the gateway model; the
 default is `claude-sonnet-4-6`.
 
+Claude's background self-updater is disabled in OpenShell because the image
+installation is read-only. To update Claude Code, rebuild the OpenShell image
+and create a new sandbox; the launcher sets `DISABLE_AUTOUPDATER=1`
+automatically.
+
+The Claude/Vertex policy does not grant GitHub access by default. The GitHub
+overlay is not required for Claude requests, Vertex inference, or an ordinary
+Claude session. Add the read-only GitHub overlay only when Claude must download
+or update plugins or marketplace metadata; the read/write GitHub policy and
+GitHub provider are not required for that public catalog.
+
 This uses OpenShell's [Vertex provider](https://docs.nvidia.com/openshell/providers/google-vertex-ai)
 and [inference routing](https://docs.nvidia.com/openshell/sandboxes/inference-routing)
 features. The effective sandbox policy should show a provider-derived

@@ -805,6 +805,7 @@ class TestContainerLaunchers:
         assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in env_values
         assert "ANTHROPIC_BASE_URL=https://inference.local" in env_values
         assert "ANTHROPIC_API_KEY=unused" in env_values
+        assert "DISABLE_AUTOUPDATER=1" in env_values
         assert not any(
             value.startswith("CLAUDE_CODE_USE_VERTEX=") for value in env_values
         )

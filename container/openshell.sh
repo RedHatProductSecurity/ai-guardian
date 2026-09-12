@@ -706,6 +706,12 @@ env_args=(
     --env "AI_GUARDIAN_HOME=${CONTAINER_CONFIG_DIR}"
     --env "AI_GUARDIAN_SETUP_SCOPE=${SETUP_SCOPE}"
 )
+if [[ "$IDE" = "claude" ]]; then
+    # Claude is supplied by the image and the OpenShell policy keeps the
+    # installation path read-only. Update it by rebuilding the image, not
+    # from inside the sandbox.
+    env_args+=(--env "DISABLE_AUTOUPDATER=1")
+fi
 if [[ -n "$PROFILE" ]]; then
     env_args+=(--env "AI_GUARDIAN_PROFILE=${PROFILE_IN_SANDBOX}")
 fi

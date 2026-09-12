@@ -22,7 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   providers with their project and region, route Claude Code through the
   gateway-managed `inference.local` endpoint, keep direct GCP credential
   discovery out of the sandbox, and transparently use Claude's non-OAuth
-  `--bare` mode for ordinary model commands.
+  `--bare` mode for ordinary model commands. The launcher also disables
+  Claude's background self-updater inside the immutable image; image rebuilds
+  are the update path.
 
 - **Linux tray UI fallbacks (#2269)**: Prefer the detected native desktop
   dialog provider, keep Tkinter in-process on Linux, and fall through to
