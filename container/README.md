@@ -448,6 +448,11 @@ active gateway so the provider-owned network policy is included:
 openshell settings set --global --key providers_v2_enabled --value true
 ```
 
+Keep `--agent claude` when using Vertex AI. `claude` selects the Claude Code
+CLI; Vertex is the provider backend, not a separate agent, so
+`--agent claude-vertex` is not a valid selector. The expected provider name is
+`ai-guardian-google-vertex-ai`.
+
 The launcher uses Google Application Default Credentials (ADC) while creating
 the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a service-account JSON
 file when it is not at the standard gcloud ADC location, or authenticate with
