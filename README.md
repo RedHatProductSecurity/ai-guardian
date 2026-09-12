@@ -213,11 +213,12 @@ discover or manage it without the forward.
 OpenShell must be installed and initialized on the host first, with a
 reachable gateway and configured compute driver; follow the
 [official OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
-The quickstart installer can install and start a local gateway; verify it with
-`openshell status` before using the OpenShell launcher.
-When the gateway uses rootless Podman on Linux, start its API socket first with
-`systemctl --user enable --now podman.socket`; see the container guide for
-socket-path troubleshooting.
+On Fedora/Linux, verify the systemd user service with
+`systemctl --user status openshell-gateway`. On macOS, verify the Homebrew
+service with `brew services list`. In both cases, run `openshell status` before
+using the OpenShell launcher. When the gateway uses rootless Podman on Linux,
+start its API socket first with `systemctl --user enable --now podman.socket`;
+see the container guide for socket-path troubleshooting.
 
 The OpenShell launcher opens a shell by default. Its `--repo` option uploads an
 isolated snapshot rather than binding the host checkout; the shell starts in
@@ -243,6 +244,11 @@ Inside OpenShell, the launcher sets Codex's sandbox-local
 bubblewrap sandbox. OpenShell remains the outer filesystem and network
 boundary; regular Docker/Podman launches retain Codex's normal inner sandbox.
 See the official [OpenShell Codex example](https://github.com/NVIDIA/OpenShell/blob/main/examples/agent-driven-policy-management/sandbox-agent.sh).
+
+For a Codex-only sandbox, no GitHub policy is required. The launcher applies
+the shared base policy and selected Codex policy automatically. Add the
+read-only or read/write GitHub policy only when the sandbox needs GitHub
+access.
 
 For proprietary agents such as Claude Code, select the agent explicitly and
 review its terms before enabling the runtime consent flow. See the container
