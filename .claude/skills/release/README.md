@@ -27,6 +27,7 @@ Project-specific installation is recommended for:
 
 - **SKILL.md** - Skill documentation (invoked by Claude Code)
 - **release_helper.py** - Python automation utilities (ai-guardian specific)
+- **scripts/sync_release_versions.py** - Synchronizes active stable container references
 - **README.md** - This file
 - **EXAMPLE_USAGE.md** - Usage examples and troubleshooting
 
@@ -71,6 +72,9 @@ python .claude/skills/release/release_helper.py validate --type regular
 
 # Print the two versioned container images published for an AI Guardian release
 python .claude/skills/release/release_helper.py container-images 1.2.0
+
+# Verify active stable container references match the latest CHANGELOG release
+python scripts/sync_release_versions.py --check
 ```
 
 ## Testing
@@ -94,7 +98,7 @@ When you invoke `/release <type>`, Claude Code will:
 
 1. Load SKILL.md and provide it as context
 2. Follow the documented workflow in SKILL.md
-3. Use release_helper.py to automate version updates
+3. Use release_helper.py and sync_release_versions.py to automate version updates
 4. Guide you through git operations
 5. Provide post-release checklist
 

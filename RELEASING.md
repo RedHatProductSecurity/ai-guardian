@@ -7,9 +7,9 @@ This document describes the release management process for AI Guardian.
 The fastest way to create a release — no AI agent required:
 
 ```bash
-scripts/release.sh minor              # minor release (1.16.0 -> 1.17.0)
-scripts/release.sh patch              # patch release (1.17.0 -> 1.17.1)
-scripts/release.sh major              # major release (1.0.0 -> 2.0.0)
+scripts/release.sh minor              # minor release (X.Y.Z -> X.(Y+1).0)
+scripts/release.sh patch              # patch release (X.Y.Z -> X.Y.(Z+1))
+scripts/release.sh major              # major release (X.Y.Z -> (X+1).0.0)
 scripts/release.sh --dry-run minor    # preview without executing
 scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 ```
@@ -115,6 +115,16 @@ scripts/release.sh major   # Create major version release
 ```
 
 The `/release` skill is also available for AI-assisted releases via Claude Code.
+
+The automated script also runs `scripts/sync_release_versions.py` so the
+normal and OpenShell container defaults, pinned container examples, and root
+README release image references move to the new stable version together. The
+script fails if one of those active references is missing. CI repeats the
+guard with:
+
+```bash
+python scripts/sync_release_versions.py --check
+```
 
 **Note**: Only maintainers should push release tags.
 
@@ -654,6 +664,7 @@ Use this checklist for each release:
 ### Release Branch
 - [ ] Create release branch (`release-X.Y`)
 - [ ] Update version in `pyproject.toml` (remove `-dev`)
+- [ ] Synchronize stable container references (`python scripts/sync_release_versions.py --stable-version X.Y.Z`)
 - [ ] Update CHANGELOG.md (move Unreleased to version section)
 - [ ] Run full test suite
 - [ ] Test installation in clean environment
@@ -705,6 +716,22 @@ Version number is stored in two locations that must be kept in sync:
 **Important:** Always update both files when bumping versions.
 
 This uses the modern Python packaging standard (PEP 621) with hatchling as the build backend.
+
+### Active Stable Release References
+
+The two package files above are the runtime/package version. `main` continues
+to use a `-dev` package version, so stable container fallbacks and pinned
+examples are maintained separately in:
+
+- `container/Dockerfile`
+- `container/Dockerfile.openshell`
+- `container/README.md`
+- `README.md`
+
+Do not update historical examples or changelog entries. For a release, run the
+project synchronizer with the new stable version; after merge-back, use its
+`--check` mode to confirm the references still match the latest stable
+`CHANGELOG.md` heading.
 
 ### Version Display
 

@@ -78,6 +78,10 @@ jobs:
         if: steps.params.outputs.skip != 'true'
         uses: actions/checkout@v7
 
+      - name: Verify stable release references
+        if: steps.params.outputs.skip != 'true'
+        run: python3 scripts/sync_release_versions.py --repo . --check
+
       # --- Dev image: download wheel from Build Wheel artifact ---
       - name: Download dev wheel
         if: steps.params.outputs.skip != 'true' && steps.params.outputs.wheel_source == 'artifact'
@@ -107,13 +111,16 @@ jobs:
         if: steps.params.outputs.skip != 'true'
         id: wheel
         run: |
-          WHL=$(ls container/vendor/ai_guardian-*.whl 2>/dev/null | xargs basename 2>/dev/null || true)
-          if [[ -n "$WHL" ]]; then
-            echo "version=$WHL" >> "$GITHUB_OUTPUT"
-          else
-            # No wheel in vendor/ — install from PyPI using the image tag as version
-            echo "version=${{ steps.params.outputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          shopt -s nullglob
+          wheels=(container/vendor/ai_guardian-*.whl)
+          if (( ${#wheels[@]} != 1 )); then
+            echo "::error::Expected exactly one AI Guardian wheel from the build, found ${#wheels[@]}"
+            printf '%s\n' "${wheels[@]:-<none>}"
+            exit 1
           fi
+          WHL="${wheels[0]##*/}"
+          echo "Using AI Guardian wheel: ${WHL}"
+          echo "version=${WHL}" >> "$GITHUB_OUTPUT"
 
       # --- Multi-arch build setup ---
       - name: Set up QEMU

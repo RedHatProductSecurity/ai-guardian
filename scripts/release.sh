@@ -3,9 +3,9 @@
 # No AI agent required — just gh CLI, python3, git, sed, curl, and git-cliff.
 #
 # Usage:
-#   scripts/release.sh minor              # minor release (1.16.0 -> 1.17.0)
-#   scripts/release.sh patch              # patch release (1.17.0 -> 1.17.1)
-#   scripts/release.sh major              # major release (1.0.0 -> 2.0.0)
+#   scripts/release.sh minor              # minor release (X.Y.Z -> X.(Y+1).0)
+#   scripts/release.sh patch              # patch release (X.Y.Z -> X.Y.(Z+1))
+#   scripts/release.sh major              # major release (X.Y.Z -> (X+1).0.0)
 #   scripts/release.sh --dry-run minor    # show commands without executing
 #   scripts/release.sh --skip-cursor patch
 set -euo pipefail
@@ -29,9 +29,9 @@ Options:
   -h, --help       Show this help message
 
 Release types:
-  minor   Bump minor version   (1.16.0 -> 1.17.0)
-  patch   Bump patch version   (1.17.0 -> 1.17.1)
-  major   Bump major version   (1.0.0 -> 2.0.0)
+  minor   Bump minor version   (X.Y.Z -> X.(Y+1).0)
+  patch   Bump patch version   (X.Y.Z -> X.Y.(Z+1))
+  major   Bump major version   (X.Y.Z -> (X+1).0.0)
 EOF
     exit 0
 }
@@ -291,6 +291,16 @@ if [[ -f README.md ]]; then
     fi
 fi
 
+# Stable container references: update the project-specific release locations
+# after the package version and CHANGELOG have been updated. The synchronizer
+# fails if an expected active reference disappears, so adding a new release
+# location cannot silently create a stale version.
+section "Synchronizing release version references"
+run python3 "${REPO_ROOT}/scripts/sync_release_versions.py" \
+    --repo "${REPO_ROOT}" \
+    --stable-version "${NEW_VERSION}"
+info "Stable release references synchronized to ${NEW_VERSION}"
+
 # Generate docs/notebooklm-export.md
 section "Generating docs/notebooklm-export.md"
 
@@ -337,7 +347,9 @@ else
 fi
 
 # Commit release changes (skip if nothing changed)
-run git add pyproject.toml src/ai_guardian/__init__.py CHANGELOG.md README.md docs/notebooklm-export.md
+run git add pyproject.toml src/ai_guardian/__init__.py CHANGELOG.md README.md \
+    container/Dockerfile container/Dockerfile.openshell container/README.md \
+    docs/notebooklm-export.md
 if $DRY_RUN || ! git diff --cached --quiet 2>/dev/null; then
     run git commit -m "chore: release v${NEW_VERSION}
 
@@ -345,6 +357,7 @@ Prepare v${NEW_VERSION} release:
 - Bump version to ${NEW_VERSION}
 - Update CHANGELOG.md
 - Update README.md install URLs to ${TAG_NAME}
+- Synchronize stable versions in container defaults and examples
 - Regenerate docs/notebooklm-export.md"
 else
     warn "No changes to commit — release commit already exists"
@@ -516,6 +529,12 @@ if [[ -f README.md ]]; then
         warn "README.md URLs already point to main — skipping"
     fi
 fi
+
+# Verify that the release branch's stable references survived the merge-back.
+run python3 "${REPO_ROOT}/scripts/sync_release_versions.py" \
+    --repo "${REPO_ROOT}" \
+    --check
+info "Stable release references verified after merge-back"
 
 # Commit post-release changes (skip if nothing changed)
 run git add pyproject.toml src/ai_guardian/__init__.py README.md

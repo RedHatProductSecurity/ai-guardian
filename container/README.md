@@ -641,9 +641,10 @@ the MCP entry by default in both cases.
 
 ```bash
 uv build --wheel
-cp dist/ai_guardian-*.whl container/vendor/
+WHEEL="$(basename dist/ai_guardian-*.whl)"
+cp "dist/${WHEEL}" container/vendor/
 podman build \
-    --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.18.0.dev0-py3-none-any.whl \
+    --build-arg AI_GUARDIAN_VERSION="${WHEEL}" \
     -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ```
