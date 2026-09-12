@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Codex coverage documentation**: Clarify that the label covers Codex CLI and
   desktop Codex mode, not regular ChatGPT mode, and that shared MCP
   configuration does not imply lifecycle-hook enforcement (#2274).
+- **OpenShell marketplace documentation**: Clarify that Claude marketplace and
+  plugin installation requires the read-only GitHub policy overlay, while
+  Claude/Vertex inference does not.
 
 ### Fixed
 

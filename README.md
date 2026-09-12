@@ -262,11 +262,14 @@ installation is read-only. To update Claude Code, rebuild the OpenShell image
 and create a new sandbox; the launcher sets `DISABLE_AUTOUPDATER=1`
 automatically.
 
-The Claude/Vertex policy does not grant GitHub access by default. The GitHub
-overlay is not required for Claude requests, Vertex inference, or an ordinary
-Claude session. Add the read-only GitHub overlay only when Claude must download
-or update plugins or marketplace metadata; the read/write GitHub policy and
-GitHub provider are not required for that public catalog:
+The Claude/Vertex policy does not grant GitHub access by default. The command
+above is sufficient for Claude requests, Vertex inference, and an ordinary
+Claude session. Marketplace or plugin installation and refresh are different:
+you must add the read-only GitHub overlay because the Anthropic marketplace is
+fetched from GitHub. Without this overlay, model requests still work but
+marketplace installation or refresh fails due to OpenShell's deny-by-default
+network policy. The read/write GitHub policy and GitHub provider are not
+required for the public catalog:
 
 ```bash
 ./container/openshell.sh \
