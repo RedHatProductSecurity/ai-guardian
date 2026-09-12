@@ -222,14 +222,12 @@ if [[ ${#EXTRA_ARGS[@]} -eq 0 ]]; then
     EXTRA_ARGS=(/bin/bash)
 fi
 
-if (( ${#POLICY_INPUTS[@]} > 0 )); then
-    for policy_input in "${POLICY_INPUTS[@]}"; do
-        if [[ ! -f "$policy_input" ]]; then
-            echo "Error: OpenShell policy file not found: $policy_input" >&2
-            exit 2
-        fi
-    done
-fi
+for policy_input in ${POLICY_INPUTS[@]+"${POLICY_INPUTS[@]}"}; do
+    if [[ ! -f "$policy_input" ]]; then
+        echo "Error: OpenShell policy file not found: $policy_input" >&2
+        exit 2
+    fi
+done
 
 _cleanup_composed_policy() {
     if [[ -n "$POLICY_TEMP_DIR" && -d "$POLICY_TEMP_DIR" ]]; then
@@ -259,9 +257,7 @@ _compose_agent_policy() {
     fi
 
     composed_inputs+=("$POLICY_BASE")
-    if (( ${#POLICY_INPUTS[@]} > 0 )); then
-        composed_inputs+=("${POLICY_INPUTS[@]}")
-    fi
+    composed_inputs+=( ${POLICY_INPUTS[@]+"${POLICY_INPUTS[@]}"} )
     composed_inputs+=("$agent_policy")
 
     if ! POLICY_TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-openshell-policy.XXXXXX")"; then
@@ -556,11 +552,9 @@ _prepare_vertex_provider_credentials() {
 
 _cleanup_codex_file_credentials() {
     local env_name
-    if (( ${#CODEX_FILE_VARS[@]} > 0 )); then
-        for env_name in "${CODEX_FILE_VARS[@]}"; do
-            unset "$env_name"
-        done
-    fi
+    for env_name in ${CODEX_FILE_VARS[@]+"${CODEX_FILE_VARS[@]}"}; do
+        unset "$env_name"
+    done
     CODEX_FILE_VARS=()
 }
 
@@ -568,11 +562,9 @@ _cleanup_provider_credentials() {
     local env_name
 
     _cleanup_codex_file_credentials
-    if (( ${#PROVIDER_ENV_VARS[@]} > 0 )); then
-        for env_name in "${PROVIDER_ENV_VARS[@]}"; do
-            unset "$env_name"
-        done
-    fi
+    for env_name in ${PROVIDER_ENV_VARS[@]+"${PROVIDER_ENV_VARS[@]}"}; do
+        unset "$env_name"
+    done
     PROVIDER_ENV_VARS=()
 }
 
@@ -765,13 +757,9 @@ else
 fi
 [[ -n "$SANDBOX_NAME" ]] && openshell_args+=(--name "$SANDBOX_NAME")
 [[ -n "$POLICY_PATH" ]] && openshell_args+=(--policy "$POLICY_PATH")
-if (( ${#PROVIDER_ARGS[@]} > 0 )); then
-    openshell_args+=("${PROVIDER_ARGS[@]}")
-fi
+openshell_args+=( ${PROVIDER_ARGS[@]+"${PROVIDER_ARGS[@]}"} )
 openshell_args+=("${env_args[@]}")
-if (( ${#upload_args[@]} > 0 )); then
-    openshell_args+=("${upload_args[@]}")
-fi
+openshell_args+=( ${upload_args[@]+"${upload_args[@]}"} )
 
 # OpenShell normally infers PTY allocation, but the staged upload path starts
 # the agent through a second relay where inference can be lost. Make the
@@ -783,9 +771,7 @@ if [[ -t 0 && -t 1 ]]; then
     TTY_ARGS=(--tty)
 fi
 EXEC_ARGS=("${TTY_ARGS[@]}")
-if (( ${#REPO_WORKDIR_ARGS[@]} > 0 )); then
-    EXEC_ARGS+=("${REPO_WORKDIR_ARGS[@]}")
-fi
+EXEC_ARGS+=( ${REPO_WORKDIR_ARGS[@]+"${REPO_WORKDIR_ARGS[@]}"} )
 
 # OpenShell executes the command after the separator directly and does not
 # reliably re-enter the image's Docker ENTRYPOINT, especially for detached
