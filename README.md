@@ -172,6 +172,7 @@ OPENAI_API_KEY=... \
 
 # Optional OpenShell sandbox (published image; local build is also supported)
 # OpenShell defaults to Claude; select Codex explicitly when needed.
+openshell settings set --global --key providers_v2_enabled --value true
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ./container/openshell.sh --agent codex --repo $(pwd)
 
