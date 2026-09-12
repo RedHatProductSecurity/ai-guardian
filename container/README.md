@@ -444,6 +444,9 @@ export CLOUD_ML_REGION=global
     --repo .
 ```
 
+When using a locally built image, rebuild it after pulling this change because
+the transparent `claude` wrapper is installed by the image entrypoint.
+
 Providers v2 must be enabled on the active gateway before the first launcher
 call so the provider-owned Vertex network policy is included:
 
@@ -460,17 +463,21 @@ ANTHROPIC_API_KEY=unused
 ```
 
 The key is only a placeholder; OpenShell strips it and uses the gateway's
-refreshed Vertex credential. From the resulting shell, start Claude with:
+refreshed Vertex credential. From the resulting shell, start Claude normally:
 
 ```bash
-claude --bare
+claude
 ```
 
-Do not set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox. That mode
-makes Claude try to discover GCP credentials directly inside the sandbox,
-where the host ADC file is intentionally not mounted. The OpenShell launcher
-uses gateway-managed inference instead. Use `--model MODEL` to select the
-gateway model; the default is `claude-sonnet-4-6`.
+The OpenShell image automatically adds `--bare` to Claude model commands so
+Claude does not enter the Claude.ai OAuth flow; `claude --bare` remains
+equivalent. Administrative commands such as `claude plugin` and `claude
+doctor` are passed through unchanged. Do not set `CLAUDE_CODE_USE_VERTEX=1`
+inside an OpenShell sandbox. That mode makes Claude try to discover GCP
+credentials directly inside the sandbox, where the host ADC file is
+intentionally not mounted. The OpenShell launcher uses gateway-managed
+inference instead. Use `--model MODEL` to select the gateway model; the
+default is `claude-sonnet-4-6`.
 
 This uses OpenShell's [Vertex provider](https://docs.nvidia.com/openshell/providers/google-vertex-ai)
 and [inference routing](https://docs.nvidia.com/openshell/sandboxes/inference-routing)
