@@ -341,6 +341,23 @@ provider exists on the currently active gateway. Provider setup must be
 repeated for each gateway or laptop; `git pull` only updates the launcher and
 policy files.
 
+The `--provider` option is lookup-only: it attaches an existing provider
+instance and does not create one. To let the launcher create
+`ai-guardian-codex` from local Codex credentials, omit `--provider` and ensure
+the active gateway lists the `codex` profile:
+
+```bash
+openshell provider list-profiles
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
+    --agent codex \
+    --repo .
+```
+
+Provider creation requires a matching gateway profile and credentials
+available to the launcher. If `codex` is absent from `list-profiles`, update or
+reconfigure the active OpenShell gateway before retrying.
+
 ```bash
 ./container/openshell.sh \
     --agent codex \
