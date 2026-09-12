@@ -1466,6 +1466,118 @@ fi
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
+def test_entrypoint_adds_bare_to_direct_openshell_claude_command(tmp_path):
+    args_path = tmp_path / "claude.args"
+    _executable_script(
+        tmp_path / "claude",
+        """#!/usr/bin/env bash
+printf '%s\n' "$@" > "$CLAUDE_ARGS"
+""",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && "$2" = "--help" ]]; then
+    printf 'usage: ai-guardian setup --ide {claude}\n'
+    exit 0
+fi
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "claude",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "CLAUDE_ARGS": str(args_path),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "claude", "--print", "hello"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert args_path.read_text(encoding="utf-8").splitlines() == [
+        "--bare",
+        "--print",
+        "hello",
+    ]
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_wraps_plain_claude_in_openshell_interactive_shell(tmp_path):
+    args_path = tmp_path / "claude.args"
+    _executable_script(
+        tmp_path / "claude",
+        """#!/usr/bin/env bash
+printf '%s\n' "$@" > "$CLAUDE_ARGS"
+""",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && "$2" = "--help" ]]; then
+    printf 'usage: ai-guardian setup --ide {claude}\n'
+    exit 0
+fi
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "claude",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "CLAUDE_ARGS": str(args_path),
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ENTRYPOINT_SCRIPT),
+            "/bin/bash",
+            "-lc",
+            "claude --print hello",
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert args_path.read_text(encoding="utf-8").splitlines() == [
+        "--bare",
+        "--print",
+        "hello",
+    ]
+    assert (Path(env["HOME"]) / ".bashrc").exists()
+    assert (Path(env["HOME"]) / ".bash_profile").exists()
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
 def test_entrypoint_skips_integrations_missing_from_released_package(tmp_path):
     log_path = tmp_path / "ai-guardian.log"
     _executable_script(

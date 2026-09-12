@@ -245,10 +245,17 @@ export CLOUD_ML_REGION=global
     --repo .
 ```
 
-From the resulting shell, start Claude with `claude --bare`. Do not set
-`CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox; that direct-Vertex
-mode expects GCP credential discovery inside the sandbox. Use the launcher's
-`--model` option (default `claude-sonnet-4-6`) to select the gateway model.
+From the resulting shell, start Claude with `claude`. The OpenShell image
+automatically adds `--bare` to Claude model commands so Claude does not enter
+the Claude.ai OAuth flow; `claude --bare` remains equivalent. Administrative
+commands such as `claude plugin` and `claude doctor` are passed through
+unchanged. Do not set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox;
+that direct-Vertex mode expects GCP credential discovery inside the sandbox.
+Use the launcher's `--model` option (default `claude-sonnet-4-6`) to select the
+gateway model.
+
+If using a locally built image, rebuild it after pulling this change so the
+transparent Claude wrapper is included.
 
 The Claude/Vertex policy does not grant GitHub access by default. If Claude
 plugins or the public Claude plugin marketplace are needed, add the

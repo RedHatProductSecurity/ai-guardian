@@ -233,6 +233,96 @@ if [ "${1:-}" = "__AI_GUARDIAN_DEFAULT_AGENT__" ]; then
   fi
 fi
 
+# OpenShell's gateway-managed inference route uses a placeholder API key and
+# must skip Claude Code's Claude.ai OAuth flow. Keep that transport detail out
+# of the interactive user experience: plain `claude` becomes `claude --bare`
+# for model commands, while administrative subcommands such as `claude plugin`
+# and `claude doctor` retain their normal arguments.
+_claude_command_needs_bare() {
+  local argument
+
+  for argument in "$@"; do
+    if [ "$argument" = "--bare" ]; then
+      return 1
+    fi
+  done
+
+  case "${1:-}" in
+    auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+_configure_openshell_claude_bare_mode() {
+  local bash_profile
+  local bashrc
+  local marker="# ai-guardian-openshell-claude-bare-mode"
+
+  if [ "$IDE" != "claude" ] ||
+    [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
+    return 0
+  fi
+
+  bashrc="${HOME}/.bashrc"
+  bash_profile="${HOME}/.bash_profile"
+  if ! mkdir -p "$HOME"; then
+    echo "Error: unable to prepare the sandbox shell for OpenShell inference" >&2
+    return 1
+  fi
+
+  if ! grep -Fq "$marker" "$bashrc" 2>/dev/null; then
+    printf '\n' >>"$bashrc"
+    cat >>"$bashrc" <<'EOF'
+# ai-guardian-openshell-claude-bare-mode
+claude() {
+    local argument
+    for argument in "$@"; do
+        if [ "$argument" = "--bare" ]; then
+            command claude "$@"
+            return $?
+        fi
+    done
+    case "${1:-}" in
+        auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
+            command claude "$@"
+            ;;
+        *)
+            command claude --bare "$@"
+            ;;
+    esac
+}
+EOF
+  fi
+
+  if ! grep -Fq "$marker" "$bash_profile" 2>/dev/null; then
+    printf '\n' >>"$bash_profile"
+    cat >>"$bash_profile" <<'EOF'
+# ai-guardian-openshell-claude-bare-mode
+if [ -f "$HOME/.bashrc" ]; then
+    . "$HOME/.bashrc"
+fi
+EOF
+  fi
+}
+
+if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
+  [ "$IDE" = "claude" ]; then
+  if ! _configure_openshell_claude_bare_mode; then
+    exit 1
+  fi
+  case "${1:-}" in
+    claude|*/claude)
+      if _claude_command_needs_bare "$@"; then
+        set -- "$1" --bare "${@:2}"
+      fi
+      ;;
+  esac
+fi
+
 # dummy-agent: no API key required — launch REPL directly
 if [ "$IDE" = "dummy-agent" ]; then
     echo "Starting ai-guardian daemon..."
