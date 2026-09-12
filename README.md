@@ -171,6 +171,7 @@ OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
 # Optional OpenShell sandbox (published image; local build is also supported)
+# OpenShell defaults to Claude; select Codex explicitly when needed.
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ./container/openshell.sh --agent codex --repo $(pwd)
 
