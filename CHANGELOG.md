@@ -24,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Container and release version alignment (#2292)**: Keep normal and
+  OpenShell image defaults on the latest stable AI Guardian release, require
+  release image builds to install the wheel produced by the same workflow run,
+  and derive the release-readiness upgrade baseline from the changelog.
 - **OpenShell Vertex routing**: Configure existing and newly created Vertex
   providers with their project and region, route Claude Code through the
   gateway-managed `inference.local` endpoint, keep direct GCP credential

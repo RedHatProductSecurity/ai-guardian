@@ -1,11 +1,12 @@
 """Tests for the support-image launchers and entrypoint contract."""
 
+import base64
 import json
 import os
+import re
 import stat
 import subprocess
 import sys
-import base64
 import time
 from pathlib import Path
 
@@ -29,6 +30,18 @@ GITHUB_POLICY = REPO_ROOT / "container" / "openshell-github-readonly-policy.yaml
 GITHUB_READWRITE_POLICY = (
     REPO_ROOT / "container" / "openshell-github-readwrite-policy.yaml"
 )
+
+
+def _latest_stable_release_version() -> str:
+    """Return the first stable release listed in the changelog."""
+    changelog = (REPO_ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    match = re.search(
+        r"^## \[(?P<version>\d+\.\d+\.\d+)\]",
+        changelog,
+        flags=re.MULTILINE,
+    )
+    assert match, "CHANGELOG.md must list a stable release"
+    return match.group("version")
 
 
 def _executable_script(path: Path, body: str) -> Path:
@@ -195,6 +208,42 @@ class TestContainerLaunchers:
         )
         assert 'CMD ["bash", "-l"]' in dockerfile
         assert "COPY --from=builder /opt/uv-tools /usr/lib/uv-tools" not in dockerfile
+
+    def test_container_defaults_match_latest_stable_ai_guardian_release(self):
+        expected_version = _latest_stable_release_version()
+
+        for dockerfile_path in (DOCKERFILE, OPENSHELL_DOCKERFILE):
+            dockerfile = dockerfile_path.read_text(encoding="utf-8")
+            match = re.search(
+                r"^ARG AI_GUARDIAN_VERSION=(?P<version>[^\s#]+)$",
+                dockerfile,
+                flags=re.MULTILINE,
+            )
+            assert match, f"{dockerfile_path} must define AI_GUARDIAN_VERSION"
+            assert match.group("version") == expected_version
+
+        container_readme = (REPO_ROOT / "container" / "README.md").read_text(
+            encoding="utf-8"
+        )
+        assert f"| `AI_GUARDIAN_VERSION` | `{expected_version}` |" in container_readme
+
+    def test_container_build_requires_the_same_run_wheel(self):
+        workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
+        resolve_section = workflow.split(
+            "# --- Resolve wheel filename for AI_GUARDIAN_VERSION build-arg ---", 1
+        )[1].split("# --- Multi-arch build setup ---", 1)[0]
+
+        assert "shopt -s nullglob" in resolve_section
+        assert "wheels=(container/vendor/ai_guardian-*.whl)" in resolve_section
+        assert "Expected exactly one AI Guardian wheel" in resolve_section
+        assert 'WHL="${wheels[0]##*/}"' in resolve_section
+        assert 'echo "version=${WHL}"' in resolve_section
+        assert "steps.params.outputs.image_tag" not in resolve_section
+
+    def test_container_build_checks_release_references_before_building(self):
+        workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
+
+        assert "scripts/sync_release_versions.py --repo . --check" in workflow
 
     def test_openshell_image_uses_community_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")

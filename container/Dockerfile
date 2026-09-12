@@ -11,8 +11,8 @@
 # Build locally:
 #   Podman: podman build -t ai-guardian container/
 #   Docker:  docker build -t ai-guardian container/
-#   Podman: podman build --build-arg AI_GUARDIAN_VERSION=1.13.0 -t ai-guardian container/
-#   Docker:  docker build --build-arg AI_GUARDIAN_VERSION=1.13.0 -t ai-guardian container/
+#   Podman: podman build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
+#   Docker:  docker build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
 #
 # Run:
 #   Podman: podman run -it -p 63152 ai-guardian
@@ -32,14 +32,15 @@
 #
 # Local wheel:
 #   python -m build --wheel && cp dist/ai_guardian-*.whl container/vendor/
-#   podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.13.0.dev0-py3-none-any.whl -t ai-guardian container/
+#   WHEEL="$(basename dist/ai_guardian-*.whl)"
+#   podman build --build-arg AI_GUARDIAN_VERSION="${WHEEL}" -t ai-guardian container/
 
 # ============================================================
 # Stage 1: builder — install everything, discard build tools
 # ============================================================
 FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS builder
 
-ARG AI_GUARDIAN_VERSION=1.13.2
+ARG AI_GUARDIAN_VERSION=1.17.1
 ARG UV_VERSION=0.11.16
 ARG OPENCODE_VERSION=1.17.3
 ARG GH_VERSION=2.74.1

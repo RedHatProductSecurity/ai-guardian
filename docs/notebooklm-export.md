@@ -140,8 +140,8 @@ podman run -it -p 63152:63152 \
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.16.0
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.16.0
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.17.1
+podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.17.1
 
 # Or build from source
 podman build -t ai-guardian container/
@@ -484,12 +484,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.13.2
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.17.1
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.13.2`)
+- `:<version>` — pinned stable release (e.g. `1.17.1`)
 
 ## Build Locally
 
@@ -498,11 +498,11 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.13.2 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
 
 # Local wheel (copy wheel into container/ first)
-cp dist/ai_guardian-1.13.2-py3-none-any.whl container/vendor/
-podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.13.2-py3-none-any.whl \
+cp dist/ai_guardian-1.17.1-py3-none-any.whl container/vendor/
+podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.17.1-py3-none-any.whl \
     -t ai-guardian container/
 
 # Multi-arch
@@ -714,7 +714,7 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.13.2` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.17.1` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.17.3` | OpenCode version |

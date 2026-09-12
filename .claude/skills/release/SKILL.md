@@ -41,7 +41,7 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 
 1. **Safety Checks**: Verify prerequisites before starting
 2. **Release Readiness CI**: Trigger automated readiness workflow and wait for results
-3. **Version Management**: Update version in both required files
+3. **Version Management**: Update package metadata and project-specific release references
 4. **CHANGELOG Management**: Update CHANGELOG.md with proper format
 5. **Git Operations**: Create branches, commits, and tags
 6. **Post-Release Guidance**: Provide checklist for manual steps (maintainers only)
@@ -65,14 +65,15 @@ When invoked with arguments (e.g., `/release minor`), this skill guides you thro
 5. Cursor hook compatibility verification (mandatory — see section below)
 6. Create release branch (e.g., `release-1.2`)
 7. Determine new version based on release type
-8. Update version in both files (remove `-dev` suffix)
+8. Update version in all configured package files (remove `-dev` suffix)
 9. Update CHANGELOG.md (move Unreleased to version section with date)
 10. Update install URLs in `README.md` to point to the release tag (e.g., `v1.2.0`) — **MUST happen before tagging**
-11. Commit changes with proper commit message format
-12. TestPyPI verification (recommended — see TestPyPI Verification section below)
-13. Create tag and push
-14. Verify PyPI publication and both versioned container images
-15. Provide post-release checklist
+11. Synchronize project-specific stable references before tagging
+12. Commit changes with proper commit message format
+13. TestPyPI verification (recommended — see TestPyPI Verification section below)
+14. Create tag and push
+15. Verify PyPI publication and both versioned container images
+16. Provide post-release checklist
 
 ### Hotfix Release (`/release hotfix <tag>`)
 
@@ -133,6 +134,29 @@ On first use, the skill automatically detects version files in your project by s
 The detected configuration is saved to `.release-config.json` and can be edited manually if needed.
 
 **CRITICAL**: All detected version files MUST be kept in sync. The skill automatically updates all configured files together.
+
+### AI Guardian release references
+
+AI Guardian keeps a stable container fallback on `main` even though the
+package version on `main` is a `-dev` version. The package-aware helper cannot
+infer that separate stable value, so the canonical release script also runs:
+
+```bash
+python scripts/sync_release_versions.py --stable-version X.Y.Z
+```
+
+This updates the active stable references in the normal and OpenShell
+Dockerfiles, the root and container READMEs, and the generated documentation
+export. It fails when an expected reference is missing. CI runs the matching
+check automatically:
+
+```bash
+python scripts/sync_release_versions.py --check
+```
+
+Historical changelog entries and historical examples are intentionally not
+rewritten. The release-readiness workflow derives its previous stable package
+from `CHANGELOG.md`, so it does not require a manually maintained version pin.
 
 **Version Format**:
 - Production: `"1.0.0"` (semantic versioning)
@@ -574,13 +598,14 @@ to it, stop the release and have a maintainer provision
 6. **Dependency security review**: Check for open Dependabot CVE alerts and merge critical/high severity fixes (regular releases only)
 7. **Cursor hook verification**: Run the semi-automated Cursor hook compatibility check (regular releases only, may skip for urgent hotfixes)
 8. **Calculate new version**: Based on current version and release type
-9. **Update version files**: Edit all detected version files atomically
+9. **Update version files**: Edit all detected package version files atomically
 10. **Update CHANGELOG**: Move Unreleased to version section with date
 11. **Update install URLs**: Replace `main` with release tag in README.md install commands (**before tagging** — PyPI uses the tag snapshot as package README)
-12. **Create commits**: Use proper commit message format
-13. **TestPyPI verification**: Create test tag, verify README renders correctly on TestPyPI (recommended, may skip for hotfixes)
-14. **Create production tag**: After TestPyPI verification passes
-15. **Validate**: Ensure versions match between all files
+12. **Synchronize release references**: Run `python scripts/sync_release_versions.py --stable-version X.Y.Z`
+13. **Create commits**: Use proper commit message format
+14. **TestPyPI verification**: Create test tag, verify README renders correctly on TestPyPI (recommended, may skip for hotfixes)
+15. **Create production tag**: After TestPyPI verification passes
+16. **Validate**: Run `python scripts/sync_release_versions.py --check` and ensure package versions match
 
 **Error Recovery**:
 - If any step fails, provide clear error message and recovery steps
@@ -606,6 +631,7 @@ to it, stop the release and have a maintainer provision
 
 3. **Verify version updates**:
    - Check all detected files updated correctly
+   - Run `python scripts/sync_release_versions.py --check`
    - Verify versions match across all files
    - Verify -dev suffix handling
 
