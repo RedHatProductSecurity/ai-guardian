@@ -6,8 +6,12 @@
 #   - :latest         on every successful merge to main
 #   - :VERSION        on clean release tags (v1.2.3)
 #
-# Required secrets: QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (primary registry)
-#                   QUAY_USERNAME, QUAY_PASSWORD (legacy mirror — remove in v2.0, see #1774)
+# Required secrets:
+#   QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (normal image repository)
+#   QUAY_PRS_OPENSHELL_USERNAME, QUAY_RPS_OPENSHELL_PASSWORD (OpenShell repository)
+#   QUAY_USERNAME, QUAY_PASSWORD (legacy mirror — remove in v2.0, see #1774)
+# The PRS/RPS spelling difference in the OpenShell secret names is intentional
+# and must match the configured GitHub Actions secrets.
 # Required: both primary Quay repositories created and set to public:
 #           quay.io/redhatproductsecurity/ai-guardian
 #           quay.io/redhatproductsecurity/ai-guardian-openshell
@@ -178,6 +182,16 @@ jobs:
       # This image is deliberately published to its own primary Quay
       # repository. The legacy-mirror job below copies only the normal image
       # tags and never receives any OpenShell tag.
+      # Docker credentials are registry-wide, so re-authenticate with the
+      # dedicated OpenShell robot account before pushing this image.
+      - name: Log in to quay.io for OpenShell
+        if: steps.params.outputs.skip != 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_PRS_OPENSHELL_USERNAME }}
+          password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}
+
       - name: Build and push OpenShell sandbox image
         if: steps.params.outputs.skip != 'true'
         uses: docker/build-push-action@v7
