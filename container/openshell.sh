@@ -271,7 +271,7 @@ _compose_agent_policy() {
         return 1
     fi
 
-    POLICY_DISPLAY="composed base + ${POLICY_INPUTS[*]} + ${IDE} agent policy"
+    POLICY_DISPLAY="composed base + ${POLICY_INPUTS[*]-} + ${IDE} agent policy"
 }
 
 if ! _compose_agent_policy; then
