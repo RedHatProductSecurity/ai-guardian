@@ -238,10 +238,9 @@ OpenShell prerequisites are:
   Kubernetes.
 
 The launcher requires an OpenShell CLI and gateway new enough to support
-`sandbox create --env` and the upload-based staging workflow. An old
-development build such as `0.0.23-dev` is not compatible. Install or update
-OpenShell on the host, then refresh the shell command and verify both the
-client and gateway:
+`sandbox create --env` and the upload-based staging workflow. Install or
+update OpenShell on the host, then refresh the shell command and verify both
+the client and gateway:
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
@@ -278,9 +277,9 @@ brew services restart openshell
 openshell status
 ```
 
-If macOS still reports an old version such as `0.0.23-dev`, check which
-executable is being used with `type -a openshell`; the shell may be finding an
-older installation first. Updating the AI Guardian branch does not update the
+If macOS still reports an older version after updating, check which executable
+is being used with `type -a openshell`; the shell may be finding an older
+installation first. Updating the AI Guardian branch does not update the
 OpenShell CLI or gateway, and provider profiles remain local to each gateway.
 
 If the gateway reports that `/run/user/<uid>/podman/podman.sock` is missing,
