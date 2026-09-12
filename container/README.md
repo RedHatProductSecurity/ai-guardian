@@ -294,9 +294,34 @@ guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
 The OpenShell launcher opens `/bin/bash` by default. When `--repo` is supplied,
 the shell starts in the uploaded repository at `/sandbox/repo`; otherwise it
-starts in `/sandbox`. The selected `--agent` controls ai-guardian setup, the
-agent policy fragment, and automatic provider selection, but it does not
-launch the CLI automatically.
+starts in `/sandbox`. The selected `--agent` controls ai-guardian setup and
+automatic provider selection. When a `--policy` overlay is supplied, it also
+selects the matching agent policy fragment; without an overlay, OpenShell uses
+its default policy and attached provider profiles. The launcher does not start
+the CLI automatically.
+
+Provider profiles belong to the active OpenShell gateway; they are not stored
+in the repository, image, or Git branch. When `--provider` is omitted, the
+launcher asks that gateway for a provider profile matching the selected agent
+and may create or reuse the corresponding `ai-guardian-<agent>` provider from
+local credentials. If the gateway does not advertise a Codex profile, a
+launch with the default `--agent codex` fails with an error such as “the active
+OpenShell gateway has no provider profile for codex.” Configure a Codex
+provider on that gateway first, or pass an already configured provider
+explicitly:
+
+```bash
+./container/openshell.sh \
+    --base localhost/ai-guardian-openshell:latest \
+    --agent codex \
+    --provider ai-guardian-codex \
+    --repo .
+```
+
+Use `openshell provider get ai-guardian-codex` to verify that the named
+provider exists on the currently active gateway. Provider setup must be
+repeated for each gateway or laptop; `git pull` only updates the launcher and
+policy files.
 
 ```bash
 ./container/openshell.sh \
