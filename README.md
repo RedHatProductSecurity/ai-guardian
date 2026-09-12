@@ -228,6 +228,11 @@ isolated snapshot rather than binding the host checkout; the shell starts in
 without writing files back to the host. Pass `-- codex` to launch Codex
 directly instead of opening the shell.
 
+The OpenShell workflows documented here have been tested with Claude Code
+through Google Vertex AI and with Codex through its OpenShell provider. Claude
+marketplace/plugin installation has also been tested with the read-only GitHub
+overlay described below.
+
 For Claude Code through Google Vertex AI, set the GCP project and launch with
 the OpenShell image. The launcher creates or updates the gateway provider,
 configures the workspace's `inference.local` route, and supplies Claude with a

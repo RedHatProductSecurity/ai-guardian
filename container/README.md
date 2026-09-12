@@ -106,6 +106,11 @@ The normal `run.sh` container still defaults to Codex. The OpenShell launcher
 defaults to Claude, matching OpenShell's first-class default-policy coverage;
 select another agent explicitly with `--agent`.
 
+The OpenShell workflows documented here have been tested with Claude Code
+through Google Vertex AI and with Codex through its OpenShell provider. Claude
+marketplace/plugin installation has also been tested with the read-only GitHub
+overlay described below.
+
 ```bash
 podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
