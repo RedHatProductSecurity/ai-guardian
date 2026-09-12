@@ -120,7 +120,7 @@ def test_check_uses_latest_changelog_release_and_detects_stale_references(tmp_pa
     check_result = _run_sync(tmp_path, "--check")
 
     assert check_result.returncode == 1
-    assert "container/Dockerfile.openshell" in check_result.stderr
+    assert str(Path("container") / "Dockerfile.openshell") in check_result.stderr
 
 
 def test_check_rejects_a_missing_active_reference(tmp_path):
