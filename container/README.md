@@ -315,6 +315,14 @@ openshell status
 For a containerized gateway, see OpenShell's [container gateway
 guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
+Before the first launcher call, enable OpenShell Providers v2 on the active
+gateway. This is required for the launcher’s provider-backed Claude, Codex,
+and Vertex AI flows:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
 ```bash
 ./container/openshell.sh                             # opens a shell; Claude is selected
 ./container/openshell.sh --agent opencode --repo .
