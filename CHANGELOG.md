@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShell marketplace documentation**: Clarify that Claude marketplace and
   plugin installation requires the read-only GitHub policy overlay, while
   Claude/Vertex inference does not.
+- **OpenShell validation documentation**: Record the tested Claude/Vertex and
+  Codex provider workflows, including Claude marketplace access with the
+  read-only GitHub overlay.
 
 ### Fixed
 
