@@ -539,12 +539,8 @@ class TestContainerLaunchers:
             [
                 "bash",
                 str(OPENSHELL_SCRIPT),
-                "--agent",
-                "codex",
                 "--repo",
                 ".",
-                "--provider",
-                "ai-guardian-codex",
                 "--name",
                 "shell-test",
             ],
@@ -559,7 +555,7 @@ class TestContainerLaunchers:
         composed_policy = yaml.safe_load(
             capture.with_name("openshell.args.policy.yaml").read_text(encoding="utf-8")
         )
-        assert set(composed_policy["network_policies"]) == {"codex_openai"}
+        assert set(composed_policy["network_policies"]) == {"claude_code"}
         exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
         assert exec_args[:8] == [
             "sandbox",
