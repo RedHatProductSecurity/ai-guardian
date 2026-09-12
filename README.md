@@ -257,10 +257,16 @@ gateway model.
 If using a locally built image, rebuild it after pulling this change so the
 transparent Claude wrapper is included.
 
-The Claude/Vertex policy does not grant GitHub access by default. If Claude
-plugins or the public Claude plugin marketplace are needed, add the
-read-only GitHub overlay; the read/write GitHub policy and GitHub provider are
-not required for the public catalog:
+Claude's background self-updater is disabled in OpenShell because the image
+installation is read-only. To update Claude Code, rebuild the OpenShell image
+and create a new sandbox; the launcher sets `DISABLE_AUTOUPDATER=1`
+automatically.
+
+The Claude/Vertex policy does not grant GitHub access by default. The GitHub
+overlay is not required for Claude requests, Vertex inference, or an ordinary
+Claude session. Add the read-only GitHub overlay only when Claude must download
+or update plugins or marketplace metadata; the read/write GitHub policy and
+GitHub provider are not required for that public catalog:
 
 ```bash
 ./container/openshell.sh \
