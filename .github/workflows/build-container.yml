@@ -8,10 +8,10 @@
 #
 # Required secrets:
 #   QUAY_RPS_USERNAME, QUAY_RPS_PASSWORD (normal image repository)
-#   QUAY_PRS_OPENSHELL_USERNAME, QUAY_RPS_OPENSHELL_PASSWORD (OpenShell repository)
+#   QUAY_RPS_OPENSHELL_USERNAME, QUAY_RPS_OPENSHELL_PASSWORD (OpenShell repository)
 #   QUAY_USERNAME, QUAY_PASSWORD (legacy mirror — remove in v2.0, see #1774)
-# The PRS/RPS spelling difference in the OpenShell secret names is intentional
-# and must match the configured GitHub Actions secrets.
+# The RPS prefix in both OpenShell secret names must match the configured
+# GitHub Actions secrets.
 # Required: both primary Quay repositories created and set to public:
 #           quay.io/redhatproductsecurity/ai-guardian
 #           quay.io/redhatproductsecurity/ai-guardian-openshell
@@ -189,7 +189,7 @@ jobs:
         uses: docker/login-action@v4
         with:
           registry: quay.io
-          username: ${{ secrets.QUAY_PRS_OPENSHELL_USERNAME }}
+          username: ${{ secrets.QUAY_RPS_OPENSHELL_USERNAME }}
           password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}
 
       - name: Build and push OpenShell sandbox image

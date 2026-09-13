@@ -315,11 +315,11 @@ class TestContainerLaunchers:
         assert "username: ${{ secrets.QUAY_RPS_USERNAME }}" in normal_login
         assert "password: ${{ secrets.QUAY_RPS_PASSWORD }}" in normal_login
         assert "- name: Log in to quay.io for OpenShell" in openshell_login
-        assert "username: ${{ secrets.QUAY_PRS_OPENSHELL_USERNAME }}" in openshell_login
+        assert "username: ${{ secrets.QUAY_RPS_OPENSHELL_USERNAME }}" in openshell_login
         assert "password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}" in openshell_login
         assert "QUAY_RPS_USERNAME" in legacy_mirror
         assert "QUAY_RPS_PASSWORD" in legacy_mirror
-        assert "QUAY_PRS_OPENSHELL_USERNAME" not in legacy_mirror
+        assert "QUAY_RPS_OPENSHELL_USERNAME" not in legacy_mirror
         assert "QUAY_RPS_OPENSHELL_PASSWORD" not in legacy_mirror
 
     def test_container_build_publishes_openshell_for_supported_trigger_paths(self):
