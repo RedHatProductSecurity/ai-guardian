@@ -340,8 +340,7 @@ The Read the Docs GitHub integration also builds the activated version tag. This
 
 Note: `:latest` tracks the main branch (updated on every merge), not releases,
 in both primary Quay repositories. The OpenShell image has its own repository;
-it is not represented by an `openshell` tag in the normal image repository and
-is not mirrored to `quay.io/itdove`.
+it is not represented by an `openshell` tag in the normal image repository.
 
 #### 7. Verify GitHub Actions Workflows
 
@@ -678,7 +677,6 @@ Use this checklist for each release:
 - [ ] Test installation from PyPI: `uv tool install ai-guardian` (or `pip install ai-guardian`)
 - [ ] Verify `quay.io/redhatproductsecurity/ai-guardian:<version>` is available
 - [ ] Verify `quay.io/redhatproductsecurity/ai-guardian-openshell:<version>` is available
-- [ ] Confirm the OpenShell image was not mirrored to `quay.io/itdove`
 - [ ] Verify versioned documentation published on Read the Docs
 
 ### Post-Release
