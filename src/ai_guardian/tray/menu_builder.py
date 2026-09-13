@@ -38,14 +38,32 @@ class TrayMenuBuilder:
     def _on_about(self, icon, item):
         """Show About info via OS dialog."""
 
+        target = None
+        if len(self._tray._targets) == 1:
+            target = self._tray._targets[0]
+
         def _show():
             try:
                 from ai_guardian.tray.plugins import show_dialog
 
-                text = tray_menu.build_about_text()
-                if self._tray._is_multi_daemon():
-                    text += self._format_daemon_list()
-                show_dialog("About AI Guardian", text)
+                title = "About AI Guardian"
+                if target and target.runtime != "local":
+                    info = None
+                    if self._tray._multi_client:
+                        info = self._tray._multi_client.get_about(target)
+                    if info:
+                        from ai_guardian.daemon.about import format_about_text
+
+                        title = f"About {target.name}"
+                        text = format_about_text(info)
+                    else:
+                        title, text = self._format_unavailable_remote_about(target)
+                else:
+                    text = tray_menu.build_about_text()
+                    if self._tray._is_multi_daemon():
+                        text = self._format_local_about_text(text)
+                        text += self._format_daemon_list()
+                show_dialog(title, text)
             except Exception:
                 pass  # intentionally silent — optional dependency
 
@@ -87,6 +105,8 @@ class TrayMenuBuilder:
                         from ai_guardian.daemon.about import format_about_text
 
                         text = format_about_text(info)
+                    elif target.runtime != "local":
+                        _, text = self._format_unavailable_remote_about(target)
                     else:
                         text = tray_menu.build_about_text()
                     show_dialog(f"About {target.name}", text)
@@ -98,6 +118,19 @@ class TrayMenuBuilder:
             ).start()
 
         return action
+
+    @staticmethod
+    def _format_local_about_text(text):
+        """Identify About fields that describe the local tray process."""
+        return f"Local tray (this process):\n{text}"
+
+    def _format_unavailable_remote_about(self, target):
+        """Format a clear fallback when a remote daemon has no About data."""
+        return (
+            f"About {target.name}",
+            "Remote daemon information is unavailable.\n\n"
+            + self._format_local_about_text(tray_menu.build_about_text()),
+        )
 
     def _format_daemon_list(self):
         """Format connected daemons list for multi-daemon About."""
