@@ -283,11 +283,12 @@ class TestContainerLaunchers:
 
     def test_container_build_publishes_openshell_to_dedicated_primary_registry(self):
         workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
-        openshell_section = workflow.split(
-            "# --- Legacy mirror outputs for downstream jobs ---", 1
-        )[0]
+        params_section = workflow.split("      - name: Determine build parameters", 1)[
+            1
+        ].split("      - name: Checkout code", 1)[0]
+        openshell_section = workflow.split("# --- OpenShell sandbox image ---", 1)[1]
 
-        assert "openshell_tag=latest" in openshell_section
+        assert 'echo "openshell_tag=latest"' in params_section
         assert "file: container/Dockerfile.openshell" in openshell_section
         assert (
             "tags: quay.io/redhatproductsecurity/ai-guardian-openshell:${{ steps.params.outputs.openshell_tag }}"
@@ -297,30 +298,29 @@ class TestContainerLaunchers:
             "tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.openshell_tag }}"
             not in openshell_section
         )
-        assert "quay.io/itdove" not in openshell_section
+        assert "quay.io/itdove" not in workflow
 
     def test_container_build_uses_separate_openshell_registry_credentials(self):
         workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
         normal_login = workflow.split(
             "# --- Skip rebuild if commit-tagged image already exists ---", 1
         )[0]
-        openshell_section = workflow.split("# --- OpenShell sandbox image ---", 1)[
-            1
-        ].split("# --- Legacy mirror outputs for downstream jobs ---", 1)[0]
+        openshell_section = workflow.split("# --- OpenShell sandbox image ---", 1)[1]
         openshell_login = openshell_section.split(
             "- name: Build and push OpenShell sandbox image", 1
         )[0]
-        legacy_mirror = workflow.split("legacy-mirror:", 1)[1]
 
         assert "username: ${{ secrets.QUAY_RPS_USERNAME }}" in normal_login
         assert "password: ${{ secrets.QUAY_RPS_PASSWORD }}" in normal_login
         assert "- name: Log in to quay.io for OpenShell" in openshell_login
         assert "username: ${{ secrets.QUAY_RPS_OPENSHELL_USERNAME }}" in openshell_login
         assert "password: ${{ secrets.QUAY_RPS_OPENSHELL_PASSWORD }}" in openshell_login
-        assert "QUAY_RPS_USERNAME" in legacy_mirror
-        assert "QUAY_RPS_PASSWORD" in legacy_mirror
-        assert "QUAY_RPS_OPENSHELL_USERNAME" not in legacy_mirror
-        assert "QUAY_RPS_OPENSHELL_PASSWORD" not in legacy_mirror
+        assert "legacy-mirror:" not in workflow
+        assert "Export image tag" not in workflow
+        assert "steps.export" not in workflow
+        assert "quay.io/itdove" not in workflow
+        assert "QUAY_USERNAME" not in workflow
+        assert "QUAY_PASSWORD" not in workflow
 
     def test_container_build_publishes_openshell_for_supported_trigger_paths(self):
         workflow = BUILD_CONTAINER_WORKFLOW.read_text(encoding="utf-8")
@@ -335,6 +335,17 @@ class TestContainerLaunchers:
         assert "    tags: ['v*']" in workflow
         assert "  workflow_dispatch:" in workflow
         assert '        description: "Image tag override (default: latest)"' in workflow
+        assert (
+            "tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}"
+            in workflow
+        )
+        assert (
+            "tags: quay.io/redhatproductsecurity/ai-guardian:${{ github.sha }}"
+            in workflow
+        )
+        assert 'echo "image_tag=latest"' in params_section
+        assert 'echo "image_tag=${TAG}"' in params_section
+        assert 'echo "image_tag=${TAG:-latest}"' in params_section
         assert 'echo "openshell_tag=latest"' in params_section
         assert 'echo "openshell_tag=${TAG}"' in params_section
         assert 'echo "openshell_tag=${TAG#openshell-}"' in params_section

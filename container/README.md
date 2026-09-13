@@ -12,8 +12,7 @@ own primary Quay repository as
 `quay.io/redhatproductsecurity/ai-guardian-openshell:latest` on successful
 merges and as `:<version>` for releases. Build it locally only when testing a
 change to the image; `openshell.sh` uses the published OpenShell image by
-default. The OpenShell image is not published in the normal image repository
-or mirrored to the legacy `itdove` repository.
+default. The OpenShell image is not published in the normal image repository.
 The normal UBI image remains published to
 [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian)
 on every merge and release.
