@@ -3549,6 +3549,33 @@ class TestAboutMenuItem:
             assert "local v1.9.0" in text
             assert "sandbox v1.8.0" in text
 
+    def test_multi_daemon_about_labels_local_tray_metadata(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._targets = [
+            DaemonTarget(name="local", runtime="local", status="running"),
+            DaemonTarget(name="sandbox", runtime="container", status="running"),
+        ]
+        with (
+            mock.patch(
+                "ai_guardian.tray.menu.build_about_text",
+                return_value="LOCAL TRAY ABOUT",
+            ),
+            mock.patch("ai_guardian.tray.plugins.show_dialog") as mock_dialog,
+            mock.patch("threading.Thread") as mock_thread,
+        ):
+            mock_thread.return_value = mock.MagicMock()
+            tray._menu._on_about(mock.MagicMock(), mock.MagicMock())
+            show_fn = mock_thread.call_args[1]["target"]
+            show_fn()
+
+        text = mock_dialog.call_args[0][1]
+        assert "Local tray (this process):" in text
+        assert "LOCAL TRAY ABOUT" in text
+
     def test_single_daemon_about_no_daemon_list(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
@@ -3566,6 +3593,77 @@ class TestAboutMenuItem:
             show_fn()
             text = mock_dialog.call_args[0][1]
             assert "Daemons:" not in text
+
+    def test_single_remote_about_uses_remote_daemon_info(self):
+        mc = mock.MagicMock()
+        mc.get_about.return_value = {
+            "version": "1.8.0",
+            "name": "sandbox-daemon",
+            "hostname": "container-host",
+            "python": "3.11.9",
+            "platform": "Linux 5.15 x86_64",
+            "config_path": "/root/.config/ai-guardian/ai-guardian.json",
+            "scanners": [],
+            "url": "https://github.com/RedHatProductSecurity/ai-guardian",
+        }
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+            multi_client=mc,
+        )
+        target = DaemonTarget(name="sandbox", runtime="container", status="running")
+        tray._targets = [target]
+        with (
+            mock.patch(
+                "ai_guardian.tray.menu.build_about_text",
+                return_value="LOCAL TRAY ABOUT",
+            ),
+            mock.patch("ai_guardian.tray.plugins.show_dialog") as mock_dialog,
+            mock.patch("threading.Thread") as mock_thread,
+        ):
+            mock_thread.return_value = mock.MagicMock()
+            tray._menu._on_about(mock.MagicMock(), mock.MagicMock())
+            show_fn = mock_thread.call_args[1]["target"]
+            show_fn()
+
+        mc.get_about.assert_called_once_with(target)
+        assert mock_dialog.call_args[0][0] == "About sandbox"
+        text = mock_dialog.call_args[0][1]
+        assert "AI Guardian v1.8.0" in text
+        assert "container-host" in text
+        assert "LOCAL TRAY ABOUT" not in text
+
+    def test_single_remote_about_fallback_labels_local_tray_metadata(self):
+        mc = mock.MagicMock()
+        mc.get_about.return_value = None
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+            multi_client=mc,
+        )
+        target = DaemonTarget(name="sandbox", runtime="container", status="running")
+        tray._targets = [target]
+        with (
+            mock.patch(
+                "ai_guardian.tray.menu.build_about_text",
+                return_value="LOCAL TRAY ABOUT",
+            ),
+            mock.patch("ai_guardian.tray.plugins.show_dialog") as mock_dialog,
+            mock.patch("threading.Thread") as mock_thread,
+        ):
+            mock_thread.return_value = mock.MagicMock()
+            tray._menu._on_about(mock.MagicMock(), mock.MagicMock())
+            show_fn = mock_thread.call_args[1]["target"]
+            show_fn()
+
+        mc.get_about.assert_called_once_with(target)
+        assert mock_dialog.call_args[0][0] == "About sandbox"
+        text = mock_dialog.call_args[0][1]
+        assert "Remote daemon information is unavailable." in text
+        assert "Local tray (this process):" in text
+        assert "LOCAL TRAY ABOUT" in text
 
     def test_per_daemon_about_calls_multi_client(self):
         mc = mock.MagicMock()
