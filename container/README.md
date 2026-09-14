@@ -61,9 +61,11 @@ podman build -t ai-guardian container/
 # Specific version
 podman build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
 
-# Local wheel (copy wheel into container/ first)
-cp dist/ai_guardian-1.17.1-py3-none-any.whl container/vendor/
-podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.17.1-py3-none-any.whl \
+# Local wheel (copy the wheel into container/vendor/ first)
+WHEEL_PATH=dist/ai_guardian-1.17.1-py3-none-any.whl
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
+podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
     -t ai-guardian container/
 
 # Multi-arch
@@ -804,13 +806,18 @@ the MCP entry by default in both cases.
 
 ```bash
 uv build --wheel
-WHEEL="$(basename dist/ai_guardian-*.whl)"
-cp "dist/${WHEEL}" container/vendor/
+WHEEL_PATH="$(printf '%s\n' dist/ai_guardian-*.whl | head -n 1)"
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build \
-    --build-arg AI_GUARDIAN_VERSION="${WHEEL}" \
+    --build-arg "AI_GUARDIAN_VERSION=${WHEEL_NAME}" \
     -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ```
+
+`WHEEL_PATH` includes the `dist/` directory, while `WHEEL_NAME` is only the
+filename. The `AI_GUARDIAN_VERSION` build argument must use `WHEEL_NAME`, since
+the Dockerfile looks for the wheel by filename under `container/vendor/`.
 
 #### OpenShell policy composition
 
