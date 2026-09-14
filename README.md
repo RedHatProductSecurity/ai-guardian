@@ -172,23 +172,26 @@ OPENAI_API_KEY=... \
 
 # Optional OpenShell sandbox (published image; local build is also supported)
 # OpenShell defaults to Claude; select Codex explicitly when needed.
+# Experimental: OpenShell integration is still evolving. Claude, Codex, and
+# OpenCode using Claude have been tested; verify current compatibility before
+# important work.
 openshell settings set --global --key providers_v2_enabled --value true
 podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ai-guardian sandbox create --runtime openshell \
     --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
-    --agent codex --repo $(pwd)
+    --cli codex --repo $(pwd)
 
 # Or build and select a local OpenShell image
 podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent codex --repo $(pwd)
+    --cli codex --repo $(pwd)
 # A source-wheel build is documented in container/README.md; it includes the
 # current development setup behavior instead of the stable PyPI fallback.
 
 # Launch Codex directly instead of opening the shell
-ai-guardian sandbox create --runtime openshell --agent codex --repo $(pwd) -- codex
+ai-guardian sandbox create --runtime openshell --cli codex --repo $(pwd) -- codex
 
 # Or manually with podman/docker
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
@@ -268,16 +271,20 @@ isolated snapshot rather than binding the host checkout; the shell starts in
 without writing files back to the host. Pass `-- codex` to launch Codex
 directly instead of opening the shell.
 
-The OpenShell workflows documented here have been tested with Claude Code
-through Google Vertex AI and with Codex through its OpenShell provider. Claude
+OpenShell integration is experimental. The documented workflows have been
+tested with Claude Code through Google Vertex AI, Codex through its OpenShell
+provider, and OpenCode using Claude through Vertex AI. Claude
 marketplace/plugin installation has also been tested with the read-only GitHub
 overlay described below.
 
 For Claude Code through Google Vertex AI, set the GCP project and launch with
-the OpenShell image. The subcommand creates or updates the gateway provider,
-configures the workspace's `inference.local` route, and supplies Claude with a
-non-secret placeholder key; the host ADC file is consumed by the gateway and
-is not mounted into the sandbox:
+the OpenShell image. The subcommand creates or updates and attaches the gateway
+provider, configures the workspace's `inference.local` route, and supplies
+Claude only the non-secret client settings it requires; the host ADC file is
+consumed by the gateway and is not mounted into the sandbox. The
+`ANTHROPIC_API_KEY=unused` value is only a Claude Code protocol placeholder,
+not an API credential; the actual authentication comes from the attached
+Vertex provider:
 
 ```bash
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
@@ -285,27 +292,57 @@ export CLOUD_ML_REGION=global
 
 ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent claude \
+    --cli claude \
     --model claude-sonnet-4-6 \
     --repo .
 ```
 
-From the resulting shell, start Claude with `claude`. The OpenShell image
-automatically adds `--bare` to Claude model commands so Claude does not enter
-the Claude.ai OAuth flow; `claude --bare` remains equivalent. Administrative
-commands such as `claude plugin` and `claude doctor` are passed through
-unchanged. Do not set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox;
-that direct-Vertex mode expects GCP credential discovery inside the sandbox.
-Use the subcommand's `--model` option (default `claude-sonnet-4-6`) to select the
-gateway model.
+From the resulting shell, start Claude explicitly with `claude --bare`, as
+documented by OpenShell. `--bare` skips Claude's OAuth login flow and uses
+`ANTHROPIC_API_KEY` directly. The value is only a non-secret placeholder:
+`inference.local` strips it and injects the real GCP access token before
+forwarding the request. AI Guardian does not install a persistent shell
+wrapper. For an explicit automated `claude --print ...` command passed during
+creation, the entrypoint adds `--bare` when it is missing. Administrative
+commands such as `claude plugin` and `claude doctor` remain unchanged. Do not
+set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox; that direct-Vertex
+mode expects GCP credential discovery inside the sandbox. Use the subcommand's
+`--model` option (default `claude-sonnet-4-6`) to select the gateway model.
 
 If using a locally built image, rebuild it after pulling this change so the
-transparent Claude wrapper is included.
+OpenShell inference environment fallback is included.
 
 Claude's background self-updater is disabled in OpenShell because the image
 installation is read-only. To update Claude Code, rebuild the OpenShell image
 and create a new sandbox; the subcommand sets `DISABLE_AUTOUPDATER=1`
 automatically.
+
+OpenCode is a CLI with its own agent profiles and model/provider selection. The
+`--agent` profile is required when `--cli opencode` is selected. Use the explicit
+two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+Here `--agent claude` is an OpenCode agent profile and `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables
+`ANTHROPIC_BASE_URL=https://inference.local/v1` and the non-secret
+`ANTHROPIC_API_KEY=unused` placeholder. OpenCode has no Claude-style `--bare`
+flag; run `opencode --agent NAME` normally. The gateway inference route must
+be configured with `openshell inference set`.
+
+The `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects OpenCode, `--agent claude` selects the tested profile,
+and `--model` plus `--provider` select the inference backend.
 
 The Claude/Vertex policy does not grant GitHub access by default. The command
 above is sufficient for Claude requests, Vertex inference, and an ordinary
@@ -319,7 +356,7 @@ required for the public catalog:
 ```bash
 ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent claude \
+    --cli claude \
     --policy ./container/openshell-github-readonly-policy.yaml \
     --repo .
 ```
@@ -336,7 +373,10 @@ enabled. Legacy Codex discovery requires `OPENAI_API_KEY` instead.
 The subcommand converts the gateway-provided OAuth placeholders into Codex's
 native sandbox-local `auth.json`; real host tokens are not uploaded. When host
 files must be uploaded, the subcommand uses a compatible staging flow and starts
-the selected agent with `sandbox exec` after setup.
+the selected CLI with `sandbox exec` after setup.
+For API-key authentication, the entrypoint runs `codex login --with-api-key`
+with the provider-injected placeholder so Codex can read its native
+`auth.json`; the real host key is never written into the sandbox.
 Inside OpenShell, the subcommand sets Codex's sandbox-local
 `sandbox_mode = "danger-full-access"` so Codex does not create a nested
 bubblewrap sandbox. OpenShell remains the outer filesystem and network
@@ -348,7 +388,7 @@ the shared base policy and selected Codex policy automatically. Add the
 read-only or read/write GitHub policy only when the sandbox needs GitHub
 access.
 
-Claude Code can use Google Vertex AI by selecting `--agent claude` and setting
+Claude Code can use Google Vertex AI by selecting `--cli claude` and setting
 `ANTHROPIC_VERTEX_PROJECT_ID`; the OpenShell subcommand creates the required
 gateway provider from Google ADC credentials. See the container guide for the
 complete Vertex AI example.
@@ -368,7 +408,7 @@ podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex ai-guardian
 ```
 
 See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for agent selection, host config/profile behavior, OpenShell, Vertex AI auth, and multi-arch details.
-The container guide also includes [read-only](container/openshell-github-readonly-policy.yaml) and [read/write](container/openshell-github-readwrite-policy.yaml) OpenShell policy overlays, selected-agent policy fragments, and provider setup.
+The container guide also includes [read-only](container/openshell-github-readonly-policy.yaml) and [read/write](container/openshell-github-readwrite-policy.yaml) OpenShell policy overlays, selected-CLI policy fragments, and provider setup.
 
 ### What Setup Does
 
@@ -551,8 +591,9 @@ See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian
 ## Integration
 
 See [Agent Support](docs/AGENT_SUPPORT.md) for the current capability
-matrix and [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md)
-for the implementation and validation workflow.
+matrix, [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md)
+for host integrations, and [CLI/Runtime Integration Checklist](docs/CLI_RUNTIME_CHECKLIST.md)
+for container and OpenShell support.
 
 - [GitHub Copilot Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
 - [Aider Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md)

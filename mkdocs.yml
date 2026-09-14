@@ -111,6 +111,7 @@ nav:
       - Pre-commit: PRE_COMMIT.md
   - Operations:
       - Sandbox CLI: Sandbox.md
+      - CLI/Runtime Integration Checklist: CLI_RUNTIME_CHECKLIST.md
       - Kubernetes: kubernetes.md
       - Container: project/container.md
       - Pattern Server: PATTERN_SERVER.md

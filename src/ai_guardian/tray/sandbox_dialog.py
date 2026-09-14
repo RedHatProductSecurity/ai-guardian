@@ -7,9 +7,28 @@ import logging
 import os
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Dict, Iterable, Optional
 
 logger = logging.getLogger(__name__)
+
+
+def _scroll_canvas(event, canvas) -> str:
+    """Scroll a Tk canvas for native mouse-wheel events."""
+    button = getattr(event, "num", None)
+    delta = getattr(event, "delta", 0)
+    if button == 4:
+        units = -1
+    elif button == 5:
+        units = 1
+    elif delta:
+        delta = int(delta)
+        magnitude = max(1, abs(delta) // 120)
+        units = -magnitude if delta > 0 else magnitude
+    else:
+        return "break"
+    canvas.yview_scroll(units, "units")
+    return "break"
 
 
 def _merge_browse_paths(current: str, selected) -> str:
@@ -26,6 +45,26 @@ def _merge_browse_paths(current: str, selected) -> str:
         if path and path not in existing:
             existing.append(path)
     return ", ".join(existing)
+
+
+def _browse_selection(current: str, selected, kind: str) -> str:
+    """Apply a file or directory browser selection to a form field."""
+    if kind == "directory":
+        selected_path = str(selected or "").strip()
+        return selected_path or str(current or "")
+    return _merge_browse_paths(current, selected)
+
+
+def _browse_initialdir(value: str) -> Optional[str]:
+    """Return a usable initial directory for a path browser."""
+    first_path = str(value or "").replace("\n", ",").split(",", 1)[0].strip()
+    if not first_path:
+        return None
+    candidate = Path(first_path).expanduser()
+    if candidate.is_dir():
+        return str(candidate)
+    parent = candidate.parent
+    return str(parent) if parent.is_dir() else None
 
 
 def _local_image_choices():
@@ -193,8 +232,13 @@ def _show_tkinter_form(
     def resize_form(event) -> None:
         canvas.itemconfigure(frame_window, width=event.width)
 
+    def scroll_form(event):
+        return _scroll_canvas(event, canvas)
+
     frame.bind("<Configure>", update_scroll_region)
     canvas.bind("<Configure>", resize_form)
+    for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+        root.bind(sequence, scroll_form, add="+")
     ttk.Label(frame, text=message, justify="left", wraplength=600).grid(
         row=0, column=0, columnspan=2, sticky="w", pady=(0, 14)
     )
@@ -223,10 +267,10 @@ def _show_tkinter_form(
                 frame,
                 textvariable=variable,
                 values=choices,
-                state="readonly",
+                state="normal" if field.get("editable") else "readonly",
                 width=int(field.get("width", 44)),
             )
-            if choices and str(default) not in choices:
+            if choices and str(default) not in choices and not field.get("editable"):
                 variable.set(choices[0])
             control.grid(row=row, column=1, sticky="w", pady=4)
             widgets = [control]
@@ -265,13 +309,16 @@ def _show_tkinter_form(
 
             def browse(variable=variable, field=field, kind=kind):
                 options = {"title": field.get("browse_title", "Select a path")}
+                initialdir = _browse_initialdir(variable.get())
+                if initialdir:
+                    options["initialdir"] = initialdir
                 if kind == "directory":
                     selected = filedialog.askdirectory(**options)
                 elif field.get("multiple"):
                     selected = filedialog.askopenfilenames(**options)
                 else:
                     selected = filedialog.askopenfilename(**options)
-                variable.set(_merge_browse_paths(variable.get(), selected))
+                variable.set(_browse_selection(variable.get(), selected, kind))
 
             browse_button = ttk.Button(control_frame, text="Browse...", command=browse)
             browse_button.grid(row=0, column=1, padx=(6, 0))
@@ -352,7 +399,7 @@ def _show_tkinter_form(
             if kind != "bool" and isinstance(value, str):
                 value = value.strip()
             values[name] = value
-            if field.get("required") and not value:
+            if field.get("required") and enabled_states.get(name, True) and not value:
                 missing.append(str(field.get("label", name)))
         if missing:
             error.set("Required: " + ", ".join(missing))

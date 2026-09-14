@@ -374,6 +374,37 @@ class TestSandboxTrayMenu:
             "status output",
         )
 
+    def test_noninteractive_sandbox_command_shows_captured_logs(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            status="running",
+            container_engine="podman",
+        )
+        tray = _make_tray([target])
+        tray._discovery = None
+
+        def run_command(args, *, output):
+            assert args.sandbox_command == "logs"
+            assert args.runtime == "container"
+            assert args.name == "ag-test"
+            output.append("log output\n")
+            return 0
+
+        with (
+            mock.patch(
+                "ai_guardian.sandbox.run_sandbox_command", side_effect=run_command
+            ),
+            mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log") as show_log,
+        ):
+            tray._menu._run_sandbox_command(target, "logs", [target.name])
+
+        show_log.assert_called_once_with(
+            "Sandbox logs",
+            "Output from sandbox 'ag-test'.",
+            "log output",
+        )
+
     def test_start_menu_action_uses_direct_sandbox_command(self):
         target = DaemonTarget(
             name="stopped-container",
@@ -402,7 +433,8 @@ class TestSandboxTrayMenu:
         values = {
             "runtime": "openshell",
             "name": "ag-test",
-            "agent": "claude",
+            "agent": "",
+            "cli": "claude",
             "repo": "/tmp/repo",
             "config_dir": "",
             "image": "localhost/ai-guardian:openshell",
@@ -427,7 +459,8 @@ class TestSandboxTrayMenu:
         args = create.call_args.args[0]
         assert args.runtime == "openshell"
         assert args.name == "ag-test"
-        assert args.agent == "claude"
+        assert args.cli == "claude"
+        assert args.opencode_agent is None
         assert args.repo == "/tmp/repo"
         assert args.config_dir is None
         assert args.image == "localhost/ai-guardian:openshell"
@@ -463,17 +496,67 @@ class TestSandboxTrayMenu:
             "runtime failed",
         )
 
+    def test_create_form_maps_opencode_cli_and_agent(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-opencode",
+            "cli": "opencode",
+            "agent": "build",
+            "repo": "",
+            "config_dir": "",
+            "image": "",
+            "model": "",
+            "profile": "",
+            "policies": "",
+            "providers": "",
+            "environment": "",
+            "labels": "",
+            "config_source": "Host/default",
+            "port": "",
+        }
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.cli == "opencode"
+        assert args.opencode_agent == "build"
+
     def test_create_form_exposes_policy_file_field(self):
         tray = _make_tray([])
 
         with mock.patch.dict(os.environ, {}, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
+        cli_field = next(field for field in fields if field["name"] == "cli")
+        assert cli_field["type"] == "choice"
+        assert cli_field["choices"] == SUPPORTED_CLI_IDE_TYPES
+        assert cli_field["default"] == "codex"
+        assert cli_field["required"] is True
+
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == SUPPORTED_CLI_IDE_TYPES
-        assert agent_field["default"] == "codex"
+        assert agent_field["choices"] == ("", "build", "plan", "claude")
+        assert agent_field["editable"] is True
+        assert agent_field["default"] == ""
         assert agent_field["required"] is True
+        assert agent_field["enabled_when"] == {
+            "field": "cli",
+            "values": ("opencode",),
+        }
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "AI_GUARDIAN_CLI": "opencode",
+                "AI_GUARDIAN_OPENCODE_AGENT": "build",
+            },
+            clear=True,
+        ):
+            fields = tray._menu._sandbox_create_fields()
+
+        agent_field = next(field for field in fields if field["name"] == "agent")
+        assert agent_field["default"] == "build"
 
         policy_field = next(field for field in fields if field["name"] == "policies")
         assert policy_field["type"] == "file"
@@ -494,6 +577,16 @@ class TestSandboxTrayMenu:
             "field": "runtime",
             "values": ("openshell",),
         }
+        profile_field = next(field for field in fields if field["name"] == "profile")
+        assert profile_field["type"] == "choice"
+        assert profile_field["choices"] == (
+            "",
+            "@minimal",
+            "@standard",
+            "@strict",
+            "@moderator",
+        )
+        assert profile_field["editable"] is True
         provider_field = next(field for field in fields if field["name"] == "providers")
         assert provider_field["enabled_when"] == {
             "field": "runtime",
@@ -506,6 +599,25 @@ class TestSandboxTrayMenu:
 
         repo_field = next(field for field in fields if field["name"] == "repo")
         assert repo_field["type"] == "directory"
+        assert repo_field["default"] == os.path.expanduser("~")
+
+    def test_create_form_defaults_repo_to_active_working_dir(self):
+        tray = _make_tray(
+            [
+                DaemonTarget(
+                    name="ag-test",
+                    runtime="container",
+                    working_dir="/tmp/current-project",
+                )
+            ]
+        )
+        tray._active_target = tray._targets[0]
+
+        with mock.patch.dict(os.environ, {}, clear=True):
+            fields = tray._menu._sandbox_create_fields()
+
+        repo_field = next(field for field in fields if field["name"] == "repo")
+        assert repo_field["default"] == "/tmp/current-project"
 
         config_dir_field = next(
             field for field in fields if field["name"] == "config_dir"
@@ -527,6 +639,24 @@ class TestSandboxTrayMenu:
         assert _merge_browse_paths(
             "/tmp/one.yaml", ("/tmp/one.yaml", "/tmp/two.yaml")
         ) == ("/tmp/one.yaml, /tmp/two.yaml")
+
+    def test_directory_browser_replaces_current_value(self):
+        from ai_guardian.tray.sandbox_dialog import _browse_selection
+
+        assert _browse_selection("/tmp/repo", "/tmp/Downloads", "directory") == (
+            "/tmp/Downloads"
+        )
+        assert _browse_selection("/tmp/repo", "", "directory") == "/tmp/repo"
+
+    def test_path_browser_starts_at_current_directory_value(self, tmp_path):
+        from ai_guardian.tray.sandbox_dialog import _browse_initialdir
+
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        assert _browse_initialdir(str(repo)) == str(repo)
+        assert _browse_initialdir(str(repo / "new-file")) == str(repo)
+        assert _browse_initialdir("") is None
 
     def test_local_image_choices_use_ai_guardian_image_label(self):
         from ai_guardian.tray.sandbox_dialog import _local_image_choices
@@ -638,6 +768,22 @@ class TestSandboxDialogFallback:
 
         assert message == "Copied to clipboard (xclip)."
         copy_to_clipboard.assert_called_once_with("runtime output")
+
+    def test_form_mouse_wheel_scrolls_canvas_on_each_platform(self):
+        from ai_guardian.tray.sandbox_dialog import _scroll_canvas
+
+        canvas = mock.MagicMock()
+        _scroll_canvas(SimpleNamespace(delta=120, num=None), canvas)
+        _scroll_canvas(SimpleNamespace(delta=-120, num=None), canvas)
+        _scroll_canvas(SimpleNamespace(delta=0, num=4), canvas)
+        _scroll_canvas(SimpleNamespace(delta=0, num=5), canvas)
+
+        assert canvas.yview_scroll.call_args_list == [
+            mock.call(-1, "units"),
+            mock.call(1, "units"),
+            mock.call(-1, "units"),
+            mock.call(1, "units"),
+        ]
 
     def test_log_copy_uses_tkinter_clipboard_owner(self):
         from ai_guardian.tray.sandbox_dialog import _copy_sandbox_log

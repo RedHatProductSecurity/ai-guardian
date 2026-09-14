@@ -241,13 +241,19 @@ if [ "${1:-}" = "__AI_GUARDIAN_DEFAULT_AGENT__" ]; then
   fi
 fi
 
-# OpenShell's gateway-managed inference route uses a placeholder API key and
-# must skip Claude Code's Claude.ai OAuth flow. Keep that transport detail out
-# of the interactive user experience: plain `claude` becomes `claude --bare`
-# for model commands, while administrative subcommands such as `claude plugin`
-# and `claude doctor` retain their normal arguments.
-_claude_command_needs_bare() {
+# OpenShell's gateway-managed inference route uses a placeholder API key.
+# Configure only the documented client environment here. Claude Code's
+# documented `--bare` flag remains explicit for interactive use; the
+# non-interactive `--print` path below preserves AI Guardian's automation
+# behavior without installing a persistent shell wrapper.
+_claude_print_command_needs_bare() {
   local argument
+
+  case "${1:-}" in
+    auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
+      return 1
+      ;;
+  esac
 
   for argument in "$@"; do
     if [ "$argument" = "--bare" ]; then
@@ -255,25 +261,29 @@ _claude_command_needs_bare() {
     fi
   done
 
-  case "${1:-}" in
-    auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
-      return 1
-      ;;
-    *)
+  for argument in "$@"; do
+    if [ "$argument" = "--print" ]; then
       return 0
-      ;;
-  esac
+    fi
+  done
+  return 1
 }
 
-_configure_openshell_claude_bare_mode() {
+_configure_openshell_inference_environment() {
   local bash_profile
   local bashrc
-  local marker="# ai-guardian-openshell-claude-bare-mode"
+  local base_url
+  local marker="# ai-guardian-openshell-inference-environment-v1"
 
-  if [ "$IDE" != "claude" ] ||
-    [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
+  if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
     return 0
   fi
+
+  case "$IDE" in
+    claude) base_url="https://inference.local" ;;
+    opencode) base_url="https://inference.local/v1" ;;
+    *) return 0 ;;
+  esac
 
   bashrc="${HOME}/.bashrc"
   bash_profile="${HOME}/.bash_profile"
@@ -284,51 +294,53 @@ _configure_openshell_claude_bare_mode() {
 
   if ! grep -Fq "$marker" "$bashrc" 2>/dev/null; then
     printf '\n' >>"$bashrc"
-    cat >>"$bashrc" <<'EOF'
-# ai-guardian-openshell-claude-bare-mode
-claude() {
-    local argument
-    for argument in "$@"; do
-        if [ "$argument" = "--bare" ]; then
-            command claude "$@"
-            return $?
-        fi
-    done
-    case "${1:-}" in
-        auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
-            command claude "$@"
-            ;;
-        *)
-            command claude --bare "$@"
-            ;;
-    esac
-}
+cat >>"$bashrc" <<EOF
+# $marker
+if [ "\${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ]; then
+    # Remove the legacy AI Guardian Claude wrapper if this sandbox was
+    # bootstrapped by an older image. Claude's --bare flag stays explicit.
+    if [ "\${AI_GUARDIAN_AGENT:-}" = "claude" ]; then
+        unset -f claude 2>/dev/null || true
+    fi
+    export ANTHROPIC_BASE_URL="\${ANTHROPIC_BASE_URL:-$base_url}"
+    export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY:-unused}"
+fi
 EOF
   fi
 
   if ! grep -Fq "$marker" "$bash_profile" 2>/dev/null; then
     printf '\n' >>"$bash_profile"
-    cat >>"$bash_profile" <<'EOF'
-# ai-guardian-openshell-claude-bare-mode
-if [ -f "$HOME/.bashrc" ]; then
-    . "$HOME/.bashrc"
+cat >>"$bash_profile" <<EOF
+# $marker
+if [ -f "\$HOME/.bashrc" ]; then
+    . "\$HOME/.bashrc"
 fi
 EOF
   fi
 }
 
 if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
-  [ "$IDE" = "claude" ]; then
-  if ! _configure_openshell_claude_bare_mode; then
+  { [ "$IDE" = "claude" ] || [ "$IDE" = "opencode" ]; }; then
+  # Keep the route self-healing when an older OpenShell version or an existing
+  # sandbox omitted the non-secret environment values from sandbox creation.
+  if [ "$IDE" = "claude" ]; then
+    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local}"
+  else
+    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local/v1}"
+  fi
+  export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-unused}"
+  if ! _configure_openshell_inference_environment; then
     exit 1
   fi
-  case "${1:-}" in
-    claude|*/claude)
-      if _claude_command_needs_bare "$@"; then
-        set -- "$1" --bare "${@:2}"
-      fi
-      ;;
-  esac
+  if [ "$IDE" = "claude" ]; then
+    case "${1:-}" in
+      claude|*/claude)
+        if _claude_print_command_needs_bare "${@:2}"; then
+          set -- "$1" --bare "${@:2}"
+        fi
+        ;;
+    esac
+  fi
 fi
 
 # dummy-agent: no API key required — launch REPL directly
@@ -376,8 +388,20 @@ _bootstrap_codex_openshell_auth() {
   if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
     [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ] ||
     [ -z "${CODEX_AUTH_ACCOUNT_ID:-}" ]; then
-    # This may be an explicitly supplied provider with a different credential
-    # shape (for example OPENAI_API_KEY). Leave its auth setup to the caller.
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+      # This may be an explicitly supplied provider with a different credential
+      # shape. Leave providers without a Codex-compatible credential alone.
+      return 0
+    fi
+
+    # Codex reads API-key authentication from auth.json as well. OpenShell
+    # injects OPENAI_API_KEY as an opaque placeholder, so let Codex write that
+    # placeholder in its native format without exposing the real key.
+    if ! printf '%s\n' "$OPENAI_API_KEY" | codex login --with-api-key >/dev/null 2>&1; then
+      echo "Error: unable to create provider-backed Codex API-key auth file: $auth_path" >&2
+      return 1
+    fi
+    echo "Configured Codex API-key authentication from the OpenShell provider"
     return 0
   fi
 

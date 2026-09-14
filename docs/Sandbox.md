@@ -8,13 +8,23 @@ Create a sandbox once, then inspect, stop, start, connect to, execute commands
 in, stream logs from, or delete it in later shell sessions.
 
 The command is the supported entry point for both lifecycle management and
-initial sandbox setup. It composes the OpenShell baseline and selected-agent
+initial sandbox setup. It composes the OpenShell baseline and selected-CLI
 policies, prepares gateway providers when required, handles configuration and
 repository snapshots, and exposes the daemon through an OpenShell gateway
 service endpoint when that runtime is selected.
 The tray and web console authenticate this service with a dedicated token
 header as well as the standard Bearer header because some OpenShell gateway
 versions remove `Authorization` while proxying a service.
+
+> **Experimental:** OpenShell integration is still evolving. The following
+> combinations have been tested; verify current compatibility before important
+> work:
+>
+> | Selection | Inference/authentication |
+> | --- | --- |
+> | `--cli claude` | Claude Code through Google Vertex AI and `inference.local` |
+> | `--cli codex` | Codex through its OpenShell provider and Codex policy |
+> | `--cli opencode --agent claude` | OpenCode using Claude through Vertex AI and `inference.local/v1` |
 
 ## Prerequisites
 
@@ -28,7 +38,7 @@ versions remove `Authorization` while proxying a service.
   `quay.io/redhatproductsecurity/ai-guardian-openshell:latest` for OpenShell.
   Select another image with `--image`.
 - OpenShell creation composes `container/policies/base.yaml`, the selected
-  agent fragment, and any files passed with `--policy`. Installed wheels carry
+  CLI fragment, and any files passed with `--policy`. Installed wheels carry
   these policy assets with the CLI.
 
 OpenShell installation and gateway setup are documented in the official
@@ -70,7 +80,7 @@ ai-guardian sandbox delete guardian-codex
 Create and manage an OpenShell sandbox:
 
 ```bash
-ai-guardian sandbox create --runtime openshell --name guardian-claude --agent claude
+ai-guardian sandbox create --runtime openshell --name guardian-claude --cli claude
 ai-guardian sandbox status guardian-claude
 ai-guardian sandbox connect guardian-claude
 ai-guardian sandbox exec guardian-claude -- /bin/bash
@@ -130,6 +140,11 @@ option rather than being put into the tray form payload. Stopped
 container-engine sandboxes, including OpenShell sandboxes, appear in the main
 menu under `Start stopped sandbox...`.
 
+The form separates the selected **CLI** from the **OpenCode agent** profile.
+When `opencode` is selected, enter `build`, `plan`, or a custom profile name;
+the agent field is required. The field is only enabled for OpenCode; other CLI
+selections retain their existing defaults.
+
 ## OpenShell command mappings
 
 Most lifecycle operations below are deliberately thin aliases of the native
@@ -180,7 +195,8 @@ Common options for `sandbox create` are:
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Required to choose the runtime explicitly when creating; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
-| `--agent NAME` | Select the agent setup; defaults to Codex for containers and Claude for OpenShell. |
+| `--cli NAME` | Select the CLI executable. Optional; defaults to Codex for containers and Claude for OpenShell. |
+| `--agent NAME` | OpenCode agent profile. Required with `--cli opencode`; valid only with that CLI and does not select the executable. |
 | `--image IMAGE` | Override the runtime image. `--base` is an alias. An explicit value is passed through unchanged; an invalid reference fails instead of falling back to the default. |
 | `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
 | `--port PORT` | Use a specific host port for a container daemon REST endpoint. OpenShell uses the gateway-selected service port. Must be `1-65535`. |
@@ -189,14 +205,15 @@ Common options for `sandbox create` are:
 | `--config-dir DIR` | Use `ai-guardian.json` from DIR as the initial config snapshot when no sandbox-local config exists. `--guardian-home` is an alias. |
 | `--env KEY=VALUE` | Add an environment value; repeatable. |
 | `--provider NAME` | Attach an OpenShell provider; repeatable. |
-| `--policy FILE` | Add an OpenShell policy overlay; repeatable. The baseline and selected-agent fragments are included automatically. |
+| `--policy FILE` | Add an OpenShell policy overlay; repeatable. The baseline and selected-CLI fragments are included automatically. |
 | `--label KEY=VALUE` | Add a runtime label; repeatable. |
-| `--model MODEL` | OpenShell Vertex AI inference model; defaults to `$AI_GUARDIAN_OPEN_SHELL_MODEL` or `claude-sonnet-4-6`. |
+| `--model MODEL` | OpenShell inference model for a Claude-compatible route; defaults to `$AI_GUARDIAN_OPEN_SHELL_MODEL` or `claude-sonnet-4-6` when that route is selected. |
 | `--api-key KEY` | Pass a direct Anthropic key to container setup, or use it only while creating an OpenShell Claude provider. It is never placed in sandbox runtime arguments. |
 
-In the tray's **Create sandbox** form, **Agent / CLI** is a dropdown containing
-the CLI-capable sandbox integrations: `claude`, `copilot`, `codex`, `gemini`,
-`kiro`, `openclaw`, `opencode`, and `crush`.
+In the tray's **Create sandbox** form, **CLI** is a dropdown containing the
+CLI-capable sandbox integrations: `claude`, `copilot`, `codex`, `gemini`,
+`kiro`, `openclaw`, `opencode`, and `crush`. Selecting `opencode`
+enables a separate **OpenCode agent** field.
 
 The **Image / base** field remains editable for registry references, local
 Dockerfile paths, and community sandbox names. Its **Browse...** button lists
@@ -230,13 +247,48 @@ command follows `--`, it runs in a separate exec after bootstrap and the create
 command returns when that command exits.
 
 When `--provider` is omitted, staged OpenShell setup reuses or creates an
-`ai-guardian-<agent>` provider from the active gateway and local credentials
-when that agent has a matching provider profile. Existing providers can always
-be selected explicitly with repeatable `--provider` options. Claude Vertex AI
-setup is selected by `ANTHROPIC_VERTEX_PROJECT_ID` or `VERTEX_AI_PROJECT_ID`; it
-creates or updates the gateway Vertex provider and configures the
-`inference.local` route. Provider values and credentials are kept out of the
-sandbox's `--env` and `--upload` arguments.
+`ai-guardian-<cli>` provider from the active gateway and local credentials
+when that CLI/backend has a matching provider profile. Existing providers can
+always be selected explicitly with repeatable `--provider` options. Claude
+Vertex AI setup is selected by `ANTHROPIC_VERTEX_PROJECT_ID` or
+`VERTEX_AI_PROJECT_ID`; it creates or updates and attaches the gateway Vertex
+provider and configures the `inference.local` route. Real provider values and
+credentials are kept out of the sandbox's `--env` and `--upload` arguments.
+Claude receives only the non-secret `ANTHROPIC_API_KEY=unused` protocol
+placeholder required by its client; OpenShell's warning for that known
+placeholder is suppressed. `--bare` skips Claude's OAuth login flow and uses
+that `ANTHROPIC_API_KEY` directly. The placeholder does not reach Vertex AI:
+`inference.local` strips it and injects the real GCP access token before
+forwarding the request. Run `claude --bare` explicitly, matching OpenShell's
+documented provider-backed workflow; AI Guardian does not install a persistent
+wrapper. Explicit automated `claude --print ...` commands passed during
+creation still receive `--bare` when it is missing.
+
+OpenCode is a CLI with its own agent profiles and model/provider selection.
+The profile is required whenever `--cli opencode` is selected. Use the explicit
+two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+This `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects the executable; `--agent claude` selects the tested
+OpenCode profile; and `--model` plus `--provider` select the inference backend.
+
+Here `--agent claude` is an OpenCode agent profile; `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables
+`ANTHROPIC_BASE_URL=https://inference.local/v1` and the non-secret
+`ANTHROPIC_API_KEY=unused` placeholder. OpenCode has no Claude-style `--bare`
+flag; launch it normally, or use `opencode --agent NAME`.
 
 ## Configuration precedence
 

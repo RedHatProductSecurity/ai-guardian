@@ -765,12 +765,16 @@ fi
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_adds_bare_to_direct_openshell_claude_command(tmp_path):
+def test_entrypoint_adds_bare_to_automated_openshell_claude_print(tmp_path):
     args_path = tmp_path / "claude.args"
+    base_url_path = tmp_path / "claude.base-url"
+    api_key_path = tmp_path / "claude.api-key"
     _executable_script(
         tmp_path / "claude",
         """#!/usr/bin/env bash
 printf '%s\n' "$@" > "$CLAUDE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$CLAUDE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$CLAUDE_API_KEY"
 """,
     )
     _executable_script(
@@ -796,6 +800,8 @@ fi
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "CLAUDE_ARGS": str(args_path),
+        "CLAUDE_BASE_URL": str(base_url_path),
+        "CLAUDE_API_KEY": str(api_key_path),
     }
 
     result = subprocess.run(
@@ -812,17 +818,27 @@ fi
         "--print",
         "hello",
     ]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
 
 
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_wraps_plain_claude_in_openshell_interactive_shell(tmp_path):
+def test_entrypoint_does_not_wrap_plain_claude_in_openshell_interactive_shell(
+    tmp_path,
+):
     args_path = tmp_path / "claude.args"
+    base_url_path = tmp_path / "claude.base-url"
+    api_key_path = tmp_path / "claude.api-key"
     _executable_script(
         tmp_path / "claude",
         """#!/usr/bin/env bash
 printf '%s\n' "$@" > "$CLAUDE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$CLAUDE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$CLAUDE_API_KEY"
 """,
     )
     _executable_script(
@@ -848,6 +864,8 @@ fi
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "CLAUDE_ARGS": str(args_path),
+        "CLAUDE_BASE_URL": str(base_url_path),
+        "CLAUDE_API_KEY": str(api_key_path),
     }
 
     result = subprocess.run(
@@ -856,7 +874,7 @@ fi
             str(ENTRYPOINT_SCRIPT),
             "/bin/bash",
             "-lc",
-            "claude --print hello",
+            "claude hello",
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -865,13 +883,75 @@ fi
     )
 
     assert result.returncode == 0, result.stderr
-    assert args_path.read_text(encoding="utf-8").splitlines() == [
-        "--bare",
-        "--print",
-        "hello",
-    ]
+    assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
     assert (Path(env["HOME"]) / ".bashrc").exists()
     assert (Path(env["HOME"]) / ".bash_profile").exists()
+    assert "claude()" not in (Path(env["HOME"]) / ".bashrc").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_sets_opencode_inference_environment_without_wrapping_command(
+    tmp_path,
+):
+    args_path = tmp_path / "opencode.args"
+    base_url_path = tmp_path / "opencode.base-url"
+    api_key_path = tmp_path / "opencode.api-key"
+    _executable_script(
+        tmp_path / "opencode",
+        """#!/usr/bin/env bash
+printf '%s\n' "$@" > "$OPENCODE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$OPENCODE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$OPENCODE_API_KEY"
+""",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && "$2" = "--help" ]]; then
+    printf 'usage: ai-guardian setup --ide {opencode}\n'
+    exit 0
+fi
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "opencode",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "OPENCODE_ARGS": str(args_path),
+        "OPENCODE_BASE_URL": str(base_url_path),
+        "OPENCODE_API_KEY": str(api_key_path),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "opencode", "hello"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip()
+        == "https://inference.local/v1"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
 
 
 @pytest.mark.skipif(
@@ -958,7 +1038,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -985,6 +1065,63 @@ fi
     assert "https://api.openai.com/auth" not in id_token_payload
     assert auth["last_refresh"].endswith("Z")
     assert stat.S_IMODE(auth_path.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_bootstraps_codex_api_key_placeholder(tmp_path):
+    codex_home = tmp_path / "codex-home"
+    config_dir = tmp_path / "config"
+    captured_input = tmp_path / "codex-login-input"
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+if [ "$1" = "--version" ]; then
+    printf 'ai-guardian test\n'
+fi
+""",
+    )
+    _executable_script(
+        tmp_path / "codex",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1" = "login" ] && [ "$2" = "--with-api-key" ]; then
+    cat > "$CODEX_LOGIN_INPUT"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "cli",
+        "AI_GUARDIAN_OPEN_SHELL_PROVIDER": "true",
+        "CODEX_HOME": str(codex_home),
+        "OPENAI_API_KEY": "openshell:resolve:env:OPENAI_API_KEY",
+        "CODEX_LOGIN_INPUT": str(captured_input),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert captured_input.read_text(encoding="utf-8") == (
+        "openshell:resolve:env:OPENAI_API_KEY\n"
+    )
+    assert "Configured Codex API-key authentication" in result.stdout
 
 
 @pytest.mark.skipif(

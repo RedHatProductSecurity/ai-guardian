@@ -293,6 +293,7 @@ jobs:
         run: |
           test -f docs/AGENT_SUPPORT.md
           test -f docs/IDE_INTEGRATION_CHECKLIST.md
+          test -f docs/CLI_RUNTIME_CHECKLIST.md
 
   ide-hook-e2e:
     name: IDE Hook E2E (${{ matrix.ide }})

@@ -508,11 +508,22 @@ class TrayMenuBuilder:
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "container")
         if runtime not in {"container", "openshell"}:
             runtime = "container"
-        agent_choices = SUPPORTED_CLI_IDE_TYPES
-        default_agent = "claude" if runtime == "openshell" else "codex"
-        agent = os.environ.get("AI_GUARDIAN_AGENT", default_agent)
-        if agent not in agent_choices:
-            agent = default_agent
+        cli_choices = SUPPORTED_CLI_IDE_TYPES
+        default_cli = "claude" if runtime == "openshell" else "codex"
+        cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
+        if cli not in cli_choices:
+            cli = default_cli
+        opencode_agent = os.environ.get("AI_GUARDIAN_OPENCODE_AGENT", "")
+        repo_default = os.environ.get("AI_GUARDIAN_SANDBOX_REPO")
+        if not repo_default:
+            target = getattr(self._tray, "_active_target", None)
+            if target is None and len(self._tray._targets) == 1:
+                target = self._tray._targets[0]
+            repo_default = getattr(target, "working_dir", None)
+        if not repo_default:
+            repo_default = os.path.expanduser("~")
+        profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
+        opencode_agent_choices = ("", "build", "plan", "claude")
         return [
             {
                 "name": "runtime",
@@ -526,23 +537,37 @@ class TrayMenuBuilder:
             {
                 "name": "name",
                 "label": "Sandbox name",
-                "default": f"ag-{agent[:8]}-{os.getpid()}",
+                "default": f"ag-{cli[:8]}-{os.getpid()}",
                 "required": True,
             },
             {
-                "name": "agent",
-                "label": "Agent / CLI",
+                "name": "cli",
+                "label": "CLI",
                 "type": "choice",
-                "choices": agent_choices,
-                "default": agent,
+                "choices": cli_choices,
+                "default": cli,
                 "required": True,
                 "help": "Select the CLI to configure in the sandbox.",
+            },
+            {
+                "name": "agent",
+                "label": "OpenCode agent",
+                "type": "choice",
+                "choices": opencode_agent_choices,
+                "editable": True,
+                "default": opencode_agent,
+                "required": True,
+                "help": (
+                    "Required when CLI is opencode; choose a common profile or "
+                    "type a custom name. Passed as opencode --agent NAME."
+                ),
+                "enabled_when": {"field": "cli", "values": ("opencode",)},
             },
             {
                 "name": "repo",
                 "label": "Repository",
                 "type": "directory",
-                "default": os.environ.get("AI_GUARDIAN_SANDBOX_REPO", ""),
+                "default": repo_default,
             },
             {
                 "name": "config_dir",
@@ -572,8 +597,14 @@ class TrayMenuBuilder:
             {
                 "name": "profile",
                 "label": "Profile",
+                "type": "choice",
+                "choices": profile_choices,
+                "editable": True,
                 "default": "",
-                "help": "Optional profile, for example @standard.",
+                "help": (
+                    "Optional profile; choose a built-in or type a custom "
+                    "profile name/path."
+                ),
             },
             {
                 "name": "policies",
@@ -644,7 +675,16 @@ class TrayMenuBuilder:
             )
             return
 
-        agent = str(values.get("agent") or "").strip() or None
+        opencode_agent = str(values.get("agent") or "").strip() or None
+        cli_value = str(values.get("cli") or "").strip() or None
+        cli = cli_value or ("claude" if runtime == "openshell" else "codex")
+        agent_profile = opencode_agent if cli == "opencode" else None
+        if cli == "opencode" and not agent_profile:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "An OpenCode agent profile is required when CLI is opencode.",
+            )
+            return
         repo = str(values.get("repo") or "").strip() or None
         config_dir = str(values.get("config_dir") or "").strip() or None
         image = str(values.get("image") or "").strip() or None
@@ -719,7 +759,8 @@ class TrayMenuBuilder:
                 container_engine=None,
                 openshell_cli=None,
                 name=name,
-                agent=agent,
+                cli=cli,
+                opencode_agent=agent_profile,
                 profile=profile_value,
                 restore_config="latest" if restore else None,
                 config_dir=config_dir,
@@ -836,7 +877,7 @@ class TrayMenuBuilder:
             result = 1
 
         log_text = "".join(output).strip()
-        show_log = result != 0 or parts == ["status"] or parts[0] == "config"
+        show_log = result != 0 or parts[0] in {"status", "logs", "config"}
         if show_log:
             try:
                 from ai_guardian.tray.sandbox_dialog import show_sandbox_log

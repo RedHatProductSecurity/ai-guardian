@@ -4,9 +4,11 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 
 This document is the capability reference: it records what each integration
 supports and where known limitations remain. Use the
-[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) for the
-implementation, test, documentation, and release workflow when adding or
-changing an integration.
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) for host hooks,
+plugins, MCP, transcripts, and IDE setup. Use the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md) for Docker/Podman
+and OpenShell distribution, authentication, policies, images, and runtime
+behavior.
 
 The canonical cross-cutting registry is
 [`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). The executable
@@ -636,11 +638,12 @@ for the event list, command-hook protocol, and cloud-agent scope rules.
 
 ## Adding or Changing an Agent
 
-Follow the [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md).
-It covers the adapter and registry, setup and reconciliation, optional MCP
-and transcript surfaces, focused tests, manual acceptance, documentation, and
-release-readiness coverage. Keep the capability tables in this document
-synchronized with the evidence collected by that checklist.
+Follow the applicable
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) and
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md). The first
+covers host integration surfaces; the second covers normal containers and
+OpenShell. Keep the capability tables in this document synchronized with the
+evidence collected by both checklists.
 
 ## Adding a New Violation Type
 

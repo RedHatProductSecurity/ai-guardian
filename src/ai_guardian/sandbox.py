@@ -30,8 +30,8 @@ SUPPORTED_RUNTIMES = (CONTAINER_RUNTIME, OPENSHELL_RUNTIME)
 DEFAULT_CONTAINER_ENGINE = "podman"
 DEFAULT_CONTAINER_IMAGE = "quay.io/redhatproductsecurity/ai-guardian:latest"
 DEFAULT_OPENSHELL_IMAGE = "quay.io/redhatproductsecurity/ai-guardian-openshell:latest"
-DEFAULT_CONTAINER_AGENT = "codex"
-DEFAULT_OPENSHELL_AGENT = "claude"
+DEFAULT_CONTAINER_CLI = "codex"
+DEFAULT_OPENSHELL_CLI = "claude"
 DEFAULT_REST_PORT = "63152"
 DEFAULT_OPENSHELL_MODEL = "claude-sonnet-4-6"
 MANAGED_LABEL = "ai-guardian.managed=true"
@@ -134,6 +134,115 @@ def _command_args(args) -> List[str]:
     if command and command[0] == "--":
         return command[1:]
     return command
+
+
+def _selected_cli(args, default: str) -> str:
+    """Resolve the CLI executable selected for a sandbox."""
+    return str(
+        getattr(args, "cli", None) or os.environ.get("AI_GUARDIAN_CLI") or default
+    ).strip()
+
+
+def _opencode_agent(args, cli: str) -> Optional[str]:
+    """Return the OpenCode agent profile selected for the CLI."""
+    if cli != "opencode":
+        return None
+
+    selected = getattr(args, "opencode_agent", None)
+    return (
+        str(selected or os.environ.get("AI_GUARDIAN_OPENCODE_AGENT") or "").strip()
+        or None
+    )
+
+
+def _openshell_inference_cli(args, cli: str) -> str:
+    """Return the model client whose OpenShell inference route is requested."""
+    if cli == "claude":
+        return "claude"
+    if cli != "opencode":
+        return cli
+
+    opencode_agent = _opencode_agent(args, cli)
+    requested_model = getattr(args, "model", None) or os.environ.get(
+        "AI_GUARDIAN_OPEN_SHELL_MODEL", DEFAULT_OPENSHELL_MODEL
+    )
+    # OpenCode's ``--agent`` is normally a user-defined profile, not a
+    # provider. Treat the conventional ``claude`` profile name, the default
+    # Claude model, or an explicitly Claude-named inference model as a request
+    # for the Anthropic-compatible OpenShell route. Generic OpenCode providers
+    # remain untouched when a non-Claude model is selected.
+    if opencode_agent == "claude" or "claude" in str(requested_model).lower():
+        return "claude"
+    return cli
+
+
+def _openshell_explicit_command(args) -> List[str]:
+    """Apply OpenShell-specific flags to an explicit CLI command.
+
+    OpenShell's documented interactive flow keeps ``--bare`` explicit. The
+    create command's trailing command is executed through ``sandbox exec``
+    after bootstrap, so it does not pass through the image entrypoint. Preserve
+    the non-interactive automation behavior here without installing a shell
+    wrapper. When ``--cli opencode --agent NAME`` is used, pass the selected
+    OpenCode profile to an explicit ``opencode`` command.
+    """
+    command = _command_args(args)
+    cli = _selected_cli(args, DEFAULT_OPENSHELL_CLI)
+    if not command:
+        return command
+
+    executable = Path(str(command[0])).name
+    if cli == "opencode" and executable == "opencode":
+        opencode_agent = _opencode_agent(args, cli)
+        administrative_commands = {
+            "agent",
+            "auth",
+            "debug",
+            "export",
+            "github",
+            "import",
+            "mcp",
+            "models",
+            "serve",
+            "session",
+            "stats",
+            "upgrade",
+            "web",
+            "--help",
+            "-h",
+            "--version",
+        }
+        if (
+            opencode_agent
+            and (not command[1:2] or command[1] not in administrative_commands)
+            and "--agent" not in command
+        ):
+            return [command[0], "--agent", opencode_agent, *command[1:]]
+        return command
+
+    if cli != "claude" or executable != "claude":
+        return command
+
+    administrative_commands = {
+        "auth",
+        "config",
+        "doctor",
+        "help",
+        "install",
+        "mcp",
+        "plugin",
+        "update",
+        "version",
+        "--help",
+        "-h",
+        "--version",
+        "-V",
+    }
+    if command[1:2] and command[1] in administrative_commands:
+        return command
+    if "--bare" in command or "--print" not in command:
+        return command
+    return [command[0], "--bare", *command[1:]]
 
 
 def _image_for_runtime(args, runtime: str) -> str:
@@ -653,17 +762,18 @@ def _add_container_environment(
     command: List[str], args, *, child_env: Dict[str, str]
 ) -> None:
     """Add non-secret setup values and pass selected host credentials through."""
-    agent = getattr(args, "agent", None) or os.environ.get(
-        "AI_GUARDIAN_AGENT", DEFAULT_CONTAINER_AGENT
-    )
+    cli = _selected_cli(args, DEFAULT_CONTAINER_CLI)
     values = [
-        f"AI_GUARDIAN_AGENT={agent}",
-        f"AI_GUARDIAN_IDE={agent}",
+        f"AI_GUARDIAN_AGENT={cli}",
+        f"AI_GUARDIAN_IDE={cli}",
         f"AI_GUARDIAN_REST_PORT={DEFAULT_REST_PORT}",
         "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
         "AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian",
         f"AI_GUARDIAN_SETUP_SCOPE={os.environ.get('AI_GUARDIAN_SETUP_SCOPE', 'selected')}",
     ]
+    opencode_agent = _opencode_agent(args, cli)
+    if opencode_agent:
+        values.append(f"AI_GUARDIAN_OPENCODE_AGENT={opencode_agent}")
     for value in values:
         command.extend(["--env", value])
 
@@ -689,10 +799,10 @@ def _openshell_asset_roots() -> List[Path]:
     return [repository_root, installed_root]
 
 
-def _openshell_policy_assets(args, agent: str) -> Tuple[Path, Path]:
-    """Resolve the baseline and selected-agent OpenShell policy fragments."""
+def _openshell_policy_assets(args, cli: str) -> Tuple[Path, Path]:
+    """Resolve the baseline and selected-CLI OpenShell policy fragments."""
     base_override = os.environ.get(_OPENSHELL_BASE_POLICY_ENV)
-    agent_override = os.environ.get(_OPENSHELL_AGENT_POLICY_DIR_ENV)
+    cli_policy_dir = os.environ.get(_OPENSHELL_AGENT_POLICY_DIR_ENV)
     roots = _openshell_asset_roots()
 
     if base_override:
@@ -707,25 +817,25 @@ def _openshell_policy_assets(args, agent: str) -> Tuple[Path, Path]:
             roots[0] / "policies" / "base.yaml",
         )
 
-    if agent_override:
-        agent_path = Path(agent_override).expanduser() / f"{agent}.yaml"
+    if cli_policy_dir:
+        cli_path = Path(cli_policy_dir).expanduser() / f"{cli}.yaml"
     else:
-        agent_path = next(
+        cli_path = next(
             (
-                root / "policies" / "agents" / f"{agent}.yaml"
+                root / "policies" / "agents" / f"{cli}.yaml"
                 for root in roots
-                if (root / "policies" / "agents" / f"{agent}.yaml").is_file()
+                if (root / "policies" / "agents" / f"{cli}.yaml").is_file()
             ),
-            roots[0] / "policies" / "agents" / f"{agent}.yaml",
+            roots[0] / "policies" / "agents" / f"{cli}.yaml",
         )
 
     if not base_path.is_file():
         raise ValueError(f"OpenShell base policy not found: {base_path}")
-    if not agent_path.is_file():
+    if not cli_path.is_file():
         raise ValueError(
-            f"OpenShell policy fragment not found for agent '{agent}': {agent_path}"
+            f"OpenShell policy fragment not found for CLI '{cli}': {cli_path}"
         )
-    return base_path, agent_path
+    return base_path, cli_path
 
 
 def _load_openshell_policy(path: Path) -> Dict[str, Any]:
@@ -770,11 +880,11 @@ def _merge_openshell_policy_values(base: Any, overlay: Any) -> Any:
     return overlay
 
 
-def _compose_openshell_policy(args, agent: str) -> Tuple[Path, Path]:
-    """Compose the baseline, user overlays, and selected-agent policy."""
+def _compose_openshell_policy(args, cli: str) -> Tuple[Path, Path]:
+    """Compose the baseline, user overlays, and selected-CLI policy."""
     import yaml
 
-    base_path, agent_path = _openshell_policy_assets(args, agent)
+    base_path, cli_path = _openshell_policy_assets(args, cli)
     overlay_paths = [
         Path(value).expanduser() for value in getattr(args, "policy", None) or []
     ]
@@ -783,7 +893,7 @@ def _compose_openshell_policy(args, agent: str) -> Tuple[Path, Path]:
             raise ValueError(f"OpenShell policy file not found: {policy_path}")
 
     policy: Dict[str, Any] = {}
-    for path in [base_path, *overlay_paths, agent_path]:
+    for path in [base_path, *overlay_paths, cli_path]:
         policy = _merge_openshell_policy_values(policy, _load_openshell_policy(path))
     policy.setdefault("version", 1)
     if policy["version"] != 1:
@@ -831,24 +941,31 @@ def _openshell_environment_values(args) -> Dict[str, str]:
     return values
 
 
-def _openshell_provider_environment(args, agent: str) -> Dict[str, str]:
-    """Build a temporary provider-process environment without sandbox secrets."""
+def _openshell_provider_environment(args, cli: str) -> Dict[str, str]:
+    """Build a temporary provider-process environment without command leaks."""
     environment = os.environ.copy()
     environment.update(_openshell_environment_values(args))
 
     api_key = getattr(args, "api_key", None)
-    if api_key and agent == "claude" and not environment.get("ANTHROPIC_API_KEY"):
+    if api_key and cli == "claude" and not environment.get("ANTHROPIC_API_KEY"):
         environment["ANTHROPIC_API_KEY"] = api_key
 
-    if agent == "codex":
+    if cli == "codex":
         codex_home = Path(
-            os.environ.get("CODEX_HOME", _openshell_host_home() / ".codex")
+            environment.get("CODEX_HOME", _openshell_host_home() / ".codex")
         )
         auth_path = codex_home / "auth.json"
         try:
             auth = json.loads(auth_path.read_text(encoding="utf-8"))
         except (OSError, UnicodeError, json.JSONDecodeError):
             auth = {}
+        auth_api_key = auth.get("OPENAI_API_KEY") if isinstance(auth, dict) else None
+        if (
+            isinstance(auth_api_key, str)
+            and auth_api_key
+            and not environment.get("OPENAI_API_KEY")
+        ):
+            environment["OPENAI_API_KEY"] = auth_api_key
         tokens = auth.get("tokens", {}) if isinstance(auth, dict) else {}
         if isinstance(tokens, dict):
             for token_key, environment_name in (
@@ -911,39 +1028,39 @@ def _openshell_providers_v2_enabled(args) -> Optional[bool]:
     return value if isinstance(value, bool) else None
 
 
-def _ensure_openshell_agent_provider(
-    args, agent: str, *, output: Optional[List[str]] = None
+def _ensure_openshell_cli_provider(
+    args, cli: str, *, output: Optional[List[str]] = None
 ) -> str:
-    """Create or reuse the default provider needed by staged agent setup."""
-    if agent not in {"claude", "codex", "copilot", "opencode"}:
+    """Create or reuse the default provider needed by staged CLI setup."""
+    if cli not in {"claude", "codex", "copilot", "opencode"}:
         raise ValueError(
-            f"the active OpenShell gateway has no automatic provider mapping for '{agent}'; "
+            f"the active OpenShell gateway has no automatic provider mapping for '{cli}'; "
             "create a compatible provider and pass it with --provider NAME"
         )
 
     profiles = _openshell_provider_profiles(args)
     provider_type = (
-        "claude-code" if agent == "claude" and "claude-code" in profiles else agent
+        "claude-code" if cli == "claude" and "claude-code" in profiles else cli
     )
-    if agent == "claude" and provider_type == "claude" and "claude" not in profiles:
+    if cli == "claude" and provider_type == "claude" and "claude" not in profiles:
         raise ValueError(
             "the active OpenShell gateway has no provider profile for 'claude'; "
             "create a compatible provider and pass it with --provider NAME"
         )
     if provider_type not in profiles:
         raise ValueError(
-            f"the active OpenShell gateway has no provider profile for '{agent}'; "
+            f"the active OpenShell gateway has no provider profile for '{cli}'; "
             "create a compatible provider and pass it with --provider NAME"
         )
 
-    provider_name = f"ai-guardian-{agent}"
+    provider_name = f"ai-guardian-{cli}"
     if _openshell_provider_exists(args, provider_name):
         _emit_output(
             f"Using existing OpenShell provider: {provider_name}", output=output
         )
         return provider_name
 
-    if agent == "codex" and not os.environ.get("OPENAI_API_KEY"):
+    if cli == "codex" and not os.environ.get("OPENAI_API_KEY"):
         codex_home = Path(
             os.environ.get("CODEX_HOME", _openshell_host_home() / ".codex")
         )
@@ -965,18 +1082,26 @@ def _ensure_openshell_agent_provider(
         f"Creating OpenShell provider from existing local credentials: {provider_name}",
         output=output,
     )
+    provider_environment = _openshell_provider_environment(args, cli)
+    provider_command = [
+        _openshell_cli(args),
+        "provider",
+        "create",
+        "--name",
+        provider_name,
+        "--type",
+        provider_type,
+    ]
+    if cli == "codex" and provider_environment.get("OPENAI_API_KEY"):
+        # OpenShell's Codex --from-existing discovery only recognizes the
+        # OAuth credential set. API-key auth must use the environment-key
+        # credential form instead; the key value stays out of argv.
+        provider_command.extend(["--credential", "OPENAI_API_KEY"])
+    else:
+        provider_command.append("--from-existing")
     result = _run(
-        [
-            _openshell_cli(args),
-            "provider",
-            "create",
-            "--name",
-            provider_name,
-            "--type",
-            provider_type,
-            "--from-existing",
-        ],
-        env=_openshell_provider_environment(args, agent),
+        provider_command,
+        env=provider_environment,
         output=output,
     )
     if result != 0:
@@ -1134,30 +1259,30 @@ def _configure_openshell_inference(
         )
 
 
-def _openshell_agent_has_credentials(args, agent: str) -> bool:
+def _openshell_cli_has_credentials(args, cli: str) -> bool:
     """Return whether staged setup needs an explicit provider instance."""
     environment = dict(os.environ)
     environment.update(_openshell_environment_values(args))
-    if agent == "codex":
+    if cli == "codex":
         codex_home = Path(
             environment.get("CODEX_HOME", _openshell_host_home() / ".codex")
         )
         return (codex_home / "auth.json").is_file() or bool(
             environment.get("OPENAI_API_KEY")
         )
-    if agent == "claude":
+    if cli == "claude":
         return bool(
             getattr(args, "api_key", None)
             or environment.get("ANTHROPIC_API_KEY")
             or environment.get("CLAUDE_API_KEY")
         )
-    if agent == "copilot":
+    if cli == "copilot":
         return bool(
             environment.get("COPILOT_GITHUB_TOKEN")
             or environment.get("GH_TOKEN")
             or environment.get("GITHUB_TOKEN")
         )
-    if agent == "opencode":
+    if cli == "opencode":
         return bool(
             environment.get("OPENCODE_API_KEY")
             or environment.get("OPENROUTER_API_KEY")
@@ -1171,11 +1296,11 @@ def _openshell_entrypoint_args(args) -> List[str]:
     return _command_args(args) or ["bash", "-l"]
 
 
-def _generated_openshell_name(agent: str) -> str:
+def _generated_openshell_name(cli: str) -> str:
     """Generate a short name for OpenShell's upload-then-exec flow."""
-    agent_suffix = agent[:8]
+    cli_suffix = cli[:8]
     pid_suffix = str(os.getpid())[-6:]
-    return f"ag-{agent_suffix}-{pid_suffix}"
+    return f"ag-{cli_suffix}-{pid_suffix}"
 
 
 def _extract_openshell_service_url(value: str) -> Optional[str]:
@@ -1674,31 +1799,34 @@ def _openshell_create(
         ["--label", MANAGED_LABEL, "--label", "ai-guardian.runtime=openshell"]
     )
 
-    agent = getattr(args, "agent", None) or os.environ.get(
-        "AI_GUARDIAN_AGENT", DEFAULT_OPENSHELL_AGENT
-    )
-    if agent not in SUPPORTED_CLI_IDE_TYPES:
+    cli = _selected_cli(args, DEFAULT_OPENSHELL_CLI)
+    if cli not in SUPPORTED_CLI_IDE_TYPES:
         raise ValueError(
-            f"unsupported OpenShell agent '{agent}'; supported CLI agents: "
+            f"unsupported OpenShell CLI '{cli}'; supported CLIs: "
             + ", ".join(SUPPORTED_CLI_IDE_TYPES)
         )
 
-    name = getattr(args, "name", None) or _generated_openshell_name(agent)
+    name = getattr(args, "name", None) or _generated_openshell_name(cli)
     command.extend(["--name", name, "--label", f"ai-guardian.name={name}"])
+    opencode_agent = _opencode_agent(args, cli)
+    if opencode_agent:
+        command.extend(["--label", f"ai-guardian.opencode-agent={opencode_agent}"])
     for label in getattr(args, "label", None) or []:
         command.extend(["--label", label])
 
     environment = [
-        f"AI_GUARDIAN_AGENT={agent}",
-        f"AI_GUARDIAN_IDE={agent}",
+        f"AI_GUARDIAN_AGENT={cli}",
+        f"AI_GUARDIAN_IDE={cli}",
         f"AI_GUARDIAN_REST_PORT={DEFAULT_REST_PORT}",
         "AI_GUARDIAN_CONFIG_DIR=/sandbox/.config/ai-guardian",
         "AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian",
         f"AI_GUARDIAN_SETUP_SCOPE={os.environ.get('AI_GUARDIAN_SETUP_SCOPE', 'selected')}",
     ]
-    if agent == "claude":
+    if opencode_agent:
+        environment.append(f"AI_GUARDIAN_OPENCODE_AGENT={opencode_agent}")
+    if cli == "claude":
         environment.append("DISABLE_AUTOUPDATER=1")
-    if agent == "codex":
+    if cli == "codex":
         environment.extend(
             [
                 "CODEX_HOME=/sandbox/.codex",
@@ -1745,8 +1873,10 @@ def _openshell_create(
     explicit_providers = list(getattr(args, "provider", None) or [])
     provider_names = explicit_providers[:]
     provider_attached = bool(provider_names)
+    suppress_credential_warnings = False
     project, region, model = _vertex_settings(args)
-    vertex_provider_required = agent == "claude" and bool(project)
+    inference_cli = _openshell_inference_cli(args, cli)
+    vertex_provider_required = inference_cli == "claude" and bool(project)
     if vertex_provider_required:
         provider_name = (
             provider_names[0]
@@ -1764,15 +1894,39 @@ def _openshell_create(
             [
                 "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
                 "ANTHROPIC_BASE_URL=https://inference.local",
+                # Claude Code requires a non-empty key even though the
+                # inference router strips it and authenticates with the
+                # attached Vertex provider.
                 "ANTHROPIC_API_KEY=unused",
             ]
         )
+        suppress_credential_warnings = True
 
     if not provider_names and (
-        uploads_requested or _openshell_agent_has_credentials(args, agent)
+        uploads_requested or _openshell_cli_has_credentials(args, inference_cli)
     ):
-        provider_names = [_ensure_openshell_agent_provider(args, agent, output=output)]
+        provider_names = [
+            _ensure_openshell_cli_provider(args, inference_cli, output=output)
+        ]
         provider_attached = True
+
+    if cli == "opencode" and inference_cli == "claude" and provider_attached:
+        # OpenShell documents OpenCode's Anthropic-compatible client through
+        # inference.local/v1. Only an explicitly Claude-selected OpenCode
+        # profile/model uses this route; generic OpenCode providers keep their
+        # own endpoint and credential environment.
+        if not vertex_provider_required:
+            _configure_openshell_inference(
+                args, provider_names[0], model, output=output
+            )
+        environment.extend(
+            [
+                "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
+                "ANTHROPIC_BASE_URL=https://inference.local/v1",
+                "ANTHROPIC_API_KEY=unused",
+            ]
+        )
+        suppress_credential_warnings = True
 
     for value in environment:
         command.extend(["--env", value])
@@ -1781,7 +1935,13 @@ def _openshell_create(
     for provider in provider_names:
         command.extend(["--provider", provider])
 
-    if agent == "codex" and provider_attached:
+    if suppress_credential_warnings:
+        # OpenShell identifies the required non-secret client placeholder by
+        # its environment-variable name. Do not present it as a credential
+        # warning when the actual authentication is provider-backed.
+        command.append("--no-credential-warnings")
+
+    if cli == "codex" and provider_attached:
         environment_marker = "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true"
         command.extend(["--env", environment_marker])
 
@@ -1793,7 +1953,7 @@ def _openshell_create(
     else:
         command.append("--auto-providers")
 
-    policy_path, policy_dir = _compose_openshell_policy(args, agent)
+    policy_path, policy_dir = _compose_openshell_policy(args, cli)
     command.extend(["--policy", str(policy_path)])
 
     # A detached OpenShell sandbox with no upload still needs its entrypoint to
@@ -1840,30 +2000,30 @@ def _create(
         if result != 0:
             return result
 
+        explicit_command = _openshell_explicit_command(args)
         if uploads_requested:
             # The detached OpenShell process already owns the persistent
             # login shell.  Bootstrap setup must return so create can start
             # the gateway-managed service; an explicitly supplied command is a separate
             # user-requested exec and may remain interactive.
-            command_args = _command_args(args)
-            if command_args:
+            if explicit_command:
                 result = _run(
                     _openshell_exec_command(
                         args,
                         name,
-                        command_args,
+                        explicit_command,
                         tty=interactive and output is None and sys.stdin.isatty(),
                     ),
                     output=output,
                 )
                 if result != 0:
                     return result
-        elif _command_args(args):
+        elif explicit_command:
             result = _run(
                 _openshell_exec_command(
                     args,
                     name,
-                    _command_args(args),
+                    explicit_command,
                     tty=interactive and output is None and sys.stdin.isatty(),
                 ),
                 output=output,
@@ -1875,7 +2035,7 @@ def _create(
         # independent exec session rather than ``connect``.  In OpenShell
         # versions where ``connect`` attaches to the sandbox's main process,
         # exiting that shell terminates the sandbox.
-        if interactive and runtime == OPENSHELL_RUNTIME and not _command_args(args):
+        if interactive and runtime == OPENSHELL_RUNTIME and not explicit_command:
             return _run(_openshell_interactive_shell_command(args, name), output=output)
         return result
     except ValueError as exc:
@@ -1910,6 +2070,15 @@ def _validate_create_options(args) -> None:
     policy = getattr(args, "policy", None) or []
     providers = getattr(args, "provider", None) or []
     model = getattr(args, "model", None)
+    default_cli = (
+        DEFAULT_OPENSHELL_CLI if runtime == OPENSHELL_RUNTIME else DEFAULT_CONTAINER_CLI
+    )
+    cli = _selected_cli(args, default_cli)
+    opencode_agent = _opencode_agent(args, cli)
+    if getattr(args, "opencode_agent", None) and cli != "opencode":
+        raise ValueError("--agent is supported only with --cli opencode")
+    if cli == "opencode" and not opencode_agent:
+        raise ValueError("--agent is required with --cli opencode")
     if runtime == CONTAINER_RUNTIME:
         if policy:
             raise ValueError("--policy is supported for OpenShell sandboxes only")
@@ -1919,12 +2088,10 @@ def _validate_create_options(args) -> None:
             raise ValueError("--model is supported for OpenShell sandboxes only")
     elif runtime == OPENSHELL_RUNTIME:
         if getattr(args, "api_key", None):
-            agent = getattr(args, "agent", None) or os.environ.get(
-                "AI_GUARDIAN_AGENT", DEFAULT_OPENSHELL_AGENT
-            )
-            if agent != "claude":
+            if _openshell_inference_cli(args, cli) != "claude":
                 raise ValueError(
-                    "--api-key can only be used with the Claude OpenShell agent"
+                    "--api-key can only be used with Claude-compatible OpenShell "
+                    "inference"
                 )
         if getattr(args, "port", None) is not None:
             raise ValueError("--port is supported for container sandboxes only")

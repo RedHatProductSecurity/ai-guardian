@@ -14,13 +14,15 @@ import yaml
 from ai_guardian.sandbox import (
     OPENSHELL_ENTRYPOINT,
     _compose_openshell_policy,
-    _ensure_openshell_agent_provider,
+    _ensure_openshell_cli_provider,
     _ensure_openshell_daemon,
     _fetch_sandbox_config,
     _load_snapshot_config,
     _openshell_create,
+    _openshell_explicit_command,
     _openshell_provider_environment,
     _expose_openshell_service,
+    _validate_create_options,
     create_sandbox,
     handle_sandbox_command,
 )
@@ -34,6 +36,8 @@ def _args(**overrides):
         "container_engine": "podman",
         "openshell_cli": "openshell",
         "name": "demo",
+        "cli": None,
+        "opencode_agent": None,
         "restore_config": None,
         "snapshot": "latest",
         "json_output": False,
@@ -124,6 +128,30 @@ def test_create_requires_runtime_selection(capsys):
         assert handle_sandbox_command(args) == 2
 
     assert "--runtime is required when creating a sandbox" in capsys.readouterr().err
+
+
+def test_sandbox_create_reserves_agent_for_opencode_profiles():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        opencode_agent="codex",
+    )
+
+    with pytest.raises(
+        ValueError, match="--agent is supported only with --cli opencode"
+    ):
+        _validate_create_options(args)
+
+
+def test_sandbox_create_requires_agent_for_opencode():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        cli="opencode",
+    )
+
+    with pytest.raises(ValueError, match="--agent is required with --cli opencode"):
+        _validate_create_options(args)
 
 
 def test_container_list_is_scoped_to_managed_sandboxes():
@@ -409,7 +437,7 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
     args = _args(
         sandbox_command="create",
         name="demo",
-        agent="codex",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=str(repo),
@@ -698,6 +726,48 @@ def test_container_create_preserves_explicit_command():
     ]
 
 
+def test_openshell_automated_claude_print_gets_bare_without_shell_wrapper():
+    args = _args(
+        runtime="openshell",
+        cli="claude",
+        command_args=["--", "claude", "--print", "hello"],
+    )
+
+    assert _openshell_explicit_command(args) == [
+        "claude",
+        "--bare",
+        "--print",
+        "hello",
+    ]
+
+
+def test_openshell_interactive_claude_command_is_not_rewritten():
+    args = _args(
+        runtime="openshell",
+        cli="claude",
+        command_args=["--", "claude"],
+    )
+
+    assert _openshell_explicit_command(args) == ["claude"]
+
+
+def test_openshell_explicit_opencode_command_uses_selected_agent_profile():
+    args = _args(
+        runtime="openshell",
+        cli="opencode",
+        opencode_agent="build",
+        command_args=["--", "opencode", "run", "hello"],
+    )
+
+    assert _openshell_explicit_command(args) == [
+        "opencode",
+        "--agent",
+        "build",
+        "run",
+        "hello",
+    ]
+
+
 def test_openshell_create_exposes_gateway_managed_service(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -710,7 +780,7 @@ def test_openshell_create_exposes_gateway_managed_service(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="claude",
+        cli="claude",
         profile=None,
         config_dir=str(config_dir),
         repo=str(repo),
@@ -838,7 +908,7 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="codex",
+        cli="codex",
         config_dir=str(tmp_path / "config"),
         repo=None,
         profile=None,
@@ -850,7 +920,7 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
     )
 
     with patch(
-        "ai_guardian.sandbox._openshell_agent_has_credentials", return_value=False
+        "ai_guardian.sandbox._openshell_cli_has_credentials", return_value=False
     ):
         command, name, uploads, policy_dir = _openshell_create(args)
     try:
@@ -860,6 +930,132 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert "--auto-providers" not in command
         assert command[command.index("--provider") + 1] == "codex-provider"
         assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_opencode_provider_does_not_force_anthropic_route(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-demo",
+        cli="opencode",
+        model="gpt-5",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[],
+        policy=[],
+        provider=["opencode-provider"],
+        label=[],
+    )
+
+    command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" not in command
+        assert "ANTHROPIC_API_KEY=unused" not in command
+        assert command[command.index("--provider") + 1] == "opencode-provider"
+        assert "--no-credential-warnings" not in command
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_opencode_claude_agent_uses_anthropic_route(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-claude-demo",
+        cli="opencode",
+        opencode_agent="claude",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[],
+        policy=[],
+        provider=["vertex-provider"],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-claude-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_OPENCODE_AGENT=claude" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
+        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
+        assert "ANTHROPIC_API_KEY=unused" in command
+        assert command[command.index("--provider") + 1] == "vertex-provider"
+        assert "--no-credential-warnings" in command
+        configure.assert_called_once()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_opencode_claude_model_uses_anthropic_route(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-model-demo",
+        cli="opencode",
+        opencode_agent="build",
+        model="claude-sonnet-4-6",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[],
+        policy=[],
+        provider=["vertex-provider"],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-model-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
+        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
+        assert "--no-credential-warnings" in command
+        configure.assert_called_once()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_opencode_default_model_uses_anthropic_route(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-default-model-demo",
+        cli="opencode",
+        opencode_agent="build",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[],
+        policy=[],
+        provider=["vertex-provider"],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-default-model-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_OPENCODE_AGENT=build" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
+        assert "ANTHROPIC_BASE_URL=https://inference.local/v1" in command
+        assert "ANTHROPIC_API_KEY=unused" in command
+        assert "--no-credential-warnings" in command
+        configure.assert_called_once()
     finally:
         shutil.rmtree(policy_dir)
 
@@ -907,11 +1103,49 @@ def test_openshell_provider_environment_bridges_codex_oauth_without_command_leak
             clear=False,
         ),
     ):
-        assert _ensure_openshell_agent_provider(args, "codex") == "ai-guardian-codex"
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
 
     command = run.call_args.args[0]
     assert "access-secret" not in command
     assert run.call_args.kwargs["env"]["CODEX_AUTH_ACCESS_TOKEN"] == "access-secret"
+
+
+def test_openshell_provider_environment_bridges_codex_api_key_without_command_leak(
+    tmp_path,
+):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "auth_mode": "apikey",
+                "OPENAI_API_KEY": "api-secret",
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(environment=[f"CODEX_HOME={codex_home}"])
+
+    with (
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles",
+            return_value=["codex"],
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+        patch.dict(
+            os.environ,
+            {"HOME": str(tmp_path)},
+            clear=True,
+        ),
+    ):
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+
+    command = run.call_args.args[0]
+    assert "api-secret" not in command
+    assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
+    assert "--from-existing" not in command
+    assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
 
 
 def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
@@ -922,7 +1156,7 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="vertex-demo",
-        agent="claude",
+        cli="claude",
         profile=None,
         config_dir=str(tmp_path / "config"),
         repo=None,
@@ -990,6 +1224,9 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
     assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in create_command
     assert "ANTHROPIC_BASE_URL=https://inference.local" in create_command
     assert "ANTHROPIC_API_KEY=unused" in create_command
+    assert "--provider" in create_command
+    assert "ai-guardian-google-vertex-ai" in create_command
+    assert "--no-credential-warnings" in create_command
     assert str(adc_path) not in create_command
 
 
@@ -998,7 +1235,7 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         sandbox_command="create",
         runtime="openshell",
         name="vertex-demo",
-        agent="claude",
+        cli="claude",
         model="claude-haiku-4-5",
         profile=None,
         config_dir=str(tmp_path / "config"),
@@ -1061,7 +1298,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="claude",
+        cli="claude",
         restore_config="latest",
         config_dir=None,
         repo=None,
@@ -1077,7 +1314,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
     with (
         patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False),
         patch(
-            "ai_guardian.sandbox._ensure_openshell_agent_provider",
+            "ai_guardian.sandbox._ensure_openshell_cli_provider",
             return_value="ai-guardian-claude",
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
@@ -1106,7 +1343,7 @@ def test_openshell_create_invokes_entrypoint_without_uploads(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="codex",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -1120,9 +1357,7 @@ def test_openshell_create_invokes_entrypoint_without_uploads(tmp_path):
     )
 
     with (
-        patch(
-            "ai_guardian.sandbox._openshell_agent_has_credentials", return_value=False
-        ),
+        patch("ai_guardian.sandbox._openshell_cli_has_credentials", return_value=False),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
@@ -1162,7 +1397,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="claude",
+        cli="claude",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -1177,9 +1412,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
     output = []
 
     with (
-        patch(
-            "ai_guardian.sandbox._openshell_agent_has_credentials", return_value=False
-        ),
+        patch("ai_guardian.sandbox._openshell_cli_has_credentials", return_value=False),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
@@ -1215,7 +1448,7 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name=None,
-        agent="codex",
+        cli="codex",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -1230,7 +1463,7 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
 
     with (
         patch(
-            "ai_guardian.sandbox._ensure_openshell_agent_provider",
+            "ai_guardian.sandbox._ensure_openshell_cli_provider",
             return_value="ai-guardian-codex",
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
@@ -1284,7 +1517,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
         sandbox_command="create",
         runtime="openshell",
         name="demo",
-        agent="claude",
+        cli="claude",
         profile=None,
         config_dir=str(config_dir),
         repo=None,
@@ -1300,7 +1533,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
 
     with (
         patch(
-            "ai_guardian.sandbox._ensure_openshell_agent_provider",
+            "ai_guardian.sandbox._ensure_openshell_cli_provider",
             return_value="ai-guardian-claude",
         ),
         patch(
@@ -1363,7 +1596,7 @@ def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
 
     with (
         patch(
-            "ai_guardian.sandbox._ensure_openshell_agent_provider",
+            "ai_guardian.sandbox._ensure_openshell_cli_provider",
             return_value="ai-guardian-claude",
         ),
         patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),

@@ -1086,10 +1086,21 @@ def main():
             "--name", help="Name for the sandbox (runtime-generated when omitted)"
         )
         sandbox_create_parser.add_argument(
+            "--cli",
+            dest="cli",
+            help=(
+                "CLI executable to configure (for example, opencode or "
+                "claude); defaults to Codex for containers and Claude for "
+                "OpenShell"
+            ),
+        )
+        sandbox_create_parser.add_argument(
             "--agent",
-            "--ide",
-            dest="agent",
-            help="Agent to configure (default: codex for containers, claude for OpenShell)",
+            dest="opencode_agent",
+            help=(
+                "OpenCode agent profile; required with --cli opencode and only "
+                "valid with that CLI"
+            ),
         )
         sandbox_create_parser.add_argument(
             "--profile", help="Bundled or custom ai-guardian security profile"
@@ -1132,7 +1143,7 @@ def main():
         sandbox_create_parser.add_argument(
             "--model",
             help=(
-                "OpenShell inference model for Claude Vertex AI "
+                "OpenShell inference model for a Claude-compatible route "
                 "(default: $AI_GUARDIAN_OPEN_SHELL_MODEL or claude-sonnet-4-6)"
             ),
         )
