@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import subprocess
 import sys
 from typing import Any, Dict, Iterable, Optional
@@ -25,6 +26,128 @@ def _merge_browse_paths(current: str, selected) -> str:
         if path and path not in existing:
             existing.append(path)
     return ", ".join(existing)
+
+
+def _local_image_choices():
+    """Return locally available AI Guardian support-image references.
+
+    The image browser runs in the short-lived form process, so an unavailable
+    or disconnected container engine must only result in an empty list.  The
+    explicit image field remains available for custom images and OpenShell
+    Dockerfile paths.
+    """
+    configured_engine = os.environ.get("CONTAINER_ENGINE")
+    engines = [configured_engine] if configured_engine else ["podman", "docker"]
+    choices = []
+    for engine in engines:
+        if not engine:
+            continue
+        try:
+            result = subprocess.run(
+                [
+                    engine,
+                    "image",
+                    "ls",
+                    "--filter",
+                    "label=ai-guardian.support-image=true",
+                    "--format",
+                    "{{.Repository}}:{{.Tag}}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=10,
+            )
+        except (FileNotFoundError, OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode != 0:
+            continue
+        for line in (result.stdout or "").splitlines():
+            image = line.strip()
+            if not image or image.startswith("<none>") or image in choices:
+                continue
+            choices.append(image)
+    return choices
+
+
+def _show_local_image_picker(parent, variable) -> None:
+    """Let the user select a labeled local AI Guardian image."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    choices = _local_image_choices()
+    dialog = tk.Toplevel(parent)
+    dialog.title("Select local AI Guardian image")
+    dialog.geometry("620x300")
+    dialog.minsize(440, 220)
+    dialog.transient(parent)
+    dialog.rowconfigure(1, weight=1)
+    dialog.columnconfigure(0, weight=1)
+
+    ttk.Label(
+        dialog,
+        text=(
+            "Images labeled ai-guardian.support-image=true are shown. "
+            "Custom references can be typed in the form."
+        ),
+        justify="left",
+        wraplength=580,
+    ).grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 8))
+
+    list_frame = ttk.Frame(dialog, padding=(12, 0, 12, 0))
+    list_frame.grid(row=1, column=0, sticky="nsew")
+    list_frame.rowconfigure(0, weight=1)
+    list_frame.columnconfigure(0, weight=1)
+    listbox = tk.Listbox(list_frame, exportselection=False)
+    listbox.grid(row=0, column=0, sticky="nsew")
+    scrollbar = ttk.Scrollbar(list_frame, orient="vertical", command=listbox.yview)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    listbox.configure(yscrollcommand=scrollbar.set)
+    for image in choices:
+        listbox.insert(tk.END, image)
+
+    current = str(variable.get() or "")
+    if current in choices:
+        listbox.selection_set(choices.index(current))
+        listbox.see(choices.index(current))
+    elif choices:
+        listbox.selection_set(0)
+
+    status = "" if choices else "No labeled local AI Guardian images were found."
+    ttk.Label(dialog, text=status, foreground="#666666").grid(
+        row=2, column=0, sticky="w", padx=12, pady=(8, 0)
+    )
+
+    buttons = ttk.Frame(dialog, padding=12)
+    buttons.grid(row=3, column=0, sticky="ew")
+    buttons.columnconfigure(0, weight=1)
+
+    def close() -> None:
+        dialog.destroy()
+
+    def select() -> None:
+        selected = listbox.curselection()
+        if selected:
+            variable.set(listbox.get(selected[0]))
+        close()
+
+    ttk.Button(buttons, text="Cancel", command=close).grid(row=0, column=0, sticky="w")
+    ttk.Button(
+        buttons,
+        text="Select",
+        command=select,
+        state="normal" if choices else "disabled",
+    ).grid(row=0, column=1, sticky="e", padx=(8, 0))
+    listbox.bind("<Double-Button-1>", lambda _event: select())
+    dialog.bind("<Return>", lambda _event: select())
+    dialog.bind("<Escape>", lambda _event: close())
+    dialog.protocol("WM_DELETE_WINDOW", close)
+    try:
+        dialog.grab_set()
+    except tk.TclError:
+        # Some desktop environments reject nested grabs; the picker remains
+        # usable as a transient window in that case.
+        pass
 
 
 def _show_tkinter_form(
@@ -107,6 +230,26 @@ def _show_tkinter_form(
                 variable.set(choices[0])
             control.grid(row=row, column=1, sticky="w", pady=4)
             widgets = [control]
+        elif kind == "image":
+            variable = tk.StringVar(value="" if default is None else str(default))
+            control_frame = ttk.Frame(frame)
+            control_frame.grid(row=row, column=1, sticky="ew", pady=4)
+            control = ttk.Entry(
+                control_frame,
+                textvariable=variable,
+                width=int(field.get("width", 44)),
+            )
+            control.grid(row=0, column=0, sticky="ew")
+            control_frame.columnconfigure(0, weight=1)
+            browse_button = ttk.Button(
+                control_frame,
+                text="Browse...",
+                command=lambda variable=variable: _show_local_image_picker(
+                    root, variable
+                ),
+            )
+            browse_button.grid(row=0, column=1, padx=(6, 0))
+            widgets = [control, browse_button]
         elif kind in {"file", "directory"}:
             variable = tk.StringVar(value="" if default is None else str(default))
             control_frame = ttk.Frame(frame)
@@ -354,6 +497,118 @@ def _show_tkinter_log(title: str, message: str, log_text: str) -> None:
     root.mainloop()
 
 
+def _show_tkinter_confirmation(title: str, message: str, expected_name: str) -> bool:
+    """Show a destructive-action confirmation requiring the sandbox name."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    from ai_guardian.tui.display import _ensure_tcl_library
+
+    _ensure_tcl_library()
+    root = tk.Tk()
+    root.title(title)
+    root.geometry("560x250")
+    root.minsize(480, 220)
+    root.resizable(True, False)
+    root.columnconfigure(0, weight=1)
+
+    frame = ttk.Frame(root, padding=16)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text=message, justify="left", wraplength=510).grid(
+        row=0, column=0, sticky="w", pady=(0, 14)
+    )
+    ttk.Label(frame, text="Type the sandbox name to confirm:").grid(
+        row=1, column=0, sticky="w"
+    )
+    name = tk.StringVar()
+    entry = ttk.Entry(frame, textvariable=name)
+    entry.grid(row=2, column=0, sticky="ew", pady=(4, 0))
+    error = tk.StringVar()
+    ttk.Label(frame, textvariable=error, foreground="#b00020").grid(
+        row=3, column=0, sticky="w", pady=(6, 0)
+    )
+
+    confirmed = False
+
+    def cancel() -> None:
+        root.destroy()
+
+    def confirm() -> None:
+        nonlocal confirmed
+        if name.get().strip() != expected_name:
+            error.set("The sandbox name does not match.")
+            entry.focus_set()
+            return
+        confirmed = True
+        root.destroy()
+
+    button_frame = ttk.Frame(frame)
+    button_frame.grid(row=4, column=0, sticky="e", pady=(14, 0))
+    ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left")
+    ttk.Button(button_frame, text="Delete sandbox", command=confirm).pack(
+        side="left", padx=(8, 0)
+    )
+    root.protocol("WM_DELETE_WINDOW", cancel)
+    root.bind("<Escape>", lambda _event: cancel())
+    root.bind("<Return>", lambda _event: confirm())
+    root.lift()
+    root.focus_force()
+    entry.focus_set()
+    try:
+        root.grab_set()
+        root.attributes("-topmost", True)
+        root.after(150, lambda: root.attributes("-topmost", False))
+    except tk.TclError:
+        # Some desktop environments reject transient/topmost hints.  The
+        # confirmation remains usable as an ordinary modal window in that case.
+        pass
+    root.mainloop()
+    return confirmed
+
+
+def _show_tkinter_confirmation_subprocess(
+    title: str, message: str, expected_name: str
+) -> bool:
+    """Run a destructive-action confirmation outside the tray process."""
+    payload = json.dumps(
+        {
+            "title": title,
+            "message": message,
+            "expected_name": expected_name,
+        },
+        ensure_ascii=False,
+    )
+    child = (
+        "import json, sys; "
+        "from ai_guardian.tray.sandbox_dialog import _show_tkinter_confirmation; "
+        "p=json.loads(sys.argv[1]); "
+        "v=_show_tkinter_confirmation(p['title'], p['message'], p['expected_name']); "
+        "print('1' if v else '0')"
+    )
+    try:
+        process = subprocess.run(
+            [sys.executable, "-c", child, payload],
+            capture_output=True,
+            text=True,
+            timeout=3600,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Sandbox confirmation could not be shown: %s", exc)
+        return False
+    if process.returncode != 0:
+        detail = (process.stderr or "").strip()
+        logger.warning(
+            "Sandbox confirmation exited with code %s%s",
+            process.returncode,
+            f": {detail[:200]}" if detail else "",
+        )
+        return False
+    return (process.stdout or "").strip().splitlines()[-1:] == ["1"]
+
+
 def _copy_sandbox_log(log_text: str, clipboard_owner=None) -> str:
     """Copy sandbox output and return a short status message for the dialog."""
     text = log_text or ""
@@ -440,6 +695,27 @@ def show_sandbox_log(title: str, message: str, log_text: str) -> bool:
     return bool(show_dialog(title, f"{message}\n\n{text}"))
 
 
+def show_sandbox_confirmation(name: str, runtime: str) -> bool:
+    """Confirm permanent deletion without exposing tray GUI toolkit state."""
+    try:
+        from ai_guardian.tui.display import _tkinter_available
+
+        if not _tkinter_available():
+            logger.warning("Sandbox confirmation unavailable: tkinter is not installed")
+            return False
+        message = (
+            f"Permanently delete sandbox '{name}' ({runtime})?\n\n"
+            "The runtime sandbox will be removed. Saved host configuration "
+            "snapshots are kept."
+        )
+        return _show_tkinter_confirmation_subprocess(
+            "Delete AI Guardian sandbox", message, name
+        )
+    except Exception as exc:
+        logger.warning("Sandbox confirmation unavailable: %s", exc)
+        return False
+
+
 def show_sandbox_form(
     title: str, message: str, fields: Iterable[Dict[str, Any]]
 ) -> Optional[Dict[str, Any]]:
@@ -460,4 +736,4 @@ def show_sandbox_form(
         return None
 
 
-__all__ = ["show_sandbox_form", "show_sandbox_log"]
+__all__ = ["show_sandbox_confirmation", "show_sandbox_form", "show_sandbox_log"]

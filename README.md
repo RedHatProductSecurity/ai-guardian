@@ -204,23 +204,22 @@ subcommand. It supports both Docker/Podman containers and OpenShell:
 
 ```bash
 ai-guardian sandbox create --runtime container --name guardian-codex --repo .
-ai-guardian sandbox list --runtime container
-ai-guardian sandbox stop --runtime container guardian-codex
-ai-guardian sandbox start --runtime container guardian-codex
-ai-guardian sandbox connect --runtime container guardian-codex
-ai-guardian sandbox exec --runtime container guardian-codex -- ai-guardian daemon status
-ai-guardian sandbox logs --runtime container guardian-codex --follow
-ai-guardian sandbox config save --runtime container guardian-codex
-ai-guardian sandbox delete --runtime container guardian-codex
+ai-guardian sandbox list
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian daemon status
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox delete guardian-codex
 ```
 
-Replace `container` with `openshell` for OpenShell sandboxes. A runtime must be
-selected when creating a sandbox; named lifecycle commands automatically detect
-the runtime from AI Guardian labels and OpenShell metadata when `--runtime` is
-omitted. An unqualified `list` includes both runtimes. OpenShell operations use
-the installed `openshell` CLI and its active gateway; set
-`OPENSHELL_CLI` when a different executable is required. The existing
-The sandbox command is also the supported entry point for interactive,
+Use `--runtime openshell` when creating an OpenShell sandbox. Named lifecycle
+commands automatically detect the runtime from AI Guardian labels and OpenShell
+metadata when `--runtime` is omitted. An unqualified `list` includes both
+runtimes. OpenShell operations use the installed `openshell` CLI and its active
+gateway; set `OPENSHELL_CLI` when a different executable is required. The
+sandbox command is also the supported entry point for interactive,
 fully provisioned OpenShell sessions, including policy composition and
 gateway-provider setup.
 
@@ -228,37 +227,30 @@ OpenShell `create` opens an independent interactive sandbox shell after setup,
 matching the native OpenShell experience while leaving the sandbox available
 after the shell exits; container `create` remains detached.
 
-The OpenShell `status`, `start`, `stop`, and `delete` forms are thin aliases of
-the corresponding native `openshell sandbox` commands. `connect` uses an
-independent `openshell sandbox exec --name ... --tty` shell so exiting it does
-not terminate the sandbox's main process. `exec` maps to
-`openshell sandbox exec --name`, and `logs` maps to `openshell logs`.
-`restart` is implemented as native `stop` followed by `start`; `create` and
-`list` add AI Guardian defaults and managed-resource filtering. See the
+The OpenShell `status`, `stop`, `exec`, and `logs` forms are thin aliases of
+the corresponding native commands. `connect` uses an independent
+`openshell sandbox exec --name ... --tty` shell so exiting it does not
+terminate the sandbox's main process. `start` and `restart` additionally
+ensure that the AI Guardian daemon and gateway service are available; `delete`
+removes that service before the native sandbox. `create` and `list` add AI
+Guardian defaults and managed-resource filtering. See the
 [Sandbox CLI guide](docs/Sandbox.md) for the full command reference, including
 timestamped configuration snapshots and recreating a sandbox with
 `--restore-config latest`.
 
-The OpenShell subcommand asks OpenShell to allocate a free port by default
-(`openshell forward service --local 127.0.0.1:0`) and prints the assigned port
-in its startup output. Pass `--port N` when a stable port is needed for a tray
-target or another client. Forwarding is enabled by default
-for host tray/NiceGUI integration; use `--no-forward` when the host UI should
-not have a REST endpoint for the sandbox:
+The OpenShell subcommand exposes the daemon's internal port through the
+gateway-managed `ai-guardian` service. The gateway gives each sandbox a
+separate URL, so multiple sandboxes can use the same internal port:
 
 ```bash
-ai-guardian sandbox create --runtime openshell --agent codex --no-forward
-# Equivalent environment setting:
-AI_GUARDIAN_OPEN_SHELL_FORWARD=false ai-guardian sandbox create \
-    --runtime openshell --agent codex
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
+# Example: http://NAME--ai-guardian.openshell.localhost:PORT/
 ```
 
-The sandbox remains usable from its shell, but the host tray/NiceGUI cannot
-discover or manage it without the forward.
-
-The same forwarding behavior is used by `ai-guardian sandbox create
---runtime openshell`; its `--port` option selects the local service-forward
-port, and omitting it selects a free port.
+Tray and NiceGUI discovery query the gateway for these service URLs. `--port`
+is a container-only option; OpenShell selects the service port through the
+gateway and does not use a host-side forward process.
 
 OpenShell must be installed and initialized on the host first, with a
 reachable gateway and configured compute driver; follow the

@@ -554,8 +554,13 @@ class TrayMenuBuilder:
             {
                 "name": "image",
                 "label": "Image / base",
+                "type": "image",
                 "default": "",
-                "help": "Leave empty to use the runtime default image.",
+                "help": (
+                    "Leave empty to use the runtime default. Browse lists local "
+                    "AI Guardian images; local tags use registry/name:tag, "
+                    "for example localhost/ai-guardian-openshell:dev."
+                ),
             },
             {
                 "name": "model",
@@ -612,14 +617,11 @@ class TrayMenuBuilder:
                 "name": "port",
                 "label": "Host port",
                 "default": "",
-                "help": "Optional port 1-65535; empty means runtime-selected.",
-            },
-            {
-                "name": "no_forward",
-                "label": "Disable OpenShell REST forwarding",
-                "type": "bool",
-                "default": False,
-                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "help": (
+                    "Container host port 1-65535; empty means runtime-selected. "
+                    "OpenShell uses the gateway-selected service port."
+                ),
+                "enabled_when": {"field": "runtime", "values": ("container",)},
             },
         ]
 
@@ -693,6 +695,12 @@ class TrayMenuBuilder:
         port = str(values.get("port") or "").strip()
         port_value = None
         if port:
+            if runtime != "container":
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    "Host port is supported for container sandboxes only.",
+                )
+                return
             try:
                 if not 1 <= int(port) <= 65535:
                     raise ValueError
@@ -717,7 +725,6 @@ class TrayMenuBuilder:
                 config_dir=config_dir,
                 repo=repo,
                 port=port_value,
-                no_forward=bool(values.get("no_forward")),
                 image=image,
                 model=model,
                 api_key=None,
@@ -1006,6 +1013,34 @@ class TrayMenuBuilder:
 
         return action
 
+    def _mk_sandbox_delete_action(self, slot):
+        """Create a delete action protected by an isolated confirmation."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+
+            def confirm_and_delete():
+                try:
+                    from ai_guardian.tray.sandbox_dialog import (
+                        show_sandbox_confirmation,
+                    )
+
+                    runtime = self._sandbox_runtime(target) or "unknown"
+                    if show_sandbox_confirmation(target.name, runtime):
+                        self._start_sandbox_command(target, "delete", [target.name])
+                except Exception:
+                    logger.exception("Sandbox delete confirmation failed")
+
+            threading.Thread(
+                target=confirm_and_delete,
+                daemon=True,
+                name="sandbox-delete-confirmation",
+            ).start()
+
+        return action
+
     def _build_sandbox_manage_menu_item(self, slot):
         """Build the per-target sandbox management submenu."""
 
@@ -1082,6 +1117,11 @@ class TrayMenuBuilder:
                 ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("Config", config_menu),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Delete...",
+                    self._mk_sandbox_delete_action(slot),
+                ),
             ),
             visible=visible,
         )

@@ -36,6 +36,7 @@ except ImportError:
 
 _CONTAINER_ID_RE = re.compile(r"^[a-fA-F0-9]{12,64}$")
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+_OPENSHELL_SERVICE_URL_RE = re.compile(r"https?://[^\s<>\[\]{}\"']+")
 _K8S_LABEL_KEY_RE = re.compile(
     r"^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/)?"
     r"[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$"
@@ -47,6 +48,7 @@ _K8S_LABEL_VALUE_RE = re.compile(
 _OPEN_SHELL_RUNTIME = "openshell"
 _OPEN_SHELL_MANAGED_LABEL = "openshell.managed"
 _OPEN_SHELL_NAME_LABEL = "openshell.ai/sandbox-name"
+_OPEN_SHELL_SERVICE_NAME = "ai-guardian"
 _AI_GUARDIAN_RUNTIME_LABEL = "ai-guardian.runtime"
 
 DOCKER_SOCKET = "/var/run/docker.sock"
@@ -59,6 +61,15 @@ def _normalize_container_name(value):
         return None
     name = value.strip().lstrip("/")
     return name or None
+
+
+def _extract_openshell_service_url(value: str) -> Optional[str]:
+    """Extract a gateway-managed service URL from OpenShell CLI output."""
+    for match in _OPENSHELL_SERVICE_URL_RE.finditer(
+        _ANSI_ESCAPE_RE.sub("", value or "")
+    ):
+        return match.group(0).rstrip(".,;)")
+    return None
 
 
 def is_container_id(value):
@@ -151,26 +162,6 @@ from ai_guardian.daemon import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-def get_openshell_forward_state_dir() -> Path:
-    """Return the host directory used by OpenShell sandbox commands for forwards."""
-    configured = os.environ.get("AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR")
-    if configured:
-        return Path(configured).expanduser()
-
-    runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
-    if runtime_dir:
-        return Path(runtime_dir) / "ai-guardian" / "openshell-forwards"
-
-    from ai_guardian.config.utils import get_state_dir
-
-    return get_state_dir() / "openshell-forwards"
-
-
-def _get_openshell_forward_state_dir() -> Path:
-    """Backward-compatible private alias for the forward state directory."""
-    return get_openshell_forward_state_dir()
 
 
 def _find_service_port(ports, target_port: int) -> int:
@@ -535,7 +526,7 @@ class DaemonDiscovery:
                 engine,
                 containers,
                 rest_port,
-                self._get_openshell_forwards(containers),
+                self._get_openshell_services(containers),
                 self._get_openshell_phases(containers),
             )
         except Exception as e:
@@ -556,7 +547,7 @@ class DaemonDiscovery:
                 engine,
                 matching,
                 rest_port,
-                self._get_openshell_forwards(matching) if matching else {},
+                self._get_openshell_services(matching) if matching else {},
                 self._get_openshell_phases(matching) if matching else {},
             )
         except Exception as e:
@@ -603,53 +594,60 @@ class DaemonDiscovery:
         }
 
     @staticmethod
-    def _get_openshell_forwards(containers):
-        """Return active OpenShell host forwards for managed containers.
+    def _get_openshell_services(containers):
+        """Return gateway-managed AI Guardian service URLs by sandbox name.
 
-        OpenShell sandboxes expose their daemon port through the gateway's
-        forwarding process rather than a normal container port binding. Only
-        invoke the optional CLI when the container list contains OpenShell
-        metadata, so ordinary Docker/Podman discovery remains unchanged.
+        OpenShell service endpoints are durable gateway resources. Querying the
+        endpoint for each discovered sandbox avoids host-side tunnel processes
+        and, importantly, keeps multiple sandboxes independent even when they
+        all expose the daemon on the same internal port.
         """
-        if not any(_is_openshell_container(c.labels or {}) for c in containers):
+        sandbox_names = set()
+        for container in containers:
+            labels = getattr(container, "labels", {}) or {}
+            if not _is_openshell_container(labels):
+                continue
+            name = _normalize_container_name(
+                labels.get(_OPEN_SHELL_NAME_LABEL) or labels.get("ai-guardian.name")
+            )
+            if name:
+                sandbox_names.add(name)
+        openshell_cli = os.environ.get("OPENSHELL_CLI", "openshell")
+        if not sandbox_names or not shutil.which(openshell_cli):
             return {}
-        forwards = {}
 
-        if shutil.which("openshell"):
+        services = {}
+        for name in sorted(sandbox_names):
             try:
                 result = subprocess.run(
-                    ["openshell", "forward", "list"],
+                    [
+                        openshell_cli,
+                        "service",
+                        "get",
+                        name,
+                        _OPEN_SHELL_SERVICE_NAME,
+                    ],
                     capture_output=True,
                     text=True,
                     timeout=3,
                 )
             except (OSError, subprocess.TimeoutExpired) as exc:
-                logger.debug("OpenShell forward discovery failed: %s", exc)
-            else:
-                if result.returncode != 0:
-                    logger.debug(
-                        "OpenShell forward discovery returned %s: %s",
-                        result.returncode,
-                        result.stderr.strip(),
-                    )
-                else:
-                    for raw_line in result.stdout.splitlines():
-                        line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
-                        fields = line.split()
-                        if len(fields) < 5 or fields[0].upper() == "SANDBOX":
-                            continue
-                        if fields[-1].lower() != "running":
-                            continue
-                        try:
-                            forwards[fields[0]] = int(fields[2])
-                        except (ValueError, IndexError):
-                            continue
+                logger.debug("OpenShell service discovery failed for %s: %s", name, exc)
+                continue
 
-        # `forward service` creates a long-lived local process, but OpenShell
-        # 0.0.116 does not include that process in `forward list`. The sandbox
-        # records its assigned host port so the tray/NiceGUI can discover it.
-        forwards.update(DaemonDiscovery._get_recorded_openshell_forwards())
-        return forwards
+            if result.returncode != 0:
+                logger.debug(
+                    "OpenShell service discovery returned %s for %s: %s",
+                    result.returncode,
+                    name,
+                    (result.stderr or "").strip(),
+                )
+                continue
+
+            service_url = _extract_openshell_service_url(result.stdout or "")
+            if service_url:
+                services[name] = service_url
+        return services
 
     @staticmethod
     def _get_openshell_phases(containers):
@@ -671,13 +669,14 @@ class DaemonDiscovery:
             )
             if name:
                 sandbox_names.add(name)
-        if not sandbox_names or not shutil.which("openshell"):
+        openshell_cli = os.environ.get("OPENSHELL_CLI", "openshell")
+        if not sandbox_names or not shutil.which(openshell_cli):
             return {}
 
         try:
             result = subprocess.run(
                 [
-                    "openshell",
+                    openshell_cli,
                     "sandbox",
                     "list",
                     "--output",
@@ -694,7 +693,7 @@ class DaemonDiscovery:
             logger.debug(
                 "OpenShell phase discovery returned %s: %s",
                 result.returncode,
-                result.stderr.strip(),
+                (result.stderr or "").strip(),
             )
             return {}
 
@@ -753,69 +752,17 @@ class DaemonDiscovery:
             return "starting"
         return None
 
-    @staticmethod
-    def _get_recorded_openshell_forwards():
-        """Read live OpenShell service-forward records written by sandbox create."""
-        state_dir = _get_openshell_forward_state_dir()
-        try:
-            state_paths = list(state_dir.glob("*.json"))
-        except OSError as exc:
-            logger.debug("OpenShell forward state discovery failed: %s", exc)
-            return {}
-
-        forwards = {}
-        for state_path in state_paths:
-            try:
-                data = json.loads(state_path.read_text(encoding="utf-8"))
-                if not isinstance(data, dict):
-                    continue
-                sandbox_name = data.get("sandbox_name")
-                host = data.get("host", "127.0.0.1")
-                port = int(data.get("port", 0))
-                pid = int(data.get("pid", 0))
-            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
-                logger.debug(
-                    "Ignoring invalid OpenShell forward state %s: %s",
-                    state_path,
-                    exc,
-                )
-                continue
-
-            if (
-                not isinstance(sandbox_name, str)
-                or not sandbox_name
-                or not isinstance(host, str)
-                or host not in {"127.0.0.1", "localhost", "::1"}
-                or not 1 <= port <= 65535
-                or pid <= 0
-                or not is_pid_alive(pid)
-            ):
-                continue
-            forwards[sandbox_name] = port
-        return forwards
-
-    @staticmethod
-    def _is_openshell_forward_disabled(sandbox_name):
-        """Return whether sandbox creation explicitly disabled REST forwarding."""
-        safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", sandbox_name)
-        state_path = _get_openshell_forward_state_dir() / f"{safe_name}.json"
-        try:
-            state = json.loads(state_path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError):
-            return False
-        return isinstance(state, dict) and state.get("enabled") is False
-
     def _sdk_containers_to_targets(
         self,
         engine,
         containers,
         rest_port,
-        openshell_forwards=None,
+        openshell_services=None,
         openshell_phases=None,
         stopped_only=False,
     ):
         """Convert SDK Container objects to DaemonTarget list."""
-        openshell_forwards = openshell_forwards or {}
+        openshell_services = openshell_services or {}
         openshell_phases = openshell_phases or {}
         targets = []
         for c in containers:
@@ -845,14 +792,21 @@ class DaemonDiscovery:
             except (ValueError, TypeError):
                 target_rest_port = rest_port
 
-            host_port = self._sdk_find_host_port(c, target_rest_port)
             sandbox_name = _normalize_container_name(
                 labels.get(_OPEN_SHELL_NAME_LABEL)
                 or labels.get("ai-guardian.name")
                 or name
             )
-            if not host_port and is_openshell:
-                host_port = openshell_forwards.get(sandbox_name, 0)
+            service_url = openshell_services.get(sandbox_name) if is_openshell else None
+            # OpenShell's support container may advertise the internal daemon
+            # port, but that port is not a host endpoint. Always use the
+            # gateway-managed service URL for OpenShell sandboxes.
+            host_port = (
+                0 if is_openshell else self._sdk_find_host_port(c, target_rest_port)
+            )
+            service_host, service_port = self._parse_service_endpoint(service_url)
+            if service_url:
+                host_port = service_port
 
             status = "stopped" if stopped_only else "unknown"
             error_message = None
@@ -873,15 +827,13 @@ class DaemonDiscovery:
                 elif is_openshell and phase_status in {"running", "paused"}:
                     # OpenShell's Ready phase only describes its supervisor.
                     # The AI Guardian daemon has its own lifecycle and must
-                    # answer on the forwarded REST port before the tray marks
-                    # the target as running.
-                    if self._is_openshell_forward_disabled(sandbox_name):
-                        status = phase_status
-                    elif not host_port:
+                    # answer on the gateway-managed service before the tray
+                    # marks the target as running.
+                    if not service_url:
                         status = "error"
-                        error_message = "OpenShell REST forward is unavailable"
+                        error_message = "OpenShell AI Guardian service is unavailable"
                     else:
-                        api_data = self._probe_daemon(host_port)
+                        api_data = self._probe_daemon(url=service_url)
                         if api_data:
                             status = "paused" if api_data.get("paused") else "running"
                             api_name = api_data.get("name")
@@ -893,12 +845,16 @@ class DaemonDiscovery:
                             status = "error"
                             error_message = (
                                 "AI Guardian daemon is not reachable through the "
-                                "OpenShell REST forward"
+                                "OpenShell AI Guardian service"
                             )
                 elif phase_status:
                     status = phase_status
-                elif host_port:
-                    api_data = self._probe_daemon(host_port)
+                elif service_url or host_port:
+                    api_data = (
+                        self._probe_daemon(url=service_url)
+                        if service_url
+                        else self._probe_daemon(host_port)
+                    )
                     if api_data:
                         status = "paused" if api_data.get("paused") else "running"
                         api_name = api_data.get("name")
@@ -927,11 +883,12 @@ class DaemonDiscovery:
                 runtime="container",
                 runtime_type=_OPEN_SHELL_RUNTIME if is_openshell else None,
                 status=status,
-                host="127.0.0.1",
+                host=service_host or "127.0.0.1",
                 port=host_port,
                 container_id=container_id,
                 container_engine=engine,
                 container_name=orig_container_name,
+                url=service_url,
                 auth_token=container_token,
                 last_seen=time.monotonic(),
                 error_message=error_message,
@@ -939,6 +896,21 @@ class DaemonDiscovery:
             targets.append(target)
 
         return targets
+
+    @staticmethod
+    def _parse_service_endpoint(url):
+        """Return host and port metadata for a gateway-managed service URL."""
+        if not isinstance(url, str) or not url:
+            return None, 0
+        from urllib.parse import urlparse
+
+        try:
+            parsed = urlparse(url)
+            host = parsed.hostname
+            port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        except ValueError:
+            return None, 0
+        return host, port
 
     @staticmethod
     def _sdk_find_host_port(container, container_port):
@@ -1070,13 +1042,29 @@ class DaemonDiscovery:
         return None
 
     @staticmethod
-    def _probe_daemon(port, host="127.0.0.1", timeout=1.0):
+    def _probe_daemon(port=None, host="127.0.0.1", timeout=1.0, url=None):
         """Probe a daemon's REST API via /api/health (unauthenticated).
 
         Returns dict with at least {"status", "paused", "name"} or None
         if unreachable.
         """
         import socket as _socket
+        from urllib.parse import urlparse
+
+        health_url = None
+        if url:
+            try:
+                parsed = urlparse(url)
+                if parsed.scheme not in {"http", "https"}:
+                    return None
+                host = parsed.hostname
+                port = parsed.port or (443 if parsed.scheme == "https" else 80)
+            except ValueError:
+                return None
+            health_url = f"{url.rstrip('/')}/api/health"
+
+        if not host or not port:
+            return None
 
         try:
             sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
@@ -1091,7 +1079,9 @@ class DaemonDiscovery:
             from urllib.request import urlopen
             import json as json_mod
 
-            if host not in ("127.0.0.1", "localhost", "::1"):
+            if host not in ("127.0.0.1", "localhost", "::1") and not (
+                host == "openshell.localhost" or host.endswith(".openshell.localhost")
+            ):
                 try:
                     if not _ipaddr.ip_address(host).is_private:
                         logger.warning(
@@ -1100,8 +1090,8 @@ class DaemonDiscovery:
                         return None
                 except ValueError:
                     pass  # intentionally silent — daemon comm best-effort
-            url = f"http://{host}:{port}/api/health"
-            with urlopen(url, timeout=timeout) as resp:
+            health_url = health_url or f"http://{host}:{port}/api/health"
+            with urlopen(health_url, timeout=timeout) as resp:
                 return json_mod.loads(resp.read().decode("utf-8"))
         except Exception:
             return None

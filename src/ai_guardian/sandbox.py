@@ -12,17 +12,15 @@ import os
 import json
 import logging
 import re
-import signal
 import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from ai_guardian.daemon.discovery import DaemonTarget, get_openshell_forward_state_dir
+from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
 
 CONTAINER_RUNTIME = "container"
@@ -41,6 +39,7 @@ MANAGED_LABEL_KEY = "ai-guardian.managed"
 RUNTIME_LABEL_KEY = "ai-guardian.runtime"
 DAEMON_LABEL_KEY = "ai-guardian.daemon"
 OPENSHELL_ENTRYPOINT = "/usr/local/bin/entrypoint.sh"
+OPENSHELL_SERVICE_NAME = "ai-guardian"
 # Host configuration is staged outside the active sandbox config directory so
 # an existing sandbox-local config can win over it at container startup.
 CONTAINER_HOST_CONFIG_PATH = "/sandbox/.config/ai-guardian.host.json"
@@ -52,9 +51,7 @@ _OPENSHELL_BASE_POLICY_ENV = "AI_GUARDIAN_OPEN_SHELL_BASE_POLICY"
 _OPENSHELL_AGENT_POLICY_DIR_ENV = "AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR"
 
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
-_OPENSHELL_FORWARD_LINE_RE = re.compile(
-    r"Forwarding\s+127\.0\.0\.1:(?P<port>[0-9]+)\s+->"
-)
+_OPENSHELL_SERVICE_URL_RE = re.compile(r"https?://[^\s<>\[\]{}\"']+")
 
 logger = logging.getLogger(__name__)
 
@@ -137,6 +134,50 @@ def _command_args(args) -> List[str]:
     if command and command[0] == "--":
         return command[1:]
     return command
+
+
+def _image_for_runtime(args, runtime: str) -> str:
+    """Resolve the selected image while preserving an explicit form value."""
+    explicit = str(getattr(args, "image", None) or "").strip()
+    if explicit:
+        return explicit
+    if runtime == CONTAINER_RUNTIME:
+        return os.environ.get("AI_GUARDIAN_IMAGE", DEFAULT_CONTAINER_IMAGE)
+    return os.environ.get(
+        "AI_GUARDIAN_IMAGE",
+        os.environ.get("AI_GUARDIAN_OPEN_SHELL_IMAGE", DEFAULT_OPENSHELL_IMAGE),
+    )
+
+
+def _validate_image_reference(image: Optional[str]) -> None:
+    """Reject the common two-colon image typo before invoking a runtime.
+
+    A single colon in an unqualified image is a tag (``image:tag``).  A colon
+    before the repository path is a registry port and must be numeric
+    (``localhost:5000/image:tag``).  This catches values such as
+    ``localhost:ai-guardian:openshell`` instead of letting a runtime resolve
+    or report them ambiguously.
+    """
+    value = str(image or "").strip()
+    if not value:
+        return
+
+    first_component = value.split("/", 1)[0]
+    if "/" not in value:
+        if value.count(":") > 1:
+            raise ValueError(
+                f"invalid image reference '{value}'; use registry/name:tag, "
+                "for example localhost/ai-guardian-openshell:dev"
+            )
+        return
+
+    if ":" in first_component:
+        port = first_component.rsplit(":", 1)[1]
+        if not port.isdigit():
+            raise ValueError(
+                f"invalid image reference '{value}'; a registry port must be "
+                "numeric, for example localhost:5000/image:tag"
+            )
 
 
 def _record_output(output: Optional[List[str]], text) -> None:
@@ -1125,20 +1166,6 @@ def _openshell_agent_has_credentials(args, agent: str) -> bool:
     return False
 
 
-def _openshell_forward_enabled(args) -> bool:
-    """Resolve the OpenShell forwarding switch from CLI or environment."""
-    if getattr(args, "no_forward", False):
-        return False
-    configured = os.environ.get("AI_GUARDIAN_OPEN_SHELL_FORWARD")
-    if configured is None:
-        return True
-    if configured.lower() in {"1", "true", "yes", "on"}:
-        return True
-    if configured.lower() in {"0", "false", "no", "off"}:
-        return False
-    raise ValueError("AI_GUARDIAN_OPEN_SHELL_FORWARD must be true or false")
-
-
 def _openshell_entrypoint_args(args) -> List[str]:
     """Return the entrypoint command for an OpenShell-created sandbox."""
     return _command_args(args) or ["bash", "-l"]
@@ -1151,265 +1178,109 @@ def _generated_openshell_name(agent: str) -> str:
     return f"ag-{agent_suffix}-{pid_suffix}"
 
 
-def _openshell_forward_state_path(name: str) -> Path:
-    """Return the shared discovery state path for an OpenShell forward."""
-    safe_name = re.sub(r"[^A-Za-z0-9_.-]", "_", name)
-    return get_openshell_forward_state_dir() / f"{safe_name}.json"
+def _extract_openshell_service_url(value: str) -> Optional[str]:
+    """Extract a gateway-managed service URL from OpenShell CLI output."""
+    for match in _OPENSHELL_SERVICE_URL_RE.finditer(
+        _ANSI_ESCAPE_RE.sub("", value or "")
+    ):
+        return match.group(0).rstrip(".,;)")
+    return None
 
 
-def _read_openshell_forward_state(name: str) -> Optional[dict]:
-    """Read a previously recorded OpenShell service-forward state."""
-    try:
-        data = json.loads(
-            _openshell_forward_state_path(name).read_text(encoding="utf-8")
-        )
-    except (OSError, UnicodeError, json.JSONDecodeError):
+def _get_openshell_service_url(args, name: str) -> Optional[str]:
+    """Return the gateway-managed AI Guardian service URL for a sandbox."""
+    result = _run_capture(
+        [
+            _openshell_cli(args),
+            "service",
+            "get",
+            name,
+            OPENSHELL_SERVICE_NAME,
+        ]
+    )
+    if not result or result.returncode != 0:
         return None
-    return data if isinstance(data, dict) else None
+    return _extract_openshell_service_url(result.stdout or "")
 
 
-def _write_openshell_forward_state(
-    name: str, port: int, pid: int, *, enabled: bool = True
-) -> bool:
-    """Atomically record OpenShell service-forward state for discovery."""
-    state_path = _openshell_forward_state_path(name)
-    try:
-        state_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        descriptor, temporary_path = tempfile.mkstemp(
-            prefix=".openshell-forward.",
-            suffix=".tmp",
-            dir=state_path.parent,
-        )
-        state = {
-            "sandbox_name": name,
-            "host": "127.0.0.1",
-            "port": int(port),
-            "target_port": int(DEFAULT_REST_PORT),
-            "pid": int(pid),
-        }
-        if not enabled:
-            state["enabled"] = False
-        try:
-            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-                json.dump(state, stream, separators=(",", ":"))
-                stream.write("\n")
-            os.chmod(temporary_path, 0o600)
-            os.replace(temporary_path, state_path)
-        except Exception:
-            try:
-                os.unlink(temporary_path)
-            except OSError:
-                pass  # intentionally silent — cleanup of temporary state
-            raise
-    except (OSError, TypeError, ValueError) as exc:
-        logger.warning("Unable to record OpenShell forward for %s: %s", name, exc)
-        return False
-    return True
-
-
-def _terminate_openshell_forward(pid: int) -> None:
-    """Stop a service-forward process recorded by this command."""
-    if pid <= 0 or pid == os.getpid():
-        return
-    try:
-        os.kill(pid, signal.SIGTERM)
-    except ProcessLookupError:
-        pass  # intentionally silent — forward already stopped
-    except OSError as exc:
-        logger.debug("Unable to stop OpenShell forward process %s: %s", pid, exc)
-
-
-def _stop_openshell_forward(name: str, *, retain: bool) -> None:
-    """Stop a recorded forward and optionally retain its port for ``start``."""
-    state_path = _openshell_forward_state_path(name)
-    state = _read_openshell_forward_state(name)
-    if state:
-        try:
-            _terminate_openshell_forward(int(state.get("pid", 0)))
-        except (TypeError, ValueError):
-            logger.debug("Ignoring invalid OpenShell forward PID for %s", name)
-
-    if retain and state:
-        state["pid"] = 0
-        try:
-            state_path.write_text(
-                json.dumps(state, separators=(",", ":")) + "\n", encoding="utf-8"
-            )
-            os.chmod(state_path, 0o600)
-        except OSError as exc:
-            logger.debug(
-                "Unable to retain OpenShell forward state for %s: %s", name, exc
-            )
-    elif not retain:
-        try:
-            state_path.unlink()
-        except FileNotFoundError:
-            pass  # intentionally silent — no forward was recorded
-        except OSError as exc:
-            logger.debug(
-                "Unable to remove OpenShell forward state for %s: %s", name, exc
-            )
-
-
-def _start_openshell_forward(
+def _expose_openshell_service(
     args,
     name: str,
-    port: Optional[int] = None,
     *,
     output: Optional[List[str]] = None,
 ) -> int:
-    """Start a persistent host REST forward and record its assigned port."""
+    """Expose the daemon through an OpenShell gateway-managed HTTP service."""
     if not name:
         _emit_output(
-            "Error: OpenShell forwarding requires a sandbox name; provide --name.",
+            "Error: exposing the OpenShell service requires a sandbox name; "
+            "provide --name.",
             output=output,
             error=True,
         )
         return 1
 
-    requested_port = port if port is not None else getattr(args, "port", None)
-    local_port = str(requested_port if requested_port is not None else 0)
     command = [
         _openshell_cli(args),
-        "forward",
         "service",
-        "--target-port",
-        DEFAULT_REST_PORT,
-        "--local",
-        f"127.0.0.1:{local_port}",
+        "expose",
         name,
+        DEFAULT_REST_PORT,
+        OPENSHELL_SERVICE_NAME,
     ]
-    popen_options = {
-        "stdin": subprocess.DEVNULL,
-        "stdout": subprocess.PIPE,
-        "stderr": subprocess.STDOUT,
-        "text": True,
-        "bufsize": 1,
-    }
-    if os.name == "nt":
-        popen_options["creationflags"] = getattr(
-            subprocess, "CREATE_NEW_PROCESS_GROUP", 0
-        )
+    captured: List[str] = []
+    result = _run(command, output=captured)
+    if output is None:
+        for chunk in captured:
+            print(chunk, end="")
     else:
-        popen_options["start_new_session"] = True
+        output.extend(captured)
+    if result != 0:
+        return result
 
-    try:
-        process = subprocess.Popen(command, **popen_options)
-    except FileNotFoundError:
+    service_url = _extract_openshell_service_url("".join(captured))
+    if service_url is None:
+        service_url = _get_openshell_service_url(args, name)
+    if not service_url:
         _emit_output(
-            "Error: required executable was not found: " f"{_openshell_cli(args)}",
+            "Error: OpenShell did not return a service URL for the AI Guardian "
+            "daemon.",
             output=output,
             error=True,
         )
-        return 127
-    except OSError as exc:
-        _emit_output(
-            f"Error starting OpenShell service forward: {exc}",
-            output=output,
-            error=True,
-        )
-        return 1
-
-    ready = threading.Event()
-    result = {}
-
-    def _consume_output():
-        stream = process.stdout
-        if stream is None:
-            result["error"] = "OpenShell forward produced no status output"
-            ready.set()
-            return
-        try:
-            for raw_line in stream:
-                line = _ANSI_ESCAPE_RE.sub("", raw_line).strip()
-                _record_output(output, f"{line}\n")
-                match = _OPENSHELL_FORWARD_LINE_RE.search(line)
-                if match and "port" not in result:
-                    result["port"] = int(match.group("port"))
-                    ready.set()
-        except (OSError, ValueError) as exc:
-            result["error"] = str(exc)
-        finally:
-            if not ready.is_set():
-                result.setdefault(
-                    "error", "OpenShell forward exited before becoming ready"
-                )
-                ready.set()
-
-    threading.Thread(
-        target=_consume_output,
-        name=f"openshell-forward-{name}",
-        daemon=True,
-    ).start()
-
-    if not ready.wait(timeout=10):
-        _terminate_openshell_forward(process.pid)
-        _emit_output(
-            "Error: timed out waiting for OpenShell service forward.",
-            output=output,
-            error=True,
-        )
-        return 1
-
-    assigned_port = result.get("port")
-    if not isinstance(assigned_port, int) or not 1 <= assigned_port <= 65535:
-        _terminate_openshell_forward(process.pid)
-        detail = result.get("error", "OpenShell did not report a valid host port")
-        _emit_output(f"Error: {detail}.", output=output, error=True)
-        return 1
-
-    if not _write_openshell_forward_state(name, assigned_port, process.pid):
-        _terminate_openshell_forward(process.pid)
         return 1
 
     _emit_output(
-        f"OpenShell REST forward: http://127.0.0.1:{assigned_port}/",
+        f"OpenShell AI Guardian service: {service_url}",
         output=output,
     )
     return 0
 
 
-def _restart_recorded_openshell_forward(
+def _ensure_openshell_service(
     args, name: str, *, output: Optional[List[str]] = None
 ) -> int:
-    """Restart or recreate the OpenShell forward for a sandbox."""
-    state = _read_openshell_forward_state(name)
-    if state and state.get("enabled") is False:
-        _emit_output(
-            f"OpenShell REST forwarding is disabled for sandbox '{name}'.",
-            output=output,
-        )
+    """Ensure the durable AI Guardian service endpoint exists for a sandbox."""
+    if _get_openshell_service_url(args, name):
         return 0
+    return _expose_openshell_service(args, name, output=output)
 
-    port = 0
-    if state:
-        try:
-            port = int(state.get("port", 0))
-        except (TypeError, ValueError):
-            port = 0
 
-    if 1 <= port <= 65535:
-        if output is None:
-            result = _start_openshell_forward(args, name, port=port)
-        else:
-            result = _start_openshell_forward(args, name, port=port, output=output)
-        if result == 0:
-            return 0
-        _emit_output(
-            f"Unable to reuse OpenShell forward port {port}; allocating a new port.",
-            output=output,
-            error=True,
-        )
-    else:
-        _emit_output(
-            f"No usable OpenShell forward record for sandbox '{name}'; "
-            "creating a new forward.",
-            output=output,
-        )
-
-    if output is None:
-        return _start_openshell_forward(args, name)
-    return _start_openshell_forward(args, name, output=output)
+def _delete_openshell_service(
+    args, name: str, *, output: Optional[List[str]] = None
+) -> int:
+    """Delete the AI Guardian service endpoint before deleting its sandbox."""
+    if not _get_openshell_service_url(args, name):
+        return 0
+    return _run(
+        [
+            _openshell_cli(args),
+            "service",
+            "delete",
+            name,
+            OPENSHELL_SERVICE_NAME,
+        ],
+        output=output,
+    )
 
 
 def _recover_stopped_openshell_container(
@@ -1530,21 +1401,18 @@ def _container_rest_port(args, name: str) -> int:
 
 def _sandbox_rest_target(args, runtime: str, name: str) -> DaemonTarget:
     """Build a REST target for a running sandbox daemon."""
+    service_url = None
     if runtime == CONTAINER_RUNTIME:
         port = _container_rest_port(args, name)
     elif runtime == OPENSHELL_RUNTIME:
-        state = _read_openshell_forward_state(name)
-        try:
-            port = int(state.get("port", 0)) if state else 0
-            forward_pid = int(state.get("pid", 0)) if state else 0
-        except (TypeError, ValueError):
-            port = 0
-            forward_pid = 0
-        if not 1 <= port <= 65535 or forward_pid <= 0:
+        service_url = _get_openshell_service_url(args, name)
+        if not service_url:
             raise ValueError(
-                f"sandbox '{name}' has no active OpenShell REST forward; "
-                "recreate it without --no-forward"
+                f"sandbox '{name}' has no OpenShell AI Guardian service endpoint; "
+                f"run 'openshell service expose {name} {DEFAULT_REST_PORT} "
+                f"{OPENSHELL_SERVICE_NAME}'"
             )
+        port = 0
     else:
         raise ValueError(f"unsupported sandbox runtime: {runtime}")
 
@@ -1553,6 +1421,7 @@ def _sandbox_rest_target(args, runtime: str, name: str) -> DaemonTarget:
         runtime=runtime,
         host="127.0.0.1",
         port=port,
+        url=service_url,
         auth_token=_sandbox_auth_token(args, runtime, name),
         container_engine=(
             _container_engine(args) if runtime == CONTAINER_RUNTIME else None
@@ -1718,9 +1587,7 @@ def _config_mount_args(command: List[str], args) -> None:
 
 def _container_create(args) -> Tuple[List[str], Optional[Dict[str, str]]]:
     engine = _container_engine(args)
-    image = getattr(args, "image", None) or os.environ.get(
-        "AI_GUARDIAN_IMAGE", DEFAULT_CONTAINER_IMAGE
-    )
+    image = _image_for_runtime(args, CONTAINER_RUNTIME)
     command = [
         engine,
         "run",
@@ -1800,10 +1667,7 @@ def _openshell_create(
 ) -> Tuple[List[str], str, bool, Path]:
     """Build a managed OpenShell create command and its temporary policy."""
     cli = _openshell_cli(args)
-    image = getattr(args, "image", None) or os.environ.get(
-        "AI_GUARDIAN_IMAGE",
-        os.environ.get("AI_GUARDIAN_OPEN_SHELL_IMAGE", DEFAULT_OPENSHELL_IMAGE),
-    )
+    image = _image_for_runtime(args, OPENSHELL_RUNTIME)
     command = [cli, "sandbox", "create", "--from", image, "--detach"]
 
     command.extend(
@@ -1961,7 +1825,6 @@ def _create(
         result = _run(command, output=output)
         shutil.rmtree(policy_dir, ignore_errors=True)
         policy_dir = None
-        forward_enabled = _openshell_forward_enabled(args)
         if result != 0:
             return result
 
@@ -1973,9 +1836,14 @@ def _create(
             if result != 0:
                 return result
 
+        result = _expose_openshell_service(args, name, output=output)
+        if result != 0:
+            return result
+
+        if uploads_requested:
             # The detached OpenShell process already owns the persistent
             # login shell.  Bootstrap setup must return so create can start
-            # the REST forward; an explicitly supplied command is a separate
+            # the gateway-managed service; an explicitly supplied command is a separate
             # user-requested exec and may remain interactive.
             command_args = _command_args(args)
             if command_args:
@@ -2003,19 +1871,6 @@ def _create(
             if result != 0:
                 return result
 
-        if forward_enabled:
-            if output is None:
-                result = _start_openshell_forward(args, name)
-            else:
-                result = _start_openshell_forward(args, name, output=output)
-            if result != 0:
-                return result
-        else:
-            # Retain an explicit no-forward choice so a later lifecycle
-            # restart does not silently create a host listener. Older
-            # sandboxes without this marker default to recovery on restart.
-            _write_openshell_forward_state(name, 0, 0, enabled=False)
-
         # Match native OpenShell UX by opening a shell after setup, but use an
         # independent exec session rather than ``connect``.  In OpenShell
         # versions where ``connect`` attaches to the sandbox's main process,
@@ -2041,9 +1896,9 @@ def create_sandbox(
 
     ``args`` uses the same attributes as the ``sandbox create`` parser.  The
     tray passes ``interactive=False`` so OpenShell setup returns after the
-    daemon and REST forward are ready instead of attaching a shell.  When an
-    output list is supplied, runtime output is captured there for a GUI log
-    dialog; the normal CLI path keeps streaming to the caller's terminal.
+    daemon and gateway-managed service are ready instead of attaching a shell.
+    When an output list is supplied, runtime output is captured there for a GUI
+    log dialog; the normal CLI path keeps streaming to the caller's terminal.
     """
     return _create(args, interactive=interactive, output=output)
 
@@ -2051,6 +1906,7 @@ def create_sandbox(
 def _validate_create_options(args) -> None:
     """Validate create-only options before touching a runtime."""
     runtime = _requested_runtime(args) or _runtime(args)
+    _validate_image_reference(getattr(args, "image", None))
     policy = getattr(args, "policy", None) or []
     providers = getattr(args, "provider", None) or []
     model = getattr(args, "model", None)
@@ -2061,19 +1917,17 @@ def _validate_create_options(args) -> None:
             raise ValueError("--provider is supported for OpenShell sandboxes only")
         if model:
             raise ValueError("--model is supported for OpenShell sandboxes only")
-        if getattr(args, "no_forward", False):
-            raise ValueError("--no-forward is supported for OpenShell sandboxes only")
-    elif getattr(args, "api_key", None):
-        agent = getattr(args, "agent", None) or os.environ.get(
-            "AI_GUARDIAN_AGENT", DEFAULT_OPENSHELL_AGENT
-        )
-        if agent != "claude":
-            raise ValueError(
-                "--api-key can only be used with the Claude OpenShell agent"
+    elif runtime == OPENSHELL_RUNTIME:
+        if getattr(args, "api_key", None):
+            agent = getattr(args, "agent", None) or os.environ.get(
+                "AI_GUARDIAN_AGENT", DEFAULT_OPENSHELL_AGENT
             )
-    if runtime == OPENSHELL_RUNTIME:
-        _openshell_forward_enabled(args)
-
+            if agent != "claude":
+                raise ValueError(
+                    "--api-key can only be used with the Claude OpenShell agent"
+                )
+        if getattr(args, "port", None) is not None:
+            raise ValueError("--port is supported for container sandboxes only")
     restore_selector = getattr(args, "restore_config", None)
     if not restore_selector:
         return
@@ -2208,7 +2062,6 @@ def handle_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:
         if runtime == OPENSHELL_RUNTIME:
             name = getattr(args, "name", "")
             if operation == "stop":
-                _stop_openshell_forward(name, retain=True)
                 return _run(
                     _lifecycle_command(args, operation, runtime=runtime),
                     output=output,
@@ -2229,9 +2082,8 @@ def handle_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:
                 daemon_started = _ensure_openshell_daemon(args, name, output=output)
                 if daemon_started != 0:
                     return daemon_started
-                return _restart_recorded_openshell_forward(args, name, output=output)
+                return _ensure_openshell_service(args, name, output=output)
             if operation == "restart":
-                _stop_openshell_forward(name, retain=True)
                 stopped = _run(
                     _lifecycle_command(args, "stop", runtime=runtime),
                     output=output,
@@ -2247,9 +2099,11 @@ def handle_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:
                 daemon_started = _ensure_openshell_daemon(args, name, output=output)
                 if daemon_started != 0:
                     return daemon_started
-                return _restart_recorded_openshell_forward(args, name, output=output)
+                return _ensure_openshell_service(args, name, output=output)
             if operation == "delete":
-                _stop_openshell_forward(name, retain=False)
+                service_deleted = _delete_openshell_service(args, name, output=output)
+                if service_deleted != 0:
+                    return service_deleted
                 return _run(
                     _lifecycle_command(args, operation, runtime=runtime),
                     output=output,

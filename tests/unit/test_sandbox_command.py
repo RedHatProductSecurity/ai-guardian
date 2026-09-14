@@ -1,6 +1,5 @@
 """Tests for the ``ai-guardian sandbox`` lifecycle command."""
 
-import io
 import json
 import os
 import shutil
@@ -21,7 +20,7 @@ from ai_guardian.sandbox import (
     _load_snapshot_config,
     _openshell_create,
     _openshell_provider_environment,
-    _start_openshell_forward,
+    _expose_openshell_service,
     create_sandbox,
     handle_sandbox_command,
 )
@@ -96,7 +95,7 @@ def test_openshell_start_recovers_container_stopped_out_of_band():
             ],
         ) as run,
         patch(
-            "ai_guardian.sandbox._start_openshell_forward", return_value=0
+            "ai_guardian.sandbox._ensure_openshell_service", return_value=0
         ) as forward,
         patch("ai_guardian.sandbox._ensure_openshell_daemon", return_value=0) as daemon,
     ):
@@ -234,7 +233,7 @@ def test_openshell_lifecycle_commands():
                 "ai_guardian.sandbox.subprocess.run",
                 return_value=subprocess.CompletedProcess([], 0),
             ) as run,
-            patch("ai_guardian.sandbox._start_openshell_forward", return_value=0),
+            patch("ai_guardian.sandbox._ensure_openshell_service", return_value=0),
             patch("ai_guardian.sandbox._ensure_openshell_daemon", return_value=0),
         ):
             assert handle_sandbox_command(args) == 0
@@ -253,7 +252,7 @@ def test_openshell_restart_stops_before_starting():
                 subprocess.CompletedProcess([], 0),
             ],
         ) as run,
-        patch("ai_guardian.sandbox._start_openshell_forward", return_value=0),
+        patch("ai_guardian.sandbox._ensure_openshell_service", return_value=0),
         patch("ai_guardian.sandbox._ensure_openshell_daemon", return_value=0) as daemon,
     ):
         assert handle_sandbox_command(args) == 0
@@ -415,7 +414,6 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
         config_dir=str(config_dir),
         repo=str(repo),
         port=8123,
-        no_forward=False,
         image="example/ai-guardian:test",
         api_key=None,
         environment=[],
@@ -700,7 +698,7 @@ def test_container_create_preserves_explicit_command():
     ]
 
 
-def test_openshell_create_forwards_lifecycle_options(tmp_path):
+def test_openshell_create_exposes_gateway_managed_service(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     (config_dir / "ai-guardian.json").write_text("{}\n", encoding="utf-8")
@@ -716,8 +714,7 @@ def test_openshell_create_forwards_lifecycle_options(tmp_path):
         profile=None,
         config_dir=str(config_dir),
         repo=str(repo),
-        port=9000,
-        no_forward=False,
+        port=None,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=["DEBUG=1"],
@@ -736,12 +733,12 @@ def test_openshell_create_forwards_lifecycle_options(tmp_path):
             ],
         ) as run,
         patch(
-            "ai_guardian.sandbox._start_openshell_forward", return_value=0
-        ) as forward,
+            "ai_guardian.sandbox._expose_openshell_service", return_value=0
+        ) as service,
     ):
         assert handle_sandbox_command(args) == 0
 
-    forward.assert_called_once_with(args, "demo")
+    service.assert_called_once_with(args, "demo", output=None)
 
     create_command = run.call_args_list[0].args[0]
     exec_command = run.call_args_list[1].args[0]
@@ -763,7 +760,7 @@ def test_openshell_create_forwards_lifecycle_options(tmp_path):
         if value == "--provider"
     ] == ["ai-guardian-claude"]
     policy_argument = create_command[create_command.index("--policy") + 1]
-    assert policy_argument.endswith("/policy.yaml")
+    assert Path(policy_argument).name == "policy.yaml"
     assert policy_argument != str(policy)
     assert f"{repo}:/sandbox/repo" in create_command
     assert "DEBUG=1" in create_command
@@ -845,7 +842,6 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         config_dir=str(tmp_path / "config"),
         repo=None,
         profile=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         environment=[],
         policy=[],
@@ -863,7 +859,7 @@ def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
         assert "--no-auto-providers" in command
         assert "--auto-providers" not in command
         assert command[command.index("--provider") + 1] == "codex-provider"
-        assert command[command.index("--policy") + 1].endswith("/policy.yaml")
+        assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
     finally:
         shutil.rmtree(policy_dir)
 
@@ -931,7 +927,6 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
         config_dir=str(tmp_path / "config"),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -955,6 +950,7 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
             return_value=["google-vertex-ai"],
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0),
@@ -1008,7 +1004,6 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         config_dir=str(tmp_path / "config"),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1032,6 +1027,7 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         patch(
             "ai_guardian.sandbox._configure_openshell_inference"
         ) as configure_inference,
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0),
@@ -1070,7 +1066,6 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
         config_dir=None,
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1085,6 +1080,7 @@ def test_openshell_create_uses_latest_saved_config_snapshot(tmp_path):
             "ai_guardian.sandbox._ensure_openshell_agent_provider",
             return_value="ai-guardian-claude",
         ),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             side_effect=[
@@ -1115,7 +1111,6 @@ def test_openshell_create_invokes_entrypoint_without_uploads(tmp_path):
         config_dir=str(config_dir),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1128,6 +1123,7 @@ def test_openshell_create_invokes_entrypoint_without_uploads(tmp_path):
         patch(
             "ai_guardian.sandbox._openshell_agent_has_credentials", return_value=False
         ),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             side_effect=[
@@ -1171,7 +1167,6 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
         config_dir=str(config_dir),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1185,6 +1180,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
         patch(
             "ai_guardian.sandbox._openshell_agent_has_credentials", return_value=False
         ),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             return_value=subprocess.CompletedProcess(
@@ -1207,7 +1203,7 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
     assert "DISABLE_AUTOUPDATER=1" in command
     assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false" in command
     assert "--auto-providers" in command
-    assert command[command.index("--policy") + 1].endswith("/policy.yaml")
+    assert Path(command[command.index("--policy") + 1]).name == "policy.yaml"
     assert command[-4:] == ["--", OPENSHELL_ENTRYPOINT, "bash", "-l"]
 
 
@@ -1224,7 +1220,6 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
         config_dir=str(config_dir),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1238,6 +1233,7 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
             "ai_guardian.sandbox._ensure_openshell_agent_provider",
             return_value="ai-guardian-codex",
         ),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             side_effect=[
@@ -1293,7 +1289,6 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
         config_dir=str(config_dir),
         repo=None,
         port=None,
-        no_forward=True,
         image="example/ai-guardian-openshell:test",
         api_key=None,
         environment=[],
@@ -1308,6 +1303,9 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
             "ai_guardian.sandbox._ensure_openshell_agent_provider",
             return_value="ai-guardian-claude",
         ),
+        patch(
+            "ai_guardian.sandbox._expose_openshell_service", return_value=0
+        ) as service,
         patch(
             "ai_guardian.sandbox.subprocess.run",
             side_effect=[
@@ -1342,6 +1340,7 @@ def test_openshell_create_runs_explicit_command_after_bootstrap(tmp_path):
         "daemon",
         "status",
     ]
+    service.assert_called_once_with(args, "demo", output=None)
 
 
 def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
@@ -1357,7 +1356,6 @@ def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
         name="demo",
         image="example/ai-guardian-openshell:test",
         port=None,
-        no_forward=False,
         repo=None,
         config_dir=None,
         command_args=[],
@@ -1368,7 +1366,7 @@ def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
             "ai_guardian.sandbox._ensure_openshell_agent_provider",
             return_value="ai-guardian-claude",
         ),
-        patch("ai_guardian.sandbox._start_openshell_forward", return_value=0),
+        patch("ai_guardian.sandbox._expose_openshell_service", return_value=0),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             side_effect=[
@@ -1384,135 +1382,106 @@ def test_openshell_create_does_not_put_api_keys_in_runtime_arguments(capsys):
     assert "sensitive-test-value" not in capsys.readouterr().out
 
 
-def test_openshell_forward_service_records_dynamic_port(tmp_path):
-    args = _args(runtime="openshell", openshell_cli="openshell", port=None)
-    process = subprocess.CompletedProcess([], 0)
-    process.pid = 12345
-    process.stdout = io.StringIO(
-        "\x1b[32m✓\x1b[39m Forwarding 127.0.0.1:45678 -> "
-        "127.0.0.1:63152 in sandbox demo via gRPC\n"
-    )
+def test_openshell_expose_uses_gateway_managed_service():
+    args = _args(runtime="openshell", port=None)
+    service_url = "http://demo--ai-guardian.openshell.localhost:43152/"
 
     with (
-        patch.dict(
-            os.environ,
-            {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(tmp_path)},
-            clear=False,
-        ),
-        patch("ai_guardian.sandbox.subprocess.Popen", return_value=process) as popen,
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+        patch(
+            "ai_guardian.sandbox._get_openshell_service_url",
+            return_value=service_url,
+        ) as get_service,
     ):
-        assert _start_openshell_forward(args, "demo") == 0
+        assert _expose_openshell_service(args, "demo") == 0
 
-    popen.assert_called_once()
-    assert popen.call_args.args[0] == [
-        "openshell",
-        "forward",
-        "service",
-        "--target-port",
-        "63152",
-        "--local",
-        "127.0.0.1:0",
-        "demo",
-    ]
-    state = json.loads((tmp_path / "demo.json").read_text(encoding="utf-8"))
-    assert state == {
-        "sandbox_name": "demo",
-        "host": "127.0.0.1",
-        "port": 45678,
-        "target_port": 63152,
-        "pid": 12345,
-    }
+    run.assert_called_once_with(
+        [
+            "openshell",
+            "service",
+            "expose",
+            "demo",
+            "63152",
+            "ai-guardian",
+        ],
+        output=[],
+    )
+    get_service.assert_called_once_with(args, "demo")
 
 
-def test_openshell_start_restarts_recorded_forward(tmp_path):
-    state_path = tmp_path / "demo.json"
-    state_path.write_text(
-        json.dumps(
-            {
-                "sandbox_name": "demo",
-                "host": "127.0.0.1",
-                "port": 45678,
-                "target_port": 63152,
-                "pid": 0,
-            }
+def test_openshell_expose_captures_service_url_from_cli_output():
+    args = _args(runtime="openshell", port=None)
+    service_url = "http://demo--ai-guardian.openshell.localhost:43152/"
+    output = []
+
+    with patch(
+        "ai_guardian.sandbox.subprocess.run",
+        return_value=subprocess.CompletedProcess(
+            [], 0, stdout=f"Service URL: {service_url}\n", stderr=""
         ),
-        encoding="utf-8",
+    ) as run:
+        assert _expose_openshell_service(args, "demo", output=output) == 0
+
+    assert service_url in "".join(output)
+    assert "OpenShell AI Guardian service:" in "".join(output)
+    run.assert_called_once_with(
+        [
+            "openshell",
+            "service",
+            "expose",
+            "demo",
+            "63152",
+            "ai-guardian",
+        ],
+        env=None,
+        capture_output=True,
+        text=True,
+        check=False,
     )
-    args = _args(
-        sandbox_command="start",
-        runtime="openshell",
-        name="demo",
-        port=None,
-    )
+
+
+def test_openshell_start_ensures_gateway_managed_service():
+    args = _args(sandbox_command="start", runtime="openshell", name="demo")
 
     with (
-        patch.dict(
-            os.environ,
-            {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(tmp_path)},
-            clear=False,
-        ),
         patch(
             "ai_guardian.sandbox.subprocess.run",
             return_value=subprocess.CompletedProcess([], 0),
-        ),
+        ) as run,
+        patch("ai_guardian.sandbox._ensure_openshell_daemon", return_value=0),
         patch(
-            "ai_guardian.sandbox._start_openshell_forward", return_value=0
-        ) as forward,
+            "ai_guardian.sandbox._ensure_openshell_service", return_value=0
+        ) as service,
     ):
         assert handle_sandbox_command(args) == 0
 
-    forward.assert_called_once_with(args, "demo", port=45678)
+    assert run.call_args.args[0] == ["openshell", "sandbox", "start", "demo"]
+    service.assert_called_once_with(args, "demo", output=None)
 
 
-def test_openshell_start_recreates_missing_forward(tmp_path):
-    args = _args(
-        sandbox_command="start",
-        runtime="openshell",
-        name="demo",
-        port=None,
-    )
+def test_openshell_stop_does_not_manage_a_host_forward():
+    args = _args(sandbox_command="stop", runtime="openshell", name="demo")
 
-    with (
-        patch.dict(
-            os.environ,
-            {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(tmp_path)},
-            clear=False,
-        ),
-        patch(
-            "ai_guardian.sandbox.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        ),
-        patch(
-            "ai_guardian.sandbox._start_openshell_forward", return_value=0
-        ) as forward,
-    ):
+    with patch(
+        "ai_guardian.sandbox.subprocess.run",
+        return_value=subprocess.CompletedProcess([], 0),
+    ) as run:
         assert handle_sandbox_command(args) == 0
 
-    forward.assert_called_once_with(args, "demo")
-
-
-def test_openshell_restart_respects_disabled_forward_marker(tmp_path):
-    state_path = tmp_path / "demo.json"
-    state_path.write_text(
-        json.dumps(
-            {
-                "sandbox_name": "demo",
-                "host": "127.0.0.1",
-                "port": 0,
-                "target_port": 63152,
-                "pid": 0,
-                "enabled": False,
-            }
-        ),
-        encoding="utf-8",
+    run.assert_called_once_with(
+        ["openshell", "sandbox", "stop", "demo"],
+        env=None,
+        check=False,
     )
-    args = _args(sandbox_command="restart", runtime="openshell", name="demo")
+
+
+def test_openshell_delete_removes_gateway_service_before_sandbox():
+    args = _args(sandbox_command="delete", runtime="openshell", name="demo")
 
     with (
-        patch.dict(
-            os.environ,
-            {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(tmp_path)},
-            clear=False,
+        patch(
+            "ai_guardian.sandbox._get_openshell_service_url",
+            return_value="http://demo--ai-guardian.openshell.localhost:43152/",
         ),
         patch(
             "ai_guardian.sandbox.subprocess.run",
@@ -1520,47 +1489,14 @@ def test_openshell_restart_respects_disabled_forward_marker(tmp_path):
                 subprocess.CompletedProcess([], 0),
                 subprocess.CompletedProcess([], 0),
             ],
-        ),
-        patch("ai_guardian.sandbox._ensure_openshell_daemon", return_value=0),
-        patch("ai_guardian.sandbox._start_openshell_forward") as forward,
-    ):
-        assert handle_sandbox_command(args, output=[]) == 0
-
-    forward.assert_not_called()
-
-
-def test_openshell_stop_retains_forward_port_for_start(tmp_path):
-    state_path = tmp_path / "demo.json"
-    state_path.write_text(
-        json.dumps(
-            {
-                "sandbox_name": "demo",
-                "host": "127.0.0.1",
-                "port": 45678,
-                "target_port": 63152,
-                "pid": os.getpid(),
-            }
-        ),
-        encoding="utf-8",
-    )
-    args = _args(sandbox_command="stop", runtime="openshell", name="demo")
-
-    with (
-        patch.dict(
-            os.environ,
-            {"AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR": str(tmp_path)},
-            clear=False,
-        ),
-        patch(
-            "ai_guardian.sandbox.subprocess.run",
-            return_value=subprocess.CompletedProcess([], 0),
-        ),
+        ) as run,
     ):
         assert handle_sandbox_command(args) == 0
 
-    state = json.loads(state_path.read_text(encoding="utf-8"))
-    assert state["port"] == 45678
-    assert state["pid"] == 0
+    assert [call.args[0] for call in run.call_args_list] == [
+        ["openshell", "service", "delete", "demo", "ai-guardian"],
+        ["openshell", "sandbox", "delete", "demo"],
+    ]
 
 
 def test_sandbox_command_is_registered_without_daemon_autostart():
@@ -1623,6 +1559,20 @@ def test_sandbox_port_must_be_between_one_and_65535():
             main()
 
     assert error.value.code == 2
+
+
+def test_create_rejects_malformed_explicit_image_reference(capsys):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        image="localhost:ai-guardian:openshell",
+    )
+
+    with patch("ai_guardian.sandbox.subprocess.run") as run:
+        assert handle_sandbox_command(args) == 2
+
+    run.assert_not_called()
+    assert "invalid image reference" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

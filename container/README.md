@@ -106,26 +106,26 @@ connects to the sandbox shell after setup, like native OpenShell:
 ```bash
 # Docker/Podman (defaults to podman; set CONTAINER_ENGINE=docker if needed)
 ai-guardian sandbox create --runtime container --name guardian-codex --repo .
-ai-guardian sandbox list --runtime container
-ai-guardian sandbox status --runtime container guardian-codex
-ai-guardian sandbox stop --runtime container guardian-codex
-ai-guardian sandbox start --runtime container guardian-codex
-ai-guardian sandbox connect --runtime container guardian-codex
-ai-guardian sandbox exec --runtime container guardian-codex -- ai-guardian doctor
-ai-guardian sandbox logs --runtime container guardian-codex --follow
-ai-guardian sandbox config save --runtime container guardian-codex
-ai-guardian sandbox delete --runtime container guardian-codex
+ai-guardian sandbox list
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian doctor
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox delete guardian-codex
 
 # OpenShell (uses OPENSHELL_CLI or the openshell executable on PATH)
 ai-guardian sandbox create --runtime openshell --name guardian-claude --agent claude
-ai-guardian sandbox status --runtime openshell guardian-claude
-ai-guardian sandbox stop --runtime openshell guardian-claude
-ai-guardian sandbox start --runtime openshell guardian-claude
-ai-guardian sandbox connect --runtime openshell guardian-claude
-ai-guardian sandbox exec --runtime openshell guardian-claude -- /bin/bash
-ai-guardian sandbox logs --runtime openshell guardian-claude --follow
-ai-guardian sandbox config save --runtime openshell guardian-claude
-ai-guardian sandbox delete --runtime openshell guardian-claude
+ai-guardian sandbox status guardian-claude
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox connect guardian-claude
+ai-guardian sandbox exec guardian-claude -- /bin/bash
+ai-guardian sandbox logs guardian-claude --follow
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox delete guardian-claude
 ```
 
 Runtime selection can also appear before the lifecycle verb, as in
@@ -145,13 +145,13 @@ sandbox:
 
 | AI Guardian command | Native OpenShell command |
 | --- | --- |
-| `ai-guardian sandbox status --runtime openshell NAME` | `openshell sandbox get NAME` |
-| `ai-guardian sandbox start --runtime openshell NAME` | `openshell sandbox start NAME` |
-| `ai-guardian sandbox stop --runtime openshell NAME` | `openshell sandbox stop NAME` |
-| `ai-guardian sandbox connect --runtime openshell NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
-| `ai-guardian sandbox delete --runtime openshell NAME` | `openshell sandbox delete NAME` |
-| `ai-guardian sandbox exec --runtime openshell NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
-| `ai-guardian sandbox logs --runtime openshell NAME` | `openshell logs NAME` |
+| `ai-guardian sandbox status NAME` | `openshell sandbox get NAME` |
+| `ai-guardian sandbox start NAME` | `openshell sandbox start NAME` |
+| `ai-guardian sandbox stop NAME` | `openshell sandbox stop NAME` |
+| `ai-guardian sandbox connect NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
+| `ai-guardian sandbox delete NAME` | `openshell sandbox delete NAME` |
+| `ai-guardian sandbox exec NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
+| `ai-guardian sandbox logs NAME` | `openshell logs NAME` |
 
 `sandbox restart` implements the convenient stop-then-start sequence because
 OpenShell has no separate restart command. `sandbox create` adds AI Guardian
@@ -159,8 +159,9 @@ image, environment, and labeling defaults; `sandbox list` adds the managed
 label selector, so those two commands are not plain aliases. See the full
 [Sandbox CLI guide](../docs/Sandbox.md) for create options and lifecycle
 details. Upload-based OpenShell creation bootstraps the entrypoint
-non-interactively, starts the REST forward, and then connects to the sandbox
-shell. Exiting that shell returns to the host while `sandbox connect` remains
+non-interactively, exposes the gateway-managed `ai-guardian` service, and then
+connects to the sandbox shell. Exiting that shell returns to the host while
+`sandbox connect` remains
 available for later sessions. A container created without an explicit command
 keeps a login shell with an allocated TTY as its main process, so it remains
 available for
@@ -209,8 +210,9 @@ Set `AI_GUARDIAN_OPEN_SHELL_IMAGE` to use another OpenShell-compatible image,
 or pass `--base IMAGE`/`--image IMAGE` on one invocation. The explicit
 `AI_GUARDIAN_IMAGE` variable remains the highest-priority image override. The
 subcommand uses the OpenShell-supported `--from`, `--env`, and `--upload`
-options, then uses `openshell forward service` to map the host port to the
-daemon's sandbox-local REST port.
+options, then exposes the daemon's sandbox-local REST port through the
+gateway-managed `ai-guardian` service. The gateway gives each sandbox its own
+service URL, so multiple sandboxes can use internal port `63152` concurrently.
 
 `Dockerfile.openshell` pins the tested Community base by digest rather than
 using the mutable `:latest` tag. To refresh it deliberately, pull the desired
@@ -490,25 +492,19 @@ git commit -m "Your change"
 git push
 ```
 
-The OpenShell sandbox command defaults to a free host port through
-`openshell forward service --local 127.0.0.1:0` and forwards it to the
-daemon's sandbox-local port `63152`; the assigned host port is printed in the
-startup output. Pass `--port N` to force a specific host port. The same
-service-forward behavior is used by `ai-guardian sandbox create
---runtime openshell`.
-Forwarding is enabled by default because it is the channel used by the host
-tray and NiceGUI to manage the sandbox daemon.
-
-When the host UI is not needed, disable that host-local REST listener:
+The OpenShell sandbox command exposes the daemon's sandbox-local port `63152`
+through the gateway-managed `ai-guardian` service:
 
 ```bash
-ai-guardian sandbox create --runtime openshell --no-forward
-AI_GUARDIAN_OPEN_SHELL_FORWARD=false ai-guardian sandbox create --runtime openshell
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
 ```
 
-The sandbox daemon still runs, but its REST API is not forwarded to the host
-and the tray/NiceGUI cannot discover or manage that sandbox. With forwarding
-disabled and no explicit `--port`, the daemon uses sandbox-local port `63152`.
+The gateway assigns a unique URL such as
+`http://NAME--ai-guardian.openshell.localhost:PORT/`. The same internal port
+can be exposed by multiple sandboxes, and tray/NiceGUI discovery queries each
+sandbox's URL. `--port` is only supported for container sandboxes; OpenShell
+does not use a host-side forward process.
 
 #### Claude Code with Google Vertex AI
 
@@ -843,34 +839,19 @@ to tailor the allowed repositories and methods.
 
 #### Daemon REST port and tray
 
-The sandbox command uses `openshell forward service --target-port 63152` for the
-daemon REST port. By default it passes `--local 127.0.0.1:0`, allowing OpenShell
-to select a free host port; that host port is mapped to sandbox-local port
-`63152` and printed in the startup output. To use a stable host port for a tray
-target, pass it explicitly:
+The sandbox command exposes sandbox-local port `63152` as the gateway-managed
+`ai-guardian` service. To inspect the service URL for one sandbox:
 
 ```bash
-ai-guardian sandbox create --runtime openshell --name ai-guardian-codex --port 63152
-curl http://127.0.0.1:63152/api/health
+openshell service get ai-guardian-codex ai-guardian
 ```
 
 The OpenShell network policy controls sandbox egress. The example policy
 includes the bundled Codex egress endpoints; add the selected agent's provider
-endpoints when using another agent. The policy does not need an ingress rule
-for the forwarded daemon port. The sandbox command records each assigned local
-`forward service` port under
-`$XDG_RUNTIME_DIR/ai-guardian/openshell-forwards` (or the AI Guardian state
-directory when no runtime directory is available), because OpenShell does not
-list these service forwards in `openshell forward list`. AI Guardian discovery
-uses that record only while its forward process is alive. Add a manual target
-when using a remote gateway, a host without the sandbox command state directory, or a
-forward that is not running. A sandbox started with `--no-forward` is
-intentionally unavailable to the host tray/NiceGUI until it is recreated with
-forwarding enabled:
-
-If the tray/NiceGUI runs with a different XDG runtime environment, point both
-processes at the same directory with
-`AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR=/path/to/forward-state`.
+endpoints when using another agent. The gateway service handles access to the
+daemon endpoint, and AI Guardian discovery asks the gateway for the URL of each
+managed sandbox. No local forward-state directory or host-side forwarding
+process is required.
 
 ```json
 {

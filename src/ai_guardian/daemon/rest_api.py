@@ -28,6 +28,7 @@ _VALID_CHECKS = frozenset(
 )
 
 _ALL_CHECKS = list(_VALID_CHECKS)
+REST_AUTH_HEADER = "X-AI-Guardian-Token"
 
 
 class _RestHandler(BaseHTTPRequestHandler):
@@ -145,12 +146,13 @@ class _RestHandler(BaseHTTPRequestHandler):
             self._send_error(404, "Not found")
 
     def _check_auth(self):
-        """Check bearer token if the server has one configured."""
+        """Check the bearer or gateway-safe token header if configured."""
         token = getattr(self.server, "auth_token", None)
         if not token:
             return True
         auth_header = self.headers.get("Authorization", "")
-        if auth_header == f"Bearer {token}":
+        gateway_auth_header = self.headers.get(REST_AUTH_HEADER, "")
+        if auth_header == f"Bearer {token}" or gateway_auth_header == token:
             return True
         self._send_error(401, "Unauthorized")
         return False

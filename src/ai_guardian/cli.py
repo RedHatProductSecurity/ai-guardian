@@ -1118,12 +1118,10 @@ def main():
         sandbox_create_parser.add_argument(
             "--port",
             type=_sandbox_port,
-            help="Host port for containers, or same-port OpenShell forwarding (1-65535)",
-        )
-        sandbox_create_parser.add_argument(
-            "--no-forward",
-            action="store_true",
-            help="Do not request OpenShell port forwarding",
+            help=(
+                "Host port for container sandboxes (1-65535); OpenShell uses "
+                "the gateway-selected service port"
+            ),
         )
         sandbox_create_parser.add_argument(
             "--image",

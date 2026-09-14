@@ -5,6 +5,7 @@ from unittest import mock
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.daemon.multi_client import MultiDaemonClient
+from ai_guardian.daemon.rest_api import REST_AUTH_HEADER
 
 
 class TestLocalRouting:
@@ -330,6 +331,8 @@ class TestRestRequest:
         MultiDaemonClient._rest_request(target, "GET", "/api/health")
         req = mock_urlopen.call_args[0][0]
         assert req.get_header("Authorization") == "Bearer my-token"
+        headers = {key.lower(): value for key, value in req.header_items()}
+        assert headers[REST_AUTH_HEADER.lower()] == "my-token"
 
 
 class TestManualRouting:

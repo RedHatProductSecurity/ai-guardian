@@ -14,17 +14,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   executing commands in, viewing logs from, and deleting named Docker/Podman or
   OpenShell sandboxes. Add daemon-backed timestamped configuration snapshots
   with `sandbox config save/list/restore` and `create --restore-config latest`.
-  OpenShell setup, policy composition, provider preparation, and forwarding now
+  OpenShell setup, policy composition, provider preparation, and gateway service
+  exposure now
   live in the subcommand, so the legacy `container/openshell.sh` wrapper is no
   longer needed.
 
 - **Tray sandbox management**: Add sandbox creation to the main tray menu and
-  safe lifecycle, exec, logs, and configuration snapshot actions to each
-  discovered container/OpenShell target; permanent deletion remains CLI-only.
+  safe lifecycle, exec, logs, configuration snapshot, and confirmed deletion
+  actions to each discovered container/OpenShell target.
   The create form provides a dropdown for the supported CLI agent selection,
   disables runtime-specific fields, starts stopped container and OpenShell
   sandboxes from a main-menu submenu, and runs non-interactive actions
-  in-process with captured output and failure logs.
+  in-process with captured output and failure logs. Its Image / base field can
+  browse labeled local AI Guardian images while retaining editable custom
+  references.
 
 - **Sandbox configuration notices**: Show whether the web console is using a
   writable host configuration snapshot or a directly mounted read-only host
@@ -40,7 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   limiting the multi-daemon menu to eight fixed slots.
 
 - OpenShell upload-based sandbox creation now bootstraps the entrypoint
-  non-interactively, starts its REST forward, and then opens an independent
+  non-interactively, exposes its gateway-managed service, and then opens an
+  independent
   interactive shell so exiting does not terminate the sandbox.
 
 - OpenShell `sandbox connect` now uses an independent interactive exec session
@@ -58,11 +62,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sandbox lifecycle commands now auto-detect Docker/Podman versus OpenShell by
   the AI Guardian runtime labels and OpenShell metadata when `--runtime` is
   omitted; an unqualified `list` covers both runtimes.
-- OpenShell `sandbox start` and `restart` now recreate a missing or unusable
-  REST forward instead of silently succeeding without host UI connectivity;
-  explicit `--no-forward` choices remain disabled across lifecycle restarts.
+- OpenShell sandboxes now use durable gateway-managed `service expose`
+  endpoints for tray/NiceGUI connectivity, with per-sandbox service discovery
+  and lifecycle reconciliation instead of host-side forward processes.
 - OpenShell `sandbox start` and `restart` now explicitly start the AI Guardian
   daemon when the sandbox's persistent shell is relaunched.
+- OpenShell gateway services now accept the dedicated tray token header used
+  when the gateway strips the standard HTTP Authorization header, restoring
+  tray and NiceGUI communication with authenticated daemons.
+- Sandbox creation now rejects malformed explicit image references instead of
+  allowing an invalid value to be mistaken for a runtime default.
 
 - Preserve named container and OpenShell sandboxes in tray and NiceGUI labels
   instead of replacing their names with runtime-generated container IDs.
@@ -70,8 +79,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   profiles win, existing sandbox-local config is preserved, host config seeds a
   writable sandbox snapshot, and only then is a default generated. Host files
   are never written back. OpenShell lifecycle creation now invokes the
-  support-image entrypoint after native uploads and starts the persistent
-  service forward used by tray and NiceGUI discovery.
+  support-image entrypoint after native uploads and exposes the persistent
+  gateway service used by tray and NiceGUI discovery.
 
 ### Changed
 

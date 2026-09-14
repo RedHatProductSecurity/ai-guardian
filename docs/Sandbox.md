@@ -10,7 +10,11 @@ in, stream logs from, or delete it in later shell sessions.
 The command is the supported entry point for both lifecycle management and
 initial sandbox setup. It composes the OpenShell baseline and selected-agent
 policies, prepares gateway providers when required, handles configuration and
-repository snapshots, and manages the host REST forward.
+repository snapshots, and exposes the daemon through an OpenShell gateway
+service endpoint when that runtime is selected.
+The tray and web console authenticate this service with a dedicated token
+header as well as the standard Bearer header because some OpenShell gateway
+versions remove `Authorization` while proxying a service.
 
 ## Prerequisites
 
@@ -80,7 +84,7 @@ appear before or after the lifecycle verb:
 
 ```bash
 ai-guardian sandbox --runtime openshell list
-ai-guardian sandbox status --runtime openshell guardian-claude
+ai-guardian sandbox status guardian-claude
 ```
 
 The runtime must be selected explicitly for `create`. For lifecycle commands
@@ -97,14 +101,14 @@ same Python sandbox implementation as the CLI, without opening a terminal;
 success is reported with a desktop notification and failures show the
 captured runtime log in a modal. After a container or OpenShell sandbox is
 discovered, its target menu contains `Manage sandbox` with `Status`, `Start`,
-`Stop`, `Restart`, `Exec`, and `Logs`. For ordinary containers, the
+`Stop`, `Restart`, `Exec`, `Logs`, and `Delete`. For ordinary containers, the
 `Manage sandbox` submenu also contains `Connect`; OpenShell uses the
 top-level `Connect` action described below.
 Discovery already provides the complete list of managed sandboxes, so there is
 no redundant per-target `List sandboxes` action. Configuration snapshots are grouped under
 `Manage sandbox -> Config`, with `Save`, `List`, and `Restore` actions. The
-tray intentionally does not expose `delete`; use the CLI when permanently
-removing a sandbox is intended.
+`Delete...` action opens an isolated confirmation modal and requires typing the
+exact sandbox name before deletion. Host configuration snapshots are retained.
 
 Status, start, stop, restart, and configuration actions run through the same
 Python implementation as the CLI. Status and configuration output, together
@@ -132,17 +136,19 @@ Most lifecycle operations below are deliberately thin aliases of the native
 OpenShell CLI. `connect` is intentionally mapped to an independent interactive
 `exec` session: native `openshell sandbox connect` can attach to the sandbox's
 main process, so exiting it may terminate the sandbox in some OpenShell
-versions.
+versions. `start` and `restart` additionally ensure the AI Guardian daemon and
+gateway service are available; `delete` removes that service before deleting
+the native sandbox.
 
 | AI Guardian command | Native OpenShell command |
 | --- | --- |
-| `ai-guardian sandbox status --runtime openshell NAME` | `openshell sandbox get NAME` |
-| `ai-guardian sandbox start --runtime openshell NAME` | `openshell sandbox start NAME` |
-| `ai-guardian sandbox stop --runtime openshell NAME` | `openshell sandbox stop NAME` |
-| `ai-guardian sandbox connect --runtime openshell NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
-| `ai-guardian sandbox delete --runtime openshell NAME` | `openshell sandbox delete NAME` |
-| `ai-guardian sandbox exec --runtime openshell NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
-| `ai-guardian sandbox logs --runtime openshell NAME` | `openshell logs NAME` |
+| `ai-guardian sandbox status NAME` | `openshell sandbox get NAME` |
+| `ai-guardian sandbox start NAME` | `openshell sandbox start NAME` |
+| `ai-guardian sandbox stop NAME` | `openshell sandbox stop NAME` |
+| `ai-guardian sandbox connect NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
+| `ai-guardian sandbox delete NAME` | `openshell sandbox delete NAME` |
+| `ai-guardian sandbox exec NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
+| `ai-guardian sandbox logs NAME` | `openshell logs NAME` |
 
 `sandbox restart` is a convenience sequence that runs native `stop` followed
 by native `start`; for OpenShell it also ensures that the AI Guardian daemon is
@@ -152,7 +158,8 @@ Sandboxes](https://docs.nvidia.com/openshell/sandboxes/manage-sandboxes).
 
 `sandbox create` is not a plain alias: it adds the AI Guardian image, managed
 labels, agent environment, optional repository/config uploads, providers,
-policies, and port forwarding. `sandbox list` is also intentionally scoped to
+policies, and the gateway-managed AI Guardian service. `sandbox list` is also
+intentionally scoped to
 resources carrying the `ai-guardian.managed=true` label.
 
 When `--name` is supplied, the command records that name in the runtime
@@ -174,10 +181,9 @@ Common options for `sandbox create` are:
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
 | `--agent NAME` | Select the agent setup; defaults to Codex for containers and Claude for OpenShell. |
-| `--image IMAGE` | Override the runtime image. `--base` is an alias. |
+| `--image IMAGE` | Override the runtime image. `--base` is an alias. An explicit value is passed through unchanged; an invalid reference fails instead of falling back to the default. |
 | `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
-| `--port PORT` | Use a specific host port for the daemon REST endpoint. When omitted, containers and OpenShell use a free host port. Must be `1-65535`. |
-| `--no-forward` | Do not start the OpenShell host REST forward. |
+| `--port PORT` | Use a specific host port for a container daemon REST endpoint. OpenShell uses the gateway-selected service port. Must be `1-65535`. |
 | `--profile PROFILE` | Use a bundled or custom AI Guardian security profile. |
 | `--restore-config latest` | Restore the latest saved snapshot for the named sandbox as its initial configuration. Requires `--name`; cannot be combined with `--profile` or `--config-dir`. |
 | `--config-dir DIR` | Use `ai-guardian.json` from DIR as the initial config snapshot when no sandbox-local config exists. `--guardian-home` is an alias. |
@@ -191,6 +197,14 @@ Common options for `sandbox create` are:
 In the tray's **Create sandbox** form, **Agent / CLI** is a dropdown containing
 the CLI-capable sandbox integrations: `claude`, `copilot`, `codex`, `gemini`,
 `kiro`, `openclaw`, `opencode`, and `crush`.
+
+The **Image / base** field remains editable for registry references, local
+Dockerfile paths, and community sandbox names. Its **Browse...** button lists
+local images carrying the `ai-guardian.support-image=true` label from the
+configured Docker/Podman engine. Images without that label can still be used by
+typing their reference manually. For example, a locally built OpenShell image
+uses `localhost/ai-guardian-openshell:dev` (a slash separates the registry name
+from the image name).
 
 An optional command can follow `--`:
 
@@ -207,8 +221,9 @@ one from the shell or with `sandbox exec`.
 OpenShell's native upload flow cannot reliably combine uploads with a trailing
 command. The subcommand handles this by creating the detached sandbox first,
 then invoking the image entrypoint through a non-interactive `sandbox exec`
-after uploads finish. This bootstrap returns after setup so `create` can start
-the host REST forward, then the default create opens an independent interactive
+after uploads finish. This bootstrap returns after setup so `create` can expose
+the gateway-managed `ai-guardian` service, then the default create opens an
+independent interactive
 `sandbox exec --tty` shell. Exiting that shell returns to the host while the
 named sandbox remains available for a later `connect` or `exec`. If an explicit
 command follows `--`, it runs in a separate exec after bootstrap and the create
@@ -292,7 +307,8 @@ ai-guardian sandbox create \
 profile or host `--config-dir`. It stages the selected snapshot as input, then
 the entrypoint copies it into the writable sandbox configuration. Saving and
 restoring never modifies the host config. `config save` and `config restore`
-require a running daemon; OpenShell also requires an active REST forward.
+require a running daemon; OpenShell also requires its `ai-guardian` service
+endpoint to be available.
 
 In the system tray, the top-level action for an OpenShell target is
 `Connect`. It uses the same independent OpenShell `exec` session as
@@ -322,20 +338,28 @@ When `--port` is omitted for a container, Docker/Podman publishes the internal
 daemon port `63152` on a runtime-assigned host port. Find that host port with
 `podman port NAME` or `docker port NAME`.
 
-For OpenShell, the command starts `openshell forward service` after the
-sandbox is created. An omitted `--port` uses the service's dynamic port
-(`127.0.0.1:0`), and the assigned host port is recorded for tray and NiceGUI
-discovery. The forward is stopped and restarted with the corresponding
-OpenShell lifecycle commands. If the saved forward record is missing or its
-port is no longer usable, `start` and `restart` create a new dynamic forward
-and update the record. Use `--no-forward` when the host UI should not connect
-to the sandbox daemon; that explicit choice is preserved across later
-restarts.
+For OpenShell, the command exposes the daemon's internal port through the
+gateway-managed service named `ai-guardian`:
+
+```bash
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
+```
+
+The gateway assigns a unique URL for each sandbox, such as
+`http://NAME--ai-guardian.openshell.localhost:PORT/`. This endpoint is durable
+and independent for every OpenShell sandbox, so multiple sandboxes can expose
+the same internal daemon port. Tray and NiceGUI discovery query the gateway for
+each sandbox's service URL. `start` and `restart` reconcile the service after
+the daemon is started; `stop` leaves the service definition in place but it is
+unreachable while the sandbox is stopped. Deleting an AI Guardian sandbox also
+removes its `ai-guardian` service.
 
 ## Lifecycle and cleanup
 
 `stop` retains the sandbox so it can be started later. `delete` removes the
-runtime resource and any state retained by that runtime. `connect` opens an
+runtime resource and its gateway service, while host configuration snapshots
+remain available for a later `--restore-config latest`. `connect` opens an
 interactive container shell or an independent OpenShell `exec` session, while
 `exec` runs a command without replacing the sandbox's main process. The shell
 opened automatically by OpenShell `create` uses the same independent `exec`

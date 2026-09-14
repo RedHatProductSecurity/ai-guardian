@@ -731,6 +731,15 @@ class TestAuthEnforcement:
             data = json.loads(resp.read())
         assert data["running"] is True
 
+    def test_get_status_with_gateway_token_header(self, authed_api):
+        api, port, state = authed_api
+        url = f"http://127.0.0.1:{port}/api/status"
+        req = Request(url, method="GET")
+        req.add_header("X-AI-Guardian-Token", "test-secret-42")
+        with urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["running"] is True
+
     def test_post_pause_with_valid_token(self, authed_api):
         api, port, state = authed_api
         url = f"http://127.0.0.1:{port}/api/pause"

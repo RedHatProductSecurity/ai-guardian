@@ -91,9 +91,6 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "AI_GUARDIAN_CODEX_SANDBOX_MODE",
         "AI_GUARDIAN_IMAGE",
         "AI_GUARDIAN_OPEN_SHELL_IMAGE",
-        "AI_GUARDIAN_OPEN_SHELL_FORWARD",
-        "AI_GUARDIAN_OPEN_SHELL_DAEMON_PORT",
-        "AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR",
         "OPENAI_API_KEY",
     ):
         env.pop(name, None)

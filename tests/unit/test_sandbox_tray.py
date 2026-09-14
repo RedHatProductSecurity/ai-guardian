@@ -188,10 +188,10 @@ class TestSandboxTrayMenu:
             "Save",
             "List",
             "Restore...",
+            "Delete...",
         ):
             assert label in labels
         assert "List sandboxes" not in labels
-        assert all("Delete" not in label for label in labels)
         assert item.kwargs["visible"](None) is True
 
         connect_item = next(
@@ -200,6 +200,64 @@ class TestSandboxTrayMenu:
             if isinstance(child, FakeMenuItem) and child.label == "Connect"
         )
         assert connect_item.kwargs["visible"](None) is False
+
+    def test_delete_requires_confirmation_before_running_command(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="running",
+        )
+        tray = _make_tray([target])
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.threading.Thread",
+                ImmediateThread,
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_confirmation",
+                return_value=True,
+            ) as confirm,
+            mock.patch.object(tray._menu, "_start_sandbox_command") as run_command,
+        ):
+            item = tray._menu._build_sandbox_manage_menu_item(0)
+            delete_item = next(
+                child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem) and child.label == "Delete..."
+            )
+            delete_item.action(None, None)
+
+        confirm.assert_called_once_with("ag-test", "openshell")
+        run_command.assert_called_once_with(target, "delete", ["ag-test"])
+
+    def test_delete_does_nothing_when_confirmation_is_cancelled(self):
+        target = DaemonTarget(name="ag-test", runtime="container", status="running")
+        tray = _make_tray([target])
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.threading.Thread",
+                ImmediateThread,
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_confirmation",
+                return_value=False,
+            ),
+            mock.patch.object(tray._menu, "_start_sandbox_command") as run_command,
+        ):
+            item = tray._menu._build_sandbox_manage_menu_item(0)
+            delete_item = next(
+                child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem) and child.label == "Delete..."
+            )
+            delete_item.action(None, None)
+
+        run_command.assert_not_called()
 
     def test_manage_connect_remains_visible_for_regular_container(self):
         tray = _make_tray(
@@ -355,8 +413,7 @@ class TestSandboxTrayMenu:
             "environment": "DEBUG=1, TERM=xterm",
             "labels": "team=security, owner=ai",
             "config_source": "Latest saved snapshot",
-            "port": "43193",
-            "no_forward": True,
+            "port": "",
         }
         with (
             mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
@@ -380,8 +437,7 @@ class TestSandboxTrayMenu:
         assert args.environment == ["DEBUG=1", "TERM=xterm"]
         assert args.label == ["team=security", "owner=ai"]
         assert args.restore_config == "latest"
-        assert args.port == 43193
-        assert args.no_forward is True
+        assert args.port is None
         assert create.call_args.kwargs["interactive"] is False
         assert isinstance(create.call_args.kwargs["output"], list)
 
@@ -429,6 +485,10 @@ class TestSandboxTrayMenu:
             "values": ("openshell",),
         }
 
+        image_field = next(field for field in fields if field["name"] == "image")
+        assert image_field["type"] == "image"
+        assert "localhost/ai-guardian-openshell:dev" in image_field["help"]
+
         model_field = next(field for field in fields if field["name"] == "model")
         assert model_field["enabled_when"] == {
             "field": "runtime",
@@ -455,12 +515,10 @@ class TestSandboxTrayMenu:
         labels_field = next(field for field in fields if field["name"] == "labels")
         assert "KEY=VALUE" in labels_field["help"]
 
-        no_forward_field = next(
-            field for field in fields if field["name"] == "no_forward"
-        )
-        assert no_forward_field["enabled_when"] == {
+        port_field = next(field for field in fields if field["name"] == "port")
+        assert port_field["enabled_when"] == {
             "field": "runtime",
-            "values": ("openshell",),
+            "values": ("container",),
         }
 
     def test_browse_paths_merge_without_duplicates(self):
@@ -469,6 +527,46 @@ class TestSandboxTrayMenu:
         assert _merge_browse_paths(
             "/tmp/one.yaml", ("/tmp/one.yaml", "/tmp/two.yaml")
         ) == ("/tmp/one.yaml, /tmp/two.yaml")
+
+    def test_local_image_choices_use_ai_guardian_image_label(self):
+        from ai_guardian.tray.sandbox_dialog import _local_image_choices
+
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "localhost/ai-guardian-openshell:dev\n"
+                "<none>:<none>\n"
+                "localhost/ai-guardian:dev\n"
+                "localhost/ai-guardian-openshell:dev\n"
+            ),
+        )
+        with (
+            mock.patch.dict(os.environ, {"CONTAINER_ENGINE": "podman"}, clear=True),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.subprocess.run",
+                return_value=result,
+            ) as run,
+        ):
+            assert _local_image_choices() == [
+                "localhost/ai-guardian-openshell:dev",
+                "localhost/ai-guardian:dev",
+            ]
+
+        run.assert_called_once_with(
+            [
+                "podman",
+                "image",
+                "ls",
+                "--filter",
+                "label=ai-guardian.support-image=true",
+                "--format",
+                "{{.Repository}}:{{.Tag}}",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
 
     def test_create_form_rejects_policy_files_for_container(self):
         tray = _make_tray([])
@@ -574,3 +672,31 @@ class TestSandboxDialogFallback:
 
         assert result == {"runtime": "container"}
         show_form.assert_called_once_with("Title", "Message", [])
+
+    def test_confirmation_returns_false_when_tkinter_is_unavailable(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
+
+        with mock.patch(
+            "ai_guardian.tui.display._tkinter_available", return_value=False
+        ):
+            assert show_sandbox_confirmation("ag-test", "container") is False
+
+    def test_confirmation_isolated_in_subprocess_when_tkinter_is_available(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_confirmation
+
+        with (
+            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
+                return_value=True,
+            ) as show_confirmation,
+        ):
+            result = show_sandbox_confirmation("ag-test", "openshell")
+
+        assert result is True
+        show_confirmation.assert_called_once_with(
+            "Delete AI Guardian sandbox",
+            "Permanently delete sandbox 'ag-test' (openshell)?\n\n"
+            "The runtime sandbox will be removed. Saved host configuration snapshots are kept.",
+            "ag-test",
+        )
