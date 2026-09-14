@@ -524,11 +524,15 @@ class TestSandboxTrayMenu:
 
     def test_create_form_exposes_policy_file_field(self):
         tray = _make_tray([])
-        home = os.path.expanduser("~")
+        base_env = {
+            key: value
+            for key, value in os.environ.items()
+            if not key.startswith("AI_GUARDIAN_")
+        }
 
         with mock.patch.dict(
             os.environ,
-            {"HOME": home, "USERPROFILE": home},
+            base_env,
             clear=True,
         ):
             fields = tray._menu._sandbox_create_fields()
@@ -550,14 +554,14 @@ class TestSandboxTrayMenu:
             "values": ("opencode",),
         }
 
-        with mock.patch.dict(
-            os.environ,
+        opencode_env = base_env.copy()
+        opencode_env.update(
             {
                 "AI_GUARDIAN_CLI": "opencode",
                 "AI_GUARDIAN_OPENCODE_AGENT": "build",
-            },
-            clear=True,
-        ):
+            }
+        )
+        with mock.patch.dict(os.environ, opencode_env, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
         agent_field = next(field for field in fields if field["name"] == "agent")
