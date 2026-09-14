@@ -52,30 +52,31 @@ Create and manage a Docker/Podman sandbox:
 
 ```bash
 ai-guardian sandbox create --runtime container --name guardian-codex --repo .
-ai-guardian sandbox list --runtime container
-ai-guardian sandbox status --runtime container guardian-codex
-ai-guardian sandbox connect --runtime container guardian-codex
-ai-guardian sandbox exec --runtime container guardian-codex -- ai-guardian doctor
-ai-guardian sandbox logs --runtime container guardian-codex --follow
-ai-guardian sandbox config save --runtime container guardian-codex
-ai-guardian sandbox stop --runtime container guardian-codex
-ai-guardian sandbox start --runtime container guardian-codex
-ai-guardian sandbox delete --runtime container guardian-codex
+ai-guardian sandbox list
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian doctor
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox delete guardian-codex
 ```
 
 Create and manage an OpenShell sandbox:
 
 ```bash
 ai-guardian sandbox create --runtime openshell --name guardian-claude --agent claude
-ai-guardian sandbox status --runtime openshell guardian-claude
-ai-guardian sandbox connect --runtime openshell guardian-claude
-ai-guardian sandbox exec --runtime openshell guardian-claude -- /bin/bash
-ai-guardian sandbox logs --runtime openshell guardian-claude --follow
-ai-guardian sandbox config save --runtime openshell guardian-claude
-ai-guardian sandbox delete --runtime openshell guardian-claude
+ai-guardian sandbox status guardian-claude
+ai-guardian sandbox connect guardian-claude
+ai-guardian sandbox exec guardian-claude -- /bin/bash
+ai-guardian sandbox logs guardian-claude --follow
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox delete guardian-claude
 ```
 
-The runtime option may appear before or after the lifecycle verb:
+The runtime option is optional for lifecycle commands. When supplied, it may
+appear before or after the lifecycle verb:
 
 ```bash
 ai-guardian sandbox --runtime openshell list
@@ -301,11 +302,14 @@ for ordinary container sandboxes.
 ## Inspecting and listing
 
 Use `status` for one named sandbox and `list` for the resources created by this
-command:
+command. Named lifecycle commands automatically discover the runtime, so
+`--runtime` is only needed when the same name exists in both runtime
+namespaces or when you want to force a specific runtime:
 
 ```bash
-ai-guardian sandbox status --runtime container guardian-codex
-ai-guardian sandbox status --runtime openshell --json guardian-claude
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox status --json guardian-claude
+ai-guardian sandbox list --json
 ai-guardian sandbox list --runtime container --json
 ai-guardian sandbox list --runtime openshell --json
 ```
@@ -339,11 +343,11 @@ session, so exiting either shell does not replace or terminate the sandbox's
 main process:
 
 ```bash
-ai-guardian sandbox stop --runtime openshell guardian-claude
-ai-guardian sandbox start --runtime openshell guardian-claude
-ai-guardian sandbox restart --runtime openshell guardian-claude
-ai-guardian sandbox exec --runtime openshell guardian-claude -- env
-ai-guardian sandbox delete --runtime openshell guardian-claude
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox restart guardian-claude
+ai-guardian sandbox exec guardian-claude -- env
+ai-guardian sandbox delete guardian-claude
 ```
 
 Do not use `delete` when the sandbox may be needed again; use `stop` instead.
