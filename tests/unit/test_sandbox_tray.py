@@ -524,8 +524,13 @@ class TestSandboxTrayMenu:
 
     def test_create_form_exposes_policy_file_field(self):
         tray = _make_tray([])
+        home = os.path.expanduser("~")
 
-        with mock.patch.dict(os.environ, {}, clear=True):
+        with mock.patch.dict(
+            os.environ,
+            {"HOME": home, "USERPROFILE": home},
+            clear=True,
+        ):
             fields = tray._menu._sandbox_create_fields()
 
         cli_field = next(field for field in fields if field["name"] == "cli")
