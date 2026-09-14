@@ -94,9 +94,11 @@ needed.
 The tray's main menu contains `Create sandbox...`. Creation runs through the
 same Python sandbox implementation as the CLI, without opening a terminal;
 success is reported with a desktop notification and failures show the
-captured runtime log in a modal. After a container or
-OpenShell sandbox is discovered, its target menu contains `Manage sandbox`
-with `Status`, `Start`, `Stop`, `Restart`, `Connect`, `Exec`, and `Logs`.
+captured runtime log in a modal. After a container or OpenShell sandbox is
+discovered, its target menu contains `Manage sandbox` with `Status`, `Start`,
+`Stop`, `Restart`, `Exec`, and `Logs`. For ordinary containers, the
+`Manage sandbox` submenu also contains `Connect`; OpenShell uses the
+top-level `Connect` action described below.
 Discovery already provides the complete list of managed sandboxes, so there is
 no redundant per-target `List sandboxes` action. Configuration snapshots are grouped under
 `Manage sandbox -> Config`, with `Save`, `List`, and `Restore` actions. The
@@ -168,6 +170,8 @@ Common options for `sandbox create` are:
 | --- | --- |
 | `--name NAME` | Assign a stable runtime name. |
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Required to choose the runtime explicitly when creating; lifecycle commands auto-detect it by name when omitted. |
+| `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
+| `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
 | `--agent NAME` | Select the agent setup; defaults to Codex for containers and Claude for OpenShell. |
 | `--image IMAGE` | Override the runtime image. `--base` is an alias. |
 | `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
