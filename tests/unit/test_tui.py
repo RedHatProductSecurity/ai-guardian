@@ -612,23 +612,23 @@ class TestCopyToSystemClipboard:
             assert error is None
             assert method == "wl-copy"
 
-    def test_linux_no_tools_returns_error(self):
-        """Test that Linux returns error when no clipboard tools are found."""
+    def test_linux_no_tools_uses_osc52(self):
+        """Test that Linux falls back to OSC 52 when no native tool exists."""
         from unittest.mock import patch
 
         with (
             patch("ai_guardian.tui.app.sys") as mock_sys,
             patch("ai_guardian.tui.app.subprocess") as mock_subprocess,
+            patch("ai_guardian.tui.app.copy_osc52", return_value=True) as copy_osc52,
         ):
             mock_sys.platform = "linux"
             mock_subprocess.run.side_effect = FileNotFoundError("not found")
             mock_subprocess.CalledProcessError = subprocess.CalledProcessError
             mock_subprocess.TimeoutExpired = subprocess.TimeoutExpired
             error, method = copy_to_system_clipboard("test text")
-            assert isinstance(error, str)
-            assert method is None
-            assert "terminal escape sequence" in error
-            assert "xclip" in error
+            assert error is None
+            assert method == "OSC 52"
+            copy_osc52.assert_called_once_with("test text")
 
     def test_copy_succeeds_on_windows(self):
         """Test clipboard copy using clip on Windows."""
@@ -724,12 +724,13 @@ class TestCopyToSystemClipboard:
             assert args[1]["input"] == text.encode("utf-8")
 
     def test_linux_no_tools_error_suggests_install(self):
-        """Test Linux error message suggests installing clipboard tools."""
+        """Test Linux error message when native and OSC 52 copy fail."""
         from unittest.mock import patch
 
         with (
             patch("ai_guardian.tui.app.sys") as mock_sys,
             patch("ai_guardian.tui.app.subprocess") as mock_subprocess,
+            patch("ai_guardian.tui.app.copy_osc52", return_value=False),
         ):
             mock_sys.platform = "linux"
             mock_subprocess.run.side_effect = FileNotFoundError("not found")

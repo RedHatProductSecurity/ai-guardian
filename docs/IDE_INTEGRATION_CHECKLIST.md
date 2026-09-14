@@ -43,16 +43,16 @@ availability does not imply hook enforcement.
 
 OpenShell is a separate, terminal-first distribution target. Adding an
 integration to the canonical AI Guardian registry does not automatically add
-it to the OpenShell image or launcher. Before onboarding a new integration,
+it to the OpenShell image or sandbox create command. Before onboarding a new integration,
 classify whether it is a redistributable CLI, a runtime-installed CLI, or a
 GUI/editor-only integration. GUI/editor-only integrations must remain out of
 the OpenShell selector and image.
 
 For a new CLI-capable integration, complete the applicable items below:
 
-- [ ] Add the command to the OpenShell CLI selector in
-  `container/openshell.sh` and the selected-agent setup list in
-  `container/entrypoint.sh`. Verify the command mapping, startup environment,
+- [ ] Add the command to the OpenShell CLI selector used by
+  `ai-guardian sandbox create --runtime openshell` and the selected-agent setup
+  list in `container/entrypoint.sh`. Verify the command mapping, startup environment,
   home-directory variable, and selected-agent-only setup behavior.
 - [ ] Decide whether the CLI is legally and technically suitable for image
   redistribution. Record the license, service terms, authentication model,

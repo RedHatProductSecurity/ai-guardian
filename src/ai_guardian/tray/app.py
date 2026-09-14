@@ -15,6 +15,7 @@ import threading
 import time
 
 from ai_guardian.daemon import is_mcp_installed
+from ai_guardian.daemon.discovery import should_update_target_name
 from ai_guardian.tray import icons as tray_icons
 from ai_guardian.tray import menu as tray_menu
 from ai_guardian.tray import notifications as tray_notifications
@@ -297,6 +298,7 @@ class DaemonTray:
         self._mcp_installed = self._mcp_installed_local
         self._mcp_installed_per_daemon = {}
         self._targets = []
+        self._stopped_container_targets = []
         self._active_target = None
         self._menu = TrayMenuBuilder(self)
         self._plugins = TrayPluginMenuBuilder(self)
@@ -308,6 +310,12 @@ class DaemonTray:
         self._web_console_first_start = True
         self._last_autostart_attempt = 0.0
         self._last_stats_snapshot = None
+        # The multi-daemon menu is sized from discovery results.  Keep the
+        # count used to build the current native menu so target additions and
+        # removals can replace it instead of being hidden by a fixed slot cap.
+        self._menu_target_count = None
+        self._menu_stopped_container_count = None
+        self._menu_stopped_container_snapshot = None
 
         # Push event subscriber (#650)
         self._subscriber_running = False
@@ -514,14 +522,16 @@ class DaemonTray:
         except Exception:
             pass  # intentionally silent — optional dependency
 
-    def _run(self):
-        """Run tray icon (blocking, called in thread)."""
-        self._ensure_macos_activation_policy()
+    def _build_tray_menu(self):
+        """Build the native tray menu for the currently discovered targets."""
         menu = pystray.Menu(
             *self._menu._build_single_daemon_menu_items(),
             *self._plugins._build_single_daemon_plugin_items(),
             *self._menu._build_single_daemon_daemon_items(),
             *self._menu._build_multi_daemon_menu_items(),
+            pystray.Menu.SEPARATOR,
+            *self._menu._build_sandbox_create_menu_items(),
+            *self._menu._build_sandbox_start_menu_items(),
             pystray.Menu.SEPARATOR,
             *self._plugins._build_global_plugin_items(),
             *self._menu._build_ide_setup_menu_items(),
@@ -537,6 +547,18 @@ class DaemonTray:
                 ),
             ),
         )
+        self._menu_target_count = len(self._targets)
+        self._menu_stopped_container_count = len(self._stopped_container_targets)
+        self._menu_stopped_container_snapshot = tuple(
+            (target.name, getattr(target, "container_id", None))
+            for target in self._stopped_container_targets
+        )
+        return menu
+
+    def _run(self):
+        """Run tray icon (blocking, called in thread)."""
+        self._ensure_macos_activation_policy()
+        menu = self._build_tray_menu()
         self._icon = pystray.Icon(
             "ai-guardian", self._create_icon(), "AI Guardian Tray", menu
         )
@@ -842,9 +864,38 @@ class DaemonTray:
         """Refresh the tray menu (must be called on main thread)."""
         if self._icon:
             try:
-                self._icon.update_menu()
+                if (
+                    (
+                        self._menu_target_count is not None
+                        and self._menu_target_count != len(self._targets)
+                    )
+                    or (
+                        self._menu_stopped_container_count is not None
+                        and self._menu_stopped_container_count
+                        != len(self._stopped_container_targets)
+                    )
+                    or (
+                        self._menu_stopped_container_snapshot is not None
+                        and self._menu_stopped_container_snapshot
+                        != tuple(
+                            (target.name, getattr(target, "container_id", None))
+                            for target in self._stopped_container_targets
+                        )
+                    )
+                ):
+                    # pystray's menu descriptors are immutable.  Replacing the
+                    # menu lets discovery add or remove any number of daemon
+                    # submenus; the menu property updates native backends.
+                    self._icon.menu = self._build_tray_menu()
+                else:
+                    self._icon.update_menu()
             except Exception:
-                pass  # intentionally silent — best-effort operation
+                # Preserve the old refresh path when a test double or an
+                # optional tray backend cannot rebuild the descriptor tree.
+                try:
+                    self._icon.update_menu()
+                except Exception:
+                    pass  # intentionally silent — best-effort operation
 
     def _refresh_menu_if_changed(self):
         """Refresh the tray menu only if stats changed.
@@ -879,6 +930,10 @@ class DaemonTray:
                 self._status,
                 len(self._targets),
                 tuple((t.name, t.status) for t in self._targets),
+                tuple(
+                    (t.name, getattr(t, "container_id", None))
+                    for t in self._stopped_container_targets
+                ),
                 tuple(sorted(paused_dirs.keys())) if paused_dirs else (),
             )
         except Exception:
@@ -1071,6 +1126,11 @@ class DaemonTray:
         self._anim._stop_discovery_animation()
         self._anim._is_initial_discovery = False
         self._targets = targets
+        stopped_targets = getattr(self._discovery, "stopped_container_targets", ())
+        if isinstance(stopped_targets, (list, tuple)):
+            self._stopped_container_targets = list(stopped_targets)
+        else:
+            self._stopped_container_targets = []
         if self._status == "paused":
             for t in self._targets:
                 if t.runtime == "local" and t.status == "running":
@@ -1390,7 +1450,9 @@ class DaemonTray:
             and self._active_target.runtime != "local"
         ):
             result = self._multi_client.get_status(self._active_target)
-            if result and result.get("name"):
+            if result and should_update_target_name(
+                self._active_target, result.get("name")
+            ):
                 self._active_target.name = result["name"]
             return result or {}
         return self._get_stats()

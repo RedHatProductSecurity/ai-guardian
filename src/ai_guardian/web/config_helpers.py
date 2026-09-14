@@ -101,6 +101,79 @@ def _is_target_expected() -> bool:
     return bool(_daemon_service and _current_daemon_name)
 
 
+def get_web_config_state() -> dict:
+    """Return the effective config source and write capability for the UI.
+
+    Remote daemons publish this metadata in their status response.  Local
+    pages read the same environment markers used by the config writers.
+    Unknown/unreachable targets are not treated as host-managed config; their
+    normal unavailable-target handling remains in place.
+    """
+    target = _get_current_target()
+    if target is not None and _daemon_service is not None:
+        try:
+            status = _daemon_service.get_daemon_status(target)
+        except Exception:
+            status = None
+        if isinstance(status, dict):
+            read_only = bool(status.get("config_read_only", False))
+            source = status.get("config_source") or (
+                "host" if read_only else "sandbox-local"
+            )
+            return {"source": source, "read_only": read_only}
+
+    try:
+        from ai_guardian.config.utils import get_config_source, is_config_read_only
+
+        return {
+            "source": get_config_source(),
+            "read_only": is_config_read_only(),
+        }
+    except Exception:
+        return {"source": "sandbox-local", "read_only": False}
+
+
+def get_web_config_notice(config_state: Optional[dict]) -> Optional[dict]:
+    """Return the user-facing notice for the effective config source.
+
+    A host configuration copied into a sandbox is safe to edit because it is
+    only a snapshot.  A directly mounted host configuration is different: it
+    must remain read-only so edits cannot change the host configuration.
+    """
+    if not isinstance(config_state, dict):
+        return None
+
+    if bool(config_state.get("read_only", False)):
+        return {
+            "message": (
+                "Host configuration is mounted read-only. "
+                "Configuration editing is disabled."
+            ),
+            "icon": "lock",
+            "background_class": "bg-red-1",
+            "text_class": "text-red-10",
+        }
+
+    source = str(config_state.get("source") or "").strip().lower()
+    if source == "host":
+        return {
+            "message": (
+                "Using host configuration snapshot. Changes apply only to this "
+                "sandbox; the host configuration will not be modified."
+            ),
+            "icon": "info",
+            "background_class": "bg-amber-1",
+            "text_class": "text-amber-10",
+        }
+
+    return None
+
+
+def is_web_config_read_only() -> bool:
+    """Return whether the current web-console config target is read-only."""
+    return bool(get_web_config_state().get("read_only", False))
+
+
 def _get_current_scope() -> str:
     """Derive config scope from project selection.
 
@@ -198,7 +271,7 @@ def load_web_config_global() -> dict:
     return {}
 
 
-def save_web_config(config: dict) -> None:
+def save_web_config(config: dict) -> bool:
     """Write config dict to ai-guardian.json for the current scope.
 
     Routes through DaemonService for both local and remote targets.
@@ -206,24 +279,32 @@ def save_web_config(config: dict) -> None:
     where the config is written. Falls back to direct filesystem write
     when no daemon target is available.
     """
+    if is_web_config_read_only():
+        logger.warning(
+            "Web config write rejected: configuration is host-managed and read-only"
+        )
+        return False
+
     target = _get_current_target()
     if target is not None and _daemon_service is not None:
         scope = _get_current_scope()
         project_dir = _get_remote_project_dir()
         if scope == "project" and project_dir:
-            _daemon_service.write_config_bulk(
+            result = _daemon_service.write_config_bulk(
                 target, "project", config, project_dir=project_dir
             )
         else:
-            _daemon_service.write_config_bulk(target, "global", config)
+            result = _daemon_service.write_config_bulk(target, "global", config)
+        if result is None or result.get("status") == "error":
+            return False
         _invalidate_config_cache_after_save(scope, project_dir)
-        return
+        return True
 
     if _is_target_expected():
         logger.warning(
             "Cannot save config: daemon '%s' unreachable", _current_daemon_name
         )
-        return
+        return False
 
     scope = _get_current_scope()
     project_dir = _get_project_dir()
@@ -241,9 +322,10 @@ def save_web_config(config: dict) -> None:
             existing_config.update(config)
             return False, f"Saved web config [{scope}]"
 
-        _atomic_config_update(config_path, updater)
+        if not _atomic_config_update(config_path, updater):
+            return False
         _invalidate_config_cache_after_save(scope, project_dir)
-        return
+        return True
     except Exception:
         pass  # intentionally silent — optional dependency
 
@@ -255,6 +337,7 @@ def save_web_config(config: dict) -> None:
         json.dump(config, f, indent=2)
         f.write("\n")
     _invalidate_config_cache_after_save("global", None)
+    return True
 
 
 def _invalidate_config_cache_after_save(scope: str, project_dir: Optional[str]) -> None:

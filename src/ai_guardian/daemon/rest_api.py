@@ -332,6 +332,7 @@ class _RestHandler(BaseHTTPRequestHandler):
         state = self.server.daemon_state
         stats = state.get_stats()
         paused_dirs = stats.get("paused_dirs", {})
+        config_source, config_read_only = self._get_config_metadata()
         result = {
             "running": True,
             "paused": stats.get("paused", False),
@@ -340,6 +341,8 @@ class _RestHandler(BaseHTTPRequestHandler):
             "version": self._get_version(),
             "name": self._get_instance_name(),
             "mcp_installed": stats.get("mcp_installed", False),
+            "config_source": config_source,
+            "config_read_only": config_read_only,
         }
         menu_tags = self._get_menu_tags()
         if menu_tags:
@@ -351,10 +354,35 @@ class _RestHandler(BaseHTTPRequestHandler):
         name = self._get_instance_name()
         if name:
             stats["name"] = name
+        config_source, config_read_only = self._get_config_metadata()
+        stats["config_source"] = config_source
+        stats["config_read_only"] = config_read_only
         menu_tags = self._get_menu_tags()
         if menu_tags:
             stats["menu_tags"] = menu_tags
         return stats
+
+    @staticmethod
+    def _get_config_metadata():
+        """Return the effective config source and whether it is read-only."""
+        try:
+            from ai_guardian.config.utils import get_config_source, is_config_read_only
+
+            return get_config_source(), is_config_read_only()
+        except Exception:
+            logger.debug("Unable to determine config source metadata", exc_info=True)
+            return "sandbox-local", False
+
+    def _reject_read_only_config_write(self) -> bool:
+        """Reject config mutations when the effective config is host-managed."""
+        _source, read_only = self._get_config_metadata()
+        if not read_only:
+            return False
+        from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+
+        logger.warning("Config write rejected: %s", CONFIG_READ_ONLY_MESSAGE)
+        self._send_error(409, CONFIG_READ_ONLY_MESSAGE)
+        return True
 
     def _get_instance_name(self):
         """Get instance name from current config, falling back to startup value."""
@@ -511,6 +539,8 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     def _handle_config_write(self, body):
         """Handle POST /api/config — scoped config write."""
+        if self._reject_read_only_config_write():
+            return
         scope = body.get("scope")
         if scope not in ("global", "project"):
             self._send_error(400, "scope must be 'global' or 'project'")
@@ -541,6 +571,8 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     def _handle_config_delete(self, body):
         """Handle DELETE /api/config — remove project override."""
+        if self._reject_read_only_config_write():
+            return
         section = body.get("section")
         if not section or not isinstance(section, str):
             self._send_error(400, "section is required")
@@ -563,6 +595,8 @@ class _RestHandler(BaseHTTPRequestHandler):
 
     def _handle_config_bulk_write(self, body):
         """Handle POST /api/config/bulk — write entire config dict."""
+        if self._reject_read_only_config_write():
+            return
         scope = body.get("scope")
         if scope not in ("global", "project"):
             self._send_error(400, "scope must be 'global' or 'project'")
@@ -586,7 +620,11 @@ class _RestHandler(BaseHTTPRequestHandler):
                 existing_config.update(config)
                 return False, f"Bulk config write [{scope}]"
 
-            _atomic_config_update(config_path, updater)
+            if not _atomic_config_update(config_path, updater):
+                from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+
+                self._send_error(409, CONFIG_READ_ONLY_MESSAGE)
+                return
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "ok", "scope": scope})
         except Exception as e:

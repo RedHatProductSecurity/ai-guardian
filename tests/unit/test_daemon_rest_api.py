@@ -83,6 +83,16 @@ class TestRestAPIEndpoints:
         assert "mcp_installed" in data
         assert data["mcp_installed"] is False
 
+    def test_status_includes_config_metadata(self, rest_api, monkeypatch):
+        api, port, state = rest_api
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_SOURCE", "host")
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_READ_ONLY", "true")
+        url = f"http://127.0.0.1:{port}/api/status"
+        with urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["config_source"] == "host"
+        assert data["config_read_only"] is True
+
     def test_status_includes_menu_tags(self, rest_api):
         api, port, state = rest_api
         cfg = {"menu_tags": ["carbonite", "container"]}
@@ -109,6 +119,33 @@ class TestRestAPIEndpoints:
             data = json.loads(resp.read())
         assert data["request_count"] == 42
         assert data["blocked_count"] == 3
+
+    def test_stats_includes_config_metadata(self, rest_api, monkeypatch):
+        api, port, state = rest_api
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_SOURCE", "sandbox-local")
+        monkeypatch.delenv("AI_GUARDIAN_CONFIG_READ_ONLY", raising=False)
+        url = f"http://127.0.0.1:{port}/api/stats"
+        with urlopen(url, timeout=5) as resp:
+            data = json.loads(resp.read())
+        assert data["config_source"] == "sandbox-local"
+        assert data["config_read_only"] is False
+
+    def test_config_write_rejected_when_host_managed(self, rest_api, monkeypatch):
+        api, port, state = rest_api
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_READ_ONLY", "true")
+        url = f"http://127.0.0.1:{port}/api/config/bulk"
+        body = json.dumps({"scope": "global", "config": {"changed": True}}).encode(
+            "utf-8"
+        )
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with pytest.raises(HTTPError) as exc_info:
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 409
+        assert json.loads(exc_info.value.read())["error"] == (
+            "Configuration is managed by the host and is read-only."
+        )
+        assert state._config_reloaded is False
 
     def test_performance_includes_paused_state(self, rest_api):
         api, port, state = rest_api

@@ -1,6 +1,6 @@
 # Read/write GitHub capability for the AI Guardian OpenShell support image.
 #
-# This is the main policy overlay. The OpenShell launcher composes it with
+# This is the main policy overlay. The AI Guardian sandbox command composes it with
 # policies/base.yaml and the selected agent fragment from policies/agents/.
 # Credentials are supplied separately by OpenShell providers.
 version: 1

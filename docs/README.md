@@ -80,6 +80,7 @@ Run `mkdocs build` before submitting documentation changes. The generated `site/
 
 | Document | Description |
 |----------|-------------|
+| [Sandbox CLI](Sandbox.md) | Named Docker/Podman and OpenShell sandbox lifecycle management and native command mappings |
 | [Container Image](../container/README.md) | UBI-based image with supported agent integrations, published to quay.io |
 
 ## Development

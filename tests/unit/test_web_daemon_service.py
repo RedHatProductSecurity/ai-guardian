@@ -47,6 +47,20 @@ class TestDaemonServiceTargets:
 
 
 class TestDaemonServiceStatus:
+    def test_get_daemon_status(self, service, mock_target):
+        service._client.get_status.return_value = {
+            "config_source": "host",
+            "config_read_only": True,
+        }
+        assert service.get_daemon_status(mock_target) == {
+            "config_source": "host",
+            "config_read_only": True,
+        }
+
+    def test_get_daemon_status_handles_error(self, service, mock_target):
+        service._client.get_status.side_effect = Exception("connection failed")
+        assert service.get_daemon_status(mock_target) is None
+
     def test_get_all_daemon_status(self, service, mock_target):
         service._targets = [mock_target]
         service._client.get_status.return_value = {
@@ -64,6 +78,22 @@ class TestDaemonServiceStatus:
         result = service.get_all_daemon_status()
         assert len(result) == 1
         assert result[0]["status"] is None
+
+    def test_get_all_daemon_status_respects_discovery_error(self, service, mock_target):
+        mock_target.status = "error"
+        service._targets = [mock_target]
+        service._client.get_status.return_value = {"request_count": 42}
+
+        result = service.get_all_daemon_status()
+
+        assert result[0]["status"] is None
+        service._client.get_status.assert_not_called()
+
+    def test_get_daemon_status_respects_discovery_error(self, service, mock_target):
+        mock_target.status = "error"
+
+        assert service.get_daemon_status(mock_target) is None
+        service._client.get_status.assert_not_called()
 
 
 class TestDaemonServiceConfig:

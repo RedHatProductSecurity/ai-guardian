@@ -15,6 +15,9 @@ from ai_guardian.daemon.discovery import (
     _detect_engine,
     _engine_from_source,
     _get_podman_socket,
+    is_container_id,
+    should_update_target_name,
+    should_use_container_api_name,
 )
 
 
@@ -29,6 +32,7 @@ class TestDaemonTarget:
         assert t.container_id is None
         assert t.container_engine is None
         assert t.container_name is None
+        assert t.runtime_type is None
         assert t.pod_name is None
         assert t.namespace is None
         assert t.context is None
@@ -242,6 +246,7 @@ def _make_mock_container(
     name="my-guardian",
     labels=None,
     ports=None,
+    status=None,
 ):
     """Create a mock docker SDK Container object."""
     c = mock.MagicMock()
@@ -249,6 +254,8 @@ def _make_mock_container(
     c.name = name
     c.labels = labels or {"ai-guardian.daemon": "true"}
     c.ports = ports or {"63152/tcp": [{"HostIp": "0.0.0.0", "HostPort": "49200"}]}
+    if status is not None:
+        c.status = status
     return c
 
 
@@ -267,6 +274,39 @@ class TestEngineFromSource:
 
     def test_docker_host_podman(self):
         assert _engine_from_source("unix:///run/podman/podman.sock") == "podman"
+
+
+class TestContainerNameHelpers:
+    def test_is_container_id_accepts_short_and_full_ids(self):
+        assert is_container_id("abc123def456")
+        assert is_container_id("abc123def456" * 5 + "abcd")
+
+    def test_is_container_id_rejects_runtime_names(self):
+        assert not is_container_id("ag-test")
+        assert not is_container_id("short")
+
+    def test_container_api_id_does_not_replace_runtime_name(self):
+        assert not should_use_container_api_name("ag-test", "1595862f38e8")
+
+    def test_container_api_name_is_used_when_human_readable(self):
+        assert should_use_container_api_name("ag-test", "configured-name")
+
+    def test_target_name_update_preserves_runtime_identity(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            container_name="ag-test",
+        )
+        assert not should_update_target_name(target, "1595862f38e8")
+        assert should_update_target_name(target, "configured-name")
+
+    def test_target_name_update_preserves_explicit_discovery_name(self):
+        target = DaemonTarget(
+            name="ag-codex-123456",
+            runtime="container",
+            container_name="sandbox-ag-codex-123456",
+        )
+        assert not should_update_target_name(target, "sandbox-ag-codex-123456")
 
 
 class TestDetectEngine:
@@ -345,6 +385,48 @@ class TestDiscoverContainers:
         d = DaemonDiscovery()
         with mock.patch.object(d, "_get_docker_clients", return_value=[]):
             assert d.discover_containers() == []
+
+    def test_unreachable_engine_retains_cached_targets_as_unknown(self):
+        d = DaemonDiscovery()
+        d._container_targets_cache = {
+            "podman": [
+                DaemonTarget(
+                    name="ag-test",
+                    runtime="container",
+                    runtime_type="openshell",
+                    status="running",
+                    container_id="abc123def456",
+                    container_engine="podman",
+                )
+            ]
+        }
+
+        with mock.patch.object(d, "_get_docker_clients", return_value=[]):
+            targets = d.discover_containers()
+
+        assert len(targets) == 1
+        assert targets[0].name == "ag-test"
+        assert targets[0].status == "unknown"
+        assert (
+            targets[0].error_message
+            == "Container engine unavailable; retrying discovery"
+        )
+
+    def test_reachable_engine_clears_cached_targets(self):
+        d = DaemonDiscovery()
+        d._container_targets_cache = {
+            "podman": [DaemonTarget(name="old", runtime="container")]
+        }
+        client = mock.MagicMock()
+        client.containers.list.return_value = []
+        client.close = mock.MagicMock()
+
+        with mock.patch.object(
+            d, "_get_docker_clients", return_value=[(client, "podman")]
+        ):
+            assert d.discover_containers() == []
+
+        assert d._container_targets_cache["podman"] == []
 
     @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
     def test_label_discovery_via_sdk(self):
@@ -471,6 +553,56 @@ class TestDiscoverContainers:
         assert targets == []
 
     @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_stopped_managed_containers_are_available_separately(self):
+        stopped = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="stopped-guardian",
+            status="exited",
+        )
+        mock_client = mock.MagicMock()
+
+        def list_containers(*_args, **kwargs):
+            return [stopped] if kwargs.get("all") else []
+
+        mock_client.containers.list.side_effect = list_containers
+        mock_client.close = mock.MagicMock()
+
+        d = DaemonDiscovery()
+        with mock.patch.object(
+            d, "_get_docker_clients", return_value=[(mock_client, "podman")]
+        ):
+            assert d.discover_containers() == []
+
+        targets = d.stopped_container_targets
+        assert len(targets) == 1
+        assert targets[0].name == "stopped-guardian"
+        assert targets[0].status == "stopped"
+        assert targets[0].container_engine == "podman"
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_running_managed_containers_are_not_available_to_start(self):
+        running = _make_mock_container(
+            container_id="abc123def456abc123",
+            status="running",
+        )
+        mock_client = mock.MagicMock()
+        mock_client.containers.list.return_value = [running]
+        mock_client.close = mock.MagicMock()
+
+        d = DaemonDiscovery()
+        p1, p2 = self._patch_probes(d)
+        with (
+            mock.patch.object(
+                d, "_get_docker_clients", return_value=[(mock_client, "podman")]
+            ),
+            p1,
+            p2,
+        ):
+            d.discover_containers()
+
+        assert d.stopped_container_targets == []
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
     def test_custom_name_from_label(self):
         container = _make_mock_container(
             container_id="abc123def456abc123",
@@ -493,6 +625,34 @@ class TestDiscoverContainers:
         ):
             targets = d.discover_containers()
         assert targets[0].name == "my-sandbox"
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_container_name_wins_over_hostname_id(self):
+        container = _make_mock_container(
+            container_id="1595862f38e8d461ca84922cf3621be3",
+            name="ag-test",
+            ports={"63152/tcp": [{"HostIp": "0.0.0.0", "HostPort": "49501"}]},
+        )
+        mock_client = mock.MagicMock()
+        mock_client.containers.list.return_value = [container]
+        mock_client.close = mock.MagicMock()
+
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(
+                d, "_get_docker_clients", return_value=[(mock_client, "podman")]
+            ),
+            mock.patch.object(
+                d,
+                "_probe_daemon",
+                return_value={"paused": False, "name": "1595862f38e8"},
+            ),
+            mock.patch.object(d, "_sdk_exec_instance_name", return_value=None),
+        ):
+            targets = d.discover_containers()
+
+        assert targets[0].name == "ag-test"
+        assert targets[0].container_name == "ag-test"
 
     @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
     def test_custom_rest_port_from_label(self):
@@ -522,7 +682,7 @@ class TestDiscoverContainers:
     def test_openshell_forward_supplies_host_port(self):
         container = _make_mock_container(
             container_id="abc123def456abc123",
-            name="openshell-container",
+            name="sandbox-ag-codex-123456",
             labels={
                 "ai-guardian.daemon": "true",
                 "openshell.managed": "true",
@@ -558,7 +718,9 @@ class TestDiscoverContainers:
 
         assert len(targets) == 1
         assert targets[0].port == 55289
-        assert targets[0].name == "sandbox-codex"
+        assert targets[0].name == "ag-codex-123456"
+        assert targets[0].runtime == "container"
+        assert targets[0].runtime_type == "openshell"
         assert targets[0].auth_token == "daemon-token"
         assert mock_forwards.call_count == 1
 
@@ -601,6 +763,166 @@ class TestDiscoverContainers:
             text=True,
             timeout=3,
         )
+
+    def test_reads_openshell_error_phase(self):
+        containers = [
+            _make_mock_container(
+                labels={
+                    "ai-guardian.daemon": "true",
+                    "ai-guardian.managed": "true",
+                    "ai-guardian.runtime": "openshell",
+                    "ai-guardian.name": "ag-test",
+                }
+            )
+        ]
+        result = mock.MagicMock(
+            returncode=0,
+            stdout=json.dumps([{"name": "ag-test", "phase": "Error"}]),
+            stderr="",
+        )
+        with (
+            mock.patch("shutil.which", return_value="/usr/bin/openshell"),
+            mock.patch("subprocess.run", return_value=result) as mock_run,
+        ):
+            phases = DaemonDiscovery._get_openshell_phases(containers)
+
+        assert phases == {"ag-test": "Error"}
+        mock_run.assert_called_once_with(
+            [
+                "openshell",
+                "sandbox",
+                "list",
+                "--output",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+
+    def test_openshell_error_phase_overrides_healthy_daemon(self):
+        container = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="sandbox-ag-test",
+            labels={
+                "ai-guardian.daemon": "true",
+                "ai-guardian.managed": "true",
+                "ai-guardian.runtime": "openshell",
+                "ai-guardian.name": "ag-test",
+            },
+            ports={"63152/tcp": [{"HostIp": "0.0.0.0", "HostPort": "49201"}]},
+        )
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(
+                d, "_probe_daemon", return_value={"paused": False}
+            ) as probe,
+            mock.patch.object(
+                d,
+                "_sdk_exec_auth_token",
+                return_value=None,
+            ),
+        ):
+            targets = d._sdk_containers_to_targets(
+                "podman",
+                [container],
+                63152,
+                openshell_phases={"ag-test": "Error"},
+            )
+
+        assert targets[0].status == "error"
+        assert targets[0].error_message == "OpenShell phase: Error"
+        probe.assert_not_called()
+
+    def test_openshell_ready_with_unreachable_daemon_is_error(self):
+        container = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="openshell-default--ag-test",
+            labels={
+                "ai-guardian.daemon": "true",
+                "ai-guardian.managed": "true",
+                "ai-guardian.runtime": "openshell",
+                "ai-guardian.name": "ag-test",
+            },
+            ports={"63152/tcp": [{"HostIp": "0.0.0.0", "HostPort": "49201"}]},
+        )
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(d, "_probe_daemon", return_value=None) as probe,
+            mock.patch.object(d, "_is_openshell_forward_disabled", return_value=False),
+            mock.patch.object(d, "_sdk_exec_auth_token", return_value=None),
+        ):
+            targets = d._sdk_containers_to_targets(
+                "podman",
+                [container],
+                63152,
+                openshell_phases={"ag-test": "Ready"},
+            )
+
+        assert targets[0].status == "error"
+        assert (
+            targets[0].error_message
+            == "AI Guardian daemon is not reachable through the OpenShell REST forward"
+        )
+        probe.assert_called_once_with(49201)
+
+    def test_openshell_ready_without_forward_is_error(self):
+        container = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="openshell-default--ag-test",
+            labels={
+                "ai-guardian.daemon": "true",
+                "ai-guardian.managed": "true",
+                "ai-guardian.runtime": "openshell",
+                "ai-guardian.name": "ag-test",
+            },
+            ports={"63152/tcp": None},
+        )
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(d, "_is_openshell_forward_disabled", return_value=False),
+            mock.patch.object(d, "_probe_daemon") as probe,
+            mock.patch.object(d, "_sdk_exec_auth_token", return_value=None),
+        ):
+            targets = d._sdk_containers_to_targets(
+                "podman",
+                [container],
+                63152,
+                openshell_phases={"ag-test": "Ready"},
+            )
+
+        assert targets[0].status == "error"
+        assert targets[0].error_message == "OpenShell REST forward is unavailable"
+        probe.assert_not_called()
+
+    def test_openshell_ready_without_forward_can_be_explicitly_disabled(self):
+        container = _make_mock_container(
+            container_id="abc123def456abc123",
+            name="openshell-default--ag-test",
+            labels={
+                "ai-guardian.daemon": "true",
+                "ai-guardian.managed": "true",
+                "ai-guardian.runtime": "openshell",
+                "ai-guardian.name": "ag-test",
+            },
+            ports={"63152/tcp": None},
+        )
+        d = DaemonDiscovery()
+        with (
+            mock.patch.object(d, "_is_openshell_forward_disabled", return_value=True),
+            mock.patch.object(d, "_probe_daemon") as probe,
+            mock.patch.object(d, "_sdk_exec_auth_token", return_value=None),
+        ):
+            targets = d._sdk_containers_to_targets(
+                "podman",
+                [container],
+                63152,
+                openshell_phases={"ag-test": "Ready"},
+            )
+
+        assert targets[0].status == "running"
+        assert targets[0].error_message is None
+        probe.assert_not_called()
 
     def test_reads_live_recorded_openshell_service_forward(self, tmp_path):
         state_dir = tmp_path / "openshell-forwards"

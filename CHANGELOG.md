@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sandbox lifecycle CLI (#2302)**: Add `ai-guardian sandbox` commands for
+  creating, listing, inspecting, starting, stopping, restarting, connecting to,
+  executing commands in, viewing logs from, and deleting named Docker/Podman or
+  OpenShell sandboxes. Add daemon-backed timestamped configuration snapshots
+  with `sandbox config save/list/restore` and `create --restore-config latest`.
+  OpenShell setup, policy composition, provider preparation, and forwarding now
+  live in the subcommand, so the legacy `container/openshell.sh` wrapper is no
+  longer needed.
+
+- **Tray sandbox management**: Add sandbox creation to the main tray menu and
+  safe lifecycle, exec, logs, and configuration snapshot actions to each
+  discovered container/OpenShell target; permanent deletion remains CLI-only.
+  The create form provides a dropdown for the supported CLI agent selection,
+  disables runtime-specific fields, starts stopped container and OpenShell
+  sandboxes from a main-menu submenu, and runs non-interactive actions
+  in-process with captured output and failure logs.
+
+- **Sandbox configuration notices**: Show whether the web console is using a
+  writable host configuration snapshot or a directly mounted read-only host
+  configuration, with clear editing guidance.
+
+- **OpenShell tray connection**: Route the top-level OpenShell connection
+  action through the same sandbox connect implementation used by sandbox
+  management instead of opening a generic container shell.
+
+### Fixed
+
+- **Tray daemon visibility**: Expose every discovered daemon instead of
+  limiting the multi-daemon menu to eight fixed slots.
+
+- OpenShell upload-based sandbox creation now bootstraps the entrypoint
+  non-interactively, starts its REST forward, and then opens an independent
+  interactive shell so exiting does not terminate the sandbox.
+
+- OpenShell `sandbox connect` now uses an independent interactive exec session
+  for the same safe exit behavior.
+
+- Tray container discovery now retains last-known targets during temporary
+  Podman socket interruptions and retries automatically; the redundant per-target
+  `List sandboxes` action was removed because discovery already exposes all
+  managed instances.
+
+- OpenShell discovery now treats control-plane errors as authoritative and
+  validates Ready/running phases through the AI Guardian REST endpoint, so a
+  dead daemon or REST forward is not shown as active in the tray or NiceGUI.
+
+- Sandbox lifecycle commands now auto-detect Docker/Podman versus OpenShell by
+  the AI Guardian runtime labels and OpenShell metadata when `--runtime` is
+  omitted; an unqualified `list` covers both runtimes.
+- OpenShell `sandbox start` and `restart` now recreate a missing or unusable
+  REST forward instead of silently succeeding without host UI connectivity;
+  explicit `--no-forward` choices remain disabled across lifecycle restarts.
+- OpenShell `sandbox start` and `restart` now explicitly start the AI Guardian
+  daemon when the sandbox's persistent shell is relaunched.
+
+- Preserve named container and OpenShell sandboxes in tray and NiceGUI labels
+  instead of replacing their names with runtime-generated container IDs.
+- Make container and OpenShell configuration precedence consistent: explicit
+  profiles win, existing sandbox-local config is preserved, host config seeds a
+  writable sandbox snapshot, and only then is a default generated. Host files
+  are never written back. OpenShell lifecycle creation now invokes the
+  support-image entrypoint after native uploads and starts the persistent
+  service forward used by tray and NiceGUI discovery.
+
 ### Changed
 
 - **Codex integration display name**: Rename setup, tray, doctor, and support

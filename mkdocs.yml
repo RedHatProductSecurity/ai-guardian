@@ -110,6 +110,7 @@ nav:
       - AiderDesk: AIDERDESK.md
       - Pre-commit: PRE_COMMIT.md
   - Operations:
+      - Sandbox CLI: Sandbox.md
       - Kubernetes: kubernetes.md
       - Container: project/container.md
       - Pattern Server: PATTERN_SERVER.md

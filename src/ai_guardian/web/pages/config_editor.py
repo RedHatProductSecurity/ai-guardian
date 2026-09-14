@@ -6,11 +6,15 @@ from pathlib import Path
 
 from nicegui import run, ui
 
+from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+from ai_guardian.web.components.config_notice import create_config_source_banner
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.config_helpers import (
     _get_current_target,
     _is_remote_target,
     _daemon_service,
+    get_web_config_state,
+    is_web_config_read_only,
 )
 
 
@@ -87,6 +91,9 @@ def _save_config_with_backup(content_str, path_str):
 
     Routes through DaemonService for both local and remote targets.
     """
+    if is_web_config_read_only():
+        return CONFIG_READ_ONLY_MESSAGE
+
     parsed, err = _validate_json(content_str)
     if err:
         return err
@@ -106,7 +113,9 @@ def _save_config_with_backup(content_str, path_str):
             )
         else:
             result = _daemon_service.write_config_bulk(target, "global", parsed)
-        if result is None:
+        if result is None or result.get("status") == "error":
+            if isinstance(result, dict) and result.get("message"):
+                return result["message"]
             return "Failed to write to daemon"
         return None
 
@@ -132,12 +141,18 @@ def create_config_editor_page(service, daemon_name: str):
         ui.label("Edit configuration files with JSON validation.").classes(
             "text-xs text-grey-6"
         )
+        config_banner = ui.column().classes("w-full")
 
         from ai_guardian.web.config_helpers import _get_remote_project_dir
 
         project_dir = _get_remote_project_dir()
         initial_scope = "project" if project_dir else "global"
-        state = {"scope": initial_scope, "path": None}
+        state = {
+            "scope": initial_scope,
+            "path": None,
+            "read_only": False,
+            "config_source": "",
+        }
 
         with ui.card().classes("w-full"):
             scope_sel = None
@@ -161,6 +176,15 @@ def create_config_editor_page(service, daemon_name: str):
             # warnings when navigating between config pages (issue #1102)
             editor_container = ui.column().classes("w-full")
             editor = None
+            save_button = None
+
+            def apply_read_only_state():
+                if not state["read_only"]:
+                    return
+                if editor is not None:
+                    editor.props("readonly")
+                if save_button is not None:
+                    save_button.set_enabled(False)
 
             async def init_editor():
                 nonlocal editor
@@ -175,6 +199,8 @@ def create_config_editor_page(service, daemon_name: str):
                         .classes("w-full")
                         .style("min-height: 500px")
                     )
+                    if state["read_only"]:
+                        editor.props("readonly")
                     editor.on_value_change(on_editor_change)
                 return editor
 
@@ -182,6 +208,9 @@ def create_config_editor_page(service, daemon_name: str):
 
             async def do_save():
                 nonlocal editor
+                if state["read_only"]:
+                    ui.notify(CONFIG_READ_ONLY_MESSAGE, type="warning")
+                    return
                 if editor is None:
                     await init_editor()
 
@@ -216,7 +245,9 @@ def create_config_editor_page(service, daemon_name: str):
 
                 dlg.open()
 
-            ui.button("Save", icon="save", on_click=do_save).props("dense")
+            save_button = ui.button("Save", icon="save", on_click=do_save).props(
+                "dense"
+            )
 
             async def do_reload():
                 nonlocal editor
@@ -253,6 +284,13 @@ def create_config_editor_page(service, daemon_name: str):
 
             sc = scope_val or (scope_sel.value if scope_sel else state["scope"])
             state["scope"] = sc
+            config_state = await run.io_bound(get_web_config_state)
+            state["read_only"] = bool(config_state.get("read_only", False))
+            state["config_source"] = config_state.get("source", "")
+            config_banner.clear()
+            with config_banner:
+                create_config_source_banner(config_state)
+            apply_read_only_state()
             text, path_str = await run.io_bound(_load_config_by_scope, sc)
             state["path"] = path_str
             path_label.text = f"File: {path_str or 'N/A'}"

@@ -34,7 +34,7 @@ _request_tos_consent() {
 
 # Older OpenShell invocations may pass metadata as leading arguments. Consume
 # only our reserved arguments and leave the agent command untouched. The
-# current launcher uses OpenShell's supported --env options instead.
+# current sandbox command uses OpenShell's supported --env options instead.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ai-guardian-agent)
@@ -74,7 +74,7 @@ SUPPORTED_AGENT_IDES=(
 CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode crush)
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 
-# AI_GUARDIAN_AGENT is the new name used by the OpenShell launcher. Keep
+# AI_GUARDIAN_AGENT is the name used by the sandbox command. Keep
 # AI_GUARDIAN_IDE as a compatibility alias for existing container users.
 # If no explicit environment value is present, infer the agent when its
 # command is the first argument (for example, ``... -- codex``).
@@ -99,11 +99,19 @@ else
   CONFIG_DIR="${HOME}/.config/ai-guardian"
 fi
 CONFIG_PATH="${CONFIG_DIR}/ai-guardian.json"
+CONFIG_METADATA_PATH="${CONFIG_DIR}/.ai-guardian-config-metadata.json"
 HOST_CONFIG_MOUNTED="${AI_GUARDIAN_HOST_CONFIG_MOUNTED:-false}"
+# New sandbox commands stage a host config beside the active sandbox config. Keep
+# the canonical path as the compatibility default for older invocations that
+# mounted the host file directly over CONFIG_PATH.
+HOST_CONFIG_PATH="${AI_GUARDIAN_HOST_CONFIG_PATH:-$CONFIG_PATH}"
+CONFIG_SOURCE="${AI_GUARDIAN_CONFIG_SOURCE:-}"
+CONFIG_READ_ONLY="${AI_GUARDIAN_CONFIG_READ_ONLY:-false}"
+RESTORE_CONFIG="${AI_GUARDIAN_RESTORE_CONFIG:-false}"
 SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 OPEN_SHELL_STAGING="${AI_GUARDIAN_OPEN_SHELL_STAGING:-false}"
 
-# The support image may use a released PyPI package while the launcher is
+# The support image may use a released PyPI package while the sandbox command is
 # newer than that package. Discover the setup command's advertised IDE choices
 # so a newly added integration is skipped until the corresponding release is
 # available, while an explicitly selected unsupported agent still fails fast.
@@ -185,7 +193,7 @@ if [ -n "$PROFILE" ] && [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
 fi
 
 # OpenShell 0.0.116 transfers --upload files after the canonical process has
-# started.  The launcher marks this initial shell as staging so a required
+# started. The sandbox command marks this initial shell as staging so a required
 # host config or custom profile can arrive before setup reads it.  Direct
 # container launches retain the fail-fast behavior.
 _wait_for_open_shell_upload() {
@@ -208,11 +216,11 @@ _wait_for_open_shell_upload() {
   done
 }
 
-if [ "$HOST_CONFIG_MOUNTED" = "true" ] && [ ! -f "$CONFIG_PATH" ]; then
+if [ "$HOST_CONFIG_MOUNTED" = "true" ] && [ ! -f "$HOST_CONFIG_PATH" ]; then
   if [ "$OPEN_SHELL_STAGING" = "true" ]; then
-    _wait_for_open_shell_upload "$CONFIG_PATH" "host ai-guardian config"
+    _wait_for_open_shell_upload "$HOST_CONFIG_PATH" "host ai-guardian config"
   else
-    echo "Error: host ai-guardian config was requested but is missing: $CONFIG_PATH"
+    echo "Error: host ai-guardian config was requested but is missing: $HOST_CONFIG_PATH"
     exit 1
   fi
 fi
@@ -478,9 +486,10 @@ fi
 # gh: reads GH_TOKEN / GITHUB_TOKEN natively, no action needed
 
 if [ "$IDE" != "dummy-agent" ]; then
-    # Create or select the one shared ai-guardian configuration first. A
-    # mounted host config is deliberately never passed to --create-config:
-    # the mount is read-only and must remain untouched.
+    # Apply the shared configuration precedence. Explicit profiles are
+    # intentional overrides, followed by an explicit restored snapshot. An
+    # existing sandbox-local config then wins over a normal host fallback, and
+    # only then do we use the host config or generate a default config.
     if [ -n "$PROFILE" ]; then
         echo "Creating ai-guardian config from profile: $PROFILE"
         if ! ai-guardian setup --ide "$IDE" --create-config --profile "$PROFILE" \
@@ -489,9 +498,55 @@ if [ "$IDE" != "dummy-agent" ]; then
             exit 1
         fi
         CONFIG_SOURCE="profile"
+        CONFIG_READ_ONLY="false"
+    elif [ "$RESTORE_CONFIG" = "true" ] && [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
+        if [ "$HOST_CONFIG_PATH" = "$CONFIG_PATH" ]; then
+            echo "Error: restored config snapshot must be staged outside active config path"
+            exit 1
+        fi
+        mkdir -p "$(dirname "$CONFIG_PATH")"
+        if ! cp "$HOST_CONFIG_PATH" "$CONFIG_PATH"; then
+            echo "Error: unable to restore ai-guardian config snapshot: $HOST_CONFIG_PATH"
+            exit 1
+        fi
+        echo "Restoring ai-guardian config snapshot"
+        CONFIG_SOURCE="snapshot"
+        CONFIG_READ_ONLY="false"
+        if ! ai-guardian setup --ide "$IDE" --force --yes; then
+            echo "Error: unable to configure selected IDE: $IDE"
+            exit 1
+        fi
+    elif [ -f "$CONFIG_PATH" ] &&
+        { [ "$HOST_CONFIG_MOUNTED" != "true" ] ||
+          [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; }; then
+        echo "Using sandbox-local ai-guardian config: $CONFIG_PATH"
+        CONFIG_SOURCE="sandbox-local"
+        CONFIG_READ_ONLY="false"
+        if ! ai-guardian setup --ide "$IDE" --force --yes; then
+            echo "Error: unable to configure selected IDE: $IDE"
+            exit 1
+        fi
     elif [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
-        echo "Using read-only host ai-guardian config: $CONFIG_PATH"
-        CONFIG_SOURCE="host (read-only)"
+        if [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; then
+            mkdir -p "$(dirname "$CONFIG_PATH")"
+            if ! cp "$HOST_CONFIG_PATH" "$CONFIG_PATH"; then
+                echo "Error: unable to stage host ai-guardian config: $HOST_CONFIG_PATH"
+                exit 1
+            fi
+        fi
+        CONFIG_SOURCE="host"
+        if [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; then
+            echo "Using host ai-guardian config snapshot"
+            # The host file is mounted/uploaded beside the active config.  The
+            # active copy belongs to this sandbox and is intentionally
+            # writable; the host file is never written back.
+            CONFIG_READ_ONLY="false"
+        else
+            # Preserve compatibility with older direct read-only mounts that
+            # place the host file over the active config path.
+            echo "Using read-only host ai-guardian config"
+            CONFIG_READ_ONLY="true"
+        fi
         if ! ai-guardian setup --ide "$IDE" --force --yes; then
             echo "Error: unable to configure selected IDE: $IDE"
             exit 1
@@ -503,6 +558,7 @@ if [ "$IDE" != "dummy-agent" ]; then
             exit 1
         fi
         CONFIG_SOURCE="sandbox-local"
+        CONFIG_READ_ONLY="false"
     fi
 
     # Configure every supported integration so a runtime agent selection does
@@ -532,9 +588,50 @@ if [ "$IDE" != "dummy-agent" ]; then
         echo "Error: setup completed but config file missing: $CONFIG_PATH"
         exit 1
     fi
+
+    # A later `podman exec`/`docker exec` process does not inherit exports made
+    # by this entrypoint. Persist the effective source and write capability so
+    # a connected TUI or CLI sees the same sandbox snapshot semantics.
+    if ! python3 - "$CONFIG_METADATA_PATH" "$CONFIG_SOURCE" "$CONFIG_READ_ONLY" <<'PY'
+import json
+import os
+import sys
+import tempfile
+
+
+metadata_path, source, read_only = sys.argv[1:]
+metadata_dir = os.path.dirname(os.path.abspath(metadata_path))
+os.makedirs(metadata_dir, exist_ok=True)
+metadata = {"source": source, "read_only": read_only.lower() == "true"}
+file_descriptor, temporary_path = tempfile.mkstemp(
+    prefix=".config-metadata.", suffix=".tmp", dir=metadata_dir
+)
+try:
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+        json.dump(metadata, stream, separators=(",", ":"))
+        stream.write("\n")
+    os.replace(temporary_path, metadata_path)
+except Exception:
+    try:
+        os.unlink(temporary_path)
+    except OSError:
+        # intentionally silent — cleanup of the temporary metadata file
+        pass
+    raise
+PY
+    then
+        echo "Warning: unable to persist ai-guardian config metadata: $CONFIG_METADATA_PATH" >&2
+    fi
 else
     CONFIG_SOURCE="not used (dummy-agent)"
+    CONFIG_READ_ONLY="false"
 fi
+
+# The daemon and console use these markers to expose and enforce whether the
+# effective config is managed by the host.  The explicit source marker also
+# lets a sandbox-local config win while a host fallback is staged alongside it.
+export AI_GUARDIAN_CONFIG_SOURCE="$CONFIG_SOURCE"
+export AI_GUARDIAN_CONFIG_READ_ONLY="$CONFIG_READ_ONLY"
 
 # OpenShell is already the outer sandbox. Configure Codex to use its full
 # access mode inside that outer boundary so Codex does not start a nested

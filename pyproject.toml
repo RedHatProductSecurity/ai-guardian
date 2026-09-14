@@ -100,6 +100,12 @@ packages = ["src/ai_guardian"]
 "images" = "ai_guardian/images"
 "README.md" = "ai_guardian/README.md"
 "pyproject.toml" = "ai_guardian/pyproject.toml"
+# The sandbox command composes the same OpenShell baseline and agent policies
+# used by the container image. Keep them in installed wheels so the command
+# works outside a source checkout as well.
+"container/policies" = "ai_guardian/sandbox_assets/policies"
+"container/openshell-github-readonly-policy.yaml" = "ai_guardian/sandbox_assets/openshell-github-readonly-policy.yaml"
+"container/openshell-github-readwrite-policy.yaml" = "ai_guardian/sandbox_assets/openshell-github-readwrite-policy.yaml"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

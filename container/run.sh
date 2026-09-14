@@ -165,6 +165,9 @@ HOST_CONFIG_PATH="${HOST_CONFIG_DIR}/ai-guardian.json"
 
 # --- Build env var list ---
 CONTAINER_CONFIG_DIR="/sandbox/.config/ai-guardian"
+# Keep a host config beside the active sandbox config so an existing
+# sandbox-local file can take precedence at container startup.
+HOST_CONFIG_FALLBACK_PATH="/sandbox/.config/ai-guardian.host.json"
 HOST_CONFIG_MOUNTED="false"
 CONFIG_SOURCE="sandbox-local"
 env_args=(
@@ -211,7 +214,7 @@ if [[ -n "$PROFILE" ]]; then
             ;;
     esac
     if [[ -n "$PROFILE_MOUNT_SOURCE" ]]; then
-        volume_args+=(-v "${PROFILE_MOUNT_SOURCE}:${PROFILE_MOUNT_TARGET}:ro")
+        volume_args+=(-v "${PROFILE_MOUNT_SOURCE}:${PROFILE_MOUNT_TARGET}:ro,z")
         env_args+=(-e "AI_GUARDIAN_PROFILE=${PROFILE_MOUNT_TARGET}")
         CONFIG_SOURCE="profile (host file, read-only)"
     else
@@ -219,10 +222,13 @@ if [[ -n "$PROFILE" ]]; then
     fi
 else
     if [[ -f "$HOST_CONFIG_PATH" ]]; then
-        volume_args+=(-v "${HOST_CONFIG_PATH}:${CONTAINER_CONFIG_DIR}/ai-guardian.json:ro")
-        env_args+=(-e "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true")
+        volume_args+=(-v "${HOST_CONFIG_PATH}:${HOST_CONFIG_FALLBACK_PATH}:ro,z")
+        env_args+=(
+            -e "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true"
+            -e "AI_GUARDIAN_HOST_CONFIG_PATH=${HOST_CONFIG_FALLBACK_PATH}"
+        )
         HOST_CONFIG_MOUNTED="true"
-        CONFIG_SOURCE="host config (read-only)"
+        CONFIG_SOURCE="host config fallback (snapshot)"
     else
         if [[ -n "$CONFIG_DIR_OVERRIDE" || -n "${AI_GUARDIAN_CONFIG_DIR:-}" || -n "${AI_GUARDIAN_HOME:-}" ]]; then
             echo "Notice: host ai-guardian config not found at ${HOST_CONFIG_PATH}; using sandbox-local config" >&2

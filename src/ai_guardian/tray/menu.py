@@ -17,7 +17,6 @@ PANEL_TO_WEB_PATH = {
 
 REFRESH_INTERVAL = 10
 WAKE_GAP_THRESHOLD = 30
-MAX_DAEMON_SLOTS = 8
 MAX_DIR_PAUSE_SLOTS = 16
 AUTOSTART_COOLDOWN = 5.0
 
@@ -60,8 +59,9 @@ def daemon_status_label(
             "error": "✗",
             "unknown": "○",
         }.get(target.status, "○")
-    if target.runtime == "container" and target.container_engine:
-        runtime = f" ({target.container_engine})"
+    display_runtime = getattr(target, "runtime_type", None) or target.runtime
+    if target.runtime == "container":
+        runtime = f" ({display_runtime})"
     elif target.runtime == "kubernetes":
         k8s_parts = ["kubernetes"]
         ctx = getattr(target, "context", None)
@@ -72,7 +72,7 @@ def daemon_status_label(
             k8s_parts.append(ns)
         runtime = f" ({'/'.join(k8s_parts)})"
     elif target.runtime != "local":
-        runtime = f" ({target.runtime})"
+        runtime = f" ({display_runtime})"
     else:
         runtime = ""
     forwarding_badge = " ⚠" if forwarding_failed else ""
@@ -158,6 +158,55 @@ def launch_create_config():
         resolve_cli_cmd("setup", "--create-config"),
         keep_open=True,
     )
+
+
+def _sandbox_runtime(target):
+    """Return the logical sandbox runtime represented by a tray target."""
+    return getattr(target, "runtime_type", None) or getattr(target, "runtime", None)
+
+
+def launch_sandbox_command(target, operation, command_args=(), *, keep_open=True):
+    """Launch an ``ai-guardian sandbox`` command for a discovered target."""
+    from ai_guardian.daemon.multi_client import _launch_in_terminal
+    from ai_guardian.tray.plugins import resolve_cli_cmd
+
+    runtime = _sandbox_runtime(target)
+    if runtime not in {"container", "openshell"}:
+        logger.warning(
+            "Cannot launch sandbox command for unsupported target runtime: %s",
+            runtime,
+        )
+        return False
+
+    operation_parts = (
+        list(operation) if isinstance(operation, (tuple, list)) else [operation]
+    )
+    command = resolve_cli_cmd(
+        "sandbox",
+        *operation_parts,
+        "--runtime",
+        runtime,
+        *(str(value) for value in command_args),
+    )
+    return _launch_in_terminal(command, keep_open=keep_open)
+
+
+def launch_sandbox_create_command(runtime, command_args=(), *, keep_open=True):
+    """Launch ``ai-guardian sandbox create`` with selected form values."""
+    from ai_guardian.daemon.multi_client import _launch_in_terminal
+    from ai_guardian.tray.plugins import resolve_cli_cmd
+
+    if runtime not in {"container", "openshell"}:
+        logger.warning("Cannot create sandbox with unsupported runtime: %s", runtime)
+        return False
+    command = resolve_cli_cmd(
+        "sandbox",
+        "create",
+        "--runtime",
+        runtime,
+        *(str(value) for value in command_args),
+    )
+    return _launch_in_terminal(command, keep_open=keep_open)
 
 
 def open_web_console(daemon_name="", page=""):

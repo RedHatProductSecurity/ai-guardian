@@ -200,6 +200,7 @@ def create_header(daemon_name: str = "", drawer=None):
     except Exception:
         set_current_project_dir("")
 
+    config_state_label = None
     with ui.header().classes("items-center justify-between bg-blue-grey-10"):
         with ui.row().classes("items-center gap-4"):
             if drawer is not None:
@@ -214,6 +215,8 @@ def create_header(daemon_name: str = "", drawer=None):
             if daemon_name:
                 ui.label("|").classes("text-grey-6")
                 ui.label(daemon_name).classes("text-white font-bold")
+                config_state_label = ui.label("").classes("text-orange-3 text-xs")
+                config_state_label.set_visibility(False)
             _create_project_selector(daemon_name)
         with ui.row().classes("gap-2 items-center"):
             if daemon_name:
@@ -221,6 +224,24 @@ def create_header(daemon_name: str = "", drawer=None):
                 _create_nav_menu(daemon_name)
             else:
                 ui.link("Select Daemon", "/").classes("text-white no-underline")
+
+    if config_state_label is not None:
+
+        async def _refresh_config_state():
+            try:
+                from nicegui import run
+
+                from ai_guardian.web.config_helpers import get_web_config_state
+
+                state = await run.io_bound(get_web_config_state)
+                if state.get("read_only"):
+                    source = state.get("source") or "host"
+                    config_state_label.text = f"Config: {source} (read-only)"
+                    config_state_label.set_visibility(True)
+            except Exception:
+                pass  # intentionally silent — header metadata is best-effort
+
+        ui.timer(0.1, _refresh_config_state, once=True)
 
 
 def create_sidebar(daemon_name: str, current: str = ""):

@@ -718,8 +718,8 @@ class MultiDaemonClient:
                 existing.update(config)
                 return False, f"Bulk write [{scope}]"
 
-            _atomic_config_update(config_path, updater)
-            return {"status": "ok"}
+            success = _atomic_config_update(config_path, updater)
+            return {"status": "ok" if success else "error"}
         body: dict = {"scope": scope, "config": config}
         if project_dir:
             body["project_dir"] = project_dir

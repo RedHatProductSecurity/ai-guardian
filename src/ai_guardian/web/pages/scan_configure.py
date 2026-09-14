@@ -529,6 +529,12 @@ def _apply_config(
     """Write config and aiguardignore files at the chosen scope."""
     import shutil
 
+    from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+    from ai_guardian.web.config_helpers import is_web_config_read_only
+
+    if is_web_config_read_only():
+        raise RuntimeError(CONFIG_READ_ONLY_MESSAGE)
+
     from ai_guardian.scan_analyzer import merge_and_write_config
 
     if merged_config:
