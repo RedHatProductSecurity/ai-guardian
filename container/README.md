@@ -117,15 +117,49 @@ ai-guardian sandbox config save guardian-codex
 ai-guardian sandbox delete guardian-codex
 
 # OpenShell (uses OPENSHELL_CLI or the openshell executable on PATH)
-ai-guardian sandbox create --runtime openshell --name guardian-claude --cli claude
+# Create; policy files are repeatable.
+ai-guardian sandbox create \
+    --runtime openshell \
+    --name guardian-claude \
+    --cli claude \
+    --repo . \
+    --policy ./container/openshell-github-readonly-policy.yaml
+
+# List managed OpenShell sandboxes.
+ai-guardian sandbox list --runtime openshell
+
+# Inspect status; runtime is auto-detected by name.
 ai-guardian sandbox status guardian-claude
+
+# Open an independent interactive shell.
+ai-guardian sandbox connect guardian-claude
+
+# Execute a command without replacing the sandbox process.
+ai-guardian sandbox exec guardian-claude -- ai-guardian doctor
+
+# Stream logs.
+ai-guardian sandbox logs guardian-claude --follow
+
+# Save and inspect configuration snapshots.
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox config list guardian-claude
+
+# Stop, start, or restart.
 ai-guardian sandbox stop guardian-claude
 ai-guardian sandbox start guardian-claude
-ai-guardian sandbox connect guardian-claude
-ai-guardian sandbox exec guardian-claude -- /bin/bash
-ai-guardian sandbox logs guardian-claude --follow
-ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox restart guardian-claude
+
+# Permanently delete.
 ai-guardian sandbox delete guardian-claude
+```
+
+For multiple policy overlays, repeat the option in the same create command:
+
+```bash
+ai-guardian sandbox create --runtime openshell --name guardian-claude \
+    --cli claude --repo . \
+    --policy ./policy-one.yaml \
+    --policy ./policy-two.yaml
 ```
 
 Runtime selection can also appear before the lifecycle verb, as in
