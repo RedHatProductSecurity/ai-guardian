@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-Common issues with the AI Guardian daemon, system tray, and container deployments.
+Common issues with the AI Guardian daemon, system tray, container deployments, and OpenShell.
 
 ## General Diagnostics
 
@@ -391,6 +391,62 @@ rm -f ~/.local/state/ai-guardian/daemon.pid
 # Start manually
 ai-guardian daemon start
 ```
+
+## OpenShell on macOS
+
+### OpenShell Gateway Cannot Find the Podman Network
+
+**Symptom:** OpenShell finds the selected provider, but sandbox creation fails
+with an error like:
+
+```
+create sandbox failed: podman API error (500): unable to find network with name or ID openshell: network not found
+```
+
+**Cause:** Podman Machine can expose separate rootless and rootful
+connections. For example, `podman-machine-default` may be the rootless
+connection while `podman-machine-default-root` is rootful. The `openshell`
+network must exist in the same rootless Podman connection used by the
+OpenShell gateway. Seeing the network in another connection does not make it
+available to the gateway.
+
+List the Podman connections and check the network in the rootless connection:
+
+```bash
+podman system connection list
+podman --connection podman-machine-default network ls
+```
+
+Use the rootless connection name configured for your OpenShell gateway in
+place of `podman-machine-default` if it differs. If `openshell` is missing,
+create it in that connection and verify it there:
+
+```bash
+podman --connection podman-machine-default network create openshell
+podman --connection podman-machine-default network inspect openshell
+```
+
+Do not use `sudo` for these commands: it can create the network in a different
+Podman context that the gateway cannot see.
+
+Restart the Homebrew-managed gateway and check that it is ready:
+
+```bash
+brew services restart openshell
+openshell status
+```
+
+A connection-refused message immediately after restarting the gateway can be
+transient. Wait for the service to finish starting, then retry `openshell
+status`.
+
+Provider lookup or authentication errors are separate from this network
+failure. Successfully selecting a provider does not confirm that sandbox
+creation can reach the Podman network; the `network not found` API error points
+to a mismatch between the gateway's Podman connection and the connection where
+the network exists. See the official
+[OpenShell sandbox compute-driver reference](https://docs.nvidia.com/openshell/reference/sandbox-compute-drivers)
+for gateway and compute-driver setup.
 
 ---
 
