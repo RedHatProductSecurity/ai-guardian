@@ -209,6 +209,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ),
         post_output_transform=False,
         platform_contract="Antigravity CLI; PostToolUse has no output transform surface",
+        cli_capable=True,
     ),
     IDEIntegration(
         "cline",
