@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Tray stale-code inventory (#2312)**: Track the daemon's shared hook,
+  reporting, SDK, and observability dependencies along with bundled pattern and
+  runtime resource files. Exclude unrelated integrations, clients, and daemon
+  CLI helpers so only daemon-relevant edits trigger the development stale-code
+  warning.
+
 ### Added
 
 - **Sandbox lifecycle CLI (#2302)**: Add `ai-guardian sandbox` commands for

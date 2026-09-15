@@ -1339,57 +1339,122 @@ class DaemonState:
         except ImportError:
             return "unknown"
 
-    # Directories (relative to package root) whose changes require daemon restart
+    # Daemon runtime dependencies tracked for the dev-mode restart warning
+    # (#1465, #2312). New package modules/resources must be reviewed against
+    # the server, REST API, and hook-processing paths before updating this list.
     _DAEMON_SOURCE_DIRS = frozenset(
         {
-            "daemon",
+            "config",
             "hook_adapters",
             "hook_events",
             "patterns",
             "scanners",
-            "config",
-            "integrations",
+            "sdk",
+            "setup",
+            "tools",
+            "utils",
+            "violations",
+            "observability",
         }
     )
     # Top-level files (no subdirectory) that require daemon restart
     _DAEMON_SOURCE_FILES = frozenset(
         {
+            "__init__.py",
             "hook_processing.py",
-            "sdk.py",
             "constants.py",
             "annotations.py",
             "aiguardignore.py",
             "response_format.py",
             "allowlist_utils.py",
             "ask_mode.py",
+            "hook_context.py",
+            "session_state.py",
+            "ide_paths.py",
+            "ide_registry.py",
+            "project_init.py",
+            "skill_discovery.py",
+            "doctor.py",
+            "smoke_test.py",
         }
+    )
+    # Isolated modules used by daemon runtime paths. Keep client-only UI and
+    # setup modules out of the scan unless the daemon itself calls them.
+    _DAEMON_SOURCE_PATHS = frozenset(
+        {
+            "daemon/__init__.py",
+            "daemon/about.py",
+            "daemon/multi_client.py",
+            "daemon/path_env.py",
+            "daemon/protocol.py",
+            "daemon/rest_api.py",
+            "daemon/server.py",
+            "daemon/state.py",
+            "daemon/trace_sync.py",
+            "daemon/traces.py",
+            "daemon/violation_rescan.py",
+            "daemon/working_dir.py",
+            "mcp/__init__.py",
+            "mcp/audit.py",
+            "reporting/__init__.py",
+            "reporting/audit.py",
+            "reporting/latency.py",
+            "reporting/metrics.py",
+            "reporting/sarif.py",
+            "tray/__init__.py",
+            "tray/plugins.py",
+            "tui/__init__.py",
+            "tui/ask_dialog.py",
+            "tui/pattern_editor.py",
+        }
+    )
+    # Non-Python package resources read by daemon request and detection paths.
+    _DAEMON_SOURCE_RESOURCE_DIRS = {
+        "patterns/data": frozenset({".toml"}),
+        "templates/tray-plugins": frozenset({".json"}),
+    }
+    _DAEMON_SOURCE_RESOURCE_FILES = frozenset(
+        {"schemas/ai-guardian-config.schema.json"}
     )
 
     @classmethod
     def get_package_max_mtime(cls) -> float:
-        """Get max mtime of daemon-relevant .py files in the ai_guardian package.
+        """Get max mtime of daemon-relevant source and bundled data files.
 
-        Only scans files that require a daemon restart when changed — excludes
-        tui/, web/, cli.py, setup.py, doctor.py, etc. (#1465).
+        Includes curated server, REST API, and hook-processing dependencies.
+        The inventory deliberately excludes unrelated CLI, integration, and UI
+        code; see docs/MULTI_DAEMON_TRAY.md for the selection policy (#2312).
         """
         try:
             import ai_guardian
 
             pkg_dir = Path(ai_guardian.__file__).parent
             max_mtime = 0.0
-            for py_file in pkg_dir.rglob("*.py"):
-                rel = py_file.relative_to(pkg_dir)
+            for source_file in pkg_dir.rglob("*"):
+                if not source_file.is_file():
+                    continue
+                rel = source_file.relative_to(pkg_dir)
                 parts = rel.parts
-                # Top-level file — include only if in the allow-list
-                if len(parts) == 1:
-                    if parts[0] not in cls._DAEMON_SOURCE_FILES:
+                rel_name = rel.as_posix()
+                if source_file.suffix == ".py":
+                    # Root modules need explicit review. Directory groups cover
+                    # cohesive runtime areas; isolated files use exact paths.
+                    if len(parts) == 1:
+                        if parts[0] not in cls._DAEMON_SOURCE_FILES:
+                            continue
+                    elif (
+                        parts[0] not in cls._DAEMON_SOURCE_DIRS
+                        and rel_name not in cls._DAEMON_SOURCE_PATHS
+                    ):
                         continue
-                else:
-                    # Subdirectory file — include only if the top-level dir matches
-                    if parts[0] not in cls._DAEMON_SOURCE_DIRS:
-                        continue
+                elif rel_name in cls._DAEMON_SOURCE_RESOURCE_FILES:
+                    pass
+                elif source_file.suffix not in cls._DAEMON_SOURCE_RESOURCE_DIRS.get(
+                    rel.parent.as_posix(), frozenset()
+                ):
+                    continue
                 try:
-                    mtime = py_file.stat().st_mtime
+                    mtime = source_file.stat().st_mtime
                     if mtime > max_mtime:
                         max_mtime = mtime
                 except OSError:

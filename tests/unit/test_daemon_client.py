@@ -512,7 +512,9 @@ class TestGetPackageMaxMtime:
         tui_py = tui_dir / "app.py"
         tui_py.write_text("")
         os.utime(str(tui_py), (9999.0, 9999.0))
-        (pkg_dir / "__init__.py").write_text("")
+        pkg_init = pkg_dir / "__init__.py"
+        pkg_init.write_text("")
+        os.utime(str(pkg_init), (100.0, 100.0))
 
         with mock.patch.object(
             __import__("ai_guardian"), "__file__", str(pkg_dir / "__init__.py")
@@ -532,7 +534,9 @@ class TestGetPackageMaxMtime:
         import os
 
         os.utime(str(hp), (5000.0, 5000.0))
-        (pkg_dir / "__init__.py").write_text("")
+        pkg_init = pkg_dir / "__init__.py"
+        pkg_init.write_text("")
+        os.utime(str(pkg_init), (100.0, 100.0))
 
         with mock.patch.object(
             __import__("ai_guardian"), "__file__", str(pkg_dir / "__init__.py")
@@ -540,6 +544,68 @@ class TestGetPackageMaxMtime:
             mtime = DaemonState.get_package_max_mtime()
 
         assert mtime >= 5000.0
+
+    @pytest.mark.parametrize(
+        ("relative_path", "included"),
+        [
+            ("__init__.py", True),
+            ("hook_context.py", True),
+            ("daemon/server.py", True),
+            ("daemon/client.py", False),
+            ("daemon/discovery.py", False),
+            ("daemon/auto_setup.py", False),
+            ("daemon/desktop.py", False),
+            ("mcp/__init__.py", True),
+            ("mcp/audit.py", True),
+            ("mcp/server.py", False),
+            ("observability/otel_exporter.py", True),
+            ("reporting/__init__.py", True),
+            ("reporting/latency.py", True),
+            ("reporting/support_bundle.py", False),
+            ("sdk/run_context.py", True),
+            ("setup/mcp.py", True),
+            ("tools/policy.py", True),
+            ("tui/ask_dialog.py", True),
+            ("tui/app.py", False),
+            ("tray/__init__.py", True),
+            ("tray/plugins.py", True),
+            ("tray/app.py", False),
+            ("web/config_helpers.py", False),
+            ("web/app.py", False),
+            ("violations/logger.py", True),
+            ("integrations/openai.py", False),
+            ("cli.py", False),
+            ("update_checker.py", False),
+            ("patterns/data/secrets.toml", True),
+            ("patterns/data/readme.md", False),
+            ("schemas/ai-guardian-config.schema.json", True),
+            ("schemas/scenario.schema.json", False),
+            ("templates/tray-plugins/default-global.json", True),
+            ("templates/profiles/standard.json", False),
+        ],
+    )
+    def test_source_inventory(self, tmp_path, relative_path, included):
+        """The mtime inventory follows daemon runtime paths, not whole UI packages."""
+        import ai_guardian
+        from ai_guardian.daemon.state import DaemonState
+
+        pkg_dir = tmp_path / "ai_guardian"
+        pkg_dir.mkdir()
+
+        def write_with_mtime(path, mtime):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+            os.utime(str(path), (mtime, mtime))
+
+        pkg_init = pkg_dir / "__init__.py"
+        write_with_mtime(pkg_init, 100.0)
+        write_with_mtime(pkg_dir / "daemon" / "server.py", 1000.0)
+        write_with_mtime(pkg_dir / relative_path, 5000.0)
+
+        with mock.patch.object(ai_guardian, "__file__", str(pkg_init)):
+            mtime = DaemonState.get_package_max_mtime()
+
+        assert mtime == (5000.0 if included else 1000.0)
 
 
 class TestRemoteURL:
