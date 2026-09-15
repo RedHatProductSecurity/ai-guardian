@@ -3,6 +3,7 @@
 import logging
 import os
 import platform
+import shlex
 import shutil
 import stat
 import subprocess
@@ -274,17 +275,16 @@ class MacOSDesktop(DesktopIntegration):
             resources_dir.mkdir(parents=True, exist_ok=True)
 
             script_path = macos_dir / "ai-guardian-tray"
+            cmd = shlex.join(_get_executable_command() + ["tray", "start"])
             script_path.write_text(
-                "#!/usr/bin/env python\n"
-                "import os, sys\n"
-                "for d in ['/opt/homebrew/bin', '/opt/homebrew/sbin',\n"
-                "          '/usr/local/bin', '/usr/local/sbin',\n"
-                "          os.path.expanduser('~/.local/bin')]:\n"
-                "    if os.path.isdir(d) and d not in os.environ.get('PATH', ''):\n"
-                "        os.environ['PATH'] = d + ':' + os.environ.get('PATH', '')\n"
-                "sys.argv = ['ai-guardian', 'tray', 'start']\n"
-                "from ai_guardian.__main__ import main\n"
-                "raise SystemExit(main())\n"
+                "#!/bin/sh\n"
+                "for d in /opt/homebrew/bin /opt/homebrew/sbin "
+                '/usr/local/bin /usr/local/sbin "$HOME/.local/bin"; do\n'
+                '    case ":${PATH:-}:" in *":$d:"*) ;; '
+                '*) PATH="$d${PATH:+:$PATH}" ;; esac\n'
+                "done\n"
+                "export PATH\n"
+                f'exec {cmd} "$@"\n'
             )
             script_path.chmod(
                 script_path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
@@ -436,8 +436,8 @@ class WindowsDesktop(DesktopIntegration):
             target = cmd[0]
             arguments = "tray start"
         else:
-            pythonw = shutil.which("pythonw")
-            target = pythonw if pythonw else cmd[0]
+            pythonw = Path(cmd[0]).with_name("pythonw.exe")
+            target = str(pythonw) if pythonw.is_file() else cmd[0]
             arguments = "-m ai_guardian tray start"
 
         lnk_path.parent.mkdir(parents=True, exist_ok=True)

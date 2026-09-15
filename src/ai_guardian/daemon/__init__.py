@@ -7,7 +7,6 @@ cross-hook state sharing between PreToolUse and PostToolUse events.
 """
 
 import os
-import shutil
 import sys
 
 from ai_guardian.config.utils import get_config_dir, get_state_dir
@@ -90,31 +89,12 @@ def is_pid_active(pid):
 
 
 def get_executable_command():
-    """Resolve the command to launch ai-guardian.
-
-    Tries multiple strategies to find a working Python installation.
+    """Build a command to run this package with its current interpreter.
 
     Returns:
-        list: Command list, e.g. ['/usr/local/bin/ai-guardian'] or
-              ['/path/to/python', '-m', 'ai_guardian']
+        list: Command to invoke ai-guardian from the environment already
+            running this process.
     """
-    # 1. Check if ai-guardian executable exists (best option)
-    ag_path = shutil.which("ai-guardian")
-    if ag_path:
-        return [os.path.abspath(ag_path)]
-
-    # 2. Try to find python in PATH
-    python_exe = shutil.which("python")
-    if python_exe:
-        return [os.path.abspath(python_exe), "-m", "ai_guardian"]
-
-    # 3. Try python3 as fallback
-    python_exe = shutil.which("python3")
-    if python_exe:
-        return [os.path.abspath(python_exe), "-m", "ai_guardian"]
-
-    # 4. Use sys.executable as last resort (may be wrong with uv tool install,
-    # but better than nothing if PATH isn't set up)
     return [sys.executable, "-m", "ai_guardian"]
 
 
