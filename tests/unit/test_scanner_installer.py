@@ -7,13 +7,15 @@ import sys
 import tempfile
 import hashlib
 import io
+import subprocess
 import tarfile
+import time
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from ai_guardian.scanners.installer import ScannerInstaller
+from ai_guardian.scanners.installer import ScannerInstaller, _interprocess_file_lock
 
 
 class TestScannerConfigLoading:
@@ -1037,6 +1039,54 @@ class TestChecksumVerification:
                     "ai_guardian.scanners.installer.shutil.which", return_value=None
                 ):
                     assert installer._find_installed_binary("gitguardian") == str(path)
+
+    def test_gitguardian_install_lock_serializes_processes(self, tmp_path):
+        lock_path = tmp_path / ".ai-guardian" / "gitguardian-install.lock"
+        marker_path = tmp_path / "lock-acquired"
+        child_script = "\n".join(
+            [
+                "import sys",
+                "from pathlib import Path",
+                "from ai_guardian.scanners.installer import _interprocess_file_lock",
+                "lock_path = Path(sys.argv[1])",
+                "marker_path = Path(sys.argv[2])",
+                "print('ready', flush=True)",
+                "with _interprocess_file_lock(lock_path):",
+                "    marker_path.write_text('acquired', encoding='utf-8')",
+            ]
+        )
+        child = None
+        try:
+            with _interprocess_file_lock(lock_path):
+                child = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-c",
+                        child_script,
+                        str(lock_path),
+                        str(marker_path),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                assert child.stdout is not None
+                assert child.stdout.readline().strip() == "ready"
+                time.sleep(0.2)
+                assert child.poll() is None
+                assert not marker_path.exists()
+        finally:
+            if child is not None:
+                try:
+                    _, stderr = child.communicate(timeout=5)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    _, stderr = child.communicate()
+                    pytest.fail(f"Lock subprocess did not finish: {stderr}")
+
+        assert child is not None
+        assert child.returncode == 0, stderr
+        assert marker_path.read_text(encoding="utf-8") == "acquired"
 
     def test_install_gitguardian_windows_bundle_keeps_active_install_on_stage_failure(
         self,

@@ -8,6 +8,7 @@ Handles automated installation and upgrade of scanner engines:
 - LeakTK
 """
 
+import errno
 import hashlib
 import logging
 import os
@@ -20,9 +21,10 @@ import tarfile
 import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Iterator, Optional
 import sys
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,46 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
+
+
+@contextmanager
+def _interprocess_file_lock(lock_path: Path) -> Iterator[None]:
+    """Hold an exclusive file lock across processes on Windows and Unix."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as lock_file:
+        if os.name == "nt":
+            import msvcrt
+
+            # msvcrt locks a byte range, so make sure the first byte exists.
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"\0")
+                lock_file.flush()
+
+            conflict_errnos = {errno.EACCES, getattr(errno, "EDEADLK", None)}
+            while True:
+                lock_file.seek(0)
+                try:
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as exc:
+                    if exc.errno not in conflict_errnos:
+                        raise
+                    time.sleep(0.1)
+
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 class InstallMethod(Enum):
@@ -855,7 +897,17 @@ class ScannerInstaller:
     def _install_gitguardian_bundle(
         self, bundle_source: Path, binary_name: str, version: str, system: str
     ) -> Path:
-        """Install ggshield's complete release bundle and expose its launcher."""
+        """Serialize bundle staging, publication, and cleanup across processes."""
+        lock_path = self.install_dir / ".ai-guardian" / "gitguardian-install.lock"
+        with _interprocess_file_lock(lock_path):
+            return self._install_gitguardian_bundle_locked(
+                bundle_source, binary_name, version, system
+            )
+
+    def _install_gitguardian_bundle_locked(
+        self, bundle_source: Path, binary_name: str, version: str, system: str
+    ) -> Path:
+        """Install ggshield's bundle while the shared install lock is held."""
         if system == "windows":
             bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
             bundle_parent.mkdir(parents=True, exist_ok=True)
