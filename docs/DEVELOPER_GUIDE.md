@@ -46,7 +46,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 | Daemon | `src/ai_guardian/daemon/` | Background service for faster hook responses |
 | Console (TUI) | `src/ai_guardian/tui/` | Interactive terminal UI for configuration |
 | MCP Server | `src/ai_guardian/mcp/` | MCP security advisor tools |
-| Scanner engines | `src/ai_guardian/scanners/` | Multi-engine secret scanning (gitleaks, betterleaks, leaktk) |
+| Scanner engines | `src/ai_guardian/scanners/` | Multi-engine secret scanning and pinned scanner installation |
 | Custom Scanner SDK | `src/ai_guardian/scanners/sdk.py` | Python-based scanner base class |
 | Prompt injection | `src/ai_guardian/scanners/prompt_injection.py` | Heuristic prompt injection detection |
 | SSRF protection | `src/ai_guardian/scanners/ssrf.py` | Private IP / metadata endpoint blocking |
@@ -240,6 +240,11 @@ For any new or changed IDE/agent integration, use the
 [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md). It combines
 the runtime, setup, transcript, MCP, test, documentation, and
 release-readiness checks that must stay synchronized across an integration.
+
+For any new or changed scanner engine or built-in security detector, use the
+[Scanner Integration Checklist](SCANNER_INTEGRATION_CHECKLIST.md). If the work
+changes container images or runtime behavior, also use the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md).
 
 ### Configuration Schema Changes
 

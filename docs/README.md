@@ -4,14 +4,19 @@ This directory contains detailed documentation for AI Guardian. The main [README
 
 The documentation is published on [Read the Docs](https://ai-guardian.readthedocs.io/).
 
-## Build the documentation locally
+## Documentation site
+
+The MkDocs site is generated and published by CI/CD through Read the Docs. A
+local preview is optional and is not required for documentation changes. To
+preview the site on demand:
 
 ```bash
 python -m pip install -r docs/requirements.txt
 mkdocs serve
 ```
 
-Run `mkdocs build` before submitting documentation changes. The generated `site/` directory is not committed.
+To generate the static site locally on demand, run `mkdocs build`. The generated
+`site/` directory is not committed.
 
 ## Getting Started
 
@@ -19,7 +24,7 @@ Run `mkdocs build` before submitting documentation changes. The generated `site/
 |----------|-------------|
 | [Configuration Guide](CONFIGURATION.md) | Config file locations, options, precedence, and remote configs |
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
-| [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage gitleaks, betterleaks, leaktk |
+| [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
 | [Console Guide](CONSOLE.md) | Interactive TUI for managing configuration |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
@@ -89,6 +94,7 @@ Run `mkdocs build` before submitting documentation changes. The generated `site/
 | Document | Description |
 |----------|-------------|
 | [Developer Guide](DEVELOPER_GUIDE.md) | Architecture, setup, testing, and development workflows |
+| [Scanner Integration Checklist](SCANNER_INTEGRATION_CHECKLIST.md) | License, installation, testing, and documentation checklist for scanner engines and detectors |
 | [Contributing](../CONTRIBUTING.md) | Fork workflow, PR guidelines |
 | [Agent Instructions](../AGENTS.md) | Development guidelines, testing, CI/CD |
 | [Releasing](../RELEASING.md) | Release process and version management |

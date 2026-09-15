@@ -84,11 +84,28 @@ RUN echo "Installing ai-guardian: ${AI_GUARDIAN_VERSION}" \
 RUN uv pip uninstall --python /opt/uv-tools/ai-guardian/bin/python3 opencv-python \
     && uv pip install --python /opt/uv-tools/ai-guardian/bin/python3 opencv-python-headless
 
-# Secret scanners
-RUN (ai-guardian scanner install gitleaks --use-pinned || true) \
+# Secret scanners. Versions come from the scanner pins bundled with AI Guardian.
+RUN ai-guardian scanner install gitleaks --use-pinned \
     && test -x /usr/local/bin/gitleaks \
-    && (ai-guardian scanner install betterleaks --use-pinned || true) \
-    && test -x /usr/local/bin/betterleaks
+    && ai-guardian scanner install betterleaks --use-pinned \
+    && test -x /usr/local/bin/betterleaks \
+    && ai-guardian scanner install leaktk --use-pinned \
+    && test -x /usr/local/bin/leaktk \
+    && ai-guardian scanner install secretlint --use-pinned \
+    && test -x /usr/local/bin/secretlint \
+    && ai-guardian scanner install gitguardian --use-pinned \
+    && test -x /usr/local/bin/ggshield
+
+# detect-secrets is a Python package. Install its pinned version into a separate
+# uv tool environment so it remains available in the runtime image without pip.
+RUN DETECT_SECRETS_VERSION=$(/opt/uv-tools/ai-guardian/bin/python -c \
+        "from ai_guardian.scanners.installer import ScannerInstaller; print(ScannerInstaller().get_pinned_version('detect-secrets'))") \
+    && test -n "$DETECT_SECRETS_VERSION" \
+    && test "$DETECT_SECRETS_VERSION" != unknown \
+    && UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
+        uv tool install --python /opt/uv-tools/ai-guardian/bin/python \
+            "detect-secrets==${DETECT_SECRETS_VERSION}" \
+    && test -x /usr/local/bin/detect-secrets
 
 # Node.js CLIs (installed to /opt/npm for predictable COPY paths)
 RUN npm install -g --prefix /opt/npm @google/gemini-cli @openai/codex openclaw 2>/dev/null \
@@ -160,9 +177,13 @@ COPY --from=builder /usr/local/bin/ai-guardian /usr/local/bin/
 RUN ln -sf /usr/local/bin/ai-guardian /usr/bin/ai-guardian \
     && (ai-guardian --version || echo "ai-guardian installed (version check skipped under emulation)")
 
-# Secret scanners (static Go binaries)
+# Secret scanner executables and detect-secrets tool environment
 COPY --from=builder /usr/local/bin/gitleaks /usr/local/bin/
 COPY --from=builder /usr/local/bin/betterleaks /usr/local/bin/
+COPY --from=builder /usr/local/bin/leaktk /usr/local/bin/
+COPY --from=builder /usr/local/bin/secretlint /usr/local/bin/
+COPY --from=builder /usr/local/bin/ggshield /usr/local/bin/
+COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/
 
 # Forge CLIs (static Go binaries)
 COPY --from=builder /usr/local/bin/gh /usr/local/bin/

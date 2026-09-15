@@ -207,6 +207,47 @@ class TestContainerLaunchers:
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
         assert "ai-guardian.openshell-base=true" in dockerfile
 
+    def test_images_preinstall_pinned_scanner_engines(self):
+        for dockerfile_path in (DOCKERFILE, OPENSHELL_DOCKERFILE):
+            dockerfile = dockerfile_path.read_text(encoding="utf-8")
+
+            for scanner in (
+                "gitleaks",
+                "betterleaks",
+                "leaktk",
+                "secretlint",
+                "gitguardian",
+            ):
+                assert (
+                    f"ai-guardian scanner install {scanner} --use-pinned" in dockerfile
+                )
+
+            assert "test -x /usr/local/bin/secretlint" in dockerfile
+            assert "test -x /usr/local/bin/ggshield" in dockerfile
+
+            assert "get_pinned_version('detect-secrets')" in dockerfile
+            assert "uv tool install --python" in dockerfile
+            assert '"detect-secrets==${DETECT_SECRETS_VERSION}"' in dockerfile
+            assert "test -x /usr/local/bin/detect-secrets" in dockerfile or (
+                "test -x /sandbox/.local/bin/detect-secrets" in dockerfile
+            )
+            assert "ai-guardian scanner install trufflehog" not in dockerfile
+
+        normal_image = DOCKERFILE.read_text(encoding="utf-8")
+        assert "COPY --from=builder /usr/local/bin/leaktk /usr/local/bin/" in (
+            normal_image
+        )
+        assert "COPY --from=builder /usr/local/bin/secretlint /usr/local/bin/" in (
+            normal_image
+        )
+        assert "COPY --from=builder /usr/local/bin/ggshield /usr/local/bin/" in (
+            normal_image
+        )
+        assert (
+            "COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/"
+            in normal_image
+        )
+
     def test_openshell_cli_health_workflow_is_scheduled_and_quay_only(self):
         workflow = CLI_VERSION_WORKFLOW.read_text(encoding="utf-8")
 
@@ -533,6 +574,11 @@ class TestContainerLaunchers:
             "github_api_readonly",
             "github_git_readonly",
         }
+
+    def test_shared_policy_baseline_does_not_grant_network_access(self):
+        policy = yaml.safe_load(POLICY_BASE.read_text(encoding="utf-8"))
+
+        assert "network_policies" not in policy
 
     def test_github_readwrite_policy_allows_api_and_git_writes(self):
         policy = yaml.safe_load(GITHUB_READWRITE_POLICY.read_text(encoding="utf-8"))

@@ -5,6 +5,9 @@ Tests for scanner_installer module.
 import os
 import sys
 import tempfile
+import hashlib
+import io
+import tarfile
 from pathlib import Path
 from unittest import mock
 
@@ -32,6 +35,8 @@ class TestScannerConfigLoading:
         assert "gitleaks" in repos
         assert "betterleaks" in repos
         assert "leaktk" in repos
+        assert repos["secretlint"] == "secretlint/secretlint"
+        assert repos["gitguardian"] == "GitGuardian/ggshield"
 
     def test_load_config_has_pattern_servers(self):
         """Test that loaded config contains pattern_servers section."""
@@ -93,6 +98,8 @@ class TestScannerInstaller:
         assert installer.get_github_repo("gitleaks") == "gitleaks/gitleaks"
         assert installer.get_github_repo("betterleaks") == "betterleaks/betterleaks"
         assert installer.get_github_repo("leaktk") == "leaktk/leaktk"
+        assert installer.get_github_repo("secretlint") == "secretlint/secretlint"
+        assert installer.get_github_repo("gitguardian") == "GitGuardian/ggshield"
 
     def test_get_pinned_version(self):
         """Test pinned version lookup."""
@@ -103,6 +110,8 @@ class TestScannerInstaller:
         assert gitleaks_version != "unknown"
         assert not gitleaks_version.startswith("v")
         assert "." in gitleaks_version  # Should be semantic version
+        assert installer.get_pinned_version("secretlint") == "13.0.5"
+        assert installer.get_pinned_version("gitguardian") == "1.54.0"
 
     @mock.patch("ai_guardian.scanners.installer.requests")
     def test_get_latest_version_from_github(self, mock_requests):
@@ -221,7 +230,14 @@ class TestScannerInstaller:
             )
 
             installer = ScannerInstaller()
-            for scanner in ["gitleaks", "betterleaks", "leaktk", "trufflehog"]:
+            for scanner in [
+                "gitleaks",
+                "betterleaks",
+                "leaktk",
+                "trufflehog",
+                "secretlint",
+                "gitguardian",
+            ]:
                 result = installer.install_via_package_manager(scanner)
                 assert not result, f"{scanner} should skip Linux package managers"
 
@@ -456,6 +472,20 @@ class TestVersionChecking:
             version = installer._get_installed_version("gitleaks")
 
             assert version is None
+
+    @mock.patch("shutil.which")
+    @mock.patch("subprocess.run")
+    def test_get_gitguardian_version_uses_ggshield_binary(self, mock_run, mock_which):
+        mock_which.return_value = "/usr/local/bin/ggshield"
+        mock_run.return_value = mock.Mock(
+            returncode=0, stdout="ggshield, version 1.54.0\n"
+        )
+
+        installer = ScannerInstaller()
+        version = installer._get_installed_version("gitguardian")
+
+        assert version == "1.54.0"
+        mock_which.assert_called_once_with("ggshield")
 
     def test_compare_versions_less_than(self):
         """Test version comparison: v1 < v2."""
@@ -707,6 +737,22 @@ class TestVersionChecking:
 class TestChecksumVerification:
     """Tests for SHA-256 checksum verification."""
 
+    @pytest.mark.parametrize(
+        "platform_arch", ["linux_x32", "windows_arm64", "freebsd_x64"]
+    )
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_with_retry")
+    def test_secretlint_rejects_unsupported_platforms(
+        self, mock_download, platform_arch
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = ScannerInstaller(install_dir=Path(temp_dir))
+            installer.detect_platform = mock.Mock(return_value=platform_arch)
+
+            with pytest.raises(RuntimeError, match="does not publish an asset"):
+                installer.install_from_download("secretlint", "13.0.5")
+
+        mock_download.assert_not_called()
+
     @mock.patch("ai_guardian.scanners.installer.requests")
     def test_download_checksums_gitleaks(self, mock_requests):
         """Test downloading checksums file for gitleaks."""
@@ -771,6 +817,149 @@ class TestChecksumVerification:
         # Verify URL format: scanner_version_checksums.txt
         call_args = mock_requests.get.call_args
         assert "leaktk_0.2.10_checksums.txt" in call_args[0][0]
+
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_download_checksums_secretlint(self, mock_requests):
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_response.text = "a" * 64 + "  secretlint-13.0.5-linux-x64\n"
+        mock_requests.get.return_value = mock_response
+
+        installer = ScannerInstaller()
+        content = installer._download_checksums(
+            "secretlint", "13.0.5", "secretlint/secretlint"
+        )
+
+        assert content == "a" * 64 + "  secretlint-13.0.5-linux-x64"
+        assert "secretlint-13.0.5-sha256sum.txt" in mock_requests.get.call_args[0][0]
+
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_download_checksums_gitguardian_uses_release_digest(self, mock_requests):
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_response.json.return_value = {
+            "assets": [
+                {
+                    "name": "ggshield-1.54.0-x86_64-unknown-linux-gnu.tar.gz",
+                    "digest": "sha256:" + "b" * 64,
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+
+        installer = ScannerInstaller()
+        filename = "ggshield-1.54.0-x86_64-unknown-linux-gnu.tar.gz"
+        content = installer._download_checksums(
+            "gitguardian", "1.54.0", "GitGuardian/ggshield", filename
+        )
+
+        assert content == "b" * 64 + "  " + filename
+        assert mock_requests.get.call_args[0][0].endswith(
+            "/repos/GitGuardian/ggshield/releases/tags/v1.54.0"
+        )
+
+    @pytest.mark.parametrize(
+        ("platform_arch", "expected_asset"),
+        [
+            ("linux_x64", "secretlint-13.0.5-linux-x64"),
+            ("linux_arm64", "secretlint-13.0.5-linux-arm64"),
+        ],
+    )
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_checksums")
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_with_retry")
+    def test_install_secretlint_standalone_binary(
+        self, mock_download, mock_checksums, platform_arch, expected_asset
+    ):
+        payload = b"secretlint executable"
+        mock_download.return_value = mock.Mock(content=payload)
+        mock_checksums.side_effect = lambda _name, _version, _repo, filename: (
+            f"{hashlib.sha256(payload).hexdigest()}  {filename}"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = ScannerInstaller(install_dir=Path(temp_dir))
+            installer.detect_platform = mock.Mock(return_value=platform_arch)
+            path = installer.install_from_download("secretlint", "13.0.5")
+
+            assert path.name == "secretlint"
+            assert path.read_bytes() == payload
+            if os.name != "nt":
+                assert path.stat().st_mode & 0o111
+            assert expected_asset in mock_download.call_args[0][0]
+
+    @mock.patch(
+        "ai_guardian.scanners.installer.ScannerInstaller._download_checksums",
+        return_value=None,
+    )
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_with_retry")
+    def test_install_secretlint_fails_closed_without_checksum(
+        self, mock_download, _mock_checksums
+    ):
+        mock_download.return_value = mock.Mock(content=b"not verified")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = ScannerInstaller(install_dir=Path(temp_dir))
+            installer.detect_platform = mock.Mock(return_value="linux_x64")
+
+            with pytest.raises(RuntimeError, match="Checksum verification is required"):
+                installer.install_from_download("secretlint", "13.0.5")
+
+    @pytest.mark.parametrize(
+        ("platform_arch", "expected_asset"),
+        [
+            (
+                "linux_x64",
+                "ggshield-1.54.0-x86_64-unknown-linux-gnu.tar.gz",
+            ),
+            (
+                "linux_arm64",
+                "ggshield-1.54.0-aarch64-unknown-linux-gnu.tar.gz",
+            ),
+        ],
+    )
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_checksums")
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_with_retry")
+    def test_install_gitguardian_archive_and_binary_alias(
+        self, mock_download, mock_checksums, platform_arch, expected_asset
+    ):
+        payload = b"ggshield executable"
+        archive_buffer = io.BytesIO()
+        with tarfile.open(fileobj=archive_buffer, mode="w:gz") as tar_ref:
+            member = tarfile.TarInfo("ggshield")
+            member.size = len(payload)
+            member.mode = 0o755
+            tar_ref.addfile(member, io.BytesIO(payload))
+        archive = archive_buffer.getvalue()
+        mock_download.return_value = mock.Mock(content=archive)
+        mock_checksums.side_effect = lambda _name, _version, _repo, filename: (
+            f"{hashlib.sha256(archive).hexdigest()}  {filename}"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = ScannerInstaller(install_dir=Path(temp_dir))
+            installer.detect_platform = mock.Mock(return_value=platform_arch)
+            path = installer.install_from_download("gitguardian", "1.54.0")
+
+            assert path.name == "ggshield"
+            assert path.read_bytes() == payload
+            assert expected_asset in mock_download.call_args[0][0]
+
+    @mock.patch(
+        "ai_guardian.scanners.installer.ScannerInstaller._download_checksums",
+        return_value=None,
+    )
+    @mock.patch("ai_guardian.scanners.installer.ScannerInstaller._download_with_retry")
+    def test_install_gitguardian_fails_closed_without_checksum(
+        self, mock_download, _mock_checksums
+    ):
+        mock_download.return_value = mock.Mock(content=b"not verified")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            installer = ScannerInstaller(install_dir=Path(temp_dir))
+            installer.detect_platform = mock.Mock(return_value="linux_x64")
+
+            with pytest.raises(RuntimeError, match="Checksum verification is required"):
+                installer.install_from_download("gitguardian", "1.54.0")
 
     @mock.patch("ai_guardian.scanners.installer.requests")
     def test_download_checksums_network_failure(self, mock_requests):

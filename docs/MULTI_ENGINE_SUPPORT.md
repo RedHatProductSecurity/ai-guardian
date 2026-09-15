@@ -962,7 +962,7 @@ Benefits:
 - **OWASP Secret Management**: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
 
 ### Related Tools
-- **GitGuardian**: https://www.gitguardian.com/ (Commercial, 350+ secret types)
+- **GitGuardian**: https://www.gitguardian.com/ (Cloud service, 350+ secret types; the `ggshield` CLI is MIT-licensed)
 - **GitHub Secret Scanning**: https://docs.github.com/en/code-security/secret-scanning
 - **AWS Macie**: https://aws.amazon.com/macie/ (Cloud-specific)
 - **Azure Key Vault Scanner**: https://azure.microsoft.com/en-us/products/key-vault

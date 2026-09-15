@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   live in the subcommand, so the legacy `container/openshell.sh` wrapper is no
   longer needed.
 
+- **Sandbox scanner dependencies (#2299)**: Preinstall the pinned Gitleaks,
+  BetterLeaks, LeakTK, detect-secrets, Secretlint, and GitGuardian `ggshield`
+  engines in container and OpenShell images. GitGuardian's cloud engine still
+  requires consent, an API key, and runtime network access. TruffleHog remains
+  unavailable in the stock images pending its interactive AGPL-3.0 license
+  acknowledgement.
+
 - **Tray sandbox management**: Add sandbox creation to the main tray menu and
   safe lifecycle, exec, logs, configuration snapshot, and confirmed deletion
   actions to each discovered container/OpenShell target.

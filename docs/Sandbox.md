@@ -421,6 +421,25 @@ the TUI, NiceGUI, or REST API affect only the sandbox's copy. OpenShell uploads
 the snapshot, while containers use a read-only bind mount for the staging file
 before copying it into the writable active config path.
 
+Both container and OpenShell images preinstall pinned versions of Gitleaks,
+BetterLeaks, LeakTK, detect-secrets, Secretlint, and the GitGuardian `ggshield`
+CLI. These engines are available regardless of whether the active config came
+from the host, a profile, a restored snapshot, or a sandbox-local file; startup
+does not download scanner tools or require an OpenShell policy for downloading
+scanner binaries. Pattern-server access, when configured, remains governed by
+the selected configuration and policy. Secretlint scans locally. The
+GitGuardian engine requires configured consent and an API key and sends scan
+data to the cloud service; OpenShell use also requires policy access to that
+service.
+
+TruffleHog is intentionally omitted from the stock images for now. Its AGPL-3.0
+installation path requires interactive license acknowledgement, which cannot be
+collected during an image build. A configuration that selects TruffleHog cannot
+use it in these images; use one of the bundled engines or provide it in a
+derived image after reviewing and acknowledging its license. Custom scanner
+binaries and Python scanner packages are outside the current pinned image set
+and must be added to a derived image when needed.
+
 ## Configuration snapshots
 
 Configuration snapshots preserve changes made inside a sandbox without

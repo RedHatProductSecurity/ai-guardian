@@ -18,10 +18,14 @@ import sys
 import json
 import argparse
 import requests
-import tomllib
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Optional
+
+try:
+    import tomllib
+except ImportError:  # Python 3.9 and 3.10
+    import tomli as tomllib
 
 
 def get_latest_version(repo: str) -> Optional[str]:
@@ -117,6 +121,28 @@ def compare_versions(v1: str, v2: str) -> int:
         return 0
 
 
+def expected_asset_name(scanner_name: str, version: str, platform: str) -> str:
+    """Return upstream asset names for Secretlint and GitGuardian releases."""
+    system, arch = platform.split('_', 1)
+
+    if scanner_name == 'secretlint':
+        extension = '.exe' if system == 'windows' else ''
+        return f'secretlint-{version}-{system}-{arch}{extension}'
+
+    if scanner_name == 'gitguardian':
+        if system == 'linux':
+            gg_arch = {'x64': 'x86_64', 'arm64': 'aarch64'}.get(arch, arch)
+            return f'ggshield-{version}-{gg_arch}-unknown-linux-gnu.tar.gz'
+        if system == 'darwin':
+            gg_arch = {'x64': 'x86_64', 'arm64': 'arm64'}.get(arch, arch)
+            return f'ggshield-{version}-{gg_arch}-apple-darwin.tar.gz'
+        if system == 'windows':
+            windows_arch = {'x64': 'x86_64'}.get(arch, arch)
+            return f'ggshield-{version}-{windows_arch}-pc-windows-msvc.zip'
+
+    raise ValueError(f'No asset naming rule for {scanner_name} on {platform}')
+
+
 def check_scanner_exists(repo: str, version: str, scanner_name: str, platform: str = "linux_x64") -> dict:
     """
     Check if a scanner version exists on GitHub releases.
@@ -124,7 +150,7 @@ def check_scanner_exists(repo: str, version: str, scanner_name: str, platform: s
     Args:
         repo: GitHub repo (e.g., "gitleaks/gitleaks")
         version: Version to check (e.g., "8.30.1")
-        scanner_name: Name of scanner (gitleaks, betterleaks, leaktk, trufflehog, detect-secrets)
+        scanner_name: Name of scanner configured in pyproject.toml
         platform: Platform string (e.g., "linux_x64")
 
     Returns:
@@ -172,7 +198,9 @@ def check_scanner_exists(repo: str, version: str, scanner_name: str, platform: s
         # gitleaks/betterleaks: scanner_version_platform.tar.gz (e.g., gitleaks_8.30.1_linux_x64.tar.gz)
         # leaktk: scanner-version-system-arch.tar.xz with x86_64 instead of x64 (e.g., leaktk-0.2.10-linux-x86_64.tar.xz)
         # trufflehog: scanner_version_system_arch.tar.gz with amd64 instead of x64 (e.g., trufflehog_3.88.0_linux_amd64.tar.gz)
-        if scanner_name == "leaktk":
+        if scanner_name in ('secretlint', 'gitguardian'):
+            asset_name = expected_asset_name(scanner_name, version, platform)
+        elif scanner_name == "leaktk":
             # leaktk uses hyphens, separate system and arch, and x86_64 instead of x64
             system, arch = platform.split('_', 1)
             leaktk_arch = "x86_64" if arch == "x64" else arch

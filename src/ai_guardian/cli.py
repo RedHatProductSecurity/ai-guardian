@@ -774,6 +774,8 @@ def main():
                 "leaktk",
                 "trufflehog",
                 "detect-secrets",
+                "secretlint",
+                "gitguardian",
             ],
             help="Scanner to install",
         )
@@ -803,6 +805,8 @@ def main():
                 "leaktk",
                 "trufflehog",
                 "detect-secrets",
+                "secretlint",
+                "gitguardian",
             ],
             help="Scanner to show info for",
         )
