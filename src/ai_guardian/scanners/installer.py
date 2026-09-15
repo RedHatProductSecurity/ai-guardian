@@ -144,9 +144,11 @@ class ScannerInstaller:
         self.scanner_config = self._load_scanner_config()
 
     def _get_binary_name(self, scanner_name: str) -> str:
-        """Return scanner binary name with .exe extension on Windows."""
+        """Return the platform-specific command name used to launch a scanner."""
         binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
         if sys.platform == "win32":
+            if scanner_name == "gitguardian":
+                return f"{binary_name}.cmd"
             return f"{binary_name}.exe"
         return binary_name
 
@@ -677,6 +679,9 @@ class ScannerInstaller:
 
         # Determine file extension and binary name.
         binary_name = self._get_binary_name(scanner_name)
+        archive_binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
+        if system == "windows":
+            archive_binary_name += ".exe"
         archive_format: Optional[str]
 
         # Build filename - different scanners have different naming conventions
@@ -803,7 +808,7 @@ class ScannerInstaller:
 
                     # Find the binary in extracted files.
                     binary_path = None
-                    for path in extract_dir.rglob(binary_name):
+                    for path in extract_dir.rglob(archive_binary_name):
                         if path.is_file():
                             binary_path = path
                             break
@@ -824,7 +829,7 @@ class ScannerInstaller:
                     # bundles, not standalone executables. Keep the companion
                     # Python runtime and its _internal directory beside ggshield.
                     target_path = self._install_gitguardian_bundle(
-                        binary_path.parent, binary_name, version, system
+                        binary_path.parent, archive_binary_name, version, system
                     )
                 else:
                     target_path = self.install_dir / binary_name
@@ -852,24 +857,82 @@ class ScannerInstaller:
     ) -> Path:
         """Install ggshield's complete release bundle and expose its launcher."""
         if system == "windows":
-            # Windows installs use a dedicated AI Guardian bin directory, and
-            # the upstream launcher expects every bundle file beside ggshield.
-            for source in bundle_source.iterdir():
-                target = self.install_dir / source.name
-                if target.is_symlink() or target.is_file():
-                    target.unlink()
-                elif target.is_dir():
-                    shutil.rmtree(target)
+            bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
+            bundle_parent.mkdir(parents=True, exist_ok=True)
+            bundle_dir = Path(tempfile.mkdtemp(prefix=f"{version}-", dir=bundle_parent))
+            launcher_path = self.install_dir / f"{Path(binary_name).stem}.cmd"
+            wrapper_path: Optional[Path] = None
 
-                if source.is_dir() and not source.is_symlink():
-                    shutil.copytree(source, target, symlinks=True)
-                elif source.is_symlink():
-                    target.symlink_to(
-                        os.readlink(source), target_is_directory=source.is_dir()
+            try:
+                # Stage into a new version-specific directory. The active
+                # command wrapper is not replaced until every bundle file is
+                # safely in place, so a failed copy leaves the old install
+                # available and cannot overwrite shared-path entries such as
+                # _internal.
+                shutil.copytree(
+                    bundle_source, bundle_dir, dirs_exist_ok=True, symlinks=True
+                )
+                bundle_binary = bundle_dir / binary_name
+                if not bundle_binary.is_file():
+                    raise RuntimeError(
+                        f"GitGuardian bundle is missing its launcher: {bundle_binary}"
                     )
-                else:
-                    shutil.copy2(source, target)
-            return self.install_dir / binary_name
+
+                relative_binary = os.path.relpath(bundle_binary, self.install_dir)
+                relative_binary = relative_binary.replace("/", "\\")
+                wrapper = (
+                    "@echo off\r\n"
+                    f'call "%~dp0{relative_binary}" %*\r\n'
+                    "exit /b %ERRORLEVEL%\r\n"
+                )
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    newline="",
+                    prefix=f".{launcher_path.name}.",
+                    dir=self.install_dir,
+                    delete=False,
+                ) as wrapper_file:
+                    wrapper_path = Path(wrapper_file.name)
+                    wrapper_file.write(wrapper)
+                os.replace(wrapper_path, launcher_path)
+            except Exception:
+                if wrapper_path and wrapper_path.exists():
+                    try:
+                        wrapper_path.unlink()
+                    except OSError as cleanup_error:
+                        logger.warning(
+                            "Could not remove staged ggshield launcher %s: %s",
+                            wrapper_path,
+                            cleanup_error,
+                        )
+                try:
+                    shutil.rmtree(bundle_dir)
+                except OSError as cleanup_error:
+                    logger.warning(
+                        "Could not remove incomplete ggshield bundle %s: %s",
+                        bundle_dir,
+                        cleanup_error,
+                    )
+                raise
+
+            # The new wrapper is active now. Remove older managed bundles only
+            # after the complete replacement has succeeded.
+            for old_bundle in bundle_parent.iterdir():
+                if old_bundle == bundle_dir:
+                    continue
+                try:
+                    if old_bundle.is_symlink() or old_bundle.is_file():
+                        old_bundle.unlink()
+                    elif old_bundle.is_dir():
+                        shutil.rmtree(old_bundle)
+                except OSError as cleanup_error:
+                    logger.warning(
+                        "Could not remove old ggshield bundle %s: %s",
+                        old_bundle,
+                        cleanup_error,
+                    )
+            return launcher_path
 
         bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
         bundle_parent.mkdir(parents=True, exist_ok=True)

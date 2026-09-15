@@ -130,9 +130,10 @@ secretlint = "13.0.5"
 gitguardian = "1.54.0"
 ```
 
-Container builds install these exact pins. CI checks that each configured
-release asset remains available; update the pins deliberately when reviewing
-scanner releases.
+Container builds install these exact pins. CI checks GitHub release assets for
+both Linux container targets (`linux_x64` and `linux_arm64`); it checks the
+`detect-secrets` package release on PyPI. Update the pins deliberately when
+reviewing scanner releases.
 
 ### Override: Explicit Version
 

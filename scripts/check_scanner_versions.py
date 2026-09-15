@@ -28,6 +28,9 @@ except ImportError:  # Python 3.9 and 3.10
     import tomli as tomllib
 
 
+LINUX_CONTAINER_PLATFORMS = ("linux_x64", "linux_arm64")
+
+
 def get_latest_version(repo: str) -> Optional[str]:
     """Get latest version from GitHub releases."""
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
@@ -422,18 +425,24 @@ def check_existence():
             print(f"⚠️  {scanner}: No repository configured, skipping")
             continue
 
-        print(f"Checking {scanner} v{version} ({repo})...")
+        platforms = (
+            ("linux_x64",)
+            if scanner == "detect-secrets"
+            else LINUX_CONTAINER_PLATFORMS
+        )
+        for platform in platforms:
+            print(f"Checking {scanner} v{version} ({repo}) for {platform}...")
 
-        result = check_scanner_exists(repo, version, scanner)
+            result = check_scanner_exists(repo, version, scanner, platform=platform)
 
-        if result['exists']:
-            print(f"  ✅ EXISTS - {result['download_url']}")
-            print(f"     Size: {result['size_mb']} MB")
-        else:
-            print(f"  ❌ NOT FOUND - {result['error']}")
-            all_exist = False
+            if result['exists']:
+                print(f"  ✅ EXISTS - {result['download_url']}")
+                print(f"     Size: {result['size_mb']} MB")
+            else:
+                print(f"  ❌ NOT FOUND - {result['error']}")
+                all_exist = False
 
-        print()
+            print()
 
     if not all_exist:
         print("\n🚨 CRITICAL: One or more pinned scanner versions do not exist!")

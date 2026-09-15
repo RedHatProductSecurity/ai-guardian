@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engines in container and OpenShell images. GitGuardian's cloud engine still
   requires consent, an API key, and runtime network access. TruffleHog remains
   unavailable in the stock images pending its interactive AGPL-3.0 license
-  acknowledgement.
+  acknowledgement. CI verifies the pinned release assets for both Linux image
+  architectures, and Windows GitGuardian upgrades stage a complete bundle
+  before switching the active launcher.
 
 - **Tray sandbox management**: Add sandbox creation to the main tray menu and
   safe lifecycle, exec, logs, configuration snapshot, and confirmed deletion
