@@ -950,6 +950,7 @@ class TestChecksumVerification:
         )
 
         with tempfile.TemporaryDirectory() as temp_dir:
+            running_windows = sys.platform == "win32"
             installer = ScannerInstaller(install_dir=Path(temp_dir))
             installer.detect_platform = mock.Mock(return_value=platform_arch)
             # These cases exercise Linux release assets even when the test
@@ -970,7 +971,13 @@ class TestChecksumVerification:
             with mock.patch(
                 "ai_guardian.scanners.installer.shutil.which", return_value=None
             ):
-                assert installer.verify_installation("gitguardian")
+                if running_windows:
+                    with mock.patch.object(
+                        installer, "_get_installed_version", return_value="1.54.0"
+                    ):
+                        assert installer.verify_installation("gitguardian")
+                else:
+                    assert installer.verify_installation("gitguardian")
             assert expected_asset in mock_download.call_args[0][0]
 
     def test_install_gitguardian_windows_bundle_stages_and_publishes_launcher(self):
