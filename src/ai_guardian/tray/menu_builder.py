@@ -8,6 +8,7 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 
 import logging
 import os
+import secrets
 import shlex
 import threading
 import time
@@ -505,9 +506,9 @@ class TrayMenuBuilder:
 
     def _sandbox_create_fields(self):
         """Return the create form fields used by the main tray menu."""
-        runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "container")
+        runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
-            runtime = "container"
+            runtime = "openshell"
         cli_choices = SUPPORTED_CLI_IDE_TYPES
         default_cli = "claude" if runtime == "openshell" else "codex"
         cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
@@ -524,6 +525,7 @@ class TrayMenuBuilder:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
         opencode_agent_choices = ("", "build", "plan", "claude")
+        name_suffix = secrets.token_hex(3)
         return [
             {
                 "name": "runtime",
@@ -535,12 +537,6 @@ class TrayMenuBuilder:
                 "help": "Use Docker/Podman or NVIDIA OpenShell.",
             },
             {
-                "name": "name",
-                "label": "Sandbox name",
-                "default": f"ag-{cli[:8]}-{os.getpid()}",
-                "required": True,
-            },
-            {
                 "name": "cli",
                 "label": "CLI",
                 "type": "choice",
@@ -548,6 +544,18 @@ class TrayMenuBuilder:
                 "default": cli,
                 "required": True,
                 "help": "Select the CLI to configure in the sandbox.",
+            },
+            {
+                "name": "name",
+                "label": "Sandbox name",
+                "default": f"ag-{cli[:8]}-{name_suffix}",
+                "dynamic_default": {
+                    "field": "cli",
+                    "prefix": "ag-",
+                    "value_max_length": 8,
+                    "suffix": name_suffix,
+                },
+                "required": True,
             },
             {
                 "name": "agent",

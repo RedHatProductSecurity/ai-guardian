@@ -18,6 +18,20 @@ The normal UBI image remains published to
 [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian)
 on every merge and release.
 
+## Recommended runtime
+
+Use OpenShell when it is available, especially for provider-backed Claude or
+Codex sessions. OpenShell keeps provider credentials in the gateway rather
+than mounting them into the agent sandbox, and adds deny-by-default network
+and filesystem policy, provider-backed inference, repository isolation, and
+per-sandbox gateway services. OpenShell support is experimental, but it is the
+preferred security boundary for the tested provider workflows.
+
+The plain Docker/Podman container is a simpler fallback and is useful for
+local development or environments without an OpenShell gateway. Its Vertex
+ADC file or direct API-key environment is available inside the container, so
+the selected agent may be able to read that credential material.
+
 ## What's Included
 
 | Component | License | Installed |
@@ -165,10 +179,11 @@ ai-guardian sandbox create --runtime openshell --name guardian-claude \
 ```
 
 Runtime selection can also appear before the lifecycle verb, as in
-`ai-guardian sandbox --runtime openshell list`. A runtime must be selected when
-creating a sandbox; for named lifecycle commands, omit it and the CLI probes AI
-Guardian labels/metadata to choose Docker/Podman or OpenShell. An unqualified
-`list` combines managed resources from both runtimes. `list` is
+`ai-guardian sandbox --runtime openshell list`. New sandbox creation defaults to
+OpenShell, including the tray create form; pass `--runtime container` explicitly
+to use Docker/Podman. For named lifecycle commands, omit the runtime and the
+CLI probes AI Guardian labels/metadata to choose Docker/Podman or OpenShell. An
+unqualified `list` combines managed resources from both runtimes. `list` is
 limited to resources created through this command's `ai-guardian.managed=true`
 label. The sandbox command also owns provider setup, policy composition,
 host-config snapshots, and OpenShell upload bootstrapping; no separate
@@ -805,8 +820,9 @@ legacy `codex.json` file in the working directory. `ai-guardian setup` installs
 the MCP entry by default in both cases.
 
 ```bash
-uv build --wheel
-WHEEL_PATH="$(printf '%s\n' dist/ai_guardian-*.whl | head -n 1)"
+WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-wheel.XXXXXX")"
+uv build --wheel --out-dir "$WHEEL_DIR"
+WHEEL_PATH="$(printf '%s\n' "$WHEEL_DIR"/ai_guardian-*.whl | head -n 1)"
 WHEEL_NAME="$(basename "$WHEEL_PATH")"
 cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build \
@@ -815,9 +831,11 @@ podman build \
     -t localhost/ai-guardian-openshell:latest container/
 ```
 
-`WHEEL_PATH` includes the `dist/` directory, while `WHEEL_NAME` is only the
-filename. The `AI_GUARDIAN_VERSION` build argument must use `WHEEL_NAME`, since
-the Dockerfile looks for the wheel by filename under `container/vendor/`.
+`WHEEL_PATH` includes the temporary build directory, while `WHEEL_NAME` is only
+the filename. The `AI_GUARDIAN_VERSION` build argument must use `WHEEL_NAME`,
+since the Dockerfile looks for the wheel by filename under `container/vendor/`.
+Using a fresh output directory avoids accidentally selecting an older wheel
+left in `dist/`.
 
 #### OpenShell policy composition
 
@@ -1150,12 +1168,18 @@ inherited automatically.
 
 `run.sh` forwards the common agent variables (`OPENAI_API_KEY`,
 `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock variables, Azure OpenAI
-variables, and the existing Anthropic/Vertex variables) without mounting any
-agent home directory. The OpenShell sandbox command relies on OpenShell providers for
-credentials: its `--api-key` option is used only while creating an Anthropic
-provider, and Vertex ADC credentials are consumed while creating the
-`google-vertex-ai` provider. Neither credential value nor the ADC file is
-passed to the sandbox.
+variables, and the existing Anthropic/Vertex variables). Both `run.sh` and
+`ai-guardian sandbox create --runtime container` detect Vertex settings and
+mount the host ADC file read-only when it is available. The OpenShell sandbox
+command relies on OpenShell providers for credentials: its `--api-key` option
+is used only while creating an Anthropic provider, and Vertex ADC credentials
+are consumed while creating the `google-vertex-ai` provider. Neither provider
+credential value nor the ADC file is passed to the OpenShell sandbox.
+
+When both an Anthropic API-key environment variable and Vertex project
+settings are present, the container launchers select Vertex and omit the
+inherited API key. Pass `--api-key` explicitly when direct Anthropic
+authentication is intended.
 
 ### Codex CLI in a Docker/Podman sandbox
 

@@ -67,6 +67,21 @@ def _browse_initialdir(value: str) -> Optional[str]:
     return str(parent) if parent.is_dir() else None
 
 
+def _dynamic_default_value(specification: Dict[str, Any], value: str) -> Optional[str]:
+    """Build a dependent default value from the selected field value."""
+    value = str(value or "").strip()
+    if not value:
+        return None
+    max_length = specification.get("value_max_length")
+    if isinstance(max_length, int) and max_length > 0:
+        value = value[:max_length]
+    separator = str(specification.get("separator", "-"))
+    return (
+        f"{specification.get('prefix', '')}{value}"
+        f"{separator}{specification.get('suffix', '')}"
+    )
+
+
 def _local_image_choices():
     """Return locally available AI Guardian support-image references.
 
@@ -204,6 +219,7 @@ def _show_tkinter_form(
     control_widgets = {}
     field_labels = {}
     enabled_states = {}
+    dynamic_defaults = {}
     result: Dict[str, Any] = {}
 
     root = tk.Tk()
@@ -336,6 +352,8 @@ def _show_tkinter_form(
         controls[name] = (kind, variable)
         control_widgets[name] = widgets
         enabled_states[name] = True
+        if isinstance(field.get("dynamic_default"), dict):
+            dynamic_defaults[name] = str(variable.get())
 
         help_text = field.get("help")
         if help_text:
@@ -372,6 +390,26 @@ def _show_tkinter_form(
             for widget in field_labels.get(name, ()):
                 widget.state(["!disabled"] if enabled else ["disabled"])
 
+    def refresh_dynamic_defaults(*_args) -> None:
+        """Update untouched defaults that depend on another field."""
+        for field in field_list:
+            name = str(field.get("name", ""))
+            specification = field.get("dynamic_default")
+            if not isinstance(specification, dict):
+                continue
+            dependency = controls.get(str(specification.get("field", "")))
+            target = controls.get(name)
+            if not dependency or not target:
+                continue
+            target_variable = target[1]
+            if str(target_variable.get()) != dynamic_defaults.get(name):
+                continue
+            updated = _dynamic_default_value(specification, dependency[1].get())
+            if updated is None:
+                continue
+            target_variable.set(updated)
+            dynamic_defaults[name] = updated
+
     for field in field_list:
         condition = field.get("enabled_when")
         if not isinstance(condition, dict):
@@ -379,6 +417,13 @@ def _show_tkinter_form(
         dependency = controls.get(str(condition.get("field", "")))
         if dependency:
             dependency[1].trace_add("write", refresh_enabled_states)
+    for field in field_list:
+        specification = field.get("dynamic_default")
+        if not isinstance(specification, dict):
+            continue
+        dependency = controls.get(str(specification.get("field", "")))
+        if dependency:
+            dependency[1].trace_add("write", refresh_dynamic_defaults)
     refresh_enabled_states()
 
     error = tk.StringVar()

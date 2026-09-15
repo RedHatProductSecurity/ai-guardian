@@ -321,6 +321,45 @@ class TestContainerLaunchers:
             "codex",
         ]
 
+    def test_vertex_auth_takes_precedence_over_inherited_anthropic_key(self, tmp_path):
+        home = tmp_path / "home"
+        adc_path = home / ".config" / "gcloud" / "application_default_credentials.json"
+        adc_path.parent.mkdir(parents=True)
+        adc_path.write_text("{}\n", encoding="utf-8")
+        capture = tmp_path / "run.args"
+        engine = _capture_script(tmp_path / "fake-engine")
+        env = _launcher_env(tmp_path, engine, capture)
+        env.update(
+            {
+                "HOME": str(home),
+                "ANTHROPIC_API_KEY": "inherited-placeholder",
+                "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
+                "CLOUD_ML_REGION": "global",
+            }
+        )
+
+        result = subprocess.run(
+            ["bash", str(RUN_SCRIPT), "--agent", "claude"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        args = _captured_args(capture)
+        values = _env_values(args, "-e")
+        assert "CLAUDE_CODE_USE_VERTEX=1" in values
+        assert "ANTHROPIC_VERTEX_PROJECT_ID=test-project" in values
+        assert "CLOUD_ML_REGION=global" in values
+        assert "ANTHROPIC_API_KEY=inherited-placeholder" not in values
+        assert any(
+            value
+            == f"{adc_path}:/sandbox/.config/gcloud/application_default_credentials.json:ro"
+            for value in _volume_values(args)
+        )
+        assert "Auth:     Vertex AI" in result.stdout
+
     def test_profile_suppresses_host_config_and_mounts_custom_profile_read_only(
         self, tmp_path
     ):

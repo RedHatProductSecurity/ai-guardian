@@ -537,11 +537,23 @@ class TestSandboxTrayMenu:
         ):
             fields = tray._menu._sandbox_create_fields()
 
+        field_names = [field["name"] for field in fields]
+        assert field_names.index("cli") < field_names.index("name")
+
+        runtime_field = next(field for field in fields if field["name"] == "runtime")
+        assert runtime_field["default"] == "openshell"
+
         cli_field = next(field for field in fields if field["name"] == "cli")
         assert cli_field["type"] == "choice"
         assert cli_field["choices"] == SUPPORTED_CLI_IDE_TYPES
-        assert cli_field["default"] == "codex"
+        assert cli_field["default"] == "claude"
         assert cli_field["required"] is True
+
+        name_field = next(field for field in fields if field["name"] == "name")
+        assert name_field["default"].startswith("ag-claude-")
+        dynamic_default = name_field["dynamic_default"]
+        assert dynamic_default["field"] == "cli"
+        assert name_field["default"] == f"ag-claude-{dynamic_default['suffix']}"
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
@@ -566,6 +578,8 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["default"] == "build"
+        name_field = next(field for field in fields if field["name"] == "name")
+        assert name_field["default"].startswith("ag-opencode-")
 
         policy_field = next(field for field in fields if field["name"] == "policies")
         assert policy_field["type"] == "file"
@@ -656,6 +670,22 @@ class TestSandboxTrayMenu:
             "/tmp/Downloads"
         )
         assert _browse_selection("/tmp/repo", "", "directory") == "/tmp/repo"
+
+    def test_dynamic_default_uses_selected_cli(self):
+        from ai_guardian.tray.sandbox_dialog import _dynamic_default_value
+
+        assert (
+            _dynamic_default_value(
+                {
+                    "prefix": "ag-",
+                    "value_max_length": 8,
+                    "separator": "-",
+                    "suffix": "abc123",
+                },
+                "claude",
+            )
+            == "ag-claude-abc123"
+        )
 
     def test_path_browser_starts_at_current_directory_value(self, tmp_path):
         from ai_guardian.tray.sandbox_dialog import _browse_initialdir

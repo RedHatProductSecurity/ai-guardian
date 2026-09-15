@@ -225,8 +225,8 @@ def _add_sandbox_runtime_options(parser, *, suppress_defaults=False):
         choices=SUPPORTED_RUNTIMES,
         default=default,
         help=(
-            "Sandbox runtime: container (Docker/Podman) or openshell; "
-            "required for create, optional for lifecycle commands, which auto-detect"
+            "Sandbox runtime: openshell (default) or container (Docker/Podman); "
+            "optional for create, while lifecycle commands auto-detect"
         ),
     )
     parser.add_argument(
@@ -1090,8 +1090,8 @@ def main():
             dest="cli",
             help=(
                 "CLI executable to configure (for example, opencode or "
-                "claude); defaults to Codex for containers and Claude for "
-                "OpenShell"
+                "claude); defaults to Claude for OpenShell and Codex for "
+                "containers"
             ),
         )
         sandbox_create_parser.add_argument(

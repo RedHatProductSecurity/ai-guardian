@@ -163,6 +163,12 @@ curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/m
 
 A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with ai-guardian and the supported agent integrations. Redistributable headless CLIs are bundled; proprietary or GUI-only agents are configured at startup without being embedded:
 
+For provider-backed sessions, OpenShell is the preferred runtime when
+available: provider credentials remain in the gateway and OpenShell supplies
+deny-by-default network/filesystem policy and per-sandbox isolation. The plain
+Docker/Podman container is the simpler fallback; credentials passed to it are
+available inside the container and may be readable by the selected agent.
+
 ```bash
 # Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
 curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/container/run.sh -o run.sh
@@ -170,7 +176,7 @@ chmod +x run.sh
 OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
-# Optional OpenShell sandbox (published image; local build is also supported)
+# Preferred OpenShell sandbox (published image; local build is also supported)
 # OpenShell defaults to Claude; select Codex explicitly when needed.
 # Experimental: OpenShell integration is still evolving. Claude, Codex, and
 # OpenCode using Claude have been tested; verify current compatibility before
@@ -223,8 +229,9 @@ ai-guardian sandbox config save guardian-codex
 ai-guardian sandbox delete guardian-codex
 ```
 
-Use `--runtime openshell` when creating an OpenShell sandbox. Named lifecycle
-commands automatically detect the runtime from AI Guardian labels and OpenShell
+New sandbox creation defaults to OpenShell; use `--runtime container` explicitly
+when a plain Docker/Podman sandbox is required. Named lifecycle commands
+automatically detect the runtime from AI Guardian labels and OpenShell
 metadata when `--runtime` is omitted. An unqualified `list` includes both
 runtimes. OpenShell operations use the installed `openshell` CLI and its active
 gateway; set `OPENSHELL_CLI` when a different executable is required. The

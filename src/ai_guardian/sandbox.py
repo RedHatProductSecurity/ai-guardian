@@ -40,6 +40,9 @@ RUNTIME_LABEL_KEY = "ai-guardian.runtime"
 DAEMON_LABEL_KEY = "ai-guardian.daemon"
 OPENSHELL_ENTRYPOINT = "/usr/local/bin/entrypoint.sh"
 OPENSHELL_SERVICE_NAME = "ai-guardian"
+CONTAINER_GOOGLE_CREDENTIALS_PATH = (
+    "/sandbox/.config/gcloud/application_default_credentials.json"
+)
 # Host configuration is staged outside the active sandbox config directory so
 # an existing sandbox-local config can win over it at container startup.
 CONTAINER_HOST_CONFIG_PATH = "/sandbox/.config/ai-guardian.host.json"
@@ -95,8 +98,8 @@ def _requested_runtime(args) -> Optional[str]:
 
 
 def _runtime(args) -> str:
-    """Resolve the selected runtime, defaulting creation to containers."""
-    return _requested_runtime(args) or CONTAINER_RUNTIME
+    """Resolve the selected runtime, defaulting creation to OpenShell."""
+    return _requested_runtime(args) or OPENSHELL_RUNTIME
 
 
 def _container_engine(args) -> str:
@@ -774,22 +777,80 @@ def _add_container_environment(
     opencode_agent = _opencode_agent(args, cli)
     if opencode_agent:
         values.append(f"AI_GUARDIAN_OPENCODE_AGENT={opencode_agent}")
+    explicit_api_key = getattr(args, "api_key", None)
+    vertex_project = os.environ.get("ANTHROPIC_VERTEX_PROJECT_ID") or os.environ.get(
+        "VERTEX_AI_PROJECT_ID"
+    )
+    use_vertex = cli == "claude" and bool(vertex_project) and not explicit_api_key
     for value in values:
         command.extend(["--env", value])
 
     # Let the runtime read host credentials from the child environment instead
     # of putting their values in the engine command line.
     for name in _KNOWN_CREDENTIAL_ENVIRONMENT:
+        if name == "ANTHROPIC_API_KEY" and use_vertex:
+            continue
         if os.environ.get(name):
             command.extend(["--env", name])
 
-    api_key = getattr(args, "api_key", None)
+    api_key = explicit_api_key or (
+        os.environ.get("ANTHROPIC_API_KEY") if not use_vertex else None
+    )
     if api_key:
         child_env["ANTHROPIC_API_KEY"] = api_key
         command.extend(["--env", "ANTHROPIC_API_KEY"])
 
+    if use_vertex:
+        vertex_region = os.environ.get("CLOUD_ML_REGION") or os.environ.get(
+            "VERTEX_AI_REGION", "global"
+        )
+        command.extend(
+            [
+                "--env",
+                "CLAUDE_CODE_USE_VERTEX=1",
+                "--env",
+                f"ANTHROPIC_VERTEX_PROJECT_ID={vertex_project}",
+                "--env",
+                f"CLOUD_ML_REGION={vertex_region}",
+            ]
+        )
+        adc_path = _container_google_adc_path()
+        if adc_path and adc_path.is_file():
+            command.extend(
+                [
+                    "--env",
+                    f"GOOGLE_APPLICATION_CREDENTIALS={CONTAINER_GOOGLE_CREDENTIALS_PATH}",
+                    "--volume",
+                    f"{adc_path}:{CONTAINER_GOOGLE_CREDENTIALS_PATH}:ro,z",
+                ]
+            )
+        else:
+            logger.warning(
+                "Vertex AI is configured for the container, but Google ADC "
+                "credentials were not found; run 'gcloud auth "
+                "application-default login' or set GOOGLE_APPLICATION_CREDENTIALS"
+            )
+
     for value in getattr(args, "environment", None) or []:
         command.extend(["--env", value])
+
+
+def _container_google_adc_path() -> Optional[Path]:
+    """Return the host Google ADC path used by a container sandbox."""
+    configured = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if configured:
+        return Path(configured).expanduser()
+
+    candidates = [
+        Path.home() / ".config" / "gcloud" / "application_default_credentials.json"
+    ]
+    appdata = os.environ.get("APPDATA")
+    if appdata:
+        candidates.insert(
+            0,
+            Path(appdata) / "gcloud" / "application_default_credentials.json",
+        )
+    return next((candidate for candidate in candidates if candidate.is_file()), None)
 
 
 def _openshell_asset_roots() -> List[Path]:
@@ -2215,11 +2276,6 @@ def handle_sandbox_command(args, *, output: Optional[List[str]] = None) -> int:
             return _handle_sandbox_config_command(args, output=output)
 
         if operation == "create":
-            if _requested_runtime(args) is None:
-                raise ValueError(
-                    "--runtime is required when creating a sandbox; "
-                    "lifecycle commands can auto-detect it"
-                )
             return create_sandbox(args, output=output)
 
         runtime = _resolve_lifecycle_runtime(args, operation)

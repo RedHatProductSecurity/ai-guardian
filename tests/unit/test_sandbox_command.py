@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from ai_guardian.sandbox import (
+    CONTAINER_GOOGLE_CREDENTIALS_PATH,
     OPENSHELL_ENTRYPOINT,
     _compose_openshell_policy,
     _ensure_openshell_cli_provider,
@@ -22,6 +23,7 @@ from ai_guardian.sandbox import (
     _openshell_explicit_command,
     _openshell_provider_environment,
     _expose_openshell_service,
+    _runtime,
     _validate_create_options,
     create_sandbox,
     handle_sandbox_command,
@@ -121,13 +123,17 @@ def test_openshell_start_recovers_container_stopped_out_of_band():
     daemon.assert_called_once_with(args, "demo", output=output)
 
 
-def test_create_requires_runtime_selection(capsys):
+def test_create_defaults_to_openshell():
     args = _args(sandbox_command="create", runtime=None)
 
-    with patch.dict(os.environ, {"AI_GUARDIAN_SANDBOX_RUNTIME": ""}):
-        assert handle_sandbox_command(args) == 2
+    with (
+        patch.dict(os.environ, {"AI_GUARDIAN_SANDBOX_RUNTIME": ""}),
+        patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+    ):
+        assert _runtime(args) == "openshell"
+        assert handle_sandbox_command(args) == 0
 
-    assert "--runtime is required when creating a sandbox" in capsys.readouterr().err
+    create.assert_called_once_with(args, output=None)
 
 
 def test_sandbox_create_reserves_agent_for_opencode_profiles():
@@ -476,6 +482,52 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
     )
     assert f"{repo}:/sandbox/repo" in command
     assert command[-3:] == ["example/ai-guardian:test", "bash", "-l"]
+
+
+def test_container_create_forwards_vertex_auth_and_mounts_adc(tmp_path):
+    adc_path = tmp_path / ".config" / "gcloud" / "application_default_credentials.json"
+    adc_path.parent.mkdir(parents=True)
+    adc_path.write_text("{}\n", encoding="utf-8")
+    args = _args(
+        sandbox_command="create",
+        name="claude-vertex",
+        cli="claude",
+        image="example/ai-guardian:test",
+        api_key=None,
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "HOME": str(tmp_path),
+                "USERPROFILE": str(tmp_path),
+                "ANTHROPIC_API_KEY": "inherited-placeholder",
+                "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
+                "CLOUD_ML_REGION": "global",
+            },
+            clear=True,
+        ),
+        patch(
+            "ai_guardian.sandbox.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as run,
+    ):
+        assert handle_sandbox_command(args) == 0
+
+    command = run.call_args.args[0]
+    assert "CLAUDE_CODE_USE_VERTEX=1" in command
+    assert "ANTHROPIC_API_KEY" not in command
+    assert "ANTHROPIC_VERTEX_PROJECT_ID=test-project" in command
+    assert "CLOUD_ML_REGION=global" in command
+    assert (
+        f"GOOGLE_APPLICATION_CREDENTIALS={CONTAINER_GOOGLE_CREDENTIALS_PATH}" in command
+    )
+    assert f"{adc_path}:{CONTAINER_GOOGLE_CREDENTIALS_PATH}:ro,z" in command
 
 
 def test_container_create_uses_latest_saved_config_snapshot(tmp_path):

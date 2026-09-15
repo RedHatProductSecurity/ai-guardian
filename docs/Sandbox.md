@@ -16,6 +16,14 @@ The tray and web console authenticate this service with a dedicated token
 header as well as the standard Bearer header because some OpenShell gateway
 versions remove `Authorization` while proxying a service.
 
+When it is available, OpenShell is the preferred runtime for agent sandboxes.
+OpenShell provider credentials stay with the gateway instead of being mounted
+or passed into the agent sandbox, and the gateway adds deny-by-default network
+and filesystem policy, provider-backed inference, and per-sandbox isolation.
+The Docker/Podman runtime remains useful as a simpler fallback, but credentials
+such as Vertex ADC files or API keys are available inside that container and
+may therefore be readable by the agent.
+
 > **Experimental:** OpenShell integration is still evolving. The following
 > combinations have been tested; verify current compatibility before important
 > work:
@@ -25,6 +33,10 @@ versions remove `Authorization` while proxying a service.
 > | `--cli claude` | Claude Code through Google Vertex AI and `inference.local` |
 > | `--cli codex` | Codex through its OpenShell provider and Codex policy |
 > | `--cli opencode --agent claude` | OpenCode using Claude through Vertex AI and `inference.local/v1` |
+
+OpenShell is the default runtime for new sandboxes, including the tray's
+Create sandbox form. Use `--runtime container` explicitly when Docker/Podman
+is required; the container runtime remains available as a simpler fallback.
 
 ## Prerequisites
 
@@ -197,8 +209,8 @@ ai-guardian sandbox --runtime openshell list
 ai-guardian sandbox status guardian-claude
 ```
 
-The runtime must be selected explicitly for `create`. For lifecycle commands
-with a name, omit `--runtime` and the command probes the AI Guardian
+Creation defaults to OpenShell. For lifecycle commands with a name, omit
+`--runtime` and the command probes the AI Guardian
 labels/metadata to select Docker/Podman or OpenShell. If no runtime is supplied
 to `list`, it lists managed sandboxes from both runtimes.
 `AI_GUARDIAN_SANDBOX_RUNTIME` can still provide the runtime selection when
@@ -292,10 +304,10 @@ Common options for `sandbox create` are:
 | Option | Purpose |
 | --- | --- |
 | `--name NAME` | Assign a stable runtime name. |
-| `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Required to choose the runtime explicitly when creating; lifecycle commands auto-detect it by name when omitted. |
+| `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
-| `--cli NAME` | Select the CLI executable. Optional; defaults to Codex for containers and Claude for OpenShell. |
+| `--cli NAME` | Select the CLI executable. Optional; defaults to Claude for OpenShell and Codex for containers. |
 | `--agent NAME` | OpenCode agent profile. Required with `--cli opencode`; valid only with that CLI and does not select the executable. |
 | `--image IMAGE` | Override the runtime image. `--base` is an alias. An explicit value is passed through unchanged; an invalid reference fails instead of falling back to the default. |
 | `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
