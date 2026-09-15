@@ -922,13 +922,24 @@ class TestChecksumVerification:
     def test_install_gitguardian_archive_and_binary_alias(
         self, mock_download, mock_checksums, platform_arch, expected_asset
     ):
-        payload = b"ggshield executable"
+        payload = (
+            b"#!/bin/sh\n"
+            b'test -f "$(dirname "$0")/ggshield-py" || exit 1\n'
+            b'test -f "$(dirname "$0")/_internal/runtime.dat" || exit 1\n'
+            b"printf 'ggshield, version 1.54.0\\n'\n"
+        )
+        bundle_root = "ggshield-1.54.0-x86_64-unknown-linux-gnu"
         archive_buffer = io.BytesIO()
         with tarfile.open(fileobj=archive_buffer, mode="w:gz") as tar_ref:
-            member = tarfile.TarInfo("ggshield")
-            member.size = len(payload)
-            member.mode = 0o755
-            tar_ref.addfile(member, io.BytesIO(payload))
+            for name, contents, mode in (
+                ("ggshield", payload, 0o755),
+                ("ggshield-py", b"bundled Python implementation", 0o755),
+                ("_internal/runtime.dat", b"runtime data", 0o644),
+            ):
+                member = tarfile.TarInfo(f"{bundle_root}/{name}")
+                member.size = len(contents)
+                member.mode = mode
+                tar_ref.addfile(member, io.BytesIO(contents))
         archive = archive_buffer.getvalue()
         mock_download.return_value = mock.Mock(content=archive)
         mock_checksums.side_effect = lambda _name, _version, _repo, filename: (
@@ -941,8 +952,44 @@ class TestChecksumVerification:
             path = installer.install_from_download("gitguardian", "1.54.0")
 
             assert path.name == "ggshield"
-            assert path.read_bytes() == payload
+            bundle_dir = Path(temp_dir) / ".ai-guardian" / "gitguardian" / "1.54.0"
+            assert path.read_text(encoding="utf-8").startswith("#!/bin/sh")
+            assert (bundle_dir / "ggshield").read_bytes() == payload
+            assert (bundle_dir / "ggshield-py").read_bytes() == (
+                b"bundled Python implementation"
+            )
+            assert (bundle_dir / "_internal" / "runtime.dat").read_bytes() == (
+                b"runtime data"
+            )
+            with mock.patch(
+                "ai_guardian.scanners.installer.shutil.which", return_value=None
+            ):
+                assert installer.verify_installation("gitguardian")
             assert expected_asset in mock_download.call_args[0][0]
+
+    def test_install_gitguardian_windows_bundle_preserves_all_files(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            install_dir = root / "bin"
+            install_dir.mkdir()
+            bundle_source = root / "bundle"
+            internal_dir = bundle_source / "_internal"
+            internal_dir.mkdir(parents=True)
+            (bundle_source / "ggshield.exe").write_bytes(b"launcher")
+            (bundle_source / "ggshield-py.exe").write_bytes(b"python runtime")
+            (internal_dir / "runtime.dat").write_bytes(b"runtime data")
+
+            installer = ScannerInstaller(install_dir=install_dir)
+            path = installer._install_gitguardian_bundle(
+                bundle_source, "ggshield.exe", "1.54.0", "windows"
+            )
+
+            assert path == install_dir / "ggshield.exe"
+            assert path.read_bytes() == b"launcher"
+            assert (install_dir / "ggshield-py.exe").read_bytes() == (b"python runtime")
+            assert (install_dir / "_internal" / "runtime.dat").read_bytes() == (
+                b"runtime data"
+            )
 
     @mock.patch(
         "ai_guardian.scanners.installer.ScannerInstaller._download_checksums",

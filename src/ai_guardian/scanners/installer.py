@@ -13,6 +13,7 @@ import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import tarfile
@@ -818,13 +819,20 @@ class ScannerInstaller:
                         f"Archive contents: {archive_contents}"
                     )
 
-                # Install to install_dir
-                target_path = self.install_dir / binary_name
-                shutil.copy2(binary_path, target_path)
+                if scanner_name == "gitguardian":
+                    # Recent ggshield release archives are complete application
+                    # bundles, not standalone executables. Keep the companion
+                    # Python runtime and its _internal directory beside ggshield.
+                    target_path = self._install_gitguardian_bundle(
+                        binary_path.parent, binary_name, version, system
+                    )
+                else:
+                    target_path = self.install_dir / binary_name
+                    shutil.copy2(binary_path, target_path)
 
-                # Make executable (Unix)
-                if system != "windows":
-                    target_path.chmod(0o755)
+                    # Make executable (Unix)
+                    if system != "windows":
+                        target_path.chmod(0o755)
 
                 logger.info(f"Installed {scanner_name} to {target_path}")
                 print(f"✓ Installed {scanner_name} {version} to {target_path}")
@@ -838,6 +846,92 @@ class ScannerInstaller:
                 raise RuntimeError(
                     f"Failed to download {scanner_name} from {download_url}: {e}"
                 ) from e
+
+    def _install_gitguardian_bundle(
+        self, bundle_source: Path, binary_name: str, version: str, system: str
+    ) -> Path:
+        """Install ggshield's complete release bundle and expose its launcher."""
+        if system == "windows":
+            # Windows installs use a dedicated AI Guardian bin directory, and
+            # the upstream launcher expects every bundle file beside ggshield.
+            for source in bundle_source.iterdir():
+                target = self.install_dir / source.name
+                if target.is_symlink() or target.is_file():
+                    target.unlink()
+                elif target.is_dir():
+                    shutil.rmtree(target)
+
+                if source.is_dir() and not source.is_symlink():
+                    shutil.copytree(source, target, symlinks=True)
+                elif source.is_symlink():
+                    target.symlink_to(
+                        os.readlink(source), target_is_directory=source.is_dir()
+                    )
+                else:
+                    shutil.copy2(source, target)
+            return self.install_dir / binary_name
+
+        bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
+        bundle_parent.mkdir(parents=True, exist_ok=True)
+        bundle_dir = bundle_parent / version
+
+        # Stage the complete bundle next to its destination so it stays on the
+        # same filesystem when moved into place.
+        with tempfile.TemporaryDirectory(
+            prefix=f".{version}-", dir=bundle_parent
+        ) as staging_name:
+            staging_dir = Path(staging_name)
+            shutil.copytree(
+                bundle_source, staging_dir, dirs_exist_ok=True, symlinks=True
+            )
+            if bundle_dir.is_symlink():
+                bundle_dir.unlink()
+            elif bundle_dir.exists():
+                shutil.rmtree(bundle_dir)
+            os.replace(staging_dir, bundle_dir)
+
+        bundle_binary = bundle_dir / binary_name
+        if not bundle_binary.is_file():
+            raise RuntimeError(
+                f"GitGuardian bundle is missing its launcher: {bundle_binary}"
+            )
+        bundle_binary.chmod(bundle_binary.stat().st_mode | 0o111)
+
+        # The lightweight upstream launcher resolves its bundled runtime next
+        # to the real executable, so this shell shim must exec that path rather
+        # than copy the launcher into the shared scanner bin directory.
+        target_path = self.install_dir / binary_name
+        wrapper = "#!/bin/sh\n" f'exec {shlex.quote(str(bundle_binary))} "$@"\n'
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{binary_name}.",
+            dir=self.install_dir,
+            delete=False,
+        ) as wrapper_file:
+            wrapper_file.write(wrapper)
+        wrapper_path = Path(wrapper_file.name)
+        wrapper_path.chmod(0o755)
+        os.replace(wrapper_path, target_path)
+
+        # Keep only the active version so repeated scanner upgrades do not
+        # leave multi-megabyte ggshield runtimes behind.
+        for old_bundle in bundle_parent.iterdir():
+            if old_bundle == bundle_dir or not re.fullmatch(
+                r"\d+\.\d+\.\d+", old_bundle.name
+            ):
+                continue
+            try:
+                if old_bundle.is_symlink() or old_bundle.is_file():
+                    old_bundle.unlink()
+                elif old_bundle.is_dir():
+                    shutil.rmtree(old_bundle)
+            except OSError as exc:
+                logger.warning(
+                    "Could not remove old ggshield bundle %s: %s", old_bundle, exc
+                )
+
+        return target_path
 
     def install(
         self,

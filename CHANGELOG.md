@@ -58,6 +58,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **GitGuardian scanner installation**: Preserve the complete `ggshield` release
+  bundle so its packaged Python runtime is available during verification and
+  use in container images.
+
 - **Tray daemon visibility**: Expose every discovered daemon instead of
   limiting the multi-daemon menu to eight fixed slots.
 

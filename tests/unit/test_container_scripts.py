@@ -244,6 +244,11 @@ class TestContainerLaunchers:
             normal_image
         )
         assert (
+            "COPY --from=builder /usr/local/bin/.ai-guardian "
+            "/usr/local/bin/.ai-guardian" in normal_image
+        )
+        assert "RUN ggshield --version" in normal_image
+        assert (
             "COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/"
             in normal_image
         )

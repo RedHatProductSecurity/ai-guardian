@@ -177,13 +177,15 @@ COPY --from=builder /usr/local/bin/ai-guardian /usr/local/bin/
 RUN ln -sf /usr/local/bin/ai-guardian /usr/bin/ai-guardian \
     && (ai-guardian --version || echo "ai-guardian installed (version check skipped under emulation)")
 
-# Secret scanner executables and detect-secrets tool environment
+# Secret scanner launchers, the complete ggshield bundle, and detect-secrets.
 COPY --from=builder /usr/local/bin/gitleaks /usr/local/bin/
 COPY --from=builder /usr/local/bin/betterleaks /usr/local/bin/
 COPY --from=builder /usr/local/bin/leaktk /usr/local/bin/
 COPY --from=builder /usr/local/bin/secretlint /usr/local/bin/
 COPY --from=builder /usr/local/bin/ggshield /usr/local/bin/
+COPY --from=builder /usr/local/bin/.ai-guardian /usr/local/bin/.ai-guardian
 COPY --from=builder /usr/local/bin/detect-secrets /usr/local/bin/
+RUN ggshield --version
 
 # Forge CLIs (static Go binaries)
 COPY --from=builder /usr/local/bin/gh /usr/local/bin/
