@@ -102,7 +102,8 @@ jobs:
 
               - [ ] **Betterleaks** - https://github.com/betterleaks/betterleaks
                 - Last reviewed: _[update date after review]_
-                - Check: 200+ service rules in \`cmd/generate/config/rules/\` — gitleaks successor with exact key lengths
+                - Check: 200+ service rules in [\`cmd/generate/config/rules/\`](https://github.com/betterleaks/betterleaks/tree/main/cmd/generate/config/rules) — gitleaks successor with exact key lengths
+                - Notable: [bitbucket.go](https://github.com/betterleaks/betterleaks/blob/main/cmd/generate/config/rules/bitbucket.go) (Bitbucket DC tokens)
                 - **License: MIT** — patterns can be adapted directly
 
               - [ ] **AI Security Research Papers** - Search arXiv, Google Scholar for recent publications
@@ -182,6 +183,20 @@ jobs:
                  - Check GitHub repos: \`curl -s https://api.github.com/repos/OWNER/REPO | jq -r '.license.spdx_id'\`
                  - **Acceptable**: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, CC0-1.0, ISC, Unlicense, Public Domain
                  - **Unacceptable**: GPL*, AGPL*, proprietary, "All Rights Reserved"
+
+              ---
+
+              ## ⚠️ Source URL Troubleshooting
+
+              If a source URL returns 403/404 during review, the documentation may have moved (e.g., vendor acquisitions, domain reorganizations). **Do not skip the source.** Instead:
+
+              1. Search for the new location: \`site:<domain> <topic>\` or use WebSearch
+              2. Check the GitHub API for repo renames: \`curl -sL https://api.github.com/repos/OWNER/REPO\`
+              3. For vendor docs (e.g., Humio → CrowdStrike Falcon LogScale), try alternative path prefixes
+              4. Document the updated URL in the review comment so the workflow template can be updated
+
+              **Known URL changes:**
+              - \`library.humio.com/data-analysis/*\` → use \`library.humio.com/falcon-logscale-cloud/*\` or \`library.humio.com/logscale-api/*\`
 
               ---
 
