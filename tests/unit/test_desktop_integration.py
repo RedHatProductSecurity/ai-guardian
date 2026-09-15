@@ -49,33 +49,14 @@ class TestGetDesktopIntegration:
 
 
 class TestGetExecutableCommand:
-    def test_uses_shutil_which_when_available(self):
-        with mock.patch(
-            "ai_guardian.daemon.shutil.which", return_value="/usr/local/bin/ai-guardian"
+    def test_uses_current_interpreter_even_when_path_has_another_install(self):
+        with (
+            mock.patch("sys.executable", "/venv/bin/python"),
+            mock.patch("shutil.which", return_value="/old/bin/ai-guardian") as which,
         ):
             result = _get_executable_command()
-        assert len(result) == 1
-        assert result[0].endswith("ai-guardian")
-
-    def test_falls_back_to_python_command(self):
-        with mock.patch("ai_guardian.daemon.shutil.which", return_value=None):
-            result = _get_executable_command()
-        assert "-m" in result
-        assert "ai_guardian" in result
-
-    def test_uses_absolute_python_path_when_available(self):
-        def mock_which(cmd):
-            if cmd == "ai-guardian":
-                return None
-            if cmd == "python":
-                return "/usr/bin/python3"
-            return None
-
-        with mock.patch("ai_guardian.daemon.shutil.which", side_effect=mock_which):
-            result = _get_executable_command()
-        assert result[0].endswith("python3")
-        assert result[1] == "-m"
-        assert result[2] == "ai_guardian"
+        assert result == ["/venv/bin/python", "-m", "ai_guardian"]
+        which.assert_not_called()
 
 
 class TestPrepareIcon:
@@ -345,8 +326,23 @@ class TestMacOSDesktop:
 
         script = macos.app_path / "Contents" / "MacOS" / "ai-guardian-tray"
         content = script.read_text()
-        assert content.startswith("#!")
-        assert "from ai_guardian.__main__ import main" in content
+        assert content.startswith("#!/bin/sh\n")
+        assert 'exec /usr/local/bin/ai-guardian tray start "$@"' in content
+
+    def test_app_bundle_uses_current_python_for_launcher(self, macos, tmp_path):
+        python = tmp_path / "venv with spaces" / "bin" / "python"
+        with mock.patch(
+            "ai_guardian.daemon.desktop._get_executable_command",
+            return_value=[str(python), "-m", "ai_guardian"],
+        ):
+            with mock.patch(
+                "ai_guardian.daemon.desktop._prepare_icon", return_value=None
+            ):
+                macos.install_shortcut()
+
+        script = macos.app_path / "Contents" / "MacOS" / "ai-guardian-tray"
+        content = script.read_text()
+        assert f"exec '{python}' -m ai_guardian tray start \"$@\"" in content
 
     def test_app_bundle_script_augments_path(self, macos):
         with mock.patch(
@@ -362,7 +358,8 @@ class TestMacOSDesktop:
         content = script.read_text()
         assert "/opt/homebrew/bin" in content
         assert "/usr/local/bin" in content
-        assert "os.environ" in content
+        assert "export PATH" in content
+        assert "${PATH:-}" in content
 
     def test_info_plist_has_lsuielement(self, macos):
         import plistlib
@@ -587,6 +584,29 @@ class TestWindowsDesktop:
         mock_run.assert_called_once()
         call_args = mock_run.call_args[0][0]
         assert call_args[0] == "powershell"
+
+    def test_shortcut_uses_pythonw_from_same_interpreter_directory(self, win, tmp_path):
+        python_exe = tmp_path / "python.exe"
+        pythonw_exe = tmp_path / "pythonw.exe"
+        python_exe.touch()
+        pythonw_exe.touch()
+        with mock.patch(
+            "ai_guardian.daemon.desktop._get_executable_command",
+            return_value=[str(python_exe), "-m", "ai_guardian"],
+        ):
+            with mock.patch(
+                "ai_guardian.daemon.desktop._prepare_ico", return_value=None
+            ):
+                with mock.patch(
+                    "ai_guardian.daemon.desktop.subprocess.run"
+                ) as mock_run:
+                    win.shortcut_path.parent.mkdir(parents=True, exist_ok=True)
+                    win.shortcut_path.write_text("fake lnk")
+                    win.install_shortcut()
+
+        ps_script = mock_run.call_args[0][0][3]
+        assert f"$Shortcut.TargetPath = '{pythonw_exe}'" in ps_script
+        assert "$Shortcut.Arguments = '-m ai_guardian tray start'" in ps_script
 
     def test_uninstall_shortcut_removes_file(self, win):
         win.shortcut_path.parent.mkdir(parents=True, exist_ok=True)

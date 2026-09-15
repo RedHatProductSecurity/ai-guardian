@@ -27,6 +27,53 @@ class TestLocalRouting:
         assert result is True
         mock_popen.assert_called_once()
 
+    @mock.patch("ai_guardian.daemon.multi_client._launch_in_terminal")
+    def test_console_uses_current_interpreter(self, mock_launch):
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            MultiDaemonClient._local_console(["ai-guardian", "console"])
+
+        assert mock_launch.call_args[0][0] == [
+            "/tray/venv/bin/python",
+            "-m",
+            "ai_guardian",
+            "console",
+        ]
+
+    @mock.patch("subprocess.run")
+    def test_pip_check_uses_current_interpreter(self, mock_run):
+        mock_run.return_value.returncode = 0
+        target = DaemonTarget(name="local", runtime="local")
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            assert MultiDaemonClient().check_pip_available(target)
+
+        assert mock_run.call_args[0][0] == [
+            "/tray/venv/bin/python",
+            "-m",
+            "pip",
+            "--version",
+        ]
+
+    @mock.patch("subprocess.run")
+    def test_pip_upgrade_uses_current_interpreter(self, mock_run):
+        mock_run.return_value.returncode = 0
+        mock_run.return_value.stdout = "installed"
+        mock_run.return_value.stderr = ""
+        target = DaemonTarget(name="local", runtime="local")
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            success, output = MultiDaemonClient().run_pip_upgrade(
+                target, version="1.18.0"
+            )
+
+        assert success is True
+        assert output == "installed"
+        assert mock_run.call_args[0][0] == [
+            "/tray/venv/bin/python",
+            "-m",
+            "pip",
+            "install",
+            "ai-guardian==1.18.0",
+        ]
+
 
 class TestPerformanceRouting:
     def test_local_performance_exposes_paused_state(self):

@@ -1944,31 +1944,19 @@ MAX_GLOBAL_ITEMS_PER_PLUGIN = 12
 
 
 def get_python_executable():
-    """Get the best available Python executable path."""
-    import shutil
-
-    python_exe = shutil.which("python")
-    if python_exe:
-        return python_exe
-    python_exe = shutil.which("python3")
-    if python_exe:
-        return python_exe
+    """Return the Python interpreter running the tray process."""
     return sys.executable
 
 
 def resolve_cli_cmd(*args):
     """Build command list for running ai-guardian with given arguments.
 
-    Uses absolute path to python to ensure it works in subprocesses that
-    may not have the same PATH (e.g., Terminal.app on macOS).
+    Use the interpreter running the tray so subprocesses load the same
+    ai-guardian installation even when PATH points to another install.
     """
-    import shutil
+    from ai_guardian.daemon import get_executable_command
 
-    ag_path = shutil.which("ai-guardian")
-    if ag_path:
-        return [ag_path] + list(args)
-    python_exe = get_python_executable()
-    return [python_exe, "-m", "ai_guardian"] + list(args)
+    return get_executable_command() + list(args)
 
 
 def resolve_plugin_ai_guardian(command_str, run_on_target, target):
@@ -1987,8 +1975,7 @@ def resolve_plugin_ai_guardian(command_str, run_on_target, target):
 
     stripped = command_str.lstrip()
     if stripped == "ai-guardian" or stripped.startswith("ai-guardian "):
-        python_exe = get_python_executable()
-        resolved = shlex.quote(python_exe) + " -m ai_guardian"
+        resolved = " ".join(shlex.quote(arg) for arg in resolve_cli_cmd())
         return resolved + stripped[len("ai-guardian") :]
     return command_str
 

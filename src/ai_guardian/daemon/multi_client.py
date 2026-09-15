@@ -13,6 +13,7 @@ import platform
 import shlex
 import shutil
 import subprocess
+import sys
 from typing import List, Optional
 from urllib.request import Request, urlopen
 from urllib.error import URLError
@@ -315,7 +316,7 @@ class MultiDaemonClient:
         try:
             if target.runtime == "local":
                 result = subprocess.run(
-                    ["python", "-m", "pip", "--version"],
+                    [sys.executable, "-m", "pip", "--version"],
                     capture_output=True,
                     text=True,
                     timeout=10,
@@ -363,10 +364,7 @@ class MultiDaemonClient:
                 pkg_spec = "ai-guardian"
 
             if target.runtime == "local":
-                python_exe = (
-                    shutil.which("python") or shutil.which("python3") or "python"
-                )
-                cmd = [python_exe, "-m", "pip", "install"]
+                cmd = [sys.executable, "-m", "pip", "install"]
                 if not version:
                     cmd.append("--upgrade")
                 cmd.append(pkg_spec)

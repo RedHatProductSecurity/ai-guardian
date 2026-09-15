@@ -396,9 +396,7 @@ def _show_via_subprocess(
     prevents tkinter subprocesses from appearing in front on macOS 14+).
     """
     import json
-    import shutil
     import subprocess
-    import sys
     import tempfile
 
     violation_json = json.dumps(
@@ -424,11 +422,9 @@ def _show_via_subprocess(
     tmpdir = tempfile.mkdtemp(prefix="ai-guardian-ask-")
     output_path = os.path.join(tmpdir, "result.json")
 
-    ag_path = shutil.which("ai-guardian")
-    if ag_path:
-        cmd = [ag_path, "prompt", "--mode", "ask"]
-    else:
-        cmd = [sys.executable, "-m", "ai_guardian", "prompt", "--mode", "ask"]
+    from ai_guardian.daemon import get_executable_command
+
+    cmd = get_executable_command() + ["prompt", "--mode", "ask"]
     logger.debug(f"prompt --mode ask cmd: {cmd[0]}")
     cmd += [
         "--violation",

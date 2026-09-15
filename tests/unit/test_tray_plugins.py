@@ -15,11 +15,14 @@ from ai_guardian.tray.plugins import (
     dict_to_plugins,
     filter_plugins_by_tags,
     find_project_plugins_dir,
+    get_python_executable,
     load_merged_plugins,
     load_plugins,
     _linux_dialog_provider_order,
     plugins_to_dict,
     resolve_command,
+    resolve_cli_cmd,
+    resolve_plugin_ai_guardian,
     show_action_dialog,
     show_dialog,
     substitute_params,
@@ -27,6 +30,34 @@ from ai_guardian.tray.plugins import (
     validate_param_value,
     wrap_for_target,
 )
+
+
+class TestCliSubprocessResolution:
+    def test_get_python_executable_uses_tray_interpreter(self):
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            with mock.patch("shutil.which", return_value="/old/bin/python") as which:
+                assert get_python_executable() == "/tray/venv/bin/python"
+                which.assert_not_called()
+
+    def test_resolve_cli_cmd_uses_tray_interpreter_not_path(self):
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            with mock.patch(
+                "shutil.which", return_value="/old/bin/ai-guardian"
+            ) as which:
+                assert resolve_cli_cmd("console", "--web") == [
+                    "/tray/venv/bin/python",
+                    "-m",
+                    "ai_guardian",
+                    "console",
+                    "--web",
+                ]
+                which.assert_not_called()
+
+    def test_plugin_ai_guardian_uses_tray_interpreter(self):
+        with mock.patch("sys.executable", "/tray/venv/bin/python"):
+            with mock.patch("shutil.which", return_value="/old/bin/ai-guardian"):
+                result = resolve_plugin_ai_guardian("ai-guardian doctor", False, None)
+        assert result == "/tray/venv/bin/python -m ai_guardian doctor"
 
 
 class TestLoadPlugins:
