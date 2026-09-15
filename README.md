@@ -202,6 +202,12 @@ podman run -it -p 63152:63152 \
     quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
+For Codex authentication in a Docker/Podman sandbox, the host
+`~/.codex/auth.json` is not mounted automatically. Authenticate inside the
+sandbox or follow the [container Codex authentication
+guide](docs/Sandbox.md#codex-authentication-in-container-sandboxes) for
+headless OAuth, API-key, and explicit credential-copy options.
+
 For a named sandbox that can be managed across sessions, use the CLI
 subcommand. It supports both Docker/Podman containers and OpenShell:
 

@@ -750,7 +750,7 @@ not available to that process. Start a fresh sandbox with this command rather
 than launching `codex` from an unrelated shell, and verify that
 `openshell provider get ai-guardian-codex` reports either the four Codex OAuth
 credential keys or `OPENAI_API_KEY`, as appropriate. Do not copy the host
-`auth.json` into the sandbox.
+`auth.json` into an OpenShell sandbox; use its provider mechanism instead.
 
 When Providers v2 is unset or disabled, OpenShell 0.0.116 falls back to legacy
 `codex` discovery, which only recognizes `OPENAI_API_KEY`; the sandbox command reports
@@ -1143,7 +1143,10 @@ write back to the host file.
 
 ## Authentication
 
-Pass authentication credentials as environment variables at runtime.
+Pass authentication credentials as environment variables at runtime. The
+normal Docker/Podman image does not mount or read the host `~/.codex` directory,
+so Codex ChatGPT/OAuth login is performed inside the sandbox rather than being
+inherited automatically.
 
 `run.sh` forwards the common agent variables (`OPENAI_API_KEY`,
 `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock variables, Azure OpenAI
@@ -1153,6 +1156,53 @@ credentials: its `--api-key` option is used only while creating an Anthropic
 provider, and Vertex ADC credentials are consumed while creating the
 `google-vertex-ai` provider. Neither credential value nor the ADC file is
 passed to the sandbox.
+
+### Codex CLI in a Docker/Podman sandbox
+
+For a named sandbox, connect to it and authenticate Codex from inside:
+
+```bash
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+codex login
+```
+
+On a headless container, `codex login --device-auth` requires device-code
+authorization to be enabled in ChatGPT's **Settings → Security**. If that
+option is unavailable, use a real OpenAI Platform API key:
+
+```bash
+export OPENAI_API_KEY="<your-openai-api-key>"
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+printenv OPENAI_API_KEY | codex login --with-api-key
+```
+
+`auth.json` from a ChatGPT OAuth login contains OAuth credentials, not a
+Platform API key. Do not paste its access or refresh token into the API-key
+login. If necessary, the user can authenticate on a host with a browser and
+manually copy the complete file into a persistent named container:
+
+```bash
+podman cp ~/.codex/auth.json guardian-codex:/sandbox/.codex/auth.json
+```
+
+Use `docker cp` with Docker. AI Guardian does not inspect this file, but it is
+then present inside the sandbox; treat it like a password and never commit or
+share it. The detailed container-sandbox flow is also documented in the
+[Sandbox CLI guide](../docs/Sandbox.md#codex-authentication-in-container-sandboxes).
 
 > **Tested configurations:** Anthropic API key and Google Vertex AI have been
 > validated with this image. Other providers (AWS Bedrock, Azure, self-hosted)

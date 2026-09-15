@@ -77,6 +77,66 @@ ai-guardian sandbox start guardian-codex
 ai-guardian sandbox delete guardian-codex
 ```
 
+## Codex authentication in container sandboxes
+
+Docker/Podman sandbox creation deliberately does not mount or read the host
+`~/.codex/auth.json`. Agent home directories remain isolated from the sandbox;
+AI Guardian configures the hooks and daemon, but it does not log Codex in
+automatically. Authenticate from inside a persistent named sandbox:
+
+```bash
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+codex login
+```
+
+For a headless container, `codex login --device-auth` is the preferred OAuth
+flow, but device-code authorization must first be enabled in ChatGPT's
+**Settings → Security**. A managed ChatGPT workspace may require an
+administrator to enable it.
+
+API-key authentication uses a real OpenAI Platform API key, not an OAuth token
+from `auth.json`:
+
+```bash
+export OPENAI_API_KEY="<your-openai-api-key>"
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+printenv OPENAI_API_KEY | codex login --with-api-key
+```
+
+The key must be present when the container is created so the sandbox receives
+it. The `--api-key` option on `sandbox create` is for Anthropic authentication,
+not Codex. API-key authentication is billed through the OpenAI Platform rather
+than ChatGPT plan credits; see the [official OpenAI authentication
+documentation](https://learn.chatgpt.com/docs/auth).
+
+If device-code authorization is unavailable and the browser flow cannot
+complete from inside the container, authenticate on a host with a browser and
+manually copy the complete OAuth cache into a persistent named container:
+
+```bash
+# On the host, after completing `codex login`:
+podman cp ~/.codex/auth.json guardian-codex:/sandbox/.codex/auth.json
+```
+
+Use `docker cp` with Docker. This is an explicit user action; AI Guardian does
+not inspect the file. Treat `auth.json` like a password because it contains
+credentials, and never commit or share it. An OAuth access or refresh token
+from that file must not be pasted into Codex's API-key login.
+
 Create and manage an OpenShell sandbox:
 
 ```bash
