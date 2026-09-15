@@ -140,6 +140,27 @@ class TestDaemonTrayCallbacks:
         assert "2m" in label
         assert "5s" in label
 
+    def test_active_container_name_is_not_replaced_by_hostname_id(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            status="running",
+            container_name="ag-test",
+        )
+        client = mock.MagicMock()
+        client.get_status.return_value = {"name": "1595862f38e8"}
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+            multi_client=client,
+        )
+        tray._active_target = target
+
+        tray._get_active_stats()
+
+        assert target.name == "ag-test"
+
 
 class TestTrayPauseRoutesLocalThroughMultiClient:
     """Verify local daemon pause/resume routes through multi_client (issue #683)."""
@@ -771,14 +792,29 @@ class TestSingleDaemonFlatMenu:
                     container_engine="podman",
                     status="running",
                 ),
-                "● sandbox (podman)",
+                "● sandbox (container)",
+            ),
+            (
+                dict(
+                    name="ag-test",
+                    runtime="container",
+                    runtime_type="openshell",
+                    container_engine="podman",
+                    status="running",
+                ),
+                "● ag-test (openshell)",
             ),
             (
                 dict(name="k8s-pod", runtime="kubernetes", status="running"),
                 "● k8s-pod (kubernetes)",
             ),
         ],
-        ids=["local-running", "container-running", "kubernetes-running"],
+        ids=[
+            "local-running",
+            "container-running",
+            "openshell-running",
+            "kubernetes-running",
+        ],
     )
     def test_daemon_status_label(self, target_kwargs, expected_label):
         t = DaemonTarget(**target_kwargs)
@@ -1735,6 +1771,56 @@ class TestUntilResumePauseOption:
         )
         tray._update_global_pause_status()
         assert tray._status == "running"
+
+
+class TestMultiDaemonMenuCapacity:
+    """The tray exposes every discovered daemon, not a fixed slot prefix."""
+
+    def test_multi_daemon_menu_includes_every_discovered_target(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+            multi_client=mock.MagicMock(),
+        )
+        tray._targets = [
+            DaemonTarget(name=f"daemon-{index}", runtime="container", status="running")
+            for index in range(10)
+        ]
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray") as mock_pystray,
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", new=mock_pystray),
+        ):
+            mock_pystray.MenuItem = mock.MagicMock()
+            mock_pystray.Menu = mock.MagicMock()
+            mock_pystray.Menu.SEPARATOR = mock.MagicMock()
+            items = tray._menu._build_multi_daemon_menu_items()
+
+        assert len(items) == len(tray._targets)
+
+    def test_refresh_rebuilds_menu_when_target_count_changes(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._menu_target_count = 8
+        tray._targets = [
+            DaemonTarget(name=f"daemon-{index}", runtime="container")
+            for index in range(10)
+        ]
+        tray._icon = mock.MagicMock()
+        rebuilt_menu = object()
+
+        with mock.patch.object(
+            tray, "_build_tray_menu", return_value=rebuilt_menu
+        ) as build_menu:
+            tray._refresh_menu()
+
+        build_menu.assert_called_once_with()
+        assert tray._icon.menu is rebuilt_menu
+        tray._icon.update_menu.assert_not_called()
 
 
 class TestResumeMenuLabelFormats:
@@ -4604,6 +4690,7 @@ class TestMultiTargetExecution:
         assert result[0]["name"] == "proj"
         assert result[0]["container_name"] == "sandbox-1"
         assert result[0]["runtime"] == "container"
+        assert result[0]["runtime_type"] is None
         assert result[0]["container_engine"] == "podman"
 
 

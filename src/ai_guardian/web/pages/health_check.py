@@ -2,6 +2,7 @@
 
 from nicegui import run, ui
 
+from ai_guardian.web.components.config_notice import create_config_source_banner
 from ai_guardian.web.components.header import create_header, create_sidebar
 
 _STATUS_ICONS = {
@@ -27,7 +28,16 @@ def create_health_check_page(service, daemon_name: str):
 
         _is_remote = is_remote_daemon()
 
+        config_banner = ui.column().classes("w-full")
         content = ui.column().classes("w-full gap-4")
+
+        async def refresh_config_banner():
+            from ai_guardian.web.config_helpers import get_web_config_state
+
+            config_state = await run.io_bound(get_web_config_state)
+            config_banner.clear()
+            with config_banner:
+                create_config_source_banner(config_state)
 
         async def refresh(fix=False):
             content.clear()
@@ -270,4 +280,5 @@ def create_health_check_page(service, daemon_name: str):
                         on_click=lambda: do_smoke_test(),
                     ).props("dense")
 
+        ui.timer(0.1, refresh_config_banner, once=True)
         ui.timer(0.1, refresh, once=True)

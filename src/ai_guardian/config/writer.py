@@ -24,10 +24,12 @@ except ImportError:
 
 from ai_guardian.allowlist_utils import validate_allowlist_patterns
 from ai_guardian.config.utils import (
+    CONFIG_READ_ONLY_MESSAGE,
     get_config_dir,
     get_project_config_path,
     GLOBAL_ONLY_SECTIONS,
     _find_git_root,
+    is_config_read_only,
 )
 
 logger = logging.getLogger(__name__)
@@ -48,6 +50,10 @@ def _atomic_config_update(
     Returns:
         True on success, False on failure.
     """
+    if is_config_read_only():
+        logger.warning("Config write rejected: %s", CONFIG_READ_ONLY_MESSAGE)
+        return False
+
     lock_path = str(config_path) + ".lock"
 
     try:

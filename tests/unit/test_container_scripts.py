@@ -17,7 +17,6 @@ from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_SCRIPT = REPO_ROOT / "container" / "run.sh"
-OPENSHELL_SCRIPT = REPO_ROOT / "container" / "openshell.sh"
 ENTRYPOINT_SCRIPT = REPO_ROOT / "container" / "entrypoint.sh"
 DOCKERFILE = REPO_ROOT / "container" / "Dockerfile"
 OPENSHELL_DOCKERFILE = REPO_ROOT / "container" / "Dockerfile.openshell"
@@ -66,6 +65,12 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "AI_GUARDIAN_HOME",
         "AI_GUARDIAN_SETUP_SCOPE",
         "AI_GUARDIAN_PROFILE",
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED",
+        "AI_GUARDIAN_HOST_CONFIG_PATH",
+        "AI_GUARDIAN_RESTORE_CONFIG",
+        "AI_GUARDIAN_OPEN_SHELL_STAGING",
+        "AI_GUARDIAN_CONFIG_SOURCE",
+        "AI_GUARDIAN_CONFIG_READ_ONLY",
         "ANTHROPIC_API_KEY",
         "ANTHROPIC_VERTEX_PROJECT_ID",
         "VERTEX_AI_PROJECT_ID",
@@ -86,9 +91,6 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "AI_GUARDIAN_CODEX_SANDBOX_MODE",
         "AI_GUARDIAN_IMAGE",
         "AI_GUARDIAN_OPEN_SHELL_IMAGE",
-        "AI_GUARDIAN_OPEN_SHELL_FORWARD",
-        "AI_GUARDIAN_OPEN_SHELL_DAEMON_PORT",
-        "AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR",
         "OPENAI_API_KEY",
     ):
         env.pop(name, None)
@@ -99,72 +101,6 @@ def _capture_script(path: Path) -> Path:
     return _executable_script(
         path,
         '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$CAPTURE"\n',
-    )
-
-
-def _staging_openshell_script(path: Path) -> Path:
-    return _executable_script(
-        path,
-        """#!/usr/bin/env bash
-set -euo pipefail
-if [ "$1" = "provider" ] && [ "$2" = "list-profiles" ]; then
-    echo '[{"id": "codex"}, {"id": "claude-code"}, {"id": "google-vertex-ai"}]'
-    exit 0
-fi
-if [ "$1" = "provider" ] && [ "$2" = "get" ]; then
-    if [ "${FAKE_PROVIDER_EXISTS:-false}" = "true" ]; then
-        exit 0
-    fi
-    exit 1
-fi
-if [ "$1" = "settings" ] && [ "$2" = "get" ]; then
-    if [ "${FAKE_PROVIDERS_V2:-true}" = "true" ]; then
-        echo '{"settings": {"providers_v2_enabled": true}}'
-    else
-        echo '{"settings": {"providers_v2_enabled": "<unset>"}}'
-    fi
-    exit 0
-fi
-if [ "$1" = "provider" ] && [ "$2" = "create" ]; then
-    if [ -n "${CODEX_AUTH_ACCESS_TOKEN:-}" ] &&
-        [ -n "${CODEX_AUTH_REFRESH_TOKEN:-}" ] &&
-        [ -n "${CODEX_AUTH_ACCOUNT_ID:-}" ]; then
-        echo present > "$CAPTURE.provider.auth"
-    else
-        echo absent > "$CAPTURE.provider.auth"
-    fi
-fi
-if [ "$1" = "sandbox" ] && [ "$2" = "create" ]; then
-    previous_arg=""
-    for arg in "$@"; do
-        if [ "$previous_arg" = "--policy" ]; then
-            cp "$arg" "$CAPTURE.policy.yaml"
-        fi
-        previous_arg="$arg"
-    done
-    if [ -n "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
-        [ -n "${CODEX_AUTH_REFRESH_TOKEN:-}" ] ||
-        [ -n "${CODEX_AUTH_ACCOUNT_ID:-}" ] ||
-        [ -n "${CODEX_AUTH_ID_TOKEN:-}" ]; then
-        echo leaked > "$CAPTURE.sandbox.auth"
-    else
-        echo clean > "$CAPTURE.sandbox.auth"
-    fi
-fi
-if [ "$1" = "forward" ] && [ "$2" = "service" ]; then
-    capture_file="$CAPTURE.$1.$2"
-    for arg in "$@"; do
-        echo "$arg"
-    done > "$capture_file"
-    echo 'Forwarding 127.0.0.1:55745 -> 127.0.0.1:63152 in sandbox'
-    sleep 0.2
-    exit 0
-fi
-capture_file="$CAPTURE.$1.$2"
-for arg in "$@"; do
-    echo "$arg"
-done > "$capture_file"
-""",
     )
 
 
@@ -191,7 +127,7 @@ class TestContainerLaunchers:
     """Verify launcher defaults, isolation, and argument forwarding."""
 
     def test_shell_scripts_are_valid_and_executable(self):
-        for script in (RUN_SCRIPT, OPENSHELL_SCRIPT, ENTRYPOINT_SCRIPT):
+        for script in (RUN_SCRIPT, ENTRYPOINT_SCRIPT):
             result = subprocess.run(
                 ["bash", "-n", str(script)], capture_output=True, text=True
             )
@@ -377,13 +313,52 @@ class TestContainerLaunchers:
         assert "AI_GUARDIAN_SETUP_SCOPE=selected" in values
         assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true" in values
         assert any(
-            value == f"{config_path}:/sandbox/.config/ai-guardian/ai-guardian.json:ro"
+            value == f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z"
             for value in volumes
         )
         assert args[-2:] == [
             "quay.io/redhatproductsecurity/ai-guardian:latest",
             "codex",
         ]
+
+    def test_vertex_auth_takes_precedence_over_inherited_anthropic_key(self, tmp_path):
+        home = tmp_path / "home"
+        adc_path = home / ".config" / "gcloud" / "application_default_credentials.json"
+        adc_path.parent.mkdir(parents=True)
+        adc_path.write_text("{}\n", encoding="utf-8")
+        capture = tmp_path / "run.args"
+        engine = _capture_script(tmp_path / "fake-engine")
+        env = _launcher_env(tmp_path, engine, capture)
+        env.update(
+            {
+                "HOME": str(home),
+                "ANTHROPIC_API_KEY": "inherited-placeholder",
+                "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
+                "CLOUD_ML_REGION": "global",
+            }
+        )
+
+        result = subprocess.run(
+            ["bash", str(RUN_SCRIPT), "--agent", "claude"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.returncode == 0, result.stderr
+        args = _captured_args(capture)
+        values = _env_values(args, "-e")
+        assert "CLAUDE_CODE_USE_VERTEX=1" in values
+        assert "ANTHROPIC_VERTEX_PROJECT_ID=test-project" in values
+        assert "CLOUD_ML_REGION=global" in values
+        assert "ANTHROPIC_API_KEY=inherited-placeholder" not in values
+        assert any(
+            value
+            == f"{adc_path}:/sandbox/.config/gcloud/application_default_credentials.json:ro"
+            for value in _volume_values(args)
+        )
+        assert "Auth:     Vertex AI" in result.stdout
 
     def test_profile_suppresses_host_config_and_mounts_custom_profile_read_only(
         self, tmp_path
@@ -418,8 +393,8 @@ class TestContainerLaunchers:
             "AI_GUARDIAN_PROFILE=/sandbox/.config/ai-guardian/profiles/team.json"
             in values
         )
-        assert not any(value.endswith("/ai-guardian.json:ro") for value in volumes)
-        assert any(value.endswith("/profiles/team.json:ro") for value in volumes)
+        assert not any(value.endswith("/ai-guardian.json:ro,z") for value in volumes)
+        assert any(value.endswith("/profiles/team.json:ro,z") for value in volumes)
         assert args[-2:] == [
             "quay.io/redhatproductsecurity/ai-guardian:latest",
             "opencode",
@@ -447,7 +422,7 @@ class TestContainerLaunchers:
 
         assert result.returncode == 0, result.stderr
         assert any(
-            value == f"{config_path}:/sandbox/.config/ai-guardian/ai-guardian.json:ro"
+            value == f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z"
             for value in _volume_values(_captured_args(capture))
         )
 
@@ -476,8 +451,7 @@ class TestContainerLaunchers:
         assert result.returncode == 0, result.stderr
         volumes = _volume_values(_captured_args(capture))
         assert any(
-            value
-            == f"{option_config_path}:/sandbox/.config/ai-guardian/ai-guardian.json:ro"
+            value == f"{option_config_path}:/sandbox/.config/ai-guardian.host.json:ro,z"
             for value in volumes
         )
         assert not any(str(env_config_path) in value for value in volumes)
@@ -503,7 +477,7 @@ class TestContainerLaunchers:
 
         assert result.returncode == 0, result.stderr
         assert any(
-            value == f"{config_path}:/sandbox/.config/ai-guardian/ai-guardian.json:ro"
+            value == f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z"
             for value in _volume_values(_captured_args(capture))
         )
 
@@ -529,485 +503,9 @@ class TestContainerLaunchers:
 
         assert result.returncode == 0, result.stderr
         assert any(
-            value == f"{config_path}:/sandbox/.config/ai-guardian/ai-guardian.json:ro"
+            value == f"{config_path}:/sandbox/.config/ai-guardian.host.json:ro,z"
             for value in _volume_values(_captured_args(capture))
         )
-
-    def test_openshell_launcher_uses_supported_options_and_metadata(self, tmp_path):
-        home = tmp_path / "home"
-        config_path = home / ".config" / "ai-guardian" / "ai-guardian.json"
-        config_path.parent.mkdir(parents=True)
-        config_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "codex",
-                "--repo",
-                ".",
-                "--policy",
-                str(GITHUB_POLICY),
-                "--provider",
-                "ai-guardian-codex",
-                "--provider",
-                "ai-guardian-github",
-                "--name",
-                "github-test",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
-        assert create_args[:3] == ["sandbox", "create", "--from"]
-        assert (
-            create_args[3]
-            == "quay.io/redhatproductsecurity/ai-guardian-openshell:latest"
-        )
-        assert "--no-auto-providers" in create_args
-        assert "--detach" in create_args
-        assert "--forward" not in create_args
-        forward_args = _captured_args(
-            capture.with_name("openshell.args.forward.service")
-        )
-        assert forward_args[:5] == [
-            "forward",
-            "service",
-            "--target-port",
-            "63152",
-            "--local",
-        ]
-        assert forward_args[5].startswith("127.0.0.1:")
-        assert forward_args[6:] == ["github-test"]
-        selected_port = forward_args[5].rsplit(":", 1)[1]
-        composed_policy_path = capture.with_name("openshell.args.policy.yaml")
-        assert composed_policy_path.exists()
-        composed_policy_argument = create_args[create_args.index("--policy") + 1]
-        assert composed_policy_argument != str(GITHUB_POLICY)
-        assert not Path(composed_policy_argument).exists()
-        composed_policy = yaml.safe_load(
-            composed_policy_path.read_text(encoding="utf-8")
-        )
-        assert set(composed_policy["network_policies"]) == {
-            "github_api_readonly",
-            "github_git_readonly",
-            "codex_openai",
-        }
-        provider_values = [
-            create_args[index + 1]
-            for index, value in enumerate(create_args[:-1])
-            if value == "--provider"
-        ]
-        assert provider_values == ["ai-guardian-codex", "ai-guardian-github"]
-        assert create_args[create_args.index("--name") + 1] == "github-test"
-        values = _openshell_env_values(create_args)
-        assert "AI_GUARDIAN_AGENT=codex" in values
-        assert "CODEX_HOME=/sandbox/.codex" in values
-        assert "AI_GUARDIAN_CODEX_SANDBOX_MODE=danger-full-access" in values
-        assert "AI_GUARDIAN_CODEX_NETWORK_ACCESS=true" not in values
-        assert "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true" in values
-        assert "AI_GUARDIAN_REST_PORT=63152" in values
-        assert "AI_GUARDIAN_SETUP_SCOPE=selected" in values
-        assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true" in values
-        assert any(
-            value == f"{config_path}:/sandbox/.config/ai-guardian/ai-guardian.json"
-            for value in _env_values(create_args, "--upload")
-        )
-        assert "--" not in create_args
-        assert exec_args[:8] == [
-            "sandbox",
-            "exec",
-            "--name",
-            "github-test",
-            "--no-tty",
-            "--workdir",
-            "/sandbox/repo",
-            "--",
-        ]
-        assert exec_args[8:] == ["/usr/local/bin/entrypoint.sh", "/bin/bash"]
-
-    def test_openshell_launcher_defaults_to_shell_in_uploaded_repo(self, tmp_path):
-        home = tmp_path / "home"
-        config_path = home / ".config" / "ai-guardian" / "ai-guardian.json"
-        config_path.parent.mkdir(parents=True)
-        config_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--repo",
-                ".",
-                "--name",
-                "shell-test",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        assert "Command:  /bin/bash" in result.stdout
-        composed_policy = yaml.safe_load(
-            capture.with_name("openshell.args.policy.yaml").read_text(encoding="utf-8")
-        )
-        assert set(composed_policy["network_policies"]) == {"claude_code"}
-        exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
-        assert exec_args[:8] == [
-            "sandbox",
-            "exec",
-            "--name",
-            "shell-test",
-            "--no-tty",
-            "--workdir",
-            "/sandbox/repo",
-            "--",
-        ]
-        assert exec_args[8:] == ["/usr/local/bin/entrypoint.sh", "/bin/bash"]
-
-    def test_openshell_launcher_forces_tty_for_interactive_exec(self, tmp_path):
-        pty = pytest.importorskip("pty")
-        import os as posix_os
-        import select
-
-        home = tmp_path / "home"
-        config_path = home / ".config" / "ai-guardian" / "ai-guardian.json"
-        config_path.parent.mkdir(parents=True)
-        config_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-
-        master_fd, slave_fd = pty.openpty()
-        process = subprocess.Popen(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "codex", "--repo", "."],
-            cwd=REPO_ROOT,
-            env=env,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            close_fds=True,
-        )
-        posix_os.close(slave_fd)
-        try:
-            while process.poll() is None:
-                ready, _, _ = select.select([master_fd], [], [], 0.1)
-                if ready:
-                    try:
-                        posix_os.read(master_fd, 4096)
-                    except OSError:
-                        break
-            process.wait(timeout=5)
-        finally:
-            posix_os.close(master_fd)
-
-        assert process.returncode == 0
-        exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
-        assert "--tty" in exec_args
-
-    def test_openshell_launcher_keeps_anthropic_api_key_out_of_sandbox(self, tmp_path):
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "claude",
-                "--api-key",
-                "test-anthropic-api-key",
-                "--provider",
-                "anthropic-provider",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert "test-anthropic-api-key" not in create_args
-        assert not any(
-            value.startswith("ANTHROPIC_API_KEY=")
-            for value in _openshell_env_values(create_args)
-        )
-
-    def test_openshell_launcher_uses_openshell_dynamic_port_for_zero(self, tmp_path):
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "codex",
-                "--port",
-                "0",
-                "--provider",
-                "codex-provider",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert "--forward" not in create_args
-        forward_args = _captured_args(
-            capture.with_name("openshell.args.forward.service")
-        )
-        assert forward_args[forward_args.index("--local") + 1] == "127.0.0.1:0"
-        assert "--target-port" in forward_args
-        assert "63152" in forward_args
-        assert "AI_GUARDIAN_REST_PORT=63152" in _openshell_env_values(create_args)
-        assert "Port:     dynamic (host forward)" in result.stdout
-        assert "Access at: http://127.0.0.1:55745/" in result.stdout
-
-        sandbox_name = create_args[create_args.index("--name") + 1]
-        state_path = (
-            tmp_path
-            / "home"
-            / ".local"
-            / "state"
-            / "ai-guardian"
-            / "openshell-forwards"
-        )
-        state = json.loads(
-            (state_path / f"{sandbox_name}.json").read_text(encoding="utf-8")
-        )
-        assert state["sandbox_name"] == sandbox_name
-        assert state["host"] == "127.0.0.1"
-        assert state["port"] == 55745
-        assert state["target_port"] == 63152
-        assert state["pid"] > 0
-
-    @pytest.mark.parametrize(
-        ("args", "forward_setting"),
-        [
-            (["--no-forward"], None),
-            ([], "false"),
-        ],
-    )
-    def test_openshell_launcher_can_disable_daemon_forwarding(
-        self, tmp_path, args, forward_setting
-    ):
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        if forward_setting is not None:
-            env["AI_GUARDIAN_OPEN_SHELL_FORWARD"] = forward_setting
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "codex",
-                *args,
-                "--provider",
-                "codex-provider",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert "--forward" not in create_args
-        assert "AI_GUARDIAN_REST_PORT=63152" in _openshell_env_values(create_args)
-        assert "Port:     63152 (not forwarded)" in result.stdout
-
-    def test_openshell_launcher_uses_gateway_vertex_provider_without_adc_upload(
-        self, tmp_path
-    ):
-        home = tmp_path / "home"
-        adc_path = home / ".config" / "gcloud" / "application_default_credentials.json"
-        adc_path.parent.mkdir(parents=True)
-        adc_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-        env["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-project"
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "claude",
-                "--name",
-                "vertex-test",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        provider_args = _captured_args(
-            capture.with_name("openshell.args.provider.create")
-        )
-        assert provider_args == [
-            "provider",
-            "create",
-            "--name",
-            "ai-guardian-google-vertex-ai",
-            "--type",
-            "google-vertex-ai",
-            "--from-gcloud-adc",
-            "--config",
-            "VERTEX_AI_PROJECT_ID=test-project",
-            "--config",
-            "VERTEX_AI_REGION=global",
-        ]
-        inference_args = _captured_args(
-            capture.with_name("openshell.args.inference.set")
-        )
-        assert inference_args == [
-            "inference",
-            "set",
-            "--provider",
-            "ai-guardian-google-vertex-ai",
-            "--model",
-            "claude-sonnet-4-6",
-            "--no-verify",
-        ]
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert "--no-auto-providers" in create_args
-        env_values = _openshell_env_values(create_args)
-        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in env_values
-        assert "ANTHROPIC_BASE_URL=https://inference.local" in env_values
-        assert "ANTHROPIC_API_KEY=unused" in env_values
-        assert "DISABLE_AUTOUPDATER=1" in env_values
-        assert not any(
-            value.startswith("CLAUDE_CODE_USE_VERTEX=") for value in env_values
-        )
-        assert not any(
-            value.startswith("ANTHROPIC_VERTEX_PROJECT_ID=") for value in env_values
-        )
-        assert not any(value.startswith("CLOUD_ML_REGION=") for value in env_values)
-        assert not any(
-            value.startswith("GOOGLE_APPLICATION_CREDENTIALS=") for value in env_values
-        )
-        assert not any(
-            str(adc_path) in value
-            or value.endswith("/application_default_credentials.json")
-            for value in _env_values(create_args, "--upload")
-        )
-
-    def test_openshell_launcher_updates_existing_vertex_provider_and_route(
-        self, tmp_path
-    ):
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["FAKE_PROVIDER_EXISTS"] = "true"
-        env["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-project"
-        env["CLOUD_ML_REGION"] = "us-central1"
-        env["AI_GUARDIAN_OPEN_SHELL_MODEL"] = "claude-opus-4-6"
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "claude",
-                "--name",
-                "vertex-existing",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        assert not capture.with_name("openshell.args.provider.create").exists()
-        provider_args = _captured_args(
-            capture.with_name("openshell.args.provider.update")
-        )
-        assert provider_args == [
-            "provider",
-            "update",
-            "ai-guardian-google-vertex-ai",
-            "--config",
-            "VERTEX_AI_PROJECT_ID=test-project",
-            "--config",
-            "VERTEX_AI_REGION=us-central1",
-        ]
-        inference_args = _captured_args(
-            capture.with_name("openshell.args.inference.set")
-        )
-        assert inference_args == [
-            "inference",
-            "set",
-            "--provider",
-            "ai-guardian-google-vertex-ai",
-            "--model",
-            "claude-opus-4-6",
-            "--no-verify",
-        ]
-
-    def test_openshell_launcher_accepts_vertex_model_option(self, tmp_path):
-        home = tmp_path / "home"
-        adc_path = home / ".config" / "gcloud" / "application_default_credentials.json"
-        adc_path.parent.mkdir(parents=True)
-        adc_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-        env["ANTHROPIC_VERTEX_PROJECT_ID"] = "test-project"
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "claude",
-                "--model",
-                "claude-haiku-4-5",
-                "--name",
-                "vertex-model",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        inference_args = _captured_args(
-            capture.with_name("openshell.args.inference.set")
-        )
-        assert "claude-haiku-4-5" in inference_args
 
     def test_github_policy_allows_read_only_api_and_git_operations(self):
         policy = yaml.safe_load(GITHUB_POLICY.read_text(encoding="utf-8"))
@@ -1110,267 +608,6 @@ class TestContainerLaunchers:
             "claude_code",
         }
         assert "codex_openai" not in policy["network_policies"]
-
-    def test_openshell_launcher_accepts_repeatable_policy_overlays(self, tmp_path):
-        extra_policy = tmp_path / "extra-policy.yaml"
-        extra_policy.write_text(
-            """version: 1
-
-network_policies:
-  extra_api:
-    name: extra-api
-    endpoints:
-      - host: example.com
-        port: 443
-        protocol: rest
-        enforcement: enforce
-        access: read-only
-    binaries:
-      - {path: /usr/bin/curl}
-""",
-            encoding="utf-8",
-        )
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-
-        result = subprocess.run(
-            [
-                "bash",
-                str(OPENSHELL_SCRIPT),
-                "--agent",
-                "codex",
-                "--policy",
-                str(GITHUB_READWRITE_POLICY),
-                "--policy",
-                str(extra_policy),
-                "--provider",
-                "codex-provider",
-            ],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        composed_policy = yaml.safe_load(
-            capture.with_name("openshell.args.policy.yaml").read_text(encoding="utf-8")
-        )
-        assert set(composed_policy["network_policies"]) == {
-            "github_api",
-            "github_git",
-            "extra_api",
-            "codex_openai",
-        }
-
-    def test_openshell_upload_fallback_prepares_default_agent_provider(self, tmp_path):
-        home = tmp_path / "home"
-        config_path = home / ".config" / "ai-guardian" / "ai-guardian.json"
-        config_path.parent.mkdir(parents=True)
-        config_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-
-        result = subprocess.run(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "codex"],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        provider_args = _captured_args(
-            capture.with_name("openshell.args.provider.create")
-        )
-        assert provider_args == [
-            "provider",
-            "create",
-            "--name",
-            "ai-guardian-codex",
-            "--type",
-            "codex",
-            "--from-existing",
-        ]
-
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        exec_args = _captured_args(capture.with_name("openshell.args.sandbox.exec"))
-        sandbox_name = create_args[create_args.index("--name") + 1]
-        assert sandbox_name.startswith("ag-codex-")
-        assert len(sandbox_name) <= 19
-        assert "--provider" in create_args
-        assert create_args[create_args.index("--provider") + 1] == "ai-guardian-codex"
-        assert exec_args[:6] == [
-            "sandbox",
-            "exec",
-            "--name",
-            sandbox_name,
-            "--no-tty",
-            "--",
-        ]
-        assert exec_args[6:] == ["/usr/local/bin/entrypoint.sh", "/bin/bash"]
-
-    def test_openshell_launcher_bridges_codex_oauth_file_for_provider_setup(
-        self, tmp_path
-    ):
-        home = tmp_path / "home"
-        codex_home = home / ".codex"
-        codex_home.mkdir(parents=True)
-        (codex_home / "auth.json").write_text(
-            """{
-  "auth_mode": "chatgpt",
-  "tokens": {
-    "access_token": "test-access-token",
-    "refresh_token": "test-refresh-token",
-    "account_id": "test-account-id",
-    "id_token": "test-id-token"
-  }
-}
-""",
-            encoding="utf-8",
-        )
-        config_path = home / ".config" / "ai-guardian" / "ai-guardian.json"
-        config_path.parent.mkdir(parents=True)
-        config_path.write_text("{}\n", encoding="utf-8")
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-        env["CODEX_HOME"] = str(codex_home)
-
-        result = subprocess.run(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "codex"],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        assert (
-            capture.with_name("openshell.args.provider.auth")
-            .read_text(encoding="utf-8")
-            .strip()
-            == "present"
-        )
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert not any(
-            token in value
-            for value in create_args
-            for token in (
-                "test-access-token",
-                "test-refresh-token",
-                "test-account-id",
-                "test-id-token",
-            )
-        )
-        assert not any(
-            value.endswith("/auth.json") or ":/sandbox/.codex" in value
-            for value in _env_values(create_args, "--upload")
-        )
-        assert (
-            capture.with_name("openshell.args.sandbox.auth")
-            .read_text(encoding="utf-8")
-            .strip()
-            == "clean"
-        )
-
-    def test_openshell_launcher_uses_codex_provider_without_uploads(self, tmp_path):
-        home = tmp_path / "home"
-        codex_home = home / ".codex"
-        codex_home.mkdir(parents=True)
-        (codex_home / "auth.json").write_text(
-            '{"tokens": {"access_token": "access", "refresh_token": "refresh", '
-            '"account_id": "account"}}\n',
-            encoding="utf-8",
-        )
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-        env["CODEX_HOME"] = str(codex_home)
-
-        result = subprocess.run(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "codex"],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 0, result.stderr
-        create_args = _captured_args(capture.with_name("openshell.args.sandbox.create"))
-        assert "--no-auto-providers" in create_args
-        assert "--auto-providers" not in create_args
-        assert "--detach" in create_args
-        assert "--upload" not in create_args
-        assert create_args[create_args.index("--provider") + 1] == "ai-guardian-codex"
-        assert "CODEX_HOME=/sandbox/.codex" in _openshell_env_values(create_args)
-        assert "AI_GUARDIAN_CODEX_SANDBOX_MODE=danger-full-access" in (
-            _openshell_env_values(create_args)
-        )
-        assert "AI_GUARDIAN_CODEX_NETWORK_ACCESS=true" not in _openshell_env_values(
-            create_args
-        )
-        assert "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true" in _openshell_env_values(
-            create_args
-        )
-        assert "--" not in create_args
-        forward_args = _captured_args(
-            capture.with_name("openshell.args.forward.service")
-        )
-        assert forward_args[forward_args.index("--target-port") + 1] == "63152"
-
-    def test_openshell_launcher_explains_disabled_providers_v2_for_codex_oauth(
-        self, tmp_path
-    ):
-        home = tmp_path / "home"
-        codex_home = home / ".codex"
-        codex_home.mkdir(parents=True)
-        (codex_home / "auth.json").write_text(
-            '{"tokens": {"access_token": "access", "refresh_token": "refresh", '
-            '"account_id": "account"}}\n',
-            encoding="utf-8",
-        )
-        capture = tmp_path / "openshell.args"
-        cli = _staging_openshell_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-        env["HOME"] = str(home)
-        env["CODEX_HOME"] = str(codex_home)
-        env["FAKE_PROVIDERS_V2"] = "false"
-
-        result = subprocess.run(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "codex"],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 2
-        assert "Providers v2 is disabled" in result.stderr
-        assert "providers_v2_enabled --value true" in result.stderr
-        assert not capture.with_name("openshell.args.provider.create").exists()
-
-    def test_openshell_launcher_rejects_gui_only_integrations(self, tmp_path):
-        capture = tmp_path / "openshell.args"
-        cli = _capture_script(tmp_path / "fake-openshell")
-        env = _launcher_env(tmp_path, cli, capture)
-
-        result = subprocess.run(
-            ["bash", str(OPENSHELL_SCRIPT), "--agent", "cursor"],
-            cwd=REPO_ROOT,
-            env=env,
-            capture_output=True,
-            text=True,
-        )
-
-        assert result.returncode == 2
-        assert "Supported CLI agents:" in result.stderr
-        assert not capture.exists()
 
     def test_launcher_rejects_unknown_agent(self, tmp_path):
         capture = tmp_path / "run.args"
@@ -1567,12 +804,16 @@ fi
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_adds_bare_to_direct_openshell_claude_command(tmp_path):
+def test_entrypoint_adds_bare_to_automated_openshell_claude_print(tmp_path):
     args_path = tmp_path / "claude.args"
+    base_url_path = tmp_path / "claude.base-url"
+    api_key_path = tmp_path / "claude.api-key"
     _executable_script(
         tmp_path / "claude",
         """#!/usr/bin/env bash
 printf '%s\n' "$@" > "$CLAUDE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$CLAUDE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$CLAUDE_API_KEY"
 """,
     )
     _executable_script(
@@ -1598,6 +839,8 @@ fi
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "CLAUDE_ARGS": str(args_path),
+        "CLAUDE_BASE_URL": str(base_url_path),
+        "CLAUDE_API_KEY": str(api_key_path),
     }
 
     result = subprocess.run(
@@ -1614,17 +857,27 @@ fi
         "--print",
         "hello",
     ]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
 
 
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_wraps_plain_claude_in_openshell_interactive_shell(tmp_path):
+def test_entrypoint_does_not_wrap_plain_claude_in_openshell_interactive_shell(
+    tmp_path,
+):
     args_path = tmp_path / "claude.args"
+    base_url_path = tmp_path / "claude.base-url"
+    api_key_path = tmp_path / "claude.api-key"
     _executable_script(
         tmp_path / "claude",
         """#!/usr/bin/env bash
 printf '%s\n' "$@" > "$CLAUDE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$CLAUDE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$CLAUDE_API_KEY"
 """,
     )
     _executable_script(
@@ -1650,6 +903,8 @@ fi
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "CLAUDE_ARGS": str(args_path),
+        "CLAUDE_BASE_URL": str(base_url_path),
+        "CLAUDE_API_KEY": str(api_key_path),
     }
 
     result = subprocess.run(
@@ -1658,7 +913,7 @@ fi
             str(ENTRYPOINT_SCRIPT),
             "/bin/bash",
             "-lc",
-            "claude --print hello",
+            "claude hello",
         ],
         cwd=REPO_ROOT,
         env=env,
@@ -1667,13 +922,75 @@ fi
     )
 
     assert result.returncode == 0, result.stderr
-    assert args_path.read_text(encoding="utf-8").splitlines() == [
-        "--bare",
-        "--print",
-        "hello",
-    ]
+    assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
     assert (Path(env["HOME"]) / ".bashrc").exists()
     assert (Path(env["HOME"]) / ".bash_profile").exists()
+    assert "claude()" not in (Path(env["HOME"]) / ".bashrc").read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_sets_opencode_inference_environment_without_wrapping_command(
+    tmp_path,
+):
+    args_path = tmp_path / "opencode.args"
+    base_url_path = tmp_path / "opencode.base-url"
+    api_key_path = tmp_path / "opencode.api-key"
+    _executable_script(
+        tmp_path / "opencode",
+        """#!/usr/bin/env bash
+printf '%s\n' "$@" > "$OPENCODE_ARGS"
+printf '%s\n' "${ANTHROPIC_BASE_URL:-missing}" > "$OPENCODE_BASE_URL"
+printf '%s\n' "${ANTHROPIC_API_KEY:-missing}" > "$OPENCODE_API_KEY"
+""",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && "$2" = "--help" ]]; then
+    printf 'usage: ai-guardian setup --ide {opencode}\n'
+    exit 0
+fi
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "opencode",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "OPENCODE_ARGS": str(args_path),
+        "OPENCODE_BASE_URL": str(base_url_path),
+        "OPENCODE_API_KEY": str(api_key_path),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "opencode", "hello"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
+    assert (
+        base_url_path.read_text(encoding="utf-8").strip()
+        == "https://inference.local/v1"
+    )
+    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
 
 
 @pytest.mark.skipif(
@@ -1760,7 +1077,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1787,6 +1104,63 @@ fi
     assert "https://api.openai.com/auth" not in id_token_payload
     assert auth["last_refresh"].endswith("Z")
     assert stat.S_IMODE(auth_path.stat().st_mode) == stat.S_IRUSR | stat.S_IWUSR
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_bootstraps_codex_api_key_placeholder(tmp_path):
+    codex_home = tmp_path / "codex-home"
+    config_dir = tmp_path / "config"
+    captured_input = tmp_path / "codex-login-input"
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+if [ "$1" = "--version" ]; then
+    printf 'ai-guardian test\n'
+fi
+""",
+    )
+    _executable_script(
+        tmp_path / "codex",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [ "$1" = "login" ] && [ "$2" = "--with-api-key" ]; then
+    cat > "$CODEX_LOGIN_INPUT"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "cli",
+        "AI_GUARDIAN_OPEN_SHELL_PROVIDER": "true",
+        "CODEX_HOME": str(codex_home),
+        "OPENAI_API_KEY": "openshell:resolve:env:OPENAI_API_KEY",
+        "CODEX_LOGIN_INPUT": str(captured_input),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert captured_input.read_text(encoding="utf-8") == (
+        "openshell:resolve:env:OPENAI_API_KEY\n"
+    )
+    assert "Configured Codex API-key authentication" in result.stdout
 
 
 @pytest.mark.skipif(
@@ -2035,13 +1409,14 @@ fi
 """,
     )
     config_dir = tmp_path / "config"
-    config_path = config_dir / "ai-guardian.json"
+    host_config_path = config_dir / "ai-guardian.host.json"
     env = {
         "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
         "HOME": str(tmp_path / "home"),
         "AI_GUARDIAN_AGENT": "codex",
         "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+        "AI_GUARDIAN_HOST_CONFIG_PATH": str(host_config_path),
         "AI_GUARDIAN_OPEN_SHELL_STAGING": "true",
         "AI_GUARDIAN_SETUP_SCOPE": "cli",
     }
@@ -2055,13 +1430,177 @@ fi
         text=True,
     )
     time.sleep(0.25)
-    config_path.parent.mkdir(parents=True)
-    config_path.write_text("{}\n", encoding="utf-8")
+    host_config_path.parent.mkdir(parents=True)
+    host_config_path.write_text("{}\n", encoding="utf-8")
     stdout, stderr = process.communicate(timeout=10)
 
     assert process.returncode == 0, stderr
     assert "Waiting for OpenShell to upload host ai-guardian config" in stdout
-    assert "Using read-only host ai-guardian config" in stdout
+    assert "Using host ai-guardian config snapshot" in stdout
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_prefers_existing_sandbox_local_config(tmp_path):
+    fake_ai_guardian = _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" = "--version" ]]; then
+    echo "ai-guardian test"
+fi
+""",
+    )
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    local_config = config_dir / "ai-guardian.json"
+    local_config.write_text('{"source": "sandbox-local"}\n', encoding="utf-8")
+    host_config = tmp_path / "host-ai-guardian.json"
+    host_config.write_text('{"source": "host"}\n', encoding="utf-8")
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+        "AI_GUARDIAN_HOST_CONFIG_PATH": str(host_config),
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ENTRYPOINT_SCRIPT),
+            "bash",
+            "-c",
+            "printf '%s|%s|' \"$AI_GUARDIAN_CONFIG_SOURCE\" "
+            '"$AI_GUARDIAN_CONFIG_READ_ONLY"; cat "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"',
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Using sandbox-local ai-guardian config" in result.stdout
+    assert 'sandbox-local|false|{"source": "sandbox-local"}' in result.stdout
+    assert local_config.read_text(encoding="utf-8") == '{"source": "sandbox-local"}\n'
+    assert json.loads(
+        (config_dir / ".ai-guardian-config-metadata.json").read_text(encoding="utf-8")
+    ) == {"source": "sandbox-local", "read_only": False}
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_uses_host_config_as_writable_snapshot(tmp_path):
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" = "--version" ]]; then
+    echo "ai-guardian test"
+fi
+""",
+    )
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    host_config = tmp_path / "host-ai-guardian.json"
+    host_config.write_text('{"source": "host"}\n', encoding="utf-8")
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+        "AI_GUARDIAN_HOST_CONFIG_PATH": str(host_config),
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ENTRYPOINT_SCRIPT),
+            "bash",
+            "-c",
+            "printf '%s|%s|' \"$AI_GUARDIAN_CONFIG_SOURCE\" "
+            '"$AI_GUARDIAN_CONFIG_READ_ONLY"; '
+            "printf '{\"changed\": true}\\n' > "
+            '"$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"; '
+            'cat "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"',
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Using host ai-guardian config snapshot" in result.stdout
+    assert 'host|false|{"changed": true}' in result.stdout
+    assert host_config.read_text(encoding="utf-8") == '{"source": "host"}\n'
+    assert json.loads(
+        (config_dir / ".ai-guardian-config-metadata.json").read_text(encoding="utf-8")
+    ) == {"source": "host", "read_only": False}
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_restores_snapshot_over_existing_sandbox_config(tmp_path):
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" = "--version" ]]; then
+    echo "ai-guardian test"
+fi
+""",
+    )
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    local_config = config_dir / "ai-guardian.json"
+    local_config.write_text('{"source": "image"}\n', encoding="utf-8")
+    snapshot_path = tmp_path / "snapshot.json"
+    snapshot_path.write_text('{"source": "snapshot"}\n', encoding="utf-8")
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "codex",
+        "AI_GUARDIAN_CONFIG_DIR": str(config_dir),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+        "AI_GUARDIAN_HOST_CONFIG_PATH": str(snapshot_path),
+        "AI_GUARDIAN_RESTORE_CONFIG": "true",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ENTRYPOINT_SCRIPT),
+            "bash",
+            "-c",
+            "printf '%s|%s|' \"$AI_GUARDIAN_CONFIG_SOURCE\" "
+            '"$AI_GUARDIAN_CONFIG_READ_ONLY"; cat '
+            '"$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"',
+        ],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Restoring ai-guardian config snapshot" in result.stdout
+    assert 'snapshot|false|{"source": "snapshot"}' in result.stdout
+    assert json.loads(local_config.read_text(encoding="utf-8")) == {
+        "source": "snapshot"
+    }
+    assert json.loads(
+        (config_dir / ".ai-guardian-config-metadata.json").read_text(encoding="utf-8")
+    ) == {"source": "snapshot", "read_only": False}
 
 
 @pytest.mark.skipif(

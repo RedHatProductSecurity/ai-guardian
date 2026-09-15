@@ -23,6 +23,8 @@ ACTION_SEVERITY = {"allow": 0, "log-only": 1, "warn": 2, "redact": 3, "block": 4
 SENSITIVITY_SEVERITY = {"low": 0, "medium": 1, "high": 2}
 
 _BROAD_PATH_PATTERNS = frozenset({"*", "**", "**/*"})
+CONFIG_READ_ONLY_MESSAGE = "Configuration is managed by the host and is read-only."
+CONFIG_METADATA_FILENAME = ".ai-guardian-config-metadata.json"
 
 
 def is_safe_path_pattern(pattern: str, *, block_broad: bool = False) -> bool:
@@ -544,6 +546,60 @@ def get_config_dir() -> Path:
             return Path(appdata) / "ai-guardian"
         return Path.home() / "AppData" / "Roaming" / "ai-guardian"
     return Path("~/.config/ai-guardian").expanduser()
+
+
+def get_config_source() -> str:
+    """Return the source selected for the effective configuration.
+
+    Sandboxed runtimes set ``AI_GUARDIAN_CONFIG_SOURCE`` during startup.  The
+    persisted metadata is used by newly connected TUI processes, which do not
+    inherit environment changes made by a container entrypoint.  The legacy
+    host-config marker remains a final fallback for older images.
+    """
+    source = os.environ.get("AI_GUARDIAN_CONFIG_SOURCE")
+    if source:
+        return source
+
+    metadata = _read_config_metadata()
+    metadata_source = metadata.get("source")
+    if isinstance(metadata_source, str) and metadata_source:
+        return metadata_source
+
+    if os.environ.get("AI_GUARDIAN_HOST_CONFIG_MOUNTED", "false").lower() == "true":
+        return "host"
+    return "sandbox-local"
+
+
+def is_config_read_only() -> bool:
+    """Return whether configuration writes are disabled for this runtime."""
+    explicit = os.environ.get("AI_GUARDIAN_CONFIG_READ_ONLY")
+    if explicit is not None:
+        return explicit.lower() == "true"
+
+    metadata = _read_config_metadata()
+    metadata_read_only = metadata.get("read_only")
+    if isinstance(metadata_read_only, bool):
+        return metadata_read_only
+
+    return os.environ.get("AI_GUARDIAN_HOST_CONFIG_MOUNTED", "false").lower() == "true"
+
+
+def _read_config_metadata() -> dict:
+    """Read sandbox config provenance for processes started after entrypoint."""
+    metadata_path = get_config_dir() / CONFIG_METADATA_FILENAME
+    try:
+        with metadata_path.open(encoding="utf-8") as stream:
+            metadata = json.load(stream)
+    except FileNotFoundError:
+        return {}
+    except (OSError, json.JSONDecodeError) as exc:
+        logger.warning("Unable to read config metadata from %s: %s", metadata_path, exc)
+        return {}
+
+    if not isinstance(metadata, dict):
+        logger.warning("Ignoring non-object config metadata at %s", metadata_path)
+        return {}
+    return metadata
 
 
 def get_config() -> dict:

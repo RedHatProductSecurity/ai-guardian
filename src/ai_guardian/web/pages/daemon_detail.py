@@ -30,7 +30,14 @@ def _save_local_daemon_config(
     terminal_app="",
 ):
     import json
-    from ai_guardian.config.utils import get_config_dir
+    from ai_guardian.config.utils import (
+        CONFIG_READ_ONLY_MESSAGE,
+        get_config_dir,
+        is_config_read_only,
+    )
+
+    if is_config_read_only():
+        raise RuntimeError(CONFIG_READ_ONLY_MESSAGE)
 
     config_path = get_config_dir() / "ai-guardian.json"
     if config_path.exists():
@@ -204,7 +211,9 @@ def create_daemon_detail_page(service, daemon_name: str):
                         ui.label("Info").classes("text-lg font-bold")
                         with ui.grid(columns=2).classes("gap-1 text-sm"):
                             ui.label("Runtime:").classes("text-grey-6")
-                            ui.label(target.runtime)
+                            ui.label(
+                                getattr(target, "runtime_type", None) or target.runtime
+                            )
                             if target.host:
                                 ui.label("Host:").classes("text-grey-6")
                                 ui.label(target.host)

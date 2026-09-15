@@ -13,6 +13,8 @@ from ai_guardian.daemon.multi_client import MultiDaemonClient
 
 logger = logging.getLogger(__name__)
 
+_NON_RUNNING_TARGET_STATES = {"error", "stopped", "starting"}
+
 
 class DaemonService:
     """Provides daemon data and control for web console pages."""
@@ -39,12 +41,24 @@ class DaemonService:
     def get_all_daemon_status(self) -> list:
         results = []
         for target in self._targets:
-            try:
-                status = self._client.get_status(target)
-            except Exception:
+            if target.status in _NON_RUNNING_TARGET_STATES:
                 status = None
+            else:
+                try:
+                    status = self._client.get_status(target)
+                except Exception:
+                    status = None
             results.append({"target": target, "status": status})
         return results
+
+    def get_daemon_status(self, target: DaemonTarget) -> Optional[dict]:
+        """Get one daemon's status for page-level capability checks."""
+        if target.status in _NON_RUNNING_TARGET_STATES:
+            return None
+        try:
+            return self._client.get_status(target)
+        except Exception:
+            return None
 
     def get_daemon_config(self, target: DaemonTarget) -> Optional[dict]:
         try:

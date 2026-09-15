@@ -17,7 +17,7 @@ class TestTargetLabel:
             "container_engine": "podman",
             "container_name": "sandbox-1",
         }
-        assert _target_label(t) == "my-project (podman: sandbox-1)"
+        assert _target_label(t) == "my-project (container: sandbox-1)"
 
     def test_container_with_same_name(self):
         t = {
@@ -26,7 +26,7 @@ class TestTargetLabel:
             "container_engine": "docker",
             "container_name": "sandbox-1",
         }
-        assert _target_label(t) == "sandbox-1 (docker)"
+        assert _target_label(t) == "sandbox-1 (container)"
 
     def test_container_without_container_name(self):
         t = {
@@ -35,7 +35,7 @@ class TestTargetLabel:
             "container_engine": "podman",
             "container_name": None,
         }
-        assert _target_label(t) == "my-daemon (podman)"
+        assert _target_label(t) == "my-daemon (container)"
 
     def test_container_without_engine(self):
         t = {
@@ -45,6 +45,15 @@ class TestTargetLabel:
             "container_name": "c1",
         }
         assert _target_label(t) == "d (container: c1)"
+
+    def test_openshell_backing_container_uses_logical_runtime(self):
+        t = {
+            "name": "ag-test",
+            "runtime": "container",
+            "runtime_type": "openshell",
+            "container_name": "openshell-default--ag-test-id",
+        }
+        assert _target_label(t) == "ag-test (openshell)"
 
     def test_local_target(self):
         t = {"name": "my-mac", "runtime": "local"}

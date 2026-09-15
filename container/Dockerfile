@@ -31,9 +31,12 @@
 #   CONTAINER_ENGINE=docker ./container/run.sh # use docker instead
 #
 # Local wheel:
-#   python -m build --wheel && cp dist/ai_guardian-*.whl container/vendor/
-#   WHEEL="$(basename dist/ai_guardian-*.whl)"
-#   podman build --build-arg AI_GUARDIAN_VERSION="${WHEEL}" -t ai-guardian container/
+#   WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-wheel.XXXXXX")"
+#   uv build --wheel --out-dir "$WHEEL_DIR"
+#   WHEEL_PATH="$(printf '%s\n' "$WHEEL_DIR"/ai_guardian-*.whl | head -n 1)"
+#   WHEEL_NAME="$(basename "$WHEEL_PATH")"
+#   cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
+#   podman build --build-arg AI_GUARDIAN_VERSION="$WHEEL_NAME" -t ai-guardian container/
 
 # ============================================================
 # Stage 1: builder — install everything, discard build tools

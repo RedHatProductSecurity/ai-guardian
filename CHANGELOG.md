@@ -7,6 +7,115 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Sandbox lifecycle CLI (#2302)**: Add `ai-guardian sandbox` commands for
+  creating, listing, inspecting, starting, stopping, restarting, connecting to,
+  executing commands in, viewing logs from, and deleting named Docker/Podman or
+  OpenShell sandboxes. Add daemon-backed timestamped configuration snapshots
+  with `sandbox config save/list/restore` and `create --restore-config latest`.
+  OpenShell setup, policy composition, provider preparation, and gateway service
+  exposure now
+  live in the subcommand, so the legacy `container/openshell.sh` wrapper is no
+  longer needed.
+
+- **Tray sandbox management**: Add sandbox creation to the main tray menu and
+  safe lifecycle, exec, logs, configuration snapshot, and confirmed deletion
+  actions to each discovered container/OpenShell target.
+  The create form provides a dropdown for the supported CLI selection,
+  disables runtime-specific fields, starts stopped container and OpenShell
+  sandboxes from a main-menu submenu, and runs non-interactive actions
+  in-process with captured output and failure logs. Its Image / base field can
+  browse labeled local AI Guardian images while retaining editable custom
+  references.
+
+- **Sandbox configuration notices**: Show whether the web console is using a
+  writable host configuration snapshot or a directly mounted read-only host
+  configuration, with clear editing guidance.
+
+- **OpenShell tray connection**: Route the top-level OpenShell connection
+  action through the same sandbox connect implementation used by sandbox
+  management instead of opening a generic container shell.
+
+- **Tray sandbox repository default**: Start the sandbox creation form at the
+  active daemon's Working Dir value, falling back to the user's home directory
+  when no working directory is configured.
+- **Tray sandbox profiles**: Offer built-in security profiles in an editable
+  dropdown while retaining support for custom profile names and paths.
+- **Sandbox CLI selection**: Use `--cli` for the executable and require the
+  `--agent` flag when selecting the OpenCode CLI for its agent profile.
+- **CLI/runtime integration checklist**: Add a dedicated onboarding and
+  validation checklist for normal containers and OpenShell, covering image
+  distribution, providers, policies, authentication, lifecycle behavior, and
+  runtime evidence separately from host IDE integrations.
+
+### Fixed
+
+- **Tray daemon visibility**: Expose every discovered daemon instead of
+  limiting the multi-daemon menu to eight fixed slots.
+
+- OpenShell upload-based sandbox creation now bootstraps the entrypoint
+  non-interactively, exposes its gateway-managed service, and then opens an
+  independent
+  interactive shell so exiting does not terminate the sandbox.
+
+- OpenShell `sandbox connect` now uses an independent interactive exec session
+  for the same safe exit behavior.
+
+- Tray container discovery now retains last-known targets during temporary
+  Podman socket interruptions and retries automatically; the redundant per-target
+  `List sandboxes` action was removed because discovery already exposes all
+  managed instances.
+
+- OpenShell discovery now treats control-plane errors as authoritative and
+  validates Ready/running phases through the AI Guardian REST endpoint, so a
+  dead daemon or REST forward is not shown as active in the tray or NiceGUI.
+
+- Sandbox lifecycle commands now auto-detect Docker/Podman versus OpenShell by
+  the AI Guardian runtime labels and OpenShell metadata when `--runtime` is
+  omitted; an unqualified `list` covers both runtimes.
+- OpenShell sandboxes now use durable gateway-managed `service expose`
+  endpoints for tray/NiceGUI connectivity, with per-sandbox service discovery
+  and lifecycle reconciliation instead of host-side forward processes.
+- OpenShell `sandbox start` and `restart` now explicitly start the AI Guardian
+  daemon when the sandbox's persistent shell is relaunched.
+- OpenShell gateway services now accept the dedicated tray token header used
+  when the gateway strips the standard HTTP Authorization header, restoring
+  tray and NiceGUI communication with authenticated daemons.
+- Sandbox creation now rejects malformed explicit image references instead of
+  allowing an invalid value to be mistaken for a runtime default.
+- OpenShell Codex provider creation now bridges API-key authentication cached
+  in `auth.json` through OpenShell's environment-key credential form without
+  exposing the key in sandbox runtime arguments.
+- OpenShell Claude/Vertex startup now restores the `inference.local` endpoint
+  and non-secret client placeholder in the sandbox shell when an older
+  sandbox omitted those environment values.
+- OpenShell OpenCode sandboxes now route an omitted model through the default
+  Claude/Vertex inference path instead of trying to create an `opencode`
+  provider profile; explicit non-Claude models retain generic provider handling.
+- Tray one-shot sandbox logs now open the captured output in the log window
+  instead of appearing to do nothing after a successful command.
+- Tray sandbox creation forms now respond to mouse-wheel scrolling on the
+  scrollable field list.
+- Tray sandbox path browsers now open at the current field value, including the
+  active daemon's Working Dir repository default.
+- Tray directory browsing now replaces the current repository/config directory
+  instead of combining both paths into an invalid value.
+- OpenShell Codex API-key credentials now bootstrap Codex's native
+  `auth.json`, so API-key-authenticated sessions do not open the sign-in flow.
+- OpenShell Claude/Vertex sandboxes now explicitly suppress the credential
+  warning for Claude's non-secret `unused` client placeholder; model
+  authentication remains attached to the gateway Vertex provider.
+
+- Preserve named container and OpenShell sandboxes in tray and NiceGUI labels
+  instead of replacing their names with runtime-generated container IDs.
+- Make container and OpenShell configuration precedence consistent: explicit
+  profiles win, existing sandbox-local config is preserved, host config seeds a
+  writable sandbox snapshot, and only then is a default generated. Host files
+  are never written back. OpenShell lifecycle creation now invokes the
+  support-image entrypoint after native uploads and exposes the persistent
+  gateway service used by tray and NiceGUI discovery.
+
 ### Changed
 
 - **Codex integration display name**: Rename setup, tray, doctor, and support
@@ -31,10 +140,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenShell Vertex routing**: Configure existing and newly created Vertex
   providers with their project and region, route Claude Code through the
   gateway-managed `inference.local` endpoint, keep direct GCP credential
-  discovery out of the sandbox, and transparently use Claude's non-OAuth
-  `--bare` mode for ordinary model commands. The launcher also disables
-  Claude's background self-updater inside the immutable image; image rebuilds
-  are the update path.
+  discovery out of the sandbox. Claude now follows OpenShell's explicit
+  `claude --bare` invocation without a persistent wrapper; automated
+  `claude --print` commands still receive `--bare`. OpenCode now separates
+  the selected CLI from its optional agent profile; only an explicit
+  Claude-compatible OpenCode selection uses the documented
+  `https://inference.local/v1` base URL. Generic OpenCode providers remain
+  unchanged. The launcher also disables Claude's background self-updater
+  inside the immutable image; image rebuilds are the update path.
 
 - **Linux tray UI fallbacks (#2269)**: Prefer the detected native desktop
   dialog provider, keep Tkinter in-process on Linux, and fall through to

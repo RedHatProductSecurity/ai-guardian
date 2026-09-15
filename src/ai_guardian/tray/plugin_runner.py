@@ -310,6 +310,7 @@ class TrayPluginMenuBuilder:
             {
                 "name": t.name,
                 "runtime": t.runtime,
+                "runtime_type": getattr(t, "runtime_type", None),
                 "container_name": getattr(t, "container_name", None),
                 "container_engine": t.container_engine,
                 "container_id": t.container_id,

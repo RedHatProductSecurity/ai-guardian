@@ -1,6 +1,7 @@
 """Tests for the Scan Configure web page."""
 
 import json
+import os
 from unittest import mock
 from pathlib import Path
 
@@ -115,6 +116,15 @@ class TestRunScan:
 
 class TestApplyConfig:
     """Test the config application function."""
+
+    def test_apply_config_rejects_host_managed_config(self, tmp_path):
+        from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+        from ai_guardian.web.pages.scan_configure import _apply_config
+
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"}):
+            with pytest.raises(RuntimeError) as exc_info:
+                _apply_config(str(tmp_path), {"changed": True}, {})
+        assert str(exc_info.value) == CONFIG_READ_ONLY_MESSAGE
 
     def test_apply_config_project_scope(self, tmp_path):
         from ai_guardian.web.pages.scan_configure import _apply_config

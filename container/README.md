@@ -11,11 +11,26 @@ tools, and agent runtime. The dedicated OpenShell image is published in its
 own primary Quay repository as
 `quay.io/redhatproductsecurity/ai-guardian-openshell:latest` on successful
 merges and as `:<version>` for releases. Build it locally only when testing a
-change to the image; `openshell.sh` uses the published OpenShell image by
-default. The OpenShell image is not published in the normal image repository.
+change to the image; `ai-guardian sandbox create --runtime openshell` uses the
+published OpenShell image by default. The OpenShell image is not published in
+the normal image repository.
 The normal UBI image remains published to
 [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian)
 on every merge and release.
+
+## Recommended runtime
+
+Use OpenShell when it is available, especially for provider-backed Claude or
+Codex sessions. OpenShell keeps provider credentials in the gateway rather
+than mounting them into the agent sandbox, and adds deny-by-default network
+and filesystem policy, provider-backed inference, repository isolation, and
+per-sandbox gateway services. OpenShell support is experimental, but it is the
+preferred security boundary for the tested provider workflows.
+
+The plain Docker/Podman container is a simpler fallback and is useful for
+local development or environments without an OpenShell gateway. Its Vertex
+ADC file or direct API-key environment is available inside the container, so
+the selected agent may be able to read that credential material.
 
 ## What's Included
 
@@ -60,15 +75,17 @@ podman build -t ai-guardian container/
 # Specific version
 podman build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
 
-# Local wheel (copy wheel into container/ first)
-cp dist/ai_guardian-1.17.1-py3-none-any.whl container/vendor/
-podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.17.1-py3-none-any.whl \
+# Local wheel (copy the wheel into container/vendor/ first)
+WHEEL_PATH=dist/ai_guardian-1.17.1-py3-none-any.whl
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
+podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
     -t ai-guardian container/
 
 # Multi-arch
 podman build --platform linux/amd64,linux/arm64 -t ai-guardian container/
 
-# Dedicated OpenShell BYOC image (the launcher uses the published image by default)
+# Dedicated OpenShell BYOC image (the sandbox command uses the published image by default)
 podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ```
@@ -90,23 +107,136 @@ Using `run.sh` (recommended):
 
 Vertex AI auth is auto-detected from environment variables (see [Authentication](#authentication)).
 
-At startup the launcher configures only the selected `--agent`; configuring
-other integrations is unnecessary when the sandbox runs one CLI. `--ide`
-remains an alias for `--agent`. To opt into broader setup, set
+At startup the sandbox command configures only the selected `--cli`; configuring
+other integrations is unnecessary when the sandbox runs one CLI. To opt into
+broader setup, set
 `AI_GUARDIAN_SETUP_SCOPE=cli` for all supported CLI agents or
 `AI_GUARDIAN_SETUP_SCOPE=all` for every supported integration.
 
+### CLI lifecycle management
+
+The `ai-guardian sandbox` subcommand provides named lifecycle operations for
+both supported runtimes. Container creation is detached; OpenShell creation
+connects to the sandbox shell after setup, like native OpenShell:
+
+```bash
+# Docker/Podman (defaults to podman; set CONTAINER_ENGINE=docker if needed)
+ai-guardian sandbox create --runtime container --name guardian-codex --repo .
+ai-guardian sandbox list
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian doctor
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox delete guardian-codex
+
+# OpenShell (uses OPENSHELL_CLI or the openshell executable on PATH)
+# Create; policy files are repeatable.
+ai-guardian sandbox create \
+    --runtime openshell \
+    --name guardian-claude \
+    --cli claude \
+    --repo . \
+    --policy ./container/openshell-github-readonly-policy.yaml
+
+# List managed OpenShell sandboxes.
+ai-guardian sandbox list --runtime openshell
+
+# Inspect status; runtime is auto-detected by name.
+ai-guardian sandbox status guardian-claude
+
+# Open an independent interactive shell.
+ai-guardian sandbox connect guardian-claude
+
+# Execute a command without replacing the sandbox process.
+ai-guardian sandbox exec guardian-claude -- ai-guardian doctor
+
+# Stream logs.
+ai-guardian sandbox logs guardian-claude --follow
+
+# Save and inspect configuration snapshots.
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox config list guardian-claude
+
+# Stop, start, or restart.
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox restart guardian-claude
+
+# Permanently delete.
+ai-guardian sandbox delete guardian-claude
+```
+
+For multiple policy overlays, repeat the option in the same create command:
+
+```bash
+ai-guardian sandbox create --runtime openshell --name guardian-claude \
+    --cli claude --repo . \
+    --policy ./policy-one.yaml \
+    --policy ./policy-two.yaml
+```
+
+Runtime selection can also appear before the lifecycle verb, as in
+`ai-guardian sandbox --runtime openshell list`. New sandbox creation defaults to
+OpenShell, including the tray create form; pass `--runtime container` explicitly
+to use Docker/Podman. For named lifecycle commands, omit the runtime and the
+CLI probes AI Guardian labels/metadata to choose Docker/Podman or OpenShell. An
+unqualified `list` combines managed resources from both runtimes. `list` is
+limited to resources created through this command's `ai-guardian.managed=true`
+label. The sandbox command also owns provider setup, policy composition,
+host-config snapshots, and OpenShell upload bootstrapping; no separate
+OpenShell script is required.
+
+For OpenShell, the following lifecycle commands map directly to the native CLI
+and preserve its exit status and terminal behavior, except for `connect`, which
+uses an independent exec session so leaving the shell does not terminate the
+sandbox:
+
+| AI Guardian command | Native OpenShell command |
+| --- | --- |
+| `ai-guardian sandbox status NAME` | `openshell sandbox get NAME` |
+| `ai-guardian sandbox start NAME` | `openshell sandbox start NAME` |
+| `ai-guardian sandbox stop NAME` | `openshell sandbox stop NAME` |
+| `ai-guardian sandbox connect NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
+| `ai-guardian sandbox delete NAME` | `openshell sandbox delete NAME` |
+| `ai-guardian sandbox exec NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
+| `ai-guardian sandbox logs NAME` | `openshell logs NAME` |
+
+`sandbox restart` implements the convenient stop-then-start sequence because
+OpenShell has no separate restart command. `sandbox create` adds AI Guardian
+image, environment, and labeling defaults; `sandbox list` adds the managed
+label selector, so those two commands are not plain aliases. See the full
+[Sandbox CLI guide](../docs/Sandbox.md) for create options and lifecycle
+details. Upload-based OpenShell creation bootstraps the entrypoint
+non-interactively, exposes the gateway-managed `ai-guardian` service, and then
+connects to the sandbox shell. Exiting that shell returns to the host while
+`sandbox connect` remains
+available for later sessions. A container created without an explicit command
+keeps a login shell with an allocated TTY as its main process, so it remains
+available for
+`connect` and `exec`; start the selected agent from that shell or with
+`sandbox exec`. A supplied `--name` is also recorded for tray and NiceGUI
+display, preventing a runtime-generated container ID from being shown.
+
+Use `ai-guardian sandbox config save NAME` to preserve changes made inside a
+running sandbox. The newest timestamped snapshot can be used when recreating
+the sandbox with `sandbox create --name NAME --restore-config latest`; snapshots
+are stored in the host XDG state directory and never overwrite the host config.
+
 ### OpenShell
 
-The OpenShell launcher uses the dedicated `Dockerfile.openshell` image rather
-than the normal UBI image. Build it once from the repository root:
+The OpenShell sandbox command uses the dedicated `Dockerfile.openshell` image
+rather than the normal UBI image. Build it once from the repository root:
 
-The normal `run.sh` container still defaults to Codex. The OpenShell launcher
-defaults to Claude, matching OpenShell's first-class default-policy coverage;
-select another agent explicitly with `--agent`.
+The normal `run.sh` container still defaults to Codex. The OpenShell sandbox
+command defaults to Claude, matching OpenShell's first-class default-policy
+coverage; select another CLI explicitly with `--cli`.
 
-The OpenShell workflows documented here have been tested with Claude Code
-through Google Vertex AI and with Codex through its OpenShell provider. Claude
+OpenShell integration is experimental. The documented workflows have been
+tested with Claude Code through Google Vertex AI, Codex through its OpenShell
+provider, and OpenCode using Claude through Vertex AI. Claude
 marketplace/plugin installation has also been tested with the read-only GitHub
 overlay described below.
 
@@ -118,7 +248,7 @@ podman build -f container/Dockerfile.openshell \
 To use that local build for one run, pass it explicitly:
 
 ```bash
-./container/openshell.sh --base localhost/ai-guardian-openshell:latest
+ai-guardian sandbox create --runtime openshell --base localhost/ai-guardian-openshell:latest
 ```
 
 The published image can be pulled explicitly as well:
@@ -130,9 +260,10 @@ podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 Set `AI_GUARDIAN_OPEN_SHELL_IMAGE` to use another OpenShell-compatible image,
 or pass `--base IMAGE`/`--image IMAGE` on one invocation. The explicit
 `AI_GUARDIAN_IMAGE` variable remains the highest-priority image override. The
-launcher uses the OpenShell-supported `--from`, `--env`, and `--upload` options,
-then uses `openshell forward service` to map the host port to the daemon's
-sandbox-local REST port.
+subcommand uses the OpenShell-supported `--from`, `--env`, and `--upload`
+options, then exposes the daemon's sandbox-local REST port through the
+gateway-managed `ai-guardian` service. The gateway gives each sandbox its own
+service URL, so multiple sandboxes can use internal port `63152` concurrently.
 
 `Dockerfile.openshell` pins the tested Community base by digest rather than
 using the mutable `:latest` tag. To refresh it deliberately, pull the desired
@@ -182,9 +313,9 @@ podman build -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:dev \
     container/
 
-./container/openshell.sh \
+ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:dev \
-    --agent codex \
+    --cli codex \
     --policy ./container/openshell-github-readwrite-policy.yaml \
     --provider ai-guardian-codex \
     --repo .
@@ -241,7 +372,7 @@ OpenShell prerequisites are:
 - A gateway compute driver configured for Docker, Podman, MicroVM, or
   Kubernetes.
 
-The launcher requires an OpenShell CLI and gateway new enough to support
+The sandbox command requires an OpenShell CLI and gateway new enough to support
 `sandbox create --env` and the upload-based staging workflow. Install or
 update OpenShell on the host, then refresh the shell command and verify both
 the client and gateway:
@@ -294,7 +425,7 @@ or set it to the active `${XDG_RUNTIME_DIR}/podman/podman.sock` path in
 `sudo` with the rootless `systemctl --user` command.
 
 If `openshell status` reports `Connection refused`, inspect the gateway before
-retrying the launcher:
+retrying the sandbox command:
 
 ```bash
 systemctl --user is-active openshell-gateway
@@ -319,8 +450,8 @@ openshell status
 For a containerized gateway, see OpenShell's [container gateway
 guide](https://docs.nvidia.com/openshell/about/container-gateway).
 
-Before the first launcher call, enable OpenShell Providers v2 on the active
-gateway. This is required for the launcher’s provider-backed Claude, Codex,
+Before the first sandbox command call, enable OpenShell Providers v2 on the active
+gateway. This is required for the sandbox command’s provider-backed Claude, Codex,
 and Vertex AI flows:
 
 ```bash
@@ -328,78 +459,80 @@ openshell settings set --global --key providers_v2_enabled --value true
 ```
 
 ```bash
-./container/openshell.sh                             # opens a shell; Claude is selected
-./container/openshell.sh --agent opencode --repo .
-./container/openshell.sh --profile @strict --policy ./container/openshell-github-readwrite-policy.yaml
-./container/openshell.sh --config-dir "$HOME/.config/ai-guardian"
+ai-guardian sandbox create --runtime openshell        # opens a shell; Claude is selected
+ai-guardian sandbox create --runtime openshell --cli opencode --agent claude --repo .
+ai-guardian sandbox create --runtime openshell --profile @strict --policy ./container/openshell-github-readwrite-policy.yaml
+ai-guardian sandbox create --runtime openshell --config-dir "$HOME/.config/ai-guardian"
 ```
 
-The OpenShell launcher opens `/bin/bash` by default. When `--repo` is supplied,
+The OpenShell sandbox command opens `/bin/bash` by default. When `--repo` is supplied,
 the shell starts in the uploaded repository at `/sandbox/repo`; otherwise it
-starts in `/sandbox`. The selected `--agent` controls ai-guardian setup and
-automatic provider selection. When a `--policy` overlay is supplied, it also
-selects the matching agent policy fragment. Without an overlay, the launcher
-still applies the shared base policy and the selected agent policy, but no
-GitHub policy is added. The launcher does not start the CLI automatically.
+starts in `/sandbox`. The selected `--cli` controls the AI Guardian setup,
+policy fragment, and automatic provider selection. With `--cli opencode`,
+`--agent` is required and selects the OpenCode agent profile. When a `--policy`
+overlay is supplied, it also selects the matching CLI policy fragment. Without
+an overlay, the sandbox command still applies the shared base policy and the
+selected CLI policy, but no GitHub policy is added. The sandbox command does
+not start the CLI automatically.
 
 Provider profiles belong to the active OpenShell gateway; they are not stored
 in the repository, image, or Git branch. When `--provider` is omitted, the
-launcher asks that gateway for a provider profile matching the selected agent
-and may create or reuse the corresponding `ai-guardian-<agent>` provider from
+sandbox command asks that gateway for a provider profile matching the selected CLI
+and may create or reuse the corresponding `ai-guardian-<cli>` provider from
 local credentials. If the gateway does not advertise a Codex profile, a
-launch with the default `--agent codex` fails with an error such as “the active
+launch selecting `--cli codex` fails with an error such as “the active
 OpenShell gateway has no provider profile for codex.” Configure a Codex
 provider on that gateway first, or pass an already configured provider
 explicitly:
 
 ```bash
-./container/openshell.sh \
+ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent codex \
+    --cli codex \
     --provider ai-guardian-codex \
     --repo .
 ```
 
 Use `openshell provider get ai-guardian-codex` to verify that the named
 provider exists on the currently active gateway. Provider setup must be
-repeated for each gateway or laptop; `git pull` only updates the launcher and
+repeated for each gateway or laptop; `git pull` only updates the sandbox command and
 policy files.
 
 The `--provider` option attaches an existing provider instance and does not
-create one. In Claude Vertex mode, the launcher also refreshes that provider's
+create one. In Claude Vertex mode, the sandbox command also refreshes that provider's
 project/region configuration and uses it for the workspace inference route.
-To let the launcher create
+To let the sandbox command create
 `ai-guardian-codex` from local Codex credentials, omit `--provider` and ensure
 the active gateway lists the `codex` profile:
 
 ```bash
 openshell provider list-profiles
-./container/openshell.sh \
+ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent codex \
+    --cli codex \
     --repo .
 ```
 
 Provider creation requires a matching gateway profile and credentials
-available to the launcher. If `codex` is absent from `list-profiles`, update or
+available to the sandbox command. If `codex` is absent from `list-profiles`, update or
 reconfigure the active OpenShell gateway before retrying.
 
 ```bash
-./container/openshell.sh \
-    --agent codex \
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
     --policy ./container/openshell-github-readwrite-policy.yaml \
     --provider ai-guardian-codex \
     --provider ai-guardian-github \
     --repo .
 ```
 
-The launcher runs setup before opening the shell. You can launch the selected
-agent from that shell; when the agent exits, you return to the shell and can
+The sandbox command runs setup before opening the shell. You can launch the selected
+CLI from that shell; when the CLI exits, you return to the shell and can
 inspect, commit, and push changes. The repository is still an OpenShell
 snapshot, so commits and other file changes are made in the sandbox copy. With
 the read/write GitHub policy and an attached GitHub provider, `git push` goes
 to GitHub through the gateway; it does not modify the host checkout. To launch
-the selected agent immediately instead, pass it after `--`, for example
+the selected CLI immediately instead, pass it after `--`, for example
 `-- codex`.
 
 From the shell, launch and exit the selected CLI as often as needed:
@@ -412,28 +545,24 @@ git commit -m "Your change"
 git push
 ```
 
-The OpenShell launcher defaults to `--port 0`. OpenShell selects one free host
-port through `openshell forward service --local 127.0.0.1:0` and forwards it to
-the daemon's sandbox-local port `63152`; the assigned host port is printed in
-the startup output. Pass `--port N` to force a specific host port.
-Forwarding is enabled by default because it is the channel used by the host
-tray and NiceGUI to manage the sandbox daemon.
-
-When the host UI is not needed, disable that host-local REST listener:
+The OpenShell sandbox command exposes the daemon's sandbox-local port `63152`
+through the gateway-managed `ai-guardian` service:
 
 ```bash
-./container/openshell.sh --no-forward
-AI_GUARDIAN_OPEN_SHELL_FORWARD=false ./container/openshell.sh
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
 ```
 
-The sandbox daemon still runs, but its REST API is not forwarded to the host
-and the tray/NiceGUI cannot discover or manage that sandbox. With forwarding
-disabled and no explicit `--port`, the daemon uses sandbox-local port `63152`.
+The gateway assigns a unique URL such as
+`http://NAME--ai-guardian.openshell.localhost:PORT/`. The same internal port
+can be exposed by multiple sandboxes, and tray/NiceGUI discovery queries each
+sandbox's URL. `--port` is only supported for container sandboxes; OpenShell
+does not use a host-side forward process.
 
 #### Claude Code with Google Vertex AI
 
 To run Claude Code through Google Vertex AI, select Claude and provide a GCP
-project. The launcher automatically creates or updates the gateway-local
+project. The sandbox command automatically creates or updates the gateway-local
 `ai-guardian-google-vertex-ai` provider, including its required project and
 region configuration. No GitHub policy is needed for model inference:
 
@@ -441,52 +570,94 @@ region configuration. No GitHub policy is needed for model inference:
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
 export CLOUD_ML_REGION=global
 
-./container/openshell.sh \
+ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent claude \
+    --cli claude \
     --model claude-sonnet-4-6 \
     --repo .
 ```
 
 When using a locally built image, rebuild it after pulling this change because
-the transparent `claude` wrapper is installed by the image entrypoint.
+the provider-backed inference environment fallback is installed by the image
+entrypoint.
 
-Providers v2 must be enabled on the active gateway before the first launcher
+Providers v2 must be enabled on the active gateway before the first sandbox command
 call so the provider-owned Vertex network policy is included:
 
 ```bash
 openshell settings set --global --key providers_v2_enabled --value true
 ```
 
-The launcher configures the workspace's OpenShell `inference.local` route and
-passes these sandbox-local variables:
+The sandbox command attaches the gateway Vertex provider, configures the
+workspace's OpenShell `inference.local` route, and passes Claude only the
+non-secret client settings it requires:
 
 ```text
 ANTHROPIC_BASE_URL=https://inference.local
 ANTHROPIC_API_KEY=unused
 ```
 
-The key is only a placeholder; OpenShell strips it and uses the gateway's
-refreshed Vertex credential. From the resulting shell, start Claude normally:
+The key is only a protocol placeholder; `--bare` skips Claude's OAuth login
+flow and uses `ANTHROPIC_API_KEY` directly. The placeholder does not reach
+Vertex AI: `inference.local` strips it and injects the attached provider's
+refreshed GCP access token before forwarding the request. The create command
+suppresses OpenShell's plain-environment credential warning for this known
+placeholder. From the resulting shell, start Claude explicitly with the
+OpenShell-documented `--bare` flag:
 
 ```bash
-claude
+claude --bare
 ```
 
-The OpenShell image automatically adds `--bare` to Claude model commands so
-Claude does not enter the Claude.ai OAuth flow; `claude --bare` remains
-equivalent. Administrative commands such as `claude plugin` and `claude
-doctor` are passed through unchanged. Do not set `CLAUDE_CODE_USE_VERTEX=1`
-inside an OpenShell sandbox. That mode makes Claude try to discover GCP
-credentials directly inside the sandbox, where the host ADC file is
-intentionally not mounted. The OpenShell launcher uses gateway-managed
-inference instead. Use `--model MODEL` to select the gateway model; the
-default is `claude-sonnet-4-6`.
+AI Guardian does not install a persistent shell wrapper. For an explicit
+automated `claude --print ...` command passed during creation, the entrypoint
+adds `--bare` when it is missing. Administrative commands such as `claude
+plugin` and `claude doctor` are passed through unchanged. Do not set
+`CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox. That mode makes Claude
+try to discover GCP credentials directly inside the sandbox, where the host
+ADC file is intentionally not mounted. The OpenShell sandbox command uses
+gateway-managed inference instead. Use `--model MODEL` to select the gateway
+model; the default is `claude-sonnet-4-6`.
 
 Claude's background self-updater is disabled in OpenShell because the image
 installation is read-only. To update Claude Code, rebuild the OpenShell image
-and create a new sandbox; the launcher sets `DISABLE_AUTOUPDATER=1`
+and create a new sandbox; the sandbox command sets `DISABLE_AUTOUPDATER=1`
 automatically.
+
+#### OpenCode through OpenShell inference
+
+OpenCode is a CLI with its own agent profiles and model/provider selection.
+The `--agent` profile is required when `--cli opencode` is selected. Use the
+explicit two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+This `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects OpenCode, `--agent claude` selects the tested profile,
+and `--model` plus `--provider` select the inference backend.
+
+Here `--agent claude` is an OpenCode agent profile and `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables:
+
+```text
+ANTHROPIC_BASE_URL=https://inference.local/v1
+ANTHROPIC_API_KEY=unused
+```
+
+Generic OpenCode providers are left unchanged. OpenCode has no Claude-style
+`--bare` flag; run `opencode --agent NAME` normally. Configure the gateway
+route first with `openshell inference set` and the provider/model you want to
+use.
 
 The Claude/Vertex policy does not grant GitHub access by default. The command
 above is sufficient for Claude requests, Vertex inference, and an ordinary
@@ -502,12 +673,12 @@ and [inference routing](https://docs.nvidia.com/openshell/sandboxes/inference-ro
 features. The effective sandbox policy should show a provider-derived
 `_provider_ai_guardian_google_vertex_ai` entry for the Google Vertex hosts.
 
-Keep `--agent claude` when using Vertex AI. `claude` selects the Claude Code
-CLI; Vertex is the provider backend, not a separate agent, so
-`--agent claude-vertex` is not a valid selector. The expected provider name is
+Keep `--cli claude` when using Vertex AI. `claude` selects the Claude Code
+CLI; Vertex is the provider backend, not a separate CLI, so
+`--cli claude-vertex` is not a valid selector. The expected provider name is
 `ai-guardian-google-vertex-ai`.
 
-The launcher uses Google Application Default Credentials (ADC) while creating
+The sandbox command uses Google Application Default Credentials (ADC) while creating
 or refreshing the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a
 service-account JSON file when it is not at the standard gcloud ADC location,
 or authenticate with gcloud first. The credential file is consumed by the
@@ -518,16 +689,16 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
 export CLOUD_ML_REGION=global
 
-./container/openshell.sh --agent claude --repo .
+ai-guardian sandbox create --runtime openshell --cli claude --repo .
 ```
 
 The active gateway must expose the `google-vertex-ai` provider profile. If the
-launcher reports that the profile is missing, update or reconfigure the
+sandbox command reports that the profile is missing, update or reconfigure the
 active OpenShell gateway. For direct Anthropic access instead, use
 `ANTHROPIC_API_KEY` and omit the Vertex project variables.
 
-If a provider created by an older launcher shows no config keys, rerunning the
-launcher updates it with `VERTEX_AI_PROJECT_ID` and `VERTEX_AI_REGION`. The
+If a provider created by an older sandbox command shows no config keys, rerunning the
+sandbox command updates it with `VERTEX_AI_PROJECT_ID` and `VERTEX_AI_REGION`. The
 equivalent manual repair is:
 
 ```bash
@@ -543,9 +714,9 @@ GitHub overlay. A read/write GitHub policy or GitHub credential provider is
 not required for the public catalog:
 
 ```bash
-./container/openshell.sh \
+ai-guardian sandbox create --runtime openshell \
     --base localhost/ai-guardian-openshell:latest \
-    --agent claude \
+    --cli claude \
     --policy ./container/openshell-github-readonly-policy.yaml \
     --repo .
 ```
@@ -557,16 +728,19 @@ running through Vertex AI. The relevant test is whether Claude can complete a
 model request through the configured Vertex project.
 
 OpenShell discovers common agent credentials through its provider mechanism.
-An existing host `ai-guardian.json` is uploaded as a sandbox-local snapshot
-when no profile is selected; the host file is never written. A selected
-profile always takes precedence and prevents that full-config upload. Unlike
-the Docker/Podman launcher, OpenShell's `--upload` is a snapshot rather than a
-live read-only bind mount.
+When no profile is selected, an existing host `ai-guardian.json` is uploaded
+as the initial configuration snapshot. The sandbox-local config still takes
+precedence when it already exists, and the host file is never written. A
+selected profile always takes precedence and prevents that full-config upload.
+OpenShell's `--upload` gives the sandbox a writable copy, matching the
+Docker/Podman sandbox command, which stages the host file with a read-only bind mount
+before copying it into the writable active config path.
 
 Agent credential directories are deliberately not mounted or uploaded. For
-Codex, the launcher reads `$CODEX_HOME/auth.json` (falling back to
+Codex, the sandbox command reads `$CODEX_HOME/auth.json` (falling back to
 `$HOME/.codex/auth.json`) only while creating the OpenShell provider, and
-passes the OAuth fields to the provider command without printing them. The
+passes the OAuth fields or API key to the provider command without printing
+them. The
 provider then supplies sandbox-scoped credential placeholders. At sandbox
 startup, the entrypoint writes those placeholders into the selected
 `$CODEX_HOME/auth.json` in Codex's native ChatGPT format; it never writes the
@@ -580,24 +754,31 @@ required. Enable the gateway feature once with:
 openshell settings set --global --key providers_v2_enabled --value true
 ```
 
+For API-key authentication, the entrypoint instead runs `codex login
+--with-api-key` with the provider-injected `OPENAI_API_KEY` placeholder, so
+Codex writes its native API-key `auth.json` without putting the real key in the
+sandbox filesystem. This is required even though the provider already exposes
+the placeholder as an environment variable.
+
 If Codex still shows the sign-in menu, the provider-backed auth bootstrap was
-not available to that process. Start a fresh sandbox with this launcher rather
+not available to that process. Start a fresh sandbox with this command rather
 than launching `codex` from an unrelated shell, and verify that
-`openshell provider get ai-guardian-codex` reports the four Codex OAuth
-credential keys. Do not copy the host `auth.json` into the sandbox.
+`openshell provider get ai-guardian-codex` reports either the four Codex OAuth
+credential keys or `OPENAI_API_KEY`, as appropriate. Do not copy the host
+`auth.json` into an OpenShell sandbox; use its provider mechanism instead.
 
 When Providers v2 is unset or disabled, OpenShell 0.0.116 falls back to legacy
-`codex` discovery, which only recognizes `OPENAI_API_KEY`; the launcher reports
+`codex` discovery, which only recognizes `OPENAI_API_KEY`; the sandbox command reports
 this prerequisite instead of asking for an API key that is not needed by a
 Codex OAuth login. If the profile is unavailable, use an explicit compatible
 provider with `--provider NAME`.
 
 Codex also needs a writable local state database before it can display its
-prompt. The launcher sets `CODEX_HOME=/sandbox/.codex` and initializes that
+prompt. The sandbox command sets `CODEX_HOME=/sandbox/.codex` and initializes that
 directory. The OpenShell policy gives `/sandbox` to the sandbox user, and
 keeping Codex state there also lets Codex create its helper binaries instead
 of rejecting them as temporary `/tmp` files. If you connect to the sandbox and
-run `codex` manually, run the launcher first so this environment and directory
+run `codex` manually, run the sandbox command first so this environment and directory
 are present.
 
 Codex is configured with `sandbox_mode = "danger-full-access"` inside the
@@ -615,13 +796,13 @@ allowed through the selected Codex policy.
 
 OpenShell 0.0.116 does not allow `--upload` and a trailing canonical command in
 the same `sandbox create` invocation. When a config, profile, repository, or
-credential snapshot is needed, this launcher creates a named detached staging
+credential snapshot is needed, this command creates a named detached staging
 sandbox, uploads the snapshot, and then explicitly invokes the image entrypoint
 with `openshell sandbox exec`. This is required because detached OpenShell
 creation starts its own shell instead of reliably running the image Docker
 entrypoint. For `claude`, `codex`, `copilot`,
 and `opencode` when the active gateway advertises a matching profile, the
-launcher creates or reuses an `ai-guardian-<agent>` provider from existing
+sandbox command creates or reuses an `ai-guardian-<agent>` provider from existing
 local credentials when `--provider` is not supplied. Pass `--provider NAME`
 for an agent or gateway that does not advertise an automatic provider profile.
 
@@ -639,14 +820,22 @@ legacy `codex.json` file in the working directory. `ai-guardian setup` installs
 the MCP entry by default in both cases.
 
 ```bash
-uv build --wheel
-WHEEL="$(basename dist/ai_guardian-*.whl)"
-cp "dist/${WHEEL}" container/vendor/
+WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-wheel.XXXXXX")"
+uv build --wheel --out-dir "$WHEEL_DIR"
+WHEEL_PATH="$(printf '%s\n' "$WHEEL_DIR"/ai_guardian-*.whl | head -n 1)"
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
 podman build \
-    --build-arg AI_GUARDIAN_VERSION="${WHEEL}" \
+    --build-arg "AI_GUARDIAN_VERSION=${WHEEL_NAME}" \
     -f container/Dockerfile.openshell \
     -t localhost/ai-guardian-openshell:latest container/
 ```
+
+`WHEEL_PATH` includes the temporary build directory, while `WHEEL_NAME` is only
+the filename. The `AI_GUARDIAN_VERSION` build argument must use `WHEEL_NAME`,
+since the Dockerfile looks for the wheel by filename under `container/vendor/`.
+Using a fresh output directory avoids accidentally selecting an older wheel
+left in `dist/`.
 
 #### OpenShell policy composition
 
@@ -660,23 +849,23 @@ in composable pieces:
   HTTPS `git clone`/`git fetch`/`git push`.
 - `policies/agents/<agent>.yaml`: the network capability for the selected CLI.
 
-When `--policy` is supplied, it may be repeated. The launcher always composes
+When `--policy` is supplied, it may be repeated. The sandbox command always composes
 one final policy in this order:
 
 ```text
 policies/base.yaml
   + every --policy overlay (left to right)
-  + policies/agents/<selected-agent>.yaml
+  + policies/agents/<selected-cli>.yaml
 ```
 
-Only the selected agent fragment is added; the other agent policies are not
+Only the selected CLI fragment is added; the other CLI policies are not
 enabled. YAML mappings are merged and lists are replaced by later overlays.
 The resulting temporary file is passed as the single OpenShell `--policy`
 argument and removed after OpenShell has consumed it. If no `--policy` overlay
 is given, the result contains only the shared base policy and the selected
-agent policy; it does not grant GitHub access.
+CLI policy; it does not grant GitHub access.
 
-The agent fragments are intentionally conservative. Kiro and OpenClaw have no
+The CLI fragments are intentionally conservative. Kiro and OpenClaw have no
 single default LLM endpoint, while OpenCode and Crush support additional
 providers beyond the examples in their fragments. Attach a compatible
 OpenShell provider or add a custom policy overlay for those providers.
@@ -692,8 +881,8 @@ unrelated providers when a narrower sandbox is intended.
 Use it when creating a sandbox:
 
 ```bash
-./container/openshell.sh \
-    --agent codex \
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
     --policy ./container/openshell-github-readonly-policy.yaml \
     --repo .
 ```
@@ -702,8 +891,8 @@ For a workflow that needs to create or update GitHub content, use the
 read/write policy explicitly:
 
 ```bash
-./container/openshell.sh \
-    --agent codex \
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
     --policy ./container/openshell-github-readwrite-policy.yaml \
     --provider ai-guardian-codex \
     --provider ai-guardian-github \
@@ -721,8 +910,8 @@ openshell provider create \
     --type github \
     --from-existing
 
-./container/openshell.sh \
-    --agent codex \
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
     --provider ai-guardian-codex \
     --provider ai-guardian-github \
     --policy ./container/openshell-github-readwrite-policy.yaml \
@@ -744,9 +933,9 @@ openshell policy set <sandbox-name> \
 rm -rf -- "${policy_tmp_dir}"
 ```
 
-When updating an existing sandbox, compose the selected-agent policy first;
+When updating an existing sandbox, compose the selected-CLI policy first;
 `openshell policy set` accepts one final YAML document and does not perform
-the launcher-side composition automatically. The official [policy
+the sandbox command-side composition automatically. The official [policy
 customization guide](https://docs.nvidia.com/openshell/sandboxes/policies)
 documents incremental updates and full policy replacement.
 
@@ -761,34 +950,19 @@ to tailor the allowed repositories and methods.
 
 #### Daemon REST port and tray
 
-The launcher uses `openshell forward service --target-port 63152` for the
-daemon REST port. By default it passes `--local 127.0.0.1:0`, allowing OpenShell
-to select a free host port; that host port is mapped to sandbox-local port
-`63152` and printed in the startup output. To use a stable host port for a tray
-target, pass it explicitly:
+The sandbox command exposes sandbox-local port `63152` as the gateway-managed
+`ai-guardian` service. To inspect the service URL for one sandbox:
 
 ```bash
-./container/openshell.sh --name ai-guardian-codex --port 63152
-curl http://127.0.0.1:63152/api/health
+openshell service get ai-guardian-codex ai-guardian
 ```
 
 The OpenShell network policy controls sandbox egress. The example policy
-includes the bundled Codex egress endpoints; add the selected agent's provider
-endpoints when using another agent. The policy does not need an ingress rule
-for the forwarded daemon port. The launcher records each assigned local
-`forward service` port under
-`$XDG_RUNTIME_DIR/ai-guardian/openshell-forwards` (or the AI Guardian state
-directory when no runtime directory is available), because OpenShell does not
-list these service forwards in `openshell forward list`. AI Guardian discovery
-uses that record only while its forward process is alive. Add a manual target
-when using a remote gateway, a host without the launcher state directory, or a
-forward that is not running. A sandbox started with `--no-forward` is
-intentionally unavailable to the host tray/NiceGUI until it is recreated with
-forwarding enabled:
-
-If the tray/NiceGUI runs with a different XDG runtime environment, point both
-processes at the same directory with
-`AI_GUARDIAN_OPEN_SHELL_FORWARD_STATE_DIR=/path/to/forward-state`.
+includes the bundled Codex egress endpoints; add the selected CLI's provider
+endpoints when using another CLI. The gateway service handles access to the
+daemon endpoint, and AI Guardian discovery asks the gateway for the URL of each
+managed sandbox. No local forward-state directory or host-side forwarding
+process is required.
 
 ```json
 {
@@ -822,10 +996,11 @@ podman run -it -p 63152 ai-guardian
 # Select agent
 podman run -it -p 63152 -e AI_GUARDIAN_AGENT=opencode ai-guardian opencode
 
-# Keep the host config file read-only and file-only
+# Seed the sandbox config from the host when no sandbox-local config exists
 podman run -it -p 63152 \
-    -v "$HOME/.config/ai-guardian/ai-guardian.json:/sandbox/.config/ai-guardian/ai-guardian.json:ro" \
+    -v "$HOME/.config/ai-guardian/ai-guardian.json:/sandbox/.config/ai-guardian.host.json:ro,z" \
     -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=true \
+    -e AI_GUARDIAN_HOST_CONFIG_PATH=/sandbox/.config/ai-guardian.host.json \
     ai-guardian
 
 # Select configuration profile
@@ -943,16 +1118,18 @@ volume), the consent prompt is skipped.
 ## Configuration and Profiles
 
 With no profile selected, `run.sh` checks the host configuration directory and
-mounts only `ai-guardian.json` read-only when it exists. The image keeps all
-other XDG state, cache, scanner, and agent directories sandbox-local. If the
-host file is absent, startup creates a sandbox-local configuration.
+stages only `ai-guardian.json` as the initial snapshot when it exists. The
+image keeps all other XDG state, cache, scanner, and agent directories
+sandbox-local. If a sandbox-local config already exists, it wins and is not
+overwritten. If the host file is absent, startup creates a sandbox-local
+configuration.
 
 Set `AI_GUARDIAN_PROFILE` or pass `--profile` to apply a security profile at
 container start. Profile mode never mounts the host's complete config:
 
 | Value | Description |
 |-------|-------------|
-| (unset) | Use the host config if present; otherwise create a sandbox-local standard config |
+| (unset) | Use an existing sandbox-local config; otherwise copy the host config as a writable initial snapshot, or create a sandbox-local standard config |
 | `@minimal` | Minimal — fewer checks, lower false positive rate |
 | `@standard` | Standard — balanced security and usability |
 | `@strict` | Strict — maximum security, all checks enabled |
@@ -968,7 +1145,7 @@ The host config directory is selected in this order:
 4. `XDG_CONFIG_HOME/ai-guardian`
 5. `HOME/.config/ai-guardian`
 
-When `HOME` is not exported, the launcher can infer its parent from a
+When `HOME` is not exported, the sandbox command can infer its parent from a
 supported agent home variable such as `CODEX_HOME`, `CLAUDE_CONFIG_DIR`,
 `CURSOR_CONFIG_DIR`, `GEMINI_CLI_HOME`, `KIRO_HOME`, `JUNIE_HOME`, or
 `OPENCODE_CONFIG_DIR`. These variables are used only to locate the host
@@ -977,21 +1154,79 @@ ai-guardian config; agent homes and caches are not mounted into the sandbox.
 If a custom profile file is given, it is mounted read-only by `run.sh` at a
 sandbox-local profile path. A missing explicit profile file is an error. A
 missing host `ai-guardian.json` is not an error when no profile is selected;
-the launcher reports the fallback and creates a local config. `--profile` and
-host-config sharing are mutually exclusive.
+the sandbox command reports the fallback and creates a local config. `--profile` and
+host-config sharing are mutually exclusive. When the host config is effective,
+the sandbox edits its own copy; the TUI, NiceGUI, and REST config APIs never
+write back to the host file.
 
 ## Authentication
 
-Pass authentication credentials as environment variables at runtime.
+Pass authentication credentials as environment variables at runtime. The
+normal Docker/Podman image does not mount or read the host `~/.codex` directory,
+so Codex ChatGPT/OAuth login is performed inside the sandbox rather than being
+inherited automatically.
 
 `run.sh` forwards the common agent variables (`OPENAI_API_KEY`,
 `OPENROUTER_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock variables, Azure OpenAI
-variables, and the existing Anthropic/Vertex variables) without mounting any
-agent home directory. The OpenShell launcher relies on OpenShell providers for
-credentials: its `--api-key` option is used only while creating an Anthropic
-provider, and Vertex ADC credentials are consumed while creating the
-`google-vertex-ai` provider. Neither credential value nor the ADC file is
-passed to the sandbox.
+variables, and the existing Anthropic/Vertex variables). Both `run.sh` and
+`ai-guardian sandbox create --runtime container` detect Vertex settings and
+mount the host ADC file read-only when it is available. The OpenShell sandbox
+command relies on OpenShell providers for credentials: its `--api-key` option
+is used only while creating an Anthropic provider, and Vertex ADC credentials
+are consumed while creating the `google-vertex-ai` provider. Neither provider
+credential value nor the ADC file is passed to the OpenShell sandbox.
+
+When both an Anthropic API-key environment variable and Vertex project
+settings are present, the container launchers select Vertex and omit the
+inherited API key. Pass `--api-key` explicitly when direct Anthropic
+authentication is intended.
+
+### Codex CLI in a Docker/Podman sandbox
+
+For a named sandbox, connect to it and authenticate Codex from inside:
+
+```bash
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+codex login
+```
+
+On a headless container, `codex login --device-auth` requires device-code
+authorization to be enabled in ChatGPT's **Settings → Security**. If that
+option is unavailable, use a real OpenAI Platform API key:
+
+```bash
+export OPENAI_API_KEY="<your-openai-api-key>"
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+printenv OPENAI_API_KEY | codex login --with-api-key
+```
+
+`auth.json` from a ChatGPT OAuth login contains OAuth credentials, not a
+Platform API key. Do not paste its access or refresh token into the API-key
+login. If necessary, the user can authenticate on a host with a browser and
+manually copy the complete file into a persistent named container:
+
+```bash
+podman cp ~/.codex/auth.json guardian-codex:/sandbox/.codex/auth.json
+```
+
+Use `docker cp` with Docker. AI Guardian does not inspect this file, but it is
+then present inside the sandbox; treat it like a password and never commit or
+share it. The detailed container-sandbox flow is also documented in the
+[Sandbox CLI guide](../docs/Sandbox.md#codex-authentication-in-container-sandboxes).
 
 > **Tested configurations:** Anthropic API key and Google Vertex AI have been
 > validated with this image. Other providers (AWS Bedrock, Azure, self-hosted)

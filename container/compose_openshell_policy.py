@@ -14,7 +14,7 @@ try:
 except ImportError as exc:  # pragma: no cover - exercised by host setup
     raise SystemExit(
         "Error: policy composition requires PyYAML; "
-        "install ai-guardian or run the launcher from its virtual environment."
+        "install ai-guardian or run the command from its virtual environment."
     ) from exc
 
 

@@ -1,6 +1,7 @@
 """Tests for Web Console Phase 4 pages (Configuration & Tools)."""
 
 import json
+import os
 from unittest import mock
 
 import pytest
@@ -559,6 +560,28 @@ class TestConfigEditorSaveBackup:
 
         err = _save_config_with_backup('{"a": 1}', None)
         assert err is not None
+
+    def test_host_managed_config_is_read_only(self, tmp_path):
+        from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+        from ai_guardian.web.pages.config_editor import _save_config_with_backup
+
+        config_file = tmp_path / "ai-guardian.json"
+        config_file.write_text('{"source": "host"}\n', encoding="utf-8")
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"}):
+            err = _save_config_with_backup('{"changed": true}', str(config_file))
+        assert err == CONFIG_READ_ONLY_MESSAGE
+        assert config_file.read_text(encoding="utf-8") == '{"source": "host"}\n'
+
+
+class TestDaemonDetailConfigSave:
+    def test_host_managed_config_is_read_only(self):
+        from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
+        from ai_guardian.web.pages.daemon_detail import _save_local_daemon_config
+
+        with mock.patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"}):
+            with pytest.raises(RuntimeError) as exc_info:
+                _save_local_daemon_config(0, 2.0, True, True)
+        assert str(exc_info.value) == CONFIG_READ_ONLY_MESSAGE
 
 
 class TestConfigFilePhantomConfig:

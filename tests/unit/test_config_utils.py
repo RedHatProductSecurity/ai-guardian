@@ -2,16 +2,22 @@
 Unit tests for config_utils module
 """
 
+import os
 import unittest
 from datetime import datetime, timezone
+from tempfile import TemporaryDirectory
 
 from unittest.mock import patch
 
 from ai_guardian.config.utils import (
     _parse_org_repo,
     _project_name_cache,
+    CONFIG_METADATA_FILENAME,
     get_project_name,
+    get_config_source,
+    get_config_dir,
     is_expired,
+    is_config_read_only,
     is_feature_enabled,
     parse_iso8601,
     validate_regex_pattern,
@@ -152,6 +158,90 @@ class ConfigUtilsTest(unittest.TestCase):
         # Afternoon: debug access expired
         afternoon = datetime(2026, 4, 13, 14, 30, 0, tzinfo=timezone.utc)
         self.assertTrue(is_expired(debug_expires, afternoon))
+
+
+class ConfigSourceMetadataTest(unittest.TestCase):
+    """Test sandbox config source and write-protection markers."""
+
+    def test_defaults_to_sandbox_local(self):
+        with TemporaryDirectory() as config_dir:
+            with patch.dict(
+                os.environ,
+                {"AI_GUARDIAN_CONFIG_DIR": config_dir},
+                clear=True,
+            ):
+                self.assertEqual(get_config_source(), "sandbox-local")
+                self.assertFalse(is_config_read_only())
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_GUARDIAN_CONFIG_SOURCE": "host",
+            "AI_GUARDIAN_CONFIG_READ_ONLY": "true",
+        },
+        clear=True,
+    )
+    def test_explicit_host_metadata(self):
+        self.assertEqual(get_config_source(), "host")
+        self.assertTrue(is_config_read_only())
+
+    @patch.dict(
+        os.environ,
+        {
+            "AI_GUARDIAN_CONFIG_SOURCE": "host",
+            "AI_GUARDIAN_CONFIG_READ_ONLY": "false",
+        },
+        clear=True,
+    )
+    def test_host_snapshot_is_editable(self):
+        self.assertEqual(get_config_source(), "host")
+        self.assertFalse(is_config_read_only())
+
+    def test_legacy_host_marker_is_supported(self):
+        with TemporaryDirectory() as config_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "AI_GUARDIAN_CONFIG_DIR": config_dir,
+                    "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+                },
+                clear=True,
+            ):
+                self.assertEqual(get_config_source(), "host")
+                self.assertTrue(is_config_read_only())
+
+    def test_persisted_local_metadata_overrides_host_mount_marker(self):
+        with TemporaryDirectory() as metadata_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "AI_GUARDIAN_CONFIG_DIR": metadata_dir,
+                    "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "true",
+                },
+                clear=True,
+            ):
+                metadata_path = get_config_dir() / CONFIG_METADATA_FILENAME
+                metadata_path.write_text(
+                    '{"source":"sandbox-local","read_only":false}\n',
+                    encoding="utf-8",
+                )
+                self.assertEqual(get_config_source(), "sandbox-local")
+                self.assertFalse(is_config_read_only())
+
+    def test_persisted_host_metadata_is_used_without_environment_marker(self):
+        with TemporaryDirectory() as metadata_dir:
+            with patch.dict(
+                os.environ,
+                {"AI_GUARDIAN_CONFIG_DIR": metadata_dir},
+                clear=True,
+            ):
+                metadata_path = get_config_dir() / CONFIG_METADATA_FILENAME
+                metadata_path.write_text(
+                    '{"source":"host","read_only":true}\n',
+                    encoding="utf-8",
+                )
+                self.assertEqual(get_config_source(), "host")
+                self.assertTrue(is_config_read_only())
 
 
 class IsFeatureEnabledTest(unittest.TestCase):

@@ -10,8 +10,8 @@
 #   podman build -f container/Dockerfile.openshell \
 #       -t localhost/ai-guardian-openshell:latest container/
 #
-# Run with the OpenShell launcher:
-#   ./container/openshell.sh --base localhost/ai-guardian-openshell:latest
+# Run with the AI Guardian sandbox command:
+#   ai-guardian sandbox create --runtime openshell --base localhost/ai-guardian-openshell:latest
 
 # Keep rebuilds reproducible: update this digest deliberately after reviewing
 # the new OpenShell Community base and rerunning the image smoke tests.
@@ -84,7 +84,7 @@ RUN ai-guardian scanner install gitleaks --use-pinned \
     && test -x /usr/local/bin/betterleaks
 
 # Keep all runtime state and configuration in the writable sandbox home. The
-# host configuration, when selected by openshell.sh, is uploaded separately.
+# host configuration, when selected by the sandbox command, is uploaded separately.
 RUN mkdir -p \
         /sandbox/.config/ai-guardian/profiles \
         /sandbox/.claude /sandbox/.cursor /sandbox/.codex \

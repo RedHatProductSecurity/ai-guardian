@@ -4,6 +4,7 @@ Tests for TUI Config Editor Panel
 """
 
 import json
+import os
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
@@ -15,6 +16,8 @@ from ai_guardian.tui.config_editor import (
     validate_json_string,
     validate_against_schema,
 )
+from ai_guardian.tui.schema_defaults import ConfigSaveMixin
+from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
 
 
 class TestValidateJsonString:
@@ -169,6 +172,37 @@ class TestConfigEditorContent:
             assert config_path.exists()
             backup_path = config_path.with_suffix(".json.bak")
             assert not backup_path.exists()
+
+    @patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"})
+    def test_host_managed_config_cannot_be_saved(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "ai-guardian.json"
+            original = '{"source": "host"}\n'
+            config_path.write_text(original, encoding="utf-8")
+
+            widget = ConfigEditorContent()
+            widget._config_path = config_path
+
+            success, error = widget._write_config('{"changed": true}\n')
+
+            assert success is False
+            assert error == CONFIG_READ_ONLY_MESSAGE
+            assert config_path.read_text(encoding="utf-8") == original
+
+
+class TestConfigSaveMixin:
+    @patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"})
+    def test_host_managed_config_cannot_be_written(self, tmp_path):
+        config_path = tmp_path / "ai-guardian.json"
+        config_path.write_text('{"source": "host"}\n', encoding="utf-8")
+
+        assert (
+            ConfigSaveMixin()._write_full_config(
+                {"changed": True}, config_path=config_path
+            )
+            is False
+        )
+        assert json.loads(config_path.read_text(encoding="utf-8")) == {"source": "host"}
 
 
 class TestConfigEditorThemeIntegration:

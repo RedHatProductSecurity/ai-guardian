@@ -35,6 +35,7 @@ from ai_guardian.cli_handlers import (
     _handle_prompt,
     _handle_tray_target_select,
 )
+from ai_guardian.sandbox import SUPPORTED_RUNTIMES, handle_sandbox_command
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,43 @@ def _handle_ml_command(args, ml_parser):
     else:
         ml_parser.print_help()
         return 1
+
+
+def _add_sandbox_runtime_options(parser, *, suppress_defaults=False):
+    """Add runtime selection options to the sandbox parent and subcommands."""
+    default = argparse.SUPPRESS if suppress_defaults else None
+    parser.add_argument(
+        "--runtime",
+        choices=SUPPORTED_RUNTIMES,
+        default=default,
+        help=(
+            "Sandbox runtime: openshell (default) or container (Docker/Podman); "
+            "optional for create, while lifecycle commands auto-detect"
+        ),
+    )
+    parser.add_argument(
+        "--container-engine",
+        default=default,
+        help="Docker/Podman executable (default: $CONTAINER_ENGINE or podman)",
+    )
+    parser.add_argument(
+        "--openshell-cli",
+        default=default,
+        help="OpenShell executable (default: $OPENSHELL_CLI or openshell)",
+    )
+
+
+def _sandbox_port(value):
+    """Parse a valid TCP port for sandbox forwarding."""
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            "port must be an integer between 1 and 65535"
+        ) from exc
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
 
 
 def main():
@@ -1021,6 +1059,231 @@ def main():
             "--json", action="store_true", help="Output result as JSON"
         )
 
+        # Sandbox subcommand (Issue #2302)
+        sandbox_parser = subparsers.add_parser(
+            "sandbox",
+            help="Create and manage AI Guardian sandboxes",
+            description=(
+                "Manage the lifecycle of AI Guardian sandboxes through Docker/Podman "
+                "or NVIDIA OpenShell. Runtime options may be placed before or after "
+                "the lifecycle command."
+            ),
+        )
+        _add_sandbox_runtime_options(sandbox_parser)
+        sandbox_sub = sandbox_parser.add_subparsers(
+            dest="sandbox_command", help="Sandbox lifecycle commands"
+        )
+
+        def _sandbox_command_parser(name, help_text):
+            command_parser = sandbox_sub.add_parser(name, help=help_text)
+            _add_sandbox_runtime_options(command_parser, suppress_defaults=True)
+            return command_parser
+
+        sandbox_create_parser = _sandbox_command_parser(
+            "create", "Create a sandbox (OpenShell connects when ready)"
+        )
+        sandbox_create_parser.add_argument(
+            "--name", help="Name for the sandbox (runtime-generated when omitted)"
+        )
+        sandbox_create_parser.add_argument(
+            "--cli",
+            dest="cli",
+            help=(
+                "CLI executable to configure (for example, opencode or "
+                "claude); defaults to Claude for OpenShell and Codex for "
+                "containers"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--agent",
+            dest="opencode_agent",
+            help=(
+                "OpenCode agent profile; required with --cli opencode and only "
+                "valid with that CLI"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--profile", help="Bundled or custom ai-guardian security profile"
+        )
+        sandbox_create_parser.add_argument(
+            "--restore-config",
+            nargs="?",
+            const="latest",
+            choices=("latest",),
+            metavar="latest",
+            help=(
+                "Restore the latest saved sandbox configuration snapshot; "
+                "requires --name and cannot be combined with --profile or --config-dir"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--config-dir",
+            "--guardian-home",
+            dest="config_dir",
+            metavar="DIR",
+            help="Host ai-guardian configuration directory to snapshot initially",
+        )
+        sandbox_create_parser.add_argument(
+            "--repo", metavar="DIR", help="Repository to mount or upload"
+        )
+        sandbox_create_parser.add_argument(
+            "--port",
+            type=_sandbox_port,
+            help=(
+                "Host port for container sandboxes (1-65535); OpenShell uses "
+                "the gateway-selected service port"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--image",
+            "--base",
+            dest="image",
+            help="Container or OpenShell image",
+        )
+        sandbox_create_parser.add_argument(
+            "--model",
+            help=(
+                "OpenShell inference model for a Claude-compatible route "
+                "(default: $AI_GUARDIAN_OPEN_SHELL_MODEL or claude-sonnet-4-6)"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--api-key",
+            help=(
+                "Pass a direct Anthropic API key; containers receive it through "
+                "their environment and OpenShell uses it only while creating a provider"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--env",
+            action="append",
+            dest="environment",
+            metavar="KEY=VALUE",
+            help="Set an additional sandbox environment variable (repeatable)",
+        )
+        sandbox_create_parser.add_argument(
+            "--policy",
+            action="append",
+            metavar="FILE",
+            help="OpenShell policy file (repeatable)",
+        )
+        sandbox_create_parser.add_argument(
+            "--provider",
+            action="append",
+            metavar="NAME",
+            help="OpenShell provider to attach (repeatable)",
+        )
+        sandbox_create_parser.add_argument(
+            "--label",
+            action="append",
+            metavar="KEY=VALUE",
+            help="Add a runtime label (repeatable)",
+        )
+        sandbox_create_parser.add_argument(
+            "command_args",
+            nargs=argparse.REMAINDER,
+            help="Optional command after --",
+        )
+
+        sandbox_list_parser = _sandbox_command_parser(
+            "list", "List AI Guardian-managed sandboxes"
+        )
+        sandbox_list_parser.add_argument(
+            "--json", action="store_true", dest="json_output", help="Output JSON"
+        )
+
+        sandbox_status_parser = _sandbox_command_parser(
+            "status", "Show sandbox details"
+        )
+        sandbox_status_parser.add_argument("name", help="Sandbox name")
+        sandbox_status_parser.add_argument(
+            "--json", action="store_true", dest="json_output", help="Output JSON"
+        )
+
+        for lifecycle_name, lifecycle_help in (
+            ("start", "Start a stopped sandbox"),
+            ("stop", "Stop a running sandbox while retaining its state"),
+            ("restart", "Restart a sandbox"),
+            ("connect", "Open an interactive shell or runtime connection"),
+        ):
+            lifecycle_parser = _sandbox_command_parser(lifecycle_name, lifecycle_help)
+            lifecycle_parser.add_argument("name", help="Sandbox name")
+
+        sandbox_exec_parser = _sandbox_command_parser(
+            "exec", "Run a command inside a sandbox"
+        )
+        sandbox_exec_parser.add_argument("name", help="Sandbox name")
+        sandbox_exec_parser.add_argument(
+            "command_args",
+            nargs=argparse.REMAINDER,
+            help="Command to run after -- (defaults to a login shell)",
+        )
+
+        sandbox_logs_parser = _sandbox_command_parser(
+            "logs", "Show or stream sandbox logs"
+        )
+        sandbox_logs_parser.add_argument("name", help="Sandbox name")
+        sandbox_logs_parser.add_argument(
+            "--follow", action="store_true", help="Stream logs continuously"
+        )
+        sandbox_logs_parser.add_argument(
+            "--tail", type=int, help="Number of recent lines (containers)"
+        )
+        sandbox_logs_parser.add_argument("--source", help="OpenShell log source filter")
+        sandbox_logs_parser.add_argument("--level", help="OpenShell severity filter")
+        sandbox_logs_parser.add_argument(
+            "--since", help="OpenShell time window, for example 5m"
+        )
+
+        sandbox_delete_parser = _sandbox_command_parser(
+            "delete", "Delete a sandbox and its retained state"
+        )
+        sandbox_delete_parser.add_argument("name", help="Sandbox name")
+
+        sandbox_config_parser = _sandbox_command_parser(
+            "config", "Save, list, or restore sandbox configuration snapshots"
+        )
+        sandbox_config_sub = sandbox_config_parser.add_subparsers(
+            dest="sandbox_config_command", help="Sandbox configuration commands"
+        )
+
+        sandbox_config_save_parser = sandbox_config_sub.add_parser(
+            "save", help="Save the active sandbox configuration to XDG state"
+        )
+        _add_sandbox_runtime_options(sandbox_config_save_parser, suppress_defaults=True)
+        sandbox_config_save_parser.add_argument("name", help="Sandbox name")
+        sandbox_config_save_parser.add_argument(
+            "--json", action="store_true", dest="json_output", help="Output JSON"
+        )
+
+        sandbox_config_list_parser = sandbox_config_sub.add_parser(
+            "list", help="List saved sandbox configuration snapshots"
+        )
+        _add_sandbox_runtime_options(sandbox_config_list_parser, suppress_defaults=True)
+        sandbox_config_list_parser.add_argument(
+            "name", nargs="?", help="Optional sandbox name"
+        )
+        sandbox_config_list_parser.add_argument(
+            "--json", action="store_true", dest="json_output", help="Output JSON"
+        )
+
+        sandbox_config_restore_parser = sandbox_config_sub.add_parser(
+            "restore", help="Restore a saved configuration into a sandbox"
+        )
+        _add_sandbox_runtime_options(
+            sandbox_config_restore_parser, suppress_defaults=True
+        )
+        sandbox_config_restore_parser.add_argument("name", help="Sandbox name")
+        sandbox_config_restore_parser.add_argument(
+            "--snapshot",
+            default="latest",
+            metavar="TIMESTAMP",
+            help="Snapshot timestamp to restore (default: latest)",
+        )
+        sandbox_config_restore_parser.add_argument(
+            "--json", action="store_true", dest="json_output", help="Output JSON"
+        )
+
         # Daemon subcommand
         daemon_parser = subparsers.add_parser(
             "daemon", help="Manage the background daemon service"
@@ -1493,6 +1756,7 @@ def main():
             "daemon",
             "mcp-server",
             "tray",
+            "sandbox",
             "setup",
             "ide-setup",
             "dummy-agent",
@@ -2127,6 +2391,10 @@ def main():
             except Exception as e:
                 print(f"Error during upgrade: {e}", file=sys.stderr)
                 return 1
+
+        # Handle sandbox lifecycle commands (Issue #2302)
+        if args.command == "sandbox":
+            return handle_sandbox_command(args)
 
         if args.command == "daemon":
             return _handle_daemon_command(args)

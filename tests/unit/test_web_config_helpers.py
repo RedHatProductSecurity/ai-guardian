@@ -1,6 +1,7 @@
 """Tests for web config_helpers shared load/save utilities."""
 
 import json
+import os
 from dataclasses import dataclass
 from unittest.mock import patch, MagicMock
 
@@ -10,6 +11,8 @@ from ai_guardian.web.config_helpers import (
     save_web_config,
     get_web_config_provenance,
     get_web_config_scope_label,
+    get_web_config_notice,
+    get_web_config_state,
     set_daemon_service,
     set_current_daemon_name,
     set_current_project_dir,
@@ -76,6 +79,74 @@ class TestSaveWebConfig:
             save_web_config({"a": 1})
         written = (tmp_path / "ai-guardian.json").read_text(encoding="utf-8")
         assert '  "a": 1' in written
+
+    def test_host_managed_config_is_not_written(self, tmp_path):
+        config_path = tmp_path / "ai-guardian.json"
+        config_path.write_text('{"source": "host"}\n', encoding="utf-8")
+        with (
+            patch.dict(os.environ, {"AI_GUARDIAN_CONFIG_READ_ONLY": "true"}),
+            patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path),
+            patch("ai_guardian.config.writer.get_config_dir", return_value=tmp_path),
+        ):
+            assert save_web_config({"changed": True}) is False
+        assert config_path.read_text(encoding="utf-8") == '{"source": "host"}\n'
+
+    def test_host_snapshot_config_is_written_to_sandbox_copy(self, tmp_path):
+        config_path = tmp_path / "ai-guardian.json"
+        config_path.write_text('{"source": "host"}\n', encoding="utf-8")
+        with (
+            patch.dict(
+                os.environ,
+                {
+                    "AI_GUARDIAN_CONFIG_SOURCE": "host",
+                    "AI_GUARDIAN_CONFIG_READ_ONLY": "false",
+                },
+            ),
+            patch("ai_guardian.config.utils.get_config_dir", return_value=tmp_path),
+            patch("ai_guardian.config.writer.get_config_dir", return_value=tmp_path),
+        ):
+            assert save_web_config({"changed": True}) is True
+        assert json.loads(config_path.read_text(encoding="utf-8")) == {"changed": True}
+
+
+class TestWebConfigState:
+    def test_local_state_uses_config_environment(self):
+        with patch.dict(
+            os.environ,
+            {
+                "AI_GUARDIAN_CONFIG_SOURCE": "host",
+                "AI_GUARDIAN_CONFIG_READ_ONLY": "true",
+            },
+            clear=True,
+        ):
+            assert get_web_config_state() == {"source": "host", "read_only": True}
+
+
+class TestWebConfigNotice:
+    def test_host_snapshot_notice(self):
+        notice = get_web_config_notice({"source": "host", "read_only": False})
+
+        assert notice["message"] == (
+            "Using host configuration snapshot. Changes apply only to this "
+            "sandbox; the host configuration will not be modified."
+        )
+        assert notice["icon"] == "info"
+        assert notice["background_class"] == "bg-amber-1"
+
+    def test_read_only_notice(self):
+        notice = get_web_config_notice({"source": "host", "read_only": True})
+
+        assert notice["message"] == (
+            "Host configuration is mounted read-only. "
+            "Configuration editing is disabled."
+        )
+        assert notice["icon"] == "lock"
+        assert notice["background_class"] == "bg-red-1"
+
+    def test_other_sources_have_no_notice(self):
+        assert get_web_config_notice({"source": "sandbox-local"}) is None
+        assert get_web_config_notice({"source": "snapshot"}) is None
+        assert get_web_config_notice(None) is None
 
 
 class TestCacheInvalidation:

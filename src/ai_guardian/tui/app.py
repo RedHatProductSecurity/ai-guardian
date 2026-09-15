@@ -91,9 +91,10 @@ def copy_to_system_clipboard(text: str) -> Tuple[Optional[str], Optional[str]]:
             return (None, "xsel")
         if _try_clipboard_command(["wl-copy"], text):
             return (None, "wl-copy")
+        if copy_osc52(text):
+            return (None, "OSC 52")
         return (
-            "Copied via terminal escape sequence. "
-            "For reliable clipboard, install xclip, xsel, or wl-copy",
+            "No native clipboard tool is available. " "Install xclip, xsel, or wl-copy",
             None,
         )
     else:

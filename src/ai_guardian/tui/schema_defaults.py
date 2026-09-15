@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE, is_config_read_only
 from ai_guardian.tui.widgets import sanitize_enabled_value
 
 logger = logging.getLogger(__name__)
@@ -272,6 +273,9 @@ class ConfigSaveMixin:
         config_path: Optional[Path] = None,
         backup: bool = False,
     ) -> bool:
+        if is_config_read_only():
+            logger.warning("Config write rejected: %s", CONFIG_READ_ONLY_MESSAGE)
+            return False
         path = config_path or self._get_config_path()
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -390,6 +394,14 @@ def save_global_config_field(
 
     Returns (success, error_message).
     """
+    from ai_guardian.config.utils import (
+        CONFIG_READ_ONLY_MESSAGE,
+        is_config_read_only,
+    )
+
+    if is_config_read_only():
+        return False, CONFIG_READ_ONLY_MESSAGE
+
     if config_dir is None:
         from ai_guardian.config.utils import get_config_dir
 

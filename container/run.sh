@@ -21,6 +21,7 @@ REST_PORT="${AI_GUARDIAN_REST_PORT:-63152}"
 CONTAINER_ENGINE="${CONTAINER_ENGINE:-podman}"
 REPO_PATH=""
 API_KEY="${ANTHROPIC_API_KEY:-}"
+API_KEY_FROM_FLAG="false"
 CONFIG_DIR_OVERRIDE=""
 EXTRA_ARGS=()
 SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
@@ -101,6 +102,7 @@ while [[ $# -gt 0 ]]; do
         --api-key)
             _require_option_value "$@"
             API_KEY="$2"
+            API_KEY_FROM_FLAG="true"
             shift 2
             ;;
         --help|-h)
@@ -165,6 +167,9 @@ HOST_CONFIG_PATH="${HOST_CONFIG_DIR}/ai-guardian.json"
 
 # --- Build env var list ---
 CONTAINER_CONFIG_DIR="/sandbox/.config/ai-guardian"
+# Keep a host config beside the active sandbox config so an existing
+# sandbox-local file can take precedence at container startup.
+HOST_CONFIG_FALLBACK_PATH="/sandbox/.config/ai-guardian.host.json"
 HOST_CONFIG_MOUNTED="false"
 CONFIG_SOURCE="sandbox-local"
 env_args=(
@@ -211,7 +216,7 @@ if [[ -n "$PROFILE" ]]; then
             ;;
     esac
     if [[ -n "$PROFILE_MOUNT_SOURCE" ]]; then
-        volume_args+=(-v "${PROFILE_MOUNT_SOURCE}:${PROFILE_MOUNT_TARGET}:ro")
+        volume_args+=(-v "${PROFILE_MOUNT_SOURCE}:${PROFILE_MOUNT_TARGET}:ro,z")
         env_args+=(-e "AI_GUARDIAN_PROFILE=${PROFILE_MOUNT_TARGET}")
         CONFIG_SOURCE="profile (host file, read-only)"
     else
@@ -219,10 +224,13 @@ if [[ -n "$PROFILE" ]]; then
     fi
 else
     if [[ -f "$HOST_CONFIG_PATH" ]]; then
-        volume_args+=(-v "${HOST_CONFIG_PATH}:${CONTAINER_CONFIG_DIR}/ai-guardian.json:ro")
-        env_args+=(-e "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true")
+        volume_args+=(-v "${HOST_CONFIG_PATH}:${HOST_CONFIG_FALLBACK_PATH}:ro,z")
+        env_args+=(
+            -e "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true"
+            -e "AI_GUARDIAN_HOST_CONFIG_PATH=${HOST_CONFIG_FALLBACK_PATH}"
+        )
         HOST_CONFIG_MOUNTED="true"
-        CONFIG_SOURCE="host config (read-only)"
+        CONFIG_SOURCE="host config fallback (snapshot)"
     else
         if [[ -n "$CONFIG_DIR_OVERRIDE" || -n "${AI_GUARDIAN_CONFIG_DIR:-}" || -n "${AI_GUARDIAN_HOME:-}" ]]; then
             echo "Notice: host ai-guardian config not found at ${HOST_CONFIG_PATH}; using sandbox-local config" >&2
@@ -234,14 +242,16 @@ if [[ "$HOST_CONFIG_MOUNTED" = "false" ]]; then
 fi
 
 # --- Authentication ---
-# Priority: --api-key flag > ANTHROPIC_API_KEY env > Vertex AI auto-detect
-if [[ -n "$API_KEY" ]]; then
+# Priority: --api-key flag > Vertex AI auto-detect > API key environment
+VERTEX_PROJECT="${ANTHROPIC_VERTEX_PROJECT_ID:-${VERTEX_AI_PROJECT_ID:-}}"
+VERTEX_REGION="${CLOUD_ML_REGION:-${VERTEX_AI_REGION:-global}}"
+if [[ "$API_KEY_FROM_FLAG" = "true" ]]; then
     env_args+=(-e "ANTHROPIC_API_KEY=${API_KEY}")
-elif [[ -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]]; then
+elif [[ -n "$VERTEX_PROJECT" ]]; then
     env_args+=(
         -e "CLAUDE_CODE_USE_VERTEX=1"
-        -e "ANTHROPIC_VERTEX_PROJECT_ID=${ANTHROPIC_VERTEX_PROJECT_ID}"
-        -e "CLOUD_ML_REGION=${CLOUD_ML_REGION:-global}"
+        -e "ANTHROPIC_VERTEX_PROJECT_ID=${VERTEX_PROJECT}"
+        -e "CLOUD_ML_REGION=${VERTEX_REGION}"
     )
     # Mount GCP credentials
     ADC_PATH="${GOOGLE_APPLICATION_CREDENTIALS:-${HOST_HOME}/.config/gcloud/application_default_credentials.json}"
@@ -255,6 +265,8 @@ elif [[ -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" ]]; then
         echo "  Run: gcloud auth application-default login" >&2
         echo "  Or set GOOGLE_APPLICATION_CREDENTIALS" >&2
     fi
+elif [[ -n "$API_KEY" ]]; then
+    env_args+=(-e "ANTHROPIC_API_KEY=${API_KEY}")
 fi
 
 # --- Common agent credentials (forward only explicitly supported variables) ---
@@ -296,8 +308,11 @@ echo "  Profile:  ${PROFILE:-none (host/default config)}"
 echo "  Config:   ${CONFIG_SOURCE}"
 echo "  Port:     ${REST_PORT}"
 [[ -n "$REPO_PATH" ]] && echo "  Repo:     ${REPO_PATH}"
-[[ -n "$API_KEY" ]] && echo "  Auth:     Anthropic API key"
-[[ -n "${ANTHROPIC_VERTEX_PROJECT_ID:-}" && -z "$API_KEY" ]] && echo "  Auth:     Vertex AI"
+if [[ "$API_KEY_FROM_FLAG" = "true" || ( -n "$API_KEY" && -z "$VERTEX_PROJECT" ) ]]; then
+    echo "  Auth:     Anthropic API key"
+elif [[ -n "$VERTEX_PROJECT" ]]; then
+    echo "  Auth:     Vertex AI"
+fi
 [[ -n "${GH_TOKEN:-}${GITHUB_TOKEN:-}" ]] \
     && echo "  GitHub:   token set" \
     || echo "  GitHub:   no token (export GH_TOKEN to enable)"
@@ -306,9 +321,17 @@ echo "  Port:     ${REST_PORT}"
     || echo "  GitLab:   no token (export GITLAB_TOKEN to enable)"
 echo ""
 
+if [[ ${#volume_args[@]} -gt 0 ]]; then
+    exec "$CONTAINER_ENGINE" run -it --rm \
+        -p "${REST_PORT}" \
+        "${env_args[@]}" \
+        "${volume_args[@]}" \
+        "${IMAGE}" \
+        "${EXTRA_ARGS[@]}"
+fi
+
 exec "$CONTAINER_ENGINE" run -it --rm \
     -p "${REST_PORT}" \
     "${env_args[@]}" \
-    "${volume_args[@]}" \
     "${IMAGE}" \
     "${EXTRA_ARGS[@]}"

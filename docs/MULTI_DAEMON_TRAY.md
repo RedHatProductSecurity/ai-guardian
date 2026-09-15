@@ -65,6 +65,10 @@ Quit
 - **○** Stopped daemon — limited submenu with Console, Mode, Start daemon
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
 
+Every discovered daemon is exposed in the tray. The menu is rebuilt when the
+discovery result changes, so the number of running containers or other remote
+daemons is not limited by a fixed tray slot count.
+
 ## Stale-Code Indicator
 
 When the ai-guardian source code on disk is newer than the running daemon binary, the tray shows a warning indicator next to the daemon name:
@@ -138,6 +142,37 @@ To make this permanent, add the export to your shell profile (`~/.bashrc`,
 > **macOS with Podman Desktop:** `DOCKER_HOST` is set automatically — no manual
 > setup needed.
 
+### Socket interruptions and Podman Desktop
+
+The tray refreshes container discovery periodically in addition to reacting to
+container events. If the Podman API socket briefly disappears—for example when
+Podman Desktop closes or recreates its connection—the tray keeps the last-known
+container targets visible with an unknown status and retries automatically. A
+successful query replaces that cache, so containers that were actually deleted
+or stopped disappear normally after the engine is reachable again.
+
+The tray does not run `systemctl` or restart Podman Desktop automatically. The
+socket is a user-session service and its setup differs across platforms. On
+Linux, repair or enable it with:
+
+```bash
+systemctl --user enable --now podman.socket
+```
+
+An inactive `podman.service` is expected with socket activation; check the
+socket instead:
+
+```bash
+systemctl --user status podman.socket
+```
+
+If the socket is at a non-standard path, export the Docker-compatible endpoint
+before starting the tray:
+
+```bash
+export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}')
+```
+
 ### Kubernetes Discovery
 
 Disabled by default. Enable in config:
@@ -197,8 +232,8 @@ Each daemon exposes a REST API for tray communication:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/status` | GET | Daemon status (name, version, paused, menu_tags) |
-| `/api/stats` | GET | Full stats (requests, blocked, violations, menu_tags) |
+| `/api/status` | GET | Daemon status (name, version, paused, menu_tags, config_source, config_read_only) |
+| `/api/stats` | GET | Full stats (requests, blocked, violations, menu_tags, config_source, config_read_only) |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
 

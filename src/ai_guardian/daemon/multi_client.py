@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 from ai_guardian.daemon.discovery import DaemonTarget
+from ai_guardian.daemon.rest_api import REST_AUTH_HEADER
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,15 @@ REQUEST_TIMEOUT = 5.0
 
 def _is_loopback_host(host: str) -> bool:
     """Return whether host is a loopback IP or localhost name."""
+    normalized = (host or "").lower().rstrip(".")
+    if normalized == "openshell.localhost" or normalized.endswith(
+        ".openshell.localhost"
+    ):
+        return True
     try:
-        return ipaddress.ip_address(host).is_loopback
+        return ipaddress.ip_address(normalized).is_loopback
     except ValueError:
-        return host.lower() in {"localhost", "localhost.localdomain"}
+        return normalized in {"localhost", "localhost.localdomain"}
 
 
 # macOS terminals that support Terminal.app-style "do script" AppleScript.
@@ -718,8 +724,8 @@ class MultiDaemonClient:
                 existing.update(config)
                 return False, f"Bulk write [{scope}]"
 
-            _atomic_config_update(config_path, updater)
-            return {"status": "ok"}
+            success = _atomic_config_update(config_path, updater)
+            return {"status": "ok" if success else "error"}
         body: dict = {"scope": scope, "config": config}
         if project_dir:
             body["project_dir"] = project_dir
@@ -1431,6 +1437,11 @@ class MultiDaemonClient:
         req.add_header("Content-Type", "application/json")
         if target.auth_token:
             req.add_header("Authorization", f"Bearer {target.auth_token}")
+            # OpenShell's gateway-managed service currently strips the
+            # Authorization header while proxying HTTP requests.  Keep the
+            # standard header for direct transports and send a dedicated
+            # header that the daemon accepts on gateway services.
+            req.add_header(REST_AUTH_HEADER, target.auth_token)
 
         try:
             with urlopen(req, timeout=timeout) as resp:

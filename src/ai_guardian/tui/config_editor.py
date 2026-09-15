@@ -17,7 +17,12 @@ from textual.containers import Container, Horizontal
 from textual.screen import ModalScreen
 from textual.widgets import Static, Button, TextArea
 
-from ai_guardian.config.utils import get_config_dir, get_project_config_path
+from ai_guardian.config.utils import (
+    CONFIG_READ_ONLY_MESSAGE,
+    get_config_dir,
+    get_project_config_path,
+    is_config_read_only,
+)
 from ai_guardian.tui.console_settings import load_editor_theme
 
 try:
@@ -225,12 +230,19 @@ class ConfigEditorContent(Container):
 
     def compose(self) -> ComposeResult:
         self._update_config_path_from_app()
+        read_only = is_config_read_only()
 
-        yield Static(
+        header = (
             "[bold]Config Editor[/bold]  "
             "[dim]Ctrl+S[/dim] Save  "
             "[dim]Ctrl+R[/dim] Reload  "
-            "[dim]Ctrl+Z[/dim] Undo",
+            "[dim]Ctrl+Z[/dim] Undo"
+        )
+        if read_only:
+            header += f"  [yellow]{CONFIG_READ_ONLY_MESSAGE}[/yellow]"
+
+        yield Static(
+            header,
             id="editor-header",
         )
         yield Static(f"[dim]{self._config_path}[/dim]", id="editor-path")
@@ -242,6 +254,7 @@ class ConfigEditorContent(Container):
             theme=theme,
             show_line_numbers=True,
             tab_behavior="indent",
+            read_only=read_only,
             id="config-text-editor",
         )
 
@@ -302,6 +315,8 @@ class ConfigEditorContent(Container):
                 content = self._config_path.read_text(encoding="utf-8")
                 editor.load_text(content)
                 self._update_status(content)
+                if is_config_read_only():
+                    self._set_status(CONFIG_READ_ONLY_MESSAGE, "status-warning")
             except Exception as e:
                 editor.load_text("")
                 self._set_status(f"Error loading: {e}", "status-invalid")
@@ -340,6 +355,9 @@ class ConfigEditorContent(Container):
 
     def action_save(self) -> None:
         """Save config with confirmation dialog."""
+        if is_config_read_only():
+            self.app.notify(CONFIG_READ_ONLY_MESSAGE, severity="warning")
+            return
         editor = self.query_one("#config-text-editor", TextArea)
         text = editor.text
 
@@ -367,6 +385,8 @@ class ConfigEditorContent(Container):
 
     def _write_config(self, text: str) -> tuple:
         """Write config file with backup. Returns (success, error_message)."""
+        if is_config_read_only():
+            return False, CONFIG_READ_ONLY_MESSAGE
         try:
             if self._config_path.exists():
                 backup_path = self._config_path.with_suffix(".json.bak")

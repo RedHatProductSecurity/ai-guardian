@@ -7,9 +7,15 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 """
 
 import logging
+import os
+import secrets
+import shlex
 import threading
 import time
+from types import SimpleNamespace
 
+from ai_guardian.daemon.discovery import should_update_target_name
+from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
 from ai_guardian.tray import icons as tray_icons
 from ai_guardian.tray import menu as tray_menu
 from ai_guardian.tray import notifications as tray_notifications
@@ -27,7 +33,6 @@ class TrayMenuBuilder:
     """Constructs pystray menu item trees for the system tray."""
 
     from ai_guardian.tray.menu import (
-        MAX_DAEMON_SLOTS as _MAX_DAEMON_SLOTS,
         MAX_DIR_PAUSE_SLOTS as _MAX_DIR_PAUSE_SLOTS,
     )
 
@@ -426,6 +431,807 @@ class TrayMenuBuilder:
             if not getattr(t, "working_dir", None):
                 t.working_dir = get_working_dir(t.name)
 
+    @staticmethod
+    def _sandbox_runtime(target):
+        """Return the logical sandbox runtime for a discovered target."""
+        return getattr(target, "runtime_type", None) or getattr(target, "runtime", None)
+
+    def _sandbox_target_at(self, slot):
+        """Return a target slot when it represents a supported sandbox."""
+        if slot >= len(self._tray._targets):
+            return None
+        target = self._tray._targets[slot]
+        if self._sandbox_runtime(target) not in {"container", "openshell"}:
+            return None
+        return target
+
+    def _sandbox_is_openshell(self, slot):
+        """Return whether a target slot represents an OpenShell sandbox."""
+        target = self._sandbox_target_at(slot)
+        return bool(target and self._sandbox_runtime(target) == "openshell")
+
+    def _sandbox_is_running(self, slot):
+        """Return whether a sandbox target can accept an interactive session."""
+        target = self._sandbox_target_at(slot)
+        return bool(target and target.status in ("running", "paused"))
+
+    def _mk_sandbox_connect_action(self, slot):
+        """Create the canonical sandbox connect action for a target slot."""
+        return self._mk_sandbox_command_action(
+            slot,
+            "connect",
+            lambda target: [target.name],
+        )
+
+    def _start_sandbox_form(
+        self, title, message, fields, callback, *, name="sandbox-form"
+    ):
+        """Show a sandbox form away from the tray callback thread."""
+
+        def run_form():
+            try:
+                from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+                values = show_sandbox_form(title, message, fields)
+                if values is not None:
+                    callback(values)
+            except Exception:
+                logger.exception("Sandbox form action failed")
+
+        threading.Thread(target=run_form, daemon=True, name=name).start()
+
+    @staticmethod
+    def _sandbox_error(title, message):
+        """Show a best-effort error for invalid tray form input."""
+        from ai_guardian.tray.plugins import show_dialog
+
+        show_dialog(title, message)
+
+    def _mk_sandbox_create_action(self):
+        """Create the main-menu callback for sandbox creation."""
+
+        def action(_, __):
+            self._start_sandbox_form(
+                "Create AI Guardian sandbox",
+                "Choose the sandbox runtime and initial configuration. Creation "
+                "runs in the background; failures show the captured runtime log.",
+                # The complete form is built in one place so its defaults stay
+                # aligned with the current environment at click time.
+                self._sandbox_create_fields(),
+                self._complete_sandbox_create_form,
+                name="sandbox-create-form",
+            )
+
+        return action
+
+    def _sandbox_create_fields(self):
+        """Return the create form fields used by the main tray menu."""
+        runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
+        if runtime not in {"container", "openshell"}:
+            runtime = "openshell"
+        cli_choices = SUPPORTED_CLI_IDE_TYPES
+        default_cli = "claude" if runtime == "openshell" else "codex"
+        cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
+        if cli not in cli_choices:
+            cli = default_cli
+        opencode_agent = os.environ.get("AI_GUARDIAN_OPENCODE_AGENT", "")
+        repo_default = os.environ.get("AI_GUARDIAN_SANDBOX_REPO")
+        if not repo_default:
+            target = getattr(self._tray, "_active_target", None)
+            if target is None and len(self._tray._targets) == 1:
+                target = self._tray._targets[0]
+            repo_default = getattr(target, "working_dir", None)
+        if not repo_default:
+            repo_default = os.path.expanduser("~")
+        profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
+        opencode_agent_choices = ("", "build", "plan", "claude")
+        name_suffix = secrets.token_hex(3)
+        return [
+            {
+                "name": "runtime",
+                "label": "Runtime",
+                "type": "choice",
+                "choices": ("container", "openshell"),
+                "default": runtime,
+                "required": True,
+                "help": "Use Docker/Podman or NVIDIA OpenShell.",
+            },
+            {
+                "name": "cli",
+                "label": "CLI",
+                "type": "choice",
+                "choices": cli_choices,
+                "default": cli,
+                "required": True,
+                "help": "Select the CLI to configure in the sandbox.",
+            },
+            {
+                "name": "name",
+                "label": "Sandbox name",
+                "default": f"ag-{cli[:8]}-{name_suffix}",
+                "dynamic_default": {
+                    "field": "cli",
+                    "prefix": "ag-",
+                    "value_max_length": 8,
+                    "suffix": name_suffix,
+                },
+                "required": True,
+            },
+            {
+                "name": "agent",
+                "label": "OpenCode agent",
+                "type": "choice",
+                "choices": opencode_agent_choices,
+                "editable": True,
+                "default": opencode_agent,
+                "required": True,
+                "help": (
+                    "Required when CLI is opencode; choose a common profile or "
+                    "type a custom name. Passed as opencode --agent NAME."
+                ),
+                "enabled_when": {"field": "cli", "values": ("opencode",)},
+            },
+            {
+                "name": "repo",
+                "label": "Repository",
+                "type": "directory",
+                "default": repo_default,
+            },
+            {
+                "name": "config_dir",
+                "label": "Host config directory",
+                "type": "directory",
+                "default": "",
+                "help": "Optional directory containing the initial ai-guardian.json.",
+            },
+            {
+                "name": "image",
+                "label": "Image / base",
+                "type": "image",
+                "default": "",
+                "help": (
+                    "Leave empty to use the runtime default. Browse lists local "
+                    "AI Guardian images; local tags use registry/name:tag, "
+                    "for example localhost/ai-guardian-openshell:dev."
+                ),
+            },
+            {
+                "name": "model",
+                "label": "Inference model",
+                "default": os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", ""),
+                "help": "OpenShell Vertex AI model; empty uses the default.",
+                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+            },
+            {
+                "name": "profile",
+                "label": "Profile",
+                "type": "choice",
+                "choices": profile_choices,
+                "editable": True,
+                "default": "",
+                "help": (
+                    "Optional profile; choose a built-in or type a custom "
+                    "profile name/path."
+                ),
+            },
+            {
+                "name": "policies",
+                "label": "Policy files",
+                "type": "file",
+                "multiple": True,
+                "default": "",
+                "help": (
+                    "OpenShell policy files or fragments; separate paths with "
+                    "commas or newlines."
+                ),
+                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+            },
+            {
+                "name": "providers",
+                "label": "OpenShell providers",
+                "default": "",
+                "help": "OpenShell provider names; separate names with commas or newlines.",
+                "enabled_when": {"field": "runtime", "values": ("openshell",)},
+            },
+            {
+                "name": "environment",
+                "label": "Environment",
+                "default": "",
+                "help": "KEY=VALUE entries; separate values with commas or newlines.",
+            },
+            {
+                "name": "labels",
+                "label": "Runtime labels",
+                "default": "",
+                "help": "Runtime KEY=VALUE labels; separate values with commas or newlines.",
+            },
+            {
+                "name": "config_source",
+                "label": "Initial config",
+                "type": "choice",
+                "choices": ("Host/default", "Latest saved snapshot"),
+                "default": "Host/default",
+            },
+            {
+                "name": "port",
+                "label": "Host port",
+                "default": "",
+                "help": (
+                    "Container host port 1-65535; empty means runtime-selected. "
+                    "OpenShell uses the gateway-selected service port."
+                ),
+                "enabled_when": {"field": "runtime", "values": ("container",)},
+            },
+        ]
+
+    def _complete_sandbox_create_form(self, values):
+        """Validate create form values and launch the selected command."""
+        runtime = values.get("runtime")
+        name = str(values.get("name") or "").strip()
+        profile = str(values.get("profile") or "").strip()
+        restore = values.get("config_source") == "Latest saved snapshot"
+        if restore and profile:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "A saved configuration snapshot cannot be combined with a profile.",
+            )
+            return
+        if runtime not in {"container", "openshell"} or not name:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "A valid runtime and sandbox name are required.",
+            )
+            return
+
+        opencode_agent = str(values.get("agent") or "").strip() or None
+        cli_value = str(values.get("cli") or "").strip() or None
+        cli = cli_value or ("claude" if runtime == "openshell" else "codex")
+        agent_profile = opencode_agent if cli == "opencode" else None
+        if cli == "opencode" and not agent_profile:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "An OpenCode agent profile is required when CLI is opencode.",
+            )
+            return
+        repo = str(values.get("repo") or "").strip() or None
+        config_dir = str(values.get("config_dir") or "").strip() or None
+        image = str(values.get("image") or "").strip() or None
+        model = str(values.get("model") or "").strip() or None
+        profile_value = profile or None
+        if config_dir and (restore or profile):
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "The host config directory cannot be combined with a profile or saved snapshot.",
+            )
+            return
+        policies = str(values.get("policies") or "").strip()
+        if policies and runtime != "openshell":
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "Policy files are supported for OpenShell sandboxes only.",
+            )
+            return
+        policy_paths = []
+        for policy in policies.replace("\n", ",").split(","):
+            policy = policy.strip()
+            if policy:
+                policy_paths.append(policy)
+        providers = str(values.get("providers") or "").strip()
+        provider_names = []
+        for provider in providers.replace("\n", ",").split(","):
+            provider = provider.strip()
+            if provider:
+                provider_names.append(provider)
+        environment_values = []
+        environment = str(values.get("environment") or "").strip()
+        for entry in environment.replace("\n", ",").split(","):
+            entry = entry.strip()
+            if entry:
+                environment_values.append(entry)
+        labels = str(values.get("labels") or "").strip()
+        label_values = []
+        for label in labels.replace("\n", ",").split(","):
+            label = label.strip()
+            if label:
+                if "=" not in label or not label.split("=", 1)[0].strip():
+                    self._sandbox_error(
+                        "Create AI Guardian sandbox",
+                        "Labels must use KEY=VALUE entries separated by commas.",
+                    )
+                    return
+                label_values.append(label)
+        port = str(values.get("port") or "").strip()
+        port_value = None
+        if port:
+            if runtime != "container":
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    "Host port is supported for container sandboxes only.",
+                )
+                return
+            try:
+                if not 1 <= int(port) <= 65535:
+                    raise ValueError
+            except ValueError:
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    "Host port must be an integer between 1 and 65535.",
+                )
+                return
+            port_value = int(port)
+
+        self._run_sandbox_create(
+            SimpleNamespace(
+                sandbox_command="create",
+                runtime=runtime,
+                container_engine=None,
+                openshell_cli=None,
+                name=name,
+                cli=cli,
+                opencode_agent=agent_profile,
+                profile=profile_value,
+                restore_config="latest" if restore else None,
+                config_dir=config_dir,
+                repo=repo,
+                port=port_value,
+                image=image,
+                model=model,
+                api_key=None,
+                environment=environment_values,
+                policy=policy_paths,
+                provider=provider_names,
+                label=label_values,
+                command_args=[],
+            )
+        )
+
+    def _run_sandbox_create(self, args):
+        """Create a sandbox in-process and report failures in a log dialog."""
+        output = []
+        try:
+            from ai_guardian.sandbox import create_sandbox
+
+            result = create_sandbox(args, interactive=False, output=output)
+        except Exception as exc:
+            logger.exception("Tray sandbox creation failed")
+            output.append(f"Error: {exc}\n")
+            result = 1
+
+        if result != 0:
+            try:
+                from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+                log_text = "".join(output).strip()
+                if not log_text:
+                    log_text = f"Sandbox creation failed with exit code {result}."
+                show_sandbox_log(
+                    "Sandbox creation failed",
+                    f"Unable to create sandbox '{args.name}'.",
+                    log_text,
+                )
+            except Exception:
+                logger.exception("Unable to show sandbox creation log")
+            return
+
+        tray_notifications.show_notification(
+            "AI Guardian",
+            f"Sandbox created: {args.name}",
+        )
+        if self._tray._discovery:
+            self._tray._discovery.request_refresh(wait=False)
+
+    @staticmethod
+    def _sandbox_operation_parts(operation):
+        """Normalize a lifecycle operation and an optional config verb."""
+        if isinstance(operation, (tuple, list)):
+            return [str(part) for part in operation]
+        return [str(operation)]
+
+    def _sandbox_command_args(self, target, operation, command_args):
+        """Build the argparse-compatible namespace used by sandbox helpers."""
+        parts = self._sandbox_operation_parts(operation)
+        runtime = self._sandbox_runtime(target)
+        if runtime not in {"container", "openshell"} or not target.name:
+            return None
+
+        values = [str(value) for value in (command_args or ())]
+        snapshot = "latest"
+        if "--snapshot" in values:
+            snapshot_index = values.index("--snapshot") + 1
+            if snapshot_index < len(values):
+                snapshot = values[snapshot_index]
+
+        option_values = {}
+        for option in ("tail", "source", "level", "since"):
+            option_name = f"--{option}"
+            if option_name in values:
+                option_index = values.index(option_name) + 1
+                if option_index < len(values):
+                    option_values[option] = values[option_index]
+
+        return SimpleNamespace(
+            sandbox_command=parts[0],
+            sandbox_config_command=parts[1] if len(parts) > 1 else None,
+            runtime=runtime,
+            container_engine=getattr(target, "container_engine", None),
+            openshell_cli=None,
+            name=target.name,
+            container_id=getattr(target, "container_id", None),
+            snapshot=snapshot,
+            json_output=False,
+            command_args=[],
+            follow="--follow" in values,
+            tail=option_values.get("tail"),
+            source=option_values.get("source"),
+            level=option_values.get("level"),
+            since=option_values.get("since"),
+        )
+
+    def _run_sandbox_command(self, target, operation, command_args=None):
+        """Run a non-interactive sandbox action and show useful output."""
+        output = []
+        parts = self._sandbox_operation_parts(operation)
+        args = self._sandbox_command_args(target, operation, command_args)
+        if args is None:
+            return
+
+        try:
+            from ai_guardian.sandbox import run_sandbox_command
+
+            result = run_sandbox_command(args, output=output)
+        except Exception as exc:
+            logger.exception("Tray sandbox command failed")
+            output.append(f"Error: {exc}\n")
+            result = 1
+
+        log_text = "".join(output).strip()
+        show_log = result != 0 or parts[0] in {"status", "logs", "config"}
+        if show_log:
+            try:
+                from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+                if not log_text:
+                    log_text = f"Sandbox command exited with code {result}."
+                if result == 0:
+                    title = f"Sandbox {parts[0]}"
+                    message = f"Output from sandbox '{target.name}'."
+                else:
+                    title = "Sandbox command failed"
+                    message = (
+                        f"Unable to run {' '.join(parts)} for sandbox "
+                        f"'{target.name}'."
+                    )
+                show_sandbox_log(title, message, log_text)
+            except Exception:
+                logger.exception("Unable to show sandbox command log")
+        else:
+            tray_notifications.show_notification(
+                "AI Guardian",
+                f"Sandbox {parts[0]}: {target.name}",
+            )
+
+        if result == 0 and self._tray._discovery:
+            self._tray._discovery.request_refresh(wait=False)
+
+    def _start_sandbox_command(self, target, operation, command_args=None):
+        """Run a non-interactive sandbox action away from the tray callback."""
+        thread = threading.Thread(
+            target=self._run_sandbox_command,
+            args=(target, operation, command_args),
+            daemon=True,
+            name="sandbox-command",
+        )
+        thread.start()
+        return thread
+
+    def _mk_sandbox_command_action(
+        self, slot, operation, arguments=None, *, keep_open=True
+    ):
+        """Create a menu callback for a command using the selected target."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+            command_args = arguments(target) if callable(arguments) else arguments
+            parts = self._sandbox_operation_parts(operation)
+            if parts[0] in {"connect", "exec"}:
+                tray_menu.launch_sandbox_command(
+                    target,
+                    operation,
+                    command_args or (),
+                    keep_open=keep_open,
+                )
+            else:
+                self._start_sandbox_command(target, operation, command_args)
+
+        return action
+
+    def _mk_sandbox_exec_action(self, slot):
+        """Create a callback that prompts for an exec command."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+
+            def complete(values):
+                command = str(values.get("command") or "").strip()
+                try:
+                    command_args = shlex.split(command) if command else []
+                except ValueError as exc:
+                    self._sandbox_error("Sandbox exec", f"Invalid command: {exc}")
+                    return
+                args = [target.name]
+                if command_args:
+                    args.extend(["--", *command_args])
+                tray_menu.launch_sandbox_command(target, "exec", args, keep_open=True)
+
+            self._start_sandbox_form(
+                "Execute in sandbox",
+                "Enter a command to run inside the sandbox.",
+                [
+                    {
+                        "name": "command",
+                        "label": "Command",
+                        "default": "/bin/bash -l",
+                        "help": "Leave empty to use the sandbox login shell.",
+                    }
+                ],
+                complete,
+                name="sandbox-exec-form",
+            )
+
+        return action
+
+    def _mk_sandbox_logs_action(self, slot):
+        """Create a callback that prompts for optional log filters."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+
+            def complete(values):
+                args = [target.name]
+                if values.get("follow"):
+                    args.append("--follow")
+                for option in ("tail", "source", "level", "since"):
+                    value = str(values.get(option) or "").strip()
+                    if value:
+                        args.extend([f"--{option}", value])
+                if values.get("follow"):
+                    tray_menu.launch_sandbox_command(
+                        target, "logs", args, keep_open=True
+                    )
+                else:
+                    self._start_sandbox_command(target, "logs", args)
+
+            self._start_sandbox_form(
+                "Sandbox logs",
+                "Choose optional filters. Followed output opens in a terminal; "
+                "one-shot output opens in a log window.",
+                [
+                    {
+                        "name": "follow",
+                        "label": "Follow output",
+                        "type": "bool",
+                        "default": False,
+                    },
+                    {"name": "tail", "label": "Tail lines", "default": ""},
+                    {"name": "source", "label": "OpenShell source", "default": ""},
+                    {"name": "level", "label": "OpenShell level", "default": ""},
+                    {"name": "since", "label": "OpenShell since", "default": ""},
+                ],
+                complete,
+                name="sandbox-logs-form",
+            )
+
+        return action
+
+    def _mk_sandbox_restore_action(self, slot):
+        """Create a callback that prompts for a snapshot selector."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+
+            def complete(values):
+                snapshot = str(values.get("snapshot") or "latest").strip()
+                self._start_sandbox_command(
+                    target,
+                    ("config", "restore"),
+                    [target.name, "--snapshot", snapshot],
+                )
+
+            self._start_sandbox_form(
+                "Restore sandbox configuration",
+                "Enter latest or a timestamp from the saved snapshot list.",
+                [
+                    {
+                        "name": "snapshot",
+                        "label": "Snapshot",
+                        "default": "latest",
+                        "required": True,
+                    }
+                ],
+                complete,
+                name="sandbox-config-restore-form",
+            )
+
+        return action
+
+    def _mk_sandbox_delete_action(self, slot):
+        """Create a delete action protected by an isolated confirmation."""
+
+        def action(_, __):
+            target = self._sandbox_target_at(slot)
+            if target is None:
+                return
+
+            def confirm_and_delete():
+                try:
+                    from ai_guardian.tray.sandbox_dialog import (
+                        show_sandbox_confirmation,
+                    )
+
+                    runtime = self._sandbox_runtime(target) or "unknown"
+                    if show_sandbox_confirmation(target.name, runtime):
+                        self._start_sandbox_command(target, "delete", [target.name])
+                except Exception:
+                    logger.exception("Sandbox delete confirmation failed")
+
+            threading.Thread(
+                target=confirm_and_delete,
+                daemon=True,
+                name="sandbox-delete-confirmation",
+            ).start()
+
+        return action
+
+    def _build_sandbox_manage_menu_item(self, slot):
+        """Build the per-target sandbox management submenu."""
+
+        def visible(_item, slot=slot):
+            return self._sandbox_target_at(slot) is not None
+
+        def target_running(_item, slot=slot):
+            target = self._sandbox_target_at(slot)
+            return bool(target and target.status in ("running", "paused"))
+
+        def target_not_running(_item, slot=slot):
+            target = self._sandbox_target_at(slot)
+            return bool(target and target.status not in ("running", "paused"))
+
+        target_name = lambda target: [target.name]
+        config_menu = pystray.Menu(
+            pystray.MenuItem(
+                "Save",
+                self._mk_sandbox_command_action(slot, ("config", "save"), target_name),
+                enabled=target_running,
+            ),
+            pystray.MenuItem(
+                "List",
+                self._mk_sandbox_command_action(slot, ("config", "list"), target_name),
+            ),
+            pystray.MenuItem(
+                "Restore...",
+                self._mk_sandbox_restore_action(slot),
+                enabled=target_running,
+            ),
+        )
+        return pystray.MenuItem(
+            "Manage sandbox",
+            pystray.Menu(
+                pystray.MenuItem(
+                    "Status",
+                    self._mk_sandbox_command_action(slot, "status", target_name),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Start",
+                    self._mk_sandbox_command_action(slot, "start", target_name),
+                    enabled=target_not_running,
+                    visible=lambda _item, slot=slot: (
+                        self._sandbox_runtime(self._sandbox_target_at(slot))
+                        == "openshell"
+                    ),
+                ),
+                pystray.MenuItem(
+                    "Stop",
+                    self._mk_sandbox_command_action(slot, "stop", target_name),
+                    enabled=target_running,
+                ),
+                pystray.MenuItem(
+                    "Restart",
+                    self._mk_sandbox_command_action(slot, "restart", target_name),
+                ),
+                pystray.MenuItem(
+                    "Connect",
+                    self._mk_sandbox_connect_action(slot),
+                    enabled=target_running,
+                    visible=lambda _item, slot=slot: not self._sandbox_is_openshell(
+                        slot
+                    ),
+                ),
+                pystray.MenuItem(
+                    "Exec...",
+                    self._mk_sandbox_exec_action(slot),
+                    enabled=target_running,
+                ),
+                pystray.MenuItem(
+                    "Logs...",
+                    self._mk_sandbox_logs_action(slot),
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Config", config_menu),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "Delete...",
+                    self._mk_sandbox_delete_action(slot),
+                ),
+            ),
+            visible=visible,
+        )
+
+    def _build_sandbox_create_menu_items(self):
+        """Build the always-available main-menu sandbox create action."""
+        return [
+            pystray.MenuItem(
+                "Create sandbox...",
+                self._mk_sandbox_create_action(),
+            )
+        ]
+
+    def _stopped_container_targets(self):
+        """Return stopped container-engine sandboxes for the start menu."""
+        return tuple(
+            sorted(
+                (
+                    target
+                    for target in getattr(self._tray, "_stopped_container_targets", ())
+                    if self._sandbox_runtime(target) in {"container", "openshell"}
+                ),
+                key=lambda target: target.name.casefold(),
+            )
+        )
+
+    def _mk_sandbox_start_container_action(self, target):
+        """Create the main-menu action for one stopped container."""
+
+        def action(_, __):
+            self._start_sandbox_command(target, "start", [target.name])
+
+        return action
+
+    def _build_sandbox_start_menu_items(self):
+        """Build the main-menu submenu for stopped container-engine sandboxes."""
+        targets = self._stopped_container_targets()
+        items = [
+            pystray.MenuItem(
+                f"{target.name} ({self._sandbox_runtime(target)})",
+                self._mk_sandbox_start_container_action(target),
+            )
+            for target in targets
+        ]
+        if not items:
+            items = [
+                pystray.MenuItem(
+                    "No stopped containers",
+                    None,
+                    enabled=False,
+                )
+            ]
+
+        return [
+            pystray.MenuItem(
+                "Start stopped sandbox...",
+                pystray.Menu(*items),
+                visible=lambda _item: bool(self._stopped_container_targets()),
+            )
+        ]
+
     def _build_single_daemon_menu_items(self):
         """Build flat menu items for single-daemon mode.
 
@@ -496,6 +1302,20 @@ class TrayMenuBuilder:
                         )
 
             return action
+
+        if self._sandbox_is_openshell(0):
+            shell_item = pystray.MenuItem(
+                "Connect",
+                self._mk_sandbox_connect_action(0),
+                visible=_single_vis,
+                enabled=lambda _item: self._sandbox_is_running(0),
+            )
+        else:
+            shell_item = pystray.MenuItem(
+                "Terminal",
+                _open_shell(),
+                visible=_single_vis,
+            )
 
         def _open_doctor():
             def action(_, __):
@@ -584,7 +1404,7 @@ class TrayMenuBuilder:
             target = self._tray._targets[0]
             if self._tray._multi_client and target.runtime != "local":
                 result = self._tray._multi_client.get_status(target)
-                if result and result.get("name"):
+                if result and should_update_target_name(target, result.get("name")):
                     target.name = result["name"]
                 _cache["stats"] = result or {}
             else:
@@ -839,7 +1659,8 @@ class TrayMenuBuilder:
                 self._mk_change_working_dir(0),
                 visible=_single_vis,
             ),
-            pystray.MenuItem("Terminal", _open_shell(), visible=_single_vis),
+            shell_item,
+            self._build_sandbox_manage_menu_item(0),
         ]
 
     def _build_single_daemon_daemon_items(self):
@@ -967,16 +1788,16 @@ class TrayMenuBuilder:
         ]
 
     def _build_multi_daemon_menu_items(self):
-        """Build fixed-slot menu items with per-daemon action submenus.
+        """Build per-daemon action submenus for every discovered daemon.
 
         Each daemon gets its own submenu with Console, Pause, Restart, etc.
-        pystray on macOS requires items defined at build time, so we
-        pre-allocate slots with dynamic text/visibility lambdas.
+        The tray rebuilds this part of the menu when discovery changes the
+        number of targets, so there is no fixed daemon-count limit.
 
         Only visible when 2+ daemons are discovered.
         """
         items = []
-        for i in range(self._MAX_DAEMON_SLOTS):
+        for i in range(len(self._tray._targets)):
             idx = i
 
             def make_label(_item, slot=idx):
@@ -1052,6 +1873,15 @@ class TrayMenuBuilder:
                             )
 
                 return action
+
+            if self._sandbox_is_openshell(idx):
+                shell_item = pystray.MenuItem(
+                    "Connect",
+                    self._mk_sandbox_connect_action(idx),
+                    enabled=lambda _item, slot=idx: self._sandbox_is_running(slot),
+                )
+            else:
+                shell_item = pystray.MenuItem("Terminal", _mk_open_shell())
 
             def _mk_doctor(slot=idx):
                 def action(_, __):
@@ -1205,7 +2035,9 @@ class TrayMenuBuilder:
                     target = self._tray._targets[slot]
                     if self._tray._multi_client and target.runtime != "local":
                         result = self._tray._multi_client.get_status(target)
-                        if result and result.get("name"):
+                        if result and should_update_target_name(
+                            target, result.get("name")
+                        ):
                             target.name = result["name"]
                         _cache["stats"] = result or {}
                     else:
@@ -1418,7 +2250,8 @@ class TrayMenuBuilder:
                             lambda _i, s=idx: self._working_dir_menu_label(s),
                             self._mk_change_working_dir(idx),
                         ),
-                        pystray.MenuItem("Terminal", _mk_open_shell()),
+                        shell_item,
+                        self._build_sandbox_manage_menu_item(idx),
                         pystray.Menu.SEPARATOR,
                         *multi_plugin_items,
                         pystray.Menu.SEPARATOR,

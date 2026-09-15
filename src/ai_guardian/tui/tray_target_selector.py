@@ -25,13 +25,15 @@ def _target_label(target: dict) -> str:
     """Build a display label for a target dict."""
     name = target.get("name", "unknown")
     runtime = target.get("runtime", "unknown")
+    display_runtime = target.get("runtime_type") or runtime
 
     if runtime == "container":
-        engine = target.get("container_engine") or "container"
+        if display_runtime != "container":
+            return f"{name} ({display_runtime})"
         cname = target.get("container_name")
         if cname and cname != name:
-            return f"{name} ({engine}: {cname})"
-        return f"{name} ({engine})"
+            return f"{name} (container: {cname})"
+        return f"{name} (container)"
 
     if runtime == "kubernetes":
         pod = target.get("pod_name") or ""

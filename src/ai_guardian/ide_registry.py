@@ -41,6 +41,7 @@ class IDEIntegration:
     project_scope: bool = False
     platform_contract: str = "all supported platforms"
     external: bool = True
+    cli_capable: bool = False
 
     @property
     def managed_hook_events(self) -> Tuple[str, ...]:
@@ -90,6 +91,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("SessionEnd", ("allow",)),
             ("PostCompact", ("allow",)),
         ),
+        cli_capable=True,
     ),
     IDEIntegration(
         "cursor",
@@ -128,6 +130,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("userPromptSubmitted", ("allow",)),
             ("preToolUse", ("allow", "block")),
         ),
+        cli_capable=True,
     ),
     IDEIntegration(
         "codex",
@@ -146,6 +149,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("SessionEnd", ("allow",)),
         ),
         platform_contract="Codex CLI and desktop Codex mode; not regular ChatGPT mode",
+        cli_capable=True,
     ),
     IDEIntegration(
         "windsurf",
@@ -183,6 +187,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("BeforeTool", ("allow", "block")),
             ("AfterTool", ("post",)),
         ),
+        cli_capable=True,
     ),
     IDEIntegration(
         "cline",
@@ -228,6 +233,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("PostToolUse", ("post",)),
             ("PromptSubmit", ("allow",)),
         ),
+        cli_capable=True,
     ),
     IDEIntegration(
         "aiderdesk",
@@ -249,6 +255,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ("OpenClaw JSONL",),
         "none",
         rules_supported=True,
+        cli_capable=True,
     ),
     IDEIntegration(
         "opencode",
@@ -259,6 +266,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "local",
         ("OpenCode SQLite",),
         "browser",
+        cli_capable=True,
     ),
     IDEIntegration(
         "augment",
@@ -286,6 +294,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "none",
         (("PreToolUse", ("allow", "block")),),
         platform_contract="PreToolUse only; generated project hook is structurally checked on Windows",
+        cli_capable=True,
     ),
     IDEIntegration(
         "junie",
@@ -323,6 +332,9 @@ ALL_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
 SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY
 )
+SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
+    integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
+)
 ALL_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in ALL_IDE_REGISTRY
 )
@@ -355,6 +367,7 @@ __all__ = [
     "IDEIntegration",
     "INTERNAL_IDE_REGISTRY",
     "SUPPORTED_IDES",
+    "SUPPORTED_CLI_IDE_TYPES",
     "SUPPORTED_IDE_REGISTRY",
     "SUPPORTED_IDE_TYPES",
     "get_e2e_event_cases",

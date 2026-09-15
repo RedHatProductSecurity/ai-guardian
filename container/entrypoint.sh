@@ -34,7 +34,7 @@ _request_tos_consent() {
 
 # Older OpenShell invocations may pass metadata as leading arguments. Consume
 # only our reserved arguments and leave the agent command untouched. The
-# current launcher uses OpenShell's supported --env options instead.
+# current sandbox command uses OpenShell's supported --env options instead.
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ai-guardian-agent)
@@ -74,7 +74,7 @@ SUPPORTED_AGENT_IDES=(
 CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode crush)
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 
-# AI_GUARDIAN_AGENT is the new name used by the OpenShell launcher. Keep
+# AI_GUARDIAN_AGENT is the name used by the sandbox command. Keep
 # AI_GUARDIAN_IDE as a compatibility alias for existing container users.
 # If no explicit environment value is present, infer the agent when its
 # command is the first argument (for example, ``... -- codex``).
@@ -99,11 +99,19 @@ else
   CONFIG_DIR="${HOME}/.config/ai-guardian"
 fi
 CONFIG_PATH="${CONFIG_DIR}/ai-guardian.json"
+CONFIG_METADATA_PATH="${CONFIG_DIR}/.ai-guardian-config-metadata.json"
 HOST_CONFIG_MOUNTED="${AI_GUARDIAN_HOST_CONFIG_MOUNTED:-false}"
+# New sandbox commands stage a host config beside the active sandbox config. Keep
+# the canonical path as the compatibility default for older invocations that
+# mounted the host file directly over CONFIG_PATH.
+HOST_CONFIG_PATH="${AI_GUARDIAN_HOST_CONFIG_PATH:-$CONFIG_PATH}"
+CONFIG_SOURCE="${AI_GUARDIAN_CONFIG_SOURCE:-}"
+CONFIG_READ_ONLY="${AI_GUARDIAN_CONFIG_READ_ONLY:-false}"
+RESTORE_CONFIG="${AI_GUARDIAN_RESTORE_CONFIG:-false}"
 SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 OPEN_SHELL_STAGING="${AI_GUARDIAN_OPEN_SHELL_STAGING:-false}"
 
-# The support image may use a released PyPI package while the launcher is
+# The support image may use a released PyPI package while the sandbox command is
 # newer than that package. Discover the setup command's advertised IDE choices
 # so a newly added integration is skipped until the corresponding release is
 # available, while an explicitly selected unsupported agent still fails fast.
@@ -185,7 +193,7 @@ if [ -n "$PROFILE" ] && [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
 fi
 
 # OpenShell 0.0.116 transfers --upload files after the canonical process has
-# started.  The launcher marks this initial shell as staging so a required
+# started. The sandbox command marks this initial shell as staging so a required
 # host config or custom profile can arrive before setup reads it.  Direct
 # container launches retain the fail-fast behavior.
 _wait_for_open_shell_upload() {
@@ -208,11 +216,11 @@ _wait_for_open_shell_upload() {
   done
 }
 
-if [ "$HOST_CONFIG_MOUNTED" = "true" ] && [ ! -f "$CONFIG_PATH" ]; then
+if [ "$HOST_CONFIG_MOUNTED" = "true" ] && [ ! -f "$HOST_CONFIG_PATH" ]; then
   if [ "$OPEN_SHELL_STAGING" = "true" ]; then
-    _wait_for_open_shell_upload "$CONFIG_PATH" "host ai-guardian config"
+    _wait_for_open_shell_upload "$HOST_CONFIG_PATH" "host ai-guardian config"
   else
-    echo "Error: host ai-guardian config was requested but is missing: $CONFIG_PATH"
+    echo "Error: host ai-guardian config was requested but is missing: $HOST_CONFIG_PATH"
     exit 1
   fi
 fi
@@ -233,13 +241,19 @@ if [ "${1:-}" = "__AI_GUARDIAN_DEFAULT_AGENT__" ]; then
   fi
 fi
 
-# OpenShell's gateway-managed inference route uses a placeholder API key and
-# must skip Claude Code's Claude.ai OAuth flow. Keep that transport detail out
-# of the interactive user experience: plain `claude` becomes `claude --bare`
-# for model commands, while administrative subcommands such as `claude plugin`
-# and `claude doctor` retain their normal arguments.
-_claude_command_needs_bare() {
+# OpenShell's gateway-managed inference route uses a placeholder API key.
+# Configure only the documented client environment here. Claude Code's
+# documented `--bare` flag remains explicit for interactive use; the
+# non-interactive `--print` path below preserves AI Guardian's automation
+# behavior without installing a persistent shell wrapper.
+_claude_print_command_needs_bare() {
   local argument
+
+  case "${1:-}" in
+    auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
+      return 1
+      ;;
+  esac
 
   for argument in "$@"; do
     if [ "$argument" = "--bare" ]; then
@@ -247,25 +261,29 @@ _claude_command_needs_bare() {
     fi
   done
 
-  case "${1:-}" in
-    auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
-      return 1
-      ;;
-    *)
+  for argument in "$@"; do
+    if [ "$argument" = "--print" ]; then
       return 0
-      ;;
-  esac
+    fi
+  done
+  return 1
 }
 
-_configure_openshell_claude_bare_mode() {
+_configure_openshell_inference_environment() {
   local bash_profile
   local bashrc
-  local marker="# ai-guardian-openshell-claude-bare-mode"
+  local base_url
+  local marker="# ai-guardian-openshell-inference-environment-v1"
 
-  if [ "$IDE" != "claude" ] ||
-    [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
+  if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ]; then
     return 0
   fi
+
+  case "$IDE" in
+    claude) base_url="https://inference.local" ;;
+    opencode) base_url="https://inference.local/v1" ;;
+    *) return 0 ;;
+  esac
 
   bashrc="${HOME}/.bashrc"
   bash_profile="${HOME}/.bash_profile"
@@ -276,51 +294,53 @@ _configure_openshell_claude_bare_mode() {
 
   if ! grep -Fq "$marker" "$bashrc" 2>/dev/null; then
     printf '\n' >>"$bashrc"
-    cat >>"$bashrc" <<'EOF'
-# ai-guardian-openshell-claude-bare-mode
-claude() {
-    local argument
-    for argument in "$@"; do
-        if [ "$argument" = "--bare" ]; then
-            command claude "$@"
-            return $?
-        fi
-    done
-    case "${1:-}" in
-        auth|config|doctor|help|install|mcp|plugin|update|version|--help|-h|--version|-V)
-            command claude "$@"
-            ;;
-        *)
-            command claude --bare "$@"
-            ;;
-    esac
-}
+cat >>"$bashrc" <<EOF
+# $marker
+if [ "\${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ]; then
+    # Remove the legacy AI Guardian Claude wrapper if this sandbox was
+    # bootstrapped by an older image. Claude's --bare flag stays explicit.
+    if [ "\${AI_GUARDIAN_AGENT:-}" = "claude" ]; then
+        unset -f claude 2>/dev/null || true
+    fi
+    export ANTHROPIC_BASE_URL="\${ANTHROPIC_BASE_URL:-$base_url}"
+    export ANTHROPIC_API_KEY="\${ANTHROPIC_API_KEY:-unused}"
+fi
 EOF
   fi
 
   if ! grep -Fq "$marker" "$bash_profile" 2>/dev/null; then
     printf '\n' >>"$bash_profile"
-    cat >>"$bash_profile" <<'EOF'
-# ai-guardian-openshell-claude-bare-mode
-if [ -f "$HOME/.bashrc" ]; then
-    . "$HOME/.bashrc"
+cat >>"$bash_profile" <<EOF
+# $marker
+if [ -f "\$HOME/.bashrc" ]; then
+    . "\$HOME/.bashrc"
 fi
 EOF
   fi
 }
 
 if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
-  [ "$IDE" = "claude" ]; then
-  if ! _configure_openshell_claude_bare_mode; then
+  { [ "$IDE" = "claude" ] || [ "$IDE" = "opencode" ]; }; then
+  # Keep the route self-healing when an older OpenShell version or an existing
+  # sandbox omitted the non-secret environment values from sandbox creation.
+  if [ "$IDE" = "claude" ]; then
+    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local}"
+  else
+    export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local/v1}"
+  fi
+  export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-unused}"
+  if ! _configure_openshell_inference_environment; then
     exit 1
   fi
-  case "${1:-}" in
-    claude|*/claude)
-      if _claude_command_needs_bare "$@"; then
-        set -- "$1" --bare "${@:2}"
-      fi
-      ;;
-  esac
+  if [ "$IDE" = "claude" ]; then
+    case "${1:-}" in
+      claude|*/claude)
+        if _claude_print_command_needs_bare "${@:2}"; then
+          set -- "$1" --bare "${@:2}"
+        fi
+        ;;
+    esac
+  fi
 fi
 
 # dummy-agent: no API key required — launch REPL directly
@@ -368,8 +388,20 @@ _bootstrap_codex_openshell_auth() {
   if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
     [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ] ||
     [ -z "${CODEX_AUTH_ACCOUNT_ID:-}" ]; then
-    # This may be an explicitly supplied provider with a different credential
-    # shape (for example OPENAI_API_KEY). Leave its auth setup to the caller.
+    if [ -z "${OPENAI_API_KEY:-}" ]; then
+      # This may be an explicitly supplied provider with a different credential
+      # shape. Leave providers without a Codex-compatible credential alone.
+      return 0
+    fi
+
+    # Codex reads API-key authentication from auth.json as well. OpenShell
+    # injects OPENAI_API_KEY as an opaque placeholder, so let Codex write that
+    # placeholder in its native format without exposing the real key.
+    if ! printf '%s\n' "$OPENAI_API_KEY" | codex login --with-api-key >/dev/null 2>&1; then
+      echo "Error: unable to create provider-backed Codex API-key auth file: $auth_path" >&2
+      return 1
+    fi
+    echo "Configured Codex API-key authentication from the OpenShell provider"
     return 0
   fi
 
@@ -478,9 +510,10 @@ fi
 # gh: reads GH_TOKEN / GITHUB_TOKEN natively, no action needed
 
 if [ "$IDE" != "dummy-agent" ]; then
-    # Create or select the one shared ai-guardian configuration first. A
-    # mounted host config is deliberately never passed to --create-config:
-    # the mount is read-only and must remain untouched.
+    # Apply the shared configuration precedence. Explicit profiles are
+    # intentional overrides, followed by an explicit restored snapshot. An
+    # existing sandbox-local config then wins over a normal host fallback, and
+    # only then do we use the host config or generate a default config.
     if [ -n "$PROFILE" ]; then
         echo "Creating ai-guardian config from profile: $PROFILE"
         if ! ai-guardian setup --ide "$IDE" --create-config --profile "$PROFILE" \
@@ -489,9 +522,55 @@ if [ "$IDE" != "dummy-agent" ]; then
             exit 1
         fi
         CONFIG_SOURCE="profile"
+        CONFIG_READ_ONLY="false"
+    elif [ "$RESTORE_CONFIG" = "true" ] && [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
+        if [ "$HOST_CONFIG_PATH" = "$CONFIG_PATH" ]; then
+            echo "Error: restored config snapshot must be staged outside active config path"
+            exit 1
+        fi
+        mkdir -p "$(dirname "$CONFIG_PATH")"
+        if ! cp "$HOST_CONFIG_PATH" "$CONFIG_PATH"; then
+            echo "Error: unable to restore ai-guardian config snapshot: $HOST_CONFIG_PATH"
+            exit 1
+        fi
+        echo "Restoring ai-guardian config snapshot"
+        CONFIG_SOURCE="snapshot"
+        CONFIG_READ_ONLY="false"
+        if ! ai-guardian setup --ide "$IDE" --force --yes; then
+            echo "Error: unable to configure selected IDE: $IDE"
+            exit 1
+        fi
+    elif [ -f "$CONFIG_PATH" ] &&
+        { [ "$HOST_CONFIG_MOUNTED" != "true" ] ||
+          [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; }; then
+        echo "Using sandbox-local ai-guardian config: $CONFIG_PATH"
+        CONFIG_SOURCE="sandbox-local"
+        CONFIG_READ_ONLY="false"
+        if ! ai-guardian setup --ide "$IDE" --force --yes; then
+            echo "Error: unable to configure selected IDE: $IDE"
+            exit 1
+        fi
     elif [ "$HOST_CONFIG_MOUNTED" = "true" ]; then
-        echo "Using read-only host ai-guardian config: $CONFIG_PATH"
-        CONFIG_SOURCE="host (read-only)"
+        if [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; then
+            mkdir -p "$(dirname "$CONFIG_PATH")"
+            if ! cp "$HOST_CONFIG_PATH" "$CONFIG_PATH"; then
+                echo "Error: unable to stage host ai-guardian config: $HOST_CONFIG_PATH"
+                exit 1
+            fi
+        fi
+        CONFIG_SOURCE="host"
+        if [ "$HOST_CONFIG_PATH" != "$CONFIG_PATH" ]; then
+            echo "Using host ai-guardian config snapshot"
+            # The host file is mounted/uploaded beside the active config.  The
+            # active copy belongs to this sandbox and is intentionally
+            # writable; the host file is never written back.
+            CONFIG_READ_ONLY="false"
+        else
+            # Preserve compatibility with older direct read-only mounts that
+            # place the host file over the active config path.
+            echo "Using read-only host ai-guardian config"
+            CONFIG_READ_ONLY="true"
+        fi
         if ! ai-guardian setup --ide "$IDE" --force --yes; then
             echo "Error: unable to configure selected IDE: $IDE"
             exit 1
@@ -503,6 +582,7 @@ if [ "$IDE" != "dummy-agent" ]; then
             exit 1
         fi
         CONFIG_SOURCE="sandbox-local"
+        CONFIG_READ_ONLY="false"
     fi
 
     # Configure every supported integration so a runtime agent selection does
@@ -532,9 +612,50 @@ if [ "$IDE" != "dummy-agent" ]; then
         echo "Error: setup completed but config file missing: $CONFIG_PATH"
         exit 1
     fi
+
+    # A later `podman exec`/`docker exec` process does not inherit exports made
+    # by this entrypoint. Persist the effective source and write capability so
+    # a connected TUI or CLI sees the same sandbox snapshot semantics.
+    if ! python3 - "$CONFIG_METADATA_PATH" "$CONFIG_SOURCE" "$CONFIG_READ_ONLY" <<'PY'
+import json
+import os
+import sys
+import tempfile
+
+
+metadata_path, source, read_only = sys.argv[1:]
+metadata_dir = os.path.dirname(os.path.abspath(metadata_path))
+os.makedirs(metadata_dir, exist_ok=True)
+metadata = {"source": source, "read_only": read_only.lower() == "true"}
+file_descriptor, temporary_path = tempfile.mkstemp(
+    prefix=".config-metadata.", suffix=".tmp", dir=metadata_dir
+)
+try:
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+        json.dump(metadata, stream, separators=(",", ":"))
+        stream.write("\n")
+    os.replace(temporary_path, metadata_path)
+except Exception:
+    try:
+        os.unlink(temporary_path)
+    except OSError:
+        # intentionally silent — cleanup of the temporary metadata file
+        pass
+    raise
+PY
+    then
+        echo "Warning: unable to persist ai-guardian config metadata: $CONFIG_METADATA_PATH" >&2
+    fi
 else
     CONFIG_SOURCE="not used (dummy-agent)"
+    CONFIG_READ_ONLY="false"
 fi
+
+# The daemon and console use these markers to expose and enforce whether the
+# effective config is managed by the host.  The explicit source marker also
+# lets a sandbox-local config win while a host fallback is staged alongside it.
+export AI_GUARDIAN_CONFIG_SOURCE="$CONFIG_SOURCE"
+export AI_GUARDIAN_CONFIG_READ_ONLY="$CONFIG_READ_ONLY"
 
 # OpenShell is already the outer sandbox. Configure Codex to use its full
 # access mode inside that outer boundary so Codex does not start a nested

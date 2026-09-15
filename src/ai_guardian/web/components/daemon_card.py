@@ -44,6 +44,7 @@ def daemon_card(target, stats: dict, on_click=None):
         status = target.status
 
     color, icon = _status_color_icon(status)
+    display_runtime = getattr(target, "runtime_type", None) or target.runtime
 
     with (
         ui.card().classes("w-72 cursor-pointer hover:shadow-lg").on("click", on_click)
@@ -53,7 +54,7 @@ def daemon_card(target, stats: dict, on_click=None):
         with ui.row().classes("items-center gap-2 w-full"):
             ui.icon(icon).classes(f"text-{color} text-xl")
             ui.label(target.name).classes("text-lg font-bold flex-grow")
-            ui.badge(target.runtime, color="blue-grey").classes("text-xs")
+            ui.badge(display_runtime, color="blue-grey").classes("text-xs")
 
         if stats:
             with ui.row().classes("gap-4 text-sm text-grey-6"):
