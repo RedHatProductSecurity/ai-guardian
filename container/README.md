@@ -290,7 +290,7 @@ inherited from the base image:
 | Build argument | Package | Default |
 |----------------|---------|---------|
 | `CODEX_VERSION` | `@openai/codex` | `0.154.0` |
-| `OPENCODE_VERSION` | `opencode-ai` | `1.18.30` |
+| `OPENCODE_VERSION` | `opencode-ai` | `1.18.31` |
 
 These are pinned rather than installed through a mutable `latest` tag so an
 image can be reproduced and rolled back. The Dockerfile verifies that Claude
@@ -303,7 +303,7 @@ original image.
 ```bash
 podman build -f container/Dockerfile.openshell \
     --build-arg CODEX_VERSION=0.154.0 \
-    --build-arg OPENCODE_VERSION=1.18.30 \
+    --build-arg OPENCODE_VERSION=1.18.31 \
     -t localhost/ai-guardian-openshell:latest container/
 ```
 
