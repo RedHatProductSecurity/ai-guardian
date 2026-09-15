@@ -71,12 +71,42 @@ daemons is not limited by a fixed tray slot count.
 
 ## Stale-Code Indicator
 
-When the ai-guardian source code on disk is newer than the running daemon binary, the tray shows a warning indicator next to the daemon name:
+For a local development (`-dev`) install, the daemon records the newest
+modification time of its tracked runtime files in its PID file at startup. The
+tray compares that value with the current inventory and shows a warning when a
+tracked file is newer. For installed releases, staleness is determined from the
+daemon and tray package versions; remote/container/Kubernetes targets use their
+reported daemon version because their source trees are not available locally.
+
+The inventory is curated rather than the entire package. It includes Python
+modules under `config/`, `hook_adapters/`, `hook_events/`, `patterns/`,
+`scanners/`, `sdk/`, `setup/`, `tools/`, `utils/`, `violations/`, and
+`observability/`; the package initializer and root hook, configuration, adapter,
+health-check, and self-test modules; and selected daemon lifecycle, REST API,
+reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers. It tracks
+the bundled `patterns/data/*.toml` rules, `templates/tray-plugins/*.json`, and
+`schemas/ai-guardian-config.schema.json` because daemon paths read those files
+at runtime. The exact directory and path allowlists live beside
+`DaemonState.get_package_max_mtime()` in `src/ai_guardian/daemon/state.py`.
+
+Client-only code stays out of the inventory: for example, the full
+`integrations/`, `tui/`, `web/`, and `tray/` trees, `daemon/client.py`,
+`daemon/discovery.py`, `mcp/server.py`, and the daemon's CLI-only `auto_setup.py`
+and `desktop.py` helpers. A few individual files in those packages are included
+where the daemon server calls them directly.
+
+When adding a package module or resource, check whether the daemon server, its
+REST handlers, or hook-processing path imports and uses it. Add a whole
+directory only when it is a cohesive daemon runtime subsystem; add an explicit
+path for an isolated shared helper or resource. Keep unrelated CLI and client
+code excluded, and add coverage for both included and excluded paths.
 
 - **Local daemons**: orange dot + `Restart daemon (stale code)` menu item. Clicking it restarts the daemon and polls until it comes back online (up to 10 seconds), then refreshes the menu.
 - **Container / Kubernetes daemons**: orange dot + `Rebuild image (stale code)` hint. Remote daemons cannot be restarted from the tray — you must rebuild the container image and redeploy.
 
-Stale-code detection compares the installed package version against the timestamp of the source tree using the daemon's `/api/status` endpoint. This replaces the old dev-mode auto-restart behavior removed in v1.13.0.
+The dev source-time comparison is a warning only; it does not restart the
+daemon automatically. This replaces the old dev-mode auto-restart behavior
+removed in v1.13.0.
 
 ## Discovery Methods
 
