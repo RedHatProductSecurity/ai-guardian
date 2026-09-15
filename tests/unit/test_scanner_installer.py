@@ -972,8 +972,9 @@ class TestChecksumVerification:
                 "ai_guardian.scanners.installer.shutil.which", return_value=None
             ):
                 if running_windows:
-                    with mock.patch.object(
-                        installer, "_get_installed_version", return_value="1.54.0"
+                    with mock.patch(
+                        "ai_guardian.scanners.installer.subprocess.run",
+                        return_value=mock.Mock(returncode=0),
                     ):
                         assert installer.verify_installation("gitguardian")
                 else:

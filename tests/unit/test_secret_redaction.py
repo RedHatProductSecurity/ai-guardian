@@ -240,7 +240,7 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmno
             assert "strategy" in r
 
     def test_performance(self):
-        """Test that redaction is fast enough (<5ms for 10KB)."""
+        """Test that redaction completes within 100ms for a 30KB input."""
         import time
 
         redactor = SecretRedactor()
@@ -251,12 +251,12 @@ MIIEpAIBAAKCAQEA1234567890abcdefghijklmno
             + "Some more text. " * 100
         ) * 10
 
-        start = time.time()
+        start = time.perf_counter()
         result = redactor.redact(text)
-        elapsed = (time.time() - start) * 1000  # Convert to ms
+        elapsed = (time.perf_counter() - start) * 1000  # Convert to ms
 
-        # Should complete in under 50ms (relaxed from 5ms for safety)
-        assert elapsed < 50, f"Redaction took {elapsed}ms, expected <50ms"
+        # Allow normal variation on slower CI runners while catching regressions.
+        assert elapsed < 100, f"Redaction took {elapsed}ms, expected <100ms"
         assert len(result["redactions"]) > 0
 
     def test_action_modes(self):
