@@ -75,13 +75,33 @@ RUN npm install --global --prefix /usr --no-fund --no-audit \
 RUN uv pip uninstall --python /sandbox/.venv/bin/python opencv-python || true \
     && uv pip install --python /sandbox/.venv/bin/python opencv-python-headless
 
-# Install the same permissively licensed scanner engines as the normal image.
-# They are placed in /usr/local/bin, which is readable by the sandbox user and
-# covered by the OpenShell base image's /usr filesystem policy.
+# Install the same pinned scanner engines as the normal image, except for
+# TruffleHog, whose license acknowledgement requires an interactive install.
+# These tools are present before OpenShell starts, so no runtime egress policy
+# is needed for scanner downloads.
 RUN ai-guardian scanner install gitleaks --use-pinned \
     && test -x /usr/local/bin/gitleaks \
     && ai-guardian scanner install betterleaks --use-pinned \
-    && test -x /usr/local/bin/betterleaks
+    && test -x /usr/local/bin/betterleaks \
+    && ai-guardian scanner install leaktk --use-pinned \
+    && test -x /usr/local/bin/leaktk \
+    && ai-guardian scanner install secretlint --use-pinned \
+    && test -x /usr/local/bin/secretlint \
+    && ai-guardian scanner install gitguardian --use-pinned \
+    && test -x /usr/local/bin/ggshield
+
+# Install the pinned detect-secrets Python package in the sandbox-local uv tool
+# directory, which is already included in the runtime PATH and writable home.
+RUN set -eux; \
+    DETECT_SECRETS_VERSION=$(/sandbox/.venv/bin/python -c \
+        "from ai_guardian.scanners.installer import ScannerInstaller; print(ScannerInstaller().get_pinned_version('detect-secrets'))"); \
+    test -n "$DETECT_SECRETS_VERSION"; \
+    test "$DETECT_SECRETS_VERSION" != unknown; \
+    UV_TOOL_DIR=/sandbox/.local/share/uv/tools \
+        UV_TOOL_BIN_DIR=/sandbox/.local/bin \
+        uv tool install --python /sandbox/.venv/bin/python \
+            "detect-secrets==${DETECT_SECRETS_VERSION}"; \
+    test -x /sandbox/.local/bin/detect-secrets
 
 # Keep all runtime state and configuration in the writable sandbox home. The
 # host configuration, when selected by the sandbox command, is uploaded separately.

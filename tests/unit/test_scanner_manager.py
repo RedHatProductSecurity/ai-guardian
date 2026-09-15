@@ -45,6 +45,26 @@ class TestScannerManager:
 
     @mock.patch("shutil.which")
     @mock.patch("subprocess.run")
+    def test_list_installed_gitguardian_uses_ggshield_binary(
+        self, mock_run, mock_which
+    ):
+        mock_which.side_effect = lambda name: (
+            "/usr/local/bin/ggshield" if name == "ggshield" else None
+        )
+        mock_run.return_value = mock.Mock(
+            returncode=0, stdout="ggshield, version 1.54.0", stderr=""
+        )
+
+        manager = ScannerManager()
+        scanners = manager.list_installed()
+
+        assert len(scanners) == 1
+        assert scanners[0].name == "gitguardian"
+        assert scanners[0].version == "1.54.0"
+        assert scanners[0].path == "/usr/local/bin/ggshield"
+
+    @mock.patch("shutil.which")
+    @mock.patch("subprocess.run")
     def test_list_installed_multiple(self, mock_run, mock_which):
         """Test listing when multiple scanners are installed."""
 

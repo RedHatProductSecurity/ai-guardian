@@ -276,7 +276,7 @@
       "_config": ["gitleaks", "secretlint"]
     },
     "_engines_gitguardian_example": {
-      "_comment": "GitGuardian (Proprietary, cloud): pip install ggshield. Requires consent and API key.",
+      "_comment": "GitGuardian (MIT ggshield CLI, cloud service): ai-guardian scanner install gitguardian. Requires consent and API key.",
       "_consent": "Run: ai-guardian engine consent gitguardian",
       "_api_key": "Set GITGUARDIAN_API_KEY environment variable",
       "_warning": "Content is sent to GitGuardian cloud API for scanning",

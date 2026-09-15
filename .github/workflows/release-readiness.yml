@@ -289,11 +289,12 @@ jobs:
           fi
           echo "All IDE adapters set up successfully"
 
-      - name: Verify integration documentation exists
+      - name: Verify integration and scanner documentation exists
         run: |
           test -f docs/AGENT_SUPPORT.md
           test -f docs/IDE_INTEGRATION_CHECKLIST.md
           test -f docs/CLI_RUNTIME_CHECKLIST.md
+          test -f docs/SCANNER_INTEGRATION_CHECKLIST.md
 
   ide-hook-e2e:
     name: IDE Hook E2E (${{ matrix.ide }})

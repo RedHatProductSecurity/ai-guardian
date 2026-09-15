@@ -39,6 +39,8 @@ class ScannerManager:
         "gitguardian",
     ]
 
+    BINARY_NAMES = {"gitguardian": "ggshield"}
+
     def __init__(self, config: Optional[dict] = None):
         """
         Initialize scanner manager.
@@ -58,43 +60,39 @@ class ScannerManager:
         Returns:
             Version string or "unknown" if cannot be determined
         """
-        try:
-            # Try running scanner with version command
-            result = subprocess.run(
-                [scanner_name, "version"],
-                capture_output=True,
-                timeout=5,
-                text=True,
-            )
+        binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
+        for version_arg in ("version", "--version"):
+            try:
+                result = subprocess.run(
+                    [binary_name, version_arg],
+                    capture_output=True,
+                    timeout=5,
+                    text=True,
+                )
 
-            if result.returncode != 0:
-                return "unknown"
+                if result.returncode != 0:
+                    continue
 
-            # Parse version from output
-            # Different scanners have different version output formats
-            output = result.stdout + result.stderr
+                # Parse version from output. Different scanners have different
+                # version output formats.
+                output = result.stdout + result.stderr
+                version_patterns = [
+                    r"v?(\d+\.\d+\.\d+)",
+                    r"version\s+v?(\d+\.\d+\.\d+)",
+                ]
 
-            # Common patterns: "v1.2.3", "version 1.2.3", "1.2.3"
-            version_patterns = [
-                r"v?(\d+\.\d+\.\d+)",  # Semantic version with optional 'v'
-                r"version\s+v?(\d+\.\d+\.\d+)",  # "version X.Y.Z"
-            ]
+                for pattern in version_patterns:
+                    match = re.search(pattern, output, re.IGNORECASE)
+                    if match:
+                        return match.group(1)
 
-            for pattern in version_patterns:
-                match = re.search(pattern, output, re.IGNORECASE)
-                if match:
-                    return match.group(1)
+                first_line = output.strip().split("\n")[0]
+                if first_line:
+                    return first_line.strip()
+            except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+                logger.debug(f"Failed to get version for {scanner_name}: {e}")
 
-            # If no pattern matched, return first line (often contains version)
-            first_line = output.strip().split("\n")[0]
-            if first_line:
-                return first_line.strip()
-
-            return "unknown"
-
-        except (subprocess.TimeoutExpired, FileNotFoundError) as e:
-            logger.debug(f"Failed to get version for {scanner_name}: {e}")
-            return "unknown"
+        return "unknown"
 
     def _is_default_scanner(self, scanner_name: str) -> bool:
         """
@@ -160,7 +158,8 @@ class ScannerManager:
         result = []
 
         for scanner_name in configured_names:
-            path = shutil.which(scanner_name)
+            binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
+            path = shutil.which(binary_name)
             if path:
                 version = self._get_version(scanner_name)
                 is_default = self._is_default_scanner(scanner_name)
@@ -187,7 +186,8 @@ class ScannerManager:
         installed = []
 
         for scanner_name in self.SUPPORTED_SCANNERS:
-            path = shutil.which(scanner_name)
+            binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
+            path = shutil.which(binary_name)
             if path:
                 version = self._get_version(scanner_name)
                 is_default = self._is_default_scanner(scanner_name)

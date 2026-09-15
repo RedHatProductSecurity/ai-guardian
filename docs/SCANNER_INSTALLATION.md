@@ -10,7 +10,13 @@ AI Guardian provides automated installation and management of secret scanner eng
 |---------|-------|---------|--------------|
 | Gitleaks | Standard | MIT | `ai-guardian scanner install gitleaks` |
 | BetterLeaks | 20-40% faster | MIT | `ai-guardian scanner install betterleaks` |
-| LeakTK | Standard | MIT | `ai-guardian scanner install leaktk` |
+| LeakTK | Standard | Apache-2.0 | `ai-guardian scanner install leaktk` |
+| Secretlint | Local rules | MIT | `ai-guardian scanner install secretlint` |
+| GitGuardian (`ggshield`) | Cloud service | MIT CLI | `ai-guardian scanner install gitguardian` |
+
+The GitGuardian engine also requires explicit consent, an API key, and network
+access to its cloud service. See [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md)
+for the data-flow and consent details.
 
 ## Quick Start
 
@@ -82,6 +88,10 @@ If no package manager is available, ai-guardian downloads the binary directly fr
 3. Extracts and installs to `/usr/local/bin` (or `~/.local/bin` if permission denied)
 4. Makes the binary executable (chmod +x on Unix-like systems)
 
+Secretlint and GitGuardian always use their upstream release assets directly so
+`--use-pinned` cannot be replaced by a package manager's different version.
+Their release assets are checksum-verified before installation.
+
 ### 3. From File (Air-Gapped)
 
 For environments without internet access:
@@ -114,11 +124,16 @@ When GitHub API is unavailable (offline, network issues), ai-guardian falls back
 ```toml
 [tool.ai-guardian.scanners]
 gitleaks = "8.30.1"
-betterleaks = "1.1.2"
+betterleaks = "1.3.1"
 leaktk = "0.3.4"
+secretlint = "13.0.5"
+gitguardian = "1.54.0"
 ```
 
-These versions are tested with each ai-guardian release and guaranteed to work.
+Container builds install these exact pins. CI checks GitHub release assets for
+both Linux container targets (`linux_x64` and `linux_arm64`); it checks the
+`detect-secrets` package release on PyPI. Update the pins deliberately when
+reviewing scanner releases.
 
 ### Override: Explicit Version
 

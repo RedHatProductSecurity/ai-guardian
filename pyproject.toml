@@ -174,13 +174,15 @@ ignore = [
 "src/ai_guardian/tui/violation_logging.py" = ["F821"]
 
 [tool.ai-guardian.scanners]
-# Tested scanner versions (used as fallback when GitHub API unavailable)
-# Update these when releasing new ai-guardian versions
+# Pinned versions used by `scanner install --use-pinned` and container builds.
+# Release assets are checked by scripts/check_scanner_versions.py.
 gitleaks = "8.30.1"
 betterleaks = "1.3.1"
 leaktk = "0.3.4"
 trufflehog = "3.88.0"
 detect-secrets = "1.5.0"
+secretlint = "13.0.5"
+gitguardian = "1.54.0"
 
 [tool.ai-guardian.scanners.repos]
 gitleaks = "gitleaks/gitleaks"
@@ -188,6 +190,8 @@ betterleaks = "betterleaks/betterleaks"
 leaktk = "leaktk/leaktk"
 trufflehog = "trufflesecurity/trufflehog"
 detect-secrets = "Yelp/detect-secrets"
+secretlint = "secretlint/secretlint"
+gitguardian = "GitGuardian/ggshield"
 
 [tool.ai-guardian.scanners.pattern_servers]
 leaktk = { url = "https://raw.githubusercontent.com", patterns_endpoint = "/leaktk/patterns/main/target/patterns/gitleaks/8.27.0" }

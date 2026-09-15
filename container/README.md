@@ -37,7 +37,11 @@ the selected agent may be able to read that credential material.
 | Component | License | Installed |
 |-----------|---------|-----------|
 | ai-guardian | Apache 2.0 | Build time |
-| gitleaks, betterleaks | MIT / Apache 2.0 | Build time |
+| Gitleaks, BetterLeaks | MIT | Build time |
+| LeakTK | Apache 2.0 | Build time |
+| detect-secrets | Apache 2.0 | Build time |
+| Secretlint | MIT | Build time |
+| GitGuardian ggshield CLI | MIT (service terms apply) | Build time |
 | OpenCode | MIT | Build time |
 | Gemini CLI | Apache 2.0 | Build time |
 | Codex CLI | Apache 2.0 | Build time |
@@ -863,7 +867,29 @@ enabled. YAML mappings are merged and lists are replaced by later overlays.
 The resulting temporary file is passed as the single OpenShell `--policy`
 argument and removed after OpenShell has consumed it. If no `--policy` overlay
 is given, the result contains only the shared base policy and the selected
-CLI policy; it does not grant GitHub access.
+CLI policy; it does not grant GitHub API or Git access.
+
+#### Bundled scanner engines
+
+Both support images preinstall pinned Gitleaks, BetterLeaks, LeakTK,
+detect-secrets, Secretlint, and the GitGuardian `ggshield` CLI. Their versions
+come from the scanner configuration bundled with AI Guardian, so host, profile,
+restored, and sandbox-local configurations can select them without startup
+downloads or an OpenShell policy for downloading scanner binaries.
+
+Secretlint scans locally. Using the GitGuardian engine sends scan data to its
+cloud service and still requires configured consent and an API key; an
+OpenShell sandbox also needs policy access to that service. Installing the CLI
+in the image does not add runtime network access. Pattern-server access remains
+governed by the selected configuration and policy.
+
+TruffleHog is not included in the stock images. Its AGPL-3.0 installation path
+requires interactive license acknowledgement, which cannot be collected during
+an image build. A configuration that selects TruffleHog therefore cannot use it
+in these images; use one of the bundled engines or provide it in a derived image
+after reviewing and acknowledging its license. Custom scanner binaries and
+Python scanner packages are outside the current pinned image set and must be
+added to a derived image when needed.
 
 The CLI fragments are intentionally conservative. Kiro and OpenClaw have no
 single default LLM endpoint, while OpenCode and Crush support additional

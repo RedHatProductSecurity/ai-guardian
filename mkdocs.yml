@@ -112,6 +112,7 @@ nav:
   - Operations:
       - Sandbox CLI: Sandbox.md
       - CLI/Runtime Integration Checklist: CLI_RUNTIME_CHECKLIST.md
+      - Scanner Integration Checklist: SCANNER_INTEGRATION_CHECKLIST.md
       - Kubernetes: kubernetes.md
       - Container: project/container.md
       - Pattern Server: PATTERN_SERVER.md

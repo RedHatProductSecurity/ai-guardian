@@ -284,8 +284,9 @@ because executing generated `.bat` hooks requires a Windows command host.
   documentation changes.
 - [ ] Link relevant upstream specifications and issue references, and make
   sure confidence and limitation claims match the available test evidence.
-- [ ] Build the documentation locally when documentation or navigation files
-  change; do not commit the generated `site/` directory.
+- [ ] Let CI/CD and Read the Docs generate the documentation when source or
+  navigation files change. A local preview is optional; see `docs/README.md`
+  for on-demand commands. Do not commit the generated `site/` directory.
 
 ## 5. Manual acceptance
 

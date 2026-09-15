@@ -8,20 +8,23 @@ Handles automated installation and upgrade of scanner engines:
 - LeakTK
 """
 
+import errno
 import hashlib
 import logging
 import os
 import platform
 import re
+import shlex
 import shutil
 import subprocess
 import tarfile
 import tempfile
 import time
 import zipfile
+from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Iterator, Optional
 import sys
 
 logger = logging.getLogger(__name__)
@@ -42,6 +45,46 @@ try:
     HAS_REQUESTS = True
 except ImportError:
     HAS_REQUESTS = False
+
+
+@contextmanager
+def _interprocess_file_lock(lock_path: Path) -> Iterator[None]:
+    """Hold an exclusive file lock across processes on Windows and Unix."""
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+b") as lock_file:
+        if os.name == "nt":
+            import msvcrt
+
+            # msvcrt locks a byte range, so make sure the first byte exists.
+            lock_file.seek(0, os.SEEK_END)
+            if lock_file.tell() == 0:
+                lock_file.write(b"\0")
+                lock_file.flush()
+
+            conflict_errnos = {errno.EACCES, getattr(errno, "EDEADLK", None)}
+            while True:
+                lock_file.seek(0)
+                try:
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError as exc:
+                    if exc.errno not in conflict_errnos:
+                        raise
+                    time.sleep(0.1)
+
+            try:
+                yield
+            finally:
+                lock_file.seek(0)
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 class InstallMethod(Enum):
@@ -66,6 +109,10 @@ class ScannerInstaller:
         "gitguardian",
     ]
 
+    # The GitGuardian scanner is named "gitguardian" in AI Guardian config,
+    # but the installed upstream executable is named "ggshield".
+    BINARY_NAMES = {"gitguardian": "ggshield"}
+
     # License information for scanners
     SCANNER_LICENSES = {
         "gitleaks": "MIT",
@@ -74,7 +121,7 @@ class ScannerInstaller:
         "trufflehog": "AGPL-3.0",
         "detect-secrets": "Apache-2.0",
         "secretlint": "MIT",
-        "gitguardian": "Proprietary (free tier)",
+        "gitguardian": "MIT (ggshield CLI; service terms apply)",
     }
 
     # Scanners NOT available via Linux distro package managers (apt/dnf/yum).
@@ -87,6 +134,14 @@ class ScannerInstaller:
         "secretlint",
         "gitguardian",
     }
+
+    # These tools are distributed as upstream release assets on every
+    # supported platform; package managers may install unpinned versions.
+    DIRECT_DOWNLOAD_ONLY = {"secretlint", "gitguardian"}
+
+    # New scanners must not be installed if upstream integrity metadata is
+    # unavailable. Existing scanner behavior is retained for compatibility.
+    CHECKSUM_REQUIRED = {"secretlint", "gitguardian"}
 
     def __init__(self, install_dir: Optional[Path] = None):
         """
@@ -131,10 +186,23 @@ class ScannerInstaller:
         self.scanner_config = self._load_scanner_config()
 
     def _get_binary_name(self, scanner_name: str) -> str:
-        """Return scanner binary name with .exe extension on Windows."""
+        """Return the platform-specific command name used to launch a scanner."""
+        binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
         if sys.platform == "win32":
-            return f"{scanner_name}.exe"
-        return scanner_name
+            if scanner_name == "gitguardian":
+                return f"{binary_name}.cmd"
+            return f"{binary_name}.exe"
+        return binary_name
+
+    def _find_installed_binary(self, scanner_name: str) -> Optional[str]:
+        """Find a scanner executable on PATH or in the configured install dir."""
+        binary_name = self._get_binary_name(scanner_name)
+        binary_path = shutil.which(binary_name)
+        if binary_path:
+            return binary_path
+
+        candidate = self.install_dir / binary_name
+        return str(candidate) if candidate.exists() else None
 
     def _load_scanner_config(self) -> Dict[str, Any]:
         """
@@ -147,16 +215,20 @@ class ScannerInstaller:
             logger.warning("tomllib not available, using fallback configuration")
             return {
                 "gitleaks": "8.30.1",
-                "betterleaks": "1.1.2",
-                "leaktk": "0.2.10",
+                "betterleaks": "1.3.1",
+                "leaktk": "0.3.4",
                 "trufflehog": "3.88.0",
                 "detect-secrets": "1.5.0",
+                "secretlint": "13.0.5",
+                "gitguardian": "1.54.0",
                 "repos": {
                     "gitleaks": "gitleaks/gitleaks",
                     "betterleaks": "betterleaks/betterleaks",
                     "leaktk": "leaktk/leaktk",
                     "trufflehog": "trufflesecurity/trufflehog",
                     "detect-secrets": "Yelp/detect-secrets",
+                    "secretlint": "secretlint/secretlint",
+                    "gitguardian": "GitGuardian/ggshield",
                 },
             }
 
@@ -293,6 +365,12 @@ class ScannerInstaller:
         """
         system = platform.system().lower()
 
+        if scanner_name in self.DIRECT_DOWNLOAD_ONLY:
+            logger.debug(
+                f"{scanner_name} uses pinned upstream release assets, skipping package managers"
+            )
+            return False
+
         try:
             # detect-secrets is a Python package - use pip
             if scanner_name == "detect-secrets":
@@ -420,15 +498,20 @@ class ScannerInstaller:
         )
 
     def _download_checksums(
-        self, scanner_name: str, version: str, repo: str
+        self,
+        scanner_name: str,
+        version: str,
+        repo: str,
+        asset_filename: Optional[str] = None,
     ) -> Optional[str]:
         """
         Download checksums file from GitHub releases.
 
         Args:
-            scanner_name: Scanner name (gitleaks, betterleaks, leaktk)
+            scanner_name: Scanner name
             version: Version to download checksums for
             repo: GitHub repository (owner/repo)
+            asset_filename: Release asset to verify when GitHub provides a digest
 
         Returns:
             Contents of checksums file as string, or None if download fails
@@ -439,11 +522,39 @@ class ScannerInstaller:
             )
             return None
 
+        if scanner_name == "gitguardian":
+            if not asset_filename:
+                logger.warning("GitGuardian checksum lookup requires the asset name")
+                return None
+
+            release_url = (
+                f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
+            )
+            try:
+                response = self._download_with_retry(release_url, timeout=30)
+                assets = response.json().get("assets", [])
+                asset = next(
+                    (item for item in assets if item.get("name") == asset_filename),
+                    None,
+                )
+                digest = asset.get("digest", "") if asset else ""
+                if not re.fullmatch(r"sha256:[0-9a-fA-F]{64}", digest):
+                    logger.warning(
+                        "GitGuardian release does not provide a SHA-256 asset digest"
+                    )
+                    return None
+                return f"{digest.split(':', 1)[1]}  {asset_filename}"
+            except Exception as e:
+                logger.warning(f"Failed to fetch GitGuardian asset digest: {e}")
+                return None
+
         # Different scanners have different checksums file naming conventions
         # gitleaks: gitleaks_8.30.1_checksums.txt
         # betterleaks: checksums.txt (no version!)
         # leaktk: leaktk_0.2.10_checksums.txt
-        if scanner_name == "betterleaks":
+        if scanner_name == "secretlint":
+            checksums_filename = f"secretlint-{version}-sha256sum.txt"
+        elif scanner_name == "betterleaks":
             checksums_filename = "checksums.txt"
         else:
             checksums_filename = f"{scanner_name}_{version}_checksums.txt"
@@ -608,28 +719,71 @@ class ScannerInstaller:
         system = platform_arch.split("_")[0]
         arch = platform_arch.split("_")[1]
 
-        # Determine file extension and binary name
+        # Determine file extension and binary name.
         binary_name = self._get_binary_name(scanner_name)
+        archive_binary_name = self.BINARY_NAMES.get(scanner_name, scanner_name)
         if system == "windows":
-            ext = "zip"
-        else:
-            ext = "tar.xz" if scanner_name == "leaktk" else "tar.gz"
+            archive_binary_name += ".exe"
+        archive_format: Optional[str]
 
         # Build filename - different scanners have different naming conventions
         # gitleaks/betterleaks: scanner_version_platform_arch.ext (e.g., gitleaks_8.30.1_darwin_arm64.tar.gz)
         # leaktk: scanner-version-platform-arch.ext (e.g., leaktk-0.2.10-darwin-arm64.tar.xz) with x86_64 instead of x64
         # trufflehog: scanner_version_system_arch.ext (e.g., trufflehog_3.88.0_linux_amd64.tar.gz) with amd64 instead of x64
-        if scanner_name == "leaktk":
+        if scanner_name == "secretlint":
+            supported_arches = {
+                "linux": {"x64", "arm64"},
+                "darwin": {"x64", "arm64"},
+                "windows": {"x64"},
+            }
+            if arch not in supported_arches.get(system, set()):
+                raise RuntimeError(
+                    f"Secretlint does not publish an asset for {platform_arch}"
+                )
+            ext = ".exe" if system == "windows" else ""
+            filename = f"secretlint-{version}-{system}-{arch}{ext}"
+            archive_format = None
+        elif scanner_name == "gitguardian":
+            if system == "linux":
+                gg_arch = {"x64": "x86_64", "arm64": "aarch64"}.get(arch)
+                if not gg_arch:
+                    raise RuntimeError(
+                        f"GitGuardian does not publish an asset for {platform_arch}"
+                    )
+                filename = f"ggshield-{version}-{gg_arch}-unknown-linux-gnu.tar.gz"
+                archive_format = "tar.gz"
+            elif system == "darwin":
+                gg_arch = {"x64": "x86_64", "arm64": "arm64"}.get(arch)
+                if not gg_arch:
+                    raise RuntimeError(
+                        f"GitGuardian does not publish an asset for {platform_arch}"
+                    )
+                filename = f"ggshield-{version}-{gg_arch}-apple-darwin.tar.gz"
+                archive_format = "tar.gz"
+            elif system == "windows" and arch == "x64":
+                filename = f"ggshield-{version}-x86_64-pc-windows-msvc.zip"
+                archive_format = "zip"
+            else:
+                raise RuntimeError(
+                    f"GitGuardian does not publish an asset for {platform_arch}"
+                )
+        elif scanner_name == "leaktk":
             # leaktk uses hyphens and x86_64 instead of x64
             leaktk_arch = "x86_64" if arch == "x64" else arch
+            ext = "tar.xz" if system != "windows" else "zip"
             filename = f"{scanner_name}-{version}-{system}-{leaktk_arch}.{ext}"
+            archive_format = ext
         elif scanner_name == "trufflehog":
             # trufflehog uses amd64 instead of x64
             trufflehog_arch = "amd64" if arch == "x64" else arch
+            ext = "zip" if system == "windows" else "tar.gz"
             filename = f"{scanner_name}_{version}_{system}_{trufflehog_arch}.{ext}"
+            archive_format = ext
         else:
             # gitleaks and betterleaks use underscores
+            ext = "zip" if system == "windows" else "tar.gz"
             filename = f"{scanner_name}_{version}_{platform_arch}.{ext}"
+            archive_format = ext
 
         download_url = (
             f"https://github.com/{repo}/releases/download/v{version}/{filename}"
@@ -652,7 +806,7 @@ class ScannerInstaller:
 
                 # Download and verify checksums
                 checksums_content = self._download_checksums(
-                    scanner_name, version, repo
+                    scanner_name, version, repo, filename
                 )
                 if checksums_content:
                     self._verify_checksum(archive_path, checksums_content, filename)
@@ -660,6 +814,11 @@ class ScannerInstaller:
                         f"✓ Checksum verification passed for {scanner_name} {version}"
                     )
                 else:
+                    if scanner_name in self.CHECKSUM_REQUIRED:
+                        raise RuntimeError(
+                            f"Checksum verification is required for {scanner_name}, "
+                            "but upstream integrity metadata is unavailable"
+                        )
                     print(
                         "⚠ Checksum verification skipped - checksums file not available"
                     )
@@ -667,42 +826,60 @@ class ScannerInstaller:
                         "Checksum verification skipped - checksums file not available"
                     )
 
-                # Extract archive (with path traversal protection)
-                extract_dir = temp_path / "extract"
-                extract_dir.mkdir()
-
-                if ext == "zip":
-                    with zipfile.ZipFile(archive_path, "r") as zip_ref:
-                        self._safe_extract_zip(zip_ref, extract_dir)
-                elif ext == "tar.xz":
-                    with tarfile.open(archive_path, "r:xz") as tar_ref:
-                        self._safe_extract_tar(tar_ref, extract_dir)
-                elif ext == "tar.gz":
-                    with tarfile.open(archive_path, "r:gz") as tar_ref:
-                        self._safe_extract_tar(tar_ref, extract_dir)
+                if archive_format is None:
+                    # Secretlint's release asset is the standalone executable.
+                    binary_path = archive_path
                 else:
-                    raise RuntimeError(f"Unsupported archive format: {ext}")
+                    # Extract archives with path traversal protection.
+                    extract_dir = temp_path / "extract"
+                    extract_dir.mkdir()
 
-                # Find the binary in extracted files
-                binary_path = None
-                for path in extract_dir.rglob(binary_name):
-                    if path.is_file():
-                        binary_path = path
-                        break
+                    if archive_format == "zip":
+                        with zipfile.ZipFile(archive_path, "r") as zip_ref:
+                            self._safe_extract_zip(zip_ref, extract_dir)
+                    elif archive_format == "tar.xz":
+                        with tarfile.open(archive_path, "r:xz") as tar_ref:
+                            self._safe_extract_tar(tar_ref, extract_dir)
+                    elif archive_format == "tar.gz":
+                        with tarfile.open(archive_path, "r:gz") as tar_ref:
+                            self._safe_extract_tar(tar_ref, extract_dir)
+                    else:
+                        raise RuntimeError(
+                            f"Unsupported archive format: {archive_format}"
+                        )
+
+                    # Find the binary in extracted files.
+                    binary_path = None
+                    for path in extract_dir.rglob(archive_binary_name):
+                        if path.is_file():
+                            binary_path = path
+                            break
 
                 if not binary_path:
+                    archive_contents = (
+                        list(extract_dir.rglob("*"))
+                        if archive_format is not None
+                        else []
+                    )
                     raise RuntimeError(
                         f"Binary '{binary_name}' not found in archive. "
-                        f"Archive contents: {list(extract_dir.rglob('*'))}"
+                        f"Archive contents: {archive_contents}"
                     )
 
-                # Install to install_dir
-                target_path = self.install_dir / binary_name
-                shutil.copy2(binary_path, target_path)
+                if scanner_name == "gitguardian":
+                    # Recent ggshield release archives are complete application
+                    # bundles, not standalone executables. Keep the companion
+                    # Python runtime and its _internal directory beside ggshield.
+                    target_path = self._install_gitguardian_bundle(
+                        binary_path.parent, archive_binary_name, version, system
+                    )
+                else:
+                    target_path = self.install_dir / binary_name
+                    shutil.copy2(binary_path, target_path)
 
-                # Make executable (Unix)
-                if system != "windows":
-                    target_path.chmod(0o755)
+                    # Make executable (Unix)
+                    if system != "windows":
+                        target_path.chmod(0o755)
 
                 logger.info(f"Installed {scanner_name} to {target_path}")
                 print(f"✓ Installed {scanner_name} {version} to {target_path}")
@@ -716,6 +893,160 @@ class ScannerInstaller:
                 raise RuntimeError(
                     f"Failed to download {scanner_name} from {download_url}: {e}"
                 ) from e
+
+    def _install_gitguardian_bundle(
+        self, bundle_source: Path, binary_name: str, version: str, system: str
+    ) -> Path:
+        """Serialize bundle staging, publication, and cleanup across processes."""
+        lock_path = self.install_dir / ".ai-guardian" / "gitguardian-install.lock"
+        with _interprocess_file_lock(lock_path):
+            return self._install_gitguardian_bundle_locked(
+                bundle_source, binary_name, version, system
+            )
+
+    def _install_gitguardian_bundle_locked(
+        self, bundle_source: Path, binary_name: str, version: str, system: str
+    ) -> Path:
+        """Install ggshield's bundle while the shared install lock is held."""
+        if system == "windows":
+            bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
+            bundle_parent.mkdir(parents=True, exist_ok=True)
+            bundle_dir = Path(tempfile.mkdtemp(prefix=f"{version}-", dir=bundle_parent))
+            launcher_path = self.install_dir / f"{Path(binary_name).stem}.cmd"
+            wrapper_path: Optional[Path] = None
+
+            try:
+                # Stage into a new version-specific directory. The active
+                # command wrapper is not replaced until every bundle file is
+                # safely in place, so a failed copy leaves the old install
+                # available and cannot overwrite shared-path entries such as
+                # _internal.
+                shutil.copytree(
+                    bundle_source, bundle_dir, dirs_exist_ok=True, symlinks=True
+                )
+                bundle_binary = bundle_dir / binary_name
+                if not bundle_binary.is_file():
+                    raise RuntimeError(
+                        f"GitGuardian bundle is missing its launcher: {bundle_binary}"
+                    )
+
+                relative_binary = os.path.relpath(bundle_binary, self.install_dir)
+                relative_binary = relative_binary.replace("/", "\\")
+                wrapper = (
+                    "@echo off\r\n"
+                    f'call "%~dp0{relative_binary}" %*\r\n'
+                    "exit /b %ERRORLEVEL%\r\n"
+                )
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    newline="",
+                    prefix=f".{launcher_path.name}.",
+                    dir=self.install_dir,
+                    delete=False,
+                ) as wrapper_file:
+                    wrapper_path = Path(wrapper_file.name)
+                    wrapper_file.write(wrapper)
+                os.replace(wrapper_path, launcher_path)
+            except Exception:
+                if wrapper_path and wrapper_path.exists():
+                    try:
+                        wrapper_path.unlink()
+                    except OSError as cleanup_error:
+                        logger.warning(
+                            "Could not remove staged ggshield launcher %s: %s",
+                            wrapper_path,
+                            cleanup_error,
+                        )
+                try:
+                    shutil.rmtree(bundle_dir)
+                except OSError as cleanup_error:
+                    logger.warning(
+                        "Could not remove incomplete ggshield bundle %s: %s",
+                        bundle_dir,
+                        cleanup_error,
+                    )
+                raise
+
+            # The new wrapper is active now. Remove older managed bundles only
+            # after the complete replacement has succeeded.
+            for old_bundle in bundle_parent.iterdir():
+                if old_bundle == bundle_dir:
+                    continue
+                try:
+                    if old_bundle.is_symlink() or old_bundle.is_file():
+                        old_bundle.unlink()
+                    elif old_bundle.is_dir():
+                        shutil.rmtree(old_bundle)
+                except OSError as cleanup_error:
+                    logger.warning(
+                        "Could not remove old ggshield bundle %s: %s",
+                        old_bundle,
+                        cleanup_error,
+                    )
+            return launcher_path
+
+        bundle_parent = self.install_dir / ".ai-guardian" / "gitguardian"
+        bundle_parent.mkdir(parents=True, exist_ok=True)
+        bundle_dir = bundle_parent / version
+
+        # Stage the complete bundle next to its destination so it stays on the
+        # same filesystem when moved into place.
+        with tempfile.TemporaryDirectory(
+            prefix=f".{version}-", dir=bundle_parent
+        ) as staging_name:
+            staging_dir = Path(staging_name)
+            shutil.copytree(
+                bundle_source, staging_dir, dirs_exist_ok=True, symlinks=True
+            )
+            if bundle_dir.is_symlink():
+                bundle_dir.unlink()
+            elif bundle_dir.exists():
+                shutil.rmtree(bundle_dir)
+            os.replace(staging_dir, bundle_dir)
+
+        bundle_binary = bundle_dir / binary_name
+        if not bundle_binary.is_file():
+            raise RuntimeError(
+                f"GitGuardian bundle is missing its launcher: {bundle_binary}"
+            )
+        bundle_binary.chmod(bundle_binary.stat().st_mode | 0o111)
+
+        # The lightweight upstream launcher resolves its bundled runtime next
+        # to the real executable, so this shell shim must exec that path rather
+        # than copy the launcher into the shared scanner bin directory.
+        target_path = self.install_dir / binary_name
+        wrapper = "#!/bin/sh\n" f'exec {shlex.quote(str(bundle_binary))} "$@"\n'
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            prefix=f".{binary_name}.",
+            dir=self.install_dir,
+            delete=False,
+        ) as wrapper_file:
+            wrapper_file.write(wrapper)
+        wrapper_path = Path(wrapper_file.name)
+        wrapper_path.chmod(0o755)
+        os.replace(wrapper_path, target_path)
+
+        # Keep only the active version so repeated scanner upgrades do not
+        # leave multi-megabyte ggshield runtimes behind.
+        for old_bundle in bundle_parent.iterdir():
+            if old_bundle == bundle_dir or not re.fullmatch(
+                r"\d+\.\d+\.\d+", old_bundle.name
+            ):
+                continue
+            try:
+                if old_bundle.is_symlink() or old_bundle.is_file():
+                    old_bundle.unlink()
+                elif old_bundle.is_dir():
+                    shutil.rmtree(old_bundle)
+            except OSError as exc:
+                logger.warning(
+                    "Could not remove old ggshield bundle %s: %s", old_bundle, exc
+                )
+
+        return target_path
 
     def install(
         self,
@@ -814,9 +1145,9 @@ class ScannerInstaller:
         installed_version = self._get_installed_version(scanner_name)
 
         if installed_version and ensure_only:
-            binary_path = shutil.which(scanner_name)
-            if not binary_path:
-                binary_path = self.install_dir / self._get_binary_name(scanner_name)
+            binary_path = self._find_installed_binary(scanner_name) or (
+                self.install_dir / self._get_binary_name(scanner_name)
+            )
             print(f"✓ {scanner_name} {installed_version} is already installed")
             print(f"  Path: {binary_path}")
             return True
@@ -826,9 +1157,9 @@ class ScannerInstaller:
 
             if comparison == 0 and not version:
                 # Already up-to-date, skip installation
-                binary_path = shutil.which(scanner_name)
-                if not binary_path:
-                    binary_path = self.install_dir / self._get_binary_name(scanner_name)
+                binary_path = self._find_installed_binary(scanner_name) or (
+                    self.install_dir / self._get_binary_name(scanner_name)
+                )
                 print(
                     f"✓ {scanner_name} {installed_version} is already installed (up-to-date)"
                 )
@@ -846,9 +1177,9 @@ class ScannerInstaller:
                 )
             elif comparison > 0 and not version:
                 # Installed version is newer, don't auto-downgrade
-                binary_path = shutil.which(scanner_name)
-                if not binary_path:
-                    binary_path = self.install_dir / self._get_binary_name(scanner_name)
+                binary_path = self._find_installed_binary(scanner_name) or (
+                    self.install_dir / self._get_binary_name(scanner_name)
+                )
                 print(f"✓ {scanner_name} {installed_version} is already installed")
                 print(f"  Path: {binary_path}")
                 print()
@@ -870,7 +1201,9 @@ class ScannerInstaller:
         # Try package manager first, but only for fresh installs.
         # When the scanner is already installed, skip package manager
         # to avoid unnecessary sudo prompts on Linux.
-        scanner_already_available = installed_version or shutil.which(scanner_name)
+        scanner_already_available = installed_version or self._find_installed_binary(
+            scanner_name
+        )
         if (
             method is None or method == InstallMethod.PACKAGE_MANAGER
         ) and not scanner_already_available:
@@ -919,13 +1252,9 @@ class ScannerInstaller:
         Returns:
             Version string (without 'v' prefix) if installed, None otherwise
         """
-        binary_path = shutil.which(scanner_name)
+        binary_path = self._find_installed_binary(scanner_name)
         if not binary_path:
-            # Check in install_dir (with .exe on Windows)
-            binary_path = self.install_dir / self._get_binary_name(scanner_name)
-            if not binary_path.exists():
-                return None
-            binary_path = str(binary_path)
+            return None
 
         # Different scanners have different version commands
         # gitleaks, betterleaks, leaktk, trufflehog: <binary> version
@@ -1015,13 +1344,9 @@ class ScannerInstaller:
         Returns:
             True if scanner is installed and working
         """
-        binary_path = shutil.which(scanner_name)
+        binary_path = self._find_installed_binary(scanner_name)
         if not binary_path:
-            # Check in install_dir (with .exe on Windows)
-            binary_path = self.install_dir / self._get_binary_name(scanner_name)
-            if not binary_path.exists():
-                return False
-            binary_path = str(binary_path)
+            return False
 
         # Try both version command formats
         version_commands = [
