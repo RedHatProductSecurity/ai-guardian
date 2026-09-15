@@ -645,6 +645,28 @@ class PostToolUseEnvVarDetectionTests(TestCase):
         assert result is not None, "run_secret_scan must return a result"
         assert result.detected, "env-variable pattern must detect JIRA_API_TOKEN"
 
+    def test_run_secret_scan_detects_issue_2323_resend_api_key(self):
+        """
+        USER EXPERIENCE: Resend API key in tool output -> secret scan detects it.
+
+        This contract verifies that the new bundled credential pattern reaches
+        the PostToolUse scanning path, where the normal secret handling flow
+        protects the tool output from reaching the AI agent.
+        """
+        fake_token = "re_" + "a1B2c3D4" * 3
+        content = f"RESEND_API_KEY={fake_token}"
+
+        result = _run_secret_scan(
+            content,
+            filename="Bash_output",
+            config={"enabled": True, "engines": ["toml-patterns"]},
+            secret_context={"hook_event": "PostToolUse"},
+            tool_name="Bash",
+        )
+        assert result is not None, "run_secret_scan must return a result"
+        assert result.detected, "resend-api-key pattern must detect the API key"
+        assert result.should_block, "detected secret output must remain protected"
+
     def test_run_secret_scan_detects_env_output_with_multiple_vars(self):
         """
         Toml-patterns catches JIRA token in multi-line env output.

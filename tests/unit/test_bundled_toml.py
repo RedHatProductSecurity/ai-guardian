@@ -12,7 +12,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 113,
+    "secrets.toml": 123,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -366,6 +366,45 @@ ISSUE_2185_FALSE_POSITIVE_CASES = [
     ("retell-ai-api-key", "# key_ prefix for Retell keys"),
 ]
 
+ISSUE_2323_DETECTION_CASES = [
+    (
+        "bitbucket-data-center-token",
+        "BBDC-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6",
+    ),
+    ("shopify-admin-api-token", "shpat_" + "a1B2c3D4" * 4),
+    ("shopify-custom-app-token", "shpca_" + "a1B2c3D4" * 4),
+    ("shopify-private-app-token", "shppa_" + "a1B2c3D4" * 4),
+    ("shopify-shared-secret", "shpss_" + "a1B2c3D4" * 4),
+    ("gitlab-pipeline-trigger-token", "glptt-" + "a1B2c3D4" * 5),
+    ("gitlab-runner-registration-token", "glrt-" + "a1B2c3D4" * 3),
+    ("gitlab-runner-registration-token", "GR1348941" + "a1B2c3D4" * 3),
+    ("openshift-user-token", "sha256~" + "a1B2c3D4" * 5 + "a1B"),
+    (
+        "dynatrace-token",
+        "dt0a01." + "A1B2C3D4" * 3 + "." + "A1B2C3D4" * 8,
+    ),
+    ("resend-api-key", "re_" + "a1B2c3D4" * 3),
+]
+
+ISSUE_2323_FALSE_POSITIVE_CASES = [
+    ("bitbucket-data-center-token", "BBDC-" + "a" * 31),
+    ("bitbucket-data-center-token", "# BBDC- is the Bitbucket Data Center prefix"),
+    ("shopify-admin-api-token", "shpat_" + "a" * 31),
+    ("shopify-custom-app-token", "shpca_" + "a" * 31),
+    ("shopify-private-app-token", "shppa_" + "a" * 31),
+    ("shopify-shared-secret", "shpss_" + "a" * 31),
+    ("gitlab-pipeline-trigger-token", "glptt-" + "a" * 39),
+    ("gitlab-runner-registration-token", "glrt-" + "a" * 19),
+    ("gitlab-runner-registration-token", "GR1348941" + "a" * 19),
+    ("openshift-user-token", "sha256~" + "a" * 42),
+    (
+        "dynatrace-token",
+        "dt0a01." + "A" * 24 + "." + "A" * 63,
+    ),
+    ("resend-api-key", "re_" + "a" * 19),
+    ("resend-api-key", "# re_ is the Resend API key prefix"),
+]
+
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
     + ISSUE_1617_DETECTION_CASES
@@ -373,6 +412,7 @@ ALL_DETECTION_CASES = (
     + ISSUE_1678_DETECTION_CASES
     + ISSUE_1777_DETECTION_CASES
     + ISSUE_2185_DETECTION_CASES
+    + ISSUE_2323_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
@@ -381,6 +421,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_1678_FALSE_POSITIVE_CASES
     + ISSUE_1777_FALSE_POSITIVE_CASES
     + ISSUE_2185_FALSE_POSITIVE_CASES
+    + ISSUE_2323_FALSE_POSITIVE_CASES
 )
 
 

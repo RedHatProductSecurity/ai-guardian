@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Secret patterns (#2323)**: Add detection for Bitbucket Data Center,
+  Shopify (Admin API, Custom App, Private App, and Shared Secret), GitLab
+  pipeline/runner, OpenShift, Dynatrace, and Resend credentials. Sources include
+  [Betterleaks](https://github.com/betterleaks/betterleaks/blob/main/cmd/generate/config/rules/bitbucket.go)
+  (MIT), [LeakTK](https://github.com/leaktk/patterns/blob/main/patterns/gitleaks/8.27.0/98-general.toml)
+  (MIT), and [Resend public API documentation](https://resend.com/docs/api-reference/introduction).
+
 ### Changed
 
 - **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
