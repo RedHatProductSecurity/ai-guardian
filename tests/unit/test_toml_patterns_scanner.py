@@ -425,6 +425,47 @@ class TestTomlPatternsGapFillingRules:
     def test_salesforce_marketing_cloud_short_not_matched(self):
         assert not self._find("SFMC_short", "salesforce-marketing-cloud-secret")
 
+    # --- Issue #2323: Bitbucket, Shopify, GitLab, OpenShift, Dynatrace, Resend ---
+
+    def test_bitbucket_data_center_token_detected(self):
+        token = "BBDC-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6"
+        assert self._find(f"TOKEN={token}", "bitbucket-data-center-token")
+
+    def test_bitbucket_data_center_token_low_entropy_rejected(self):
+        token = "BBDC-" + "A1b2" * 8
+        assert not self._find(f"TOKEN={token}", "bitbucket-data-center-token")
+
+    def test_shopify_tokens_detected(self):
+        for prefix, rule_id in (
+            ("shpat_", "shopify-admin-api-token"),
+            ("shpca_", "shopify-custom-app-token"),
+            ("shppa_", "shopify-private-app-token"),
+            ("shpss_", "shopify-shared-secret"),
+        ):
+            token = prefix + "a1B2c3D4" * 4
+            assert self._find(f"TOKEN={token}", rule_id)
+
+    def test_gitlab_pipeline_trigger_token_detected(self):
+        token = "glptt-" + "a1B2c3D4" * 5
+        assert self._find(f"TOKEN={token}", "gitlab-pipeline-trigger-token")
+
+    def test_gitlab_runner_registration_tokens_detected(self):
+        for prefix in ("glrt-", "GR1348941"):
+            token = prefix + "a1B2c3D4" * 3
+            assert self._find(f"TOKEN={token}", "gitlab-runner-registration-token")
+
+    def test_openshift_user_token_detected(self):
+        token = "sha256~" + "a1B2c3D4" * 5 + "a1B"
+        assert self._find(f"TOKEN={token}", "openshift-user-token")
+
+    def test_dynatrace_token_detected(self):
+        token = "dt0a01." + "A1B2C3D4" * 3 + "." + "A1B2C3D4" * 8
+        assert self._find(f"TOKEN={token}", "dynatrace-token")
+
+    def test_resend_api_key_detected(self):
+        token = "re_" + "a1B2c3D4" * 3
+        assert self._find(f"TOKEN={token}", "resend-api-key")
+
 
 class TestTomlPatternsMultiLineColumns:
     """Tests for column calculation when match spans multiple lines (#1902)."""
