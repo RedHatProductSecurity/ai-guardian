@@ -23,7 +23,7 @@ ARG AI_GUARDIAN_VERSION=1.17.1
 # every upgrade reproducible. Claude Code and GitHub Copilot are inherited
 # unchanged from the OpenShell Community base image.
 ARG CODEX_VERSION=0.154.0
-ARG OPENCODE_VERSION=1.18.30
+ARG OPENCODE_VERSION=1.18.31
 
 # The community base image already supplies the supported CLI agents, Node,
 # Git, gh, iproute2, users, and the default OpenShell policy. Install only

@@ -17,7 +17,7 @@ def test_load_pinned_versions_reads_openshell_dockerfile():
 
     assert pinned == {
         "CODEX_VERSION": "0.154.0",
-        "OPENCODE_VERSION": "1.18.30",
+        "OPENCODE_VERSION": "1.18.31",
     }
 
 
@@ -38,7 +38,7 @@ def test_compare_versions(first, second, expected):
 def test_check_versions_writes_report_and_detects_updates(tmp_path):
     latest = {
         "@openai/codex": "0.155.0",
-        "opencode-ai": "1.17.12",
+        "opencode-ai": "1.18.31",
     }
     report = tmp_path / "cli-versions.json"
 

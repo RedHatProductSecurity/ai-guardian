@@ -193,7 +193,7 @@ class TestContainerLaunchers:
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile
-        assert "ARG OPENCODE_VERSION=1.18.30" in dockerfile
+        assert "ARG OPENCODE_VERSION=1.18.31" in dockerfile
         assert "ARG COPILOT_VERSION" not in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile
         assert '"@openai/codex@${CODEX_VERSION}"' in dockerfile

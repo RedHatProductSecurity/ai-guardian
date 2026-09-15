@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
+  `1.18.31` in the dedicated OpenShell support image.
+
 ### Fixed
 
 - **Tray subprocess interpreter consistency (#2317)**: Launch local AI Guardian
