@@ -789,6 +789,7 @@ class MultiDaemonClient:
         _ALLOWED_FIELDS = {
             "type",
             "violation_type",
+            "severity",
             "tool",
             "file",
             "action",
