@@ -1667,14 +1667,17 @@ def send_notification(title: str, message: str) -> bool:
 
             safe_title = _escape_for_applescript(title)
             safe_message = _escape_for_applescript(message)
-            subprocess.Popen(
+            result = subprocess.run(
                 [
                     "osascript",
                     "-e",
                     f'display notification "{safe_message}" with title "{safe_title}"',
-                ]
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
             )
-            return True
+            return result.returncode == 0
         elif system == "Linux":
             icon_args: list[str] = []
             png_path = _find_icon("ai-guardian-320.png")

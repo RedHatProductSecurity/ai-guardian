@@ -729,23 +729,24 @@ def create_ide_session_detail_page(service, daemon_name: str):
                     )
 
                 page = detail_state["page"]
+                page_size = detail_state["page_size"]
                 if detail_state["newest_first"]:
-                    offset = (
-                        -1
-                        if page == 1
-                        else max(
-                            0,
-                            detail_state["total"] - page * detail_state["page_size"],
-                        )
-                    )
+                    if page == 1:
+                        offset = -1
+                        limit = page_size
+                    else:
+                        raw_offset = detail_state["total"] - page * page_size
+                        offset = max(0, raw_offset)
+                        limit = page_size if raw_offset >= 0 else page_size + raw_offset
                 else:
-                    offset = (page - 1) * detail_state["page_size"]
+                    offset = (page - 1) * page_size
+                    limit = page_size
 
                 page_result = await run.io_bound(
                     read_session_detail_page,
                     session,
                     offset,
-                    detail_state["page_size"],
+                    limit,
                 )
                 detail_state["total"] = page_result["total"]
                 total_pages = max(

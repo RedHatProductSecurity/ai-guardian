@@ -207,7 +207,7 @@ class IDESessionsContent(Container):
 
         select = self.query_one("#ide-sessions-ide-select", Select)
         ide = select.value
-        if not ide:
+        if ide is None or ide is Select.BLANK:
             self._finish_load(generation)
             return
 
@@ -223,16 +223,26 @@ class IDESessionsContent(Container):
         limit = max(10, min(limit, self.MAX_DISCOVERY_LIMIT))
 
         def _worker():
-            from ai_guardian.sessions.discovery import discover_sessions
+            from ai_guardian.sessions.discovery import (
+                discover_sessions,
+                get_supported_ides,
+            )
 
             try:
-                sessions = discover_sessions(str(ide), limit=limit)
+                if ide == "":
+                    sessions = []
+                    for supported_ide in get_supported_ides():
+                        sessions.extend(discover_sessions(supported_ide, limit=limit))
+                    sessions.sort(key=lambda s: s.get("modified", 0), reverse=True)
+                    sessions = sessions[:limit]
+                else:
+                    sessions = discover_sessions(str(ide), limit=limit)
             except Exception:
                 sessions = []
 
             try:
                 self.app.call_from_thread(self._render_sessions, sessions, generation)
-            except Exception:
+            except NoActiveAppError:
                 self._finish_load(generation)
                 return
 
@@ -387,7 +397,9 @@ def _strip_rich_markup(text):
 def _get_ide_options():
     from ai_guardian.sessions.discovery import get_supported_ides
 
-    return [(ide.title(), ide) for ide in get_supported_ides()]
+    options = [("All IDEs", "")]
+    options.extend((ide.title(), ide) for ide in get_supported_ides())
+    return options
 
 
 def _fmt_tok(n):

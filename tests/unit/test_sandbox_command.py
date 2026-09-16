@@ -1226,10 +1226,11 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
             os.environ,
             {
                 "HOME": str(tmp_path),
+                "USERPROFILE": str(tmp_path),
                 "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
                 "CLOUD_ML_REGION": "us-central1",
             },
-            clear=False,
+            clear=True,
         ),
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
@@ -1305,10 +1306,12 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         patch.dict(
             os.environ,
             {
+                "HOME": str(tmp_path),
+                "USERPROFILE": str(tmp_path),
                 "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
                 "CLOUD_ML_REGION": "global",
             },
-            clear=False,
+            clear=True,
         ),
         patch(
             "ai_guardian.sandbox._configure_openshell_vertex_provider"

@@ -31,6 +31,25 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+
+def _sanitize_metadata_values(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Redact secret-looking values from run_metadata before OTEL export."""
+    try:
+        from ai_guardian.scanners.secret_redactor import SecretRedactor
+
+        redactor = SecretRedactor()
+        sanitized = {}
+        for k, v in metadata.items():
+            if isinstance(v, str):
+                result = redactor.redact(v)
+                sanitized[k] = result.get("redacted", v)
+            else:
+                sanitized[k] = v
+        return sanitized
+    except Exception:
+        return metadata
+
+
 _SPAN_KIND_INTERNAL = 1
 _STATUS_CODE_OK = 1
 _STATUS_CODE_ERROR = 2
@@ -401,7 +420,8 @@ def _make_root_span(
     ]
     run_metadata = trace_doc.get("run_metadata")
     if run_metadata and isinstance(run_metadata, dict):
-        for k, v in run_metadata.items():
+        safe_meta = _sanitize_metadata_values(run_metadata)
+        for k, v in safe_meta.items():
             root_attrs_pairs.append((f"ai_guardian.meta.{k}", v))
 
     return _make_span(
@@ -697,17 +717,15 @@ def _prune_traces(args) -> int:
     dry_run = getattr(args, "dry_run", False)
     include_local = getattr(args, "include_local", False)
 
+    try:
+        datetime.fromisoformat(args.date).replace(tzinfo=timezone.utc)
+    except ValueError:
+        print(f"Error: invalid date format: {args.date}", file=sys.stderr)
+        return 1
+
     deleted = prune_cache_before_date(
         args.date, include_local=include_local, dry_run=dry_run
     )
-    if deleted == 0 and not dry_run:
-        from datetime import datetime, timezone
-
-        try:
-            datetime.fromisoformat(args.date).replace(tzinfo=timezone.utc)
-        except ValueError:
-            print(f"Error: invalid date format: {args.date}", file=sys.stderr)
-            return 1
 
     action = "Would delete" if dry_run else "Deleted"
     print(f"{action} {deleted} trace(s)")
@@ -888,7 +906,8 @@ class OtelSpanEmitter:
                 run_attrs.append(("ai_guardian.run_id", self._run_id))
             if self._run_sequence is not None:
                 run_attrs.append(("ai_guardian.run_sequence", self._run_sequence))
-            for k, v in self._run_metadata.items():
+            safe_meta = _sanitize_metadata_values(self._run_metadata)
+            for k, v in safe_meta.items():
                 run_attrs.append((f"ai_guardian.meta.{k}", v))
 
             root = _make_span(

@@ -103,14 +103,14 @@ def detect_adapter(hook_data: Dict) -> HookAdapter:
     if isinstance(explicit_ide, str):
         explicit_ide = explicit_ide.lower()
     if explicit_ide and explicit_ide in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[explicit_ide]()
+        adapter = _ENV_ALIAS_MAP[explicit_ide](agent_type=explicit_ide)
         logger.debug("Adapter selected via --ide=%s: %s", explicit_ide, adapter.name)
         return adapter
 
     # 2. Check environment variable override
     ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
     if ide_override and ide_override in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[ide_override]()
+        adapter = _ENV_ALIAS_MAP[ide_override](agent_type=ide_override)
         logger.debug(
             "Adapter selected via AI_GUARDIAN_IDE_TYPE=%s: %s",
             ide_override,

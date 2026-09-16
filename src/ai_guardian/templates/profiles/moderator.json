@@ -342,6 +342,11 @@
     "action": "block",
     "allowlist_patterns": []
   },
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  },
   "update_checking": {
     "enabled": true,
     "check_interval_seconds": 300,
