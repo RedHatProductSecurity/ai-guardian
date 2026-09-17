@@ -725,6 +725,7 @@ examples are maintained separately in:
 - `container/Dockerfile.openshell`
 - `container/README.md`
 - `README.md`
+- `docs/notebooklm-export.md`
 
 Do not update historical examples or changelog entries. For a release, run the
 project synchronizer with the new stable version; after merge-back, use its

@@ -1348,7 +1348,7 @@ class DaemonDiscovery:
             token = resp.strip() if isinstance(resp, str) else ""
             if token:
                 return token
-        except Exception:
+        except Exception:  # intentionally silent — K8s exec may fail for many reasons
             pass
         return None
 

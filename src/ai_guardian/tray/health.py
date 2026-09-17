@@ -1315,7 +1315,7 @@ class TrayHealthMonitor:
                     dismiss_label="Skip This Version",
                     snooze_options=("1h", "6h", "1d", "1w"),
                 )
-                result = dialog.show()
+                result = dialog.show(tray_safe=True)
                 state.record(prompt_key, result)
                 if result == "action":
                     self._do_self_upgrade()

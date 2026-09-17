@@ -334,11 +334,9 @@ class TestViolationsEndpoint:
         v = data["violations"][0]
         assert v["violation_type"] == "secret_detected"
         assert v["severity"] == "high"
-        assert v["blocked"] is True
-        assert v["context"]["tool"] == "Write"
-        assert v["context"]["file"] == "config.py"
-        assert v["context"]["line"] == 42
         assert v["suggestion"]["text"] == "Remove the secret"
+        assert "blocked" not in v
+        assert "context" not in v
 
     def test_get_violations_with_type_filter(self, rest_api):
         api, port, state = rest_api

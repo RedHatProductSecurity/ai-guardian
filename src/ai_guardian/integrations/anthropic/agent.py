@@ -921,7 +921,21 @@ class GuardedAgent:
                 if self._run_sequence is not None:
                     extras["run_sequence"] = self._run_sequence
                 if self._run_context.metadata:
-                    extras["run_metadata"] = self._run_context.metadata
+                    raw_meta = self._run_context.metadata
+                    str_vals = [str(v) for v in raw_meta.values() if isinstance(v, str)]
+                    if str_vals:
+                        sanitized = _try_sanitize_batch(session, str_vals)
+                        idx = 0
+                        sanitized_meta = {}
+                        for k, v in raw_meta.items():
+                            if isinstance(v, str):
+                                sanitized_meta[k] = sanitized[idx]
+                                idx += 1
+                            else:
+                                sanitized_meta[k] = v
+                        extras["run_metadata"] = sanitized_meta
+                    else:
+                        extras["run_metadata"] = raw_meta
                 if self._run_context.parent_trace_id:
                     extras["parent_trace_id"] = self._run_context.parent_trace_id
             if run_start_mono is not None:

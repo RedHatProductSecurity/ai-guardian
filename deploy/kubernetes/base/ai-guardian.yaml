@@ -53,7 +53,6 @@ spec:
                 secretKeyRef:
                   name: ai-guardian-auth
                   key: auth-token
-                  optional: true
           volumeMounts:
             - name: aiconfig
               mountPath: /sandbox/.config/ai-guardian
