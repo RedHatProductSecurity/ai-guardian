@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tray project-directory refresh (#2335)**: Refresh single-daemon and
+  multi-daemon per-directory pause menus when newly observed or expired project
+  directories change, including while global scanning is paused.
+
 - **Tray subprocess interpreter consistency (#2317)**: Launch local AI Guardian
   commands with the interpreter already running the tray, preventing a different
   `ai-guardian` executable on `PATH` from starting an older package installation.
