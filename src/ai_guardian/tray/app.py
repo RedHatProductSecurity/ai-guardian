@@ -915,6 +915,26 @@ class DaemonTray:
         try:
             stats = self._get_stats()
             paused_dirs = stats.get("paused_dirs") or {}
+            target_dir_snapshots = []
+            for target in self._targets:
+                target_stats = (
+                    stats
+                    if target.runtime == "local"
+                    else self._get_target_stats(target)
+                ) or {}
+                target_paused_dirs = target_stats.get("paused_dirs") or {}
+                target_dir_snapshots.append(
+                    (
+                        target.name,
+                        target.runtime,
+                        tuple(target_stats.get("active_project_dirs") or ()),
+                        (
+                            tuple(sorted(target_paused_dirs.keys()))
+                            if target_paused_dirs
+                            else ()
+                        ),
+                    )
+                )
             return (
                 stats.get("request_count"),
                 stats.get("blocked_count"),
@@ -930,6 +950,8 @@ class DaemonTray:
                 self._status,
                 len(self._targets),
                 tuple((t.name, t.status) for t in self._targets),
+                tuple(stats.get("active_project_dirs") or ()),
+                tuple(target_dir_snapshots),
                 tuple(
                     (t.name, getattr(t, "container_id", None))
                     for t in self._stopped_container_targets

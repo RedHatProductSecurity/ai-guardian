@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   relay and gateway-service failures as retryable startup, converge back to a
   running or paused target when the service recovers, and show a restart path
   when recovery remains unsuccessful.
+  
+- **Tray project-directory refresh (#2335)**: Refresh single-daemon and
+  multi-daemon per-directory pause menus when newly observed or expired project
+  directories change, including while global scanning is paused.
 
 - **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
   engines and runtime names in tray actions, mark created containers for stopped

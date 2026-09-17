@@ -1974,6 +1974,63 @@ class TestLinuxPauseMenuStability:
                 assert any(call[1]["visible"](None) for call in resume_calls)
 
 
+class TestProjectDirectoryMenuRefresh:
+    """Refresh directory pause menus when daemon project tracking changes."""
+
+    def _make_tray(self, stats, multi_client=None):
+        return DaemonTray(
+            get_stats_callback=lambda: stats,
+            stop_callback=lambda: None,
+            pause_callback=lambda _: None,
+            multi_client=multi_client,
+        )
+
+    def test_local_active_project_dir_change_refreshes_menu(self):
+        stats = {"active_project_dirs": ["/project-a"], "paused_dirs": {}}
+        tray = self._make_tray(stats)
+        tray._targets = [DaemonTarget(name="local", runtime="local")]
+
+        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            stats["active_project_dirs"].append("/project-b")
+            tray._refresh_menu_if_changed()
+
+        refresh_menu.assert_called_once_with()
+
+    def test_remote_active_project_dir_change_refreshes_menu(self):
+        local_stats = {"active_project_dirs": [], "paused_dirs": {}}
+        remote_stats = {"active_project_dirs": ["/project-a"], "paused_dirs": {}}
+        multi_client = mock.MagicMock()
+        multi_client.get_status.return_value = remote_stats
+        tray = self._make_tray(local_stats, multi_client=multi_client)
+        tray._targets = [DaemonTarget(name="remote", runtime="container")]
+
+        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            remote_stats["active_project_dirs"].append("/project-b")
+            tray._refresh_menu_if_changed()
+
+        refresh_menu.assert_called_once_with()
+        assert multi_client.get_status.call_count == 2
+
+    def test_active_project_dir_change_refreshes_while_globally_paused(self):
+        stats = {
+            "active_project_dirs": ["/project-a"],
+            "paused_dirs": {},
+            "paused": True,
+        }
+        tray = self._make_tray(stats)
+        tray._targets = [DaemonTarget(name="local", runtime="local", status="paused")]
+        tray._status = "paused"
+
+        with mock.patch.object(tray, "_refresh_menu") as refresh_menu:
+            tray._last_stats_snapshot = tray._build_stats_snapshot()
+            stats["active_project_dirs"].append("/project-b")
+            tray._refresh_menu_if_changed()
+
+        refresh_menu.assert_called_once_with()
+
+
 class TestWakeDetection:
     """Tests for system wake detection and tray rebuild (issue #703)."""
 
