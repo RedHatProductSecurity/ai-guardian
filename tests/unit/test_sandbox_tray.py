@@ -236,6 +236,47 @@ class TestSandboxTrayMenu:
         confirm.assert_called_once_with("ag-test", "openshell")
         run_command.assert_called_once_with(target, "delete", ["ag-test"])
 
+    def test_openshell_delete_forwards_clicked_display_to_confirmation(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="running",
+        )
+        tray = _make_tray([target])
+        bounds = (1920, 37, 2560, 1380)
+
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.threading.Thread",
+                ImmediateThread,
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_confirmation",
+                return_value=False,
+            ) as confirm,
+            mock.patch.object(
+                tray._menu,
+                "_capture_sandbox_screen_bounds",
+                return_value=bounds,
+            ) as capture,
+        ):
+            item = tray._menu._build_sandbox_manage_menu_item(0)
+            delete_item = next(
+                child
+                for child in item.action.items
+                if isinstance(child, FakeMenuItem) and child.label == "Delete..."
+            )
+            delete_item.action("clicked-icon", None)
+
+        capture.assert_called_once_with("clicked-icon")
+        confirm.assert_called_once_with(
+            "ag-test",
+            "openshell",
+            screen_bounds=bounds,
+        )
+
     def test_delete_does_nothing_when_confirmation_is_cancelled(self):
         target = DaemonTarget(name="ag-test", runtime="container", status="running")
         tray = _make_tray([target])
@@ -910,6 +951,40 @@ class TestSandboxDialogFallback:
         appkit.NSApplication.sharedApplication.return_value.currentEvent.return_value = (
             event
         )
+        icon = mock.MagicMock()
+        icon._status_item.button.return_value.window.return_value.screen.return_value = (
+            main
+        )
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system",
+                return_value="Darwin",
+            ),
+            mock.patch.dict("sys.modules", {"AppKit": appkit}),
+        ):
+            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+
+    def test_tray_screen_bounds_use_pointer_display_for_mouse_menu_event(self):
+        from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
+
+        main = mock.MagicMock()
+        main.frame.return_value = self._rect(0, 0, 1920, 1440)
+        secondary = mock.MagicMock()
+        secondary.frame.return_value = self._rect(1920, 0, 2560, 1440)
+        secondary.visibleFrame.return_value = self._rect(1920, 23, 2560, 1380)
+        appkit = mock.MagicMock()
+        appkit.NSScreen.screens.return_value = [main, secondary]
+        appkit.NSLeftMouseUp = 2
+        event = mock.MagicMock()
+        event.type.return_value = appkit.NSLeftMouseUp
+        # Nested menu actions can report the stale parent menu window even
+        # though the pointer is on the display where the item was clicked.
+        event.window.return_value.screen.return_value = main
+        appkit.NSApplication.sharedApplication.return_value.currentEvent.return_value = (
+            event
+        )
+        appkit.NSEvent.mouseLocation.return_value = SimpleNamespace(x=2200, y=400)
         icon = mock.MagicMock()
         icon._status_item.button.return_value.window.return_value.screen.return_value = (
             main

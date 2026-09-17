@@ -93,7 +93,7 @@ def _event_screen(AppKit):
     try:
         # AppKit exposes the current event through NSApplication.  NSEvent's
         # Objective-C class method is not exported by every PyObjC build.
-        event = AppKit.NSApplication.sharedApplication().currentEvent()
+        event = _current_event(AppKit)
         if event is None:
             return None
         window = event.window()
@@ -102,6 +102,59 @@ def _event_screen(AppKit):
         return window.screen()
     except Exception:
         return None
+
+
+def _current_event(AppKit):
+    """Return AppKit's current event without requiring NSEvent helpers."""
+    try:
+        return AppKit.NSApplication.sharedApplication().currentEvent()
+    except Exception:
+        return None
+
+
+def _mouse_event_types(AppKit):
+    """Return AppKit constants representing mouse activation events."""
+    names = (
+        "NSLeftMouseDown",
+        "NSLeftMouseUp",
+        "NSRightMouseDown",
+        "NSRightMouseUp",
+        "NSOtherMouseDown",
+        "NSOtherMouseUp",
+        "NSEventTypeLeftMouseDown",
+        "NSEventTypeLeftMouseUp",
+        "NSEventTypeRightMouseDown",
+        "NSEventTypeRightMouseUp",
+        "NSEventTypeOtherMouseDown",
+        "NSEventTypeOtherMouseUp",
+    )
+    return {
+        value
+        for name in names
+        for value in (getattr(AppKit, name, None),)
+        if isinstance(value, (int, float))
+    }
+
+
+def _event_is_mouse_activation(event, AppKit) -> bool:
+    """Return whether an event represents a pointer-driven menu activation."""
+    if event is None:
+        return False
+    try:
+        return event.type() in _mouse_event_types(AppKit)
+    except Exception:
+        return False
+
+
+def _screen_containing_point(point, screens):
+    """Return the screen containing an AppKit global point, if any."""
+    for screen in screens:
+        try:
+            if _point_in_rect(point, screen.frame()):
+                return screen
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
 
 
 def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
@@ -129,15 +182,20 @@ def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
         # instead be the display containing keyboard focus and is not a safe
         # coordinate-system baseline.
         main_frame = screens[0].frame()
+        event = _current_event(AppKit)
         screen = _event_screen(AppKit)
+        pointer = AppKit.NSEvent.mouseLocation()
+        pointer_screen = _screen_containing_point(pointer, screens)
+        # A nested NSMenu action can retain a window from the previous menu
+        # event. For an actual pointer activation, the global mouse location
+        # identifies the display where the user selected the item and is more
+        # reliable than that stale window.
+        if _event_is_mouse_activation(event, AppKit) and pointer_screen is not None:
+            screen = pointer_screen
         if screen is None:
             screen = _status_item_screen(icon)
         if screen is None:
-            pointer = AppKit.NSEvent.mouseLocation()
-            for candidate in screens:
-                if _point_in_rect(pointer, candidate.frame()):
-                    screen = candidate
-                    break
+            screen = pointer_screen
         if screen is not None:
             return _tk_screen_bounds(screen.visibleFrame(), main_frame)
     except Exception as exc:

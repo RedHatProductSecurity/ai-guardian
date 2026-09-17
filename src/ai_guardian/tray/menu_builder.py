@@ -1152,10 +1152,14 @@ class TrayMenuBuilder:
         """Create a delete action protected by an isolated confirmation."""
 
         def action(icon, __):
+            # Capture the click display before any worker dispatch. This is
+            # especially important for the nested OpenShell management menu,
+            # whose AppKit menu window may no longer be current by the time
+            # the confirmation subprocess is started.
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
-            screen_bounds = self._capture_sandbox_screen_bounds(icon)
 
             def confirm_and_delete():
                 try:
