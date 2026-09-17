@@ -492,7 +492,10 @@ class TestSandboxTrayMenu:
             ]
         )
 
-        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
+        with (
+            mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch("ai_guardian.tray.plugin_runner.pystray", FAKE_PYSTRAY),
+        ):
             single_items = tray._menu._build_single_daemon_menu_items()
             items = tray._menu._build_multi_daemon_menu_items()
 
