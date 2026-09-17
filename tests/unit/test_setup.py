@@ -861,8 +861,8 @@ class TestIDESetupParametrized:
 
     @pytest.mark.parametrize(
         "ide_name",
-        ["codex", "gemini", "cline", "zoocode", "augment", "kiro"],
-        ids=["codex", "gemini", "cline", "zoocode", "augment", "kiro"],
+        ["codex", "gemini", "cline", "zoocode", "augment", "kiro", "antigravity"],
+        ids=["codex", "gemini", "cline", "zoocode", "augment", "kiro", "antigravity"],
     )
     def test_ide_in_ide_configs(self, ide_name):
         """Verify IDE entry exists in IDE_CONFIGS with a name and hooks/scripts."""
@@ -1132,8 +1132,8 @@ class TestIDESetupParametrized:
 
     @pytest.mark.parametrize(
         "ide_name",
-        ["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro"],
-        ids=["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro"],
+        ["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro", "antigravity"],
+        ids=["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro", "antigravity"],
     )
     def test_setup_ide_hooks_dry_run(self, tmp_path, ide_name):
         """Dry-run mode returns success with DRY RUN and creates no files."""
@@ -4557,7 +4557,7 @@ class TestWindowsSetup:
 
     @pytest.mark.parametrize(
         "ide_type",
-        ["claude", "cursor", "copilot", "codex", "windsurf", "gemini", "augment"],
+        ["claude", "cursor", "copilot", "codex", "windsurf", "gemini", "augment", "antigravity"],
     )
     def test_hooks_use_pythonw_on_windows(self, tmp_path, ide_type):
         """All agent adapters use pythonw.exe on Windows."""

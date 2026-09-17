@@ -88,6 +88,11 @@ profile or model selector exists.
   to be available there. Relevant surfaces include `container/Dockerfile`,
   `container/run.sh`, `container/entrypoint.sh`, and the source-wheel/vendor
   installation path.
+- [ ] Add the CLI key to these shell arrays (they are not auto-derived from
+  the Python registry):
+  - `SUPPORTED_AGENTS` in `container/run.sh`
+  - `SUPPORTED_AGENT_IDES` in `container/entrypoint.sh`
+  - `CLI_AGENT_IDES` in `container/entrypoint.sh` (if the agent is CLI-based)
 - [ ] Add the CLI to the normal container's supported setup list, or document
   why it is intentionally GUI/editor-only or unavailable in this runtime.
 - [ ] For a bundled CLI, add a reproducible version pin and build-time

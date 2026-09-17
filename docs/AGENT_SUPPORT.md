@@ -482,7 +482,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
-| Antigravity CLI | Medium | Tested — PreToolUse blocking, PreInvocation injection and MCP verified against `agy`; no PostToolUse output available |
+| Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |

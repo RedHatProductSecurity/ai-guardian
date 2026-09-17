@@ -69,9 +69,9 @@ done
 
 SUPPORTED_AGENT_IDES=(
   claude cursor copilot codex windsurf gemini cline zoocode kiro
-  aiderdesk openclaw opencode augment crush junie
+  aiderdesk openclaw opencode augment crush junie antigravity
 )
-CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode crush)
+CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode crush antigravity)
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 
 # AI_GUARDIAN_AGENT is the name used by the sandbox command. Keep

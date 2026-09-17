@@ -443,9 +443,10 @@ remove_file_agents() {
     fi
 
     # Warn about project-local hooks
-    warn "Project-local hooks (cline, zoocode, kiro, junie) must be removed per-project:"
+    warn "Project-local hooks (cline, zoocode, kiro, antigravity, junie) must be removed per-project:"
     echo "    rm -rf <project>/.clinerules/hooks/   # cline/zoocode"
     echo "    rm -rf <project>/.kiro/hooks/          # kiro"
+    echo "    rm -rf <project>/.agents/hooks.json    # antigravity"
     echo "    rm -rf <project>/.junie/guidelines/    # junie"
 }
 

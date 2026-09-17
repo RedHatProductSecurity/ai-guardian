@@ -331,11 +331,11 @@ wheel or a bundled CLI version.
 
 #### CLI scope and image contents
 
-AI Guardian has 15 public integrations. OpenShell is terminal-first, so its
-agent selector contains only these eight CLI-capable integrations:
-`claude`, `copilot`, `codex`, `gemini`, `kiro`, `openclaw`, `opencode`, and
-`crush`. The seven GUI/editor integrations—`cursor`, `windsurf`, `cline`,
-`zoocode`, `aiderdesk`, `augment`, and `junie`—remain available to the normal
+AI Guardian has 16 public integrations. OpenShell is terminal-first, so its
+agent selector contains only these nine CLI-capable integrations:
+`claude`, `copilot`, `codex`, `gemini`, `antigravity`, `kiro`, `openclaw`,
+`opencode`, and `crush`. The seven GUI/editor integrations—`cursor`, `windsurf`,
+`cline`, `zoocode`, `aiderdesk`, `augment`, and `junie`—remain available to the normal
 container setup but are intentionally excluded from the OpenShell selector.
 
 The current OpenShell Community base supplies Claude, Codex, OpenCode, and
