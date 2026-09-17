@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -24,6 +25,8 @@ from ai_guardian.sandbox import (
     _openshell_provider_environment,
     _expose_openshell_service,
     _runtime,
+    _resolve_sandbox_name,
+    _sandbox_name_exists,
     _validate_create_options,
     create_sandbox,
     handle_sandbox_command,
@@ -55,6 +58,88 @@ def _args(**overrides):
     return SimpleNamespace(**values)
 
 
+@pytest.fixture(autouse=True)
+def sandbox_names_are_available():
+    """Keep command-construction tests independent of installed runtimes."""
+    with patch("ai_guardian.sandbox._sandbox_name_exists", return_value=False):
+        yield
+
+
+@pytest.mark.parametrize(
+    ("runtime", "cli", "expected_command"),
+    (
+        (
+            "container",
+            "podman",
+            ["podman", "inspect", "demo"],
+        ),
+        (
+            "openshell",
+            "openshell",
+            ["openshell", "sandbox", "get", "demo", "--output", "json"],
+        ),
+    ),
+)
+def test_sandbox_name_exists_probes_selected_runtime(runtime, cli, expected_command):
+    args = _args(runtime=runtime, container_engine=cli, openshell_cli=cli)
+
+    with patch(
+        "ai_guardian.sandbox._run_capture",
+        return_value=subprocess.CompletedProcess([], 0),
+    ) as run_capture:
+        assert _sandbox_name_exists(args, runtime, "demo") is True
+
+    run_capture.assert_called_once_with(expected_command)
+
+
+def test_resolve_sandbox_name_preserves_unused_requested_name():
+    args = _args(runtime="container", name="demo")
+
+    with patch(
+        "ai_guardian.sandbox._sandbox_name_exists", return_value=False
+    ) as exists:
+        assert _resolve_sandbox_name(args, "container") == "demo"
+
+    exists.assert_called_once_with(args, "container", "demo")
+
+
+@pytest.mark.parametrize(
+    ("runtime", "cli", "expected_base"),
+    (("container", "codex", "ag-codex"), ("openshell", "claude", "ag-claude")),
+)
+def test_resolve_sandbox_name_adds_local_timestamp_on_collision(
+    runtime, cli, expected_base
+):
+    args = _args(runtime=runtime, cli=cli, name=None)
+    timestamp = datetime(2026, 9, 17, 12, 34, 56)
+
+    with (
+        patch(
+            "ai_guardian.sandbox._sandbox_name_exists",
+            side_effect=[True, False],
+        ),
+        patch("ai_guardian.sandbox.datetime") as clock,
+    ):
+        clock.now.return_value = timestamp
+        assert _resolve_sandbox_name(args, runtime) == (
+            f"{expected_base}-20260917_123456"
+        )
+
+
+def test_resolve_sandbox_name_disambiguates_same_second_collisions():
+    args = _args(runtime="openshell", name="demo")
+
+    with (
+        patch(
+            "ai_guardian.sandbox._sandbox_name_exists",
+            side_effect=[True, True, True, False],
+        ),
+        patch("ai_guardian.sandbox.datetime") as clock,
+    ):
+        clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
+        assert _resolve_sandbox_name(args, "openshell") == ("demo-20260917_123456-2")
+
+
 def test_container_start_uses_selected_engine():
     args = _args(sandbox_command="start", container_engine="docker")
 
@@ -65,6 +150,30 @@ def test_container_start_uses_selected_engine():
         assert handle_sandbox_command(args) == 0
 
     assert run.call_args.args[0] == ["docker", "start", "demo"]
+
+
+def test_container_lifecycle_uses_runtime_container_name():
+    args = _args(
+        sandbox_command="exec",
+        name="logical-name",
+        container_name="runtime-name",
+        command_args=["--", "pwd"],
+    )
+
+    with patch(
+        "ai_guardian.sandbox.subprocess.run",
+        return_value=subprocess.CompletedProcess([], 0),
+    ) as run:
+        assert handle_sandbox_command(args) == 0
+
+    assert run.call_args.args[0] == [
+        "podman",
+        "exec",
+        "--interactive",
+        "--tty",
+        "runtime-name",
+        "pwd",
+    ]
 
 
 def test_programmatic_lifecycle_command_captures_runtime_output():
@@ -402,6 +511,36 @@ def test_lifecycle_command_auto_detects_container_by_runtime_label():
     assert run.call_args_list[-1].args[0] == ["podman", "rm", "--force", "demo"]
 
 
+def test_lifecycle_auto_detection_finds_docker_and_retains_engine():
+    args = _args(sandbox_command="delete", runtime=None, container_engine=None)
+
+    def fake_run(command, **kwargs):
+        if command[:2] == ["podman", "inspect"]:
+            return subprocess.CompletedProcess(command, 125, stderr="not found")
+        if command[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    [{"Config": {"Labels": {"ai-guardian.daemon": "true"}}}]
+                ),
+            )
+        if command[:4] == ["openshell", "sandbox", "get", "demo"]:
+            return subprocess.CompletedProcess(command, 1, stderr="not found")
+        return subprocess.CompletedProcess(command, 0)
+
+    with (
+        patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_SANDBOX_RUNTIME": "", "CONTAINER_ENGINE": ""},
+        ),
+        patch("ai_guardian.sandbox.subprocess.run", side_effect=fake_run) as run,
+    ):
+        assert handle_sandbox_command(args) == 0
+
+    assert run.call_args_list[-1].args[0] == ["docker", "rm", "--force", "demo"]
+
+
 def test_list_without_runtime_includes_both_supported_runtimes(capsys):
     args = _args(sandbox_command="list", runtime=None)
 
@@ -471,6 +610,7 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
         "--tty",
     ]
     assert command[5:8] == ["--label", "ai-guardian.managed=true", "--label"]
+    assert "ai-guardian.daemon=true" in command
     assert "--name" in command
     assert command[command.index("--name") + 1] == "demo"
     assert "ai-guardian.name=demo" in command
@@ -482,6 +622,40 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
     )
     assert f"{repo}:/sandbox/repo" in command
     assert command[-3:] == ["example/ai-guardian:test", "bash", "-l"]
+
+
+def test_container_create_uses_timestamped_name_after_collision():
+    args = _args(
+        sandbox_command="create",
+        runtime="container",
+        name="demo",
+        cli="codex",
+        image="example/ai-guardian:test",
+        environment=[],
+        label=[],
+    )
+    output = []
+
+    with (
+        patch(
+            "ai_guardian.sandbox._sandbox_name_exists",
+            side_effect=[True, False],
+        ),
+        patch("ai_guardian.sandbox.datetime") as clock,
+        patch(
+            "ai_guardian.sandbox.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as run,
+    ):
+        clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
+        assert create_sandbox(args, interactive=False, output=output) == 0
+
+    expected_name = "demo-20260917_123456"
+    command = run.call_args.args[0]
+    assert args.name == expected_name
+    assert command[command.index("--name") + 1] == expected_name
+    assert f"ai-guardian.name={expected_name}" in command
+    assert "already in use" in "".join(output)
 
 
 def test_container_create_forwards_vertex_auth_and_mounts_adc(tmp_path):
@@ -1226,10 +1400,11 @@ def test_openshell_vertex_provider_uses_adc_and_default_model(tmp_path):
             os.environ,
             {
                 "HOME": str(tmp_path),
+                "USERPROFILE": str(tmp_path),
                 "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
                 "CLOUD_ML_REGION": "us-central1",
             },
-            clear=False,
+            clear=True,
         ),
         patch(
             "ai_guardian.sandbox._openshell_provider_profiles",
@@ -1305,10 +1480,12 @@ def test_openshell_vertex_provider_updates_explicit_provider_and_model(tmp_path)
         patch.dict(
             os.environ,
             {
+                "HOME": str(tmp_path),
+                "USERPROFILE": str(tmp_path),
                 "ANTHROPIC_VERTEX_PROJECT_ID": "test-project",
                 "CLOUD_ML_REGION": "global",
             },
-            clear=False,
+            clear=True,
         ),
         patch(
             "ai_guardian.sandbox._configure_openshell_vertex_provider"
@@ -1492,6 +1669,52 @@ def test_programmatic_openshell_create_skips_interactive_shell_and_captures_outp
     assert command[-4:] == ["--", OPENSHELL_ENTRYPOINT, "bash", "-l"]
 
 
+def test_openshell_create_uses_timestamped_name_after_collision():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="demo",
+        cli="claude",
+        profile=None,
+        config_dir=None,
+        repo=None,
+        port=None,
+        image="example/ai-guardian-openshell:test",
+        api_key=None,
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+    output = []
+
+    with (
+        patch(
+            "ai_guardian.sandbox._sandbox_name_exists",
+            side_effect=[True, False],
+        ),
+        patch("ai_guardian.sandbox.datetime") as clock,
+        patch("ai_guardian.sandbox._openshell_cli_has_credentials", return_value=False),
+        patch(
+            "ai_guardian.sandbox._expose_openshell_service", return_value=0
+        ) as expose,
+        patch(
+            "ai_guardian.sandbox.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as run,
+    ):
+        clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
+        assert create_sandbox(args, interactive=False, output=output) == 0
+
+    expected_name = "demo-20260917_123456"
+    command = run.call_args.args[0]
+    assert args.name == expected_name
+    assert command[command.index("--name") + 1] == expected_name
+    assert f"ai-guardian.name={expected_name}" in command
+    assert "already in use" in "".join(output)
+    expose.assert_called_once_with(args, expected_name, output=output)
+
+
 def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
     config_dir = tmp_path / "config"
     config_dir.mkdir()
@@ -1534,8 +1757,7 @@ def test_openshell_create_stages_uploads_before_entrypoint_exec(tmp_path):
     exec_command = run.call_args_list[1].args[0]
     shell_command = run.call_args_list[2].args[0]
     generated_name = create_command[create_command.index("--name") + 1]
-    assert generated_name.startswith("ag-codex-")
-    assert len(generated_name) <= 19
+    assert generated_name == "ag-codex"
     assert "--" not in create_command
     assert exec_command == [
         "openshell",
@@ -1831,6 +2053,19 @@ def test_sandbox_create_accepts_latest_config_restore_option():
     start.assert_not_called()
     args = handler.call_args.args[0]
     assert args.restore_config == "latest"
+
+
+def test_sandbox_create_help_describes_collision_aware_names(capsys):
+    from ai_guardian.cli import main
+
+    with patch("sys.argv", ["ai-guardian", "sandbox", "create", "--help"]):
+        with pytest.raises(SystemExit) as error:
+            main()
+
+    assert error.value.code == 0
+    help_text = capsys.readouterr().out
+    assert "defaults to ag-<cli>" in help_text
+    assert "local timestamp" in help_text
 
 
 def test_sandbox_port_must_be_between_one_and_65535():

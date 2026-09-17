@@ -585,7 +585,7 @@ class TrayHealthMonitor:
         return setup.verify_hooks_for_ide(ide_type)
 
     @staticmethod
-    def _notify_user(title, message):
+    def _notify_user(title, message, *, screen_bounds=None):
         """Show a tray result, falling back to a modal dialog if needed."""
         try:
             if tray_plugins.send_notification(title, message):
@@ -595,7 +595,15 @@ class TrayHealthMonitor:
 
         logger.warning("Tray notification unavailable; showing a dialog fallback")
         try:
-            if tray_plugins.show_dialog(title, message):
+            if screen_bounds is None:
+                shown = tray_plugins.show_dialog(title, message)
+            else:
+                shown = tray_plugins.show_dialog(
+                    title,
+                    message,
+                    screen_bounds=screen_bounds,
+                )
+            if shown:
                 return True
         except Exception as exc:
             logger.warning("Tray dialog fallback failed: %s", exc)
@@ -614,19 +622,21 @@ class TrayHealthMonitor:
 
     @staticmethod
     def _notify_ide_check_result(
-        installed, unconfigured=None, statuses=None, excluded=None
+        installed, unconfigured=None, statuses=None, excluded=None, screen_bounds=None
     ):
         """Tell the user the result of an IDE configuration check."""
         if installed is None:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "Unable to check IDE/CLI configuration.",
+                screen_bounds=screen_bounds,
             )
             return
         if not installed:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "No installed IDE/CLI configuration directories were found.",
+                screen_bounds=screen_bounds,
             )
             return
 
@@ -660,6 +670,7 @@ class TrayHealthMonitor:
             TrayHealthMonitor._notify_user(
                 "AI Guardian warning",
                 "IDE/CLI integrations need setup: " + ", ".join(unconfigured_names),
+                screen_bounds=screen_bounds,
             )
             return
 
@@ -667,6 +678,7 @@ class TrayHealthMonitor:
             TrayHealthMonitor._notify_user(
                 "AI Guardian",
                 "No additional IDE/CLI integrations need setup.",
+                screen_bounds=screen_bounds,
             )
             return
 
@@ -675,10 +687,13 @@ class TrayHealthMonitor:
         TrayHealthMonitor._notify_user(
             "AI Guardian",
             "All installed IDE/CLI integrations are configured.",
+            screen_bounds=screen_bounds,
         )
 
     @staticmethod
-    def _notify_ide_setup_result(results, profile=None, remaining=None):
+    def _notify_ide_setup_result(
+        results, profile=None, remaining=None, screen_bounds=None
+    ):
         """Show doctor-style results after setting up IDE/CLI hooks."""
         from ai_guardian.setup.hooks import IDESetup
 
@@ -755,11 +770,21 @@ class TrayHealthMonitor:
                 ["", f"Still needs setup ({len(remaining_names)}):"]
                 + [f"• {name}" for name in remaining_names]
             )
-        TrayHealthMonitor._notify_user("AI Guardian Setup", "\n".join(lines))
+        TrayHealthMonitor._notify_user(
+            "AI Guardian Setup",
+            "\n".join(lines),
+            screen_bounds=screen_bounds,
+        )
 
-    def _on_check_ide_setup(self, _icon, _item):
+    def _on_check_ide_setup(self, icon, _item):
         """Run an on-demand check for installed IDE/CLI integrations."""
-        self._start_ide_setup_check(manual=True, name="ide-setup-check")
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
+
+        screen_bounds = _get_tray_screen_bounds(icon)
+        kwargs = {"manual": True, "name": "ide-setup-check"}
+        if screen_bounds is not None:
+            kwargs["screen_bounds"] = screen_bounds
+        self._start_ide_setup_check(**kwargs)
 
     def _on_startup_ide_setup(self):
         """Start the automatic IDE hook check during tray startup."""
@@ -802,7 +827,9 @@ class TrayHealthMonitor:
                 time.monotonic() + duration.total_seconds()
             )
 
-    def _start_ide_setup_check(self, manual, name, report_result=False):
+    def _start_ide_setup_check(
+        self, manual, name, report_result=False, screen_bounds=None
+    ):
         """Run an IDE hook check in a worker thread."""
         with self._ide_setup_prompt_lock:
             if self._ide_setup_prompt_in_progress or self._ide_setup_check_in_progress:
@@ -812,6 +839,8 @@ class TrayHealthMonitor:
         kwargs = {"manual": manual}
         if report_result:
             kwargs["report_result"] = True
+        if screen_bounds is not None:
+            kwargs["screen_bounds"] = screen_bounds
 
         def run_check(**_thread_kwargs):
             with self._ide_setup_prompt_lock:
@@ -837,7 +866,9 @@ class TrayHealthMonitor:
                 self._ide_setup_check_thread = None
             raise
 
-    def _check_ide_setup_notification(self, manual=False, report_result=False):
+    def _check_ide_setup_notification(
+        self, manual=False, report_result=False, screen_bounds=None
+    ):
         """Prompt users to configure installed IDE integrations.
 
         Automatic checks are limited to local-daemon trays and honor the
@@ -879,6 +910,7 @@ class TrayHealthMonitor:
                 unconfigured=unconfigured,
                 statuses=snapshot_integrations,
                 excluded=setup_exclusions,
+                screen_bounds=screen_bounds,
             )
         if not unconfigured:
             return
@@ -1014,6 +1046,8 @@ class TrayHealthMonitor:
                 }
                 if profile_choices:
                     dialog_kwargs["profile_choices"] = profile_choices
+                if screen_bounds is not None:
+                    dialog_kwargs["screen_bounds"] = screen_bounds
                 if len(names) == 1:
                     dialog = ProactivePromptDialog(**dialog_kwargs)
                 else:
@@ -1104,6 +1138,7 @@ class TrayHealthMonitor:
                             "AI Guardian Setup",
                             "Unable to create the AI Guardian security profile "
                             f"{selected_profile}.\n\n{config_message}",
+                            screen_bounds=screen_bounds,
                         )
                         return
                     configured_profile = selected_profile
@@ -1114,6 +1149,7 @@ class TrayHealthMonitor:
                         self._notify_user(
                             "AI Guardian Configuration",
                             f"Security profile {configured_profile} is configured.",
+                            screen_bounds=screen_bounds,
                         )
                     return
 
@@ -1200,6 +1236,7 @@ class TrayHealthMonitor:
                         (set(unconfigured) - selected_install - selected_never)
                         | set(unhealthy)
                     ),
+                    screen_bounds=screen_bounds,
                 )
             except Exception as exc:
                 logger.warning("IDE setup prompt failed: %s", exc)
@@ -1315,7 +1352,7 @@ class TrayHealthMonitor:
                     dismiss_label="Skip This Version",
                     snooze_options=("1h", "6h", "1d", "1w"),
                 )
-                result = dialog.show()
+                result = dialog.show(tray_safe=True)
                 state.record(prompt_key, result)
                 if result == "action":
                     self._do_self_upgrade()

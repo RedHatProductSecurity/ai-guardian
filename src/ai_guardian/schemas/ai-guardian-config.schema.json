@@ -2324,18 +2324,6 @@
                   "default": "app=ai-guardian",
                   "description": "Base label selector for daemon pods. The ownership selector is added automatically."
                 },
-                "namespaces": {
-                  "type": "array",
-                  "items": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
-                  "minItems": 1,
-                  "description": "Kubernetes namespaces to search. Overrides namespace when provided."
-                },
-                "contexts": {
-                  "type": "array",
-                  "items": {"type": "string", "minLength": 1},
-                  "minItems": 1,
-                  "description": "Kubeconfig contexts to search. Defaults to the active context."
-                },
                 "ownership": {
                   "type": "object",
                   "description": "Ownership scope for daemon pods.",

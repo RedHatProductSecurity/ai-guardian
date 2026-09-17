@@ -887,13 +887,14 @@ class TestSendNotification:
     def test_macos_uses_osascript(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.Popen") as mock_popen:
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value = mock.Mock(returncode=0)
                 from ai_guardian.tray.plugins import send_notification
 
                 result = send_notification("Title", "Hello world")
                 assert result is True
-                mock_popen.assert_called_once()
-                args = mock_popen.call_args[0][0]
+                mock_run.assert_called_once()
+                args = mock_run.call_args[0][0]
                 assert args[0] == "osascript"
                 assert args[2] == (
                     'display notification "Hello world" with title "Title"'
@@ -921,7 +922,7 @@ class TestSendNotification:
     def test_returns_false_on_error(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.Popen", side_effect=FileNotFoundError):
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
                 from ai_guardian.tray.plugins import send_notification
 
                 assert send_notification("T", "M") is False
@@ -929,7 +930,7 @@ class TestSendNotification:
     def test_returns_false_when_macos_notification_cannot_start(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.Popen", side_effect=FileNotFoundError):
+            with mock.patch("subprocess.run", side_effect=FileNotFoundError):
                 from ai_guardian.tray.plugins import send_notification
 
                 assert send_notification("T", "M") is False
@@ -937,11 +938,12 @@ class TestSendNotification:
     def test_escapes_quotes_in_message(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
-            with mock.patch("subprocess.Popen") as mock_popen:
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value = mock.Mock(returncode=0)
                 from ai_guardian.tray.plugins import send_notification
 
                 send_notification("Title", 'He said "hello"')
-                script = mock_popen.call_args[0][0][2]
+                script = mock_run.call_args[0][0][2]
                 assert '\\"' in script
 
     def test_linux_includes_icon_flag(self):
@@ -1163,6 +1165,24 @@ class TestShowDialog:
                 assert args[0] == "osascript"
                 assert "display dialog" in args[2]
 
+    def test_macos_screen_aware_dialog_uses_clicked_display_context(self):
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch(
+                "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess",
+                return_value=True,
+            ) as show_tk:
+                with mock.patch("subprocess.run") as mock_run:
+                    assert show_dialog("Test Title", "Hello", screen_bounds=bounds)
+
+        show_tk.assert_called_once_with(
+            "Test Title",
+            "Hello",
+            screen_bounds=bounds,
+        )
+        mock_run.assert_not_called()
+
     def test_linux_uses_zenity(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
@@ -1365,6 +1385,30 @@ class TestShowActionDialog:
         assert "NSAlert" in script
         assert "NSPopUpButton" in script
         assert "display dialog" not in script
+
+    def test_macos_native_prompt_positions_on_clicked_display(self):
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = (
+                    '{"result":"action","install":[],"never":[]}\n'
+                )
+                assert (
+                    show_action_dialog(
+                        "Title",
+                        "Message",
+                        "Continue",
+                        "Cancel",
+                        screen_bounds=bounds,
+                    )
+                    == "action"
+                )
+
+        script = mock_run.call_args.args[0][4]
+        assert "placeWindowOnTargetScreen" in script
+        assert '"screen_bounds": [1920, 37, 2560, 1380]' in script
 
     def test_macos_returns_none_on_nonzero_exit(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:

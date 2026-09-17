@@ -623,9 +623,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                 return False, f"Bulk config write [{scope}]"
 
             if not _atomic_config_update(config_path, updater):
-                from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
-
-                self._send_error(409, CONFIG_READ_ONLY_MESSAGE)
+                logger.error(
+                    "Bulk config write failed after read-only check: %s", config_path
+                )
+                self._send_error(500, "Failed to write configuration")
                 return
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "ok", "scope": scope})
@@ -809,6 +810,10 @@ class _RestHandler(BaseHTTPRequestHandler):
             pass
 
         if state.paused or (cwd and state.is_dir_paused(cwd)):
+            from ai_guardian.daemon.server import handle_paused_otel
+
+            handle_paused_otel(state, body, cwd)
+
             from ai_guardian import inject_security_only
 
             result = inject_security_only(body, daemon_state=state)
@@ -1230,8 +1235,21 @@ class _RestHandler(BaseHTTPRequestHandler):
         if not host or port is None:
             self._send_error(400, "host and port are required")
             return
-        self.server.daemon_state.register_tray(host, int(port), body.get("auth_token"))
-        self._send_json({"status": "registered", "host": host, "port": int(port)})
+        try:
+            port = int(port)
+        except (ValueError, TypeError):
+            self._send_error(400, "port must be an integer")
+            return
+        if port < 1 or port > 65535:
+            self._send_error(400, "port must be between 1 and 65535")
+            return
+        from ai_guardian.daemon.multi_client import _is_loopback_host
+
+        if not _is_loopback_host(host):
+            self._send_error(403, "only loopback hosts may register as tray")
+            return
+        self.server.daemon_state.register_tray(host, port, body.get("auth_token"))
+        self._send_json({"status": "registered", "host": host, "port": port})
 
     def _handle_prompt_decision(self, body):
         """Handle POST /api/prompt-decision — tray sends ask dialog decision."""
@@ -1404,12 +1422,20 @@ class _RestHandler(BaseHTTPRequestHandler):
             from urllib.error import URLError
             from urllib.request import Request, urlopen
 
+            from ai_guardian.daemon.multi_client import _is_loopback_host
+
             tray = self.server.daemon_state._registered_tray
             if not tray:
                 return
             host = tray["host"]
             port = tray["port"]
             if not port:
+                return
+
+            if not _is_loopback_host(host):
+                logger.warning(
+                    "Refusing to forward trace to non-loopback host: %s", host
+                )
                 return
 
             daemon_name = getattr(self.server, "_name", None) or "unknown"
@@ -1433,7 +1459,7 @@ class _RestHandler(BaseHTTPRequestHandler):
                 req.add_header("Authorization", f"Bearer {tray['auth_token']}")
             with urlopen(req, timeout=10) as resp:
                 resp.read()
-        except (URLError, OSError, Exception):
+        except Exception:
             logger.debug("Failed to forward trace to tray", exc_info=True)
 
     def _handle_push_trace_remote(self, body):

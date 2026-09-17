@@ -295,6 +295,23 @@ class TestAutoDetection:
         adapter = detect_adapter({"kiro_version": "1.0.0"})
         assert isinstance(adapter, KiroAdapter)
 
+    def test_ide_type_kiro_agent_type_matches_alias(self):
+        """Each Kiro alias gets its own agent_type for violation attribution."""
+        for alias in ("kiro", "aiderdesk", "openclaw"):
+            adapter = detect_adapter({"_ide_type": alias})
+            assert isinstance(adapter, KiroAdapter)
+            assert adapter.agent_type == alias, (
+                f"alias '{alias}' should produce agent_type '{alias}', "
+                f"got '{adapter.agent_type}'"
+            )
+
+    def test_env_override_kiro_agent_type_matches_alias(self):
+        for alias in ("kiro", "aiderdesk", "openclaw"):
+            with mock.patch.dict(os.environ, {"AI_GUARDIAN_IDE_TYPE": alias}):
+                adapter = detect_adapter({})
+                assert isinstance(adapter, KiroAdapter)
+                assert adapter.agent_type == alias
+
     def test_detect_gemini_not_claude_with_transcript_path(self):
         """Claude Code data with transcript_path should NOT be detected as Gemini."""
         adapter = detect_adapter(

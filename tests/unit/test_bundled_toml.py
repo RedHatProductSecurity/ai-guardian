@@ -405,6 +405,31 @@ ISSUE_2323_FALSE_POSITIVE_CASES = [
     ("resend-api-key", "# re_ is the Resend API key prefix"),
 ]
 
+ISSUE_2322_DETECTION_CASES = [
+    # postgresql:// scheme with credentials
+    (
+        "postgres-connection",
+        "DATABASE_URL=postgresql://appuser:demo-password@db.example.invalid:5432/app",
+    ),
+    # postgresql:// embedded in a config line
+    (
+        "postgres-connection",
+        'conn = "postgresql://admin:s3cret@10.0.0.5:5432/prod"',
+    ),
+    # postgres:// still detected (regression guard)
+    (
+        "postgres-connection",
+        "postgres://appuser:demo-password@db.example.invalid:5432/app",
+    ),
+]
+
+ISSUE_2322_FALSE_POSITIVE_CASES = [
+    # Credential-free postgresql:// URI
+    ("postgres-connection", "postgresql://db.example.invalid:5432/app"),
+    # Documentation mention without credential URI
+    ("postgres-connection", "# Use postgresql:// to connect to the database"),
+]
+
 ALL_DETECTION_CASES = (
     NEW_SECRET_DETECTION_CASES
     + ISSUE_1617_DETECTION_CASES
@@ -413,6 +438,7 @@ ALL_DETECTION_CASES = (
     + ISSUE_1777_DETECTION_CASES
     + ISSUE_2185_DETECTION_CASES
     + ISSUE_2323_DETECTION_CASES
+    + ISSUE_2322_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
     NEW_SECRET_FALSE_POSITIVE_CASES
@@ -422,6 +448,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_1777_FALSE_POSITIVE_CASES
     + ISSUE_2185_FALSE_POSITIVE_CASES
     + ISSUE_2323_FALSE_POSITIVE_CASES
+    + ISSUE_2322_FALSE_POSITIVE_CASES
 )
 
 

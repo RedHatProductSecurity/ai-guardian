@@ -21,6 +21,7 @@ from ai_guardian.tui.display import (
     _tkinter_available,
     get_preferred_ui,
 )
+from ai_guardian.tray.dialog_placement import _place_window_on_screen
 
 logger = logging.getLogger(__name__)
 
@@ -381,6 +382,7 @@ class ProactivePromptDialog:
         snooze_options: Optional[Iterable[str]] = None,
         ide_choices: Optional[Iterable[Dict[str, str]]] = None,
         profile_choices: Optional[Iterable[Dict[str, str]]] = None,
+        screen_bounds=None,
     ):
         self.title = title
         self.message = message
@@ -389,6 +391,7 @@ class ProactivePromptDialog:
         self.snooze_options = tuple(snooze_options or SNOOZE_OPTIONS)
         self.ide_choices = tuple(ide_choices or ())
         self.profile_choices = tuple(profile_choices or ())
+        self.screen_bounds = screen_bounds
 
     def _profile_options(self):
         """Return valid profile options plus an explicit skip choice."""
@@ -535,6 +538,7 @@ class ProactivePromptDialog:
             self.snooze_options,
             ide_choices=self.ide_choices,
             profile_choices=self._profile_options(),
+            screen_bounds=self.screen_bounds,
         )
 
     def _show_tkinter_subprocess(self) -> Optional[object]:
@@ -552,6 +556,7 @@ class ProactivePromptDialog:
                 "snooze_options": self.snooze_options,
                 "ide_choices": self.ide_choices,
                 "profile_choices": self.profile_choices,
+                "screen_bounds": self.screen_bounds,
             }
         )
         child = (
@@ -560,7 +565,8 @@ class ProactivePromptDialog:
             "p=json.loads(sys.argv[1]); "
             "d=ProactivePromptDialog(p['title'], p['message'], "
             "p['action_label'], p['dismiss_label'], p['snooze_options'], "
-            "p.get('ide_choices'), p.get('profile_choices')); "
+            "p.get('ide_choices'), p.get('profile_choices'), "
+            "p.get('screen_bounds')); "
             "value=(d._show_ide_choices_tkinter() if (p.get('ide_choices') "
             "or p.get('profile_choices')) "
             "else d._show_tkinter()); "
@@ -776,6 +782,13 @@ class ProactivePromptDialog:
             ).grid(row=button_row + 1, column=0, pady=(8, 0), sticky="w")
         root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
         root.bind("<Escape>", lambda _event: choose("dismiss"))
+        root.update_idletasks()
+        _place_window_on_screen(
+            root,
+            self.screen_bounds,
+            root.winfo_reqwidth(),
+            root.winfo_reqheight(),
+        )
         root.lift()
         root.focus_force()
         root.attributes("-topmost", True)
@@ -1062,6 +1075,13 @@ class ProactivePromptDialog:
             ).grid(row=1, column=3)
         root.protocol("WM_DELETE_WINDOW", lambda: choose("dismiss"))
         root.bind("<Escape>", lambda _event: choose("dismiss"))
+        root.update_idletasks()
+        _place_window_on_screen(
+            root,
+            self.screen_bounds,
+            root.winfo_reqwidth(),
+            root.winfo_reqheight(),
+        )
         root.lift()
         root.focus_force()
         root.attributes("-topmost", True)

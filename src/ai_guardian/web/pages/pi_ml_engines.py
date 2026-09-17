@@ -378,7 +378,13 @@ def create_pi_ml_engines_page(service, daemon_name: str):
                                 sect = {}
                             sect["ml_engines"] = parsed
                             cfg["prompt_injection"] = sect
-                            await run.io_bound(save_web_config, cfg)
+                            saved = await run.io_bound(save_web_config, cfg)
+                            if not saved:
+                                ui.notify(
+                                    "Save failed: configuration is read-only or unavailable",
+                                    type="negative",
+                                )
+                                return
                             ui.notify(f"Saved {len(parsed)} engine(s)", type="positive")
                             await refresh()
 

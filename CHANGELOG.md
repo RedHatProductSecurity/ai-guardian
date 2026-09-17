@@ -18,10 +18,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Collision-aware sandbox names (#2334)**: Use the stable `ag-<cli>` base
+  name for container and OpenShell creation, preserve unused explicit names,
+  and add a local `YYYYMMDD_HHMMSS` suffix with deterministic disambiguators
+  when a runtime name is already in use. Propagate the final name through
+  runtime labels, OpenShell service operations, tray defaults, and lifecycle
+  commands.
+
 - **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
   `1.18.31` in the dedicated OpenShell support image.
 
 ### Fixed
+
+- **Tray project-directory refresh (#2335)**: Refresh single-daemon and
+  multi-daemon per-directory pause menus when newly observed or expired project
+  directories change, including while global scanning is paused.
+
+- **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
+  engines and runtime names in tray actions, mark created containers for stopped
+  discovery, probe Docker and Podman during lifecycle auto-detection, classify
+  config write failures accurately, and surface failed web-console saves.
 
 - **Tray subprocess interpreter consistency (#2317)**: Launch local AI Guardian
   commands with the interpreter already running the tray, preventing a different

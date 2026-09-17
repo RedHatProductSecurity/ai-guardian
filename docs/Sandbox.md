@@ -209,7 +209,13 @@ ai-guardian sandbox --runtime openshell list
 ai-guardian sandbox status guardian-claude
 ```
 
-Creation defaults to OpenShell. For lifecycle commands with a name, omit
+Creation defaults to OpenShell. If `--name` is omitted, AI Guardian starts with
+`ag-<cli>` as the logical sandbox name. It preserves that base when it is
+unused; when the selected runtime already has that name, it appends the local
+creation time as `YYYYMMDD_HHMMSS` (for example,
+`ag-claude-20260917_123456`). If that timestamped name is also in use, a
+numeric suffix such as `-1` is added. This policy is applied independently in
+each runtime's native name space. For lifecycle commands with a name, omit
 `--runtime` and the command probes the AI Guardian
 labels/metadata to select Docker/Podman or OpenShell. If no runtime is supplied
 to `list`, it lists managed sandboxes from both runtimes.
@@ -257,6 +263,26 @@ When `opencode` is selected, enter `build`, `plan`, or a custom profile name;
 the agent field is required. The field is only enabled for OpenCode; other CLI
 selections retain their existing defaults.
 
+On macOS with multiple displays, modal windows opened from the tray menu open
+on the display containing the tray menu interaction. This includes About and
+health/setup dialogs, working-directory and Cursor Cloud directory pickers,
+plugin parameter/modal dialogs, and sandbox forms, configuration output,
+runtime logs, and delete confirmations. The tray captures that display before
+starting an isolated Tkinter dialog process (or passes it to the native Cocoa
+fallback); if display detection is unavailable, the normal window-manager
+placement remains the fallback.
+
+Manual verification on macOS with two displays:
+
+1. Start the tray and open its menu on the secondary display.
+2. Select **Create sandbox...** and confirm the form opens on that display.
+3. From **Manage sandbox**, open **Config -> Restore...**, **Logs...**, and
+   **Delete...**; confirm each form or confirmation opens on the same display.
+4. Check **About**, **Working Dir**, and **IDE/CLI Setup** dialogs from the
+   same display; test a plugin parameter or modal item when configured.
+5. Repeat the checks from the primary display and confirm the dialogs follow
+   the interaction display without changing single-display behavior.
+
 ## OpenShell command mappings
 
 Most lifecycle operations below are deliberately thin aliases of the native
@@ -289,10 +315,12 @@ policies, and the gateway-managed AI Guardian service. `sandbox list` is also
 intentionally scoped to
 resources carrying the `ai-guardian.managed=true` label.
 
-When `--name` is supplied, the command records that name in the runtime
-metadata. The tray and NiceGUI prefer this stable sandbox name over a daemon
-hostname that may otherwise be reported as a container ID. Existing OpenShell
-sandboxes also use their `openshell.ai/sandbox-name` metadata when available.
+The command records the final name in runtime metadata. An explicit name is
+preserved when available; if it is already in use, the collision-aware naming
+policy selects the timestamped name before creation. The tray and NiceGUI
+prefer this stable sandbox name over a daemon hostname that may otherwise be
+reported as a container ID. Existing OpenShell sandboxes also use their
+`openshell.ai/sandbox-name` metadata when available.
 
 For OpenShell log filtering, `--source`, `--level`, and `--since` are forwarded
 to `openshell logs`. `--follow` selects OpenShell's streaming `--tail` mode.
@@ -303,7 +331,7 @@ Common options for `sandbox create` are:
 
 | Option | Purpose |
 | --- | --- |
-| `--name NAME` | Assign a stable runtime name. |
+| `--name NAME` | Assign a stable base name. It is preserved when available; a local `YYYYMMDD_HHMMSS` suffix is added on collision. If omitted, the base defaults to `ag-<cli>`. |
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |

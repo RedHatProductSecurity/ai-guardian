@@ -235,14 +235,12 @@ def iter_json_array_file(path: Path, chunk_size: int = 64 * 1024):
                 if position < len(buffer) or eof:
                     return
 
-        while True:
-            skip_whitespace()
-            if position >= len(buffer):
-                raise ValueError("Expected a JSON array")
-            if buffer[position] != "[":
-                raise ValueError("Expected a JSON array")
-            position += 1
-            break
+        skip_whitespace()
+        if position >= len(buffer):
+            raise ValueError("Expected a JSON array")
+        if buffer[position] != "[":
+            raise ValueError("Expected a JSON array")
+        position += 1
 
         while True:
             skip_whitespace()

@@ -39,6 +39,81 @@ IDLE_CHECK_INTERVAL = 60  # seconds
 _is_pid_alive = is_pid_alive
 
 
+def handle_paused_otel(state, hook_data, cwd=None):
+    """Track session observability while daemon is paused (#2034, #2190).
+
+    Extracted so both the socket server and REST API can share this logic.
+    """
+    session_id = hook_data.get("session_id")
+    if not session_id:
+        return
+    event_name = hook_data.get("hook_event_name") or hook_data.get("hookEventName", "")
+    try:
+        if event_name == "SessionEnd":
+            token_usage = None
+            try:
+                from ai_guardian.scanners.transcript.common import (
+                    _get_transcript_path,
+                    parse_transcript_token_usage,
+                )
+
+                tp = _get_transcript_path(hook_data)
+                if tp:
+                    token_usage = parse_transcript_token_usage(tp)
+            except Exception:
+                pass
+            adapter_name = None
+            try:
+                from ai_guardian.hook_processing import detect_adapter
+
+                adapter_name = detect_adapter(hook_data).name
+            except Exception:
+                pass
+            state.flush_otel_emitter(
+                session_id,
+                adapter_name=adapter_name,
+                token_usage=token_usage,
+            )
+            state.finalize_hook_trace(session_id, token_usage=token_usage)
+            return
+
+        adapter_name = None
+        project_name = None
+        adapter = None
+        try:
+            from ai_guardian.hook_processing import detect_adapter
+
+            adapter = detect_adapter(hook_data)
+            adapter_name = adapter.name
+        except Exception:
+            pass
+        try:
+            from ai_guardian.config.utils import get_project_name
+
+            if cwd:
+                project_name = get_project_name(cwd)
+        except Exception:
+            pass
+        if adapter is not None:
+            normalized = adapter.normalize_input(hook_data)
+            state.record_hook_trace_event(
+                hook_data,
+                normalized,
+                {"output": None, "exit_code": 0},
+                adapter=adapter,
+            )
+
+        emitter = state.get_otel_emitter(session_id)
+        if not emitter:
+            return
+        emitter.record_session_start(
+            adapter_name=adapter_name,
+            project_name=project_name,
+        )
+    except Exception:
+        logger.debug("Paused OTEL handling failed (non-fatal)", exc_info=True)
+
+
 class DaemonServer:
     """Long-running daemon server for ai-guardian."""
 
@@ -514,76 +589,7 @@ class DaemonServer:
 
     def _handle_paused_otel(self, hook_data, cwd):
         """Track session observability while daemon is paused (#2034, #2190)."""
-        session_id = hook_data.get("session_id")
-        if not session_id:
-            return
-        event_name = hook_data.get("hook_event_name") or hook_data.get(
-            "hookEventName", ""
-        )
-        try:
-            if event_name == "SessionEnd":
-                token_usage = None
-                try:
-                    from ai_guardian.scanners.transcript.common import (
-                        _get_transcript_path,
-                        parse_transcript_token_usage,
-                    )
-
-                    tp = _get_transcript_path(hook_data)
-                    if tp:
-                        token_usage = parse_transcript_token_usage(tp)
-                except Exception:
-                    pass
-                adapter_name = None
-                try:
-                    from ai_guardian.hook_processing import detect_adapter
-
-                    adapter_name = detect_adapter(hook_data).name
-                except Exception:
-                    pass
-                self.state.flush_otel_emitter(
-                    session_id,
-                    adapter_name=adapter_name,
-                    token_usage=token_usage,
-                )
-                self.state.finalize_hook_trace(session_id, token_usage=token_usage)
-                return
-
-            adapter_name = None
-            project_name = None
-            adapter = None
-            try:
-                from ai_guardian.hook_processing import detect_adapter
-
-                adapter = detect_adapter(hook_data)
-                adapter_name = adapter.name
-            except Exception:
-                pass
-            try:
-                from ai_guardian.config.utils import get_project_name
-
-                if cwd:
-                    project_name = get_project_name(cwd)
-            except Exception:
-                pass
-            if adapter is not None:
-                normalized = adapter.normalize_input(hook_data)
-                self.state.record_hook_trace_event(
-                    hook_data,
-                    normalized,
-                    {"output": None, "exit_code": 0},
-                    adapter=adapter,
-                )
-
-            emitter = self.state.get_otel_emitter(session_id)
-            if not emitter:
-                return
-            emitter.record_session_start(
-                adapter_name=adapter_name,
-                project_name=project_name,
-            )
-        except Exception:
-            logger.debug("Paused OTEL handling failed (non-fatal)", exc_info=True)
+        handle_paused_otel(self.state, hook_data, cwd)
 
     def _handle_sdk_check(self, data):
         """Process an SDK security check request.

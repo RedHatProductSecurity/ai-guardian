@@ -233,6 +233,7 @@ NAV_GROUPS = [
             ("Config Editor", "panel-config-editor"),
             ("Console Settings", "panel-console-settings"),
             ("Tray Plugins", "panel-tray-plugins"),
+            ("Proactive Prompts", "panel-proactive-prompts"),
             ("Effective Config", "panel-config-effective"),
             ("Daemon", "panel-daemon"),
             ("About", "panel-about"),
@@ -998,6 +999,12 @@ HELP_DOCS = {
         "  [bold]Edit[/bold] — Modify selected user plugin JSON\n"
         "  [bold]Toggle[/bold] — Enable/disable a user plugin\n"
         "  [bold]Delete[/bold] — Remove a user plugin file"
+    ),
+    "panel-proactive-prompts": (
+        "[bold]Proactive Prompts[/bold]\n\n"
+        "Read-only view of the local tray proactive prompt state file.\n\n"
+        "Shows IDE/CLI setup status and recorded prompt decisions.\n"
+        "Use Refresh to reload the current state."
     ),
     "panel-config-effective": (
         "[bold]Effective Config[/bold]\n\n"
@@ -1821,6 +1828,13 @@ class AIGuardianTUI(App):
                     from ai_guardian.tui.tray_plugins import TrayPluginsContent
 
                     yield TrayPluginsContent()
+
+                with Container(id="panel-proactive-prompts"):
+                    from ai_guardian.tui.proactive_prompts import (
+                        ProactivePromptsContent,
+                    )
+
+                    yield ProactivePromptsContent()
 
                 with Container(id="panel-config-effective"):
                     from ai_guardian.tui.config_effective import ConfigEffectiveContent

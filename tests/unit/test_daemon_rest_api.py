@@ -147,6 +147,28 @@ class TestRestAPIEndpoints:
         )
         assert state._config_reloaded is False
 
+    def test_config_bulk_write_reports_filesystem_failure(self, rest_api, monkeypatch):
+        api, port, state = rest_api
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_READ_ONLY", "false")
+        url = f"http://127.0.0.1:{port}/api/config/bulk"
+        body = json.dumps({"scope": "global", "config": {"changed": True}}).encode(
+            "utf-8"
+        )
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with (
+            mock.patch(
+                "ai_guardian.config.writer._atomic_config_update", return_value=False
+            ),
+            pytest.raises(HTTPError) as exc_info,
+        ):
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 500
+        assert json.loads(exc_info.value.read())["error"] == (
+            "Failed to write configuration"
+        )
+        assert state._config_reloaded is False
+
     def test_performance_includes_paused_state(self, rest_api):
         api, port, state = rest_api
         performance = {
@@ -334,11 +356,9 @@ class TestViolationsEndpoint:
         v = data["violations"][0]
         assert v["violation_type"] == "secret_detected"
         assert v["severity"] == "high"
-        assert v["blocked"] is True
-        assert v["context"]["tool"] == "Write"
-        assert v["context"]["file"] == "config.py"
-        assert v["context"]["line"] == 42
         assert v["suggestion"]["text"] == "Remove the secret"
+        assert "blocked" not in v
+        assert "context" not in v
 
     def test_get_violations_with_type_filter(self, rest_api):
         api, port, state = rest_api

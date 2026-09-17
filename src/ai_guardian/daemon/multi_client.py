@@ -786,9 +786,26 @@ class MultiDaemonClient:
     def _local_violations(limit: int, violation_type: Optional[str]) -> dict:
         from ai_guardian.violations.logger import ViolationLogger
 
+        _ALLOWED_FIELDS = {
+            "type",
+            "violation_type",
+            "severity",
+            "tool",
+            "file",
+            "action",
+            "suggestion",
+            "line",
+            "timestamp",
+            "session_id",
+            "ide_type",
+        }
         vl = ViolationLogger()
         entries = vl.get_recent_violations(limit=limit, violation_type=violation_type)
-        return {"violations": entries, "count": len(entries)}
+        curated = [
+            {k: v for k, v in entry.items() if k in _ALLOWED_FIELDS}
+            for entry in entries
+        ]
+        return {"violations": curated, "count": len(curated)}
 
     def get_violation_context(
         self,

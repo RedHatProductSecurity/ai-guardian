@@ -266,7 +266,8 @@ elif [[ -n "$VERTEX_PROJECT" ]]; then
         echo "  Or set GOOGLE_APPLICATION_CREDENTIALS" >&2
     fi
 elif [[ -n "$API_KEY" ]]; then
-    env_args+=(-e "ANTHROPIC_API_KEY=${API_KEY}")
+    export ANTHROPIC_API_KEY="$API_KEY"
+    env_args+=(-e "ANTHROPIC_API_KEY")
 fi
 
 # --- Common agent credentials (forward only explicitly supported variables) ---
@@ -274,7 +275,7 @@ _forward_env() {
     local env_name="$1"
     local env_value="${!env_name:-}"
     if [[ -n "$env_value" ]]; then
-        env_args+=(-e "${env_name}=${env_value}")
+        env_args+=(-e "${env_name}")
     fi
 }
 
@@ -287,13 +288,13 @@ for common_env_name in \
 done
 
 # --- Proprietary CLI ToS bypass (forward from host if set) ---
-[[ -n "${ACCEPT_PROPRIETARY_TOS:-}" ]] && env_args+=(-e "ACCEPT_PROPRIETARY_TOS=${ACCEPT_PROPRIETARY_TOS}")
+[[ -n "${ACCEPT_PROPRIETARY_TOS:-}" ]] && env_args+=(-e "ACCEPT_PROPRIETARY_TOS")
 
 # --- Forge tokens (all optional — forward from host if set) ---
-[[ -n "${GH_TOKEN:-}" ]]       && env_args+=(-e "GH_TOKEN=${GH_TOKEN}")
-[[ -n "${GITHUB_TOKEN:-}" ]]   && env_args+=(-e "GITHUB_TOKEN=${GITHUB_TOKEN}")
-[[ -n "${GITLAB_TOKEN:-}" ]]   && env_args+=(-e "GITLAB_TOKEN=${GITLAB_TOKEN}")
-[[ -n "${GITLAB_HOST:-}" ]]    && env_args+=(-e "GITLAB_HOST=${GITLAB_HOST}")
+[[ -n "${GH_TOKEN:-}" ]]       && env_args+=(-e "GH_TOKEN")
+[[ -n "${GITHUB_TOKEN:-}" ]]   && env_args+=(-e "GITHUB_TOKEN")
+[[ -n "${GITLAB_TOKEN:-}" ]]   && env_args+=(-e "GITLAB_TOKEN")
+[[ -n "${GITLAB_HOST:-}" ]]    && env_args+=(-e "GITLAB_HOST")
 
 # --- Launch ---
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

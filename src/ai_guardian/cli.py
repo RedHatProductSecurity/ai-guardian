@@ -1108,7 +1108,11 @@ def main():
             "create", "Create a sandbox (OpenShell connects when ready)"
         )
         sandbox_create_parser.add_argument(
-            "--name", help="Name for the sandbox (runtime-generated when omitted)"
+            "--name",
+            help=(
+                "Base name for the sandbox; defaults to ag-<cli> and adds a "
+                "local timestamp only when the name is already in use"
+            ),
         )
         sandbox_create_parser.add_argument(
             "--cli",
@@ -1445,6 +1449,11 @@ def main():
             "--title",
             default=None,
             help="Window title for the parameter form (mode=params)",
+        )
+        prompt_parser.add_argument(
+            "--screen-bounds",
+            default=None,
+            help="JSON Tk virtual-screen bounds captured from the tray click",
         )
         # ask mode arguments
         prompt_parser.add_argument(

@@ -915,6 +915,26 @@ class DaemonTray:
         try:
             stats = self._get_stats()
             paused_dirs = stats.get("paused_dirs") or {}
+            target_dir_snapshots = []
+            for target in self._targets:
+                target_stats = (
+                    stats
+                    if target.runtime == "local"
+                    else self._get_target_stats(target)
+                ) or {}
+                target_paused_dirs = target_stats.get("paused_dirs") or {}
+                target_dir_snapshots.append(
+                    (
+                        target.name,
+                        target.runtime,
+                        tuple(target_stats.get("active_project_dirs") or ()),
+                        (
+                            tuple(sorted(target_paused_dirs.keys()))
+                            if target_paused_dirs
+                            else ()
+                        ),
+                    )
+                )
             return (
                 stats.get("request_count"),
                 stats.get("blocked_count"),
@@ -930,6 +950,8 @@ class DaemonTray:
                 self._status,
                 len(self._targets),
                 tuple((t.name, t.status) for t in self._targets),
+                tuple(stats.get("active_project_dirs") or ()),
+                tuple(target_dir_snapshots),
                 tuple(
                     (t.name, getattr(t, "container_id", None))
                     for t in self._stopped_container_targets
@@ -1232,9 +1254,9 @@ class DaemonTray:
                 tray_host = self._resolve_tray_host(target)
                 try:
                     local_port = self._get_local_daemon_port()
-                    local_token = self._get_local_daemon_token()
+                    forwarding_token = self._get_tray_forwarding_token()
                     ok = self._multi_client.register_tray(
-                        target, tray_host, local_port, local_token
+                        target, tray_host, local_port, forwarding_token
                     )
                     if ok:
                         registered.add(target.name)
@@ -1281,15 +1303,21 @@ class DaemonTray:
         except Exception:
             return 0
 
-    @staticmethod
-    def _get_local_daemon_token() -> str:
-        """Read the local REST token for authenticated remote trace forwarding."""
-        try:
-            from ai_guardian.daemon import get_auth_token_path
+    def _get_tray_forwarding_token(self) -> str:
+        """Generate a dedicated token for trace forwarding from remote daemons.
 
-            return get_auth_token_path().read_text(encoding="utf-8").strip()
-        except (OSError, UnicodeError):
-            return ""
+        Uses a per-session random token instead of the daemon's master REST
+        bearer token.  The remote daemon only needs this scoped token to POST
+        traces back — it cannot use it to control the local daemon.
+        """
+        if (
+            not hasattr(self, "_tray_forwarding_token")
+            or not self._tray_forwarding_token
+        ):
+            import secrets
+
+            self._tray_forwarding_token = secrets.token_urlsafe(32)
+        return self._tray_forwarding_token
 
     def _start_prompt_poll(self):
         """Start background thread that fast-polls remote daemons for pending ask prompts."""
