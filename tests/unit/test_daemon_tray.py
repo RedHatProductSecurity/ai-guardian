@@ -827,6 +827,18 @@ class TestSingleDaemonFlatMenu:
         assert "⚠" in label
         assert "daemon not running" in label
 
+    def test_daemon_status_label_error_includes_recovery_action(self):
+        t = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="error",
+            error_message="OpenShell phase: Error; use Manage sandbox > Restart to retry",
+        )
+        label = daemon_status_label(t)
+        assert "OpenShell phase: Error" in label
+        assert "Manage sandbox > Restart" in label
+
     def test_flat_menu_with_single_container_target(self):
         """Single container daemon uses flat layout — same as local."""
         tray = self._make_tray(

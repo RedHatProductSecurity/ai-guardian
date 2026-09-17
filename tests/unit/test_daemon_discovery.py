@@ -904,6 +904,112 @@ class TestDiscoverContainers:
         )
         probe.assert_not_called()
 
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_openshell_transient_error_reconverges_after_discovery_refresh(self):
+        d = DaemonDiscovery()
+        error_target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="error",
+            container_id="abc123def456abc123",
+            container_engine="podman",
+            error_message="AI Guardian daemon is not reachable through the OpenShell AI Guardian service",
+        )
+        running_target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="running",
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        client = mock.MagicMock()
+        client.close = mock.MagicMock()
+
+        with (
+            mock.patch.object(
+                d, "_get_docker_clients", return_value=[(client, "podman")]
+            ),
+            mock.patch.object(
+                d,
+                "_sdk_discover_by_label",
+                side_effect=[[error_target], [running_target]],
+            ),
+            mock.patch.object(d, "_sdk_discover_by_port", return_value=[]),
+            mock.patch.object(d, "_sdk_discover_stopped", return_value=[]),
+        ):
+            first = d.discover_containers()
+            second = d.discover_containers()
+
+        assert first[0].status == "starting"
+        assert first[0].error_message == (
+            "OpenShell sandbox is recovering; retrying discovery"
+        )
+        assert second[0].status == "running"
+        assert d._openshell_recovery_started == {}
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_openshell_recovery_failure_exposes_restart_action(self):
+        d = DaemonDiscovery()
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="error",
+            container_id="abc123def456abc123",
+            container_engine="podman",
+            error_message="OpenShell phase: Error",
+        )
+        d._openshell_recovery_started[(target.name, target.container_id)] = (
+            time.monotonic() - 61
+        )
+        client = mock.MagicMock()
+        client.close = mock.MagicMock()
+
+        with (
+            mock.patch.object(
+                d, "_get_docker_clients", return_value=[(client, "podman")]
+            ),
+            mock.patch.object(d, "_sdk_discover_by_label", return_value=[target]),
+            mock.patch.object(d, "_sdk_discover_by_port", return_value=[]),
+            mock.patch.object(d, "_sdk_discover_stopped", return_value=[]),
+        ):
+            targets = d.discover_containers()
+
+        assert targets[0].status == "error"
+        assert "Manage sandbox > Restart" in targets[0].error_message
+
+    @mock.patch("ai_guardian.daemon.discovery.HAS_DOCKER_SDK", True)
+    def test_openshell_starting_timeout_exposes_restart_action(self):
+        d = DaemonDiscovery()
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="starting",
+            container_id="abc123def456abc123",
+            container_engine="podman",
+        )
+        d._openshell_recovery_started[(target.name, target.container_id)] = (
+            time.monotonic() - 61
+        )
+        client = mock.MagicMock()
+        client.close = mock.MagicMock()
+
+        with (
+            mock.patch.object(
+                d, "_get_docker_clients", return_value=[(client, "podman")]
+            ),
+            mock.patch.object(d, "_sdk_discover_by_label", return_value=[target]),
+            mock.patch.object(d, "_sdk_discover_by_port", return_value=[]),
+            mock.patch.object(d, "_sdk_discover_stopped", return_value=[]),
+        ):
+            targets = d.discover_containers()
+
+        assert targets[0].status == "error"
+        assert "Manage sandbox > Restart" in targets[0].error_message
+
     def test_sdk_auth_token_from_openshell_home(self):
         container = mock.MagicMock()
         container.labels = {"openshell.managed": "true"}

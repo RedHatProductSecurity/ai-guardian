@@ -50,6 +50,7 @@ _OPEN_SHELL_MANAGED_LABEL = "openshell.managed"
 _OPEN_SHELL_NAME_LABEL = "openshell.ai/sandbox-name"
 _OPEN_SHELL_SERVICE_NAME = "ai-guardian"
 _AI_GUARDIAN_RUNTIME_LABEL = "ai-guardian.runtime"
+_OPEN_SHELL_RECOVERY_GRACE_SECONDS = 60.0
 
 DOCKER_SOCKET = "/var/run/docker.sock"
 PODMAN_ROOTFUL_SOCKET = "/run/podman/podman.sock"
@@ -220,6 +221,7 @@ class DaemonDiscovery:
         self._targets: List[DaemonTarget] = []
         self._container_targets_cache: Dict[str, List[DaemonTarget]] = {}
         self._stopped_container_targets_cache: Dict[str, List[DaemonTarget]] = {}
+        self._openshell_recovery_started: Dict[Tuple[str, Optional[str]], float] = {}
         self._lock = threading.Lock()
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -464,7 +466,7 @@ class DaemonDiscovery:
                 except Exception:
                     pass  # intentionally silent — cleanup best-effort
 
-        targets = list(seen_ids.values())
+        targets = self._apply_openshell_recovery_state(list(seen_ids.values()))
         with self._lock:
             for _, engine in clients:
                 self._container_targets_cache[engine] = [
@@ -477,6 +479,54 @@ class DaemonDiscovery:
                     for target in stopped_ids.values()
                     if target.container_engine == engine
                 ]
+        return targets
+
+    def _apply_openshell_recovery_state(self, targets):
+        """Keep transient OpenShell startup failures retryable in the tray.
+
+        OpenShell can report a running container before its supervisor relay or
+        gateway-managed service has recovered after a host restart. Treat the
+        first short interval as startup so discovery can converge without
+        showing a terminal error. Persistent failures remain actionable.
+        """
+        now = time.monotonic()
+        active_keys = set()
+        for target in targets:
+            if target.runtime_type != _OPEN_SHELL_RUNTIME:
+                continue
+
+            key = (target.name, target.container_id)
+            if target.status not in {"unknown", "starting", "error"}:
+                self._openshell_recovery_started.pop(key, None)
+                continue
+
+            active_keys.add(key)
+            started_at = self._openshell_recovery_started.setdefault(key, now)
+            if target.status == "starting":
+                if now - started_at >= _OPEN_SHELL_RECOVERY_GRACE_SECONDS:
+                    target.status = "error"
+                    target.error_message = (
+                        "OpenShell sandbox remained in startup; use Manage sandbox "
+                        "> Restart to retry"
+                    )
+                continue
+
+            base_error = target.error_message or (
+                "OpenShell sandbox did not become ready"
+            )
+            if now - started_at < _OPEN_SHELL_RECOVERY_GRACE_SECONDS:
+                target.status = "starting"
+                target.error_message = (
+                    "OpenShell sandbox is recovering; retrying discovery"
+                )
+            else:
+                target.status = "error"
+                target.error_message = (
+                    f"{base_error}; use Manage sandbox > Restart to retry"
+                )
+
+        for key in set(self._openshell_recovery_started) - active_keys:
+            self._openshell_recovery_started.pop(key, None)
         return targets
 
     def _get_docker_clients(self) -> List[Tuple]:

@@ -81,6 +81,11 @@ def daemon_status_label(
         label += " — daemon not running"
     elif target.status == "starting":
         label += " — starting..."
+    elif target.status == "error" and getattr(target, "error_message", None):
+        detail = " ".join(str(target.error_message).split())
+        if len(detail) > 96:
+            detail = detail[:93] + "..."
+        label += f" - {detail}"
     elif active_project_dir:
         short = shorten_path(active_project_dir)
         if len(short) > 40:

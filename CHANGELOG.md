@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **OpenShell post-restart tray recovery (#2333)**: Treat transient sandbox
+  relay and gateway-service failures as retryable startup, converge back to a
+  running or paused target when the service recovers, and show a restart path
+  when recovery remains unsuccessful.
+
 - **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
   engines and runtime names in tray actions, mark created containers for stopped
   discovery, probe Docker and Podman during lifecycle auto-detection, classify
