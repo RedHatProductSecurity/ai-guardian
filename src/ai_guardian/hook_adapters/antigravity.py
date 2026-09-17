@@ -61,6 +61,7 @@ class AntigravityAdapter(HookAdapter):
     """
 
     ENV_ALIASES: ClassVar[List[str]] = ["antigravity", "agy"]
+    AGENT_TYPE: ClassVar[str] = "antigravity"
 
     @property
     def ide_type(self):

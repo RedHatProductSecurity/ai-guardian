@@ -86,6 +86,20 @@ for _integration in ALL_IDE_REGISTRY:
         _ENV_ALIAS_MAP.setdefault(_alias, _adapter_cls)
 
 
+def _canonical_agent_key(alias: str) -> str:
+    """Resolve an --ide / env alias to the registry integration key."""
+    key = (alias or "").lower()
+    for integration in ALL_IDE_REGISTRY:
+        if key == integration.key or key in integration.adapter_aliases:
+            return integration.key
+    return key
+
+
+def _adapter_for_alias(alias: str) -> HookAdapter:
+    """Instantiate the adapter for an alias with canonical attribution."""
+    return _ENV_ALIAS_MAP[alias](agent_type=_canonical_agent_key(alias))
+
+
 def detect_adapter(hook_data: Dict) -> HookAdapter:
     """Detect and return the appropriate adapter for the given hook input.
 
@@ -106,14 +120,14 @@ def detect_adapter(hook_data: Dict) -> HookAdapter:
     if isinstance(explicit_ide, str):
         explicit_ide = explicit_ide.lower()
     if explicit_ide and explicit_ide in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[explicit_ide]()
+        adapter = _adapter_for_alias(explicit_ide)
         logger.debug("Adapter selected via --ide=%s: %s", explicit_ide, adapter.name)
         return adapter
 
     # 2. Check environment variable override
     ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
     if ide_override and ide_override in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[ide_override]()
+        adapter = _adapter_for_alias(ide_override)
         logger.debug(
             "Adapter selected via AI_GUARDIAN_IDE_TYPE=%s: %s",
             ide_override,

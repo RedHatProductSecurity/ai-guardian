@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
+from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN_SCRIPT = REPO_ROOT / "container" / "run.sh"
@@ -781,16 +781,7 @@ fi
         for line in cli_setup_calls
         if line.startswith("setup ") and "--ide " in line
     }
-    assert cli_agents == {
-        "claude",
-        "copilot",
-        "codex",
-        "gemini",
-        "kiro",
-        "openclaw",
-        "opencode",
-        "crush",
-    }
+    assert cli_agents == set(SUPPORTED_CLI_IDE_TYPES)
     assert "Setup:        supported CLI agents" in cli_result.stdout
 
     log_path.unlink()

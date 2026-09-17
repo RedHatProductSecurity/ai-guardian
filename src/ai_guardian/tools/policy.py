@@ -1608,7 +1608,7 @@ class ToolPolicyChecker:
         # Claude-compatible agents (notably Codex) are not misattributed.
         from ai_guardian.hook_adapters import detect_adapter
 
-        return detect_adapter(hook_data).agent_type
+        return canonical_ide(detect_adapter(hook_data).agent_type)
 
     def _load_config(self) -> Dict:
         """
