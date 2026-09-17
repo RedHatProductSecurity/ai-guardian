@@ -375,7 +375,13 @@ def create_global_settings_page(service, daemon_name: str):
                         async def save_err(e):
                             cfg = await run.io_bound(load_web_config)
                             cfg["on_scan_error"] = e.value
-                            await run.io_bound(save_web_config, cfg)
+                            saved = await run.io_bound(save_web_config, cfg)
+                            if not saved:
+                                ui.notify(
+                                    "Save failed: configuration is read-only or unavailable",
+                                    type="negative",
+                                )
+                                return
                             ui.notify("Saved", type="positive")
 
                         sel.on_value_change(save_err)

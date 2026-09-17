@@ -1010,17 +1010,31 @@ def _subprocess_succeeded(result, operation: str) -> bool:
     return False
 
 
-def show_dialog(title: str, message: str) -> bool:
+def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     """Show a modal dialog box. Returns True on success.
 
     Uses platform-native dialogs: AppleScript on macOS, zenity/kdialog
-    on Linux, PowerShell on Windows.
+    on Linux, PowerShell on Windows. When a tray click supplied explicit
+    macOS display bounds, use an isolated Tk dialog so the window can be
+    centered on that display before falling back to AppleScript.
     """
     import subprocess
 
     system = platform.system()
     try:
         if system == "Darwin":
+            if screen_bounds is not None:
+                from ai_guardian.tray.dialog_placement import (
+                    show_tkinter_message_subprocess,
+                )
+
+                shown = show_tkinter_message_subprocess(
+                    title,
+                    message,
+                    screen_bounds=screen_bounds,
+                )
+                if shown is not None:
+                    return shown
             from ai_guardian.daemon.multi_client import _escape_for_applescript
 
             msg = (
@@ -1163,6 +1177,7 @@ def _show_linux_action_dialog(
     snooze_options: Iterable[str],
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
+    screen_bounds=None,
 ) -> Optional[object]:
     """Show a simple actionable prompt using zenity or kdialog on Linux."""
     import subprocess
@@ -1260,6 +1275,7 @@ def show_action_dialog(
     snooze_options: Iterable[str] = (),
     ide_choices: Iterable[Dict[str, str]] = (),
     profile_choices: Iterable[Dict[str, str]] = (),
+    screen_bounds=None,
 ) -> Optional[object]:
     """Show an actionable native prompt on macOS or Linux.
 
@@ -1295,6 +1311,7 @@ def show_action_dialog(
             snooze_options,
             ide_choices,
             profile_choices,
+            screen_bounds,
         )
     if system != "Darwin":
         return None
@@ -1306,6 +1323,7 @@ def show_action_dialog(
         snooze_options,
         ide_choices,
         profile_choices,
+        screen_bounds,
     )
     if ide_choices or profile_choices:
         return result
@@ -1322,6 +1340,7 @@ def _show_native_choice_dialog(
     snooze_options: Iterable[str],
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
+    screen_bounds=None,
 ) -> Optional[object]:
     """Show a structured proactive prompt using native macOS controls.
 
@@ -1341,6 +1360,7 @@ def _show_native_choice_dialog(
         snooze_options,
         ide_choices,
         profile_choices,
+        screen_bounds,
     )
     if cocoa_result is not None:
         return cocoa_result
@@ -1359,6 +1379,7 @@ def _show_native_cocoa_choice_dialog(
     snooze_options: Iterable[str],
     ide_choices: Iterable[Dict[str, str]],
     profile_choices: Iterable[Dict[str, str]],
+    screen_bounds=None,
 ) -> Optional[object]:
     """Show the structured prompt with native Cocoa controls on macOS."""
     import subprocess
@@ -1374,6 +1395,7 @@ def _show_native_cocoa_choice_dialog(
         "snooze_options": options,
         "ide_choices": ide_choices,
         "profile_choices": profile_choices,
+        "screen_bounds": screen_bounds,
     }
     payload_script = json.dumps(payload, ensure_ascii=False)
 
@@ -1464,6 +1486,40 @@ function selectedProfile(profilePopup) {
         return null;
     }
     return payload.profile_choices[index].profile;
+}
+
+function placeWindowOnTargetScreen(window) {
+    if (!payload.screen_bounds || payload.screen_bounds.length !== 4) {
+        return;
+    }
+    var target = payload.screen_bounds;
+    var screens = $.NSScreen.screens;
+    if (!screens || Number(screens.count) === 0) {
+        return;
+    }
+    var mainFrame = screens.objectAtIndex(0).frame;
+    var mainX = Number(mainFrame.origin.x);
+    var mainY = Number(mainFrame.origin.y);
+    var mainHeight = Number(mainFrame.size.height);
+    for (var index = 0; index < Number(screens.count); index++) {
+        var visible = screens.objectAtIndex(index).visibleFrame;
+        var tkX = Number(visible.origin.x) - mainX;
+        var tkY = mainY + mainHeight -
+            (Number(visible.origin.y) + Number(visible.size.height));
+        if (Math.abs(tkX - Number(target[0])) > 1 ||
+            Math.abs(tkY - Number(target[1])) > 1 ||
+            Math.abs(Number(visible.size.width) - Number(target[2])) > 1 ||
+            Math.abs(Number(visible.size.height) - Number(target[3])) > 1) {
+            continue;
+        }
+        var frame = window.frame;
+        var x = Number(visible.origin.x) +
+            (Number(visible.size.width) - Number(frame.size.width)) / 2;
+        var y = Number(visible.origin.y) +
+            (Number(visible.size.height) - Number(frame.size.height)) / 2;
+        window.setFrameOrigin($.NSMakePoint(x, y));
+        return;
+    }
 }
 
 function showDialog() {
@@ -1559,6 +1615,7 @@ function showDialog() {
     var alertWindow = alert.window;
     if (alertWindow) {
         alertWindow.setLevel(3);
+        placeWindowOnTargetScreen(alertWindow);
         alertWindow.makeKeyAndOrderFront(null);
     }
     var response = Number(alert.runModal);
@@ -2014,6 +2071,7 @@ def execute_plugin_command(
     target=None,
     run_on_target=False,
     label=None,
+    screen_bounds=None,
 ):
     """Execute a plugin command with optional target context."""
     import subprocess
@@ -2089,7 +2147,12 @@ def execute_plugin_command(
                     )
                 else:
                     output = (output + "\n" + err).strip() if output else err
-            show_dialog(label or "AI Guardian", output or "(no output)")
+            title = label or "AI Guardian"
+            message = output or "(no output)"
+            if screen_bounds is None:
+                show_dialog(title, message)
+            else:
+                show_dialog(title, message, screen_bounds=screen_bounds)
         else:
             subprocess.run(cmd_parts, timeout=60)
     except Exception:

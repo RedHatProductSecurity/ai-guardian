@@ -147,6 +147,28 @@ class TestRestAPIEndpoints:
         )
         assert state._config_reloaded is False
 
+    def test_config_bulk_write_reports_filesystem_failure(self, rest_api, monkeypatch):
+        api, port, state = rest_api
+        monkeypatch.setenv("AI_GUARDIAN_CONFIG_READ_ONLY", "false")
+        url = f"http://127.0.0.1:{port}/api/config/bulk"
+        body = json.dumps({"scope": "global", "config": {"changed": True}}).encode(
+            "utf-8"
+        )
+        req = Request(url, data=body, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with (
+            mock.patch(
+                "ai_guardian.config.writer._atomic_config_update", return_value=False
+            ),
+            pytest.raises(HTTPError) as exc_info,
+        ):
+            urlopen(req, timeout=5)
+        assert exc_info.value.code == 500
+        assert json.loads(exc_info.value.read())["error"] == (
+            "Failed to write configuration"
+        )
+        assert state._config_reloaded is False
+
     def test_performance_includes_paused_state(self, rest_api):
         api, port, state = rest_api
         performance = {

@@ -260,7 +260,13 @@ def create_ssrf_page(service, daemon_name: str):
                             sect = {}
                         sect["action"] = e.value
                         cfg["ssrf_protection"] = sect
-                        await run.io_bound(save_web_config, cfg)
+                        saved = await run.io_bound(save_web_config, cfg)
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
                         ui.notify(f"Action: {e.value}", type="positive")
 
                     act_sel.on_value_change(save_action)
@@ -284,7 +290,13 @@ def create_ssrf_page(service, daemon_name: str):
                             sect = {}
                         sect["allow_localhost"] = e.value
                         cfg["ssrf_protection"] = sect
-                        await run.io_bound(save_web_config, cfg)
+                        saved = await run.io_bound(save_web_config, cfg)
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
                         ui.notify("Saved", type="positive")
 
                     lh_sw.on_value_change(save_localhost)

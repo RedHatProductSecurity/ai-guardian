@@ -43,6 +43,7 @@ class TrayMenuBuilder:
     def _on_about(self, icon, item):
         """Show About info via OS dialog."""
 
+        screen_bounds = self._capture_tray_screen_bounds(icon)
         target = None
         if len(self._tray._targets) == 1:
             target = self._tray._targets[0]
@@ -68,7 +69,11 @@ class TrayMenuBuilder:
                     if self._tray._is_multi_daemon():
                         text = self._format_local_about_text(text)
                         text += self._format_daemon_list()
-                show_dialog(title, text)
+                show_dialog(
+                    title,
+                    text,
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
             except Exception:
                 pass  # intentionally silent — optional dependency
 
@@ -92,10 +97,11 @@ class TrayMenuBuilder:
     def _on_daemon_about(self, slot):
         """Show About info for a specific daemon via OS dialog."""
 
-        def action(_, __):
+        def action(icon, __):
             if slot >= len(self._tray._targets):
                 return
             target = self._tray._targets[slot]
+            screen_bounds = self._capture_tray_screen_bounds(icon)
 
             def _show():
                 try:
@@ -114,7 +120,11 @@ class TrayMenuBuilder:
                         _, text = self._format_unavailable_remote_about(target)
                     else:
                         text = tray_menu.build_about_text()
-                    show_dialog(f"About {target.name}", text)
+                    show_dialog(
+                        f"About {target.name}",
+                        text,
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    )
                 except Exception:
                     pass  # intentionally silent — optional dependency
 
@@ -378,25 +388,28 @@ class TrayMenuBuilder:
     def _mk_change_working_dir(self, slot):
         """Create a click handler that opens a directory picker for a slot."""
 
-        def action(_, __):
+        def action(icon, __):
             if slot >= len(self._tray._targets):
                 return
             t = self._tray._targets[slot]
             current = getattr(t, "working_dir", None)
             threading.Thread(
                 target=self._pick_working_dir,
-                args=(t, current),
+                args=(t, current, self._capture_tray_screen_bounds(icon)),
                 daemon=True,
                 name="working-dir-picker",
             ).start()
 
         return action
 
-    def _pick_working_dir(self, target, current):
+    def _pick_working_dir(self, target, current, screen_bounds=None):
         """Run directory picker in background thread and persist result."""
         from ai_guardian.daemon.working_dir import choose_directory, set_working_dir
 
-        chosen = choose_directory(current)
+        chosen = choose_directory(
+            current,
+            **self._screen_bounds_kwargs(screen_bounds),
+        )
         if chosen:
             target.working_dir = chosen
             set_working_dir(target.name, chosen)
@@ -405,25 +418,27 @@ class TrayMenuBuilder:
     def _mk_cursor_cloud_setup_action(self):
         """Create a handler that selects a workspace for Cursor Cloud setup."""
 
-        def action(_, __):
+        def action(icon, __):
             current = None
             if self._tray._targets:
                 current = getattr(self._tray._targets[0], "working_dir", None)
             threading.Thread(
                 target=self._pick_cursor_cloud_project,
-                args=(current,),
+                args=(current, self._capture_tray_screen_bounds(icon)),
                 daemon=True,
                 name="cursor-cloud-project-picker",
             ).start()
 
         return action
 
-    def _pick_cursor_cloud_project(self, current=None):
+    def _pick_cursor_cloud_project(self, current=None, screen_bounds=None):
         """Select a workspace, then launch explicit Cursor project setup."""
         from ai_guardian.daemon.working_dir import choose_directory
 
         chosen = choose_directory(
-            current, title="Choose Cursor Cloud project directory"
+            current,
+            title="Choose Cursor Cloud project directory",
+            **self._screen_bounds_kwargs(screen_bounds),
         )
         if chosen:
             tray_menu.launch_ide_setup("cursor", scope="project", project_dir=chosen)
@@ -469,33 +484,61 @@ class TrayMenuBuilder:
         )
 
     def _start_sandbox_form(
-        self, title, message, fields, callback, *, name="sandbox-form"
+        self, title, message, fields, callback, *, name="sandbox-form", icon=None
     ):
         """Show a sandbox form away from the tray callback thread."""
+        screen_bounds = self._capture_sandbox_screen_bounds(icon)
 
         def run_form():
             try:
                 from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
-                values = show_sandbox_form(title, message, fields)
+                if screen_bounds is None:
+                    values = show_sandbox_form(title, message, fields)
+                else:
+                    values = show_sandbox_form(
+                        title,
+                        message,
+                        fields,
+                        screen_bounds=screen_bounds,
+                    )
                 if values is not None:
-                    callback(values)
+                    callback(values, screen_bounds=screen_bounds)
             except Exception:
                 logger.exception("Sandbox form action failed")
 
         threading.Thread(target=run_form, daemon=True, name=name).start()
 
     @staticmethod
-    def _sandbox_error(title, message):
+    def _capture_tray_screen_bounds(icon=None):
+        """Capture the display containing the tray menu before worker dispatch."""
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
+
+        return _get_tray_screen_bounds(icon)
+
+    @staticmethod
+    def _capture_sandbox_screen_bounds(icon=None):
+        """Backward-compatible alias for sandbox display capture tests."""
+        return TrayMenuBuilder._capture_tray_screen_bounds(icon)
+
+    @staticmethod
+    def _screen_bounds_kwargs(screen_bounds):
+        """Build optional dialog placement kwargs without changing fallbacks."""
+        return {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
+
+    @staticmethod
+    def _sandbox_error(title, message, *, screen_bounds=None):
         """Show a best-effort error for invalid tray form input."""
         from ai_guardian.tray.plugins import show_dialog
 
-        show_dialog(title, message)
+        show_dialog(
+            title, message, **TrayMenuBuilder._screen_bounds_kwargs(screen_bounds)
+        )
 
     def _mk_sandbox_create_action(self):
         """Create the main-menu callback for sandbox creation."""
 
-        def action(_, __):
+        def action(icon, __):
             self._start_sandbox_form(
                 "Create AI Guardian sandbox",
                 "Choose the sandbox runtime and initial configuration. Creation "
@@ -505,6 +548,7 @@ class TrayMenuBuilder:
                 self._sandbox_create_fields(),
                 self._complete_sandbox_create_form,
                 name="sandbox-create-form",
+                icon=icon,
             )
 
         return action
@@ -669,7 +713,7 @@ class TrayMenuBuilder:
             },
         ]
 
-    def _complete_sandbox_create_form(self, values):
+    def _complete_sandbox_create_form(self, values, *, screen_bounds=None):
         """Validate create form values and launch the selected command."""
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
@@ -679,12 +723,14 @@ class TrayMenuBuilder:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "A saved configuration snapshot cannot be combined with a profile.",
+                **self._screen_bounds_kwargs(screen_bounds),
             )
             return
         if runtime not in {"container", "openshell"} or not name:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "A valid runtime and sandbox name are required.",
+                **self._screen_bounds_kwargs(screen_bounds),
             )
             return
 
@@ -696,6 +742,7 @@ class TrayMenuBuilder:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "An OpenCode agent profile is required when CLI is opencode.",
+                **self._screen_bounds_kwargs(screen_bounds),
             )
             return
         repo = str(values.get("repo") or "").strip() or None
@@ -707,6 +754,7 @@ class TrayMenuBuilder:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "The host config directory cannot be combined with a profile or saved snapshot.",
+                **self._screen_bounds_kwargs(screen_bounds),
             )
             return
         policies = str(values.get("policies") or "").strip()
@@ -714,6 +762,7 @@ class TrayMenuBuilder:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
                 "Policy files are supported for OpenShell sandboxes only.",
+                **self._screen_bounds_kwargs(screen_bounds),
             )
             return
         policy_paths = []
@@ -742,6 +791,7 @@ class TrayMenuBuilder:
                     self._sandbox_error(
                         "Create AI Guardian sandbox",
                         "Labels must use KEY=VALUE entries separated by commas.",
+                        **self._screen_bounds_kwargs(screen_bounds),
                     )
                     return
                 label_values.append(label)
@@ -752,6 +802,7 @@ class TrayMenuBuilder:
                 self._sandbox_error(
                     "Create AI Guardian sandbox",
                     "Host port is supported for container sandboxes only.",
+                    **self._screen_bounds_kwargs(screen_bounds),
                 )
                 return
             try:
@@ -761,6 +812,7 @@ class TrayMenuBuilder:
                 self._sandbox_error(
                     "Create AI Guardian sandbox",
                     "Host port must be an integer between 1 and 65535.",
+                    **self._screen_bounds_kwargs(screen_bounds),
                 )
                 return
             port_value = int(port)
@@ -787,10 +839,11 @@ class TrayMenuBuilder:
                 provider=provider_names,
                 label=label_values,
                 command_args=[],
-            )
+            ),
+            **self._screen_bounds_kwargs(screen_bounds),
         )
 
-    def _run_sandbox_create(self, args):
+    def _run_sandbox_create(self, args, *, screen_bounds=None):
         """Create a sandbox in-process and report failures in a log dialog."""
         output = []
         try:
@@ -813,6 +866,7 @@ class TrayMenuBuilder:
                     "Sandbox creation failed",
                     f"Unable to create sandbox '{args.name}'.",
                     log_text,
+                    **self._screen_bounds_kwargs(screen_bounds),
                 )
             except Exception:
                 logger.exception("Unable to show sandbox creation log")
@@ -859,6 +913,7 @@ class TrayMenuBuilder:
             sandbox_config_command=parts[1] if len(parts) > 1 else None,
             runtime=runtime,
             container_engine=getattr(target, "container_engine", None),
+            container_name=getattr(target, "container_name", None),
             openshell_cli=None,
             name=target.name,
             container_id=getattr(target, "container_id", None),
@@ -872,7 +927,9 @@ class TrayMenuBuilder:
             since=option_values.get("since"),
         )
 
-    def _run_sandbox_command(self, target, operation, command_args=None):
+    def _run_sandbox_command(
+        self, target, operation, command_args=None, *, screen_bounds=None
+    ):
         """Run a non-interactive sandbox action and show useful output."""
         output = []
         parts = self._sandbox_operation_parts(operation)
@@ -906,7 +963,12 @@ class TrayMenuBuilder:
                         f"Unable to run {' '.join(parts)} for sandbox "
                         f"'{target.name}'."
                     )
-                show_sandbox_log(title, message, log_text)
+                show_sandbox_log(
+                    title,
+                    message,
+                    log_text,
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
             except Exception:
                 logger.exception("Unable to show sandbox command log")
         else:
@@ -918,13 +980,19 @@ class TrayMenuBuilder:
         if result == 0 and self._tray._discovery:
             self._tray._discovery.request_refresh(wait=False)
 
-    def _start_sandbox_command(self, target, operation, command_args=None):
+    def _start_sandbox_command(
+        self, target, operation, command_args=None, *, screen_bounds=None
+    ):
         """Run a non-interactive sandbox action away from the tray callback."""
+        thread_options = {}
+        if screen_bounds is not None:
+            thread_options["kwargs"] = {"screen_bounds": screen_bounds}
         thread = threading.Thread(
             target=self._run_sandbox_command,
             args=(target, operation, command_args),
             daemon=True,
             name="sandbox-command",
+            **thread_options,
         )
         thread.start()
         return thread
@@ -934,10 +1002,11 @@ class TrayMenuBuilder:
     ):
         """Create a menu callback for a command using the selected target."""
 
-        def action(_, __):
+        def action(icon, __):
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
             command_args = arguments(target) if callable(arguments) else arguments
             parts = self._sandbox_operation_parts(operation)
             if parts[0] in {"connect", "exec"}:
@@ -948,24 +1017,33 @@ class TrayMenuBuilder:
                     keep_open=keep_open,
                 )
             else:
-                self._start_sandbox_command(target, operation, command_args)
+                self._start_sandbox_command(
+                    target,
+                    operation,
+                    command_args,
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
 
         return action
 
     def _mk_sandbox_exec_action(self, slot):
         """Create a callback that prompts for an exec command."""
 
-        def action(_, __):
+        def action(icon, __):
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
 
-            def complete(values):
+            def complete(values, *, screen_bounds=None):
                 command = str(values.get("command") or "").strip()
                 try:
                     command_args = shlex.split(command) if command else []
                 except ValueError as exc:
-                    self._sandbox_error("Sandbox exec", f"Invalid command: {exc}")
+                    self._sandbox_error(
+                        "Sandbox exec",
+                        f"Invalid command: {exc}",
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    )
                     return
                 args = [target.name]
                 if command_args:
@@ -985,6 +1063,7 @@ class TrayMenuBuilder:
                 ],
                 complete,
                 name="sandbox-exec-form",
+                icon=icon,
             )
 
         return action
@@ -992,12 +1071,12 @@ class TrayMenuBuilder:
     def _mk_sandbox_logs_action(self, slot):
         """Create a callback that prompts for optional log filters."""
 
-        def action(_, __):
+        def action(icon, __):
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
 
-            def complete(values):
+            def complete(values, *, screen_bounds=None):
                 args = [target.name]
                 if values.get("follow"):
                     args.append("--follow")
@@ -1010,7 +1089,12 @@ class TrayMenuBuilder:
                         target, "logs", args, keep_open=True
                     )
                 else:
-                    self._start_sandbox_command(target, "logs", args)
+                    self._start_sandbox_command(
+                        target,
+                        "logs",
+                        args,
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    )
 
             self._start_sandbox_form(
                 "Sandbox logs",
@@ -1030,6 +1114,7 @@ class TrayMenuBuilder:
                 ],
                 complete,
                 name="sandbox-logs-form",
+                icon=icon,
             )
 
         return action
@@ -1037,17 +1122,18 @@ class TrayMenuBuilder:
     def _mk_sandbox_restore_action(self, slot):
         """Create a callback that prompts for a snapshot selector."""
 
-        def action(_, __):
+        def action(icon, __):
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
 
-            def complete(values):
+            def complete(values, *, screen_bounds=None):
                 snapshot = str(values.get("snapshot") or "latest").strip()
                 self._start_sandbox_command(
                     target,
                     ("config", "restore"),
                     [target.name, "--snapshot", snapshot],
+                    **self._screen_bounds_kwargs(screen_bounds),
                 )
 
             self._start_sandbox_form(
@@ -1063,6 +1149,7 @@ class TrayMenuBuilder:
                 ],
                 complete,
                 name="sandbox-config-restore-form",
+                icon=icon,
             )
 
         return action
@@ -1070,7 +1157,12 @@ class TrayMenuBuilder:
     def _mk_sandbox_delete_action(self, slot):
         """Create a delete action protected by an isolated confirmation."""
 
-        def action(_, __):
+        def action(icon, __):
+            # Capture the click display before any worker dispatch. This is
+            # especially important for the nested OpenShell management menu,
+            # whose AppKit menu window may no longer be current by the time
+            # the confirmation subprocess is started.
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
             target = self._sandbox_target_at(slot)
             if target is None:
                 return
@@ -1082,8 +1174,17 @@ class TrayMenuBuilder:
                     )
 
                     runtime = self._sandbox_runtime(target) or "unknown"
-                    if show_sandbox_confirmation(target.name, runtime):
-                        self._start_sandbox_command(target, "delete", [target.name])
+                    if show_sandbox_confirmation(
+                        target.name,
+                        runtime,
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    ):
+                        self._start_sandbox_command(
+                            target,
+                            "delete",
+                            [target.name],
+                            **self._screen_bounds_kwargs(screen_bounds),
+                        )
                 except Exception:
                     logger.exception("Sandbox delete confirmation failed")
 
@@ -1205,8 +1306,14 @@ class TrayMenuBuilder:
     def _mk_sandbox_start_container_action(self, target):
         """Create the main-menu action for one stopped container."""
 
-        def action(_, __):
-            self._start_sandbox_command(target, "start", [target.name])
+        def action(icon, __):
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
+            self._start_sandbox_command(
+                target,
+                "start",
+                [target.name],
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
 
         return action
 

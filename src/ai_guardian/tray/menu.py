@@ -181,12 +181,29 @@ def launch_sandbox_command(target, operation, command_args=(), *, keep_open=True
     operation_parts = (
         list(operation) if isinstance(operation, (tuple, list)) else [operation]
     )
+    operation_args = [str(value) for value in command_args]
+    if runtime == "container":
+        runtime_name = getattr(target, "container_name", None)
+        target_name = getattr(target, "name", None)
+        if runtime_name and operation_args and operation_args[0] == target_name:
+            operation_args[0] = str(runtime_name)
+        container_engine = getattr(target, "container_engine", None)
+        if container_engine:
+            operation_options = [
+                "--runtime",
+                runtime,
+                "--container-engine",
+                str(container_engine),
+            ]
+        else:
+            operation_options = ["--runtime", runtime]
+    else:
+        operation_options = ["--runtime", runtime]
     command = resolve_cli_cmd(
         "sandbox",
         *operation_parts,
-        "--runtime",
-        runtime,
-        *(str(value) for value in command_args),
+        *operation_options,
+        *operation_args,
     )
     return _launch_in_terminal(command, keep_open=keep_open)
 

@@ -95,7 +95,13 @@ def create_pi_unicode_page(service, daemon_name: str):
                                 usect[k] = e.value
                                 sect["unicode_detection"] = usect
                                 cfg["prompt_injection"] = sect
-                                await run.io_bound(save_web_config, cfg)
+                                saved = await run.io_bound(save_web_config, cfg)
+                                if not saved:
+                                    ui.notify(
+                                        "Save failed: configuration is read-only or unavailable",
+                                        type="negative",
+                                    )
+                                    return
                                 ui.notify("Saved", type="positive")
 
                             sw.on_value_change(on_change)

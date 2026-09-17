@@ -3,6 +3,7 @@
 import sys
 import threading
 import time
+import json
 from unittest import mock
 
 import pytest
@@ -3232,6 +3233,28 @@ class TestPluginMenuItems:
                         cmd = mock_popen.call_args[0][0]
                         assert "prompt" in cmd and "--mode" in cmd
                         assert "--output-file" in " ".join(cmd)
+
+    def test_execute_plugin_modal_forwards_clicked_display_context(self):
+        tray = self._make_tray()
+        item_dict = {
+            "label": "Show output",
+            "command": "printf modal-output",
+            "type": "modal",
+            "params": [],
+        }
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch(
+            "ai_guardian.tui.display._tkinter_available", return_value=True
+        ):
+            with mock.patch("subprocess.Popen") as mock_popen:
+                with mock.patch("sys.executable", "/usr/bin/python3"):
+                    tray._plugins._execute_plugin_command_with_params(
+                        item_dict,
+                        screen_bounds=bounds,
+                    )
+                    command = mock_popen.call_args.args[0]
+
+        assert command[command.index("--screen-bounds") + 1] == json.dumps(bounds)
 
     def test_execute_plugin_command_with_params_textual_fallback(self):
         """Falls back to _launch_in_terminal when tkinter and NiceGUI unavailable."""
