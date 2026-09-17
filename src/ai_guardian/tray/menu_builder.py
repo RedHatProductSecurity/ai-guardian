@@ -182,7 +182,12 @@ class TrayMenuBuilder:
         return "Resume (paused)"
 
     def _get_merged_dir_list(self, stats):
-        """Merge active project dirs and paused dirs into a sorted list."""
+        """Merge recently tracked project dirs and paused dirs into a list.
+
+        ``active_project_dirs`` contains daemon-observed project directories,
+        retained for the daemon's project tracking TTL (currently 24 hours),
+        rather than only directories with an open IDE session.
+        """
         active = set(stats.get("active_project_dirs") or [])
         paused = set(stats.get("paused_dirs") or {})
         return sorted(active | paused)

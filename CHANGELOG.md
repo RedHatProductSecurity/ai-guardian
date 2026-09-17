@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tray project-directory refresh (#2335)**: Refresh single-daemon and
+  multi-daemon per-directory pause menus when newly observed or expired project
+  directories change, including while global scanning is paused.
+
 - **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
   engines and runtime names in tray actions, mark created containers for stopped
   discovery, probe Docker and Podman during lifecycle auto-detection, classify

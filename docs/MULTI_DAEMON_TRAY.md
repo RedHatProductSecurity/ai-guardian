@@ -565,6 +565,15 @@ selected. Linux pause labels therefore use a stable paused indicator instead of
 a live countdown; pause/resume visibility still refreshes when the pause state
 changes. macOS keeps the live countdown refresh behavior.
 
+### Project directories in the Pause menu
+
+The per-directory **Pause...** list combines explicitly paused directories with
+the daemon's `active_project_dirs` list. This list represents project
+directories recently observed in hook requests, not only currently open IDE
+sessions. Entries are retained until the daemon's project tracking TTL expires
+(currently 24 hours without another request), including while global scanning
+is paused.
+
 ## Migration from v1.7.x
 
 In v1.7.x, `ai-guardian daemon start` launched both the daemon and the system tray. In v1.8.0+, these are separate:
