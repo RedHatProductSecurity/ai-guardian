@@ -623,9 +623,10 @@ class _RestHandler(BaseHTTPRequestHandler):
                 return False, f"Bulk config write [{scope}]"
 
             if not _atomic_config_update(config_path, updater):
-                from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE
-
-                self._send_error(409, CONFIG_READ_ONLY_MESSAGE)
+                logger.error(
+                    "Bulk config write failed after read-only check: %s", config_path
+                )
+                self._send_error(500, "Failed to write configuration")
                 return
             self.server.daemon_state.force_reload_config()
             self._send_json({"status": "ok", "scope": scope})

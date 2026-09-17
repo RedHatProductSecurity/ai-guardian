@@ -24,6 +24,7 @@ from ai_guardian.tui.display import (
     _nicegui_available,
     get_preferred_ui,
 )
+from ai_guardian.tray.dialog_placement import _place_window_on_screen
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,14 @@ class _TkinterPromptApp:
         command_type="terminal",
         extra_vars=None,
         title=None,
+        screen_bounds=None,
     ):
         self._params = params
         self._command_template = command_template
         self._command_type = command_type
         self._extra_vars = extra_vars or {}
         self._title = title or "Plugin Parameters"
+        self._screen_bounds = screen_bounds
         self._result = None
         self._widgets = {}
 
@@ -191,6 +194,12 @@ class _TkinterPromptApp:
 
         self._root.update_idletasks()
         self._root.minsize(360, self._root.winfo_reqheight())
+        _place_window_on_screen(
+            self._root,
+            self._screen_bounds,
+            self._root.winfo_reqwidth(),
+            self._root.winfo_reqheight(),
+        )
 
         self._root.lift()
         self._root.attributes("-topmost", True)
@@ -293,12 +302,14 @@ class _TextualPromptApp:
         command_type="terminal",
         extra_vars=None,
         title=None,
+        screen_bounds=None,
     ):
         self._params = params
         self._command_template = command_template
         self._command_type = command_type
         self._extra_vars = extra_vars or {}
         self._title = title
+        self._screen_bounds = screen_bounds
 
     def run(self):
         from textual.app import App, ComposeResult
@@ -570,12 +581,14 @@ class _NiceGuiPromptApp:
         command_type="terminal",
         extra_vars=None,
         title=None,
+        screen_bounds=None,
     ):
         self._params = params
         self._command_template = command_template
         self._command_type = command_type
         self._extra_vars = extra_vars or {}
         self._title = title or "Plugin Parameters"
+        self._screen_bounds = screen_bounds
         self._result = None
 
     def run(self):
@@ -828,12 +841,14 @@ class TrayPromptApp:
         command_type="terminal",
         extra_vars=None,
         title=None,
+        screen_bounds=None,
     ):
         self._params = params
         self._command_template = command_template
         self._command_type = command_type
         self._extra_vars = extra_vars or {}
         self._title = title
+        self._screen_bounds = screen_bounds
         self._result = None
         preferred = get_preferred_ui()
         if preferred == "headless":
@@ -852,6 +867,7 @@ class TrayPromptApp:
             self._command_type,
             self._extra_vars,
             self._title,
+            self._screen_bounds,
         )
         preferred = get_preferred_ui()
 

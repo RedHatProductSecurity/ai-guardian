@@ -344,7 +344,13 @@ def create_sdk_agents_page(service, daemon_name: str):
             config = state["config"]
             sdk = config.setdefault("sdk", {})
             sdk["agents"] = state["agents"]
-            await run.io_bound(save_web_config, config)
+            saved = await run.io_bound(save_web_config, config)
+            if not saved:
+                ui.notify(
+                    "Save failed: configuration is read-only or unavailable",
+                    type="negative",
+                )
+                return
             ui.notify("Saved", type="positive")
             await _load()
 

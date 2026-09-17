@@ -5,12 +5,240 @@ from __future__ import annotations
 import json
 import logging
 import os
+import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+ScreenBounds = Tuple[int, int, int, int]
+
+
+def _rect_components(rect) -> Optional[Tuple[float, float, float, float]]:
+    """Return an AppKit rectangle as ``(x, y, width, height)``."""
+    try:
+        origin = rect.origin
+        size = rect.size
+        return (
+            float(origin.x),
+            float(origin.y),
+            float(size.width),
+            float(size.height),
+        )
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _point_components(point) -> Optional[Tuple[float, float]]:
+    """Return an AppKit point as ``(x, y)``."""
+    try:
+        return float(point.x), float(point.y)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _point_in_rect(point, rect) -> bool:
+    """Return whether an AppKit point is inside an AppKit rectangle."""
+    point_components = _point_components(point)
+    rect_components = _rect_components(rect)
+    if point_components is None or rect_components is None:
+        return False
+    point_x, point_y = point_components
+    rect_x, rect_y, rect_width, rect_height = rect_components
+    return (
+        rect_x <= point_x < rect_x + rect_width
+        and rect_y <= point_y < rect_y + rect_height
+    )
+
+
+def _tk_screen_bounds(cocoa_rect, cocoa_main_rect) -> Optional[ScreenBounds]:
+    """Convert a Cocoa screen rectangle to Tk's top-left coordinate system.
+
+    Cocoa uses a bottom-left origin while Tk uses a top-left origin.  The
+    conversion is kept separate from AppKit access so it can be tested without
+    a GUI display.
+    """
+    rect = _rect_components(cocoa_rect)
+    main_rect = _rect_components(cocoa_main_rect)
+    if rect is None or main_rect is None:
+        return None
+
+    x, y, width, height = rect
+    main_x, main_y, _main_width, main_height = main_rect
+    return (
+        int(round(x - main_x)),
+        int(round(main_y + main_height - (y + height))),
+        int(round(width)),
+        int(round(height)),
+    )
+
+
+def _status_item_screen(icon):
+    """Return the display containing a macOS pystray status item, if any."""
+    if icon is None:
+        return None
+    try:
+        status_item = getattr(icon, "_status_item", None)
+        button = status_item.button()
+        window = button.window()
+        return window.screen()
+    except Exception:
+        return None
+
+
+def _event_screen(AppKit):
+    """Return the display containing AppKit's current menu event, if any."""
+    try:
+        # AppKit exposes the current event through NSApplication.  NSEvent's
+        # Objective-C class method is not exported by every PyObjC build.
+        event = _current_event(AppKit)
+        if event is None:
+            return None
+        window = event.window()
+        if window is None:
+            return None
+        return window.screen()
+    except Exception:
+        return None
+
+
+def _current_event(AppKit):
+    """Return AppKit's current event without requiring NSEvent helpers."""
+    try:
+        return AppKit.NSApplication.sharedApplication().currentEvent()
+    except Exception:
+        return None
+
+
+def _mouse_event_types(AppKit):
+    """Return AppKit constants representing mouse activation events."""
+    names = (
+        "NSLeftMouseDown",
+        "NSLeftMouseUp",
+        "NSRightMouseDown",
+        "NSRightMouseUp",
+        "NSOtherMouseDown",
+        "NSOtherMouseUp",
+        "NSEventTypeLeftMouseDown",
+        "NSEventTypeLeftMouseUp",
+        "NSEventTypeRightMouseDown",
+        "NSEventTypeRightMouseUp",
+        "NSEventTypeOtherMouseDown",
+        "NSEventTypeOtherMouseUp",
+    )
+    return {
+        value
+        for name in names
+        for value in (getattr(AppKit, name, None),)
+        if isinstance(value, (int, float))
+    }
+
+
+def _event_is_mouse_activation(event, AppKit) -> bool:
+    """Return whether an event represents a pointer-driven menu activation."""
+    if event is None:
+        return False
+    try:
+        return event.type() in _mouse_event_types(AppKit)
+    except Exception:
+        return False
+
+
+def _screen_containing_point(point, screens):
+    """Return the screen containing an AppKit global point, if any."""
+    for screen in screens:
+        try:
+            if _point_in_rect(point, screen.frame()):
+                return screen
+        except (AttributeError, TypeError, ValueError):
+            continue
+    return None
+
+
+def _get_tray_screen_bounds(icon=None) -> Optional[ScreenBounds]:
+    """Return the visible bounds of the display containing the tray menu.
+
+    This is intentionally captured by the tray process before a Tk child is
+    started.  Importing AppKit in the child before ``tk.Tk()`` can trigger a
+    macOS Tk initialization crash, so the child receives plain geometry data.
+    The current AppKit event is preferred because its window identifies the
+    display that actually dispatched the menu action. The status item's
+    window and pointer location are fallbacks for keyboard and automation
+    paths. ``None`` preserves the existing window-manager placement fallback.
+    """
+    if platform.system() != "Darwin":
+        return None
+
+    try:
+        import AppKit
+
+        screens = tuple(AppKit.NSScreen.screens() or ())
+        if len(screens) < 2:
+            return None
+        # Tk's Aqua virtual-screen origin is based on the display that owns
+        # the menu bar, which AppKit exposes as screens[0].  mainScreen can
+        # instead be the display containing keyboard focus and is not a safe
+        # coordinate-system baseline.
+        main_frame = screens[0].frame()
+        event = _current_event(AppKit)
+        screen = _event_screen(AppKit)
+        pointer = AppKit.NSEvent.mouseLocation()
+        pointer_screen = _screen_containing_point(pointer, screens)
+        # A nested NSMenu action can retain a window from the previous menu
+        # event. For an actual pointer activation, the global mouse location
+        # identifies the display where the user selected the item and is more
+        # reliable than that stale window.
+        if _event_is_mouse_activation(event, AppKit) and pointer_screen is not None:
+            screen = pointer_screen
+        if screen is None:
+            screen = _status_item_screen(icon)
+        if screen is None:
+            screen = pointer_screen
+        if screen is not None:
+            return _tk_screen_bounds(screen.visibleFrame(), main_frame)
+    except Exception as exc:
+        logger.debug("Could not determine the tray display bounds: %s", exc)
+    return None
+
+
+def _center_window_geometry(
+    window_width: int, window_height: int, screen_bounds
+) -> Optional[Tuple[int, int, int, int]]:
+    """Return centered ``(x, y, width, height)`` geometry for a screen."""
+    try:
+        screen_x, screen_y, screen_width, screen_height = (
+            int(value) for value in screen_bounds
+        )
+        window_width = min(max(1, int(window_width)), screen_width)
+        window_height = min(max(1, int(window_height)), screen_height)
+    except (TypeError, ValueError):
+        return None
+    if screen_width <= 0 or screen_height <= 0:
+        return None
+
+    return (
+        screen_x + (screen_width - window_width) // 2,
+        screen_y + (screen_height - window_height) // 2,
+        window_width,
+        window_height,
+    )
+
+
+def _place_window_on_screen(
+    window, screen_bounds, window_width: int, window_height: int
+) -> bool:
+    """Center a Tk window on explicit screen bounds when available."""
+    geometry = _center_window_geometry(window_width, window_height, screen_bounds)
+    if geometry is None:
+        return False
+    x, y, width, height = geometry
+    # The leading plus introduces an absolute virtual-screen coordinate. A
+    # negative value therefore needs the ``+-N`` form; ``-N`` means an offset
+    # from the right or bottom edge in Tk geometry syntax.
+    window.geometry(f"{width}x{height}+{x}+{y}")
+    return True
 
 
 def _scroll_canvas(event, canvas) -> str:
@@ -124,7 +352,9 @@ def _local_image_choices():
     return choices
 
 
-def _show_local_image_picker(parent, variable) -> None:
+def _show_local_image_picker(
+    parent, variable, screen_bounds: Optional[ScreenBounds] = None
+) -> None:
     """Let the user select a labeled local AI Guardian image."""
     import tkinter as tk
     from tkinter import ttk
@@ -133,6 +363,7 @@ def _show_local_image_picker(parent, variable) -> None:
     dialog = tk.Toplevel(parent)
     dialog.title("Select local AI Guardian image")
     dialog.geometry("620x300")
+    _place_window_on_screen(dialog, screen_bounds, 620, 300)
     dialog.minsize(440, 220)
     dialog.transient(parent)
     dialog.rowconfigure(1, weight=1)
@@ -205,7 +436,11 @@ def _show_local_image_picker(parent, variable) -> None:
 
 
 def _show_tkinter_form(
-    title: str, message: str, fields: Iterable[Dict[str, Any]]
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
 ) -> Optional[Dict[str, Any]]:
     """Show a blocking Tk form and return its values, or ``None`` on cancel."""
     import tkinter as tk
@@ -225,6 +460,7 @@ def _show_tkinter_form(
     root = tk.Tk()
     root.title(title)
     root.geometry("760x680")
+    _place_window_on_screen(root, screen_bounds, 760, 680)
     root.minsize(620, 380)
     root.resizable(True, True)
     root.rowconfigure(0, weight=1)
@@ -305,7 +541,7 @@ def _show_tkinter_form(
                 control_frame,
                 text="Browse...",
                 command=lambda variable=variable: _show_local_image_picker(
-                    root, variable
+                    root, variable, screen_bounds
                 ),
             )
             browse_button.grid(row=0, column=1, padx=(6, 0))
@@ -480,18 +716,28 @@ def _show_tkinter_form(
 
 
 def _show_tkinter_form_subprocess(
-    title: str, message: str, fields: Iterable[Dict[str, Any]]
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
 ) -> Optional[Dict[str, Any]]:
     """Run a Tk form outside the tray process to isolate GUI toolkit state."""
     payload = json.dumps(
-        {"title": title, "message": message, "fields": tuple(fields)},
+        {
+            "title": title,
+            "message": message,
+            "fields": tuple(fields),
+            "screen_bounds": screen_bounds,
+        },
         ensure_ascii=False,
     )
     child = (
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_form; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_form(p['title'], p['message'], p['fields']); "
+        "v=_show_tkinter_form(p['title'], p['message'], p['fields'], "
+        "screen_bounds=p.get('screen_bounds')); "
         "print(json.dumps(v, ensure_ascii=False) if v is not None else '')"
     )
     try:
@@ -524,7 +770,13 @@ def _show_tkinter_form_subprocess(
     return value if isinstance(value, dict) else None
 
 
-def _show_tkinter_log(title: str, message: str, log_text: str) -> None:
+def _show_tkinter_log(
+    title: str,
+    message: str,
+    log_text: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> None:
     """Show captured sandbox output in a scrollable Tk window."""
     import tkinter as tk
     from tkinter import ttk
@@ -535,6 +787,7 @@ def _show_tkinter_log(title: str, message: str, log_text: str) -> None:
     root = tk.Tk()
     root.title(title)
     root.geometry("760x480")
+    _place_window_on_screen(root, screen_bounds, 760, 480)
     root.minsize(520, 280)
 
     frame = ttk.Frame(root, padding=16)
@@ -589,7 +842,13 @@ def _show_tkinter_log(title: str, message: str, log_text: str) -> None:
     root.mainloop()
 
 
-def _show_tkinter_confirmation(title: str, message: str, expected_name: str) -> bool:
+def _show_tkinter_confirmation(
+    title: str,
+    message: str,
+    expected_name: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
     """Show a destructive-action confirmation requiring the sandbox name."""
     import tkinter as tk
     from tkinter import ttk
@@ -600,6 +859,7 @@ def _show_tkinter_confirmation(title: str, message: str, expected_name: str) -> 
     root = tk.Tk()
     root.title(title)
     root.geometry("560x250")
+    _place_window_on_screen(root, screen_bounds, 560, 250)
     root.minsize(480, 220)
     root.resizable(True, False)
     root.columnconfigure(0, weight=1)
@@ -661,7 +921,11 @@ def _show_tkinter_confirmation(title: str, message: str, expected_name: str) -> 
 
 
 def _show_tkinter_confirmation_subprocess(
-    title: str, message: str, expected_name: str
+    title: str,
+    message: str,
+    expected_name: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
 ) -> bool:
     """Run a destructive-action confirmation outside the tray process."""
     payload = json.dumps(
@@ -669,6 +933,7 @@ def _show_tkinter_confirmation_subprocess(
             "title": title,
             "message": message,
             "expected_name": expected_name,
+            "screen_bounds": screen_bounds,
         },
         ensure_ascii=False,
     )
@@ -676,7 +941,8 @@ def _show_tkinter_confirmation_subprocess(
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_confirmation; "
         "p=json.loads(sys.argv[1]); "
-        "v=_show_tkinter_confirmation(p['title'], p['message'], p['expected_name']); "
+        "v=_show_tkinter_confirmation(p['title'], p['message'], p['expected_name'], "
+        "screen_bounds=p.get('screen_bounds')); "
         "print('1' if v else '0')"
     )
     try:
@@ -730,17 +996,29 @@ def _copy_sandbox_log(log_text: str, clipboard_owner=None) -> str:
         return f"Copy failed: {exc}"
 
 
-def _show_tkinter_log_subprocess(title: str, message: str, log_text: str) -> bool:
+def _show_tkinter_log_subprocess(
+    title: str,
+    message: str,
+    log_text: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
     """Run the log dialog outside the tray process."""
     payload = json.dumps(
-        {"title": title, "message": message, "log": log_text},
+        {
+            "title": title,
+            "message": message,
+            "log": log_text,
+            "screen_bounds": screen_bounds,
+        },
         ensure_ascii=False,
     )
     child = (
         "import json, sys; "
         "from ai_guardian.tray.sandbox_dialog import _show_tkinter_log; "
         "p=json.loads(sys.argv[1]); "
-        "_show_tkinter_log(p['title'], p['message'], p['log'])"
+        "_show_tkinter_log(p['title'], p['message'], p['log'], "
+        "screen_bounds=p.get('screen_bounds'))"
     )
     try:
         process = subprocess.run(
@@ -764,15 +1042,29 @@ def _show_tkinter_log_subprocess(title: str, message: str, log_text: str) -> boo
     return True
 
 
-def show_sandbox_log(title: str, message: str, log_text: str) -> bool:
+def show_sandbox_log(
+    title: str,
+    message: str,
+    log_text: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
     """Show captured sandbox output in a modal log dialog."""
     try:
         from ai_guardian.tui.display import _tkinter_available
 
-        if _tkinter_available() and _show_tkinter_log_subprocess(
-            title, message, log_text
-        ):
-            return True
+        if _tkinter_available():
+            if screen_bounds is None:
+                shown = _show_tkinter_log_subprocess(title, message, log_text)
+            else:
+                shown = _show_tkinter_log_subprocess(
+                    title,
+                    message,
+                    log_text,
+                    screen_bounds=screen_bounds,
+                )
+            if shown:
+                return True
     except Exception as exc:
         logger.warning("Sandbox log dialog unavailable: %s", exc)
 
@@ -784,10 +1076,23 @@ def show_sandbox_log(title: str, message: str, log_text: str) -> bool:
     text = str(log_text or "(no output)")
     if len(text) > 6000:
         text = text[:3000] + "\n... output truncated ...\n" + text[-3000:]
-    return bool(show_dialog(title, f"{message}\n\n{text}"))
+    if screen_bounds is None:
+        return bool(show_dialog(title, f"{message}\n\n{text}"))
+    return bool(
+        show_dialog(
+            title,
+            f"{message}\n\n{text}",
+            screen_bounds=screen_bounds,
+        )
+    )
 
 
-def show_sandbox_confirmation(name: str, runtime: str) -> bool:
+def show_sandbox_confirmation(
+    name: str,
+    runtime: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
     """Confirm permanent deletion without exposing tray GUI toolkit state."""
     try:
         from ai_guardian.tui.display import _tkinter_available
@@ -800,8 +1105,15 @@ def show_sandbox_confirmation(name: str, runtime: str) -> bool:
             "The runtime sandbox will be removed. Saved host configuration "
             "snapshots are kept."
         )
+        if screen_bounds is None:
+            return _show_tkinter_confirmation_subprocess(
+                "Delete AI Guardian sandbox", message, name
+            )
         return _show_tkinter_confirmation_subprocess(
-            "Delete AI Guardian sandbox", message, name
+            "Delete AI Guardian sandbox",
+            message,
+            name,
+            screen_bounds=screen_bounds,
         )
     except Exception as exc:
         logger.warning("Sandbox confirmation unavailable: %s", exc)
@@ -809,7 +1121,11 @@ def show_sandbox_confirmation(name: str, runtime: str) -> bool:
 
 
 def show_sandbox_form(
-    title: str, message: str, fields: Iterable[Dict[str, Any]]
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
 ) -> Optional[Dict[str, Any]]:
     """Show a native sandbox form from a tray worker thread."""
     try:
@@ -822,7 +1138,14 @@ def show_sandbox_form(
         # Tk widgets in the tray callback thread can terminate the tray on
         # some Linux/GTK combinations, so keep the form in a short-lived child
         # process on every platform.
-        return _show_tkinter_form_subprocess(title, message, fields)
+        if screen_bounds is None:
+            return _show_tkinter_form_subprocess(title, message, fields)
+        return _show_tkinter_form_subprocess(
+            title,
+            message,
+            fields,
+            screen_bounds=screen_bounds,
+        )
     except Exception as exc:
         logger.warning("Sandbox form unavailable: %s", exc)
         return None

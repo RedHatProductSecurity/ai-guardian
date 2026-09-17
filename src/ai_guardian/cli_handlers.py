@@ -978,12 +978,23 @@ def _handle_prompt_params(args):
         except (json.JSONDecodeError, TypeError):
             extra_vars = {}
 
+    screen_bounds = None
+    raw_screen_bounds = getattr(args, "screen_bounds", None)
+    if isinstance(raw_screen_bounds, str) and raw_screen_bounds:
+        try:
+            parsed_bounds = json.loads(raw_screen_bounds)
+            if isinstance(parsed_bounds, (list, tuple)) and len(parsed_bounds) == 4:
+                screen_bounds = tuple(int(value) for value in parsed_bounds)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            prompt_logger.warning("Ignoring invalid --screen-bounds value")
+
     app = TrayPromptApp(
         params=params,
         command_template=args.template,
         command_type=getattr(args, "type", "terminal"),
         extra_vars=extra_vars,
         title=getattr(args, "title", None),
+        screen_bounds=screen_bounds,
     )
 
     if app.needs_terminal and not sys.stdin.isatty():

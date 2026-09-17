@@ -74,6 +74,31 @@ class TestHandleTrayPrompt:
             result = _handle_prompt_params(args)
         assert result == 0
 
+    def test_screen_bounds_are_forwarded_to_prompt_app(self):
+        from ai_guardian.cli_handlers import _handle_prompt_params
+
+        args = mock.MagicMock()
+        args.params = "[]"
+        args.template = "echo hello"
+        args.type = "terminal"
+        args.output_file = None
+        args.screen_bounds = "[1920, 37, 2560, 1380]"
+        mock_app = mock.MagicMock()
+        mock_app.needs_terminal = False
+        mock_app.run.return_value = None
+        with mock.patch(
+            "ai_guardian.tui.tray_prompt.TrayPromptApp", return_value=mock_app
+        ) as prompt_app:
+            result = _handle_prompt_params(args)
+
+        assert result == 0
+        assert prompt_app.call_args.kwargs["screen_bounds"] == (
+            1920,
+            37,
+            2560,
+            1380,
+        )
+
     def test_cancel_creates_empty_output_file(self):
         from ai_guardian.cli_handlers import _handle_prompt_params
 
@@ -183,6 +208,14 @@ class TestTrayPromptAppCreation:
         assert app._params == params
         assert app._command_template == "deploy {tray.env}"
         assert app._command_type == "terminal"
+
+    def test_app_stores_tray_screen_bounds(self):
+        from ai_guardian.tui.tray_prompt import TrayPromptApp
+
+        bounds = (1920, 37, 2560, 1380)
+        app = TrayPromptApp([], "echo", screen_bounds=bounds)
+
+        assert app._screen_bounds == bounds
 
     def test_app_with_empty_params(self):
         from ai_guardian.tui.tray_prompt import TrayPromptApp

@@ -52,6 +52,16 @@ def test_tracing_settings_write_top_level_config():
     assert "trace_cache_retention_days" in source
 
 
+def test_tracing_settings_reports_failed_config_writes():
+    """Read-only or unavailable config targets must not report a false save."""
+    from ai_guardian.web.pages.tracing_settings import create_tracing_settings_page
+
+    source = inspect.getsource(create_tracing_settings_page)
+    assert "saved = await run.io_bound(save_web_config, config)" in source
+    assert "if not saved:" in source
+    assert "read-only or unavailable" in source
+
+
 def test_tracing_settings_number_labels_have_room_to_render():
     """Numeric settings stay wide enough to show their complete labels."""
     from ai_guardian.web.pages.tracing_settings import create_tracing_settings_page

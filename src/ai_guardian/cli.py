@@ -1425,6 +1425,11 @@ def main():
             default=None,
             help="Window title for the parameter form (mode=params)",
         )
+        prompt_parser.add_argument(
+            "--screen-bounds",
+            default=None,
+            help="JSON Tk virtual-screen bounds captured from the tray click",
+        )
         # ask mode arguments
         prompt_parser.add_argument(
             "--violation",

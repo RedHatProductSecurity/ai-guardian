@@ -35,6 +35,7 @@ DEFAULT_OPENSHELL_CLI = "claude"
 DEFAULT_REST_PORT = "63152"
 DEFAULT_OPENSHELL_MODEL = "claude-sonnet-4-6"
 MANAGED_LABEL = "ai-guardian.managed=true"
+DAEMON_LABEL = "ai-guardian.daemon=true"
 MANAGED_LABEL_KEY = "ai-guardian.managed"
 RUNTIME_LABEL_KEY = "ai-guardian.runtime"
 DAEMON_LABEL_KEY = "ai-guardian.daemon"
@@ -110,6 +111,21 @@ def _container_engine(args) -> str:
     )
 
 
+def _container_engine_candidates(args) -> Tuple[str, ...]:
+    """Return engines to probe when lifecycle selection is automatic."""
+    selected = getattr(args, "container_engine", None) or os.environ.get(
+        "CONTAINER_ENGINE"
+    )
+    if selected:
+        return (selected,)
+    return tuple(dict.fromkeys((DEFAULT_CONTAINER_ENGINE, "docker")))
+
+
+def _container_runtime_name(args, name: str) -> str:
+    """Return the native container name for a logical sandbox target."""
+    return getattr(args, "container_name", None) or name
+
+
 def _openshell_cli(args) -> str:
     return getattr(args, "openshell_cli", None) or os.environ.get(
         "OPENSHELL_CLI", "openshell"
@@ -127,8 +143,16 @@ def _runtime_executable(args, runtime: str) -> str:
 
 def _missing_runtime_executable(args, runtime: str) -> Optional[str]:
     """Return a missing runtime executable, if one is not on ``PATH``."""
-    executable = _runtime_executable(args, runtime)
-    return executable if shutil.which(executable) is None else None
+    if runtime == CONTAINER_RUNTIME:
+        executables = _container_engine_candidates(args)
+    else:
+        executables = (_runtime_executable(args, runtime),)
+    missing = [
+        executable for executable in executables if shutil.which(executable) is None
+    ]
+    if len(missing) == len(executables):
+        return ", ".join(missing)
+    return None
 
 
 def _command_args(args) -> List[str]:
@@ -372,9 +396,15 @@ def _is_ai_guardian_labels(labels) -> bool:
     )
 
 
-def _container_is_ai_guardian(args, name: str) -> bool:
+def _container_is_ai_guardian(args, name: str, *, engine: Optional[str] = None) -> bool:
     """Check an exact container name without printing a probe error."""
-    result = _run_capture([_container_engine(args), "inspect", name])
+    result = _run_capture(
+        [
+            engine or _container_engine(args),
+            "inspect",
+            _container_runtime_name(args, name),
+        ]
+    )
     if not result or result.returncode != 0:
         return False
     try:
@@ -427,7 +457,19 @@ def _resolve_lifecycle_runtime(args, operation: str) -> Optional[str]:
         )
 
     matches = []
-    container_match = _container_is_ai_guardian(args, name)
+    container_matches = [
+        engine
+        for engine in _container_engine_candidates(args)
+        if _container_is_ai_guardian(args, name, engine=engine)
+    ]
+    if len(container_matches) > 1:
+        raise ValueError(
+            f"multiple AI Guardian container sandboxes named '{name}' were found; "
+            "specify --container-engine"
+        )
+    container_match = bool(container_matches)
+    if container_match:
+        args.container_engine = container_matches[0]
     openshell_match = _openshell_is_ai_guardian(args, name)
     missing_executables = []
     if container_match:
@@ -1535,7 +1577,12 @@ def _runtime_exec_capture(
 ) -> Optional[subprocess.CompletedProcess]:
     """Run a non-interactive command inside a sandbox runtime."""
     if runtime == CONTAINER_RUNTIME:
-        native_command = [_container_engine(args), "exec", name, *command]
+        native_command = [
+            _container_engine(args),
+            "exec",
+            _container_runtime_name(args, name),
+            *command,
+        ]
     elif runtime == OPENSHELL_RUNTIME:
         native_command = [
             _openshell_cli(args),
@@ -1570,7 +1617,12 @@ def _sandbox_auth_token(args, runtime: str, name: str) -> Optional[str]:
 def _container_rest_port(args, name: str) -> int:
     """Find the host-side REST port published by a container."""
     result = _run_capture(
-        [_container_engine(args), "port", name, f"{DEFAULT_REST_PORT}/tcp"]
+        [
+            _container_engine(args),
+            "port",
+            _container_runtime_name(args, name),
+            f"{DEFAULT_REST_PORT}/tcp",
+        ]
     )
     if result and result.returncode == 0:
         for line in (result.stdout or "").splitlines():
@@ -1782,6 +1834,8 @@ def _container_create(args) -> Tuple[List[str], Optional[Dict[str, str]]]:
         "--tty",
         "--label",
         MANAGED_LABEL,
+        "--label",
+        DAEMON_LABEL,
         "--label",
         "ai-guardian.runtime=container",
     ]
@@ -2179,6 +2233,7 @@ def _lifecycle_command(
     name = getattr(args, "name", None) if name is None else name
     if runtime == CONTAINER_RUNTIME:
         engine = _container_engine(args)
+        name = _container_runtime_name(args, name)
         if operation == "list":
             command = [
                 engine,

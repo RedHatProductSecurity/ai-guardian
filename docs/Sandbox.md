@@ -257,6 +257,26 @@ When `opencode` is selected, enter `build`, `plan`, or a custom profile name;
 the agent field is required. The field is only enabled for OpenCode; other CLI
 selections retain their existing defaults.
 
+On macOS with multiple displays, modal windows opened from the tray menu open
+on the display containing the tray menu interaction. This includes About and
+health/setup dialogs, working-directory and Cursor Cloud directory pickers,
+plugin parameter/modal dialogs, and sandbox forms, configuration output,
+runtime logs, and delete confirmations. The tray captures that display before
+starting an isolated Tkinter dialog process (or passes it to the native Cocoa
+fallback); if display detection is unavailable, the normal window-manager
+placement remains the fallback.
+
+Manual verification on macOS with two displays:
+
+1. Start the tray and open its menu on the secondary display.
+2. Select **Create sandbox...** and confirm the form opens on that display.
+3. From **Manage sandbox**, open **Config -> Restore...**, **Logs...**, and
+   **Delete...**; confirm each form or confirmation opens on the same display.
+4. Check **About**, **Working Dir**, and **IDE/CLI Setup** dialogs from the
+   same display; test a plugin parameter or modal item when configured.
+5. Repeat the checks from the primary display and confirm the dialogs follow
+   the interaction display without changing single-display behavior.
+
 ## OpenShell command mappings
 
 Most lifecycle operations below are deliberately thin aliases of the native

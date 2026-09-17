@@ -42,7 +42,13 @@ def create_tracing_settings_page(service, daemon_name: str):
             try:
                 config = await run.io_bound(load_web_config)
                 config.setdefault("tracing", {})[key] = value
-                await run.io_bound(save_web_config, config)
+                saved = await run.io_bound(save_web_config, config)
+                if not saved:
+                    ui.notify(
+                        "Save failed: configuration is read-only or unavailable",
+                        type="negative",
+                    )
+                    return
                 ui.notify("Saved", type="positive", position="bottom-right")
             except Exception as exc:
                 ui.notify(f"Save failed: {exc}", type="negative")
