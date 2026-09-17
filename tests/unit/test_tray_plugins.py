@@ -1165,6 +1165,24 @@ class TestShowDialog:
                 assert args[0] == "osascript"
                 assert "display dialog" in args[2]
 
+    def test_macos_screen_aware_dialog_uses_clicked_display_context(self):
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch(
+                "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess",
+                return_value=True,
+            ) as show_tk:
+                with mock.patch("subprocess.run") as mock_run:
+                    assert show_dialog("Test Title", "Hello", screen_bounds=bounds)
+
+        show_tk.assert_called_once_with(
+            "Test Title",
+            "Hello",
+            screen_bounds=bounds,
+        )
+        mock_run.assert_not_called()
+
     def test_linux_uses_zenity(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"
@@ -1367,6 +1385,30 @@ class TestShowActionDialog:
         assert "NSAlert" in script
         assert "NSPopUpButton" in script
         assert "display dialog" not in script
+
+    def test_macos_native_prompt_positions_on_clicked_display(self):
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with mock.patch("subprocess.run") as mock_run:
+                mock_run.return_value.returncode = 0
+                mock_run.return_value.stdout = (
+                    '{"result":"action","install":[],"never":[]}\n'
+                )
+                assert (
+                    show_action_dialog(
+                        "Title",
+                        "Message",
+                        "Continue",
+                        "Cancel",
+                        screen_bounds=bounds,
+                    )
+                    == "action"
+                )
+
+        script = mock_run.call_args.args[0][4]
+        assert "placeWindowOnTargetScreen" in script
+        assert '"screen_bounds": [1920, 37, 2560, 1380]' in script
 
     def test_macos_returns_none_on_nonzero_exit(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:

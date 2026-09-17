@@ -220,6 +220,9 @@ class TestSandboxTrayMenu:
                 "ai_guardian.tray.sandbox_dialog.show_sandbox_confirmation",
                 return_value=True,
             ) as confirm,
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
+            ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as run_command,
         ):
             item = tray._menu._build_sandbox_manage_menu_item(0)
@@ -246,6 +249,9 @@ class TestSandboxTrayMenu:
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog.show_sandbox_confirmation",
                 return_value=False,
+            ),
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
             ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as run_command,
         ):
@@ -319,6 +325,9 @@ class TestSandboxTrayMenu:
 
         with (
             mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
+            ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as start,
         ):
             items = tray._menu._build_sandbox_start_menu_items()
@@ -417,6 +426,9 @@ class TestSandboxTrayMenu:
 
         with (
             mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY),
+            mock.patch.object(
+                tray._menu, "_capture_sandbox_screen_bounds", return_value=None
+            ),
             mock.patch.object(tray._menu, "_start_sandbox_command") as start,
         ):
             item = tray._menu._build_sandbox_start_menu_items()[0]
@@ -796,6 +808,146 @@ class TestSandboxTrayMenu:
 
 
 class TestSandboxDialogFallback:
+    @staticmethod
+    def _rect(x, y, width, height):
+        return SimpleNamespace(
+            origin=SimpleNamespace(x=x, y=y),
+            size=SimpleNamespace(width=width, height=height),
+        )
+
+    def test_window_geometry_centers_and_clamps_to_display(self):
+        from ai_guardian.tray.sandbox_dialog import _center_window_geometry
+
+        assert _center_window_geometry(560, 250, (1920, 0, 2560, 1440)) == (
+            2920,
+            595,
+            560,
+            250,
+        )
+        assert _center_window_geometry(1000, 800, (0, 0, 800, 600)) == (
+            0,
+            0,
+            800,
+            600,
+        )
+
+    def test_cocoa_screen_bounds_convert_to_tk_coordinates(self):
+        from ai_guardian.tray.sandbox_dialog import _tk_screen_bounds
+
+        main = self._rect(0, 0, 1920, 1440)
+        secondary_visible = self._rect(1920, 23, 2560, 1380)
+
+        assert _tk_screen_bounds(secondary_visible, main) == (1920, 37, 2560, 1380)
+
+    def test_tray_screen_bounds_select_status_item_display_without_tk(self):
+        from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
+
+        main = mock.MagicMock()
+        main.frame.return_value = self._rect(0, 0, 1920, 1440)
+        main.visibleFrame.return_value = self._rect(0, 23, 1920, 1390)
+        secondary = mock.MagicMock()
+        secondary.frame.return_value = self._rect(1920, 0, 2560, 1440)
+        secondary.visibleFrame.return_value = self._rect(1920, 23, 2560, 1380)
+        appkit = mock.MagicMock()
+        appkit.NSScreen.screens.return_value = [main, secondary]
+        appkit.NSApplication.sharedApplication.return_value.currentEvent.return_value = (
+            None
+        )
+        # Keyboard focus may be on a different display; it must not change
+        # the virtual-screen origin used for Tk geometry.
+        appkit.NSScreen.mainScreen.return_value = secondary
+        icon = mock.MagicMock()
+        icon._status_item.button.return_value.window.return_value.screen.return_value = (
+            secondary
+        )
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system",
+                return_value="Darwin",
+            ),
+            mock.patch.dict("sys.modules", {"AppKit": appkit}),
+        ):
+            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+
+    def test_tray_screen_bounds_falls_back_to_pointer_display_without_icon(self):
+        from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
+
+        main = mock.MagicMock()
+        main.frame.return_value = self._rect(0, 0, 1920, 1440)
+        main.visibleFrame.return_value = self._rect(0, 23, 1920, 1390)
+        secondary = mock.MagicMock()
+        secondary.frame.return_value = self._rect(1920, 0, 2560, 1440)
+        secondary.visibleFrame.return_value = self._rect(1920, 23, 2560, 1380)
+        appkit = mock.MagicMock()
+        appkit.NSScreen.screens.return_value = [main, secondary]
+        appkit.NSApplication.sharedApplication.return_value.currentEvent.return_value = (
+            None
+        )
+        appkit.NSEvent.mouseLocation.return_value = SimpleNamespace(x=2200, y=400)
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system",
+                return_value="Darwin",
+            ),
+            mock.patch.dict("sys.modules", {"AppKit": appkit}),
+        ):
+            assert _get_tray_screen_bounds() == (1920, 37, 2560, 1380)
+
+    def test_tray_screen_bounds_prefer_current_menu_event_display(self):
+        from ai_guardian.tray.sandbox_dialog import _get_tray_screen_bounds
+
+        main = mock.MagicMock()
+        main.frame.return_value = self._rect(0, 0, 1920, 1440)
+        secondary = mock.MagicMock()
+        secondary.frame.return_value = self._rect(1920, 0, 2560, 1440)
+        secondary.visibleFrame.return_value = self._rect(1920, 23, 2560, 1380)
+        appkit = mock.MagicMock()
+        appkit.NSScreen.screens.return_value = [main, secondary]
+        event = mock.MagicMock()
+        event.window.return_value.screen.return_value = secondary
+        appkit.NSApplication.sharedApplication.return_value.currentEvent.return_value = (
+            event
+        )
+        icon = mock.MagicMock()
+        icon._status_item.button.return_value.window.return_value.screen.return_value = (
+            main
+        )
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system",
+                return_value="Darwin",
+            ),
+            mock.patch.dict("sys.modules", {"AppKit": appkit}),
+        ):
+            assert _get_tray_screen_bounds(icon) == (1920, 37, 2560, 1380)
+
+    def test_place_window_on_screen_uses_centered_geometry(self):
+        from ai_guardian.tray.sandbox_dialog import _place_window_on_screen
+
+        window = mock.MagicMock()
+
+        assert _place_window_on_screen(window, (1920, 0, 2560, 1440), 560, 250)
+        window.geometry.assert_called_once_with("560x250+2920+595")
+
+    def test_place_window_on_screen_formats_negative_virtual_coordinates(self):
+        from ai_guardian.tray.sandbox_dialog import _place_window_on_screen
+
+        window = mock.MagicMock()
+
+        assert _place_window_on_screen(window, (-1600, -200, 1600, 900), 560, 250)
+        window.geometry.assert_called_once_with("560x250+-1080+125")
+
+    def test_place_window_without_screen_bounds_keeps_window_manager_fallback(self):
+        from ai_guardian.tray.sandbox_dialog import _place_window_on_screen
+
+        window = mock.MagicMock()
+
+        assert not _place_window_on_screen(window, None, 560, 250)
+        window.geometry.assert_not_called()
+
     def test_log_copy_uses_system_clipboard(self):
         from ai_guardian.tray.sandbox_dialog import _copy_sandbox_log
 

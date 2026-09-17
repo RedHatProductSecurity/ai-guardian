@@ -1,5 +1,6 @@
 """Tests for reusable proactive tray prompts."""
 
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
@@ -337,6 +338,23 @@ def test_tkinter_subprocess_failure_returns_none_for_fallback():
 
     with patch("subprocess.run", return_value=failed):
         assert dialog._show_tkinter_subprocess() is None
+
+
+def test_tkinter_subprocess_payload_includes_tray_screen_bounds():
+    dialog = ProactivePromptDialog(
+        "Title",
+        "Message",
+        "Update",
+        "Skip",
+        screen_bounds=(1920, 37, 2560, 1380),
+    )
+    completed = SimpleNamespace(returncode=0, stdout="action\n", stderr="")
+
+    with patch("subprocess.run", return_value=completed) as run:
+        assert dialog._show_tkinter_subprocess() == "action"
+
+    payload = json.loads(run.call_args.args[0][-1])
+    assert payload["screen_bounds"] == [1920, 37, 2560, 1380]
 
 
 def test_tkinter_subprocess_failure_falls_back_to_native_macos_prompt():
@@ -823,6 +841,10 @@ def test_manual_ide_check_action_runs_a_manual_check():
 
     with (
         patch.object(monitor, "_check_ide_setup_notification") as check,
+        patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=None,
+        ),
         patch("ai_guardian.tray.health.threading.Thread") as thread,
     ):
         thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
@@ -831,6 +853,29 @@ def test_manual_ide_check_action_runs_a_manual_check():
         monitor._on_check_ide_setup(None, None)
 
     check.assert_called_once_with(manual=True)
+
+
+def test_manual_ide_check_forwards_clicked_display_to_worker():
+    tray = SimpleNamespace(_standalone=False, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+
+    with (
+        patch.object(monitor, "_check_ide_setup_notification") as check,
+        patch(
+            "ai_guardian.tray.dialog_placement._get_tray_screen_bounds",
+            return_value=(1920, 37, 2560, 1380),
+        ),
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ](**thread.call_args.kwargs["kwargs"])
+        monitor._on_check_ide_setup("clicked-icon", None)
+
+    check.assert_called_once_with(
+        manual=True,
+        screen_bounds=(1920, 37, 2560, 1380),
+    )
 
 
 def test_startup_ide_check_runs_an_automatic_check():

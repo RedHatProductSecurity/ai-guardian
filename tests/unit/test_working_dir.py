@@ -147,6 +147,25 @@ class TestShortenPath:
 
 class TestChooseDirectory:
     @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
+    @mock.patch(
+        "ai_guardian.daemon.working_dir._choose_directory_tkinter_subprocess",
+        return_value=(True, "/Users/dev/secondary-project"),
+    )
+    def test_macos_tray_picker_uses_captured_screen_bounds(self, picker, _mock_sys):
+        bounds = (1920, 37, 2560, 1380)
+        result = choose_directory(
+            "/Users/dev",
+            screen_bounds=bounds,
+        )
+
+        assert result == "/Users/dev/secondary-project"
+        picker.assert_called_once_with(
+            "/Users/dev",
+            "Choose Working Directory",
+            bounds,
+        )
+
+    @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
     @mock.patch("ai_guardian.daemon.working_dir.subprocess.run")
     def test_macos_returns_path(self, mock_run, _mock_sys):
         mock_run.return_value = mock.Mock(returncode=0, stdout="/Users/dev/project\n")

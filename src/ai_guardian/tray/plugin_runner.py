@@ -13,6 +13,12 @@ from ai_guardian.tray import plugins as tray_plugins
 
 logger = logging.getLogger(__name__)
 
+
+def _screen_bounds_kwargs(screen_bounds):
+    """Pass display context only when a tray click supplied one."""
+    return {"screen_bounds": screen_bounds} if screen_bounds is not None else {}
+
+
 try:
     import pystray
 except Exception:
@@ -37,6 +43,13 @@ class TrayPluginMenuBuilder:
         self._last_plugins_hash = {}
         self._global_plugins = []
         self._daemon_global_plugins = {}
+
+    @staticmethod
+    def _capture_tray_screen_bounds(icon=None):
+        """Capture the display containing a clicked tray menu."""
+        from ai_guardian.tray.dialog_placement import _get_tray_screen_bounds
+
+        return _get_tray_screen_bounds(icon)
 
     def _poll_plugins(self):
         """Fetch plugin definitions from each discovered daemon.
@@ -122,7 +135,9 @@ class TrayPluginMenuBuilder:
         """Get plugin list for a daemon slot index."""
         return self._daemon_plugins.get(slot, [])
 
-    def _execute_plugin_command_with_params(self, plugin_item_dict, target=None):
+    def _execute_plugin_command_with_params(
+        self, plugin_item_dict, target=None, screen_bounds=None
+    ):
         """Collect parameters via direct call or subprocess, then execute.
 
         Uses direct in-process TrayPromptApp call when NiceGUI is available
@@ -184,6 +199,8 @@ class TrayPluginMenuBuilder:
                 prompt_cmd += ["--extra-vars", json_mod.dumps(extra_vars)]
             if label:
                 prompt_cmd += ["--title", label]
+            if screen_bounds is not None:
+                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
 
             subprocess.Popen(prompt_cmd)
 
@@ -196,6 +213,7 @@ class TrayPluginMenuBuilder:
                         target=target,
                         run_on_target=run_on_target,
                         label=label,
+                        **_screen_bounds_kwargs(screen_bounds),
                     )
 
             threading.Thread(
@@ -215,6 +233,7 @@ class TrayPluginMenuBuilder:
                         command_type=item_type,
                         extra_vars=extra_vars,
                         title=label,
+                        screen_bounds=screen_bounds,
                     )
                     command = app.run()
                 except Exception as e:
@@ -227,6 +246,7 @@ class TrayPluginMenuBuilder:
                         target=target,
                         run_on_target=run_on_target,
                         label=label,
+                        **_screen_bounds_kwargs(screen_bounds),
                     )
 
             threading.Thread(
@@ -256,6 +276,8 @@ class TrayPluginMenuBuilder:
                 prompt_cmd += ["--extra-vars", json_mod.dumps(extra_vars)]
             if label:
                 prompt_cmd += ["--title", label]
+            if screen_bounds is not None:
+                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
 
             from ai_guardian.daemon.multi_client import _launch_in_terminal
 
@@ -270,6 +292,7 @@ class TrayPluginMenuBuilder:
                         target=target,
                         run_on_target=run_on_target,
                         label=label,
+                        **_screen_bounds_kwargs(screen_bounds),
                     )
 
             threading.Thread(
@@ -293,6 +316,7 @@ class TrayPluginMenuBuilder:
         item_type,
         run_on_target=False,
         label=None,
+        screen_bounds=None,
     ):
         """Execute the same command on multiple targets sequentially."""
         for target in targets:
@@ -302,6 +326,7 @@ class TrayPluginMenuBuilder:
                 target=target,
                 run_on_target=run_on_target,
                 label=label,
+                **_screen_bounds_kwargs(screen_bounds),
             )
 
     def _serialize_targets_for_selector(self):
@@ -321,7 +346,9 @@ class TrayPluginMenuBuilder:
             for t in self._tray._targets
         ]
 
-    def _execute_multi_target_with_params(self, plugin_item, targets):
+    def _execute_multi_target_with_params(
+        self, plugin_item, targets, screen_bounds=None
+    ):
         """Collect params once via direct call or subprocess, then execute on all targets.
 
         Uses direct in-process TrayPromptApp call when NiceGUI is available.
@@ -373,6 +400,8 @@ class TrayPluginMenuBuilder:
             )
             if label:
                 prompt_cmd += ["--title", label]
+            if screen_bounds is not None:
+                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
 
             subprocess.Popen(prompt_cmd)
 
@@ -385,6 +414,7 @@ class TrayPluginMenuBuilder:
                         item_type,
                         run_on_target=run_on_target,
                         label=label,
+                        screen_bounds=screen_bounds,
                     )
 
             threading.Thread(
@@ -403,6 +433,7 @@ class TrayPluginMenuBuilder:
                         command_template=resolved_cmd,
                         command_type=item_type,
                         title=label,
+                        screen_bounds=screen_bounds,
                     )
                     command = app.run()
                 except Exception as e:
@@ -415,6 +446,7 @@ class TrayPluginMenuBuilder:
                         item_type,
                         run_on_target=run_on_target,
                         label=label,
+                        screen_bounds=screen_bounds,
                     )
 
             threading.Thread(
@@ -442,6 +474,8 @@ class TrayPluginMenuBuilder:
             )
             if label:
                 prompt_cmd += ["--title", label]
+            if screen_bounds is not None:
+                prompt_cmd += ["--screen-bounds", json_mod.dumps(screen_bounds)]
 
             from ai_guardian.daemon.multi_client import _launch_in_terminal
 
@@ -456,6 +490,7 @@ class TrayPluginMenuBuilder:
                         item_type,
                         run_on_target=run_on_target,
                         label=label,
+                        screen_bounds=screen_bounds,
                     )
 
             threading.Thread(
@@ -464,7 +499,7 @@ class TrayPluginMenuBuilder:
                 name="multi-plugin-prompt-watch",
             ).start()
 
-    def _execute_plugin_with_target_select(self, plugin_item):
+    def _execute_plugin_with_target_select(self, plugin_item, screen_bounds=None):
         """Launch target selector, then execute on selected targets."""
         import json as json_mod
         import os
@@ -510,6 +545,7 @@ class TrayPluginMenuBuilder:
                 self._execute_multi_target_with_params(
                     plugin_item,
                     selected,
+                    screen_bounds=screen_bounds,
                 )
             else:
                 cmd = resolve_command(plugin_item.command)
@@ -645,7 +681,7 @@ class TrayPluginMenuBuilder:
                 return resolve_command(item.command) is not None
 
             def _cmd_action(ix=i_slot):
-                def action(_, __):
+                def action(icon, __):
                     items_list = get_items_fn()
                     if ix >= len(items_list):
                         return
@@ -653,6 +689,7 @@ class TrayPluginMenuBuilder:
                     if item.items:
                         return
                     target = get_target_fn()
+                    screen_bounds = self._capture_tray_screen_bounds(icon)
 
                     if item.target in ("all", "containers"):
                         from ai_guardian.tray.plugins import resolve_command
@@ -664,6 +701,7 @@ class TrayPluginMenuBuilder:
                             self._execute_multi_target_with_params(
                                 item,
                                 targets,
+                                screen_bounds=screen_bounds,
                             )
                         else:
                             cmd = resolve_command(item.command)
@@ -674,15 +712,20 @@ class TrayPluginMenuBuilder:
                                     item.type,
                                     run_on_target=item.run_on_target,
                                     label=item.label,
+                                    **_screen_bounds_kwargs(screen_bounds),
                                 )
                     elif item.target == "select":
-                        self._execute_plugin_with_target_select(item)
+                        self._execute_plugin_with_target_select(
+                            item,
+                            screen_bounds=screen_bounds,
+                        )
                     elif item.params:
                         from ai_guardian.tray.plugins import _item_to_dict
 
                         self._execute_plugin_command_with_params(
                             _item_to_dict(item),
                             target=target,
+                            screen_bounds=screen_bounds,
                         )
                     else:
                         from ai_guardian.tray.plugins import resolve_command
@@ -695,6 +738,7 @@ class TrayPluginMenuBuilder:
                                 target=target,
                                 run_on_target=item.run_on_target,
                                 label=item.label,
+                                **_screen_bounds_kwargs(screen_bounds),
                             )
 
                 return action
