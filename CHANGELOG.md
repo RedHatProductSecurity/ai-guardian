@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Collision-aware sandbox names (#2334)**: Use the stable `ag-<cli>` base
+  name for container and OpenShell creation, preserve unused explicit names,
+  and add a local `YYYYMMDD_HHMMSS` suffix with deterministic disambiguators
+  when a runtime name is already in use. Propagate the final name through
+  runtime labels, OpenShell service operations, tray defaults, and lifecycle
+  commands.
+
 - **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
   `1.18.31` in the dedicated OpenShell support image.
 

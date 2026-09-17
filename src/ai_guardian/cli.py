@@ -1087,7 +1087,11 @@ def main():
             "create", "Create a sandbox (OpenShell connects when ready)"
         )
         sandbox_create_parser.add_argument(
-            "--name", help="Name for the sandbox (runtime-generated when omitted)"
+            "--name",
+            help=(
+                "Base name for the sandbox; defaults to ag-<cli> and adds a "
+                "local timestamp only when the name is already in use"
+            ),
         )
         sandbox_create_parser.add_argument(
             "--cli",

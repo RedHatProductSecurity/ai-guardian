@@ -209,7 +209,13 @@ ai-guardian sandbox --runtime openshell list
 ai-guardian sandbox status guardian-claude
 ```
 
-Creation defaults to OpenShell. For lifecycle commands with a name, omit
+Creation defaults to OpenShell. If `--name` is omitted, AI Guardian starts with
+`ag-<cli>` as the logical sandbox name. It preserves that base when it is
+unused; when the selected runtime already has that name, it appends the local
+creation time as `YYYYMMDD_HHMMSS` (for example,
+`ag-claude-20260917_123456`). If that timestamped name is also in use, a
+numeric suffix such as `-1` is added. This policy is applied independently in
+each runtime's native name space. For lifecycle commands with a name, omit
 `--runtime` and the command probes the AI Guardian
 labels/metadata to select Docker/Podman or OpenShell. If no runtime is supplied
 to `list`, it lists managed sandboxes from both runtimes.
@@ -309,10 +315,12 @@ policies, and the gateway-managed AI Guardian service. `sandbox list` is also
 intentionally scoped to
 resources carrying the `ai-guardian.managed=true` label.
 
-When `--name` is supplied, the command records that name in the runtime
-metadata. The tray and NiceGUI prefer this stable sandbox name over a daemon
-hostname that may otherwise be reported as a container ID. Existing OpenShell
-sandboxes also use their `openshell.ai/sandbox-name` metadata when available.
+The command records the final name in runtime metadata. An explicit name is
+preserved when available; if it is already in use, the collision-aware naming
+policy selects the timestamped name before creation. The tray and NiceGUI
+prefer this stable sandbox name over a daemon hostname that may otherwise be
+reported as a container ID. Existing OpenShell sandboxes also use their
+`openshell.ai/sandbox-name` metadata when available.
 
 For OpenShell log filtering, `--source`, `--level`, and `--since` are forwarded
 to `openshell logs`. `--follow` selects OpenShell's streaming `--tail` mode.
@@ -323,7 +331,7 @@ Common options for `sandbox create` are:
 
 | Option | Purpose |
 | --- | --- |
-| `--name NAME` | Assign a stable runtime name. |
+| `--name NAME` | Assign a stable base name. It is preserved when available; a local `YYYYMMDD_HHMMSS` suffix is added on collision. If omitted, the base defaults to `ag-<cli>`. |
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |

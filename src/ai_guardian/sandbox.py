@@ -385,6 +385,19 @@ def _run_capture(
         return None
 
 
+def _sandbox_name_exists(args, runtime: str, name: str) -> bool:
+    """Return whether a native runtime resource already uses ``name``."""
+    if runtime == CONTAINER_RUNTIME:
+        command = [_container_engine(args), "inspect", name]
+    elif runtime == OPENSHELL_RUNTIME:
+        command = [_openshell_cli(args), "sandbox", "get", name, "--output", "json"]
+    else:
+        raise ValueError(f"unsupported sandbox runtime: {runtime}")
+
+    result = _run_capture(command)
+    return bool(result and result.returncode == 0)
+
+
 def _is_ai_guardian_labels(labels) -> bool:
     """Return whether runtime metadata identifies an AI Guardian resource."""
     if not isinstance(labels, dict):
@@ -1400,10 +1413,34 @@ def _openshell_entrypoint_args(args) -> List[str]:
 
 
 def _generated_openshell_name(cli: str) -> str:
-    """Generate a short name for OpenShell's upload-then-exec flow."""
-    cli_suffix = cli[:8]
-    pid_suffix = str(os.getpid())[-6:]
-    return f"ag-{cli_suffix}-{pid_suffix}"
+    """Generate the default logical name shared by both sandbox runtimes."""
+    return f"ag-{cli[:8]}"
+
+
+def _sandbox_base_name(args, runtime: str) -> str:
+    """Return the requested name or the runtime's default logical name."""
+    requested = getattr(args, "name", None)
+    if requested:
+        return str(requested)
+    default_cli = (
+        DEFAULT_OPENSHELL_CLI if runtime == OPENSHELL_RUNTIME else DEFAULT_CONTAINER_CLI
+    )
+    return _generated_openshell_name(_selected_cli(args, default_cli))
+
+
+def _resolve_sandbox_name(args, runtime: str) -> str:
+    """Choose an unused runtime name, adding a local timestamp on collision."""
+    base_name = _sandbox_base_name(args, runtime)
+    if not _sandbox_name_exists(args, runtime, base_name):
+        return base_name
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    candidate = f"{base_name}-{timestamp}"
+    disambiguator = 1
+    while _sandbox_name_exists(args, runtime, candidate):
+        candidate = f"{base_name}-{timestamp}-{disambiguator}"
+        disambiguator += 1
+    return candidate
 
 
 def _extract_openshell_service_url(value: str) -> Optional[str]:
@@ -1840,16 +1877,14 @@ def _container_create(args) -> Tuple[List[str], Optional[Dict[str, str]]]:
         "ai-guardian.runtime=container",
     ]
 
-    name = getattr(args, "name", None)
-    if name:
-        command.extend(["--name", name])
+    name = _sandbox_base_name(args, CONTAINER_RUNTIME)
+    command.extend(["--name", name])
 
     for label in getattr(args, "label", None) or []:
         command.extend(["--label", label])
-    if name:
-        # Discovery uses this stable label before probing the daemon, whose
-        # hostname may otherwise be the runtime-generated container ID.
-        command.extend(["--label", f"ai-guardian.name={name}"])
+    # Discovery uses this stable label before probing the daemon, whose
+    # hostname may otherwise be the runtime-generated container ID.
+    command.extend(["--label", f"ai-guardian.name={name}"])
 
     port = getattr(args, "port", None)
     if port is None:
@@ -1921,13 +1956,13 @@ def _openshell_create(
             + ", ".join(SUPPORTED_CLI_IDE_TYPES)
         )
 
-    name = getattr(args, "name", None) or _generated_openshell_name(cli)
-    command.extend(["--name", name, "--label", f"ai-guardian.name={name}"])
+    name = _sandbox_base_name(args, OPENSHELL_RUNTIME)
     opencode_agent = _opencode_agent(args, cli)
     if opencode_agent:
         command.extend(["--label", f"ai-guardian.opencode-agent={opencode_agent}"])
     for label in getattr(args, "label", None) or []:
         command.extend(["--label", label])
+    command.extend(["--name", name, "--label", f"ai-guardian.name={name}"])
 
     environment = [
         f"AI_GUARDIAN_AGENT={cli}",
@@ -2091,6 +2126,13 @@ def _create(
     try:
         _validate_create_options(args)
         runtime = _runtime(args)
+        base_name = _sandbox_base_name(args, runtime)
+        args.name = _resolve_sandbox_name(args, runtime)
+        if args.name != base_name:
+            _emit_output(
+                f"Sandbox name '{base_name}' is already in use; using '{args.name}'.",
+                output=output,
+            )
         if runtime == CONTAINER_RUNTIME:
             command, child_env = _container_create(args)
             return _run(command, env=child_env, output=output)

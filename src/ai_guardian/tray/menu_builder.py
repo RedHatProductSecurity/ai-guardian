@@ -8,7 +8,6 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 
 import logging
 import os
-import secrets
 import shlex
 import threading
 import time
@@ -574,7 +573,9 @@ class TrayMenuBuilder:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
         opencode_agent_choices = ("", "build", "plan", "claude")
-        name_suffix = secrets.token_hex(3)
+        from ai_guardian.sandbox import _generated_openshell_name
+
+        name_default = _generated_openshell_name(cli)
         return [
             {
                 "name": "runtime",
@@ -597,14 +598,19 @@ class TrayMenuBuilder:
             {
                 "name": "name",
                 "label": "Sandbox name",
-                "default": f"ag-{cli[:8]}-{name_suffix}",
+                "default": name_default,
                 "dynamic_default": {
                     "field": "cli",
                     "prefix": "ag-",
                     "value_max_length": 8,
-                    "suffix": name_suffix,
+                    "separator": "",
+                    "suffix": "",
                 },
                 "required": True,
+                "help": (
+                    "Base name; a local timestamp suffix is added only when "
+                    "this name is already in use."
+                ),
             },
             {
                 "name": "agent",

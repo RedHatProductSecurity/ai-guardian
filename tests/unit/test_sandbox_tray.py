@@ -640,10 +640,12 @@ class TestSandboxTrayMenu:
         assert cli_field["required"] is True
 
         name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"].startswith("ag-claude-")
+        assert name_field["default"] == "ag-claude"
         dynamic_default = name_field["dynamic_default"]
         assert dynamic_default["field"] == "cli"
-        assert name_field["default"] == f"ag-claude-{dynamic_default['suffix']}"
+        assert dynamic_default["separator"] == ""
+        assert dynamic_default["suffix"] == ""
+        assert name_field["help"]
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
@@ -669,7 +671,7 @@ class TestSandboxTrayMenu:
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["default"] == "build"
         name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"].startswith("ag-opencode-")
+        assert name_field["default"] == "ag-opencode"
 
         policy_field = next(field for field in fields if field["name"] == "policies")
         assert policy_field["type"] == "file"
