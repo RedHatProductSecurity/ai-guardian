@@ -908,6 +908,7 @@ class TrayMenuBuilder:
             sandbox_config_command=parts[1] if len(parts) > 1 else None,
             runtime=runtime,
             container_engine=getattr(target, "container_engine", None),
+            container_name=getattr(target, "container_name", None),
             openshell_cli=None,
             name=target.name,
             container_id=getattr(target, "container_id", None),

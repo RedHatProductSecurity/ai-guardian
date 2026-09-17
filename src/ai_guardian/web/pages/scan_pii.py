@@ -297,7 +297,13 @@ def create_scan_pii_page(service, daemon_name: str):
                                 current.remove(k)
                             sect["pii_types"] = current
                             cfg["scan_pii"] = sect
-                            await run.io_bound(save_web_config, cfg)
+                            saved = await run.io_bound(save_web_config, cfg)
+                            if not saved:
+                                ui.notify(
+                                    "Save failed: configuration is read-only or unavailable",
+                                    type="negative",
+                                )
+                                return
                             ui.notify("Saved", type="positive")
 
                         cb.on_value_change(on_pii_change)
@@ -324,7 +330,13 @@ def create_scan_pii_page(service, daemon_name: str):
                                 current.remove(k)
                             sect["pii_types"] = current
                             cfg["scan_pii"] = sect
-                            await run.io_bound(save_web_config, cfg)
+                            saved = await run.io_bound(save_web_config, cfg)
+                            if not saved:
+                                ui.notify(
+                                    "Save failed: configuration is read-only or unavailable",
+                                    type="negative",
+                                )
+                                return
                             ui.notify("Saved", type="positive")
 
                         cb.on_value_change(on_pii_change2)

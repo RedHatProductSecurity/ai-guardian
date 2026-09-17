@@ -47,7 +47,13 @@ def create_sdk_settings_page(service, daemon_name: str):
                 elif section_path == "secret_redaction.enabled":
                     sr = sdk.setdefault("secret_redaction", {})
                     sr["enabled"] = value
-                await run.io_bound(save_web_config, config)
+                saved = await run.io_bound(save_web_config, config)
+                if not saved:
+                    ui.notify(
+                        "Save failed: configuration is read-only or unavailable",
+                        type="negative",
+                    )
+                    return
                 ui.notify("Saved", type="positive", position="bottom-right")
             except Exception as exc:
                 ui.notify(f"Save failed: {exc}", type="negative")

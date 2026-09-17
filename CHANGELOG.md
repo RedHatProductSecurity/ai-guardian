@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
+  engines and runtime names in tray actions, mark created containers for stopped
+  discovery, probe Docker and Podman during lifecycle auto-detection, classify
+  config write failures accurately, and surface failed web-console saves.
+
 - **Tray subprocess interpreter consistency (#2317)**: Launch local AI Guardian
   commands with the interpreter already running the tray, preventing a different
   `ai-guardian` executable on `PATH` from starting an older package installation.

@@ -330,7 +330,13 @@ def create_secret_redaction_page(service, daemon_name: str):
                             sect = {}
                         sect["preserve_format"] = e.value
                         cfg["secret_redaction"] = sect
-                        await run.io_bound(save_web_config, cfg)
+                        saved = await run.io_bound(save_web_config, cfg)
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
                         ui.notify("Saved", type="positive")
 
                     async def save_lr(e):
@@ -340,7 +346,13 @@ def create_secret_redaction_page(service, daemon_name: str):
                             sect = {}
                         sect["log_redactions"] = e.value
                         cfg["secret_redaction"] = sect
-                        await run.io_bound(save_web_config, cfg)
+                        saved = await run.io_bound(save_web_config, cfg)
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
                         ui.notify("Saved", type="positive")
 
                     pf.on_value_change(save_pf)

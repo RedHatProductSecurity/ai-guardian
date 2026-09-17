@@ -67,6 +67,30 @@ def test_container_start_uses_selected_engine():
     assert run.call_args.args[0] == ["docker", "start", "demo"]
 
 
+def test_container_lifecycle_uses_runtime_container_name():
+    args = _args(
+        sandbox_command="exec",
+        name="logical-name",
+        container_name="runtime-name",
+        command_args=["--", "pwd"],
+    )
+
+    with patch(
+        "ai_guardian.sandbox.subprocess.run",
+        return_value=subprocess.CompletedProcess([], 0),
+    ) as run:
+        assert handle_sandbox_command(args) == 0
+
+    assert run.call_args.args[0] == [
+        "podman",
+        "exec",
+        "--interactive",
+        "--tty",
+        "runtime-name",
+        "pwd",
+    ]
+
+
 def test_programmatic_lifecycle_command_captures_runtime_output():
     args = _args(sandbox_command="status")
     output = []
@@ -402,6 +426,36 @@ def test_lifecycle_command_auto_detects_container_by_runtime_label():
     assert run.call_args_list[-1].args[0] == ["podman", "rm", "--force", "demo"]
 
 
+def test_lifecycle_auto_detection_finds_docker_and_retains_engine():
+    args = _args(sandbox_command="delete", runtime=None, container_engine=None)
+
+    def fake_run(command, **kwargs):
+        if command[:2] == ["podman", "inspect"]:
+            return subprocess.CompletedProcess(command, 125, stderr="not found")
+        if command[:2] == ["docker", "inspect"]:
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=json.dumps(
+                    [{"Config": {"Labels": {"ai-guardian.daemon": "true"}}}]
+                ),
+            )
+        if command[:4] == ["openshell", "sandbox", "get", "demo"]:
+            return subprocess.CompletedProcess(command, 1, stderr="not found")
+        return subprocess.CompletedProcess(command, 0)
+
+    with (
+        patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_SANDBOX_RUNTIME": "", "CONTAINER_ENGINE": ""},
+        ),
+        patch("ai_guardian.sandbox.subprocess.run", side_effect=fake_run) as run,
+    ):
+        assert handle_sandbox_command(args) == 0
+
+    assert run.call_args_list[-1].args[0] == ["docker", "rm", "--force", "demo"]
+
+
 def test_list_without_runtime_includes_both_supported_runtimes(capsys):
     args = _args(sandbox_command="list", runtime=None)
 
@@ -471,6 +525,7 @@ def test_container_create_is_detached_and_keeps_config_read_only(tmp_path):
         "--tty",
     ]
     assert command[5:8] == ["--label", "ai-guardian.managed=true", "--label"]
+    assert "ai-guardian.daemon=true" in command
     assert "--name" in command
     assert command[command.index("--name") + 1] == "demo"
     assert "ai-guardian.name=demo" in command

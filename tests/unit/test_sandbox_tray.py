@@ -70,6 +70,43 @@ def _make_tray(targets):
 
 
 class TestSandboxTrayCommands:
+    def test_container_command_uses_target_engine_and_runtime_name(self):
+        target = DaemonTarget(
+            name="logical-name",
+            runtime="container",
+            container_engine="docker",
+            container_name="runtime-name",
+            status="running",
+        )
+        with (
+            mock.patch(
+                "ai_guardian.tray.plugins.resolve_cli_cmd",
+                side_effect=lambda *args: ["ai-guardian", *args],
+            ),
+            mock.patch("ai_guardian.daemon.multi_client._launch_in_terminal") as launch,
+        ):
+            launch_sandbox_command(
+                target,
+                "exec",
+                [target.name, "--", "pwd"],
+            )
+
+        launch.assert_called_once_with(
+            [
+                "ai-guardian",
+                "sandbox",
+                "exec",
+                "--runtime",
+                "container",
+                "--container-engine",
+                "docker",
+                "runtime-name",
+                "--",
+                "pwd",
+            ],
+            keep_open=True,
+        )
+
     def test_lifecycle_command_uses_logical_openshell_runtime(self):
         target = DaemonTarget(
             name="ag-test",
