@@ -906,3 +906,34 @@ def test_local_daemon_accepts_cursor_config_directory(tmp_path, monkeypatch):
         assert monitor._get_unconfigured_ides() == ["cursor"]
 
     setup.check_hooks_for_ide.assert_called_once_with("cursor", integrity=True)
+
+
+def test_local_daemon_ignores_gemini_family_directories_without_cli_evidence(
+    tmp_path, monkeypatch
+):
+    """
+    USER EXPERIENCE: Shared Gemini directories -> no false setup popup.
+
+    Gemini CLI and Antigravity use paths below ``~/.gemini``. An existing
+    directory must not be treated as proof that either CLI is installed.
+    """
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    gemini_dir = tmp_path / ".gemini"
+    (gemini_dir / "config").mkdir(parents=True)
+    monkeypatch.setattr("ai_guardian.setup.hooks.shutil.which", lambda _: None)
+
+    setup = IDESetup()
+    setup.IDE_CONFIGS = {
+        "gemini": {
+            "config_path": str(gemini_dir / "settings.json"),
+            "executable": "gemini",
+        },
+        "antigravity": {
+            "config_path": str(gemini_dir / "config" / "hooks.json"),
+            "executable": "agy",
+        },
+    }
+
+    with patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
+        assert monitor._get_unconfigured_ides() == []

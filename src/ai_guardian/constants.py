@@ -141,6 +141,106 @@ _DISPLAY_NAMES = {
 ALL_HOOK_EVENT_DISPLAY_NAMES = frozenset(_DISPLAY_NAMES.values())
 
 
+# Antigravity tool names are the lowercased CORTEX_STEP_TYPE_* enum with the
+# prefix stripped. Map the security-relevant ones to canonical Claude Code
+# names so the existing pattern/policy rules apply unchanged.
+ANTIGRAVITY_TOOL_MAP = {
+    "run_command": "Bash",
+    "shell_exec": "Bash",
+    "send_command_input": "Bash",
+    "view_file": "Read",
+    "view_code_item": "Read",
+    "view_file_outline": "Read",
+    "read_notebook": "Read",
+    "propose_code": "Edit",
+    "file_change": "Edit",
+    "edit_notebook": "NotebookEdit",
+    "write_blob": "Write",
+    "delete_directory": "Delete",
+    "list_directory": "LS",
+    "list_dir": "LS",
+    "grep_search": "Grep",
+    "code_search": "Grep",
+    "find": "Glob",
+    "find_by_name": "Glob",
+    "read_url_content": "WebFetch",
+    "open_browser_url": "WebFetch",
+    "search_web": "WebSearch",
+}
+
+
+def antigravity_arg(args, *names):
+    """Fetch an Antigravity tool argument by name, ignoring case.
+
+    Antigravity's own tool schemas use PascalCase, but the surrounding
+    payload is camelCase protojson.  Every layer that reads these
+    arguments must agree on casing: if one layer resolves a value and
+    another does not, the check that layer performs is skipped silently
+    rather than failing.
+    """
+    if not isinstance(args, dict):
+        return None
+    lowered = {k.lower(): v for k, v in args.items() if isinstance(k, str)}
+    for name in names:
+        value = lowered.get(name.lower())
+        if value is not None:
+            return value
+    return None
+
+
+def antigravity_tool_name(raw_name, args=None):
+    """Resolve an Antigravity step name to its canonical tool name.
+
+    MCP calls arrive as ``call_mcp_tool`` with the server and tool in the
+    arguments; they are rebuilt as ``mcp__<server>__<tool>`` so the existing
+    MCP restriction and ``mcp__*`` permission rules keep applying.
+    """
+    if not isinstance(raw_name, str) or not raw_name:
+        return raw_name
+
+    lowered = raw_name.lower()
+    if lowered in ANTIGRAVITY_MCP_STEPS:
+        args = args if isinstance(args, dict) else {}
+        server = antigravity_arg(args, "ServerName", "server_name")
+        tool = antigravity_arg(args, "ToolName", "tool_name")
+        if server and tool:
+            return f"mcp__{server}__{tool}"
+        return "mcp__unknown"
+
+    return ANTIGRAVITY_TOOL_MAP.get(lowered, raw_name)
+
+
+# Argument keys Antigravity tools use for a path, in preference order.
+ANTIGRAVITY_PATH_ARG_KEYS = (
+    "TargetFile",
+    "AbsolutePath",
+    "FilePath",
+    "Path",
+    "DirectoryPath",
+    "SearchDirectory",
+    "Url",
+)
+
+# The subset that can name a readable file, used when pulling content to scan.
+# Directory and URL keys are deliberately excluded.
+ANTIGRAVITY_FILE_ARG_KEYS = ("TargetFile", "AbsolutePath", "FilePath", "Path")
+
+
+# CLI/env aliases that resolve onto a canonical IDE key.
+IDE_ALIASES = {"agy": "antigravity"}
+
+
+def canonical_ide(ide_type):
+    """Resolve a user-supplied IDE name or alias to its canonical key."""
+    if not ide_type or not isinstance(ide_type, str):
+        return ide_type
+    return IDE_ALIASES.get(ide_type.lower(), ide_type)
+
+
+# Steps that invoke an MCP tool rather than a built-in one.
+ANTIGRAVITY_MCP_STEPS = frozenset({"call_mcp_tool", "mcp_tool"})
+
+
 AUGMENT_TOOL_MAP = {
     "launch-process": "Bash",
     "str-replace-editor": "Edit",
@@ -200,6 +300,12 @@ GEMINI_MANAGED_HOOK_EVENTS = (
     "AfterTool",
 )
 
+ANTIGRAVITY_MANAGED_HOOK_EVENTS = (
+    "PreToolUse",
+    "PostToolUse",
+    "PreInvocation",
+)
+
 CLINE_MANAGED_HOOK_EVENTS = ("PreToolUse", "PostToolUse", "UserPromptSubmit")
 ZOOCODE_MANAGED_HOOK_EVENTS = CLINE_MANAGED_HOOK_EVENTS
 KIRO_MANAGED_HOOK_EVENTS = ("PreToolUse", "PostToolUse", "PromptSubmit")
@@ -218,6 +324,7 @@ MANAGED_HOOK_EVENTS_BY_IDE = {
     "codex": CODEX_MANAGED_HOOK_EVENTS,
     "windsurf": WINDSURF_MANAGED_HOOK_EVENTS,
     "gemini": GEMINI_MANAGED_HOOK_EVENTS,
+    "antigravity": ANTIGRAVITY_MANAGED_HOOK_EVENTS,
     "cline": CLINE_MANAGED_HOOK_EVENTS,
     "zoocode": ZOOCODE_MANAGED_HOOK_EVENTS,
     "kiro": KIRO_MANAGED_HOOK_EVENTS,

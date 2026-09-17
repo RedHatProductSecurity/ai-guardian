@@ -33,7 +33,7 @@ Options:
     --ide NAME          Setup hooks for a specific IDE; when omitted, detect
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, codex, windsurf,
-                                 gemini, cline, zoocode, kiro, aiderdesk,
+                                 gemini, antigravity, cline, zoocode, kiro, aiderdesk,
                                  openclaw, opencode, augment, crush, junie
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
@@ -110,6 +110,9 @@ detect_installed_agents() {
         [ -d "$GEMINI_CLI_HOME" ] && agents+=("gemini")
     elif [ -d "$HOME/.gemini" ]; then
         agents+=("gemini")
+    fi
+    if [ -f "$HOME/.gemini/config/hooks.json" ] || command -v agy >/dev/null 2>&1; then
+        agents+=("antigravity")
     fi
     [ -d "$HOME/.augment" ] && agents+=("augment")
 

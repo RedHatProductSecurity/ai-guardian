@@ -28,7 +28,7 @@ SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 
 SUPPORTED_AGENTS=(
     claude cursor copilot codex windsurf gemini cline zoocode kiro
-    aiderdesk openclaw opencode augment crush junie dummy-agent
+    aiderdesk openclaw opencode augment crush junie antigravity dummy-agent
 )
 
 _require_option_value() {

@@ -352,7 +352,7 @@ Common options for `sandbox create` are:
 
 In the tray's **Create sandbox** form, **CLI** is a dropdown containing the
 CLI-capable sandbox integrations: `claude`, `copilot`, `codex`, `gemini`,
-`kiro`, `openclaw`, `opencode`, and `crush`. Selecting `opencode`
+`antigravity`, `kiro`, `openclaw`, `opencode`, and `crush`. Selecting `opencode`
 enables a separate **OpenCode agent** field.
 
 The **Image / base** field remains editable for registry references, local

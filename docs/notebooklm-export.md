@@ -1082,7 +1082,7 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `cline`, `zoocode`, `kiro`, `augment`, `aiderdesk`, `openclaw`, `opencode`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `augment`, `aiderdesk`, `openclaw`, `opencode`, `crush`, `junie`
 
 ### Config File Locations
 

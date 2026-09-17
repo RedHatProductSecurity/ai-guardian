@@ -176,6 +176,63 @@ class TestIDESetup:
         ):
             assert setup.list_installed_ides() == ["cursor"]
 
+    def test_list_installed_ides_rejects_cli_config_directories_without_evidence(
+        self, tmp_path
+    ):
+        """CLI config directories alone do not prove Gemini or Antigravity exists."""
+        setup = IDESetup()
+        gemini_dir = tmp_path / ".gemini"
+        (gemini_dir / "config").mkdir(parents=True)
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "gemini": {
+                    "config_path": str(gemini_dir / "settings.json"),
+                    "executable": "gemini",
+                },
+                "antigravity": {
+                    "config_path": str(gemini_dir / "config" / "hooks.json"),
+                    "executable": "agy",
+                },
+            },
+        ):
+            with mock.patch("ai_guardian.setup.hooks.shutil.which", return_value=None):
+                assert setup.list_installed_ides() == []
+                assert setup.list_detected_ides() == []
+
+    def test_list_installed_ides_accepts_cli_executable_or_config_file(self, tmp_path):
+        """CLI detection accepts a binary or an agent-specific config file."""
+        setup = IDESetup()
+        gemini_dir = tmp_path / ".gemini"
+        antigravity_dir = gemini_dir / "config"
+        antigravity_dir.mkdir(parents=True)
+        antigravity_config = antigravity_dir / "hooks.json"
+        antigravity_config.write_text("{}")
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "gemini": {
+                    "config_path": str(gemini_dir / "settings.json"),
+                    "executable": "gemini",
+                },
+                "antigravity": {
+                    "config_path": str(antigravity_config),
+                    "executable": "agy",
+                },
+            },
+        ):
+            with mock.patch(
+                "ai_guardian.setup.hooks.shutil.which",
+                side_effect=lambda executable: (
+                    f"/usr/local/bin/{executable}" if executable == "gemini" else None
+                ),
+            ):
+                assert setup.list_installed_ides() == ["gemini", "antigravity"]
+
     def test_backup_config(self, tmp_path):
         """Test creating backup of config file."""
         setup = IDESetup()
@@ -804,8 +861,8 @@ class TestIDESetupParametrized:
 
     @pytest.mark.parametrize(
         "ide_name",
-        ["codex", "gemini", "cline", "zoocode", "augment", "kiro"],
-        ids=["codex", "gemini", "cline", "zoocode", "augment", "kiro"],
+        ["codex", "gemini", "cline", "zoocode", "augment", "kiro", "antigravity"],
+        ids=["codex", "gemini", "cline", "zoocode", "augment", "kiro", "antigravity"],
     )
     def test_ide_in_ide_configs(self, ide_name):
         """Verify IDE entry exists in IDE_CONFIGS with a name and hooks/scripts."""
@@ -848,7 +905,9 @@ class TestIDESetupParametrized:
                 )
             else:
                 hooks = config["hooks"]
-                if ide_name in ("windsurf", "augment", "crush"):
+                if ide_name == "antigravity":
+                    hooks = hooks["ai-guardian"]
+                elif ide_name in ("windsurf", "augment", "crush"):
                     hooks = hooks.get("hooks", hooks)
                 configured_events = tuple(name for name in hooks if name != "version")
             assert set(configured_events) == set(expected_events)
@@ -1073,8 +1132,26 @@ class TestIDESetupParametrized:
 
     @pytest.mark.parametrize(
         "ide_name",
-        ["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro"],
-        ids=["claude", "windsurf", "codex", "gemini", "augment", "cline", "kiro"],
+        [
+            "claude",
+            "windsurf",
+            "codex",
+            "gemini",
+            "augment",
+            "cline",
+            "kiro",
+            "antigravity",
+        ],
+        ids=[
+            "claude",
+            "windsurf",
+            "codex",
+            "gemini",
+            "augment",
+            "cline",
+            "kiro",
+            "antigravity",
+        ],
     )
     def test_setup_ide_hooks_dry_run(self, tmp_path, ide_name):
         """Dry-run mode returns success with DRY RUN and creates no files."""
@@ -4498,7 +4575,16 @@ class TestWindowsSetup:
 
     @pytest.mark.parametrize(
         "ide_type",
-        ["claude", "cursor", "copilot", "codex", "windsurf", "gemini", "augment"],
+        [
+            "claude",
+            "cursor",
+            "copilot",
+            "codex",
+            "windsurf",
+            "gemini",
+            "augment",
+            "antigravity",
+        ],
     )
     def test_hooks_use_pythonw_on_windows(self, tmp_path, ide_type):
         """All agent adapters use pythonw.exe on Windows."""

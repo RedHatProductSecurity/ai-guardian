@@ -10,6 +10,7 @@ import os
 from typing import Dict, Optional
 
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
+from ai_guardian.hook_adapters.antigravity import AntigravityAdapter
 from ai_guardian.hook_adapters.cline import ClineAdapter
 from ai_guardian.hook_adapters.gemini import GeminiCLIAdapter
 from ai_guardian.hook_adapters.windsurf import WindsurfAdapter
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 # Ordered by detection specificity: most unique fields first.
 # Claude Code is last because it is the default fallback.
 ADAPTER_CLASSES = [
+    AntigravityAdapter,  # conversationId + workspacePaths (camelCase protojson)
     ClineAdapter,  # clineVersion field
     GeminiCLIAdapter,  # transcript_path field
     WindsurfAdapter,  # agent_action_name field
@@ -66,6 +68,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         ClineAdapter,
         KiroAdapter,
         AugmentAdapter,
+        AntigravityAdapter,
         OpenCodeAdapter,
         CrushAdapter,
         JunieAdapter,
@@ -81,6 +84,20 @@ for _integration in ALL_IDE_REGISTRY:
     _adapter_cls = ADAPTERS_BY_IDE_TYPE[_integration.key]
     for _alias in _integration.adapter_aliases:
         _ENV_ALIAS_MAP.setdefault(_alias, _adapter_cls)
+
+
+def _canonical_agent_key(alias: str) -> str:
+    """Resolve an --ide / env alias to the registry integration key."""
+    key = (alias or "").lower()
+    for integration in ALL_IDE_REGISTRY:
+        if key == integration.key or key in integration.adapter_aliases:
+            return integration.key
+    return key
+
+
+def _adapter_for_alias(alias: str) -> HookAdapter:
+    """Instantiate the adapter for an alias with canonical attribution."""
+    return _ENV_ALIAS_MAP[alias](agent_type=_canonical_agent_key(alias))
 
 
 def detect_adapter(hook_data: Dict) -> HookAdapter:
@@ -103,14 +120,14 @@ def detect_adapter(hook_data: Dict) -> HookAdapter:
     if isinstance(explicit_ide, str):
         explicit_ide = explicit_ide.lower()
     if explicit_ide and explicit_ide in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[explicit_ide](agent_type=explicit_ide)
+        adapter = _adapter_for_alias(explicit_ide)
         logger.debug("Adapter selected via --ide=%s: %s", explicit_ide, adapter.name)
         return adapter
 
     # 2. Check environment variable override
     ide_override = os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower()
     if ide_override and ide_override in _ENV_ALIAS_MAP:
-        adapter = _ENV_ALIAS_MAP[ide_override](agent_type=ide_override)
+        adapter = _adapter_for_alias(ide_override)
         logger.debug(
             "Adapter selected via AI_GUARDIAN_IDE_TYPE=%s: %s",
             ide_override,
@@ -152,6 +169,7 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.GEMINI_CLI: "gemini",
         IDEType.CLINE: "cline",
         IDEType.KIRO: "kiro",
+        IDEType.ANTIGRAVITY: "antigravity",
     }
     adapter_cls = ADAPTERS_BY_IDE_TYPE.get(
         _IDE_KEY_BY_TYPE.get(ide_type, ""), BaseAgentAdapter
@@ -175,6 +193,7 @@ __all__ = [
     "ClineAdapter",
     "KiroAdapter",
     "AugmentAdapter",
+    "AntigravityAdapter",
     "OpenCodeAdapter",
     "CrushAdapter",
     "JunieAdapter",
