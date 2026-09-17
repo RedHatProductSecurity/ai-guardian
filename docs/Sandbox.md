@@ -211,11 +211,14 @@ ai-guardian sandbox status guardian-claude
 
 Creation defaults to OpenShell. If `--name` is omitted, AI Guardian starts with
 `ag-<cli>` as the logical sandbox name. It preserves that base when it is
-unused; when the selected runtime already has that name, it appends the local
-creation time as `YYYYMMDD_HHMMSS` (for example,
-`ag-claude-20260917_123456`). If that timestamped name is also in use, a
-numeric suffix such as `-1` is added. This policy is applied independently in
-each runtime's native name space. For lifecycle commands with a name, omit
+unused. For containers, when the selected runtime already has that name, it
+appends the local creation time as `YYYYMMDD_HHMMSS` (for example,
+`ag-claude-20260917_123456`) and adds a numeric suffix if needed. OpenShell
+names are limited to 19 characters, so collisions use compact `YYMMDDHHMM`
+timestamps (for example, `ag-codex-2609171646`). If the requested OpenShell
+name is too long or that compact name is already in use, AI Guardian uses a
+short UUID suffix while preserving a short base prefix. This policy is applied
+independently in each runtime's native name space. For lifecycle commands with a name, omit
 `--runtime` and the command probes the AI Guardian
 labels/metadata to select Docker/Podman or OpenShell. If no runtime is supplied
 to `list`, it lists managed sandboxes from both runtimes.
@@ -257,6 +260,14 @@ container runtime is selected. Secret `--api-key` values remain a CLI/env
 option rather than being put into the tray form payload. Stopped
 container-engine sandboxes, including OpenShell sandboxes, appear in the main
 menu under `Start stopped sandbox...`.
+
+For OpenShell repository uploads, pressing `Continue` opens an upload preflight
+confirmation showing selected path, file count, total size, Git remote
+classification, image availability, safe command preview, and a large-upload
+warning when useful. Local image references are checked without pulling;
+remote registry availability is not probed. Cancelling preflight returns to the
+populated creation form. Container
+repositories are mounted directly and do not show this upload confirmation.
 
 The form separates the selected **CLI** from the **OpenCode agent** profile.
 When `opencode` is selected, enter `build`, `plan`, or a custom profile name;
@@ -331,7 +342,7 @@ Common options for `sandbox create` are:
 
 | Option | Purpose |
 | --- | --- |
-| `--name NAME` | Assign a stable base name. It is preserved when available; a local `YYYYMMDD_HHMMSS` suffix is added on collision. If omitted, the base defaults to `ag-<cli>`. |
+| `--name NAME` | Assign a stable base name. It is preserved when available; collision names follow runtime limits. If omitted, the base defaults to `ag-<cli>`. |
 | `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
 | `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
 | `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
@@ -480,6 +491,20 @@ used to select `latest`, so container and OpenShell snapshots with the same
 name cannot be mixed. The logical name remains the snapshot key and
 user-facing sandbox identity rather than a runtime-generated container ID or
 OpenShell UUID.
+
+When creating a sandbox with a reused logical name, AI Guardian automatically
+restores the newest snapshot for that name when a snapshot exists for the
+requested runtime. If no matching snapshot exists, creation uses the normal
+host/default configuration path. This automatic restore does not apply when a
+profile or explicit host configuration directory is selected.
+
+The tray Create sandbox form exposes the same behavior through Config source:
+
+- `Host/default` forces a fresh configuration and ignores saved snapshots.
+- `Latest saved snapshot` explicitly requires a matching snapshot and reports
+  an error when none exists.
+- A reused name with no explicit source automatically restores the newest
+  matching snapshot when available.
 
 Container and OpenShell runtimes have separate native name spaces, so the same
 logical name can exist in both. The tray displays the runtime alongside the

@@ -343,6 +343,81 @@ class TestSandboxTrayMenu:
 
         run_command.assert_not_called()
 
+    def test_container_delete_streams_output_and_refreshes_discovery(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            container_engine="podman",
+            status="running",
+        )
+        tray = _make_tray([target])
+        progress = mock.MagicMock()
+        discovery = mock.MagicMock()
+        tray._discovery = discovery
+
+        def run_command(args, *, output):
+            assert args.runtime == "container"
+            output.append("removed\n")
+            return 0
+
+        with (
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=progress
+            ) as show_progress,
+            mock.patch(
+                "ai_guardian.sandbox.run_sandbox_command", side_effect=run_command
+            ),
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
+            ),
+        ):
+            tray._menu._run_sandbox_command(target, "delete", [target.name])
+
+        show_progress.assert_called_once_with(
+            "Deleting sandbox 'ag-test'",
+            "Operation: delete\nRuntime: container\n"
+            "Command is running; output appears below.",
+            screen_bounds=None,
+        )
+        progress.append.assert_called_once_with("removed\n")
+        progress.finish.assert_called_once_with(
+            True, "Sandbox 'ag-test' deleted.", "removed"
+        )
+        discovery.request_refresh.assert_called_once_with(wait=False)
+
+    def test_openshell_delete_keeps_failed_progress_open(self):
+        target = DaemonTarget(
+            name="ag-test",
+            runtime="container",
+            runtime_type="openshell",
+            status="running",
+        )
+        tray = _make_tray([target])
+        progress = mock.MagicMock()
+
+        def run_command(args, *, output):
+            assert args.runtime == "openshell"
+            output.append("service cleanup failed\n")
+            return 1
+
+        with (
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=progress
+            ),
+            mock.patch(
+                "ai_guardian.sandbox.run_sandbox_command", side_effect=run_command
+            ),
+            mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log") as show_log,
+        ):
+            tray._menu._run_sandbox_command(target, "delete", [target.name])
+
+        progress.finish.assert_called_once_with(
+            False,
+            "Unable to run delete for sandbox 'ag-test'.",
+            "service cleanup failed",
+        )
+        show_log.assert_not_called()
+
     def test_manage_connect_remains_visible_for_regular_container(self):
         tray = _make_tray(
             [DaemonTarget(name="container", runtime="container", status="running")]
@@ -384,6 +459,48 @@ class TestSandboxTrayMenu:
             items = tray._menu._build_sandbox_create_menu_items()
 
         assert [item.label for item in items] == ["Create sandbox..."]
+
+    def test_single_daemon_menu_explains_current_status_symbol(self):
+        tray = _make_tray(
+            [
+                DaemonTarget(
+                    name="ag-test",
+                    runtime="container",
+                    runtime_type="openshell",
+                    status="error",
+                    error_message="OpenShell service unavailable",
+                )
+            ]
+        )
+
+        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
+            items = tray._menu._build_single_daemon_menu_items()
+
+        status_item = next(item for item in items if item.label == "Status")
+        status_lines = status_item.action.items
+        assert status_item.kwargs["visible"](None) is True
+        assert status_lines[1].label(None) == "✗ Error"
+        assert status_lines[2].label(None) == "Runtime: openshell (container)"
+        assert status_lines[3].label(None) == "OpenShell service unavailable"
+        assert status_lines[6].label == "Symbol legend"
+
+    def test_multi_daemon_menu_has_status_entry_for_each_daemon(self):
+        tray = _make_tray(
+            [
+                DaemonTarget(name="one", runtime="local", status="running"),
+                DaemonTarget(name="two", runtime="container", status="stopped"),
+            ]
+        )
+
+        with mock.patch("ai_guardian.tray.menu_builder.pystray", FAKE_PYSTRAY):
+            single_items = tray._menu._build_single_daemon_menu_items()
+            items = tray._menu._build_multi_daemon_menu_items()
+
+        single_status = next(item for item in single_items if item.label == "Status")
+        assert single_status.kwargs["visible"](None) is False
+        assert len(items) == 2
+        for daemon_item in items:
+            assert "Status" in _walk_labels(daemon_item.action)
 
     def test_start_menu_lists_stopped_container_and_openshell_sandboxes(self):
         stopped_container = DaemonTarget(
@@ -542,9 +659,14 @@ class TestSandboxTrayMenu:
             mock.patch(
                 "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
             ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
+            mock.patch.object(
+                tray._menu, "_confirm_sandbox_upload", return_value=True
+            ) as confirm_upload,
         ):
             tray._menu._complete_sandbox_create_form(values)
 
+        confirm_upload.assert_called_once()
         create.assert_called_once()
         args = create.call_args.args[0]
         assert args.runtime == "openshell"
@@ -560,6 +682,7 @@ class TestSandboxTrayMenu:
         assert args.environment == ["DEBUG=1", "TERM=xterm"]
         assert args.label == ["team=security", "owner=ai"]
         assert args.restore_config == "latest"
+        assert args.fresh_config is False
         assert args.port is None
         assert create.call_args.kwargs["interactive"] is False
         assert isinstance(create.call_args.kwargs["output"], list)
@@ -575,6 +698,7 @@ class TestSandboxTrayMenu:
         with (
             mock.patch("ai_guardian.sandbox.create_sandbox", side_effect=fail_create),
             mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log") as show_log,
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
         ):
             tray._menu._complete_sandbox_create_form(
                 {"runtime": "container", "name": "ag-test"}
@@ -585,6 +709,175 @@ class TestSandboxTrayMenu:
             "Unable to create sandbox 'ag-test'.",
             "runtime failed",
         )
+
+    def test_upload_preflight_summarizes_size_and_git_remote(self, tmp_path):
+        tray = _make_tray([])
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "main.py").write_text("print('ok')\n", encoding="utf-8")
+        values = {
+            "runtime": "openshell",
+            "name": "ag-test",
+            "cli": "codex",
+            "repo": str(repo),
+            "image": "localhost/ai-guardian-openshell:dev",
+            "providers": "ai-guardian-codex",
+            "environment": "TOKEN=hidden",
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.menu_builder.subprocess.run",
+                return_value=SimpleNamespace(
+                    returncode=0,
+                    stdout="git@github.com:example/project.git\n",
+                ),
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_upload_confirmation",
+                return_value=True,
+            ) as show_confirmation,
+        ):
+            assert tray._menu._confirm_sandbox_upload(values, str(repo)) is True
+
+        message = show_confirmation.call_args.args[0]
+        assert str(repo) in message
+        assert "1 files" in message
+        assert "GitHub repository" in message
+        assert "TOKEN=hidden" not in message
+        assert "ai-guardian sandbox create" in message
+
+    def test_upload_preflight_reports_local_and_remote_image_status(self):
+        tray = _make_tray([])
+        with mock.patch(
+            "ai_guardian.tray.menu_builder.subprocess.run",
+            return_value=SimpleNamespace(returncode=0),
+        ):
+            assert tray._menu._sandbox_image_status("localhost/image:dev") == (
+                "Found locally."
+            )
+
+        with mock.patch(
+            "ai_guardian.tray.menu_builder.subprocess.run",
+            return_value=SimpleNamespace(returncode=1),
+        ):
+            assert tray._menu._sandbox_image_status("localhost/image:dev") == (
+                "Missing locally; this local image reference will likely fail."
+            )
+            assert tray._menu._sandbox_image_status("quay.io/example/image:latest") == (
+                "Not found locally; remote pull not probed."
+            )
+
+    def test_missing_local_image_marks_preflight_as_error(self, tmp_path):
+        tray = _make_tray([])
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        values = {
+            "runtime": "openshell",
+            "name": "ag-test",
+            "cli": "codex",
+            "repo": str(repo),
+            "image": "localhost/missing:dev",
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.tray.menu_builder.subprocess.run",
+                side_effect=[
+                    SimpleNamespace(returncode=1, stdout=""),
+                    SimpleNamespace(returncode=1, stdout=""),
+                ],
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_upload_confirmation",
+                return_value=True,
+            ) as show_confirmation,
+        ):
+            assert tray._menu._confirm_sandbox_upload(values, str(repo)) is True
+
+        assert show_confirmation.call_args.kwargs["error_lines"] == (
+            "Image status: Missing locally; this local image reference will likely fail.",
+        )
+
+    def test_cancelled_upload_preflight_reopens_creation_form(self, tmp_path):
+        tray = _make_tray([])
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        values = {"runtime": "openshell", "name": "ag-test", "repo": str(repo)}
+
+        with (
+            mock.patch.object(
+                tray._menu, "_confirm_sandbox_upload", return_value=False
+            ),
+            mock.patch.object(tray._menu, "_reopen_sandbox_create_form") as reopen,
+            mock.patch.object(tray._menu, "_run_sandbox_create") as run_create,
+        ):
+            tray._menu._complete_sandbox_create_form(values, screen_bounds=(1, 2, 3, 4))
+
+        reopen.assert_called_once_with(values, (1, 2, 3, 4))
+        run_create.assert_not_called()
+
+    def test_create_streams_output_and_closes_progress_on_success(self):
+        tray = _make_tray([])
+        progress = mock.MagicMock()
+        discovery = mock.MagicMock()
+        tray._discovery = discovery
+
+        def create_sandbox(_args, *, interactive, output):
+            assert interactive is False
+            output.append("creating sandbox\n")
+            return 0
+
+        with (
+            mock.patch(
+                "ai_guardian.sandbox.create_sandbox", side_effect=create_sandbox
+            ),
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=progress
+            ) as show_progress,
+            mock.patch(
+                "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
+            ),
+        ):
+            tray._menu._run_sandbox_create(
+                SimpleNamespace(runtime="container", name="ag-test")
+            )
+
+        show_progress.assert_called_once_with(
+            "Creating sandbox 'ag-test'",
+            "Operation: create\nRuntime: container\n"
+            "Command is running; output appears below.",
+            screen_bounds=None,
+        )
+        progress.append.assert_called_once_with("creating sandbox\n")
+        progress.finish.assert_called_once_with(
+            True, "Sandbox 'ag-test' created.", "creating sandbox"
+        )
+        discovery.request_refresh.assert_called_once_with(wait=False)
+
+    def test_create_keeps_failed_progress_open(self):
+        tray = _make_tray([])
+        progress = mock.MagicMock()
+
+        def fail_create(_args, *, interactive, output):
+            output.append("runtime failed\n")
+            return 1
+
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", side_effect=fail_create),
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=progress
+            ),
+            mock.patch("ai_guardian.tray.sandbox_dialog.show_sandbox_log") as show_log,
+        ):
+            tray._menu._run_sandbox_create(
+                SimpleNamespace(runtime="openshell", name="ag-test")
+            )
+
+        progress.finish.assert_called_once_with(
+            False, "Unable to create sandbox 'ag-test'.", "runtime failed"
+        )
+        show_log.assert_not_called()
 
     def test_create_form_maps_opencode_cli_and_agent(self):
         tray = _make_tray([])
@@ -606,11 +899,15 @@ class TestSandboxTrayMenu:
             "port": "",
         }
         with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
-            tray._menu._complete_sandbox_create_form(values)
+            with mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=None
+            ):
+                tray._menu._complete_sandbox_create_form(values)
 
         args = create.call_args.args[0]
         assert args.cli == "opencode"
         assert args.opencode_agent == "build"
+        assert args.fresh_config is True
 
     def test_create_form_exposes_policy_file_field(self):
         tray = _make_tray([])
@@ -733,6 +1030,35 @@ class TestSandboxTrayMenu:
 
         repo_field = next(field for field in fields if field["name"] == "repo")
         assert repo_field["default"] == "/tmp/current-project"
+
+    def test_working_dir_change_updates_create_form_target(self):
+        first = DaemonTarget(
+            name="first",
+            runtime="container",
+            working_dir="/tmp/first",
+        )
+        second = DaemonTarget(
+            name="second",
+            runtime="container",
+            working_dir="/tmp/old-second",
+        )
+        tray = _make_tray([first, second])
+        tray._active_target = first
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.working_dir.choose_directory",
+                return_value="/tmp/new-second",
+            ),
+            mock.patch("ai_guardian.daemon.working_dir.set_working_dir"),
+            mock.patch.dict(os.environ, {}, clear=True),
+        ):
+            tray._menu._pick_working_dir(second, second.working_dir)
+            fields = tray._menu._sandbox_create_fields()
+
+        assert tray._active_target is second
+        repo_field = next(field for field in fields if field["name"] == "repo")
+        assert repo_field["default"] == "/tmp/new-second"
 
         config_dir_field = next(
             field for field in fields if field["name"] == "config_dir"
@@ -1101,6 +1427,55 @@ class TestSandboxDialogFallback:
         clipboard_owner.clipboard_append.assert_called_once_with("runtime output")
         clipboard_owner.update.assert_called_once_with()
 
+    def test_progress_forwards_output_and_completion(self):
+        import json
+
+        from ai_guardian.tray.sandbox_dialog import SandboxProgress
+
+        process = mock.MagicMock()
+        progress = SandboxProgress(process)
+
+        progress.append("runtime output\n")
+        assert progress.finish(False, "Operation failed.", "runtime output")
+
+        updates = [
+            json.loads(call.args[0]) for call in process.stdin.write.call_args_list
+        ]
+        assert updates == [
+            {"type": "output", "text": "runtime output\n"},
+            {
+                "type": "complete",
+                "success": False,
+                "message": "Operation failed.",
+                "log": "runtime output",
+            },
+        ]
+        process.stdin.close.assert_called_once_with()
+
+    def test_progress_returns_none_when_tkinter_is_unavailable(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
+
+        with mock.patch(
+            "ai_guardian.tui.display._tkinter_available", return_value=False
+        ):
+            assert show_sandbox_progress("Title", "Message") is None
+
+    def test_progress_isolated_in_subprocess_when_tkinter_is_available(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
+
+        progress = object()
+        with (
+            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_tkinter_progress_subprocess",
+                return_value=progress,
+            ) as show_progress,
+        ):
+            result = show_sandbox_progress("Title", "Message")
+
+        assert result is progress
+        show_progress.assert_called_once_with("Title", "Message")
+
     def test_form_returns_none_when_tkinter_is_unavailable(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_form
 
@@ -1150,4 +1525,32 @@ class TestSandboxDialogFallback:
             "Permanently delete sandbox 'ag-test' (openshell)?\n\n"
             "The runtime sandbox will be removed. Saved host configuration snapshots are kept.",
             "ag-test",
+        )
+
+    def test_upload_confirmation_returns_false_when_tkinter_is_unavailable(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
+
+        with mock.patch(
+            "ai_guardian.tui.display._tkinter_available", return_value=False
+        ):
+            assert show_sandbox_upload_confirmation("Upload summary") is False
+
+    def test_upload_confirmation_isolated_in_subprocess_when_tkinter_is_available(
+        self,
+    ):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
+
+        with (
+            mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
+                return_value=True,
+            ) as show_confirmation,
+        ):
+            assert show_sandbox_upload_confirmation("Upload summary") is True
+
+        show_confirmation.assert_called_once_with(
+            "Confirm OpenShell repository upload",
+            "Upload summary",
+            error_lines=(),
         )

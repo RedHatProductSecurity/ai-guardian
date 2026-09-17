@@ -9,9 +9,12 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 import logging
 import os
 import shlex
+import subprocess
 import threading
 import time
+from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import urlparse
 
 from ai_guardian.daemon.discovery import should_update_target_name
 from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
@@ -26,6 +29,23 @@ try:
     import pystray
 except Exception:
     pystray = None
+
+
+class _SandboxOutput(list):
+    """Keep captured output while forwarding it to a live progress dialog."""
+
+    def __init__(self, callback=None):
+        super().__init__()
+        self.stream_callback = callback
+
+    def append(self, value):
+        super().append(value)
+        if self.stream_callback is None:
+            return
+        try:
+            self.stream_callback(value)
+        except Exception:
+            logger.debug("Unable to update sandbox progress dialog", exc_info=True)
 
 
 class TrayMenuBuilder:
@@ -371,6 +391,90 @@ class TrayMenuBuilder:
                 label += f" — v{daemon_ver} ⟳"
         return label
 
+    def _daemon_status_details(self, slot):
+        """Return dynamic status text used by each daemon's Status submenu."""
+        if slot >= len(self._tray._targets):
+            return (
+                "Daemon: unavailable",
+                "○ Unknown",
+                "Runtime: unknown",
+                "Daemon target is no longer available.",
+                (),
+            )
+
+        target = self._tray._targets[slot]
+        stats = getattr(target, "stats", None)
+        if target.status == "running" and not isinstance(stats, dict):
+            try:
+                stats = self._tray._get_target_stats(target)
+            except Exception:
+                stats = {}
+        has_paused_dirs = isinstance(stats, dict) and bool(stats.get("paused_dirs"))
+        key = (target.name, target.runtime)
+        status, reason, warnings = tray_menu.daemon_status_explanation(
+            target,
+            has_paused_dirs=has_paused_dirs,
+            forwarding_failed=target.name
+            in getattr(self._tray, "_ask_forwarding_failed", set()),
+            version_mismatch=key
+            in getattr(self._tray._health, "_version_mismatch_notified", set()),
+        )
+        runtime = getattr(target, "runtime_type", None) or target.runtime
+        if runtime != target.runtime:
+            runtime = f"{runtime} ({target.runtime})"
+        return (
+            f"Daemon: {target.name}",
+            status,
+            f"Runtime: {runtime}",
+            reason,
+            warnings,
+        )
+
+    def _build_daemon_status_menu_item(self, slot, *, visible=None):
+        """Build a per-daemon status explanation and symbol legend."""
+
+        def _line(index):
+            def label(_item, index=index):
+                return self._daemon_status_details(slot)[index]
+
+            return label
+
+        def warning_label(_item):
+            warnings = self._daemon_status_details(slot)[4]
+            return "Warnings: " + " | ".join(warnings)
+
+        def warnings_visible(_item):
+            return bool(self._daemon_status_details(slot)[4])
+
+        legend = pystray.Menu(
+            pystray.MenuItem("● Running", None, enabled=False),
+            pystray.MenuItem("◐ Partially paused", None, enabled=False),
+            pystray.MenuItem("☾ Paused", None, enabled=False),
+            pystray.MenuItem("◌ Starting or recovering", None, enabled=False),
+            pystray.MenuItem("⚠ Stopped or not running", None, enabled=False),
+            pystray.MenuItem("✗ Error", None, enabled=False),
+            pystray.MenuItem("○ Unknown", None, enabled=False),
+        )
+        menu_kwargs = {} if visible is None else {"visible": visible}
+        return pystray.MenuItem(
+            "Status",
+            pystray.Menu(
+                pystray.MenuItem(_line(0), None, enabled=False),
+                pystray.MenuItem(_line(1), None, enabled=False),
+                pystray.MenuItem(_line(2), None, enabled=False),
+                pystray.MenuItem(_line(3), None, enabled=False),
+                pystray.MenuItem(
+                    warning_label,
+                    None,
+                    enabled=False,
+                    visible=warnings_visible,
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Symbol legend", legend),
+            ),
+            **menu_kwargs,
+        )
+
     def _working_dir_menu_label(self, slot):
         """Format the Working Dir menu item label for a daemon slot."""
         from ai_guardian.daemon.working_dir import shorten_path
@@ -411,6 +515,7 @@ class TrayMenuBuilder:
         )
         if chosen:
             target.working_dir = chosen
+            self._tray._active_target = target
             set_working_dir(target.name, chosen)
             self._tray._refresh_event.set()
 
@@ -483,10 +588,19 @@ class TrayMenuBuilder:
         )
 
     def _start_sandbox_form(
-        self, title, message, fields, callback, *, name="sandbox-form", icon=None
+        self,
+        title,
+        message,
+        fields,
+        callback,
+        *,
+        name="sandbox-form",
+        icon=None,
+        screen_bounds=None,
     ):
         """Show a sandbox form away from the tray callback thread."""
-        screen_bounds = self._capture_sandbox_screen_bounds(icon)
+        if screen_bounds is None:
+            screen_bounds = self._capture_sandbox_screen_bounds(icon)
 
         def run_form():
             try:
@@ -534,6 +648,238 @@ class TrayMenuBuilder:
             title, message, **TrayMenuBuilder._screen_bounds_kwargs(screen_bounds)
         )
 
+    @staticmethod
+    def _format_upload_size(size):
+        """Format byte count for the repository upload summary."""
+        value = float(size)
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if value < 1024 or unit == "TB":
+                return f"{value:.1f} {unit}" if unit != "B" else f"{int(value)} B"
+            value /= 1024
+
+    @staticmethod
+    def _sandbox_image_status(image):
+        """Inspect local image availability without pulling or probing remote registries."""
+        if not image:
+            return "No image override; runtime default will be used."
+        engine = os.environ.get("CONTAINER_ENGINE", "podman")
+        try:
+            result = subprocess.run(
+                [engine, "image", "exists", image],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return "Local image check unavailable; remote pull not probed."
+        if result.returncode == 0:
+            return "Found locally."
+        if image.startswith(("localhost/", "localhost:", "127.0.0.1/", "127.0.0.1:")):
+            return "Missing locally; this local image reference will likely fail."
+        return "Not found locally; remote pull not probed."
+
+    @staticmethod
+    def _sandbox_repo_upload_summary(repo):
+        """Inspect repository size and remote classification without uploading."""
+        path = Path(repo).expanduser()
+        if not path.is_dir():
+            return None
+
+        total_size = 0
+        file_count = 0
+        pending = [path]
+        while pending:
+            directory = pending.pop()
+            try:
+                entries = tuple(os.scandir(directory))
+            except OSError:
+                continue
+            for entry in entries:
+                try:
+                    if entry.is_dir(follow_symlinks=False):
+                        pending.append(Path(entry.path))
+                    elif entry.is_file(follow_symlinks=False):
+                        file_count += 1
+                        total_size += entry.stat(follow_symlinks=False).st_size
+                except OSError:
+                    continue
+
+        source = "Not a Git repository"
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(path), "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            remote = (result.stdout or "").strip()
+            if result.returncode == 0 and remote:
+                if remote.startswith("git@"):
+                    host = remote.split("@", 1)[1].split(":", 1)[0]
+                else:
+                    host = urlparse(remote).hostname or "remote"
+                source = (
+                    "GitHub repository"
+                    if host.casefold() == "github.com"
+                    else f"Git remote: {host}"
+                )
+            elif (path / ".git").exists():
+                source = "Git repository (no origin remote)"
+        except (OSError, subprocess.TimeoutExpired):
+            if (path / ".git").exists():
+                source = "Git repository (remote unavailable)"
+
+        return {
+            "path": str(path),
+            "size": total_size,
+            "files": file_count,
+            "source": source,
+        }
+
+    def _sandbox_upload_confirmation_message(self, values, summary):
+        """Build safe command and parameter preview for an OpenShell upload."""
+        from ai_guardian.sandbox import DEFAULT_OPENSHELL_IMAGE
+
+        runtime = str(values.get("runtime") or "openshell")
+        name = str(values.get("name") or "")
+        cli = str(values.get("cli") or "claude")
+        repo = summary["path"]
+        image = summary.get("image") or DEFAULT_OPENSHELL_IMAGE
+        image_status = summary.get("image_status") or self._sandbox_image_status(image)
+        command = [
+            "ai-guardian",
+            "sandbox",
+            "create",
+            "--runtime",
+            runtime,
+            "--name",
+            name,
+            "--cli",
+            cli,
+            "--repo",
+            repo,
+        ]
+        if str(values.get("image") or "").strip():
+            command.extend(["--base", image])
+        profile = str(values.get("profile") or "").strip()
+        if profile:
+            command.extend(["--profile", profile])
+        providers = [
+            item.strip()
+            for item in str(values.get("providers") or "").replace("\n", ",").split(",")
+            if item.strip()
+        ]
+        for provider in providers:
+            command.extend(["--provider", provider])
+        policies = [
+            item.strip()
+            for item in str(values.get("policies") or "").replace("\n", ",").split(",")
+            if item.strip()
+        ]
+        for policy in policies:
+            command.extend(["--policy", policy])
+        if values.get("config_source") == "Latest saved snapshot":
+            command.extend(["--restore-config", "latest"])
+
+        environment_count = len(
+            [
+                item
+                for item in str(values.get("environment") or "")
+                .replace("\n", ",")
+                .split(",")
+                if item.strip()
+            ]
+        )
+        label_count = len(
+            [
+                item
+                for item in str(values.get("labels") or "")
+                .replace("\n", ",")
+                .split(",")
+                if item.strip()
+            ]
+        )
+        warning = ""
+        if summary["size"] >= 100 * 1024 * 1024:
+            warning = "\nWarning: large upload; transfer may take a while."
+        return (
+            "OpenShell will upload this directory to /sandbox/repo.\n\n"
+            f"Path: {summary['path']}\n"
+            f"Size: {self._format_upload_size(summary['size'])} "
+            f"({summary['files']:,} files)\n"
+            f"Source: {summary['source']}\n"
+            f"Image: {image}\n"
+            f"Image status: {image_status}\n"
+            f"Environment entries: {environment_count} (values hidden)\n"
+            f"Runtime labels: {label_count}\n\n"
+            "Command preview:\n"
+            f"{shlex.join(command)}\n\n"
+            "Continue upload?"
+            f"{warning}"
+        )
+
+    def _confirm_sandbox_upload(self, values, repo, *, screen_bounds=None):
+        """Confirm an OpenShell repository upload before starting runtime work."""
+        summary = self._sandbox_repo_upload_summary(repo)
+        if summary is None:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                f"Repository directory does not exist: {repo}",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return False
+        from ai_guardian.sandbox import DEFAULT_OPENSHELL_IMAGE
+
+        image = str(values.get("image") or "").strip() or DEFAULT_OPENSHELL_IMAGE
+        summary["image"] = image
+        summary["image_status"] = self._sandbox_image_status(image)
+        image_error = summary["image_status"].startswith("Missing locally;")
+        error_lines = (
+            (f"Image status: {summary['image_status']}",) if image_error else ()
+        )
+        try:
+            from ai_guardian.tray.sandbox_dialog import (
+                show_sandbox_upload_confirmation,
+            )
+
+            return show_sandbox_upload_confirmation(
+                self._sandbox_upload_confirmation_message(values, summary),
+                error_lines=error_lines,
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+        except Exception:
+            logger.exception("Unable to show sandbox upload confirmation")
+            return False
+
+    def _reopen_sandbox_create_form(self, values, screen_bounds):
+        """Reopen create form after upload confirmation cancellation."""
+        self._start_sandbox_form(
+            "Create AI Guardian sandbox",
+            "Choose the sandbox runtime and initial configuration. Creation "
+            "runs in the background; failures show the captured runtime log.",
+            self._sandbox_create_fields(values),
+            self._complete_sandbox_create_form,
+            name="sandbox-create-form",
+            screen_bounds=screen_bounds,
+        )
+
+    @staticmethod
+    def _show_sandbox_progress(title, message, *, screen_bounds=None):
+        """Start an isolated live progress dialog when the desktop supports it."""
+        try:
+            from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
+
+            return show_sandbox_progress(
+                title,
+                message,
+                **TrayMenuBuilder._screen_bounds_kwargs(screen_bounds),
+            )
+        except Exception:
+            logger.exception("Unable to show sandbox progress dialog")
+            return None
+
     def _mk_sandbox_create_action(self):
         """Create the main-menu callback for sandbox creation."""
 
@@ -552,7 +898,7 @@ class TrayMenuBuilder:
 
         return action
 
-    def _sandbox_create_fields(self):
+    def _sandbox_create_fields(self, values=None):
         """Return the create form fields used by the main tray menu."""
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
@@ -576,7 +922,7 @@ class TrayMenuBuilder:
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
-        return [
+        fields = [
             {
                 "name": "runtime",
                 "label": "Runtime",
@@ -718,6 +1064,12 @@ class TrayMenuBuilder:
                 "enabled_when": {"field": "runtime", "values": ("container",)},
             },
         ]
+        if values:
+            for field in fields:
+                name = field.get("name")
+                if name in values and values[name] is not None:
+                    field["default"] = values[name]
+        return fields
 
     def _complete_sandbox_create_form(self, values, *, screen_bounds=None):
         """Validate create form values and launch the selected command."""
@@ -823,6 +1175,15 @@ class TrayMenuBuilder:
                 return
             port_value = int(port)
 
+        if runtime == "openshell" and repo:
+            if not self._confirm_sandbox_upload(
+                values,
+                repo,
+                screen_bounds=screen_bounds,
+            ):
+                self._reopen_sandbox_create_form(values, screen_bounds)
+                return
+
         self._run_sandbox_create(
             SimpleNamespace(
                 sandbox_command="create",
@@ -834,6 +1195,7 @@ class TrayMenuBuilder:
                 opencode_agent=agent_profile,
                 profile=profile_value,
                 restore_config="latest" if restore else None,
+                fresh_config=values.get("config_source") == "Host/default",
                 config_dir=config_dir,
                 repo=repo,
                 port=port_value,
@@ -850,8 +1212,15 @@ class TrayMenuBuilder:
         )
 
     def _run_sandbox_create(self, args, *, screen_bounds=None):
-        """Create a sandbox in-process and report failures in a log dialog."""
-        output = []
+        """Create a sandbox in-process and stream output to an isolated dialog."""
+        runtime = str(getattr(args, "runtime", None) or "auto-detected")
+        progress = self._show_sandbox_progress(
+            f"Creating sandbox '{args.name}'",
+            f"Operation: create\nRuntime: {runtime}\n"
+            "Command is running; output appears below.",
+            screen_bounds=screen_bounds,
+        )
+        output = _SandboxOutput(progress.append if progress else None)
         try:
             from ai_guardian.sandbox import create_sandbox
 
@@ -861,23 +1230,27 @@ class TrayMenuBuilder:
             output.append(f"Error: {exc}\n")
             result = 1
 
+        log_text = "".join(output).strip()
         if result != 0:
             try:
                 from ai_guardian.tray.sandbox_dialog import show_sandbox_log
 
-                log_text = "".join(output).strip()
                 if not log_text:
                     log_text = f"Sandbox creation failed with exit code {result}."
-                show_sandbox_log(
-                    "Sandbox creation failed",
-                    f"Unable to create sandbox '{args.name}'.",
-                    log_text,
-                    **self._screen_bounds_kwargs(screen_bounds),
-                )
+                message = f"Unable to create sandbox '{args.name}'."
+                if progress is None or not progress.finish(False, message, log_text):
+                    show_sandbox_log(
+                        "Sandbox creation failed",
+                        message,
+                        log_text,
+                        **self._screen_bounds_kwargs(screen_bounds),
+                    )
             except Exception:
                 logger.exception("Unable to show sandbox creation log")
             return
 
+        if progress is not None:
+            progress.finish(True, f"Sandbox '{args.name}' created.", log_text)
         tray_notifications.show_notification(
             "AI Guardian",
             f"Sandbox created: {args.name}",
@@ -937,12 +1310,21 @@ class TrayMenuBuilder:
         self, target, operation, command_args=None, *, screen_bounds=None
     ):
         """Run a non-interactive sandbox action and show useful output."""
-        output = []
         parts = self._sandbox_operation_parts(operation)
         args = self._sandbox_command_args(target, operation, command_args)
         if args is None:
             return
 
+        progress = None
+        if parts[0] == "delete":
+            runtime = self._sandbox_runtime(target) or "auto-detected"
+            progress = self._show_sandbox_progress(
+                f"Deleting sandbox '{target.name}'",
+                f"Operation: delete\nRuntime: {runtime}\n"
+                "Command is running; output appears below.",
+                screen_bounds=screen_bounds,
+            )
+        output = _SandboxOutput(progress.append if progress else None)
         try:
             from ai_guardian.sandbox import run_sandbox_command
 
@@ -953,6 +1335,39 @@ class TrayMenuBuilder:
             result = 1
 
         log_text = "".join(output).strip()
+        if parts[0] == "delete":
+            if result != 0:
+                if not log_text:
+                    log_text = f"Sandbox command exited with code {result}."
+                message = (
+                    f"Unable to run {' '.join(parts)} for sandbox '{target.name}'."
+                )
+                try:
+                    from ai_guardian.tray.sandbox_dialog import show_sandbox_log
+
+                    if progress is None or not progress.finish(
+                        False, message, log_text
+                    ):
+                        show_sandbox_log(
+                            "Sandbox command failed",
+                            message,
+                            log_text,
+                            **self._screen_bounds_kwargs(screen_bounds),
+                        )
+                except Exception:
+                    logger.exception("Unable to show sandbox deletion log")
+            else:
+                if progress is not None:
+                    progress.finish(True, f"Sandbox '{target.name}' deleted.", log_text)
+                tray_notifications.show_notification(
+                    "AI Guardian",
+                    f"Sandbox delete: {target.name}",
+                )
+
+            if result == 0 and self._tray._discovery:
+                self._tray._discovery.request_refresh(wait=False)
+            return
+
         show_log = result != 0 or parts[0] in {"status", "logs", "config"}
         if show_log:
             try:
@@ -1702,6 +2117,10 @@ class TrayMenuBuilder:
                 enabled=False,
             ),
             pystray.MenuItem(_header_label, None, visible=_single_vis_refresh),
+            self._build_daemon_status_menu_item(
+                0,
+                visible=lambda _item: self._tray._is_single_daemon(),
+            ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
                 "Console",
@@ -2290,6 +2709,8 @@ class TrayMenuBuilder:
                             visible=_mk_daemon_stale_vis_remote(),
                             enabled=False,
                         ),
+                        self._build_daemon_status_menu_item(idx),
+                        pystray.Menu.SEPARATOR,
                         pystray.MenuItem(
                             "Console",
                             _mk_web_console_action(idx),

@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from ai_guardian.daemon.state import DaemonState, PendingPrompt
+from ai_guardian.daemon.multi_client import _is_loopback_host
 from ai_guardian.tui.ask_dialog import (
     AskDecision,
     AskResult,
@@ -146,6 +147,13 @@ class TestPendingPromptTimeout:
 
 
 class TestTrayRegistration:
+    @pytest.mark.parametrize(
+        "host",
+        ["host.docker.internal", "host.containers.internal", "openshell.localhost"],
+    )
+    def test_container_host_aliases_are_allowed(self, host):
+        assert _is_loopback_host(host)
+
     def test_register_and_check(self, daemon_state):
         assert not daemon_state.is_tray_registered()
         daemon_state.register_tray("host.docker.internal", 63152)

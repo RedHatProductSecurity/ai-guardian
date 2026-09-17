@@ -6,14 +6,93 @@ import json
 import logging
 import os
 import platform
+import queue
 import subprocess
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
 ScreenBounds = Tuple[int, int, int, int]
+
+
+class SandboxProgress:
+    """Send live sandbox output to an isolated Tk progress process."""
+
+    def __init__(self, process):
+        self._process = process
+        self._lock = threading.Lock()
+        self._closed = False
+        self._failed = False
+
+    def _send(self, payload: Dict[str, Any]) -> bool:
+        with self._lock:
+            if self._closed or self._failed:
+                return False
+            stream = getattr(self._process, "stdin", None)
+            if stream is None:
+                self._failed = True
+                return False
+            try:
+                stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
+                stream.flush()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                self._failed = True
+                logger.warning("Sandbox progress dialog stopped: %s", exc)
+                return False
+        return True
+
+    def append(self, text) -> None:
+        """Forward one captured output chunk without interrupting the command."""
+        if text:
+            self._send({"type": "output", "text": str(text)})
+
+    def finish(self, success: bool, message: str, log_text: str) -> bool:
+        """Tell the dialog whether to close or remain open for inspection."""
+        with self._lock:
+            if self._closed or self._failed:
+                return False
+            stream = getattr(self._process, "stdin", None)
+            if stream is None:
+                self._failed = True
+                return False
+            try:
+                stream.write(
+                    json.dumps(
+                        {
+                            "type": "complete",
+                            "success": bool(success),
+                            "message": str(message),
+                            "log": str(log_text or ""),
+                        },
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+                stream.flush()
+                stream.close()
+            except (BrokenPipeError, OSError, ValueError) as exc:
+                self._failed = True
+                logger.warning("Sandbox progress dialog could not finish: %s", exc)
+                return False
+            self._closed = True
+
+        threading.Thread(
+            target=self._wait_for_process,
+            daemon=True,
+            name="sandbox-progress-reaper",
+        ).start()
+        return True
+
+    def _wait_for_process(self) -> None:
+        try:
+            self._process.wait()
+        except (OSError, ValueError):
+            logger.debug(
+                "Sandbox progress dialog process cleanup failed", exc_info=True
+            )
 
 
 def _rect_components(rect) -> Optional[Tuple[float, float, float, float]]:
@@ -770,6 +849,147 @@ def _show_tkinter_form_subprocess(
     return value if isinstance(value, dict) else None
 
 
+def _show_tkinter_progress(
+    title: str,
+    message: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> None:
+    """Show live sandbox output and keep failed operations available."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    from ai_guardian.tui.display import _ensure_tcl_library
+
+    _ensure_tcl_library()
+    updates = queue.Queue()
+    log_parts = []
+    completed = False
+    root = tk.Tk()
+    root.title(title)
+    root.geometry("760x480")
+    _place_window_on_screen(root, screen_bounds, 760, 480)
+    root.minsize(520, 280)
+
+    frame = ttk.Frame(root, padding=16)
+    frame.grid(row=0, column=0, sticky="nsew")
+    root.rowconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1)
+    frame.rowconfigure(2, weight=1)
+    frame.columnconfigure(0, weight=1)
+
+    ttk.Label(frame, text=message, justify="left", wraplength=700).grid(
+        row=0, column=0, sticky="w", pady=(0, 4)
+    )
+    status = tk.StringVar(value="Running...")
+    ttk.Label(frame, textvariable=status, justify="left").grid(
+        row=1, column=0, sticky="w", pady=(0, 10)
+    )
+
+    log_frame = ttk.Frame(frame)
+    log_frame.grid(row=2, column=0, sticky="nsew")
+    log_frame.rowconfigure(0, weight=1)
+    log_frame.columnconfigure(0, weight=1)
+    text = tk.Text(log_frame, wrap="none", state="disabled")
+    text.grid(row=0, column=0, sticky="nsew")
+    scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=text.yview)
+    scrollbar.grid(row=0, column=1, sticky="ns")
+    text.configure(yscrollcommand=scrollbar.set)
+
+    def replace_log(value: str) -> None:
+        text.configure(state="normal")
+        text.delete("1.0", "end")
+        if value:
+            text.insert("1.0", value)
+        text.configure(state="disabled")
+        text.see("end")
+
+    def append_log(value: str) -> None:
+        log_parts.append(value)
+        text.configure(state="normal")
+        text.insert("end", value)
+        text.configure(state="disabled")
+        text.see("end")
+
+    copy_status = tk.StringVar()
+
+    def copy() -> None:
+        copy_status.set(_copy_sandbox_log("".join(log_parts), clipboard_owner=root))
+
+    ttk.Label(frame, textvariable=copy_status, justify="left").grid(
+        row=3, column=0, sticky="w", pady=(8, 0)
+    )
+
+    def close() -> None:
+        root.destroy()
+
+    button_frame = ttk.Frame(frame)
+    button_frame.grid(row=4, column=0, sticky="e", pady=(12, 0))
+    ttk.Button(button_frame, text="Copy", command=copy).pack(side="left")
+    ttk.Button(button_frame, text="Close", command=close).pack(side="left", padx=(8, 0))
+    root.protocol("WM_DELETE_WINDOW", close)
+    root.bind("<Escape>", lambda _event: close())
+
+    def read_updates() -> None:
+        try:
+            for line in sys.stdin:
+                try:
+                    updates.put(json.loads(line))
+                except json.JSONDecodeError:
+                    logger.debug("Ignoring malformed sandbox progress update")
+        finally:
+            updates.put({"type": "eof"})
+
+    def poll_updates() -> None:
+        nonlocal completed
+        try:
+            while True:
+                update = updates.get_nowait()
+                update_type = update.get("type")
+                if update_type == "output":
+                    append_log(str(update.get("text") or ""))
+                elif update_type == "complete":
+                    completed = True
+                    final_log = update.get("log")
+                    if isinstance(final_log, str) and final_log != "".join(log_parts):
+                        log_parts[:] = [final_log]
+                        replace_log(final_log)
+                    message = str(update.get("message") or "")
+                    if update.get("success"):
+                        status.set(message or "Completed.")
+                        root.after(150, close)
+                    else:
+                        status.set(message or "Operation failed. Review output.")
+                elif update_type == "eof" and not completed:
+                    status.set("Operation ended before completion.")
+        except queue.Empty:
+            pass
+
+        try:
+            if root.winfo_exists():
+                root.after(50, poll_updates)
+        except tk.TclError:
+            pass
+
+    threading.Thread(
+        target=read_updates,
+        daemon=True,
+        name="sandbox-progress-reader",
+    ).start()
+    root.after(50, poll_updates)
+    root.lift()
+    root.focus_force()
+    try:
+        root.grab_set()
+        root.attributes("-topmost", True)
+        root.after(150, lambda: root.attributes("-topmost", False))
+    except tk.TclError:
+        # Some desktop environments reject modal/topmost hints. The progress
+        # window remains usable as an ordinary window in that case.
+        pass
+    root.mainloop()
+
+
 def _show_tkinter_log(
     title: str,
     message: str,
@@ -1042,6 +1262,63 @@ def _show_tkinter_log_subprocess(
     return True
 
 
+def _show_tkinter_progress_subprocess(
+    title: str,
+    message: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> Optional[SandboxProgress]:
+    """Start the live progress window outside the tray process."""
+    payload = json.dumps(
+        {"title": title, "message": message, "screen_bounds": screen_bounds},
+        ensure_ascii=False,
+    )
+    child = (
+        "import json; "
+        "from ai_guardian.tray.sandbox_dialog import _show_tkinter_progress; "
+        "p=json.loads(__import__('sys').argv[1]); "
+        "_show_tkinter_progress(p['title'], p['message'], "
+        "screen_bounds=p.get('screen_bounds'))"
+    )
+    try:
+        process = subprocess.Popen(
+            [sys.executable, "-c", child, payload],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+        )
+    except OSError as exc:
+        logger.warning("Sandbox progress dialog could not be shown: %s", exc)
+        return None
+    return SandboxProgress(process)
+
+
+def show_sandbox_progress(
+    title: str,
+    message: str,
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> Optional[SandboxProgress]:
+    """Start a live sandbox progress dialog, or return ``None`` on fallback."""
+    try:
+        from ai_guardian.tui.display import _tkinter_available
+
+        if not _tkinter_available():
+            return None
+        if screen_bounds is None:
+            return _show_tkinter_progress_subprocess(title, message)
+        return _show_tkinter_progress_subprocess(
+            title,
+            message,
+            screen_bounds=screen_bounds,
+        )
+    except Exception as exc:
+        logger.warning("Sandbox progress dialog unavailable: %s", exc)
+        return None
+
+
 def show_sandbox_log(
     title: str,
     message: str,
@@ -1120,6 +1397,167 @@ def show_sandbox_confirmation(
         return False
 
 
+def _show_tkinter_upload_confirmation(
+    title: str,
+    message: str,
+    *,
+    error_lines: Iterable[str] = (),
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
+    """Show an upload summary and require explicit confirmation."""
+    import tkinter as tk
+    from tkinter import ttk
+
+    from ai_guardian.tui.display import _ensure_tcl_library
+
+    _ensure_tcl_library()
+    root = tk.Tk()
+    root.title(title)
+    root.geometry("720x360")
+    _place_window_on_screen(root, screen_bounds, 720, 360)
+    root.minsize(560, 280)
+    root.resizable(True, True)
+    root.rowconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1)
+
+    frame = ttk.Frame(root, padding=16)
+    frame.grid(row=0, column=0, sticky="nsew")
+    frame.rowconfigure(0, weight=1)
+    frame.columnconfigure(0, weight=1)
+    message_text = tk.Text(frame, wrap="word", height=14, state="normal")
+    message_text.grid(row=0, column=0, sticky="nsew")
+    message_scrollbar = ttk.Scrollbar(
+        frame,
+        orient="vertical",
+        command=message_text.yview,
+    )
+    message_scrollbar.grid(row=0, column=1, sticky="ns")
+    message_text.configure(yscrollcommand=message_scrollbar.set)
+    error_lines = set(error_lines)
+    message_text.tag_configure("error", foreground="#b00020")
+    for line in message.splitlines() or ("",):
+        message_text.insert(
+            "end",
+            f"{line}\n",
+            "error" if line in error_lines else (),
+        )
+    message_text.configure(state="disabled")
+
+    confirmed = False
+
+    def cancel() -> None:
+        root.destroy()
+
+    def continue_upload() -> None:
+        nonlocal confirmed
+        confirmed = True
+        root.destroy()
+
+    button_frame = ttk.Frame(frame)
+    button_frame.grid(row=1, column=0, sticky="e", pady=(18, 0))
+    ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left")
+    ttk.Button(
+        button_frame,
+        text="Continue upload",
+        command=continue_upload,
+    ).pack(side="left", padx=(8, 0))
+    root.protocol("WM_DELETE_WINDOW", cancel)
+    root.bind("<Escape>", lambda _event: cancel())
+    root.bind("<Return>", lambda _event: continue_upload())
+    root.lift()
+    root.focus_force()
+    try:
+        root.grab_set()
+        root.attributes("-topmost", True)
+        root.after(150, lambda: root.attributes("-topmost", False))
+    except tk.TclError:
+        # Some desktop environments reject modal/topmost hints. The upload
+        # confirmation remains usable as an ordinary window in that case.
+        pass
+    root.mainloop()
+    return confirmed
+
+
+def _show_tkinter_upload_confirmation_subprocess(
+    title: str,
+    message: str,
+    *,
+    error_lines: Iterable[str] = (),
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
+    """Run upload confirmation outside the tray process."""
+    payload = json.dumps(
+        {
+            "title": title,
+            "message": message,
+            "error_lines": tuple(error_lines),
+            "screen_bounds": screen_bounds,
+        },
+        ensure_ascii=False,
+    )
+    child = (
+        "import json, sys; "
+        "from ai_guardian.tray.sandbox_dialog import "
+        "_show_tkinter_upload_confirmation; "
+        "p=json.loads(sys.argv[1]); "
+        "v=_show_tkinter_upload_confirmation(p['title'], p['message'], "
+        "error_lines=p.get('error_lines', ()), "
+        "screen_bounds=p.get('screen_bounds')); "
+        "print('1' if v else '0')"
+    )
+    try:
+        process = subprocess.run(
+            [sys.executable, "-c", child, payload],
+            capture_output=True,
+            text=True,
+            timeout=3600,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        logger.warning("Sandbox upload confirmation could not be shown: %s", exc)
+        return False
+    if process.returncode != 0:
+        logger.warning(
+            "Sandbox upload confirmation exited with code %s",
+            process.returncode,
+        )
+        return False
+    return (process.stdout or "").strip().splitlines()[-1:] == ["1"]
+
+
+def show_sandbox_upload_confirmation(
+    message: str,
+    *,
+    error_lines: Iterable[str] = (),
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> bool:
+    """Confirm an OpenShell repository upload before transfer begins."""
+    try:
+        from ai_guardian.tui.display import _tkinter_available
+
+        if not _tkinter_available():
+            logger.warning(
+                "Sandbox upload confirmation unavailable: tkinter is not installed"
+            )
+            return False
+        title = "Confirm OpenShell repository upload"
+        if screen_bounds is None:
+            return _show_tkinter_upload_confirmation_subprocess(
+                title,
+                message,
+                error_lines=error_lines,
+            )
+        return _show_tkinter_upload_confirmation_subprocess(
+            title,
+            message,
+            error_lines=error_lines,
+            screen_bounds=screen_bounds,
+        )
+    except Exception as exc:
+        logger.warning("Sandbox upload confirmation unavailable: %s", exc)
+        return False
+
+
 def show_sandbox_form(
     title: str,
     message: str,
@@ -1151,4 +1589,10 @@ def show_sandbox_form(
         return None
 
 
-__all__ = ["show_sandbox_confirmation", "show_sandbox_form", "show_sandbox_log"]
+__all__ = [
+    "show_sandbox_confirmation",
+    "show_sandbox_form",
+    "show_sandbox_log",
+    "show_sandbox_progress",
+    "show_sandbox_upload_confirmation",
+]

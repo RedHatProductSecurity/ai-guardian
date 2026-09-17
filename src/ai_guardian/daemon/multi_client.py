@@ -27,11 +27,13 @@ REQUEST_TIMEOUT = 5.0
 
 
 def _is_loopback_host(host: str) -> bool:
-    """Return whether host is a loopback IP or localhost name."""
+    """Return whether host is local or a container host-gateway alias."""
     normalized = (host or "").lower().rstrip(".")
     if normalized == "openshell.localhost" or normalized.endswith(
         ".openshell.localhost"
     ):
+        return True
+    if normalized in {"host.docker.internal", "host.containers.internal"}:
         return True
     try:
         return ipaddress.ip_address(normalized).is_loopback
