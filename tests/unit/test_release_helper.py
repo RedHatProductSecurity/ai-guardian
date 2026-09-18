@@ -147,6 +147,9 @@ def test_update_version():
         assert version == "1.2.0"
         assert all_match is True
 
+        config = (tmp_path / ".release-config.json").read_text()
+        assert '"detected_version": "1.2.0"' in config
+
 
 def test_calculate_next_version_minor():
     """Test calculating next minor version."""
