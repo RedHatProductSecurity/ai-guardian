@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sandbox lifecycle progress (#2332)**: Show isolated live output while
+  creating or deleting container and OpenShell sandboxes. Successful actions
+  close the modal automatically; failures keep output available with copy and
+  close controls.
+
+- **Tray status explanations**: Add a per-daemon Status submenu explaining
+  status symbols, current state, runtime, errors, and actionable warnings.
+
 - **Secret patterns (#2323)**: Add detection for Bitbucket Data Center,
   Shopify (Admin API, Custom App, Private App, and Shared Secret), GitLab
   pipeline/runner, OpenShift, Dynatrace, and Resend credentials. Sources include
@@ -18,17 +26,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sandbox configuration reuse**: Automatically restore newest matching
+  configuration snapshot when recreating a logical sandbox name, while keeping
+  explicit host/default and snapshot source choices available.
+
 - **Collision-aware sandbox names (#2334)**: Use the stable `ag-<cli>` base
   name for container and OpenShell creation, preserve unused explicit names,
-  and add a local `YYYYMMDD_HHMMSS` suffix with deterministic disambiguators
-  when a runtime name is already in use. Propagate the final name through
-  runtime labels, OpenShell service operations, tray defaults, and lifecycle
-  commands.
+  and add runtime-safe collision names. Containers use a local
+  `YYYYMMDD_HHMMSS` suffix; OpenShell uses compact timestamps and short UUID
+  fallbacks to stay within its 19-character limit. Propagate the final name
+  through runtime labels, OpenShell service operations, tray defaults, and
+  lifecycle commands.
 
 - **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
   `1.18.31` in the dedicated OpenShell support image.
 
 ### Fixed
+
+- **Tray working-directory UX**: Keep sandbox creation repository defaults
+  aligned with the daemon whose working directory changed and foreground the
+  macOS directory picker on the display where it was opened.
+
+- **OpenShell upload preflight**: Show repository path, size, file count, Git
+  remote classification, image availability, safe command preview, and
+  large-upload warning before transferring a directory. Local images are
+  checked without pulling. Cancel returns to the populated creation form.
+
+- **OpenShell tray forwarding**: Accept Docker and Podman host-gateway aliases
+  during tray registration so healthy OpenShell sandboxes do not show a false
+  forwarding warning.
 
 - **OpenShell post-restart tray recovery (#2333)**: Treat transient sandbox
   relay and gateway-service failures as retryable startup, converge back to a

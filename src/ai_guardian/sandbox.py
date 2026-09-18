@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -34,6 +35,7 @@ DEFAULT_CONTAINER_CLI = "codex"
 DEFAULT_OPENSHELL_CLI = "claude"
 DEFAULT_REST_PORT = "63152"
 DEFAULT_OPENSHELL_MODEL = "claude-sonnet-4-6"
+OPENSHELL_MAX_NAME_LENGTH = 19
 MANAGED_LABEL = "ai-guardian.managed=true"
 DAEMON_LABEL = "ai-guardian.daemon=true"
 MANAGED_LABEL_KEY = "ai-guardian.managed"
@@ -346,6 +348,20 @@ def _run(
     try:
         if output is None:
             result = subprocess.run(list(command), env=env, check=False)
+        elif callable(getattr(output, "stream_callback", None)):
+            process = subprocess.Popen(
+                list(command),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+            )
+            if process.stdout is not None:
+                for line in iter(process.stdout.readline, ""):
+                    output.append(line)
+                process.stdout.close()
+            return process.wait()
         else:
             result = subprocess.run(
                 list(command),
@@ -788,6 +804,21 @@ def _initial_config_source(args) -> Optional[Path]:
             runtime=_requested_runtime(args) or _runtime(args),
         )
         return snapshot_path
+
+    # Reusing a logical sandbox name should preserve its saved configuration
+    # when one exists. Explicit profiles/config directories and the tray's
+    # Host/default choice remain authoritative fresh-config sources.
+    if (
+        getattr(args, "name", None)
+        and not getattr(args, "profile", None)
+        and not getattr(args, "config_dir", None)
+        and not getattr(args, "fresh_config", False)
+    ):
+        runtime = _requested_runtime(args) or _runtime(args)
+        candidates = _snapshot_candidates(args.name, runtime)
+        if candidates:
+            args.restore_config = "latest"
+            return candidates[0]
 
     config_path = _config_dir(args) / SANDBOX_CONFIG_FILENAME
     return config_path if config_path.is_file() else None
@@ -1428,16 +1459,36 @@ def _sandbox_base_name(args, runtime: str) -> str:
     return _generated_openshell_name(_selected_cli(args, default_cli))
 
 
+def _unique_openshell_uuid_name(args, base_name: str) -> str:
+    """Return a short OpenShell-safe name derived from a requested base."""
+    prefix = base_name[:8].rstrip("-") or "ag"
+    while True:
+        candidate = f"{prefix}-{uuid.uuid4().hex[:10]}"
+        if not _sandbox_name_exists(args, OPENSHELL_RUNTIME, candidate):
+            return candidate
+
+
 def _resolve_sandbox_name(args, runtime: str) -> str:
     """Choose an unused runtime name, adding a local timestamp on collision."""
     base_name = _sandbox_base_name(args, runtime)
+    if runtime == OPENSHELL_RUNTIME and len(base_name) > OPENSHELL_MAX_NAME_LENGTH:
+        return _unique_openshell_uuid_name(args, base_name)
     if not _sandbox_name_exists(args, runtime, base_name):
         return base_name
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    candidate = f"{base_name}-{timestamp}"
+    if runtime == OPENSHELL_RUNTIME:
+        timestamp = datetime.now().strftime("%y%m%d%H%M")
+        if len(base_name) > OPENSHELL_MAX_NAME_LENGTH - len(timestamp) - 1:
+            return _unique_openshell_uuid_name(args, base_name)
+        candidate = f"{base_name}-{timestamp}"
+
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        candidate = f"{base_name}-{timestamp}"
     disambiguator = 1
     while _sandbox_name_exists(args, runtime, candidate):
+        if runtime == OPENSHELL_RUNTIME:
+            return _unique_openshell_uuid_name(args, base_name)
         candidate = f"{base_name}-{timestamp}-{disambiguator}"
         disambiguator += 1
     return candidate
@@ -2129,10 +2180,21 @@ def _create(
         base_name = _sandbox_base_name(args, runtime)
         args.name = _resolve_sandbox_name(args, runtime)
         if args.name != base_name:
-            _emit_output(
-                f"Sandbox name '{base_name}' is already in use; using '{args.name}'.",
-                output=output,
-            )
+            if (
+                runtime == OPENSHELL_RUNTIME
+                and len(base_name) > OPENSHELL_MAX_NAME_LENGTH
+            ):
+                message = (
+                    f"Sandbox name '{base_name}' exceeds OpenShell's "
+                    f"{OPENSHELL_MAX_NAME_LENGTH}-character limit; "
+                    f"using '{args.name}'."
+                )
+            else:
+                message = (
+                    f"Sandbox name '{base_name}' is already in use; "
+                    f"using '{args.name}'."
+                )
+            _emit_output(message, output=output)
         if runtime == CONTAINER_RUNTIME:
             command, child_env = _container_create(args)
             return _run(command, env=child_env, output=output)

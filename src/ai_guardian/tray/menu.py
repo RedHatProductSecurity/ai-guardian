@@ -38,6 +38,70 @@ def build_about_text():
     return format_about_text(get_about_info())
 
 
+def _daemon_status_symbol(target, has_paused_dirs=False):
+    """Return the symbol used for a daemon target's current state."""
+    if target.status == "running" and has_paused_dirs:
+        return "◐"
+    return {
+        "running": "●",
+        "paused": "☾",
+        "starting": "◌",
+        "stopped": "⚠",
+        "error": "✗",
+        "unknown": "○",
+    }.get(target.status, "○")
+
+
+def daemon_status_explanation(
+    target,
+    *,
+    has_paused_dirs=False,
+    forwarding_failed=False,
+    version_mismatch=False,
+):
+    """Return current status label, reason, and warning details for a daemon."""
+    status = getattr(target, "status", None) or "unknown"
+    symbol = _daemon_status_symbol(target, has_paused_dirs=has_paused_dirs)
+    if status == "running" and has_paused_dirs:
+        title = "Partially paused"
+        reason = "Daemon is running; one or more project directories are paused."
+    else:
+        status_details = {
+            "running": ("Running", "Daemon is running and reachable."),
+            "paused": ("Paused", "Daemon is paused globally."),
+            "starting": (
+                "Starting",
+                "Daemon is starting or recovering; tray will refresh automatically.",
+            ),
+            "stopped": (
+                "Stopped",
+                "Daemon is not running; use Start daemon to launch it.",
+            ),
+            "error": (
+                "Error",
+                "Daemon reported an error; use Restart to retry.",
+            ),
+            "unknown": (
+                "Unknown",
+                "Tray has not confirmed daemon health yet; discovery will retry.",
+            ),
+        }
+        title, reason = status_details.get(status, status_details["unknown"])
+        if status == "error" and getattr(target, "error_message", None):
+            reason = " ".join(str(target.error_message).split())
+            if len(reason) > 160:
+                reason = reason[:157] + "..."
+
+    warnings = []
+    if forwarding_failed:
+        warnings.append(
+            "⚠ Ask-dialog forwarding is unavailable; daemon may need an upgrade."
+        )
+    if version_mismatch:
+        warnings.append("⟳ Tray is newer than daemon; rebuild or upgrade the daemon.")
+    return f"{symbol} {title}", reason, tuple(warnings)
+
+
 def daemon_status_label(
     target,
     has_paused_dirs=False,
@@ -48,17 +112,7 @@ def daemon_status_label(
     """Format a daemon target into a status header label."""
     from ai_guardian.daemon.working_dir import shorten_path
 
-    if target.status == "running" and has_paused_dirs:
-        status_icon = "◐"
-    else:
-        status_icon = {
-            "running": "●",
-            "paused": "☾",
-            "starting": "◌",
-            "stopped": "⚠",
-            "error": "✗",
-            "unknown": "○",
-        }.get(target.status, "○")
+    status_icon = _daemon_status_symbol(target, has_paused_dirs=has_paused_dirs)
     display_runtime = getattr(target, "runtime_type", None) or target.runtime
     if target.runtime == "container":
         runtime = f" ({display_runtime})"

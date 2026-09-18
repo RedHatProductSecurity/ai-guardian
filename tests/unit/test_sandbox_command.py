@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -19,11 +19,13 @@ from ai_guardian.sandbox import (
     _ensure_openshell_cli_provider,
     _ensure_openshell_daemon,
     _fetch_sandbox_config,
+    _initial_config_source,
     _load_snapshot_config,
     _openshell_create,
     _openshell_explicit_command,
     _openshell_provider_environment,
     _expose_openshell_service,
+    _run,
     _runtime,
     _resolve_sandbox_name,
     _sandbox_name_exists,
@@ -44,6 +46,7 @@ def _args(**overrides):
         "cli": None,
         "opencode_agent": None,
         "restore_config": None,
+        "fresh_config": False,
         "snapshot": "latest",
         "json_output": False,
         "command_args": [],
@@ -119,11 +122,17 @@ def test_resolve_sandbox_name_adds_local_timestamp_on_collision(
             side_effect=[True, False],
         ),
         patch("ai_guardian.sandbox.datetime") as clock,
+        patch(
+            "ai_guardian.sandbox.uuid.uuid4",
+            return_value=SimpleNamespace(hex="0123456789abcdef"),
+        ),
     ):
         clock.now.return_value = timestamp
-        assert _resolve_sandbox_name(args, runtime) == (
-            f"{expected_base}-20260917_123456"
-        )
+        if runtime == "openshell":
+            expected_name = "ag-claud-0123456789"
+        else:
+            expected_name = f"{expected_base}-20260917_123456"
+        assert _resolve_sandbox_name(args, runtime) == expected_name
 
 
 def test_resolve_sandbox_name_disambiguates_same_second_collisions():
@@ -132,12 +141,36 @@ def test_resolve_sandbox_name_disambiguates_same_second_collisions():
     with (
         patch(
             "ai_guardian.sandbox._sandbox_name_exists",
-            side_effect=[True, True, True, False],
+            side_effect=[True, True, False],
         ),
         patch("ai_guardian.sandbox.datetime") as clock,
+        patch(
+            "ai_guardian.sandbox.uuid.uuid4",
+            return_value=SimpleNamespace(hex="0123456789abcdef"),
+        ),
     ):
         clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
-        assert _resolve_sandbox_name(args, "openshell") == ("demo-20260917_123456-2")
+        assert _resolve_sandbox_name(args, "openshell") == ("demo-0123456789")
+
+
+def test_resolve_sandbox_name_uses_uuid_for_long_openshell_name():
+    args = _args(runtime="openshell", name="sandbox-name-that-is-too-long")
+
+    with (
+        patch(
+            "ai_guardian.sandbox._sandbox_name_exists",
+            return_value=False,
+        ) as exists,
+        patch(
+            "ai_guardian.sandbox.uuid.uuid4",
+            return_value=SimpleNamespace(hex="0123456789abcdef"),
+        ),
+    ):
+        name = _resolve_sandbox_name(args, "openshell")
+
+    assert name == "sandbox-0123456789"
+    assert len(name) == 18
+    exists.assert_called_once_with(args, "openshell", name)
 
 
 def test_container_start_uses_selected_engine():
@@ -189,6 +222,39 @@ def test_programmatic_lifecycle_command_captures_runtime_output():
         assert handle_sandbox_command(args, output=output) == 0
 
     assert output == ["status output\n", "status warning\n"]
+
+
+def test_live_output_uses_line_streaming_process():
+    seen = []
+
+    class LiveOutput(list):
+        def __init__(self):
+            super().__init__()
+            self.stream_callback = seen.append
+
+        def append(self, value):
+            super().append(value)
+            self.stream_callback(value)
+
+    output = LiveOutput()
+    process = MagicMock()
+    process.stdout.readline.side_effect = ["first\n", "second\n", ""]
+    process.wait.return_value = 0
+
+    with patch("ai_guardian.sandbox.subprocess.Popen", return_value=process) as popen:
+        assert _run(["podman", "rm", "demo"], output=output) == 0
+
+    assert output == ["first\n", "second\n"]
+    assert seen == ["first\n", "second\n"]
+    process.stdout.close.assert_called_once_with()
+    popen.assert_called_once_with(
+        ["podman", "rm", "demo"],
+        env=None,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+    )
 
 
 def test_openshell_start_recovers_container_stopped_out_of_band():
@@ -746,6 +812,80 @@ def test_container_create_uses_latest_saved_config_snapshot(tmp_path):
     assert f"{snapshot_path}:/sandbox/.config/ai-guardian.host.json:ro,z" in command
     assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=true" in command
     assert "AI_GUARDIAN_RESTORE_CONFIG=true" in command
+
+
+@pytest.mark.parametrize("runtime", ["container", "openshell"])
+def test_reused_name_auto_restores_matching_runtime_snapshot(tmp_path, runtime):
+    state_dir = tmp_path / "state"
+    snapshot_dir = state_dir / "sandboxes" / "demo" / "20260913T192805.123456Z"
+    snapshot_dir.mkdir(parents=True)
+    snapshot_path = snapshot_dir / "ai-guardian.json"
+    snapshot_path.write_text('{"action": "ask"}\n', encoding="utf-8")
+    (snapshot_dir / "metadata.json").write_text(
+        json.dumps({"sandbox_name": "demo", "runtime": runtime}),
+        encoding="utf-8",
+    )
+    args = _args(
+        name="demo",
+        runtime=runtime,
+        restore_config=None,
+        fresh_config=False,
+        config_dir=None,
+    )
+
+    with patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False):
+        assert _initial_config_source(args) == snapshot_path
+
+    assert args.restore_config == "latest"
+
+
+def test_reused_name_without_snapshot_uses_host_config(tmp_path):
+    state_dir = tmp_path / "state"
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_path = config_dir / "ai-guardian.json"
+    config_path.write_text('{"action": "warn"}\n', encoding="utf-8")
+    args = _args(
+        name="demo",
+        runtime="openshell",
+        restore_config=None,
+        fresh_config=False,
+        config_dir=str(config_dir),
+    )
+
+    with patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False):
+        assert _initial_config_source(args) == config_path
+
+    assert args.restore_config is None
+
+
+def test_fresh_config_ignores_matching_snapshot(tmp_path):
+    state_dir = tmp_path / "state"
+    snapshot_dir = state_dir / "sandboxes" / "demo" / "20260913T192805.123456Z"
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / "ai-guardian.json").write_text(
+        '{"action": "ask"}\n', encoding="utf-8"
+    )
+    (snapshot_dir / "metadata.json").write_text(
+        json.dumps({"sandbox_name": "demo", "runtime": "openshell"}),
+        encoding="utf-8",
+    )
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+    config_path = config_dir / "ai-guardian.json"
+    config_path.write_text('{"action": "warn"}\n', encoding="utf-8")
+    args = _args(
+        name="demo",
+        runtime="openshell",
+        restore_config=None,
+        fresh_config=True,
+        config_dir=str(config_dir),
+    )
+
+    with patch.dict(os.environ, {"AI_GUARDIAN_STATE_DIR": str(state_dir)}, clear=False):
+        assert _initial_config_source(args) == config_path
+
+    assert args.restore_config is None
 
 
 def test_restore_config_requires_name(capsys):
@@ -1706,7 +1846,7 @@ def test_openshell_create_uses_timestamped_name_after_collision():
         clock.now.return_value = datetime(2026, 9, 17, 12, 34, 56)
         assert create_sandbox(args, interactive=False, output=output) == 0
 
-    expected_name = "demo-20260917_123456"
+    expected_name = "demo-2609171234"
     command = run.call_args.args[0]
     assert args.name == expected_name
     assert command[command.index("--name") + 1] == expected_name

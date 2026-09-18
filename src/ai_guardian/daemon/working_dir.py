@@ -237,10 +237,14 @@ def _show_tkinter_directory(current, title, screen_bounds):
     _place_window_on_screen(root, screen_bounds, 1, 1)
     root.update_idletasks()
     try:
+        root.state("normal")
+        root.deiconify()
         root.attributes("-alpha", 0.0)
+        root.attributes("-topmost", True)
     except tk.TclError:
         pass
     root.lift()
+    root.focus_force()
     root.update()
     try:
         selected = filedialog.askdirectory(
@@ -249,6 +253,10 @@ def _show_tkinter_directory(current, title, screen_bounds):
             title=title,
         )
     finally:
+        try:
+            root.attributes("-topmost", False)
+        except tk.TclError:
+            pass
         root.destroy()
     return selected or None
 

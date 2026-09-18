@@ -26,6 +26,7 @@ from ai_guardian.tray.icons import (
 )
 from ai_guardian.tray.menu import (
     build_about_text,
+    daemon_status_explanation,
     daemon_status_label,
     launch_console,
     launch_create_config,
@@ -838,6 +839,43 @@ class TestSingleDaemonFlatMenu:
         label = daemon_status_label(t)
         assert "OpenShell phase: Error" in label
         assert "Manage sandbox > Restart" in label
+
+    @pytest.mark.parametrize(
+        ("status", "symbol", "title"),
+        [
+            ("running", "●", "Running"),
+            ("paused", "☾", "Paused"),
+            ("starting", "◌", "Starting"),
+            ("stopped", "⚠", "Stopped"),
+            ("error", "✗", "Error"),
+            ("unknown", "○", "Unknown"),
+        ],
+    )
+    def test_daemon_status_explanation_identifies_symbol(self, status, symbol, title):
+        target = DaemonTarget(name="ag-test", runtime="container", status=status)
+
+        current, reason, warnings = daemon_status_explanation(target)
+
+        assert current == f"{symbol} {title}"
+        assert reason
+        assert warnings == ()
+
+    def test_daemon_status_explanation_describes_warnings_and_partial_pause(self):
+        target = DaemonTarget(name="ag-test", runtime="container", status="running")
+
+        current, reason, warnings = daemon_status_explanation(
+            target,
+            has_paused_dirs=True,
+            forwarding_failed=True,
+            version_mismatch=True,
+        )
+
+        assert current == "◐ Partially paused"
+        assert "project directories are paused" in reason
+        assert warnings == (
+            "⚠ Ask-dialog forwarding is unavailable; daemon may need an upgrade.",
+            "⟳ Tray is newer than daemon; rebuild or upgrade the daemon.",
+        )
 
     def test_flat_menu_with_single_container_target(self):
         """Single container daemon uses flat layout — same as local."""

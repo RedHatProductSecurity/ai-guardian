@@ -146,6 +146,45 @@ class TestShortenPath:
 
 
 class TestChooseDirectory:
+    def test_tk_picker_activates_hidden_parent_on_captured_screen(self):
+        from ai_guardian.daemon.working_dir import _show_tkinter_directory
+
+        root = mock.MagicMock()
+        filedialog = mock.MagicMock()
+        filedialog.askdirectory.return_value = "/Users/dev/selected"
+        tkinter_module = mock.MagicMock()
+        tkinter_module.Tk.return_value = root
+        tkinter_module.TclError = RuntimeError
+        tkinter_module.filedialog = filedialog
+
+        with (
+            mock.patch("ai_guardian.tui.display._ensure_tcl_library"),
+            mock.patch.dict(
+                sys.modules,
+                {
+                    "tkinter": tkinter_module,
+                    "tkinter.filedialog": filedialog,
+                },
+            ),
+        ):
+            result = _show_tkinter_directory(
+                "/Users/dev",
+                "Choose Working Directory",
+                (1920, 37, 2560, 1380),
+            )
+
+        assert result == "/Users/dev/selected"
+        root.state.assert_called_once_with("normal")
+        root.deiconify.assert_called_once_with()
+        root.focus_force.assert_called_once_with()
+        root.attributes.assert_any_call("-topmost", True)
+        root.attributes.assert_any_call("-topmost", False)
+        filedialog.askdirectory.assert_called_once_with(
+            parent=root,
+            initialdir="/Users/dev",
+            title="Choose Working Directory",
+        )
+
     @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
     @mock.patch(
         "ai_guardian.daemon.working_dir._choose_directory_tkinter_subprocess",
