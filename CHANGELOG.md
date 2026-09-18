@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-17
+
 ### Added
 
 - **Sandbox lifecycle progress (#2332)**: Show isolated live output while
@@ -3841,7 +3843,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserves existing configuration
   - Interactive and non-interactive modes
 
-[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.17.1...HEAD
+[Unreleased]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.18.0...HEAD
+[1.18.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.18.0
 [1.17.1]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.17.1
 [1.17.0]: https://github.com/RedHatProductSecurity/ai-guardian/compare/v1.16.0...v1.17.0
 [1.16.0]: https://github.com/RedHatProductSecurity/ai-guardian/releases/tag/v1.16.0

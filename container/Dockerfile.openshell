@@ -18,7 +18,7 @@
 ARG BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e
 FROM ${BASE_IMAGE}
 
-ARG AI_GUARDIAN_VERSION=1.17.1
+ARG AI_GUARDIAN_VERSION=1.18.0
 # Keep the OpenShell image's explicitly refreshed clients current while making
 # every upgrade reproducible. Claude Code and GitHub Copilot are inherited
 # unchanged from the OpenShell Community base image.
