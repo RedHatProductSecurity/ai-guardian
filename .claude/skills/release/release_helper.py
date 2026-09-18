@@ -299,6 +299,14 @@ class ReleaseHelper:
             # Verify update
             version, all_match = self.get_current_version()
             if version == new_version and all_match:
+                for version_file in self.config.get("version_files", []):
+                    version_file["detected_version"] = new_version
+                if not self._save_config(self.config):
+                    print(
+                        "Error: Could not update release configuration metadata",
+                        file=sys.stderr,
+                    )
+                    return False
                 print(
                     f"✓ Version updated to {new_version} in all files", file=sys.stderr
                 )
