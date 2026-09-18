@@ -8,7 +8,7 @@ Auto-generated combined export of all project documentation.
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
@@ -100,55 +100,335 @@ See [CONTRIBUTING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/
 
 ### One-Line Install
 
-Creates config, installs scanner, and sets up hooks automatically:
+Creates config, installs a scanner, and automatically detects supported IDE
+configuration directories so their hooks can be installed. Use `--ide` to
+target one IDE explicitly, or `--no-setup` to skip hook setup:
+
+From the tray, open **IDE/CLI Setup...**. Use **Check hooks/MCP installation...** to
+immediately verify locally installed integrations; if hooks or a required MCP
+registration are missing or unhealthy, the tray offers setup choices and reports the final verification
+status. The **Manual setup (specific IDE)** entries are for unusual,
+incompletely detected, or targeted repair cases, while **Create Config...** is
+for first-time or manual configuration. These explicit actions remain
+available even when no daemon is running or only remote daemons are connected;
+per-IDE setup also installs the MCP security advisor by default when that IDE
+supports it.
+The tray also checks automatically when it starts and then every 10 seconds
+while running. The initial check also sends an **AI Guardian** health-result
+notification; later healthy polling checks remain silent. Automatic checks
+only offer setup on local-daemon trays.
+When multiple integrations need setup, the tray shows an individual **Install
+now** or **Never install** choice for each one. These choices are kept per
+integration, so a newly detected IDE can still be offered later.
+When no global `ai-guardian.json` exists, the automatic setup prompt also shows
+a **Security profile** selector. `@standard` is selected and recommended by
+default; `@minimal`, `@strict`, and `@moderator` include concise guidance, and
+**Skip configuration for now** installs only the selected IDE hooks. If a
+profile is selected, the tray creates the global config only after confirmation
+and before installing hooks. Existing global or project-local configuration is
+never overwritten by this flow. Configuration creation failures leave hook
+setup untouched and the prompt is temporarily deferred.
+The web console's **Configuration → Proactive Prompt State** page provides a
+read-only view of these local prompt decisions. They are stored separately in
+the XDG state file `proactive_prompts.json`, rather than in `ai-guardian.json`.
+Entries named `ide_setup_<combination>` are prompt history; the synchronized
+`ide_setup_status` entry is the current installed-IDE and current/last-verified
+hook-health snapshot.
+Within prompt history, `dismissed` means the automatic prompt was declined for
+that exact combination, while `snoozed` means it is postponed until its stored
+time. Neither value says whether the hooks are currently healthy: the tray
+refreshes the snapshot from live hook verification before applying either
+decision. Dismissed and snoozed integrations continue to be rechecked, and a
+changed unhealthy result can make their prompt eligible again. **Never
+install** is the only automatic choice that stops rechecking; the tray keeps
+its last verified status visible and suppresses automatic setup until the
+choice is reset, while manual setup remains available.
+Use the per-IDE **Reset** button on that page, or
+`ai-guardian ide-setup reset --ide <ide>`, to clear one IDE's saved prompt
+decisions and Never install choice.
 
 ```bash
+# Auto-detect installed IDEs (Linux / macOS)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash
+
 # Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/install.sh | bash -s -- --ide claude
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --ide claude
 
 # Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/install.sh | bash -s -- --pip --ide claude   # bare pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --venv --ide claude  # venv + pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --pip --ide claude   # bare pip
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.ps1 | iex
+
+# Install without changing IDE hooks
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --no-setup
 ```
 
 ### Container
 
-A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with all headless-capable IDEs (Claude Code, OpenCode, Gemini CLI, Codex CLI, Kiro CLI, OpenClaw, Crush):
+A pre-built container image is published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) with ai-guardian and the supported agent integrations. Redistributable headless CLIs are bundled; proprietary or GUI-only agents are configured at startup without being embedded:
+
+For provider-backed sessions, OpenShell is the preferred runtime when
+available: provider credentials remain in the gateway and OpenShell supplies
+deny-by-default network/filesystem policy and per-sandbox isolation. The plain
+Docker/Podman container is the simpler fallback; credentials passed to it are
+available inside the container and may be readable by the selected agent.
 
 ```bash
-# Recommended — run.sh handles auth, port mapping, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.17.1/container/run.sh -o run.sh
+# Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/container/run.sh -o run.sh
 chmod +x run.sh
-ANTHROPIC_API_KEY=sk-ant-... ACCEPT_PROPRIETARY_TOS=true \
-    ./run.sh --ide claude --repo $(pwd)
+OPENAI_API_KEY=... \
+    ./run.sh --agent codex --repo $(pwd)
+
+# Preferred OpenShell sandbox (published image; local build is also supported)
+# OpenShell defaults to Claude; select Codex explicitly when needed.
+# Experimental: OpenShell integration is still evolving. Claude, Codex, and
+# OpenCode using Claude have been tested; verify current compatibility before
+# important work.
+openshell settings set --global --key providers_v2_enabled --value true
+podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
+ai-guardian sandbox create --runtime openshell \
+    --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
+    --cli codex --repo $(pwd)
+
+# Or build and select a local OpenShell image
+podman build -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli codex --repo $(pwd)
+# A source-wheel build is documented in container/README.md; it includes the
+# current development setup behavior instead of the stable PyPI fallback.
+
+# Launch Codex directly instead of opening the shell
+ai-guardian sandbox create --runtime openshell --cli codex --repo $(pwd) -- codex
 
 # Or manually with podman/docker
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 podman run -it -p 63152:63152 \
     -v $(pwd):/workspace:z \
-    -e AI_GUARDIAN_IDE=claude \
-    -e ANTHROPIC_API_KEY=sk-ant-... \
-    -e ACCEPT_PROPRIETARY_TOS=true \
+    -e AI_GUARDIAN_AGENT=codex \
+    -e OPENAI_API_KEY=<your-openai-key> \
     quay.io/redhatproductsecurity/ai-guardian:latest
 ```
 
-`ACCEPT_PROPRIETARY_TOS=true` accepts the [Claude Code Terms of Service](https://www.anthropic.com/legal/consumer-terms) and installs Claude Code automatically at first start. Omit it to be prompted interactively instead.
+For Codex authentication in a Docker/Podman sandbox, the host
+`~/.codex/auth.json` is not mounted automatically. Authenticate inside the
+sandbox or follow the [container Codex authentication
+guide](docs/Sandbox.md#codex-authentication-in-container-sandboxes) for
+headless OAuth, API-key, and explicit credential-copy options.
+
+For a named sandbox that can be managed across sessions, use the CLI
+subcommand. It supports both Docker/Podman containers and OpenShell:
+
+```bash
+ai-guardian sandbox create --runtime container --name guardian-codex --repo .
+ai-guardian sandbox list
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian daemon status
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox delete guardian-codex
+```
+
+New sandbox creation defaults to OpenShell; use `--runtime container` explicitly
+when a plain Docker/Podman sandbox is required. Named lifecycle commands
+automatically detect the runtime from AI Guardian labels and OpenShell
+metadata when `--runtime` is omitted. An unqualified `list` includes both
+runtimes. OpenShell operations use the installed `openshell` CLI and its active
+gateway; set `OPENSHELL_CLI` when a different executable is required. The
+sandbox command is also the supported entry point for interactive,
+fully provisioned OpenShell sessions, including policy composition and
+gateway-provider setup.
+
+OpenShell `create` opens an independent interactive sandbox shell after setup,
+matching the native OpenShell experience while leaving the sandbox available
+after the shell exits; container `create` remains detached.
+
+The OpenShell `status`, `stop`, `exec`, and `logs` forms are thin aliases of
+the corresponding native commands. `connect` uses an independent
+`openshell sandbox exec --name ... --tty` shell so exiting it does not
+terminate the sandbox's main process. `start` and `restart` additionally
+ensure that the AI Guardian daemon and gateway service are available; `delete`
+removes that service before the native sandbox. `create` and `list` add AI
+Guardian defaults and managed-resource filtering. See the
+[Sandbox CLI guide](docs/Sandbox.md) for the full command reference, including
+timestamped configuration snapshots and recreating a sandbox with
+`--restore-config latest`.
+
+The OpenShell subcommand exposes the daemon's internal port through the
+gateway-managed `ai-guardian` service. The gateway gives each sandbox a
+separate URL, so multiple sandboxes can use the same internal port:
+
+```bash
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
+# Example: http://NAME--ai-guardian.openshell.localhost:PORT/
+```
+
+Tray and NiceGUI discovery query the gateway for these service URLs. `--port`
+is a container-only option; OpenShell selects the service port through the
+gateway and does not use a host-side forward process.
+
+OpenShell must be installed and initialized on the host first, with a
+reachable gateway and configured compute driver; follow the
+[official OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+On Fedora/Linux, verify the systemd user service with
+`systemctl --user status openshell-gateway`. On macOS, verify the Homebrew
+service with `brew services list`. In both cases, run `openshell status` before
+using the OpenShell subcommand. When the gateway uses rootless Podman on Linux,
+start its API socket first with `systemctl --user enable --now podman.socket`;
+see the container guide for socket-path troubleshooting.
+
+The OpenShell subcommand opens a shell by default. Its `--repo` option uploads an
+isolated snapshot rather than binding the host checkout; the shell starts in
+`/sandbox/repo`, and a read/write GitHub provider can push the sandbox copy
+without writing files back to the host. Pass `-- codex` to launch Codex
+directly instead of opening the shell.
+
+OpenShell integration is experimental. The documented workflows have been
+tested with Claude Code through Google Vertex AI, Codex through its OpenShell
+provider, and OpenCode using Claude through Vertex AI. Claude
+marketplace/plugin installation has also been tested with the read-only GitHub
+overlay described below.
+
+For Claude Code through Google Vertex AI, set the GCP project and launch with
+the OpenShell image. The subcommand creates or updates and attaches the gateway
+provider, configures the workspace's `inference.local` route, and supplies
+Claude only the non-secret client settings it requires; the host ADC file is
+consumed by the gateway and is not mounted into the sandbox. The
+`ANTHROPIC_API_KEY=unused` value is only a Claude Code protocol placeholder,
+not an API credential; the actual authentication comes from the attached
+Vertex provider:
+
+```bash
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli claude \
+    --model claude-sonnet-4-6 \
+    --repo .
+```
+
+From the resulting shell, start Claude explicitly with `claude --bare`, as
+documented by OpenShell. `--bare` skips Claude's OAuth login flow and uses
+`ANTHROPIC_API_KEY` directly. The value is only a non-secret placeholder:
+`inference.local` strips it and injects the real GCP access token before
+forwarding the request. AI Guardian does not install a persistent shell
+wrapper. For an explicit automated `claude --print ...` command passed during
+creation, the entrypoint adds `--bare` when it is missing. Administrative
+commands such as `claude plugin` and `claude doctor` remain unchanged. Do not
+set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox; that direct-Vertex
+mode expects GCP credential discovery inside the sandbox. Use the subcommand's
+`--model` option (default `claude-sonnet-4-6`) to select the gateway model.
+
+If using a locally built image, rebuild it after pulling this change so the
+OpenShell inference environment fallback is included.
+
+Claude's background self-updater is disabled in OpenShell because the image
+installation is read-only. To update Claude Code, rebuild the OpenShell image
+and create a new sandbox; the subcommand sets `DISABLE_AUTOUPDATER=1`
+automatically.
+
+OpenCode is a CLI with its own agent profiles and model/provider selection. The
+`--agent` profile is required when `--cli opencode` is selected. Use the explicit
+two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+Here `--agent claude` is an OpenCode agent profile and `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables
+`ANTHROPIC_BASE_URL=https://inference.local/v1` and the non-secret
+`ANTHROPIC_API_KEY=unused` placeholder. OpenCode has no Claude-style `--bare`
+flag; run `opencode --agent NAME` normally. The gateway inference route must
+be configured with `openshell inference set`.
+
+The `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects OpenCode, `--agent claude` selects the tested profile,
+and `--model` plus `--provider` select the inference backend.
+
+The Claude/Vertex policy does not grant GitHub access by default. The command
+above is sufficient for Claude requests, Vertex inference, and an ordinary
+Claude session. Marketplace or plugin installation and refresh are different:
+you must add the read-only GitHub overlay because the Anthropic marketplace is
+fetched from GitHub. Without this overlay, model requests still work but
+marketplace installation or refresh fails due to OpenShell's deny-by-default
+network policy. The read/write GitHub policy and GitHub provider are not
+required for the public catalog:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli claude \
+    --policy ./container/openshell-github-readonly-policy.yaml \
+    --repo .
+```
+
+For Codex ChatGPT/OAuth credentials, enable OpenShell Providers v2 once on the
+active gateway:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+A Codex OAuth login does not require a separate API key after Providers v2 is
+enabled. Legacy Codex discovery requires `OPENAI_API_KEY` instead.
+The subcommand converts the gateway-provided OAuth placeholders into Codex's
+native sandbox-local `auth.json`; real host tokens are not uploaded. When host
+files must be uploaded, the subcommand uses a compatible staging flow and starts
+the selected CLI with `sandbox exec` after setup.
+For API-key authentication, the entrypoint runs `codex login --with-api-key`
+with the provider-injected placeholder so Codex can read its native
+`auth.json`; the real host key is never written into the sandbox.
+Inside OpenShell, the subcommand sets Codex's sandbox-local
+`sandbox_mode = "danger-full-access"` so Codex does not create a nested
+bubblewrap sandbox. OpenShell remains the outer filesystem and network
+boundary; regular Docker/Podman launches retain Codex's normal inner sandbox.
+See the official [OpenShell Codex example](https://github.com/NVIDIA/OpenShell/blob/main/examples/agent-driven-policy-management/sandbox-agent.sh).
+
+For a Codex-only sandbox, no GitHub policy is required. The subcommand applies
+the shared base policy and selected Codex policy automatically. Add the
+read-only or read/write GitHub policy only when the sandbox needs GitHub
+access.
+
+Claude Code can use Google Vertex AI by selecting `--cli claude` and setting
+`ANTHROPIC_VERTEX_PROJECT_ID`; the OpenShell subcommand creates the required
+gateway provider from Google ADC credentials. See the container guide for the
+complete Vertex AI example.
+
+For proprietary agents such as Claude Code, select the agent explicitly and
+review its terms before enabling the runtime consent flow. See the container
+guide for the supported agent matrix.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.17.1
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude quay.io/redhatproductsecurity/ai-guardian:v1.17.1
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.18.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.18.0
 
 # Or build from source
 podman build -t ai-guardian container/
-podman run -it -p 63152:63152 -e AI_GUARDIAN_IDE=claude ai-guardian
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex ai-guardian
 ```
 
-See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for IDE selection, Vertex AI auth, and multi-arch details.
+See [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) for agent selection, host config/profile behavior, OpenShell, Vertex AI auth, and multi-arch details.
+The container guide also includes [read-only](container/openshell-github-readonly-policy.yaml) and [read/write](container/openshell-github-readwrite-policy.yaml) OpenShell policy overlays, selected-CLI policy fragments, and provider setup.
 
 ### What Setup Does
 
@@ -199,54 +479,54 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 
 ## Features
 
-| Feature | Description | Docs |
-|---------|-------------|------|
-| Secret Scanning | Multi-layered detection of API keys, tokens, passwords | [docs/security/SECRET_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
-| PII Detection | Detect personally identifiable information | [docs/security/SECRET_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) |
-| Prompt Injection | Language-aware detection with tree-sitter AST parsing and configurable sensitivity | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| Image Scanning | OCR-based secret and PII detection in screenshots and images | [docs/security/IMAGE_SCANNING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) |
-| Unicode Attack Detection | Zero-width chars, bidi override, homoglyphs | [docs/security/UNICODE_ATTACKS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md) |
-| SSRF Protection | Block private IPs, cloud metadata, dangerous schemes | [docs/security/SSRF_PROTECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md) |
-| Config File Scanning | Detect exfiltration of sensitive config files | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
-| Directory Blocking | `.ai-read-deny` markers + config-based rules | [docs/security/DIRECTORY_RULES.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) |
-| Tool Permissions | Allow/deny lists for Skills, MCP, Bash, Write | [docs/TOOL_POLICY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) |
-| Violation Logging | JSON audit trail of all blocked operations | [docs/VIOLATION_LOGGING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) |
-| Sanitize Command | Clean sensitive data from files | [docs/security/SECRET_REDACTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) |
-| Interactive Console | TUI for managing configuration visually | [docs/CONSOLE.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) |
-| Scanner Management | Install and manage 8 scanner engines (including built-in toml-patterns) | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Pre-commit Hook | Scan staged files for secrets before commit | [docs/PRE_COMMIT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) |
-| Inline Annotations | Suppress false positives with `ai-guardian:allow` and block annotations | [docs/ANNOTATIONS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md) |
-| Self-Protection | Prevents AI from disabling its own security controls | [docs/SECURITY_DESIGN.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) |
-| MCP Security Advisor | Read-only security tools for AI agents (proactive checks) | [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) |
-| MCP Security Scanning | Audit MCP server configs and source code for supply chain risks | [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) |
-| Project Config Overlay | Per-repo config with immutable fields and global-only section protection | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) |
-| Multi-Daemon Tray | Discover and manage daemons across local, Podman/Docker, and Kubernetes | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
-| Desktop Shortcut & Autostart | Install tray as desktop app with optional login startup | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) |
-| Tray Plugins | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) |
-| TOML Pattern Engine | Built-in Python scanner with 425 pre-compiled patterns, no binary required | [docs/TOML_PATTERNS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) |
-| Multi-Agent Support | Hook adapters for 14 AI coding agents with normalized input/output | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Container Image | UBI-based image with all headless IDEs and scanners, published to quay.io | [container/README.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) |
-| Supply Chain Scanning | Detect malicious patterns in agent hooks, MCP configs, and plugin files | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) |
-| Context Poisoning Detection | Detect persistent instruction injection in conversation context (OWASP LLM03) | [docs/security/CONTEXT_POISONING.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) |
-| Security SDK & REST API | Programmatic security checking for Python agents and multi-language support | [docs/SDK.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) |
-| Secret Liveness Validation | Verify detected secrets are still active via provider APIs | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation) |
-| Hook Latency Metrics | Per-hook timing with console dashboard for performance analysis | [docs/HOOKS.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking) |
-| OTEL Observability | OpenTelemetry trace export for SDK agent runs and interactive sessions | [docs/OBSERVABILITY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md) |
-| Canary Token Detection | Detect user-registered tripwire values in AI output to catch data exfiltration | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Offensive Language Scanner | Detect profanity, slurs, and non-inclusive terminology in code and comments | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Exfiltration Behavior Detection | Detect bash commands that steal credentials via curl, base64, SSH key exfil | [docs/security/CREDENTIAL_EXFILTRATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) |
-| Code Security Scanning | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Dummy Agent | LLM-free hook testing via interactive REPL with YAML scenario files | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Kubernetes Deployment | Kustomize manifests for Kind, OpenShift, and production deployments | [docs/kubernetes.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) |
-| Security Instructions | Configurable agent context injection rules via TUI and web console | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Transcript Scanning | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) |
-| LeakTK Listen Mode | Event-driven scanning with 40x latency reduction vs polling | [docs/SCANNER_INSTALLATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) |
-| Zero-Config Onboarding | `init --scan` scans the project and generates a tuned config | [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) |
-| Language-Aware FP Suppression | Tree-sitter AST parsing reduces false positives in code | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| ML Prompt Injection Setup | One-command `ai-guardian ml setup` installs model + dependencies | [docs/security/PROMPT_INJECTION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) |
-| Crush IDE Support | Hook adapter for Charmbracelet Crush with MCP advisory | [docs/AGENT_SUPPORT.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) |
-| Event-Driven Tray Updates | Tray refreshes on daemon state changes instead of polling | [docs/MULTI_DAEMON_TRAY.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) |
-| Scan & Configure UI | Web console workflow to scan a project and generate config | [docs/CONSOLE.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) |
+| Feature | Description |
+|---------|-------------|
+| [Secret Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Multi-layered detection of API keys, tokens, passwords |
+| [PII Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_SCANNING.md) | Detect personally identifiable information |
+| [Prompt Injection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Language-aware detection with tree-sitter AST parsing and configurable sensitivity |
+| [Image Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/IMAGE_SCANNING.md) | OCR-based secret and PII detection in screenshots and images |
+| [Unicode Attack Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/UNICODE_ATTACKS.md) | Zero-width chars, bidi override, homoglyphs |
+| [SSRF Protection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SSRF_PROTECTION.md) | Block private IPs, cloud metadata, dangerous schemes |
+| [Config File Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect exfiltration of sensitive config files |
+| [Directory Blocking](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) | `.ai-read-deny` markers + config-based rules |
+| [Tool Permissions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
+| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail of all blocked operations |
+| [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
+| [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | TUI for managing configuration visually |
+| [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |
+| [Pre-commit Hook](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PRE_COMMIT.md) | Scan staged files for secrets before commit |
+| [Inline Annotations](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/ANNOTATIONS.md) | Suppress false positives with `ai-guardian:allow` and block annotations |
+| [Self-Protection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SECURITY_DESIGN.md) | Prevents AI from disabling its own security controls |
+| [MCP Security Advisor](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) | Read-only security tools for AI agents (proactive checks) |
+| [MCP Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md#mcp-security-scanning) | Audit MCP server configs and source code for supply chain risks |
+| [Project Config Overlay](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#2-project-level-config-overlay-new-in-v180) | Per-repo config with immutable fields and global-only section protection |
+| [Multi-Daemon Tray](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Discover and manage daemons across local, Podman/Docker, and Kubernetes |
+| [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
+| [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands |
+| [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
+| [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 15 AI coding agents with normalized input/output |
+| [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
+| [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
+| [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
+| [Security SDK & REST API](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SDK.md) | Programmatic security checking for Python agents and multi-language support |
+| [Secret Liveness Validation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#secret-liveness-validation) | Verify detected secrets are still active via provider APIs |
+| [Hook Latency Metrics](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/HOOKS.md#hook-latency-tracking) | Per-hook timing with console dashboard for performance analysis |
+| [OTEL Observability](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/OBSERVABILITY.md) | OpenTelemetry trace export for SDK agent runs and interactive sessions |
+| [Canary Token Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Detect user-registered tripwire values in AI output to catch data exfiltration |
+| [Offensive Language Scanner](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Detect profanity, slurs, and non-inclusive terminology in code and comments |
+| [Exfiltration Behavior Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect bash commands that steal credentials via curl, base64, SSH key exfil |
+| [Code Security Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Bandit/Semgrep-based detection of insecure code patterns (eval, weak crypto, injection) |
+| [Dummy Agent](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | LLM-free hook testing via interactive REPL with YAML scenario files |
+| [Kubernetes Deployment](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/kubernetes.md) | Kustomize manifests for Kind, OpenShift, and production deployments |
+| [Security Instructions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | Configurable agent context injection rules via TUI and web console |
+| [Transcript Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md#transcript-scanning-availability) | Scan IDE conversation transcripts for secrets/PII across 7+ IDEs |
+| [LeakTK Listen Mode](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Event-driven scanning with 40x latency reduction vs polling |
+| [Zero-Config Onboarding](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) | `init --scan` scans the project and generates a tuned config |
+| [Language-Aware FP Suppression](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Tree-sitter AST parsing reduces false positives in code |
+| [ML Prompt Injection Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | One-command `ai-guardian ml setup` installs model + dependencies |
+| [Crush IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapter for Charmbracelet Crush with MCP advisory |
+| [Event-Driven Tray Updates](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Tray refreshes on daemon state changes instead of polling |
+| [Scan & Configure UI](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | Web console workflow to scan a project and generate config |
 
 ## Default Behavior (No Configuration File)
 
@@ -301,9 +581,20 @@ ai-guardian setup --ide copilot      # GitHub Copilot
 ai-guardian setup --dry-run          # Preview changes
 ai-guardian setup --ide claude       # MCP security advisor installed by default
 ai-guardian setup --remote-config-url https://example.com/policy.json
+ai-guardian ide-setup sync           # Refresh local IDE/hook status in XDG state
+ai-guardian ide-setup sync --json     # Print the synchronized status as JSON
+ai-guardian ide-setup reset --ide claude  # Reset Claude setup prompt decisions
 ```
 
 Run `ai-guardian setup` after upgrading to get the latest hooks. The MCP security advisor server is installed by default — the AI can check security proactively before acting. Use `--no-mcp` to skip. See [docs/MCP_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MCP_SERVER.md) for details and [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md) for other setup options.
+
+### OpenAI Codex coverage
+
+`OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** selected in
+the ChatGPT desktop app. Regular ChatGPT mode in that app is not currently
+protected by AI Guardian's Codex lifecycle hooks. The ChatGPT desktop app,
+Codex CLI, and Codex IDE extension can share MCP configuration, but shared MCP
+availability does not imply hook enforcement.
 
 ## Action Modes
 
@@ -319,22 +610,10 @@ See [docs/CONFIGURATION.md](https://github.com/RedHatProductSecurity/ai-guardian
 
 ## Integration
 
-| Agent | Setup Command | Hooks | MCP | Status |
-|-------|--------------|-------|-----|--------|
-| Claude Code | `--ide claude` | Full | Full | Complete |
-| Cursor | `--ide cursor` | Full | N/A | Complete |
-| GitHub Copilot | `--ide copilot` | Full | N/A | Complete |
-| OpenAI Codex (CLI + Desktop) | `--ide codex` | Full | N/A | Complete |
-| Windsurf | `--ide windsurf` | Full | N/A | Complete |
-| Gemini CLI | `--ide gemini` | Full | N/A | Complete |
-| Cline / ZooCode | `--ide cline` | Full | N/A | Complete |
-| Kiro (AWS) | `--ide kiro` | Full | N/A | Complete |
-| Augment Code | `--ide augment` | Full | N/A | Complete |
-| AiderDesk | `--ide aiderdesk` | Extension | N/A | Complete |
-| OpenClaw | `--ide openclaw` | Plugin | N/A | Complete |
-| OpenCode | `--ide opencode` | Plugin | N/A | Complete |
-| Crush (Charmbracelet) | `--ide crush` | Partial | Full | Complete |
-| Junie (JetBrains) | `--ide junie` | N/A | Full | MCP-only |
+See [Agent Support](docs/AGENT_SUPPORT.md) for the current capability
+matrix, [IDE/Agent Integration Checklist](docs/IDE_INTEGRATION_CHECKLIST.md)
+for host integrations, and [CLI/Runtime Integration Checklist](docs/CLI_RUNTIME_CHECKLIST.md)
+for container and OpenShell support.
 
 - [GitHub Copilot Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/GITHUB_COPILOT.md)
 - [Aider Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AIDER.md)
@@ -368,10 +647,18 @@ The MCP advisor lets the AI check *before* acting (advisory). Hooks enforce *dur
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `AI_GUARDIAN_CONFIG_DIR` | Custom config directory | `~/.config/ai-guardian` |
+| `AI_GUARDIAN_HOME` | Compatibility alias for the config directory | `~/.config/ai-guardian` |
 | `AI_GUARDIAN_STATE_DIR` | State directory (logs, violations) | `~/.local/state/ai-guardian` |
 | `AI_GUARDIAN_CACHE_DIR` | Cache directory (patterns) | `~/.cache/ai-guardian` |
 | `AI_GUARDIAN_IDE_TYPE` | Override IDE auto-detection | Auto-detect |
 | `AI_GUARDIAN_PATTERN_TOKEN` | Default pattern server auth token (all sections) | None |
+
+`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `CURSOR_CONFIG_DIR`, `COPILOT_HOME`, and
+`GEMINI_CLI_HOME` are honored by setup, MCP registration, verification, and
+supported session discovery. `AI_GUARDIAN_CONFIG_DIR` takes precedence over
+`AI_GUARDIAN_HOME`, which takes precedence over XDG. See the
+[IDE-specific path reference](docs/AGENT_SUPPORT.md#ide-specific-home-and-configuration-paths)
+for the complete variable list, precedence rules, and project-local behavior.
 
 Each detection feature (`secret_scanning`, `secret_redaction`, `ssrf_protection`, `config_file_scanning`) can use its own pattern server with independent auth via `token_env` or `token_file`. See [docs/PATTERN_SERVER.md](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/PATTERN_SERVER.md#per-section-auth-for-multiple-servers).
 
@@ -416,7 +703,9 @@ We welcome contributions! See [Developer Install](#developer-install) for setup 
 
 ## Documentation
 
-Full documentation is available in the [docs/](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/) folder:
+Full documentation is also available at [ai-guardian.readthedocs.io](https://ai-guardian.readthedocs.io/) with search and versioned navigation.
+
+Source docs are in the [docs/](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/) folder.
 
 - [Configuration Guide](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md)
 - [Security Documentation](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/)
@@ -449,20 +738,52 @@ Apache 2.0 - see [LICENSE](https://github.com/RedHatProductSecurity/ai-guardian/
 - [LeakTK](https://github.com/leaktk/patterns) - Community secret detection patterns
 - [Hermes Security Patterns](https://github.com/fullsend-ai/experiments/tree/main/hermes-security-patterns) - Security research
 
-
 # === container/README.md ===
 
 # AI Guardian Container Image
 
-UBI-based container image with ai-guardian and all headless-capable IDEs.
-Published to [quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian) on every merge and release.
+The published image is a UBI-based Docker/Podman support image with
+ai-guardian and the supported agent integrations. Headless-capable CLIs are
+bundled; GUI-only integrations receive their hooks when the container starts.
+
+OpenShell uses a separate image definition, `Dockerfile.openshell`, based on
+the [OpenShell Community sandbox base image](https://github.com/NVIDIA/OpenShell-Community/tree/main/sandboxes/base).
+That base supplies the OpenShell-compatible filesystem layout, networking
+tools, and agent runtime. The dedicated OpenShell image is published in its
+own primary Quay repository as
+`quay.io/redhatproductsecurity/ai-guardian-openshell:latest` on successful
+merges and as `:<version>` for releases. Build it locally only when testing a
+change to the image; `ai-guardian sandbox create --runtime openshell` uses the
+published OpenShell image by default. The OpenShell image is not published in
+the normal image repository.
+The normal UBI image remains published to
+[quay.io/redhatproductsecurity/ai-guardian](https://quay.io/redhatproductsecurity/ai-guardian)
+on every merge and release.
+
+## Recommended runtime
+
+Use OpenShell when it is available, especially for provider-backed Claude or
+Codex sessions. OpenShell keeps provider credentials in the gateway rather
+than mounting them into the agent sandbox, and adds deny-by-default network
+and filesystem policy, provider-backed inference, repository isolation, and
+per-sandbox gateway services. OpenShell support is experimental, but it is the
+preferred security boundary for the tested provider workflows.
+
+The plain Docker/Podman container is a simpler fallback and is useful for
+local development or environments without an OpenShell gateway. Its Vertex
+ADC file or direct API-key environment is available inside the container, so
+the selected agent may be able to read that credential material.
 
 ## What's Included
 
 | Component | License | Installed |
 |-----------|---------|-----------|
 | ai-guardian | Apache 2.0 | Build time |
-| gitleaks, betterleaks | MIT / Apache 2.0 | Build time |
+| Gitleaks, BetterLeaks | MIT | Build time |
+| LeakTK | Apache 2.0 | Build time |
+| detect-secrets | Apache 2.0 | Build time |
+| Secretlint | MIT | Build time |
+| GitGuardian ggshield CLI | MIT (service terms apply) | Build time |
 | OpenCode | MIT | Build time |
 | Gemini CLI | Apache 2.0 | Build time |
 | Codex CLI | Apache 2.0 | Build time |
@@ -484,12 +805,12 @@ See [Proprietary CLI Consent](#proprietary-cli-consent) below.
 podman pull quay.io/redhatproductsecurity/ai-guardian:latest
 
 # Specific release version
-podman pull quay.io/redhatproductsecurity/ai-guardian:1.17.1
+podman pull quay.io/redhatproductsecurity/ai-guardian:1.18.0
 ```
 
 Tag conventions:
 - `:latest` — tracks main branch (updated on every merge)
-- `:<version>` — pinned stable release (e.g. `1.17.1`)
+- `:<version>` — pinned stable release (e.g. `1.18.0`)
 
 ## Build Locally
 
@@ -498,15 +819,21 @@ Tag conventions:
 podman build -t ai-guardian container/
 
 # Specific version
-podman build --build-arg AI_GUARDIAN_VERSION=1.17.1 -t ai-guardian container/
+podman build --build-arg AI_GUARDIAN_VERSION=1.18.0 -t ai-guardian container/
 
-# Local wheel (copy wheel into container/ first)
-cp dist/ai_guardian-1.17.1-py3-none-any.whl container/vendor/
-podman build --build-arg AI_GUARDIAN_VERSION=ai_guardian-1.17.1-py3-none-any.whl \
+# Local wheel (copy the wheel into container/vendor/ first)
+WHEEL_PATH=dist/ai_guardian-1.18.0-py3-none-any.whl
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
+podman build --build-arg "AI_GUARDIAN_VERSION=$WHEEL_NAME" \
     -t ai-guardian container/
 
 # Multi-arch
 podman build --platform linux/amd64,linux/arm64 -t ai-guardian container/
+
+# Dedicated OpenShell BYOC image (the sandbox command uses the published image by default)
+podman build -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
 ```
 
 ## Run
@@ -514,26 +841,935 @@ podman build --platform linux/amd64,linux/arm64 -t ai-guardian container/
 Using `run.sh` (recommended):
 
 ```bash
-./container/run.sh                                    # defaults: claude, standard
-./container/run.sh --ide opencode                     # select IDE
+./container/run.sh                                    # defaults: Codex
+./container/run.sh --agent opencode                   # select agent
 ./container/run.sh --profile @strict                  # select profile
+./container/run.sh --config-dir "$HOME/.config/ai-guardian"
 ./container/run.sh --repo ~/myproject                 # mount a repo
 ./container/run.sh --api-key sk-ant-...               # Anthropic API auth
-./container/run.sh --ide gemini --profile @minimal    # combine options
+./container/run.sh --agent gemini --profile @minimal  # combine options
 ./container/run.sh -- ai-guardian doctor              # run a command
 ```
 
 Vertex AI auth is auto-detected from environment variables (see [Authentication](#authentication)).
 
+At startup the sandbox command configures only the selected `--cli`; configuring
+other integrations is unnecessary when the sandbox runs one CLI. To opt into
+broader setup, set
+`AI_GUARDIAN_SETUP_SCOPE=cli` for all supported CLI agents or
+`AI_GUARDIAN_SETUP_SCOPE=all` for every supported integration.
+
+### CLI lifecycle management
+
+The `ai-guardian sandbox` subcommand provides named lifecycle operations for
+both supported runtimes. Container creation is detached; OpenShell creation
+connects to the sandbox shell after setup, like native OpenShell:
+
+```bash
+# Docker/Podman (defaults to podman; set CONTAINER_ENGINE=docker if needed)
+ai-guardian sandbox create --runtime container --name guardian-codex --repo .
+ai-guardian sandbox list
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian doctor
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox delete guardian-codex
+
+# OpenShell (uses OPENSHELL_CLI or the openshell executable on PATH)
+# Create; policy files are repeatable.
+ai-guardian sandbox create \
+    --runtime openshell \
+    --name guardian-claude \
+    --cli claude \
+    --repo . \
+    --policy ./container/openshell-github-readonly-policy.yaml
+
+# List managed OpenShell sandboxes.
+ai-guardian sandbox list --runtime openshell
+
+# Inspect status; runtime is auto-detected by name.
+ai-guardian sandbox status guardian-claude
+
+# Open an independent interactive shell.
+ai-guardian sandbox connect guardian-claude
+
+# Execute a command without replacing the sandbox process.
+ai-guardian sandbox exec guardian-claude -- ai-guardian doctor
+
+# Stream logs.
+ai-guardian sandbox logs guardian-claude --follow
+
+# Save and inspect configuration snapshots.
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox config list guardian-claude
+
+# Stop, start, or restart.
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox restart guardian-claude
+
+# Permanently delete.
+ai-guardian sandbox delete guardian-claude
+```
+
+For multiple policy overlays, repeat the option in the same create command:
+
+```bash
+ai-guardian sandbox create --runtime openshell --name guardian-claude \
+    --cli claude --repo . \
+    --policy ./policy-one.yaml \
+    --policy ./policy-two.yaml
+```
+
+Runtime selection can also appear before the lifecycle verb, as in
+`ai-guardian sandbox --runtime openshell list`. New sandbox creation defaults to
+OpenShell, including the tray create form; pass `--runtime container` explicitly
+to use Docker/Podman. For named lifecycle commands, omit the runtime and the
+CLI probes AI Guardian labels/metadata to choose Docker/Podman or OpenShell. An
+unqualified `list` combines managed resources from both runtimes. `list` is
+limited to resources created through this command's `ai-guardian.managed=true`
+label. The sandbox command also owns provider setup, policy composition,
+host-config snapshots, and OpenShell upload bootstrapping; no separate
+OpenShell script is required.
+
+For OpenShell, the following lifecycle commands map directly to the native CLI
+and preserve its exit status and terminal behavior, except for `connect`, which
+uses an independent exec session so leaving the shell does not terminate the
+sandbox:
+
+| AI Guardian command | Native OpenShell command |
+| --- | --- |
+| `ai-guardian sandbox status NAME` | `openshell sandbox get NAME` |
+| `ai-guardian sandbox start NAME` | `openshell sandbox start NAME` |
+| `ai-guardian sandbox stop NAME` | `openshell sandbox stop NAME` |
+| `ai-guardian sandbox connect NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
+| `ai-guardian sandbox delete NAME` | `openshell sandbox delete NAME` |
+| `ai-guardian sandbox exec NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
+| `ai-guardian sandbox logs NAME` | `openshell logs NAME` |
+
+`sandbox restart` implements the convenient stop-then-start sequence because
+OpenShell has no separate restart command. `sandbox create` adds AI Guardian
+image, environment, and labeling defaults; `sandbox list` adds the managed
+label selector, so those two commands are not plain aliases. See the full
+[Sandbox CLI guide](../docs/Sandbox.md) for create options and lifecycle
+details. Upload-based OpenShell creation bootstraps the entrypoint
+non-interactively, exposes the gateway-managed `ai-guardian` service, and then
+connects to the sandbox shell. Exiting that shell returns to the host while
+`sandbox connect` remains
+available for later sessions. A container created without an explicit command
+keeps a login shell with an allocated TTY as its main process, so it remains
+available for
+`connect` and `exec`; start the selected agent from that shell or with
+`sandbox exec`. A supplied `--name` is also recorded for tray and NiceGUI
+display, preventing a runtime-generated container ID from being shown.
+
+Use `ai-guardian sandbox config save NAME` to preserve changes made inside a
+running sandbox. The newest timestamped snapshot can be used when recreating
+the sandbox with `sandbox create --name NAME --restore-config latest`; snapshots
+are stored in the host XDG state directory and never overwrite the host config.
+
+### OpenShell
+
+The OpenShell sandbox command uses the dedicated `Dockerfile.openshell` image
+rather than the normal UBI image. Build it once from the repository root:
+
+The normal `run.sh` container still defaults to Codex. The OpenShell sandbox
+command defaults to Claude, matching OpenShell's first-class default-policy
+coverage; select another CLI explicitly with `--cli`.
+
+OpenShell integration is experimental. The documented workflows have been
+tested with Claude Code through Google Vertex AI, Codex through its OpenShell
+provider, and OpenCode using Claude through Vertex AI. Claude
+marketplace/plugin installation has also been tested with the read-only GitHub
+overlay described below.
+
+```bash
+podman build -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+```
+
+To use that local build for one run, pass it explicitly:
+
+```bash
+ai-guardian sandbox create --runtime openshell --base localhost/ai-guardian-openshell:latest
+```
+
+The published image can be pulled explicitly as well:
+
+```bash
+podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
+```
+
+Set `AI_GUARDIAN_OPEN_SHELL_IMAGE` to use another OpenShell-compatible image,
+or pass `--base IMAGE`/`--image IMAGE` on one invocation. The explicit
+`AI_GUARDIAN_IMAGE` variable remains the highest-priority image override. The
+subcommand uses the OpenShell-supported `--from`, `--env`, and `--upload`
+options, then exposes the daemon's sandbox-local REST port through the
+gateway-managed `ai-guardian` service. The gateway gives each sandbox its own
+service URL, so multiple sandboxes can use internal port `63152` concurrently.
+
+`Dockerfile.openshell` pins the tested Community base by digest rather than
+using the mutable `:latest` tag. To refresh it deliberately, pull the desired
+base, inspect its digest, review the inherited agent/policy changes, update the
+`BASE_IMAGE` default, rebuild, and rerun the OpenShell smoke tests. A one-off
+override is also possible:
+
+```bash
+podman build \
+    --build-arg BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:<reviewed-digest> \
+    -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+```
+
+The pinned base includes older versions of some bundled Node-based CLIs, so
+`Dockerfile.openshell` replaces only Codex and OpenCode with explicit,
+independently overridable versions. Claude Code and GitHub Copilot remain
+inherited from the base image:
+
+| Build argument | Package | Default |
+|----------------|---------|---------|
+| `CODEX_VERSION` | `@openai/codex` | `0.154.0` |
+| `OPENCODE_VERSION` | `opencode-ai` | `1.18.31` |
+
+These are pinned rather than installed through a mutable `latest` tag so an
+image can be reproduced and rolled back. The Dockerfile verifies that Claude
+Code and GitHub Copilot are supplied by the base image but does not download,
+modify, or version-pin them. Override either managed version deliberately when
+testing another release. Rebuild the image and recreate the sandbox after
+changing one; existing sandboxes retain the client versions from their
+original image.
+
+```bash
+podman build -f container/Dockerfile.openshell \
+    --build-arg CODEX_VERSION=0.154.0 \
+    --build-arg OPENCODE_VERSION=1.18.31 \
+    -t localhost/ai-guardian-openshell:latest container/
+```
+
+For development, build and launch the local image in one workflow from the
+repository root. The repository snapshot is uploaded to the sandbox, and the
+read/write GitHub policy is applied to the selected Codex agent:
+
+```bash
+podman build -f container/Dockerfile.openshell \
+    --build-arg CODEX_VERSION=0.154.0 \
+    -t localhost/ai-guardian-openshell:dev \
+    container/
+
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:dev \
+    --cli codex \
+    --policy ./container/openshell-github-readwrite-policy.yaml \
+    --provider ai-guardian-codex \
+    --repo .
+```
+
+Use a different `CODEX_VERSION` build argument when testing a specific Codex
+release. Rebuild the image and recreate the sandbox after changing the source
+wheel or a bundled CLI version.
+
+#### CLI scope and image contents
+
+AI Guardian has 16 public integrations. OpenShell is terminal-first, so its
+agent selector contains only these nine CLI-capable integrations:
+`claude`, `copilot`, `codex`, `gemini`, `antigravity`, `kiro`, `openclaw`,
+`opencode`, and `crush`. The seven GUI/editor integrations—`cursor`, `windsurf`,
+`cline`, `zoocode`, `aiderdesk`, `augment`, and `junie`—remain available to the normal
+container setup but are intentionally excluded from the OpenShell selector.
+
+The current OpenShell Community base supplies Claude, Codex, OpenCode, and
+Copilot. This derived image leaves Claude and Copilot unchanged and explicitly
+refreshes the two managed CLIs shown above. Gemini, OpenClaw, Crush, and Kiro
+are not installed by this default image; selecting one requires a custom image
+that supplies its command, and Kiro retains its runtime consent flow. The
+version monitor checks the two explicit npm pins. Only the selected CLI is
+configured by default; set
+`AI_GUARDIAN_SETUP_SCOPE=cli` when one sandbox will run multiple CLI agents.
+Other installed CLIs are not removed, but they still need a compatible
+provider and network policy before they are useful in the sandbox.
+
+#### License and redistribution
+
+There is no blanket license clearance for the complete derived image. The
+OpenShell Community repository is Apache-2.0, but its
+[third-party notices](https://github.com/NVIDIA/OpenShell-Community/blob/main/THIRD-PARTY-NOTICES)
+also cover inherited system components and their separate licenses. Codex is
+Apache-2.0 and OpenCode is MIT; GitHub Copilot and Claude Code remain subject
+to their own licenses and service terms. They are inherited unchanged from the
+base image, so the OpenShell Dockerfile does not download or modify them; users
+still need their own authorized account or API access. Review the exact
+package and base image notices before making a Quay repository public or
+redistributing the image. The build workflow deliberately publishes OpenShell
+only to the dedicated primary Quay repository and does not mirror it to
+`itdove`.
+For OpenShell installation and first-time setup, see the official
+[OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+For policy fields and validation rules, see the official
+[policy schema reference](https://docs.nvidia.com/openshell/reference/policy-schema)
+and [policy customization guide](https://docs.nvidia.com/openshell/sandboxes/policies).
+
+OpenShell prerequisites are:
+
+- The OpenShell CLI installed on the host.
+- A reachable OpenShell gateway.
+- A gateway compute driver configured for Docker, Podman, MicroVM, or
+  Kubernetes.
+
+The sandbox command requires an OpenShell CLI and gateway new enough to support
+`sandbox create --env` and the upload-based staging workflow. Install or
+update OpenShell on the host, then refresh the shell command and verify both
+the client and gateway:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+hash -r
+openshell --version
+openshell status
+```
+
+On Fedora/Linux, the installer provides the CLI and a systemd user service:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+systemctl --user status openshell-gateway
+openshell status
+```
+
+If the Linux gateway uses rootless Podman, it also needs the
+rootless Podman API socket. Start it as the same user that runs the gateway:
+
+```bash
+systemctl --user enable --now podman.socket
+test -S "${XDG_RUNTIME_DIR}/podman/podman.sock"
+systemctl --user restart openshell-gateway
+openshell status
+```
+
+On macOS, the installer uses Homebrew and manages the gateway with a Homebrew
+service:
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/NVIDIA/OpenShell/main/install.sh | sh
+brew services list
+brew services restart openshell
+openshell status
+```
+
+If macOS still reports an older version after updating, check which executable
+is being used with `type -a openshell`; the shell may be finding an older
+installation first. Updating the AI Guardian branch does not update the
+OpenShell CLI or gateway, and provider profiles remain local to each gateway.
+
+If the gateway reports that `/run/user/<uid>/podman/podman.sock` is missing,
+the socket is stopped or the gateway is pinned to the wrong path. Omit
+`socket_path` from `[openshell.drivers.podman]` to use OpenShell auto-detection,
+or set it to the active `${XDG_RUNTIME_DIR}/podman/podman.sock` path in
+`$HOME/.config/openshell/gateway.toml`, then restart the gateway. Do not use
+`sudo` with the rootless `systemctl --user` command.
+
+If `openshell status` reports `Connection refused`, inspect the gateway before
+retrying the sandbox command:
+
+```bash
+systemctl --user is-active openshell-gateway
+journalctl --user -u openshell-gateway --no-pager -n 100
+```
+
+On SELinux-enabled systems, inspect the recent AVC records for the denied
+path or operation instead of disabling enforcement or installing a broad local
+allow rule:
+
+```bash
+sudo ausearch -m avc -ts recent -i
+```
+
+For a gateway hosted elsewhere, register its reachable endpoint instead:
+
+```bash
+openshell gateway add https://gateway.example.com --name production
+openshell status
+```
+
+For a containerized gateway, see OpenShell's [container gateway
+guide](https://docs.nvidia.com/openshell/about/container-gateway).
+
+Before the first sandbox command call, enable OpenShell Providers v2 on the active
+gateway. This is required for the sandbox command’s provider-backed Claude, Codex,
+and Vertex AI flows:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+```bash
+ai-guardian sandbox create --runtime openshell        # opens a shell; Claude is selected
+ai-guardian sandbox create --runtime openshell --cli opencode --agent claude --repo .
+ai-guardian sandbox create --runtime openshell --profile @strict --policy ./container/openshell-github-readwrite-policy.yaml
+ai-guardian sandbox create --runtime openshell --config-dir "$HOME/.config/ai-guardian"
+```
+
+The OpenShell sandbox command opens `/bin/bash` by default. When `--repo` is supplied,
+the shell starts in the uploaded repository at `/sandbox/repo`; otherwise it
+starts in `/sandbox`. The selected `--cli` controls the AI Guardian setup,
+policy fragment, and automatic provider selection. With `--cli opencode`,
+`--agent` is required and selects the OpenCode agent profile. When a `--policy`
+overlay is supplied, it also selects the matching CLI policy fragment. Without
+an overlay, the sandbox command still applies the shared base policy and the
+selected CLI policy, but no GitHub policy is added. The sandbox command does
+not start the CLI automatically.
+
+Provider profiles belong to the active OpenShell gateway; they are not stored
+in the repository, image, or Git branch. When `--provider` is omitted, the
+sandbox command asks that gateway for a provider profile matching the selected CLI
+and may create or reuse the corresponding `ai-guardian-<cli>` provider from
+local credentials. If the gateway does not advertise a Codex profile, a
+launch selecting `--cli codex` fails with an error such as “the active
+OpenShell gateway has no provider profile for codex.” Configure a Codex
+provider on that gateway first, or pass an already configured provider
+explicitly:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli codex \
+    --provider ai-guardian-codex \
+    --repo .
+```
+
+Use `openshell provider get ai-guardian-codex` to verify that the named
+provider exists on the currently active gateway. Provider setup must be
+repeated for each gateway or laptop; `git pull` only updates the sandbox command and
+policy files.
+
+The `--provider` option attaches an existing provider instance and does not
+create one. In Claude Vertex mode, the sandbox command also refreshes that provider's
+project/region configuration and uses it for the workspace inference route.
+To let the sandbox command create
+`ai-guardian-codex` from local Codex credentials, omit `--provider` and ensure
+the active gateway lists the `codex` profile:
+
+```bash
+openshell provider list-profiles
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli codex \
+    --repo .
+```
+
+Provider creation requires a matching gateway profile and credentials
+available to the sandbox command. If `codex` is absent from `list-profiles`, update or
+reconfigure the active OpenShell gateway before retrying.
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
+    --policy ./container/openshell-github-readwrite-policy.yaml \
+    --provider ai-guardian-codex \
+    --provider ai-guardian-github \
+    --repo .
+```
+
+The sandbox command runs setup before opening the shell. You can launch the selected
+CLI from that shell; when the CLI exits, you return to the shell and can
+inspect, commit, and push changes. The repository is still an OpenShell
+snapshot, so commits and other file changes are made in the sandbox copy. With
+the read/write GitHub policy and an attached GitHub provider, `git push` goes
+to GitHub through the gateway; it does not modify the host checkout. To launch
+the selected CLI immediately instead, pass it after `--`, for example
+`-- codex`.
+
+From the shell, launch and exit the selected CLI as often as needed:
+
+```bash
+codex
+git status
+git add .
+git commit -m "Your change"
+git push
+```
+
+The OpenShell sandbox command exposes the daemon's sandbox-local port `63152`
+through the gateway-managed `ai-guardian` service:
+
+```bash
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
+```
+
+The gateway assigns a unique URL such as
+`http://NAME--ai-guardian.openshell.localhost:PORT/`. The same internal port
+can be exposed by multiple sandboxes, and tray/NiceGUI discovery queries each
+sandbox's URL. `--port` is only supported for container sandboxes; OpenShell
+does not use a host-side forward process.
+
+#### Claude Code with Google Vertex AI
+
+To run Claude Code through Google Vertex AI, select Claude and provide a GCP
+project. The sandbox command automatically creates or updates the gateway-local
+`ai-guardian-google-vertex-ai` provider, including its required project and
+region configuration. No GitHub policy is needed for model inference:
+
+```bash
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli claude \
+    --model claude-sonnet-4-6 \
+    --repo .
+```
+
+When using a locally built image, rebuild it after pulling this change because
+the provider-backed inference environment fallback is installed by the image
+entrypoint.
+
+Providers v2 must be enabled on the active gateway before the first sandbox command
+call so the provider-owned Vertex network policy is included:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+The sandbox command attaches the gateway Vertex provider, configures the
+workspace's OpenShell `inference.local` route, and passes Claude only the
+non-secret client settings it requires:
+
+```text
+ANTHROPIC_BASE_URL=https://inference.local
+ANTHROPIC_API_KEY=unused
+```
+
+The key is only a protocol placeholder; `--bare` skips Claude's OAuth login
+flow and uses `ANTHROPIC_API_KEY` directly. The placeholder does not reach
+Vertex AI: `inference.local` strips it and injects the attached provider's
+refreshed GCP access token before forwarding the request. The create command
+suppresses OpenShell's plain-environment credential warning for this known
+placeholder. From the resulting shell, start Claude explicitly with the
+OpenShell-documented `--bare` flag:
+
+```bash
+claude --bare
+```
+
+AI Guardian does not install a persistent shell wrapper. For an explicit
+automated `claude --print ...` command passed during creation, the entrypoint
+adds `--bare` when it is missing. Administrative commands such as `claude
+plugin` and `claude doctor` are passed through unchanged. Do not set
+`CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox. That mode makes Claude
+try to discover GCP credentials directly inside the sandbox, where the host
+ADC file is intentionally not mounted. The OpenShell sandbox command uses
+gateway-managed inference instead. Use `--model MODEL` to select the gateway
+model; the default is `claude-sonnet-4-6`.
+
+Claude's background self-updater is disabled in OpenShell because the image
+installation is read-only. To update Claude Code, rebuild the OpenShell image
+and create a new sandbox; the sandbox command sets `DISABLE_AUTOUPDATER=1`
+automatically.
+
+#### OpenCode through OpenShell inference
+
+OpenCode is a CLI with its own agent profiles and model/provider selection.
+The `--agent` profile is required when `--cli opencode` is selected. Use the
+explicit two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+This `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects OpenCode, `--agent claude` selects the tested profile,
+and `--model` plus `--provider` select the inference backend.
+
+Here `--agent claude` is an OpenCode agent profile and `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables:
+
+```text
+ANTHROPIC_BASE_URL=https://inference.local/v1
+ANTHROPIC_API_KEY=unused
+```
+
+Generic OpenCode providers are left unchanged. OpenCode has no Claude-style
+`--bare` flag; run `opencode --agent NAME` normally. Configure the gateway
+route first with `openshell inference set` and the provider/model you want to
+use.
+
+The Claude/Vertex policy does not grant GitHub access by default. The command
+above is sufficient for Claude requests, Vertex inference, and an ordinary
+Claude session. Marketplace or plugin installation and refresh are different:
+you must add the read-only GitHub overlay because the Anthropic marketplace is
+fetched from GitHub. Without this overlay, model requests still work but
+marketplace installation or refresh fails due to OpenShell's deny-by-default
+network policy. The read/write GitHub policy and GitHub provider are not
+required for the public catalog.
+
+This uses OpenShell's [Vertex provider](https://docs.nvidia.com/openshell/providers/google-vertex-ai)
+and [inference routing](https://docs.nvidia.com/openshell/sandboxes/inference-routing)
+features. The effective sandbox policy should show a provider-derived
+`_provider_ai_guardian_google_vertex_ai` entry for the Google Vertex hosts.
+
+Keep `--cli claude` when using Vertex AI. `claude` selects the Claude Code
+CLI; Vertex is the provider backend, not a separate CLI, so
+`--cli claude-vertex` is not a valid selector. The expected provider name is
+`ai-guardian-google-vertex-ai`.
+
+The sandbox command uses Google Application Default Credentials (ADC) while creating
+or refreshing the provider. Set `GOOGLE_APPLICATION_CREDENTIALS` to a
+service-account JSON file when it is not at the standard gcloud ADC location,
+or authenticate with gcloud first. The credential file is consumed by the
+gateway and is not uploaded into the sandbox:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/gcp-credentials.json
+export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
+export CLOUD_ML_REGION=global
+
+ai-guardian sandbox create --runtime openshell --cli claude --repo .
+```
+
+The active gateway must expose the `google-vertex-ai` provider profile. If the
+sandbox command reports that the profile is missing, update or reconfigure the
+active OpenShell gateway. For direct Anthropic access instead, use
+`ANTHROPIC_API_KEY` and omit the Vertex project variables.
+
+If a provider created by an older sandbox command shows no config keys, rerunning the
+sandbox command updates it with `VERTEX_AI_PROJECT_ID` and `VERTEX_AI_REGION`. The
+equivalent manual repair is:
+
+```bash
+openshell provider update ai-guardian-google-vertex-ai \
+    --config VERTEX_AI_PROJECT_ID="$ANTHROPIC_VERTEX_PROJECT_ID" \
+    --config VERTEX_AI_REGION="${CLOUD_ML_REGION:-global}"
+```
+
+The Vertex policy is separate from Claude plugin marketplace access. The
+default Claude policy intentionally does not allow GitHub. To install or
+refresh the public Claude plugin marketplace, you must add the read-only
+GitHub overlay. A read/write GitHub policy or GitHub credential provider is
+not required for the public catalog:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:latest \
+    --cli claude \
+    --policy ./container/openshell-github-readonly-policy.yaml \
+    --repo .
+```
+
+Claude's diagnostics may report that the first-party `api.anthropic.com`
+provider, Claude.ai OAuth, and Remote Control are unavailable. Those checks
+are for direct Anthropic/Claude.ai sessions and are expected when Claude is
+running through Vertex AI. The relevant test is whether Claude can complete a
+model request through the configured Vertex project.
+
+OpenShell discovers common agent credentials through its provider mechanism.
+When no profile is selected, an existing host `ai-guardian.json` is uploaded
+as the initial configuration snapshot. The sandbox-local config still takes
+precedence when it already exists, and the host file is never written. A
+selected profile always takes precedence and prevents that full-config upload.
+OpenShell's `--upload` gives the sandbox a writable copy, matching the
+Docker/Podman sandbox command, which stages the host file with a read-only bind mount
+before copying it into the writable active config path.
+
+Agent credential directories are deliberately not mounted or uploaded. For
+Codex, the sandbox command reads `$CODEX_HOME/auth.json` (falling back to
+`$HOME/.codex/auth.json`) only while creating the OpenShell provider, and
+passes the OAuth fields or API key to the provider command without printing
+them. The
+provider then supplies sandbox-scoped credential placeholders. At sandbox
+startup, the entrypoint writes those placeholders into the selected
+`$CODEX_HOME/auth.json` in Codex's native ChatGPT format; it never writes the
+host's real OAuth tokens into the sandbox. A synthetic JWT-shaped ID token is
+used only because Codex parses that field locally. With a gateway that
+advertises the `codex` profile and has Providers v2 enabled, Codex should
+start without showing its sign-in menu and a separate OpenAI API key is not
+required. Enable the gateway feature once with:
+
+```bash
+openshell settings set --global --key providers_v2_enabled --value true
+```
+
+For API-key authentication, the entrypoint instead runs `codex login
+--with-api-key` with the provider-injected `OPENAI_API_KEY` placeholder, so
+Codex writes its native API-key `auth.json` without putting the real key in the
+sandbox filesystem. This is required even though the provider already exposes
+the placeholder as an environment variable.
+
+If Codex still shows the sign-in menu, the provider-backed auth bootstrap was
+not available to that process. Start a fresh sandbox with this command rather
+than launching `codex` from an unrelated shell, and verify that
+`openshell provider get ai-guardian-codex` reports either the four Codex OAuth
+credential keys or `OPENAI_API_KEY`, as appropriate. Do not copy the host
+`auth.json` into an OpenShell sandbox; use its provider mechanism instead.
+
+When Providers v2 is unset or disabled, OpenShell 0.0.116 falls back to legacy
+`codex` discovery, which only recognizes `OPENAI_API_KEY`; the sandbox command reports
+this prerequisite instead of asking for an API key that is not needed by a
+Codex OAuth login. If the profile is unavailable, use an explicit compatible
+provider with `--provider NAME`.
+
+Codex also needs a writable local state database before it can display its
+prompt. The sandbox command sets `CODEX_HOME=/sandbox/.codex` and initializes that
+directory. The OpenShell policy gives `/sandbox` to the sandbox user, and
+keeping Codex state there also lets Codex create its helper binaries instead
+of rejecting them as temporary `/tmp` files. If you connect to the sandbox and
+run `codex` manually, run the sandbox command first so this environment and directory
+are present.
+
+Codex is configured with `sandbox_mode = "danger-full-access"` inside the
+OpenShell sandbox. This prevents Codex from trying to create a nested
+bubblewrap/user-namespace sandbox; OpenShell remains the outer security and
+network boundary. The setting is written only to the sandbox-local
+`$CODEX_HOME/config.toml`. Regular Docker/Podman launches keep Codex's normal
+inner sandbox behavior. This follows the pattern in OpenShell's official
+[Codex sandbox example](https://github.com/NVIDIA/OpenShell/blob/main/examples/agent-driven-policy-management/sandbox-agent.sh).
+
+The configured `ai-guardian` MCP server is a local stdio process and therefore
+does not need a network-policy endpoint. Codex's separate `codex_apps` remote
+MCP, when enabled by Codex, does need its provider/profile endpoint and can be
+allowed through the selected Codex policy.
+
+OpenShell 0.0.116 does not allow `--upload` and a trailing canonical command in
+the same `sandbox create` invocation. When a config, profile, repository, or
+credential snapshot is needed, this command creates a named detached staging
+sandbox, uploads the snapshot, and then explicitly invokes the image entrypoint
+with `openshell sandbox exec`. This is required because detached OpenShell
+creation starts its own shell instead of reliably running the image Docker
+entrypoint. For `claude`, `codex`, `copilot`,
+and `opencode` when the active gateway advertises a matching profile, the
+sandbox command creates or reuses an `ai-guardian-<agent>` provider from existing
+local credentials when `--provider` is not supplied. Pass `--provider NAME`
+for an agent or gateway that does not advertise an automatic provider profile.
+
+The default image build is pinned to the latest stable PyPI release at the
+time the image definition is updated. At startup, the entrypoint checks the
+installed package's advertised setup choices: integrations that exist only in
+a newer development checkout are reported as skipped, while selecting one of
+those integrations fails with a clear compatibility error.
+
+When building this image from the development checkout, pass the wheel built
+from the same checkout if you need unreleased setup behavior. The current
+development package registers Codex's AI Guardian MCP server in
+`$CODEX_HOME/config.toml`; older released packages may instead write the
+legacy `codex.json` file in the working directory. `ai-guardian setup` installs
+the MCP entry by default in both cases.
+
+```bash
+WHEEL_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ai-guardian-wheel.XXXXXX")"
+uv build --wheel --out-dir "$WHEEL_DIR"
+WHEEL_PATH="$(printf '%s\n' "$WHEEL_DIR"/ai_guardian-*.whl | head -n 1)"
+WHEEL_NAME="$(basename "$WHEEL_PATH")"
+cp "$WHEEL_PATH" "container/vendor/$WHEEL_NAME"
+podman build \
+    --build-arg "AI_GUARDIAN_VERSION=${WHEEL_NAME}" \
+    -f container/Dockerfile.openshell \
+    -t localhost/ai-guardian-openshell:latest container/
+```
+
+`WHEEL_PATH` includes the temporary build directory, while `WHEEL_NAME` is only
+the filename. The `AI_GUARDIAN_VERSION` build argument must use `WHEEL_NAME`,
+since the Dockerfile looks for the wheel by filename under `container/vendor/`.
+Using a fresh output directory avoids accidentally selecting an older wheel
+left in `dist/`.
+
+#### OpenShell policy composition
+
+OpenShell network access is deny-by-default. The repository keeps the policy
+in composable pieces:
+
+- `policies/base.yaml`: shared filesystem and Landlock restrictions.
+- [Read-only main overlay](openshell-github-readonly-policy.yaml): GitHub REST reads
+  and HTTPS `git clone`/`git fetch` only.
+- [Read/write main overlay](openshell-github-readwrite-policy.yaml): GitHub REST operations and
+  HTTPS `git clone`/`git fetch`/`git push`.
+- `policies/agents/<agent>.yaml`: the network capability for the selected CLI.
+
+When `--policy` is supplied, it may be repeated. The sandbox command always composes
+one final policy in this order:
+
+```text
+policies/base.yaml
+  + every --policy overlay (left to right)
+  + policies/agents/<selected-cli>.yaml
+```
+
+Only the selected CLI fragment is added; the other CLI policies are not
+enabled. YAML mappings are merged and lists are replaced by later overlays.
+The resulting temporary file is passed as the single OpenShell `--policy`
+argument and removed after OpenShell has consumed it. If no `--policy` overlay
+is given, the result contains only the shared base policy and the selected
+CLI policy; it does not grant GitHub API or Git access.
+
+#### Bundled scanner engines
+
+Both support images preinstall pinned Gitleaks, BetterLeaks, LeakTK,
+detect-secrets, Secretlint, and the GitGuardian `ggshield` CLI. Their versions
+come from the scanner configuration bundled with AI Guardian, so host, profile,
+restored, and sandbox-local configurations can select them without startup
+downloads or an OpenShell policy for downloading scanner binaries.
+
+Secretlint scans locally. Using the GitGuardian engine sends scan data to its
+cloud service and still requires configured consent and an API key; an
+OpenShell sandbox also needs policy access to that service. Installing the CLI
+in the image does not add runtime network access. Pattern-server access remains
+governed by the selected configuration and policy.
+
+TruffleHog is not included in the stock images. Its AGPL-3.0 installation path
+requires interactive license acknowledgement, which cannot be collected during
+an image build. A configuration that selects TruffleHog therefore cannot use it
+in these images; use one of the bundled engines or provide it in a derived image
+after reviewing and acknowledging its license. Custom scanner binaries and
+Python scanner packages are outside the current pinned image set and must be
+added to a derived image when needed.
+
+The CLI fragments are intentionally conservative. Kiro and OpenClaw have no
+single default LLM endpoint, while OpenCode and Crush support additional
+providers beyond the examples in their fragments. Attach a compatible
+OpenShell provider or add a custom policy overlay for those providers.
+
+Providers v2 can add provider-owned credential and network-policy entries to
+the effective sandbox policy, but only for providers attached to that
+sandbox. See the official [Providers v2
+guide](https://docs.nvidia.com/openshell/sandboxes/providers-v2). Do not attach
+unrelated providers when a narrower sandbox is intended.
+
+#### GitHub access and providers
+
+Use it when creating a sandbox:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
+    --policy ./container/openshell-github-readonly-policy.yaml \
+    --repo .
+```
+
+For a workflow that needs to create or update GitHub content, use the
+read/write policy explicitly:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
+    --policy ./container/openshell-github-readwrite-policy.yaml \
+    --provider ai-guardian-codex \
+    --provider ai-guardian-github \
+    --repo .
+```
+
+For private repositories, create an OpenShell GitHub provider from a host
+token and attach it to the sandbox. The token is injected by OpenShell at
+runtime; it is not stored in this policy file:
+
+```bash
+export GITHUB_TOKEN=<token-with-the-required-repository-access>
+openshell provider create \
+    --name ai-guardian-github \
+    --type github \
+    --from-existing
+
+ai-guardian sandbox create --runtime openshell \
+    --cli codex \
+    --provider ai-guardian-codex \
+    --provider ai-guardian-github \
+    --policy ./container/openshell-github-readwrite-policy.yaml \
+    --repo .
+```
+
+To apply the policy to an existing sandbox, use:
+
+```bash
+policy_tmp_dir="$(mktemp -d)"
+python3 ./container/compose_openshell_policy.py \
+    --output "${policy_tmp_dir}/policy.yaml" \
+    ./container/policies/base.yaml \
+    ./container/openshell-github-readwrite-policy.yaml \
+    ./container/policies/agents/codex.yaml
+openshell policy set <sandbox-name> \
+    --policy "${policy_tmp_dir}/policy.yaml" \
+    --wait
+rm -rf -- "${policy_tmp_dir}"
+```
+
+When updating an existing sandbox, compose the selected-CLI policy first;
+`openshell policy set` accepts one final YAML document and does not perform
+the sandbox command-side composition automatically. The official [policy
+customization guide](https://docs.nvidia.com/openshell/sandboxes/policies)
+documents incremental updates and full policy replacement.
+
+The read/write policy grants the network operations required by standard
+GitHub API and HTTPS Git workflows, but the GitHub provider still controls
+which repositories and account permissions are available. `--provider` is
+repeatable; when Codex OAuth and private GitHub access are both needed, attach
+both `ai-guardian-codex` and `ai-guardian-github` as shown above. For narrower
+access, use the read-only policy or follow OpenShell's
+[GitHub sandbox tutorial](https://docs.nvidia.com/openshell/get-started/tutorials/github-sandbox)
+to tailor the allowed repositories and methods.
+
+#### Daemon REST port and tray
+
+The sandbox command exposes sandbox-local port `63152` as the gateway-managed
+`ai-guardian` service. To inspect the service URL for one sandbox:
+
+```bash
+openshell service get ai-guardian-codex ai-guardian
+```
+
+The OpenShell network policy controls sandbox egress. The example policy
+includes the bundled Codex egress endpoints; add the selected CLI's provider
+endpoints when using another CLI. The gateway service handles access to the
+daemon endpoint, and AI Guardian discovery asks the gateway for the URL of each
+managed sandbox. No local forward-state directory or host-side forwarding
+process is required.
+
+```json
+{
+  "daemons": [
+    {
+      "name": "openshell-codex",
+      "url": "http://127.0.0.1:63152",
+      "token": "the-daemon-auth-token"
+    }
+  ]
+}
+```
+
+Save this as `$HOME/.config/ai-guardian/tray-targets.json` (or the active
+ai-guardian config directory) and start the tray normally. `/api/health` is
+unauthenticated, but status and control operations require the daemon token.
+The forwarded port is the daemon REST API, not a NiceGUI page: check it with
+`/api/health`; the NiceGUI console runs on the host and uses this endpoint
+through the tray client. For a stable tray connection, set
+`daemon.auth_token` in the shared config snapshot and use the same token in a
+manual target. Use HTTPS rather than plain HTTP when the daemon is reachable
+beyond loopback.
+
 <details>
 <summary>Manual container run (podman / docker)</summary>
 
 ```bash
-# Default (Claude Code hooks)
+# Default (Codex hooks)
 podman run -it -p 63152 ai-guardian
 
-# Select IDE
-podman run -it -p 63152 -e AI_GUARDIAN_IDE=opencode ai-guardian
+# Select agent
+podman run -it -p 63152 -e AI_GUARDIAN_AGENT=opencode ai-guardian opencode
+
+# Seed the sandbox config from the host when no sandbox-local config exists
+podman run -it -p 63152 \
+    -v "$HOME/.config/ai-guardian/ai-guardian.json:/sandbox/.config/ai-guardian.host.json:ro,z" \
+    -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=true \
+    -e AI_GUARDIAN_HOST_CONFIG_PATH=/sandbox/.config/ai-guardian.host.json \
+    ai-guardian
 
 # Select configuration profile
 podman run -it -p 63152 -e AI_GUARDIAN_PROFILE=@strict ai-guardian
@@ -572,18 +1808,20 @@ export CONTAINER_ENGINE=docker
 
 Both engines support the same `-p` syntax for port mapping. Use `docker port <container>` (instead of `podman port`) to find the mapped host port when using Docker.
 
-## IDE Selection
+## Agent Selection
 
-Set `AI_GUARDIAN_IDE` to configure hooks for a specific IDE at container start:
+Set `AI_GUARDIAN_AGENT` (or compatibility alias `AI_GUARDIAN_IDE`) to choose
+which CLI/agent command is started. All rows are configured at startup:
 
-| Value | IDE | Installed in image |
-|-------|-----|--------------------|
-| `claude` (default) | Claude Code | **Runtime — ToS consent** |
+| Value | Agent | Installed in image |
+|-------|-------|--------------------|
+| `codex` (default) | OpenAI Codex (CLI + Desktop) | Yes |
+| `claude` | Claude Code | **Runtime — ToS consent** |
 | `opencode` | OpenCode | Yes |
 | `gemini` | Gemini CLI | Yes |
-| `codex` | Codex CLI | Yes |
 | `kiro` | Kiro CLI | **Runtime — ToS consent** |
 | `openclaw` | OpenClaw | Yes |
+| `crush` | Crush | No (hooks only; license/packaging varies) |
 | `cursor` | Cursor | No (hooks only) |
 | `copilot` | GitHub Copilot | No (hooks only) |
 | `windsurf` | Windsurf | No (hooks only) |
@@ -594,16 +1832,16 @@ Set `AI_GUARDIAN_IDE` to configure hooks for a specific IDE at container start:
 | `aiderdesk` | AiderDesk | No (hooks only) |
 | `dummy-agent` | Dummy Agent (fake IDE for hook testing) | Yes — no LLM required |
 
-IDEs marked "hooks only" are not installed in the image (they require a GUI) but
-ai-guardian hooks are configured for them. Mount the IDE binary into the container
-if needed.
+Agents marked "hooks only" are not installed in the image (they require a GUI
+or are not redistributed here), but ai-guardian hooks are configured for them.
+Mount or install an agent binary separately if needed.
 
 ## Proprietary CLI Consent
 
 Claude Code (Anthropic) and Kiro CLI (AWS) are proprietary with redistribution
-restrictions. They are not bundled in the image. When `AI_GUARDIAN_IDE=claude`
-or `AI_GUARDIAN_IDE=kiro` is set, the container prompts for ToS acceptance at
-first start and installs the CLI if the user agrees.
+restrictions. They are not bundled in the image. When `AI_GUARDIAN_AGENT=claude`
+or `AI_GUARDIAN_AGENT=kiro` is selected, the container prompts for ToS
+acceptance at first start and installs the CLI if the user agrees.
 
 ### Interactive (default)
 
@@ -632,9 +1870,9 @@ podman run -it -p 63152 \
 
 # Kiro CLI — non-interactive
 podman run -it -p 63152 \
-    -e AI_GUARDIAN_IDE=kiro \
+    -e AI_GUARDIAN_AGENT=kiro \
     -e ACCEPT_PROPRIETARY_TOS=true \
-    quay.io/redhatproductsecurity/ai-guardian:latest
+    quay.io/redhatproductsecurity/ai-guardian:latest kiro
 ```
 
 The `run.sh` helper passes `ACCEPT_PROPRIETARY_TOS` through from the host
@@ -645,13 +1883,21 @@ environment automatically if it is set.
 If the binary is already present in `$HOME/.local/bin/` (e.g. from a mounted
 volume), the consent prompt is skipped.
 
-## Configuration Profile
+## Configuration and Profiles
 
-Set `AI_GUARDIAN_PROFILE` to apply a security profile at container start:
+With no profile selected, `run.sh` checks the host configuration directory and
+stages only `ai-guardian.json` as the initial snapshot when it exists. The
+image keeps all other XDG state, cache, scanner, and agent directories
+sandbox-local. If a sandbox-local config already exists, it wins and is not
+overwritten. If the host file is absent, startup creates a sandbox-local
+configuration.
+
+Set `AI_GUARDIAN_PROFILE` or pass `--profile` to apply a security profile at
+container start. Profile mode never mounts the host's complete config:
 
 | Value | Description |
 |-------|-------------|
-| (unset) | Standard profile (default) |
+| (unset) | Use an existing sandbox-local config; otherwise copy the host config as a writable initial snapshot, or create a sandbox-local standard config |
 | `@minimal` | Minimal — fewer checks, lower false positive rate |
 | `@standard` | Standard — balanced security and usability |
 | `@strict` | Strict — maximum security, all checks enabled |
@@ -659,9 +1905,96 @@ Set `AI_GUARDIAN_PROFILE` to apply a security profile at container start:
 
 You can also pass a custom profile name or path if you have saved custom profiles.
 
+The host config directory is selected in this order:
+
+1. `--config-dir` (or `--guardian-home`)
+2. `AI_GUARDIAN_CONFIG_DIR`
+3. `AI_GUARDIAN_HOME`
+4. `XDG_CONFIG_HOME/ai-guardian`
+5. `HOME/.config/ai-guardian`
+
+When `HOME` is not exported, the sandbox command can infer its parent from a
+supported agent home variable such as `CODEX_HOME`, `CLAUDE_CONFIG_DIR`,
+`CURSOR_CONFIG_DIR`, `GEMINI_CLI_HOME`, `KIRO_HOME`, `JUNIE_HOME`, or
+`OPENCODE_CONFIG_DIR`. These variables are used only to locate the host
+ai-guardian config; agent homes and caches are not mounted into the sandbox.
+
+If a custom profile file is given, it is mounted read-only by `run.sh` at a
+sandbox-local profile path. A missing explicit profile file is an error. A
+missing host `ai-guardian.json` is not an error when no profile is selected;
+the sandbox command reports the fallback and creates a local config. `--profile` and
+host-config sharing are mutually exclusive. When the host config is effective,
+the sandbox edits its own copy; the TUI, NiceGUI, and REST config APIs never
+write back to the host file.
+
 ## Authentication
 
-Pass authentication credentials as environment variables at runtime.
+Pass authentication credentials as environment variables at runtime. The
+normal Docker/Podman image does not mount or read the host `~/.codex` directory,
+so Codex ChatGPT/OAuth login is performed inside the sandbox rather than being
+inherited automatically.
+
+`run.sh` forwards the common agent variables (`OPENAI_API_KEY`,
+`OPENROUTER_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock variables, Azure OpenAI
+variables, and the existing Anthropic/Vertex variables). Both `run.sh` and
+`ai-guardian sandbox create --runtime container` detect Vertex settings and
+mount the host ADC file read-only when it is available. The OpenShell sandbox
+command relies on OpenShell providers for credentials: its `--api-key` option
+is used only while creating an Anthropic provider, and Vertex ADC credentials
+are consumed while creating the `google-vertex-ai` provider. Neither provider
+credential value nor the ADC file is passed to the OpenShell sandbox.
+
+When both an Anthropic API-key environment variable and Vertex project
+settings are present, the container launchers select Vertex and omit the
+inherited API key. Pass `--api-key` explicitly when direct Anthropic
+authentication is intended.
+
+### Codex CLI in a Docker/Podman sandbox
+
+For a named sandbox, connect to it and authenticate Codex from inside:
+
+```bash
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+codex login
+```
+
+On a headless container, `codex login --device-auth` requires device-code
+authorization to be enabled in ChatGPT's **Settings → Security**. If that
+option is unavailable, use a real OpenAI Platform API key:
+
+```bash
+export OPENAI_API_KEY="<your-openai-api-key>"
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+printenv OPENAI_API_KEY | codex login --with-api-key
+```
+
+`auth.json` from a ChatGPT OAuth login contains OAuth credentials, not a
+Platform API key. Do not paste its access or refresh token into the API-key
+login. If necessary, the user can authenticate on a host with a browser and
+manually copy the complete file into a persistent named container:
+
+```bash
+podman cp ~/.codex/auth.json guardian-codex:/sandbox/.codex/auth.json
+```
+
+Use `docker cp` with Docker. AI Guardian does not inspect this file, but it is
+then present inside the sandbox; treat it like a password and never commit or
+share it. The detailed container-sandbox flow is also documented in the
+[Sandbox CLI guide](../docs/Sandbox.md#codex-authentication-in-container-sandboxes).
 
 > **Tested configurations:** Anthropic API key and Google Vertex AI have been
 > validated with this image. Other providers (AWS Bedrock, Azure, self-hosted)
@@ -714,10 +2047,10 @@ Access from the host: `http://localhost:63152`
 
 | Arg | Default | Description |
 |-----|---------|-------------|
-| `AI_GUARDIAN_VERSION` | `1.17.1` | PyPI version or `.whl` filename |
+| `AI_GUARDIAN_VERSION` | `1.18.0` | PyPI version or `.whl` filename |
 | `AI_GUARDIAN_REST_PORT` | `63152` | Daemon REST API / web console port |
 | `UV_VERSION` | `0.11.16` | uv package manager version |
-| `OPENCODE_VERSION` | `1.17.3` | OpenCode version |
+| `OPENCODE_VERSION` | `1.17.3` | OpenCode version for the normal image |
 
 ## Test Image (Dockerfile.test)
 
@@ -772,14 +2105,43 @@ All security-critical checks (config, hooks, scanners, daemon) should pass.
 
 AI Guardian protects multiple AI coding agents through a unified hook adapter architecture. Each agent gets a dedicated adapter that normalizes its hook format into a common internal model, so the core scanning pipeline stays agent-agnostic.
 
+This document is the capability reference: it records what each integration
+supports and where known limitations remain. Use the
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) for host hooks,
+plugins, MCP, transcripts, and IDE setup. Use the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md) for Docker/Podman
+and OpenShell distribution, authentication, policies, images, and runtime
+behavior.
+
+The canonical cross-cutting registry is
+[`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). The executable
+parity contract in [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py)
+checks that this support list agrees with adapter aliases, setup modes,
+managed events, MCP/rules and transcript/session registries, installer
+surfaces, and release-readiness matrices.
+
+### Codex and ChatGPT desktop scope
+
+`OpenAI Codex (CLI + Desktop)` means Codex CLI and **Codex mode** in the
+ChatGPT desktop app. It does not include regular ChatGPT mode in that app.
+AI Guardian's Codex lifecycle hooks currently run only for the Codex hook
+surface, so regular ChatGPT mode is not protected by those hooks. The ChatGPT
+desktop app, Codex CLI, and Codex IDE extension can share MCP configuration,
+but shared MCP availability is separate from hook enforcement and does not
+extend Codex lifecycle hooks to regular ChatGPT mode. See the official
+[Codex environments](https://learn.chatgpt.com/docs/environments/modes),
+[Codex hooks](https://learn.chatgpt.com/docs/hooks), and
+[MCP](https://learn.chatgpt.com/docs/extend/mcp) documentation for the
+upstream distinction.
+
 ## Supported Agents
 
 | Agent | Setup Command | Hooks | MCP | Status |
 |-------|--------------|-------|-----|--------|
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
-| Cursor | `--ide cursor` | Full | N/A | **Complete** |
+| Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`); Cloud Agents use dashboard/API MCP | **Complete locally; project hooks available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
-| OpenAI Codex (CLI + Desktop) | `--ide codex` | Full | N/A | **Complete** |
+| OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete for Codex CLI and desktop Codex mode** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
 | Cline / ZooCode | `--ide cline` | Full | N/A | **Complete** |
@@ -788,8 +2150,87 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode | `--ide opencode` | Plugin | N/A | **Complete** |
+| Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
+
+## IDE-specific home and configuration paths
+
+AI Guardian resolves user-level setup, MCP registration, verification, audit,
+and supported session paths from the same environment-variable rules. An
+explicit complete-file variable has priority over a home-directory variable;
+the first variable listed for an integration wins. A project-scoped operation
+always remains project-local, even when the IDE also supports a relocated user
+home. With no variables set, the existing defaults below are unchanged.
+
+| Integration | User-home or file variables | Relocated user-level targets | Project/local behavior |
+|---|---|---|---|
+| Claude Code | `CLAUDE_CONFIG_DIR` | Hooks: `<dir>/settings.json`; MCP: `<dir>/.claude.json`; sessions: `<dir>/projects` | Project `.claude/` and `.mcp.json` paths are not redirected |
+| OpenAI Codex | `CODEX_HOME` | Hooks: `<dir>/hooks.json`; MCP: `<dir>/config.toml`; sessions: `<dir>/sessions` | Project `.codex/` layers remain project-local |
+| Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
+| GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
+| Gemini CLI | `GEMINI_CLI_HOME` | The effective `.gemini` home is `<dir>/.gemini`; hooks/settings: `<dir>/.gemini/settings.json`; sessions: `<dir>/.gemini/tmp` | Project `.gemini/` paths are not redirected |
+| Cline / ZooCode | `CLINE_DATA_DIR` for user MCP; `CLINE_STORAGE_DIR` remains a transcript/storage alias | MCP: `<dir>/mcp_settings.json` | Hook setup remains project-local at `.clinerules/hooks` |
+| Kiro | `KIRO_HOME` | MCP: `<dir>/settings/mcp.json`; CLI sessions: `<dir>/sessions/cli` | Hook setup remains project-local at `.kiro/hooks`; the historical no-env MCP default is retained |
+| Junie | `JUNIE_HOME` | MCP: `<dir>/mcp.json` | Guidelines remain project-local at `.junie/guidelines`; `JUNIE_CONFIG_LOCATION` is an additive upstream search path, not a replacement selected by AI Guardian |
+| AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
+| OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
+| OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins` | Project-local config remains project-local |
+| Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
+| Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
+| Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
+
+These names follow the upstream contracts for [Claude](https://code.claude.com/docs/en/env-vars),
+[Codex](https://github.com/openai/codex/blob/main/codex-rs/config/src/loader/mod.rs),
+[Cursor](https://prod.cursor.com/docs/cli/reference/configuration),
+[Copilot CLI](https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-config-dir-reference),
+[Gemini CLI](https://github.com/google-gemini/gemini-cli/blob/main/docs/reference/configuration.md),
+[Kiro](https://kiro.dev/docs/cli/reference/settings/),
+[Junie](https://junie.jetbrains.com/docs/environment-variables.html),
+[Cline](https://github.com/cline/cline/blob/main/docs/cli/cli-reference.mdx),
+[OpenClaw](https://github.com/openclaw/openclaw/blob/main/docs/help/environment.md),
+and [OpenCode](https://dev.opencode.ai/docs/config). The
+[AiderDesk release notes](https://github.com/hotovo/aider-desk/releases) and
+[Crush repository](https://github.com/charmbracelet/crush) document their
+custom directory/configuration variables. Integrations without a documented
+relocation variable deliberately keep their existing defaults.
+
+## Coverage-to-test matrix
+
+This matrix is keyed by the canonical registry rather than by display-name
+groupings. Shared implementations still have one row per public key, so a
+Cline/ZooCode or Kiro/AiderDesk/OpenClaw change cannot hide a missing setup,
+health, or documentation path. The common hook contract includes allow, block,
+warning, output transformation, malformed input, timeout/process failure, and
+response-shape assertions where the host exposes that surface. The isolated
+E2E test invokes every managed event; plugin/extension rows use generated
+bridge contracts because their host SDKs are not repository dependencies.
+
+| Registry key | Adapter/setup evidence | Transcript/session evidence | E2E and scope evidence |
+|---|---|---|---|
+| `claude` | Shared adapter, setup merge/reconciliation, hook pipeline, UX setup contracts | JSONL path supplied by hook; browser session adapter | Isolated all-managed-event matrix; user scope and doctor/tray health |
+| `cursor` | Dedicated adapter, six managed events, fail-closed decision hooks, project/cloud setup | Cursor SQLite; browser session adapter | Isolated event matrix plus recognized-event/failure checks; user vs project/cloud MCP scope |
+| `copilot` | Dedicated adapter, prompt/pre-tool response contract and no-local-MCP boundary | Copilot CLI JSONL and VS Code delta journal; browser session adapter | Isolated managed-event matrix; command-hook health |
+| `codex` | Dedicated adapter, five managed events, layered config/MCP reconciliation, Codex UX contracts | Codex JSONL default-path discovery; browser session adapter | Isolated event matrix; CLI/desktop Codex-mode scope explicitly separated from regular ChatGPT |
+| `windsurf` | Dedicated adapter and nine managed command-hook events | Windsurf JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook process I/O |
+| `gemini` | Dedicated adapter, SessionStart/BeforeAgent/BeforeTool/AfterTool mapping | Explicit-path JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook health |
+| `cline` | Cline adapter and script-hook setup/reconciliation | Cline JSON-array transcript; shared Cline session adapter | Isolated script-event matrix; project-local hook scope |
+| `zoocode` | ZooCode key mapped to the shared Cline adapter and script contract | Shared Cline JSON-array/session evidence | Isolated script-event matrix; explicit alias and shared-layout coverage |
+| `kiro` | Dedicated Kiro adapter and script-hook setup/reconciliation | Kiro JSONL; browser session adapter | Isolated script-event matrix; project-local hook scope |
+| `aiderdesk` | Extension bridge/package registration and shared Kiro response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
+| `openclaw` | Plugin bridge/package registration, rules setup, and shared Kiro response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
+| `opencode` | Plugin bridge, SQLite/session setup, and Claude-compatible response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
+| `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
+| `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
+| `junie` | MCP/rules setup and explicit no-hook adapter placeholder | No transcript/session adapter | Isolated MCP-only registration/health boundary; advisory, non-enforcing behavior |
+
+The implementation checklist defines the minimum tests that must be added for
+future integrations. For this repository, the main evidence paths are
+`tests/unit/test_ide_registry.py`, `tests/unit/test_hook_adapters.py`,
+`tests/unit/test_setup.py`, the per-agent support/transcript tests,
+`tests/unit/test_auto_setup.py`, `tests/unit/test_cli_ide_setup.py`,
+`tests/test_install_script.py`, `tests/ux/`, and
+`tests/integration/test_ide_hooks_e2e.py`.
 
 ## Hook Capability Matrix
 
@@ -798,15 +2239,58 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
-| OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
+| OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
 | Cline / ZooCode | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
 | OpenCode | N/A | Yes (chat.message) | Yes | Yes | N/A | N/A | N/A |
+| Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+The Codex row applies to Codex CLI and desktop Codex mode only. Regular
+ChatGPT mode does not run these Codex lifecycle hooks.
+
+## Hook Latency Support Matrix
+
+Latency tracking is implemented in the shared hook pipeline after each
+adapter normalizes an invocation. When `latency_tracking.enabled` is `true`,
+each invocation that reaches `process_hook_data()` produces one entry in
+`latency.jsonl`, including lifecycle events that return without content
+scanning. Reports store the lower-case enum IDs (for example, `prompt` and
+`pretooluse`); source-specific display names are shown in this matrix and the
+integration guides.
+
+| Integration | Collection surface | Timed normalized events | Latency status |
+|-------------|--------------------|-------------------------|----------------|
+| Claude Code | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported |
+| Cursor desktop / local CLI | Command hooks | 6 managed Cursor events; other upstream events are normalized when explicitly configured | Supported |
+| GitHub Copilot | Command hooks | UserPromptSubmit, PreToolUse | Supported |
+| OpenAI Codex (CLI + Desktop) | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
+| Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
+| Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Cline / ZooCode | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Kiro | Script hooks | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| Augment Code | Command hooks | PreToolUse, PostToolUse | Supported |
+| Antigravity CLI (agy) | Command hooks | PreInvocation, PreToolUse, PostToolUse | Supported (partial output surface) |
+| AiderDesk | Extension | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
+| OpenClaw | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
+| Junie | MCP | None | MCP-only; no hook latency |
+| Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
+
+Codex setup installs five managed events. The adapter also records timing for
+`SessionStart`, `PermissionRequest`, `PreCompact`, `Interrupt`, `SubagentStart`,
+`SubagentStop`, and `Stop` when a user-configured hook invokes AI Guardian for
+those recognized events. These events are recognized but are not installed or
+health-checked by `ai-guardian setup`.
+
+Junie's MCP calls and Aider CLI's commit-time `ai-guardian scan` do not enter
+the hook pipeline, so they do not create latency entries. A paused daemon also
+does not create entries because it intentionally skips hook processing.
 
 ## Protection Level by Hook Availability
 
@@ -821,26 +2305,28 @@ AI Guardian protects multiple AI coding agents through a unified hook adapter ar
 
 Coverage per agent depends on which hooks are available. This table shows representative agents across the enforcement spectrum: full hooks + MCP, full hooks only, partial hooks, and MCP-only.
 
+Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
+
 Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
-| Violation Type | Requires | Claude Code | Cursor | Copilot | Junie (MCP) |
-|---|---|---|---|---|---|
-| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Advisory |
-| secret_redaction | Post | Enforce | Enforce | Enforce | No |
-| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| directory_blocking | Pre | Enforce | Enforce | Enforce | Advisory |
-| tool_permission | Pre | Enforce | Enforce | Enforce | No |
-| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Advisory |
-| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Advisory |
-| config_file_exfil | Pre | Enforce | Enforce | Enforce | No |
-| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No |
-| image_secret | Pre | Caution | Caution | Caution | No |
-| image_pii | Pre | Caution | Caution | Caution | No |
-| offensive_language | Pre+Post | Enforce | Enforce | Partial | Advisory |
-| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Advisory |
-| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Advisory |
+| Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
+|---|---|---|---|---|---|---|
+| secret_detected | Pre+Post | Enforce | Enforce | Enforce | Enforce | Advisory |
+| secret_redaction | Post | Enforce | Enforce | Enforce | No (no tool output) | No |
+| pii_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| directory_blocking | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| tool_permission | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| prompt_injection | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| jailbreak_detected | Pre+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| ssrf_blocked | Pre | Enforce | Enforce | Enforce | Enforce | Advisory |
+| config_file_exfil | Pre | Enforce | Enforce | Enforce | Enforce | No |
+| secret_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| pii_in_transcript | Prompt | Enforce | Enforce | Enforce | No | No |
+| image_secret | Pre | Caution | Caution | Caution | Caution | No |
+| image_pii | Pre | Caution | Caution | Caution | Caution | No |
+| offensive_language | Pre+Post | Enforce | Enforce | Partial | Partial | Advisory |
+| canary_detected | Pre+Post+Prompt | Enforce | Enforce | Partial | Partial | Advisory |
+| exfil_detection | Pre (Bash) | Enforce | Enforce | Partial | Enforce | Advisory |
 
 **Legend:**
 
@@ -898,6 +2384,28 @@ Claude Code exposes the conversation transcript to hooks via `UserPromptSubmit` 
 
 Transcript scanning uses a polymorphic `TranscriptAdapter` interface (`scanners/transcript/base.py`). Each IDE format has its own adapter that implements `can_scan()` and `scan_incremental()`.
 
+### Correlating Hook Sessions with SDK Runs
+
+The **Sessions** console page can group hook-based IDE activity with SDK traces.
+SDK agents use the `run_id` from `RunContext`. A hook event may provide the same
+value directly in its `run_id` field. Otherwise, a non-SDK agent can start with
+the matching value in `AI_GUARDIAN_RUN_ID`:
+
+```bash
+export AI_GUARDIAN_RUN_ID="pipeline-123"
+my-ide-agent
+```
+
+Use one stable, unique value for each logical pipeline. Sessions with matching
+values are shown as one run; an unset or different value remains separate. The
+**IDE Conversations** page remains the raw, IDE-specific conversation replay.
+
+The daemon persists the resolved value by `session_id`, so later events and
+daemon restarts retain the same correlation. Precedence is explicit hook-event
+`run_id`, persisted session binding, hook-process `AI_GUARDIAN_RUN_ID`, then the
+daemon environment as a legacy fallback. GUI IDEs that do not inherit shell
+environment should provide `run_id` in their hook events when supported.
+
 | Agent | Format | Default Path |
 |-------|--------|-------------|
 | Claude Code | JSONL | Provided by IDE in hook data |
@@ -911,13 +2419,151 @@ Transcript scanning uses a polymorphic `TranscriptAdapter` interface (`scanners/
 | Kiro | JSONL | `~/.kiro/sessions/cli/{session_id}.jsonl` |
 | AiderDesk | Markdown | `.aider.chat.history.md` (project root) |
 | OpenClaw | JSONL | `~/.openclaw/transcripts/YYYY-MM-DD/{session}/transcript.jsonl` |
-| Copilot Chat (VS Code) | JSONL delta journal | `workspaceStorage/*/chatSessions/*.jsonl` |
 
 Agents not listed above do not have transcript scanning support.
+
+### OpenAI Codex (CLI + Desktop)
+
+The display label is intentionally scoped: AI Guardian supports the documented
+Codex hook interface used by Codex CLI and Codex mode in ChatGPT desktop. The
+official [Codex hooks documentation](https://learn.chatgpt.com/docs/hooks)
+describes the same event names, command-hook payload, and layered discovery
+model used by this adapter. Selecting regular ChatGPT mode in the desktop app
+does not run these Codex lifecycle hooks, so it is not currently hook-enforced
+by AI Guardian.
+
+AI Guardian installs its five managed hooks in the Codex user layer at
+`~/.codex/hooks.json`, or at `$CODEX_HOME/hooks.json` when `CODEX_HOME` is set.
+Verification also reports the active project layer at `<repo>/.codex/` and
+whether either `hooks.json` or inline `hooks` in `config.toml` is present.
+Existing matcher groups, non-AI-Guardian commands, and their order are
+preserved. Codex loads all matching layers, so project-local hooks remain
+active alongside the user layer.
+
+AI Guardian also registers its MCP server in Codex's global `config.toml` at
+`~/.codex/config.toml`, or at `$CODEX_HOME/config.toml` when `CODEX_HOME` is
+set, following the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp).
+The ChatGPT desktop app, Codex CLI, and IDE extension can share that MCP
+configuration, but MCP availability is advisory and separate from lifecycle
+hook enforcement. An MCP server being visible in regular ChatGPT mode does not
+mean that AI Guardian's Codex hooks run there.
+MCP setup is enabled by default and preserves unrelated global and project
+configuration. A stale project-root `codex.json` entry is removed after the
+global registration is written.
+The tray's **Check hooks/MCP installation...** action checks hooks and MCP
+registration separately and can repair a missing global MCP entry without
+rewriting healthy Codex hooks.
+
+#### Violation attribution
+
+Violation records use `context.ide_type` for the stable integration identity,
+independently of the response protocol. Codex CLI and Codex mode in ChatGPT
+desktop both record `codex`, while Claude-compatible response formatting is
+preserved. This identity does not indicate coverage for regular ChatGPT mode;
+that mode is outside the current Codex hook enforcement path. Other adapters
+that share Claude-compatible formatting use their own stable values, such as
+`windsurf`, `augment`, `opencode`, and `crush`.
+Payloads that do not identify an integration use `unknown` rather than being
+attributed to Claude Code.
+
+#### Codex event classification
+
+The adapter recognizes every documented Codex lifecycle event. “Managed” means
+AI Guardian installs and verifies the event. Other recognized events may be
+configured by a user, but are not installed by `ai-guardian setup` and do not
+count toward setup health until AI Guardian has a managed setup and enforcement
+path for them.
+
+| Codex event | Classification | AI Guardian behavior |
+|---|---|---|
+| `SessionStart` | Recognized, not managed | If configured by the user, scans active agent configuration files and can block on a detected threat. |
+| `UserPromptSubmit` | Managed | Scans prompts, including prompt injection, secrets, PII, and transcript coverage. |
+| `PreToolUse` | Managed | Enforces tool permissions and pre-tool content/security scanners. |
+| `PermissionRequest` | Recognized, not managed | If configured by the user, applies the permission and security pipeline; denials use Codex’s nested decision shape. |
+| `PostToolUse` | Managed | Scans tool results and applies post-tool handling/redaction where supported. |
+| `PreCompact` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `PostCompact` | Managed | Marks the session for security-context reinjection after compaction. |
+| `SubagentStart` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `SubagentStop` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `Stop` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `Interrupt` | Recognized, not managed | If configured by the user, acknowledges the lifecycle event without inferring security-enforceable content or a decision. |
+| `SessionEnd` | Managed | Performs session cleanup. |
+
+No event in this table is silently discarded when it is present in a user
+configuration. Recognized-but-unmanaged events are intentionally not installed
+or counted as required setup because they do not belong to AI Guardian's
+managed hook contract.
+
+If the target Codex user `config.toml` already contains inline hooks, or any
+active Codex configuration layer is malformed, setup stops with a diagnostic
+instead of writing a second competing representation. Fix the reported
+configuration and rerun setup.
 
 #### Augment Code — transcript scanning not currently feasible
 
 Augment Code (Auggie CLI) stores conversation sessions server-side, not as local files. The only local files under `~/.augment/` are authentication (`session.json`), settings (`settings.json`), commands, and rules. Augment also does not implement a `UserPromptSubmit` hook event (only PreToolUse, PostToolUse, Stop, SessionStart, SessionEnd), and transcript scanning requires the PROMPT event to trigger. This can be revisited if Augment exposes local session files or adds a UserPromptSubmit-equivalent hook.
+
+### Antigravity CLI (agy) — no tool output in PostToolUse
+
+Antigravity configures hooks in `hooks.json` (`~/.gemini/config/hooks.json` globally,
+`<workspace>/.agents/hooks.json` per project, or `plugins/<name>/hooks.json`). Its payload is
+protojson camelCase and differs from every other supported agent: the tool call is nested under
+`toolCall` (`{"name": ..., "args": {...}}`), and the response is flat
+(`{"decision": "allow|deny|ask|force_ask", "reason": ...}`) rather than Claude Code's
+`hookSpecificOutput.permissionDecision`.
+
+The implementation follows the [official Antigravity hooks specification](https://www.antigravity.google/docs/hooks/).
+AI Guardian does not bundle or link Antigravity code; it invokes the host's documented
+command-hook interface. The default installation is user-scoped for hooks and MCP at
+`~/.gemini/config/`; workspace hook setup is explicit and does not imply protection for
+remote execution. The generated command-hook contract is platform-independent JSON
+stdin/stdout, while the isolated runtime matrix executes on Ubuntu and shared setup
+tests cover Windows path and script behavior.
+
+**Every PreToolUse response must carry a decision.** Antigravity has no "no opinion" value — an
+absent or unrecognised `decision` denies the tool call, and `{"decision": "none"}` is rejected with
+`unsupported hook decision`. A clean check therefore returns `{"decision": "ask"}`, which hands the
+choice back to Antigravity's own permission prompt and respects its "Always Allow" cache, so
+ai-guardian never silently widens the user's existing permissions. The trade-off: in
+non-interactive `-p` mode `ask` resolves to a denial, so headless runs need an Antigravity
+permission allowlist.
+
+**Event resolution.** Antigravity does not name the event in the payload, and — contrary to its own
+documentation, which describes PostToolUse as carrying only `stepIdx` and an optional `error` —
+the PreToolUse and PostToolUse payloads are near-identical:
+
+```
+PreToolUse   {"stepIdx": 3, "toolCall": {...}}
+PostToolUse  {"stepIdx": 3, "toolCall": {...}, "error": ""}
+```
+
+The generated hook commands therefore pass `--hook-event <Event>`, which is stamped into the hook
+data so it survives forwarding to the ai-guardian daemon (a separate, long-lived process — an
+environment variable would neither reach it nor stay correct between invocations). Hand-written
+configs fall back to inference, which keys off `error` (present on every PostToolUse payload,
+empty string on success).
+
+PostToolUse fires normally, but the payload carries **no tool output** — only the originating
+`toolCall` and its arguments. Post-tool output scanning and redaction are therefore not possible
+on Antigravity; the command itself can still be inspected. `PreInvocation` (fired before each model
+call) carries the security-instruction injection via `injectSteps`.
+
+Antigravity supplies `transcriptPath`, which AI Guardian preserves in the normalized session
+input, but no transcript reader is registered: the incremental transcript contract is not part
+of the supported integration and transcript scanning is therefore not claimed.
+
+The MCP advisor is registered in the global `~/.gemini/config/mcp_config.json`. Project hook
+configuration does not create a project MCP file; any remote or team-level MCP registration
+must be managed through Antigravity's own deployment surface.
+
+Tool names are the lowercased `CORTEX_STEP_TYPE_*` enum with the prefix stripped
+(`run_command`, `view_file`, `find_by_name`, `list_dir`, `call_mcp_tool`, …) and are mapped onto
+canonical Claude Code names so existing pattern and permission rules apply unchanged. MCP calls
+arrive as `call_mcp_tool` with the server and tool in the arguments, and are rebuilt as
+`mcp__<server>__<tool>` so MCP restriction and `mcp__*` rules keep applying.
+
+Only `matcher: "*"` in the grouped form is honoured for tool-scoped events. An empty matcher, a
+named matcher, and the flat handler list documented upstream were all observed not to fire.
 
 ### Crush (Charmbracelet) — PreToolUse only
 
@@ -936,10 +2582,11 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Agent | Confidence | Reason |
 |---|---|---|
 | Claude Code | High | Extensively tested in production |
-| Cursor | High | Extensively tested in production |
+| Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
 | Gemini CLI | Low | Hook format implemented but limited testing |
-| Codex | Low | Hook format implemented but limited testing |
+| Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
+| Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
 | Windsurf | Low | Hook format implemented but limited testing |
 | Cline / ZooCode | Low | Hook format implemented but limited testing |
 | Augment Code | Low | Hook format implemented but limited testing |
@@ -947,7 +2594,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Junie | Low | MCP only, no hook enforcement |
 | AiderDesk | Low | Extension-based, limited testing |
 | OpenClaw | Low | Plugin-based, limited testing |
-| OpenCode | Low | Plugin-based, limited testing |
+| OpenCode | Medium | Tested — plugin hooks install and work correctly |
 | Crush | Low | Compatible with Claude Code format; only PreToolUse available |
 
 ## Community Testing Feedback
@@ -964,27 +2611,42 @@ Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guar
 
 Each agent uses different event names. The adapter layer normalizes these.
 
-| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush |
-|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|
-| Session start | `SessionStart` | N/A | N/A | N/A | `SessionStart` | N/A | N/A | N/A | N/A |
-| Before tool | `PreToolUse` | `preToolUse` | `beforeShellExecution` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` |
-| After tool | `PostToolUse` | `postToolUse` | `postToolUse` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) |
-| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) |
+| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush | Antigravity |
+|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|-------------|
+| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A | N/A |
+| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` | `PreToolUse` |
+| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A | N/A |
+| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) | `PostToolUse` |
+| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) | `PreInvocation` |
+| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+
+Cursor's default managed user-level setup installs these six events:
+`beforeSubmitPrompt`, `beforeReadFile`, `beforeShellExecution`, `preToolUse`,
+`afterShellExecution`, and `postToolUse`. The adapter recognizes additional
+documented Cursor events when a user has configured them, but they are not
+AI Guardian hooks and are never reported as missing setup.
+Cursor command hooks receive JSON on stdin and return JSON on stdout; decision
+events use `permission: allow|deny`, while post-tool MCP redaction uses
+`updated_mcp_tool_output: {"modified": "..."}`. Failure hooks return an empty
+JSON object so error payloads are not echoed.
 
 ## Response Format Differences
 
 | Agent | Blocking Mechanism | Block Response |
 |-------|-------------------|----------------|
 | Claude Code | JSON `hookSpecificOutput.permissionDecision` | `{"hookSpecificOutput": {"permissionDecision": "deny"}}` |
-| Cursor | JSON `decision`/`permission` field | `{"decision": "deny", "reason": "..."}` |
+| Cursor desktop / CLI | JSON `permission` field for decision hooks; JSON transform field for MCP post-hooks | `{"permission": "deny", "user_message": "...", "agent_message": "..."}`; MCP output uses `updated_mcp_tool_output` |
 | GitHub Copilot | JSON (PreToolUse) or exit code 2 | `{"permissionDecision": "deny"}` |
 | Gemini CLI | JSON `decision` field | `{"decision": "deny", "reason": "..."}` |
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
 | Windsurf | Exit code 2 + stderr | stderr = error message |
-| Codex | Same as Claude Code | Same as Claude Code |
+| Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode | Same as Claude Code | Same as Claude Code |
 | Crush | Same as Claude Code | Same as Claude Code |
+| Antigravity CLI | Flat JSON `decision` field (required — an absent decision denies) | `{"decision": "deny", "reason": "..."}`; a clean check returns `{"decision": "ask"}` |
 
 ## Agent-Facing Message Delivery
 
@@ -1033,6 +2695,7 @@ hook_adapters/
 ├── gemini.py            # Google Gemini CLI
 ├── cline.py             # Cline / ZooCode
 ├── kiro.py              # Kiro + AiderDesk + OpenClaw
+├── antigravity.py       # Google Antigravity CLI
 ├── augment.py           # Augment Code (extends ClaudeCodeAdapter)
 ├── opencode.py          # OpenCode (extends ClaudeCodeAdapter)
 ├── crush.py             # Crush (extends ClaudeCodeAdapter)
@@ -1046,6 +2709,7 @@ hook_adapters/
 3. Fall back to Claude Code adapter (handles PascalCase and all unknown formats)
 
 Detection priority checks unique fields:
+- `conversationId` + `workspacePaths` or `toolCall` → Antigravity CLI
 - `clineVersion` → Cline
 - `transcript_path` → Gemini CLI
 - `agent_action_name` → Windsurf
@@ -1082,14 +2746,17 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `augment`, `aiderdesk`, `openclaw`, `opencode`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, `junie`
 
 ### Config File Locations
 
 | Agent | Config Path |
 |-------|------------|
 | Claude Code | `~/.claude/settings.json` |
-| Cursor | `~/.cursor/hooks.json` |
+| Cursor desktop / local CLI hooks | `~/.cursor/hooks.json` (AI Guardian install target) |
+| Cursor project hooks (explicit cloud setup target) | `<project>/.cursor/hooks.json` |
+| Cursor desktop / local CLI MCP | `~/.cursor/mcp.json` (AI Guardian install target) |
+| Cursor local project MCP (managed by Cursor, not Cloud setup) | `<project>/.cursor/mcp.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
 | OpenAI Codex (CLI + Desktop) | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
@@ -1097,9 +2764,44 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | Cline / ZooCode | `.clinerules/hooks/` (scripts) |
 | Kiro | `.kiro/hooks/` (scripts) |
 | Augment Code | `~/.augment/settings.json` |
+| AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension) |
+| OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin) |
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
+| Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |
 | Junie | `.junie/guidelines` (MCP only) |
+
+### Cursor desktop, CLI, and agent scope
+
+Cursor uses the same command-hook JSON protocol and `hooks.json` event names
+for its local desktop Agent and local CLI/headless-agent execution. The normal
+configuration scope is the local user level, so the desktop and local CLI share
+one installation:
+
+```text
+~/.cursor/hooks.json
+~/.cursor/mcp.json
+```
+
+Project-level files are inspected to explain effective Cursor behavior and are
+not changed by the default local setup. For a Cursor Cloud workspace, an
+explicit project setup can be requested with:
+
+```bash
+ai-guardian setup --ide cursor --project /path/to/workspace
+```
+
+The tray exposes the same operation as **Cursor Cloud (project setup)...**
+under **Manual setup (specific IDE)** and asks the user to select the project
+directory before launching setup. This explicit path creates or updates only
+that workspace's `.cursor/hooks.json`; it does not redirect ordinary
+desktop/CLI setup away from the user files. Cursor Cloud MCP registration is
+managed through Cursor's Cloud Agents dashboard/team settings or API, not the
+project `.cursor/mcp.json`. Enterprise/team hooks remain an upstream
+deployment option outside this local project flow.
+
+See the upstream [Cursor Hooks documentation](https://cursor.com/docs/hooks)
+for the event list, command-hook protocol, and cloud-agent scope rules.
 
 ## Per-Agent Deep-Dive Guides
 
@@ -1109,20 +2811,14 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | Aider (CLI) | [AIDER.md](AIDER.md) | Git pre-commit hook integration (not hook adapter — scans at commit time) |
 | AiderDesk | [AIDERDESK.md](AIDERDESK.md) | TypeScript extension setup, npm install, hot reload |
 
-## Adding a New Agent
+## Adding or Changing an Agent
 
-1. Create `src/ai_guardian/hook_adapters/<agent>.py` implementing `HookAdapter`
-2. Add the adapter to `ADAPTER_CLASSES` in `hook_adapters/__init__.py`
-3. Add setup config to `IDESetup.IDE_CONFIGS` in `setup/hooks.py`
-4. Add tests in `tests/unit/test_<agent>_support.py`
-5. Update the tables in this document:
-   - Supported Agents table
-   - Hook Capability Matrix
-   - Violation Type Coverage Matrix (or note coverage matches an existing agent)
-   - Agent Confidence Levels table
-   - Hook Event Name Mapping
-   - Response Format Differences
-   - Config File Locations
+Follow the applicable
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) and
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md). The first
+covers host integration surfaces; the second covers normal containers and
+OpenShell. Keep the capability tables in this document synchronized with the
+evidence collected by both checklists.
 
 ## Adding a New Violation Type
 
@@ -1880,11 +3576,287 @@ and key is AKIA_EXAMPLE_KEY
 # ai-guardian:end-allow
 ```
 
+# === docs/api/guarded-agent.md ===
+
+# GuardedAgent
+
+::: ai_guardian.integrations.anthropic.agent.GuardedAgent
+
+# === docs/api/scanning.md ===
+
+# Scanning pipeline
+
+::: ai_guardian.scanners.pipeline.scan_content
+
+# === docs/api/sdk.md ===
+
+# SDK API reference
+
+::: ai_guardian.sdk
+    options:
+      members:
+        - CheckResult
+        - SecurityViolation
+        - GuardSession
+        - DirectGuardSession
+        - RestGuardSession
+        - monitor
+
+# === docs/CLI_RUNTIME_CHECKLIST.md ===
+
+# CLI/Runtime Integration Checklist
+
+Use this checklist when adding or changing a CLI-capable AI integration in the
+normal Docker/Podman container, the NVIDIA OpenShell image, or the
+`ai-guardian sandbox` runtime selection. It is the companion to the
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md): that checklist
+covers host hooks, plugins, MCP, transcripts, and IDE setup; this one covers
+distribution, authentication, policies, image contents, and runtime behavior.
+
+Adding an integration to the canonical IDE registry does not automatically add
+it to either container runtime. Complete the applicable items below and mark
+every non-applicable item with a reason in the issue or pull request.
+
+## Runtime support record
+
+Create or update this record for every CLI/agent. A runtime may be supported,
+runtime-installed, experimental, or explicitly unsupported.
+
+| Field | Container | OpenShell |
+| --- | --- | --- |
+| Support status |  |  |
+| CLI key and display name |  |  |
+| Invocation (`--cli`, and `--agent` if applicable) |  |  |
+| Image source and version |  |  |
+| Installation mode (bundled/runtime/inherited) |  |  |
+| Authentication and provider profile |  |  |
+| Policy and network requirements |  |  |
+| Config/home/environment paths |  |  |
+| Interactive and automated invocation |  |  |
+| Linux/macOS/Windows support |  |  |
+| Evidence and known limitations |  |  |
+
+For OpenCode, keep the two concepts separate: `--cli opencode` selects the
+executable and `--agent NAME` selects its profile. Do not use an agent profile
+name as a provider name. For all other CLIs, document whether an additional
+profile or model selector exists.
+
+## 1. Scope, support, and legal classification
+
+- [ ] Choose a stable CLI key and display name. Keep the key consistent across
+  the CLI parser, sandbox labels, entrypoint variables, policy filenames,
+  provider helpers, tray controls, and documentation.
+- [ ] Classify the integration separately for the normal container and
+  OpenShell: bundled, inherited from a base image, runtime-installed,
+  custom-image-only, experimental, or unsupported.
+- [ ] Record supported CLI versions, host operating systems, image
+  architectures, upstream account requirements, and known limitations.
+- [ ] Review the CLI license, service terms, telemetry, authentication terms,
+  and any required Terms-of-Service consent before bundling or redistributing
+  it. Record the decision and source links.
+- [ ] Decide whether a proprietary CLI requires an interactive or explicit
+  runtime consent flow. Do not silently bundle it because it is available in
+  the normal container.
+- [ ] State whether the integration is expected to run interactively, through
+  `exec`, through an automated/print mode, or in all of those modes.
+
+## 2. Shared command and setup contract
+
+- [ ] Add or update the CLI parser and validation in
+  [`src/ai_guardian/cli.py`](../src/ai_guardian/cli.py), including help text,
+  defaults, invalid combinations, and environment-variable overrides.
+- [ ] Add or update runtime selection and command construction in
+  [`src/ai_guardian/sandbox.py`](../src/ai_guardian/sandbox.py). Verify that
+  the selected CLI, profile, model, provider, policy, image, repository, and
+  workdir remain distinct values.
+- [ ] Verify the CLI-to-setup mapping in `container/entrypoint.sh`, including
+  selected-only, all-CLI, and all-integration setup scopes.
+- [ ] Verify the command's home-directory variable, config paths, writable
+  directories, temporary files, and cache paths in a clean temporary HOME.
+- [ ] Verify startup environment values and ensure credentials are not placed
+  in command arguments, image layers, logs, labels, or policy files.
+- [ ] Verify that configuration preserves unrelated user settings and is
+  idempotent on repeated startup.
+- [ ] Verify repository and working-directory behavior for an uploaded or
+  mounted repository, including spaces, missing paths, and a home-directory
+  default where applicable.
+- [ ] Verify interactive startup, explicit command execution, `--print` or
+  other automated modes, exit behavior, signals, non-zero exits, and timeout
+  handling.
+- [ ] If the CLI has a special non-interactive authentication flag or wrapper
+  requirement, implement it only at the appropriate command boundary and
+  document the difference. Do not install a persistent wrapper without an
+  explicit reason and test.
+
+## 3. Normal Docker/Podman container
+
+- [ ] Update the normal image and startup path only when the CLI is intended
+  to be available there. Relevant surfaces include `container/Dockerfile`,
+  `container/run.sh`, `container/entrypoint.sh`, and the source-wheel/vendor
+  installation path.
+- [ ] Add the CLI key to these shell arrays (they are not auto-derived from
+  the Python registry):
+  - `SUPPORTED_AGENTS` in `container/run.sh`
+  - `SUPPORTED_AGENT_IDES` in `container/entrypoint.sh`
+  - `CLI_AGENT_IDES` in `container/entrypoint.sh` (if the agent is CLI-based)
+- [ ] Add the CLI to the normal container's supported setup list, or document
+  why it is intentionally GUI/editor-only or unavailable in this runtime.
+- [ ] For a bundled CLI, add a reproducible version pin and build-time
+  `--version` verification. Avoid mutable `latest` package installation.
+- [ ] For a runtime-only CLI, document the installer, consent, authentication,
+  custom-image boundary, and the reason it is not included in the published
+  image.
+- [ ] Verify normal-container behavior with a temporary HOME/config directory,
+  a clean repository, an existing user configuration, and a second startup.
+- [ ] Build the normal image for each supported architecture and run the CLI's
+  version/help check inside it.
+- [ ] Update the normal container's policy/configuration documentation if the
+  CLI needs environment variables, files, or a different daemon startup mode.
+
+## 4. OpenShell image and sandbox
+
+- [ ] Add the CLI to the OpenShell selector only if it is terminal-capable and
+  supported by the OpenShell image. Keep GUI/editor-only integrations out of
+  the selector and image.
+- [ ] Update the selected-CLI setup list and command mapping in
+  `container/entrypoint.sh`. Verify selected-only, `cli`, and `all` setup
+  scopes, plus the installed-package compatibility check.
+- [ ] For a bundled CLI, add an explicit version `ARG`, reproducible install,
+  and build-time `--version` verification to
+  `container/Dockerfile.openshell`. Record whether the CLI is inherited from
+  the OpenShell base image or deliberately refreshed by AI Guardian.
+- [ ] For an inherited or runtime-only CLI, document the base-image contract,
+  custom-image boundary, consent flow, and version-monitoring limitation.
+- [ ] Add or update `container/policies/agents/<cli>.yaml` when the CLI needs a
+  selected-CLI policy. Keep the baseline, selected-CLI policy, provider-owned
+  policy, and optional GitHub overlays separate.
+- [ ] Verify the minimum filesystem and network permissions. Deny unrelated
+  agent endpoints by default and document every required egress exception.
+- [ ] Verify repository upload/mount behavior, `/sandbox/repo` workdir,
+  OpenShell `exec`, connect, logs, start/restart, and daemon service exposure.
+- [ ] Verify tray and NiceGUI discovery, authentication headers, service URL
+  lookup, and failure output for a running and a stopped sandbox.
+- [ ] Build the OpenShell image locally, record its base/image digest and CLI
+  versions, and recreate the sandbox after image changes.
+- [ ] Verify the OpenShell image publishing workflow uses the dedicated image
+  repository and correct tag behavior. Do not accidentally mirror the image to
+  the normal container repository.
+
+## 5. Authentication, providers, and inference
+
+Provider configuration and policy configuration are separate requirements: a
+provider supplies credentials, endpoints, or binaries; a policy grants the
+filesystem and network access needed to use them. A provider profile does not
+automatically make the CLI usable, and a policy does not provide credentials.
+
+- [ ] Identify every supported auth mode: API key, OAuth, local auth file,
+  cloud ADC, workload identity, provider refresh, or custom gateway auth.
+- [ ] Verify auth discovery on Linux and macOS, including HOME overrides,
+  config paths, symlinks, permissions, and absent/partial credential files.
+- [ ] Verify the provider profile type, name, credential variable, endpoint,
+  model/inference route, refresh behavior, and gateway prerequisites.
+- [ ] Verify both implicit provider selection and explicit `--provider NAME`.
+  A missing compatible provider must fail with an actionable message.
+- [ ] Verify provider-backed credentials are not copied into sandbox arguments,
+  uploaded repositories, image layers, logs, or ordinary environment values
+  that the CLI can read when a provider abstraction is required.
+- [ ] Verify placeholder environment values used by a gateway route are clearly
+  non-secret and do not trigger misleading plain-credential warnings.
+- [ ] Verify the required gateway settings, such as Providers v2, are checked
+  or documented before sandbox creation.
+- [ ] For Vertex or another gateway route, verify the base URL, model, region,
+  project, provider type, and CLI-specific endpoint format independently.
+- [ ] Test the actual CLI request through the provider route; a successful
+  provider creation alone is not sufficient evidence.
+
+## 6. Policies and runtime security
+
+- [ ] Compose the shared baseline, selected-CLI policy, provider-owned policy,
+  and explicit user overlays in the documented order.
+- [ ] Validate the resulting policy with the runtime's schema/tooling and test
+  that unrelated endpoints remain denied.
+- [ ] Test the minimum required filesystem access, repository access, home
+  directory behavior, and nested-sandbox settings.
+- [ ] Test the minimum required network access for model requests, auth refresh,
+  package/plugin/catalog access, and GitHub operations when those features are
+  explicitly enabled.
+- [ ] Verify that adding a provider does not silently grant broad network or
+  filesystem access, and adding a policy does not silently expose credentials.
+- [ ] Document optional overlays separately from the default policy. In
+  particular, GitHub read-only/read-write access must be explicit.
+
+## 7. Tests and evidence
+
+- [ ] Add focused unit tests for parser defaults, invalid combinations,
+  command construction, environment propagation, provider selection, policy
+  composition, and credential redaction.
+- [ ] Update `tests/unit/test_container_scripts.py` for image arguments,
+  entrypoint setup, selector scope, installation/version checks, and workflow
+  coverage.
+- [ ] Update the related sandbox and tray tests, including OpenCode profile
+  handling when applicable.
+- [ ] Run the directly affected unit tests with an isolated HOME/config and
+  without relying on the developer's credentials.
+- [ ] Build and smoke-test the normal container with a disposable repository
+  and the selected CLI.
+- [ ] Build and smoke-test a disposable OpenShell sandbox with the selected
+  policy and provider. Test both implicit and explicit provider selection.
+- [ ] Test at least one authenticated model request, one denied network or
+  filesystem operation, one repository operation, and one lifecycle operation.
+- [ ] Test Linux and macOS host paths when authentication, gateway behavior,
+  or process handling differs. Record unsupported platforms explicitly.
+- [ ] Update the relevant CI jobs, including container build, scenario tests,
+  CLI version health, and release-readiness checks.
+- [ ] Record the tested image digest, CLI versions, provider/model/region,
+  gateway version, host OS, and known failures in the issue or pull request.
+
+## 8. Documentation and release gate
+
+- [ ] Update `README.md`, `container/README.md`, `docs/Sandbox.md`, and the
+  applicable capability/support tables.
+- [ ] State whether the OpenShell integration is experimental and list the
+  exact CLI/profile combinations that were tested.
+- [ ] Document required environment variables, provider setup, policy setup,
+  image rebuild requirements, and the difference between interactive and
+  automated launch modes.
+- [ ] Update tray/create-modal help or choices when the new CLI is user-visible.
+- [ ] Update version-monitoring sources for every explicitly managed bundled
+  version. Document any native installer without a stable release endpoint.
+- [ ] Add the integration to release-readiness matrices or record a tested
+  exclusion. Confirm the checklist itself remains discoverable from the docs
+  index.
+
+For an existing CLI, rerun the applicable sections whenever its command,
+profile, image/base image, version pin, provider, auth bridge, policy, model
+route, or lifecycle behavior changes. Runtime support is not complete until
+the normal container and OpenShell status are both documented, even when one
+of them is explicitly unsupported.
+
 # === docs/CONFIGURATION.md ===
 
 # Configuration Guide
 
 AI Guardian uses a flexible configuration system with multiple sources and cascading priority rules.
+
+## Tracing
+
+Unified SDK and hook trace recording is configured at the top level:
+
+```json
+{
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  }
+}
+```
+
+`enabled` defaults to `true`. Setting it to `false` stops new trace recording
+but does not disable security scanning, violation logging, OTEL export, or
+browsing existing traces. The deprecated `sdk.trace_viewer` location remains a
+1.x compatibility fallback; top-level `tracing` values take precedence. It is
+scheduled for removal in 2.x (#2194).
 
 ## Configuration Files
 
@@ -2004,6 +3976,20 @@ ai-guardian setup --create-config --profile @strict         # Enterprise SOC2/co
 ai-guardian setup --create-config --profile @moderator      # Human-in-the-loop review
 ai-guardian setup --list-profiles                           # List all available profiles
 ```
+
+On first run, the tray's automatic IDE setup prompt shows the same built-in
+profiles when the global user config is missing. `@standard` is preselected,
+and **Skip configuration for now** installs only the selected IDE hooks. To
+open the setup flow later, use the tray's **IDE/CLI Setup → Create Config...**
+entry. To change an existing global profile from the CLI, choose a profile and
+explicitly pass `--force`, for example:
+
+```bash
+ai-guardian setup --create-config --profile @strict --force
+```
+
+The automatic tray flow never passes `--force` and therefore never overwrites
+an existing global config or a project-local overlay.
 
 | Profile | Secrets | PII | Prompt Injection | SSRF | Use case |
 |---------|---------|-----|------------------|------|----------|
@@ -2519,8 +4505,27 @@ The web console binds to `127.0.0.1` (localhost only) for security.
 - **Permission Rules** — View and manage tool permission rules *(NEW in v1.11.0)*
 - **Context Poisoning** — Context poisoning detection settings with regex tester *(NEW in v1.11.0)*
 - **Logs** — Daemon log viewer
+- **Sessions** — Unified security-focused SDK and hook trace view, grouped by `run_id`
+- **Tracing Settings** — Enable or disable SDK and hook trace recording, and configure refresh and remote-cache retention
+- **IDE Conversations** — Raw IDE-specific conversation replay for debugging
 - **Scan Configure** — Scan a project to detect false positives and auto-generate suppression config *(NEW in v1.15.0)*
 - **Daemon Detail** — Single daemon stats, controls (pause/resume/reload), recent violations
+
+To correlate an SDK run with a hook-based IDE session, provide the SDK
+`RunContext.run_id` as the hook event's `run_id`. If the IDE cannot provide that
+field, set the same value as `AI_GUARDIAN_RUN_ID` when starting the non-SDK
+agent. Matching values appear as one run on **Sessions**. The daemon persists
+the `session_id` binding across restarts; sessions without a matching value
+remain separate.
+
+Both consoles save these controls in the top-level `tracing` configuration.
+Values from the deprecated `sdk.trace_viewer` section are still displayed when
+no top-level override exists, but new edits do not modify the deprecated section.
+
+An **Interrupted** Sessions status means the recording remained in progress
+without receiving a `SessionEnd` event, such as after a daemon restart. It does
+not necessarily mean the agent crashed. The stored/API `stop_reason` remains
+`crashed` for backward compatibility.
 
 ### System Tray Integration
 
@@ -7023,7 +9028,7 @@ AI Guardian protects AI-assisted coding tools through multiple layers:
 | Daemon | `src/ai_guardian/daemon/` | Background service for faster hook responses |
 | Console (TUI) | `src/ai_guardian/tui/` | Interactive terminal UI for configuration |
 | MCP Server | `src/ai_guardian/mcp/` | MCP security advisor tools |
-| Scanner engines | `src/ai_guardian/scanners/` | Multi-engine secret scanning (gitleaks, betterleaks, leaktk) |
+| Scanner engines | `src/ai_guardian/scanners/` | Multi-engine secret scanning and pinned scanner installation |
 | Custom Scanner SDK | `src/ai_guardian/scanners/sdk.py` | Python-based scanner base class |
 | Prompt injection | `src/ai_guardian/scanners/prompt_injection.py` | Heuristic prompt injection detection |
 | SSRF protection | `src/ai_guardian/scanners/ssrf.py` | Private IP / metadata endpoint blocking |
@@ -7213,6 +9218,16 @@ When adding a new feature, check whether it needs any of these surfaces:
 | System tray | Feature produces a quick status or count | `src/ai_guardian/tray/` |
 | CLI command | Feature needs a standalone command | `src/ai_guardian/cli.py` |
 
+For any new or changed IDE/agent integration, use the
+[IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md). It combines
+the runtime, setup, transcript, MCP, test, documentation, and
+release-readiness checks that must stay synchronized across an integration.
+
+For any new or changed scanner engine or built-in security detector, use the
+[Scanner Integration Checklist](SCANNER_INTEGRATION_CHECKLIST.md). If the work
+changes container images or runtime behavior, also use the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md).
+
 ### Configuration Schema Changes
 
 When adding new configuration options, update all of these:
@@ -7329,6 +9344,10 @@ ai-guardian/
 - [Annotations](ANNOTATIONS.md)
 - [Releasing](../RELEASING.md)
 - [Agent Instructions](../AGENTS.md) -- detailed coding guidelines and patterns
+
+# === docs/documentation.md ===
+
+--8<-- "docs/README.md"
 
 # === docs/GITHUB_COPILOT.md ===
 
@@ -8062,7 +10081,7 @@ The actual value is in audit logging, not user warnings:
 | IDE | Block Mode Messages | Log Mode Messages | Notes |
 |-----|-------------------|-------------------|-------|
 | **Claude Code** | ✅ Displayed (exit != 0) | ❌ Not displayed (exit 0) | Logs only |
-| **Cursor** | ✅ Displayed (`continue: false`) | ❌ Not displayed (`continue: true`) | Tested April 2026 |
+| **Cursor** | ✅ Displayed (`permission: deny`; legacy `continue: false` is retained for file-read compatibility) | ❌ Not displayed (`permission: allow`) | User-level desktop/CLI hooks |
 | **Aider** | ✅ Displayed (exit != 0) | ❌ Not displayed (exit 0) | Same as Claude Code |
 | **GitHub Copilot** | ✅ Displayed (deny) | ❌ No log mode support | Binary only |
 
@@ -8342,6 +10361,61 @@ Data is stored in `~/.local/state/ai-guardian/latency.jsonl` alongside `violatio
 
 Both the TUI (`ai-guardian console`) and web console (`ai-guardian console --web`) display latency metrics on the Security Dashboard, showing average hook execution time and per-check breakdowns.
 
+### Coverage, configuration, and restart behavior
+
+Latency is collected by the shared hook pipeline after the active IDE adapter
+normalizes the input. This makes the setting available in both execution
+modes:
+
+- **Direct hook mode** reads the effective configuration for each short-lived
+  `ai-guardian` process.
+- **Daemon hook mode** checks configuration as part of hook handling. Global
+  configuration changes are detected by modification time, and daemon hook
+  requests use the project directory supplied by the IDE when resolving a
+  project config. The web/REST configuration update and
+  `ai-guardian daemon reload` paths can also force an immediate reload.
+
+A daemon or IDE restart is not required for a configuration-only change when
+the hooks are already installed. Restart or reload the host application only
+when its hook definitions or an extension/plugin installation has changed.
+
+Codex's five managed hooks (`UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostCompact`, and `SessionEnd`) all produce latency entries when they invoke
+AI Guardian. Lifecycle events return an allow response without security
+content scanning, but are still timed. See the [Hook Latency Support
+Matrix](AGENT_SUPPORT.md#hook-latency-support-matrix) for every supported
+integration, including the commit-time Aider CLI and MCP-only Junie limits.
+
+The `OpenAI Codex (CLI + Desktop)` label covers Codex CLI and Codex mode in
+the ChatGPT desktop app. Regular ChatGPT mode does not run these Codex
+lifecycle hooks and is not currently protected by them. The ChatGPT desktop
+app, Codex CLI, and Codex IDE extension can share MCP configuration, but MCP
+availability is separate from hook enforcement.
+
+### Verifying collection
+
+1. Enable `latency_tracking.enabled` in the global or project configuration,
+   or in the Performance page.
+2. Trigger a normal prompt or tool hook in the target IDE/agent.
+3. Run:
+
+   ```bash
+   ai-guardian metrics --latency --since 1d
+   ai-guardian metrics --latency --json --since 1d
+   ```
+
+4. Confirm that `Invocations` is non-zero (or `invocation_count` in JSON) and
+   that the report contains the normalized event for the hook you triggered.
+   The log is normally `~/.local/state/ai-guardian/latency.jsonl`; deployments
+   using `AI_GUARDIAN_STATE_DIR` use that directory instead.
+
+If Codex still shows no entries, confirm that the daemon is running and not
+paused with `ai-guardian daemon status`, then use `ai-guardian daemon reload`
+after a configuration edit. Verify that the Codex hook is installed in the
+active Codex layer; changing the setting alone does not install a missing
+hook. The report groups entries by normalized hook event and check, so it does
+not identify the source IDE in each row.
+
 ---
 
 ## Related Documentation
@@ -8355,7 +10429,364 @@ Both the TUI (`ai-guardian console`) and web console (`ai-guardian console --web
 
 **Last Updated:** 2026-06-11  
 **Version:** 1.11.0  
-**Cursor Testing:** Completed - confirmed same limitation as Claude Code
+**Cursor Testing:** Desktop and local CLI command hooks use the same JSON
+protocol. AI Guardian installs the managed hook set and MCP registration in the
+user-level Cursor configuration by default. Use the explicit Cursor Cloud
+project setup flow (`ai-guardian setup --ide cursor --project DIR`, or the tray
+directory picker) when the remote run needs `<DIR>/.cursor/hooks.json`.
+Configure Cursor Cloud MCP separately through Cursor's dashboard/team settings
+or Cloud Agents API; `<DIR>/.cursor/mcp.json` is for local Cursor workspaces.
+
+# === docs/IDE_INTEGRATION_CHECKLIST.md ===
+
+# IDE/Agent Integration Checklist
+
+Use this checklist when adding a new AI coding agent or changing an existing
+IDE/agent integration. It is the implementation and verification companion to
+the [Agent Support](AGENT_SUPPORT.md) capability reference.
+
+The checklist applies to hook adapters, plugin or extension integrations,
+MCP-only integrations, transcript readers, and the dummy-agent test harness.
+Mark an item complete only when it is applicable and verified; record the
+reason for items that do not apply in the issue or pull request.
+
+The canonical production registry is
+[`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
+keys are `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`,
+`antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`,
+`augment`, `crush`, and `junie`. Add a new IDE there first. The parity contract in
+[`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
+requires setup, adapter aliases, MCP/rules capability, transcript/session
+registries, installer text, support documentation, and the release-readiness
+matrices to stay synchronized.
+
+## Support model
+
+Classify the integration before making changes. An agent can have more than
+one integration mode.
+
+| Mode | Typical surfaces | Result to document |
+|------|------------------|--------------------|
+| Hook adapter | `hook_adapters/`, `setup/hooks.py` | Which lifecycle events are normalized and enforced |
+| Plugin or extension | Agent plugin/extension source and registration | Installation, update, and removal behavior |
+| MCP-only | `setup/mcp.py`, MCP server | Advisory capabilities and the absence of hook enforcement |
+| Transcript reader | `scanners/transcript/` | Format, path discovery, and incremental scanning support |
+| Pre-commit guard | `setup/hooks.py`, `examples/aider/` | Commit-time coverage and its relationship to real-time agent protection |
+| Test harness | `dummy_agent.py`, scenario files | Scenarios that provide repeatable hook regression coverage |
+
+For products with multiple host modes, document the boundary for each mode.
+For OpenAI Codex, lifecycle hooks cover Codex CLI and Codex mode in the
+ChatGPT desktop app. Regular ChatGPT mode is not currently protected by those
+Codex hooks. Shared MCP configuration must be documented independently; MCP
+availability does not imply hook enforcement.
+
+### CLI/runtime onboarding
+
+The normal container and OpenShell are separate distribution targets. Adding
+an integration to the canonical AI Guardian registry does not automatically
+add it to either runtime. For CLI, image, provider, policy, authentication,
+or runtime lifecycle work, complete the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md). It records
+support separately for Docker/Podman and OpenShell, including explicit
+unsupported or runtime-only decisions. Keep the host hook, plugin, MCP,
+transcript, and IDE setup coverage in this checklist.
+
+## 1. Scope and capability record
+
+- [ ] Choose a stable CLI key and display name. Keep aliases consistent with
+  the agent's documented name.
+- [ ] Record the supported agent versions, operating systems, and installation
+  scope. AI Guardian installs hooks and MCP at the local user/desktop level by
+  default. Project-level files are read-only discovery/health inputs unless an
+  explicit, user-selected project setup flow is part of the supported design.
+- [ ] If the agent has local and remote/cloud execution modes, document each
+  configuration layer separately. Never imply that a local user config protects
+  a remote run; provide an explicit project/team/enterprise target when the
+  upstream contract requires one.
+- [ ] Review the agent's hook, plugin, extension, MCP, and transcript
+  contracts as applicable. Record upstream links and the applicable license
+  decision before distributing integration code.
+- [ ] Inventory the agent's lifecycle events and map them to the canonical
+  events used by AI Guardian: `SessionStart`, `UserPromptSubmit`,
+  `PreToolUse`, `PostToolUse`, `PostCompact`, and `SessionEnd`.
+- [ ] Record event-specific matchers, timeouts, input channels, output
+  channels, exit-code behavior, and whether the agent accepts modified output.
+- [ ] Record the response contract for allow, block, warning, and redaction
+  paths, including which messages reach the user and the agent.
+- [ ] Identify configuration files, environment-variable overrides, project
+  files, and whether the integration must preserve unrelated user settings.
+- [ ] Identify transcript format and path behavior, including whether the
+  agent supplies a path in hook data or requires default-path discovery.
+- [ ] Record known limitations, unsupported events, platform differences, and
+  a confidence level. Do not label an integration complete without evidence.
+
+## 2. Runtime and setup implementation
+
+### Hook adapter and registry
+
+- [ ] Add or update the adapter in
+  `src/ai_guardian/hook_adapters/<agent>.py`.
+- [ ] Implement detection, input normalization, and response formatting for
+  every supported event. Use the shared `NormalizedHookInput` contract.
+- [ ] Add tool-name mappings when the agent uses names that differ from the
+  canonical names consumed by the scanning pipeline.
+- [ ] Add default transcript-path discovery when the agent does not provide a
+  path in hook data.
+- [ ] Register the adapter in
+  `src/ai_guardian/hook_adapters/__init__.py`: imports, detection order,
+  environment aliases, and public exports as applicable.
+- [ ] Check detection precedence against every existing adapter so a new
+  format cannot be claimed by the wrong adapter or by the fallback adapter.
+- [ ] Update the legacy `IDEType` mapping when the adapter is used by a
+  compatibility path.
+
+### Setup, reconciliation, and optional surfaces
+
+- [ ] Add or update the entry in `IDESetup.IDE_CONFIGS` in
+  `src/ai_guardian/setup/hooks.py`, including display name, config path,
+  environment override, hook schema, and script/plugin/extension flags.
+- [ ] Define the required managed-hook manifest once in
+  `MANAGED_HOOK_EVENTS_BY_IDE` and verify that setup, verification,
+  reconciliation, doctor, tray health, and integration tests all consume it.
+  Keep upstream events that an adapter can recognize but AI Guardian does not
+  install separate from this manifest; they must not be reported as missing.
+- [ ] Confirm `--ide <key>`, auto-detection, dry-run, forced update, and hook
+  verification behavior for the integration.
+- [ ] Preserve unrelated configuration and existing user-owned hooks during
+  installation and reconciliation.
+- [ ] Add the MCP client registration in `src/ai_guardian/setup/mcp.py` when
+  the agent supports the MCP advisor.
+- [ ] For every local/remote or desktop/cloud variant, verify the MCP
+  registration source independently from hooks. Test that user-level files do
+  not get reported as protecting a remote run, and that project files are only
+  used when the upstream agent explicitly supports them; otherwise document
+  the required dashboard/team/API registration.
+- [ ] Add guidelines or rules setup in `src/ai_guardian/setup/rules.py` when
+  the agent has a supported context-file mechanism.
+- [ ] Add plugin or extension installation, update, and removal handling when
+  the integration is not command-hook based.
+- [ ] Add or update pre-commit setup, templates, and documentation when the
+  integration relies on commit-time scanning rather than agent hooks.
+- [ ] Add transcript registration in
+  `src/ai_guardian/scanners/transcript/__init__.py` and the appropriate
+  transcript module when transcript scanning is supported.
+- [ ] Update auto-detection in `src/ai_guardian/daemon/auto_setup.py` and the
+  installer scripts when fresh installation should discover the agent.
+- [ ] Update console, tray, or status surfaces only when the integration adds
+  a user-visible status or setup flow.
+- [ ] Trace every setup and health entry point, not only the setup function:
+  tray **Check hooks/MCP installation...**, tray **Manual setup (specific
+  IDE** (including any explicit remote/project variant), `ai-guardian doctor`,
+  `ai-guardian ide-setup`, and any REST/daemon setup-state view. They must use
+  the same verification result, preserve the user installation scope by
+  default, inspect effective user/project scope without silently modifying
+  project files, and report incomplete hook or MCP state consistently.
+- [ ] For proactive tray setup prompts, verify that Tkinter/Linux and the
+  macOS native fallback expose the same per-integration install/never choices,
+  a `Submit` action (without a redundant global Never button), visible snooze
+  selection, and dismissal semantics. Verify that the native macOS path
+  foregrounds one dialog and has no legacy multi-dialog fallback cascade.
+  Ensure a startup check and a manual check cannot show competing snapshots or
+  duplicate prompts; verify that an expired snooze and a newly detected
+  integration both re-enter the automatic prompt flow.
+
+## 3. Tests and validation
+
+Run directly related unit tests locally. The full suite, integration tests,
+and dummy-agent scenarios are exercised by CI according to `AGENTS.md`.
+
+### Required onboarding test gate
+
+Every new IDE must have an explicit test or a documented, tested exclusion for
+each applicable row below. A shared parametrized test is sufficient when the
+behavior is truly identical, but the test output and evidence must identify the
+new IDE. “The adapter is similar to another IDE” is not an exclusion. Keep
+fixtures synthetic and isolated from the user's configuration.
+
+| Test group | Tests that must be implemented | Minimum scenarios and evidence |
+|------------|--------------------------------|--------------------------------|
+| Canonical registration and parity | Add the IDE to `SUPPORTED_IDE_REGISTRY`; extend `tests/unit/test_ide_registry.py` only when a new capability shape needs a contract | Stable key/display name, all aliases, adapter class, setup mode, managed event manifest, transcript/session declaration, and release-readiness/docs/installer parity must pass |
+| Adapter detection and normalization | Focused adapter unit tests plus shared registry/precedence tests | Explicit `--ide` and environment-alias detection, auto-detection precedence, every supported lifecycle event, tool-name mapping, missing fields, wrong types, malformed JSON, and unknown events normalize safely or return the documented error |
+| Response contract | Adapter and hook-pipeline tests | Benign allow, security block, warning/log-only, post-tool redaction/output transform, user-facing and agent-facing fields, exit codes, stdout/stderr shape, invalid response handling, timeout, missing executable, non-zero process failure, and fail-open/fail-closed behavior |
+| Hook lifecycle and UX | `tests/unit/test_hook_processing.py` and an applicable `tests/ux/` contract | Invoke every event AI Guardian installs. Test clean input, a blockable threat, warning, output transformation, malformed input, and the exact permission/message flow. If the upstream exposes an event that AI Guardian does not install, record the exclusion and test that it is not reported as missing |
+| Setup and configuration reconciliation | Setup unit tests, including shared `tests/unit/test_setup.py` coverage | Fresh setup, pre-existing config, unrelated user hooks/settings preserved, repeated setup idempotence, removed or drifted AI Guardian entry restored, `--force`, dry-run, custom paths/environment variables, permissions, and upgrade from the prior config shape |
+| Scope and health | Setup verification, doctor, tray, and REST/daemon health tests where exposed | User/desktop scope, explicit project scope, cloud/team/API scope, MCP-only behavior, missing or partial installation, verification, doctor output, tray **Check hooks/MCP installation...**, manual setup, and no silent project-file mutation |
+| MCP registration and advisor | MCP setup/server integration tests when MCP is supported | Fresh registration, existing server merge, duplicate/idempotent registration, malformed config, custom scope/path, unrelated entries preserved, registration health, and advisory-only behavior for MCP-only integrations. Document and test N/A when the host has no MCP path |
+| Transcript scanning | A focused transcript test module for every declared format/path branch | Format parsing, default and explicit path discovery, malformed/truncated records, incremental offsets, duplicate suppression, append, rotation/truncation, multiple sessions, and safe behavior when the transcript is unavailable. Document why no transcript exists when unsupported |
+| Plugin/extension bridge | Bridge/setup tests and generated-source contract | Install, update, removal/reconciliation, package/manifest registration, command/environment propagation, every bridge lifecycle callback, response conversion, and runtime smoke test when the host SDK is available. Structural CI coverage is required when the SDK is not a dependency |
+| Auto-detection and installers | `tests/unit/test_auto_setup.py`/CLI tests and `tests/test_install_script.py` | Fresh unconfigured IDE marker discovery, explicit `--ide`, repeated installer runs, `--no-setup`, `--dry-run`, help/choice text, Linux/macOS shell behavior, Windows PowerShell structure, and failure reporting without claiming a successful setup |
+| Platform and process behavior | OS-parametrized tests or a documented CI contract | Linux and macOS path/permission/process behavior, Windows path/quoting/`.bat` or PowerShell generation and runtime when available, executable resolution, timeout, signal/non-zero exit, and platform-specific upstream exclusions |
+| Isolated E2E and release gate | Add the IDE to `tests/integration/test_ide_hooks_e2e.py` through the registry and to release-readiness | Temporary HOME/project/config, setup and verification, MCP/bridge health, every installed event with allow/block/post cases, project/cloud checks, and a matrix job that names the IDE/event on failure |
+
+For hook-capable integrations, the required event cases are: allow, block,
+warning, redaction/output transform, malformed input, timeout/process failure,
+and response-contract assertions. For script, plugin, or extension bridges,
+exercise the equivalent host callback or generated command boundary. For
+MCP-only integrations, replace enforcement cases with registration, advisor,
+health, and explicit “no hook enforcement” assertions. For a shared adapter
+(Cline/ZooCode or Kiro/AiderDesk/OpenClaw), retain one row and one evidence
+set per public IDE key so aliases cannot hide a missing setup or documentation
+path.
+
+### Minimum test-file inventory
+
+The onboarding pull request should link the applicable cases in this inventory:
+
+- [ ] `tests/unit/test_ide_registry.py` — canonical row and parity checks.
+- [ ] `tests/unit/test_<ide>_support.py` or the existing adapter support file —
+  detection, normalization, lifecycle mapping, response contract, malformed
+  input, timeout/process failure, and platform-specific behavior.
+- [ ] `tests/unit/test_setup.py` or a focused setup file — fresh/merge/
+  idempotence/reconciliation, verification, project/cloud scope, and MCP/rules.
+- [ ] `tests/unit/test_<ide>_transcript.py` — every transcript format and path
+  branch, incremental/duplicate/rotation behavior; record a tested exclusion
+  when no transcript is supported.
+- [ ] `tests/unit/test_auto_setup.py`, `tests/unit/test_cli_ide_setup.py`,
+  and `tests/test_install_script.py` — applicable discovery, installer, and
+  command-line behavior.
+- [ ] `tests/unit/test_hook_processing.py` and `tests/ux/` — shared pipeline,
+  exact user/agent messages, permission flow, and any new security behavior.
+- [ ] `tests/integration/test_ide_hooks_e2e.py` — isolated setup, verification,
+  all managed events, response cases, and bridge/MCP health.
+- [ ] `.github/workflows/release-readiness.yml` — setup and E2E matrix entries,
+  synchronized with the canonical registry.
+
+| Behavior | Minimum evidence | Common test locations |
+|----------|------------------|-----------------------|
+| Detection and normalization | Agent-shaped input selects the intended adapter and produces canonical fields | `tests/unit/test_hook_adapters.py`, `tests/unit/test_<agent>_support.py` |
+| Response formatting | Allow, block, warning, and output-transform cases match the agent contract | Adapter tests and `tests/unit/test_hook_adapters.py` |
+| Setup and config merge | Fresh setup, existing config, repeated setup, and drift reconciliation behave correctly | `tests/unit/test_setup.py` |
+| Auto-detection and prompts | Installed-agent discovery and setup choices are stable | `tests/unit/test_auto_setup.py`, `tests/unit/test_proactive_prompt.py`, `tests/unit/test_cli_ide_setup.py` |
+| Transcript scanning | Format parsing, path discovery, incremental positions, and duplicate handling work | `tests/unit/test_<agent>_transcript.py` |
+| Hook pipeline | The normalized events reach the shared scanning pipeline | `tests/unit/test_hook_processing.py` and the relevant UX contract test |
+| MCP integration | MCP registration and applicable advisor behavior work | `tests/unit/test_mcp_server.py`, `tests/integration/test_integration_mcp.py` |
+| Installer behavior | Help, detection, and setup flags include the integration when applicable | `tests/test_install_script.py` |
+| User experience | User-facing and agent-facing messages, setup choices, and status reporting are documented and tested | `tests/ux/` |
+| Cross-platform behavior | Paths, permissions, process I/O, and executable selection work on supported platforms | Platform parametrization and CI matrix |
+
+Complete the applicable checks:
+
+- [ ] Add focused adapter tests for detection, normalization, event mapping,
+  tool mapping, and response formatting.
+- [ ] Add setup tests for config creation, merge behavior, verification, and
+  reconciliation. Include both a fresh file and a pre-existing config.
+- [ ] Add transcript tests for every supported format and path-discovery
+  branch. If transcript scanning is not supported, document why.
+- [ ] Add hook-pipeline or UX contract coverage for each newly user-visible
+  behavior, including the expected permission and message flow.
+- [ ] Add installer and auto-detection coverage when the integration is
+  discoverable during installation.
+- [ ] Use safe, synthetic fixtures only; never include real credentials or
+  customer data in tests, docs, screenshots, or issue comments.
+- [ ] Update `.github/workflows/release-readiness.yml` when the supported-agent
+  setup list or its verification requirements change.
+- [ ] Run the related unit tests, then run formatting and lint checks required
+  by `AGENTS.md` for code changes.
+
+### Isolated IDE hook matrix
+
+`tests/integration/test_ide_hooks_e2e.py` installs each supported external IDE
+integration from the canonical registry into a temporary home and project,
+verifies the generated hook manifest and MCP registration, and invokes every
+managed lifecycle event with its registry-defined allow, directory-block, and
+post-output-redaction cases where the host exposes command hooks. Malformed
+input, timeout/process failure, and the complete response contract are covered
+by the focused adapter and hook-pipeline tests listed above.
+For Cursor, the local matrix verifies user-level MCP registration separately
+from the cloud-project hook flow; project setup must not create a local MCP
+file because Cloud Agent MCP is externally registered.
+The `ide-hook-e2e` release-readiness matrix runs one IDE per job so failures
+identify the IDE and event.
+
+Plugin and extension integrations are verified through their generated
+TypeScript bridge and registration because their host runtimes and SDKs are
+not dependencies of this repository. Junie is MCP-only, so its test verifies
+registration and records that no enforcement hook can be invoked. Windows
+setup is structurally checked; the runtime command matrix runs on Ubuntu
+because executing generated `.bat` hooks requires a Windows command host.
+
+## 4. Documentation and release bookkeeping
+
+- [ ] Update every applicable reference table in `docs/AGENT_SUPPORT.md`:
+  Supported Agents, Hook Capability Matrix, Violation Type Coverage Matrix,
+  Agent Confidence Levels, Hook Event Name Mapping, Response Format
+  Differences, and Config File Locations.
+- [ ] Update the architecture, setup, transcript, and known-limitations
+  sections in `docs/AGENT_SUPPORT.md`.
+- [ ] Add or update a focused deep-dive guide when setup or troubleshooting
+  cannot be explained clearly in the shared support reference.
+- [ ] Update `docs/README.md` and `mkdocs.yml` when creating a new document or
+  adding a new integration guide.
+- [ ] Keep `README.md` concise: link to the shared support reference and this
+  checklist instead of duplicating capability tables.
+- [ ] Update `AGENTS.md`, `docs/DEVELOPER_GUIDE.md`, or contributor guidance
+  when the integration workflow changes.
+- [ ] Add a `[Unreleased]` entry to `CHANGELOG.md` for notable integration or
+  documentation changes.
+- [ ] Link relevant upstream specifications and issue references, and make
+  sure confidence and limitation claims match the available test evidence.
+- [ ] Let CI/CD and Read the Docs generate the documentation when source or
+  navigation files change. A local preview is optional; see `docs/README.md`
+  for on-demand commands. Do not commit the generated `site/` directory.
+
+## 5. Manual acceptance
+
+Use an isolated test configuration and a disposable project where possible.
+
+- [ ] Run setup in dry-run mode and verify that the proposed changes match the
+  documented config path and event inventory.
+- [ ] Run setup against a fresh configuration, then repeat it to confirm
+  idempotence and verify the installed hook status.
+- [ ] Exercise a benign prompt and tool call through the real agent or its
+  documented simulator. Confirm the expected user and agent message channels.
+- [ ] Exercise each applicable warning, block, and output-transform path with
+  approved synthetic fixtures. Confirm that the observed result matches the
+  documented protection level.
+- [ ] Change or remove an AI Guardian-owned hook in the disposable config and
+  verify that reconciliation restores the expected manifest without removing
+  unrelated settings.
+- [ ] Restart the agent and daemon, if used, and verify that sessions,
+  transcript positions, and setup status remain consistent.
+- [ ] If the agent supports transcripts, confirm that a new conversation is
+  discoverable and that incremental scanning does not duplicate findings.
+- [ ] Verify upgrade behavior from the previous supported configuration shape
+  and record any upstream limitation that prevents full validation.
+- [ ] Attach test commands, CI links, or manual evidence to the issue or pull
+  request.
+
+## Existing integration changes
+
+For a change to an existing agent, start with the smallest applicable set and
+expand it when a shared component is touched:
+
+- [ ] Classify the change as adapter, setup, transcript, MCP, installer,
+  console/tray, documentation, or upstream-contract change.
+- [ ] Re-check the capability and limitation record against the current agent
+  documentation.
+- [ ] Run the focused tests for the changed surface and all tests that cover
+  shared adapter or hook-processing code.
+- [ ] Re-check every row in the support matrix affected by the change, rather
+  than updating only the Supported Agents table.
+- [ ] Re-check independent health renderers and launchers (doctor and tray
+  menu actions) when setup paths, config scopes, or MCP registration change.
+  Verify that setup remains user/desktop-scoped by default even when a
+  project-level configuration is present, and test every explicit project
+  setup action (CLI flag, directory picker, and resulting config paths).
+- [ ] Re-run the manual acceptance items for installation, verification, and
+  the affected user-visible behavior.
+- [ ] Update the confidence level and release-readiness coverage when the
+  evidence or support level changes.
+
+## Definition of done
+
+An integration is ready when all applicable checklist items are complete,
+focused tests pass, documentation and code agree on capabilities and limits,
+release-readiness coverage is synchronized, and the issue or pull request
+contains enough evidence for another contributor to reproduce the result.
+
+# === docs/index.md ===
+
+--8<-- "README.md"
 
 # === docs/kubernetes.md ===
 
@@ -8424,6 +10855,20 @@ This applies the base manifests (Deployment + ClusterIP Service + ConfigMap) wit
 kubectl get pods -l app=ai-guardian
 kubectl logs -l app=ai-guardian -f
 ```
+
+All daemon pods must also carry an ownership label. Use a unique owner value
+for each user or tenant when sharing a namespace:
+
+```yaml
+metadata:
+  labels:
+    app: ai-guardian
+    ai-guardian.owner: my-user
+```
+
+Configure the tray with the same owner value. Discovery adds this selector to
+every Kubernetes API or `kubectl` query, so credentials are only requested from
+pods owned by that configured identity.
 
 Wait for the pod readiness probe to pass (checks `GET /api/status` on port 63152).
 
@@ -8623,9 +11068,25 @@ AI Guardian includes an MCP (Model Context Protocol) server that exposes read-on
 
 ```bash
 ai-guardian setup --ide claude
+ai-guardian setup --ide cursor
 ```
 
 The MCP server is installed by default during setup. Use `--no-mcp` to skip.
+Cursor desktop and the local Cursor CLI share the local user configuration
+(`~/.cursor/hooks.json` and `~/.cursor/mcp.json`). A project
+`.cursor/mcp.json` is also supported for local Cursor workspaces, but it is not
+the MCP registration mechanism for Cursor Cloud Agents. Cloud MCP servers must
+be configured through Cursor's Cloud Agents dashboard/team settings or supplied
+through the Cloud Agents API. For a Cursor Cloud workspace, select the project
+explicitly to install only the project hooks:
+
+```bash
+ai-guardian setup --ide cursor --project /path/to/workspace
+```
+
+The tray exposes the same operation as **Cursor Cloud (project setup)...**;
+it does not modify the project's `.cursor/mcp.json`. Without `--project`, setup
+remains user/desktop-scoped.
 
 ### Manual setup
 
@@ -8655,12 +11116,26 @@ Add to `~/.claude.json` (or `~/.claude/settings.json`):
 }
 ```
 
+For a manual Cursor registration, add the following to `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ai-guardian": {
+      "type": "stdio",
+      "command": "ai-guardian",
+      "args": ["mcp-server"]
+    }
+  }
+}
+```
+
 ### Multi-IDE support
 
 | IDE | MCP config file |
 |-----|----------------|
 | Claude Code | `~/.claude/settings.json` or `~/.claude.json` → `mcpServers` |
-| Cursor | `~/.cursor/mcp.json` |
+| Cursor desktop / CLI | `~/.cursor/mcp.json` (`type: "stdio"`) |
 | Windsurf | `~/.windsurf/mcp.json` |
 
 ## Enable / Disable
@@ -9185,14 +11660,48 @@ Quit
 - **○** Stopped daemon — limited submenu with Console, Mode, Start daemon
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
 
+Every discovered daemon is exposed in the tray. The menu is rebuilt when the
+discovery result changes, so the number of running containers or other remote
+daemons is not limited by a fixed tray slot count.
+
 ## Stale-Code Indicator
 
-When the ai-guardian source code on disk is newer than the running daemon binary, the tray shows a warning indicator next to the daemon name:
+For a local development (`-dev`) install, the daemon records the newest
+modification time of its tracked runtime files in its PID file at startup. The
+tray compares that value with the current inventory and shows a warning when a
+tracked file is newer. For installed releases, staleness is determined from the
+daemon and tray package versions; remote/container/Kubernetes targets use their
+reported daemon version because their source trees are not available locally.
+
+The inventory is curated rather than the entire package. It includes Python
+modules under `config/`, `hook_adapters/`, `hook_events/`, `patterns/`,
+`scanners/`, `sdk/`, `setup/`, `tools/`, `utils/`, `violations/`, and
+`observability/`; the package initializer and root hook, configuration, adapter,
+health-check, and self-test modules; and selected daemon lifecycle, REST API,
+reporting, MCP audit, prompt, pattern-editor, and tray-plugin helpers. It tracks
+the bundled `patterns/data/*.toml` rules, `templates/tray-plugins/*.json`, and
+`schemas/ai-guardian-config.schema.json` because daemon paths read those files
+at runtime. The exact directory and path allowlists live beside
+`DaemonState.get_package_max_mtime()` in `src/ai_guardian/daemon/state.py`.
+
+Client-only code stays out of the inventory: for example, the full
+`integrations/`, `tui/`, `web/`, and `tray/` trees, `daemon/client.py`,
+`daemon/discovery.py`, `mcp/server.py`, and the daemon's CLI-only `auto_setup.py`
+and `desktop.py` helpers. A few individual files in those packages are included
+where the daemon server calls them directly.
+
+When adding a package module or resource, check whether the daemon server, its
+REST handlers, or hook-processing path imports and uses it. Add a whole
+directory only when it is a cohesive daemon runtime subsystem; add an explicit
+path for an isolated shared helper or resource. Keep unrelated CLI and client
+code excluded, and add coverage for both included and excluded paths.
 
 - **Local daemons**: orange dot + `Restart daemon (stale code)` menu item. Clicking it restarts the daemon and polls until it comes back online (up to 10 seconds), then refreshes the menu.
 - **Container / Kubernetes daemons**: orange dot + `Rebuild image (stale code)` hint. Remote daemons cannot be restarted from the tray — you must rebuild the container image and redeploy.
 
-Stale-code detection compares the installed package version against the timestamp of the source tree using the daemon's `/api/status` endpoint. This replaces the old dev-mode auto-restart behavior removed in v1.13.0.
+The dev source-time comparison is a warning only; it does not restart the
+daemon automatically. This replaces the old dev-mode auto-restart behavior
+removed in v1.13.0.
 
 ## Discovery Methods
 
@@ -9258,6 +11767,37 @@ To make this permanent, add the export to your shell profile (`~/.bashrc`,
 > **macOS with Podman Desktop:** `DOCKER_HOST` is set automatically — no manual
 > setup needed.
 
+### Socket interruptions and Podman Desktop
+
+The tray refreshes container discovery periodically in addition to reacting to
+container events. If the Podman API socket briefly disappears—for example when
+Podman Desktop closes or recreates its connection—the tray keeps the last-known
+container targets visible with an unknown status and retries automatically. A
+successful query replaces that cache, so containers that were actually deleted
+or stopped disappear normally after the engine is reachable again.
+
+The tray does not run `systemctl` or restart Podman Desktop automatically. The
+socket is a user-session service and its setup differs across platforms. On
+Linux, repair or enable it with:
+
+```bash
+systemctl --user enable --now podman.socket
+```
+
+An inactive `podman.service` is expected with socket activation; check the
+socket instead:
+
+```bash
+systemctl --user status podman.socket
+```
+
+If the socket is at a non-standard path, export the Docker-compatible endpoint
+before starting the tray:
+
+```bash
+export DOCKER_HOST=unix://$(podman info --format '{{.Host.RemoteSocket.Path}}')
+```
+
 ### Kubernetes Discovery
 
 Disabled by default. Enable in config:
@@ -9269,14 +11809,24 @@ Disabled by default. Enable in config:
       "discover_kubernetes": true,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   }
 }
 ```
 
-Pods are filtered by the current user (`user=$USER` label added automatically).
+Pods are always filtered by an ownership label. The default contract is
+`ai-guardian.owner=$USER`; set `AI_GUARDIAN_K8S_OWNER` or configure an explicit
+`ownership.value` when the cluster owner identity differs from the local
+username. Every daemon deployment must set the same ownership label. This
+prevents discovery and token reads from crossing user boundaries in shared
+namespaces. The ownership selector is added to `label_selector` and cannot be
+removed by setting a broader base selector.
 
 ### Manual Targets
 
@@ -9307,8 +11857,8 @@ Each daemon exposes a REST API for tray communication:
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/health` | GET | Health check |
-| `/api/status` | GET | Daemon status (name, version, paused, menu_tags) |
-| `/api/stats` | GET | Full stats (requests, blocked, violations, menu_tags) |
+| `/api/status` | GET | Daemon status (name, version, paused, menu_tags, config_source, config_read_only) |
+| `/api/stats` | GET | Full stats (requests, blocked, violations, menu_tags, config_source, config_read_only) |
 | `/api/pause` | POST | Pause scanning (`{"minutes": 15}`) |
 | `/api/resume` | POST | Resume scanning |
 
@@ -9335,7 +11885,11 @@ The REST port is configurable via `daemon.rest_port` (default 63152, 0 = OS-assi
       "discover_kubernetes": false,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   }
@@ -9596,6 +12150,24 @@ By default, all plugins appear on all daemons. Use tags to filter plugins to spe
 - Up to 8 plugins per daemon
 - Up to 12 items per plugin
 - These are pre-allocated pystray slots (macOS requires fixed menu structure)
+
+### Linux pause/resume menu stability
+
+On Linux, the tray intentionally does not rebuild the native menu every second
+while a daemon is paused. GTK/AppIndicator replaces the menu during an update,
+which can collapse an open nested submenu in KDE before **Resume** can be
+selected. Linux pause labels therefore use a stable paused indicator instead of
+a live countdown; pause/resume visibility still refreshes when the pause state
+changes. macOS keeps the live countdown refresh behavior.
+
+### Project directories in the Pause menu
+
+The per-directory **Pause...** list combines explicitly paused directories with
+the daemon's `active_project_dirs` list. This list represents project
+directories recently observed in hook requests, not only currently open IDE
+sessions. Entries are retained until the daemon's project tracking TTL expires
+(currently 24 hours without another request), including while global scanning
+is paused.
 
 ## Migration from v1.7.x
 
@@ -10780,7 +13352,7 @@ Benefits:
 - **OWASP Secret Management**: https://cheatsheetseries.owasp.org/cheatsheets/Secrets_Management_Cheat_Sheet.html
 
 ### Related Tools
-- **GitGuardian**: https://www.gitguardian.com/ (Commercial, 350+ secret types)
+- **GitGuardian**: https://www.gitguardian.com/ (Cloud service, 350+ secret types; the `ggshield` CLI is MIT-licensed)
 - **GitHub Secret Scanning**: https://docs.github.com/en/code-security/secret-scanning
 - **AWS Macie**: https://aws.amazon.com/macie/ (Cloud-specific)
 - **Azure Key Vault Scanner**: https://azure.microsoft.com/en-us/products/key-vault
@@ -12687,11 +15259,51 @@ See [docs/AIDER.md](AIDER.md) for detailed Aider integration instructions.
 
 **False positives**: Add allowlist rules to `.gitleaks.toml` or use inline `# gitleaks:allow` comments.
 
+# === docs/project/changelog.md ===
+
+# Changelog
+
+--8<-- "CHANGELOG.md"
+
+# === docs/project/container.md ===
+
+# Container
+
+--8<-- "container/README.md"
+
+# === docs/project/contributing.md ===
+
+# Contributing
+
+--8<-- "CONTRIBUTING.md"
+
+# === docs/project/releasing.md ===
+
+# Releasing
+
+--8<-- "RELEASING.md"
+
 # === docs/README.md ===
 
 # AI Guardian Documentation
 
 This directory contains detailed documentation for AI Guardian. The main [README.md](../README.md) provides a quick overview; these docs cover configuration, features, and architecture in depth.
+
+The documentation is published on [Read the Docs](https://ai-guardian.readthedocs.io/).
+
+## Documentation site
+
+The MkDocs site is generated and published by CI/CD through Read the Docs. A
+local preview is optional and is not required for documentation changes. To
+preview the site on demand:
+
+```bash
+python -m pip install -r docs/requirements.txt
+mkdocs serve
+```
+
+To generate the static site locally on demand, run `mkdocs build`. The generated
+`site/` directory is not committed.
 
 ## Getting Started
 
@@ -12699,17 +15311,17 @@ This directory contains detailed documentation for AI Guardian. The main [README
 |----------|-------------|
 | [Configuration Guide](CONFIGURATION.md) | Config file locations, options, precedence, and remote configs |
 | [Configuration Cookbook](COOKBOOK.md) | Practical Q&A pairs for common configuration tasks |
-| [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage gitleaks, betterleaks, leaktk |
+| [Scanner Installation](SCANNER_INSTALLATION.md) | Install and manage pinned secret scanner engines |
 | [TOML Pattern Engine](TOML_PATTERNS.md) | Built-in Python scanner with 267 pre-compiled TOML patterns |
 | [Console Guide](CONSOLE.md) | Interactive TUI for managing configuration |
 | [Hook Ordering](HOOKS.md) | How hooks work and ordering requirements |
-| [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, and container issue resolution |
+| [Troubleshooting](TROUBLESHOOTING.md) | Daemon, tray, container, and OpenShell issue resolution |
 
 ## Security Features
 
 | Document | Description |
 |----------|-------------|
-| [Security Overview](security/) | Index of all security feature documentation |
+| [Security Overview](security/README.md) | Index of all security feature documentation |
 | [Secret Scanning](security/SECRET_SCANNING.md) | Secret detection, pattern server, false positives |
 | [Prompt Injection](security/PROMPT_INJECTION.md) | Heuristic detection, sensitivity, allowlists |
 | [SSRF Protection](security/SSRF_PROTECTION.md) | Private IP blocking, metadata endpoints, limitations |
@@ -12747,6 +15359,7 @@ This directory contains detailed documentation for AI Guardian. The main [README
 
 | Document | Description |
 |----------|-------------|
+| [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) | Implementation, testing, documentation, and release checklist for integrations |
 | [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture |
 | [Pre-commit Hook](PRE_COMMIT.md) | Scan staged files for secrets before commit |
 | [GitHub Copilot Setup](GITHUB_COPILOT.md) | Setup guide for GitHub Copilot |
@@ -12759,18 +15372,636 @@ This directory contains detailed documentation for AI Guardian. The main [README
 
 | Document | Description |
 |----------|-------------|
-| [Container Image](../container/README.md) | UBI-based image with all headless IDEs, published to quay.io |
+| [Sandbox CLI](Sandbox.md) | Named Docker/Podman and OpenShell sandbox lifecycle management and native command mappings |
+| [CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md) | Onboarding and validation checklist for container and OpenShell CLI support |
+| [Container Image](../container/README.md) | UBI-based image with supported agent integrations, published to quay.io |
 
 ## Development
 
 | Document | Description |
 |----------|-------------|
 | [Developer Guide](DEVELOPER_GUIDE.md) | Architecture, setup, testing, and development workflows |
+| [Scanner Integration Checklist](SCANNER_INTEGRATION_CHECKLIST.md) | License, installation, testing, and documentation checklist for scanner engines and detectors |
 | [Contributing](../CONTRIBUTING.md) | Fork workflow, PR guidelines |
 | [Agent Instructions](../AGENTS.md) | Development guidelines, testing, CI/CD |
 | [Releasing](../RELEASING.md) | Release process and version management |
 | [Changelog](../CHANGELOG.md) | Version history |
 
+# === docs/Sandbox.md ===
+
+# Sandbox CLI
+
+The `ai-guardian sandbox` command manages named AI Guardian sandboxes across
+Docker/Podman and NVIDIA OpenShell. Container creation is detached; OpenShell
+creation opens an independent interactive shell after setup, matching native
+OpenShell behavior while leaving the sandbox available after the shell exits.
+Create a sandbox once, then inspect, stop, start, connect to, execute commands
+in, stream logs from, or delete it in later shell sessions.
+
+The command is the supported entry point for both lifecycle management and
+initial sandbox setup. It composes the OpenShell baseline and selected-CLI
+policies, prepares gateway providers when required, handles configuration and
+repository snapshots, and exposes the daemon through an OpenShell gateway
+service endpoint when that runtime is selected.
+The tray and web console authenticate this service with a dedicated token
+header as well as the standard Bearer header because some OpenShell gateway
+versions remove `Authorization` while proxying a service.
+
+When it is available, OpenShell is the preferred runtime for agent sandboxes.
+OpenShell provider credentials stay with the gateway instead of being mounted
+or passed into the agent sandbox, and the gateway adds deny-by-default network
+and filesystem policy, provider-backed inference, and per-sandbox isolation.
+The Docker/Podman runtime remains useful as a simpler fallback, but credentials
+such as Vertex ADC files or API keys are available inside that container and
+may therefore be readable by the agent.
+
+> **Experimental:** OpenShell integration is still evolving. The following
+> combinations have been tested; verify current compatibility before important
+> work:
+>
+> | Selection | Inference/authentication |
+> | --- | --- |
+> | `--cli claude` | Claude Code through Google Vertex AI and `inference.local` |
+> | `--cli codex` | Codex through its OpenShell provider and Codex policy |
+> | `--cli opencode --agent claude` | OpenCode using Claude through Vertex AI and `inference.local/v1` |
+
+OpenShell is the default runtime for new sandboxes, including the tray's
+Create sandbox form. Use `--runtime container` explicitly when Docker/Podman
+is required; the container runtime remains available as a simpler fallback.
+
+## Prerequisites
+
+- For `--runtime container`, install Docker or Podman. The command uses
+  `CONTAINER_ENGINE` when set, otherwise it defaults to `podman`.
+- For `--runtime openshell`, install the OpenShell CLI and connect it to an
+  OpenShell gateway. The command uses `OPENSHELL_CLI` when set, otherwise it
+  invokes `openshell`.
+- The default images are
+  `quay.io/redhatproductsecurity/ai-guardian:latest` for containers and
+  `quay.io/redhatproductsecurity/ai-guardian-openshell:latest` for OpenShell.
+  Select another image with `--image`.
+- OpenShell creation composes `container/policies/base.yaml`, the selected
+  CLI fragment, and any files passed with `--policy`. Installed wheels carry
+  these policy assets with the CLI.
+
+OpenShell installation and gateway setup are documented in the official
+[OpenShell quickstart](https://docs.nvidia.com/openshell/get-started/quickstart).
+
+On Linux, rootless Podman discovery requires its user socket:
+
+```bash
+systemctl --user enable --now podman.socket
+```
+
+`podman.service` being `inactive (dead)` is normal when socket activation is in
+use; the socket starts the service on demand. Some Podman Desktop versions can
+temporarily disconnect or recreate this API socket when the UI closes. The
+tray retries discovery and keeps the last-known container targets visible with
+an unknown status while the socket is unavailable. If the socket path is
+non-standard, set `DOCKER_HOST` to the path reported by
+`podman info --format '{{.Host.RemoteSocket.Path}}'`. The tray does not enable
+or restart the user service automatically because that is platform- and
+user-session-specific.
+
+## Quick start
+
+Create and manage a Docker/Podman sandbox:
+
+```bash
+ai-guardian sandbox create --runtime container --name guardian-codex --repo .
+ai-guardian sandbox list
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox connect guardian-codex
+ai-guardian sandbox exec guardian-codex -- ai-guardian doctor
+ai-guardian sandbox logs guardian-codex --follow
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox stop guardian-codex
+ai-guardian sandbox start guardian-codex
+ai-guardian sandbox delete guardian-codex
+```
+
+## Codex authentication in container sandboxes
+
+Docker/Podman sandbox creation deliberately does not mount or read the host
+`~/.codex/auth.json`. Agent home directories remain isolated from the sandbox;
+AI Guardian configures the hooks and daemon, but it does not log Codex in
+automatically. Authenticate from inside a persistent named sandbox:
+
+```bash
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+codex login
+```
+
+For a headless container, `codex login --device-auth` is the preferred OAuth
+flow, but device-code authorization must first be enabled in ChatGPT's
+**Settings → Security**. A managed ChatGPT workspace may require an
+administrator to enable it.
+
+API-key authentication uses a real OpenAI Platform API key, not an OAuth token
+from `auth.json`:
+
+```bash
+export OPENAI_API_KEY="<your-openai-api-key>"
+ai-guardian sandbox create \
+    --runtime container \
+    --name guardian-codex \
+    --cli codex \
+    --repo .
+ai-guardian sandbox connect guardian-codex
+
+# Inside the container:
+printenv OPENAI_API_KEY | codex login --with-api-key
+```
+
+The key must be present when the container is created so the sandbox receives
+it. The `--api-key` option on `sandbox create` is for Anthropic authentication,
+not Codex. API-key authentication is billed through the OpenAI Platform rather
+than ChatGPT plan credits; see the [official OpenAI authentication
+documentation](https://learn.chatgpt.com/docs/auth).
+
+If device-code authorization is unavailable and the browser flow cannot
+complete from inside the container, authenticate on a host with a browser and
+manually copy the complete OAuth cache into a persistent named container:
+
+```bash
+# On the host, after completing `codex login`:
+podman cp ~/.codex/auth.json guardian-codex:/sandbox/.codex/auth.json
+```
+
+Use `docker cp` with Docker. This is an explicit user action; AI Guardian does
+not inspect the file. Treat `auth.json` like a password because it contains
+credentials, and never commit or share it. An OAuth access or refresh token
+from that file must not be pasted into Codex's API-key login.
+
+Create and manage an OpenShell sandbox:
+
+```bash
+# Create; policy files are repeatable.
+ai-guardian sandbox create \
+    --runtime openshell \
+    --name guardian-claude \
+    --cli claude \
+    --repo . \
+    --policy ./container/openshell-github-readonly-policy.yaml
+
+# List managed OpenShell sandboxes.
+ai-guardian sandbox list --runtime openshell
+
+# Inspect status; runtime is auto-detected by name.
+ai-guardian sandbox status guardian-claude
+
+# Open an independent interactive shell.
+ai-guardian sandbox connect guardian-claude
+
+# Execute a command without replacing the sandbox process.
+ai-guardian sandbox exec guardian-claude -- ai-guardian doctor
+
+# Stream logs.
+ai-guardian sandbox logs guardian-claude --follow
+
+# Save and inspect configuration snapshots.
+ai-guardian sandbox config save guardian-claude
+ai-guardian sandbox config list guardian-claude
+
+# Stop, start, or restart.
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox restart guardian-claude
+
+# Permanently delete.
+ai-guardian sandbox delete guardian-claude
+```
+
+For multiple policy overlays, repeat the option in the same create command:
+
+```bash
+ai-guardian sandbox create --runtime openshell --name guardian-claude \
+    --cli claude --repo . \
+    --policy ./policy-one.yaml \
+    --policy ./policy-two.yaml
+```
+
+The `--cli` option selects the executable. Use `--cli opencode --agent NAME`
+when selecting an OpenCode agent profile; `--agent` is not the executable
+selector for other CLIs.
+
+The runtime option is optional for lifecycle commands. When supplied, it may
+appear before or after the lifecycle verb:
+
+```bash
+ai-guardian sandbox --runtime openshell list
+ai-guardian sandbox status guardian-claude
+```
+
+Creation defaults to OpenShell. If `--name` is omitted, AI Guardian starts with
+`ag-<cli>` as the logical sandbox name. It preserves that base when it is
+unused. For containers, when the selected runtime already has that name, it
+appends the local creation time as `YYYYMMDD_HHMMSS` (for example,
+`ag-claude-20260917_123456`) and adds a numeric suffix if needed. OpenShell
+names are limited to 19 characters, so collisions use compact `YYMMDDHHMM`
+timestamps (for example, `ag-codex-2609171646`). If the requested OpenShell
+name is too long or that compact name is already in use, AI Guardian uses a
+short UUID suffix while preserving a short base prefix. This policy is applied
+independently in each runtime's native name space. For lifecycle commands with a name, omit
+`--runtime` and the command probes the AI Guardian
+labels/metadata to select Docker/Podman or OpenShell. If no runtime is supplied
+to `list`, it lists managed sandboxes from both runtimes.
+`AI_GUARDIAN_SANDBOX_RUNTIME` can still provide the runtime selection when
+needed.
+
+## Tray controls
+
+The tray's main menu contains `Create sandbox...`. Creation runs through the
+same Python sandbox implementation as the CLI, without opening a terminal;
+success is reported with a desktop notification and failures show the
+captured runtime log in a modal. After a container or OpenShell sandbox is
+discovered, its target menu contains `Manage sandbox` with `Status`, `Start`,
+`Stop`, `Restart`, `Exec`, `Logs`, and `Delete`. For ordinary containers, the
+`Manage sandbox` submenu also contains `Connect`; OpenShell uses the
+top-level `Connect` action described below.
+Discovery already provides the complete list of managed sandboxes, so there is
+no redundant per-target `List sandboxes` action. Configuration snapshots are grouped under
+`Manage sandbox -> Config`, with `Save`, `List`, and `Restore` actions. The
+`Delete...` action opens an isolated confirmation modal and requires typing the
+exact sandbox name before deletion. Host configuration snapshots are retained.
+
+Status, start, stop, restart, and configuration actions run through the same
+Python implementation as the CLI. Status and configuration output, together
+with failures from any of these actions, is shown in a scrollable modal rather
+than an empty terminal; the modal includes a `Copy` button for the captured
+text. `Connect`, `Exec`, and followed `Logs` remain terminal
+actions because they are interactive or streaming sessions; one-shot `Logs`
+output uses the same log modal.
+
+The `Create sandbox...` form includes folder browsers for the repository and
+host configuration directory, plus an optional `Policy files` browser for
+OpenShell creation. It also exposes providers, the Vertex inference model,
+runtime labels, and additional `KEY=VALUE` environment entries. The policy
+chooser supports multiple files; manual entry uses comma-separated paths
+(pasted newline-separated paths are also accepted). Each path is passed as a
+repeatable `--policy` option. Runtime-specific fields are disabled when the
+container runtime is selected. Secret `--api-key` values remain a CLI/env
+option rather than being put into the tray form payload. Stopped
+container-engine sandboxes, including OpenShell sandboxes, appear in the main
+menu under `Start stopped sandbox...`.
+
+For OpenShell repository uploads, pressing `Continue` opens an upload preflight
+confirmation showing selected path, file count, total size, Git remote
+classification, image availability, safe command preview, and a large-upload
+warning when useful. Local image references are checked without pulling;
+remote registry availability is not probed. Cancelling preflight returns to the
+populated creation form. Container
+repositories are mounted directly and do not show this upload confirmation.
+
+The form separates the selected **CLI** from the **OpenCode agent** profile.
+When `opencode` is selected, enter `build`, `plan`, or a custom profile name;
+the agent field is required. The field is only enabled for OpenCode; other CLI
+selections retain their existing defaults.
+
+On macOS with multiple displays, modal windows opened from the tray menu open
+on the display containing the tray menu interaction. This includes About and
+health/setup dialogs, working-directory and Cursor Cloud directory pickers,
+plugin parameter/modal dialogs, and sandbox forms, configuration output,
+runtime logs, and delete confirmations. The tray captures that display before
+starting an isolated Tkinter dialog process (or passes it to the native Cocoa
+fallback); if display detection is unavailable, the normal window-manager
+placement remains the fallback.
+
+Manual verification on macOS with two displays:
+
+1. Start the tray and open its menu on the secondary display.
+2. Select **Create sandbox...** and confirm the form opens on that display.
+3. From **Manage sandbox**, open **Config -> Restore...**, **Logs...**, and
+   **Delete...**; confirm each form or confirmation opens on the same display.
+4. Check **About**, **Working Dir**, and **IDE/CLI Setup** dialogs from the
+   same display; test a plugin parameter or modal item when configured.
+5. Repeat the checks from the primary display and confirm the dialogs follow
+   the interaction display without changing single-display behavior.
+
+## OpenShell command mappings
+
+Most lifecycle operations below are deliberately thin aliases of the native
+OpenShell CLI. `connect` is intentionally mapped to an independent interactive
+`exec` session: native `openshell sandbox connect` can attach to the sandbox's
+main process, so exiting it may terminate the sandbox in some OpenShell
+versions. `start` and `restart` additionally ensure the AI Guardian daemon and
+gateway service are available; `delete` removes that service before deleting
+the native sandbox.
+
+| AI Guardian command | Native OpenShell command |
+| --- | --- |
+| `ai-guardian sandbox status NAME` | `openshell sandbox get NAME` |
+| `ai-guardian sandbox start NAME` | `openshell sandbox start NAME` |
+| `ai-guardian sandbox stop NAME` | `openshell sandbox stop NAME` |
+| `ai-guardian sandbox connect NAME` | `openshell sandbox exec --name NAME --tty -- /bin/bash -l` |
+| `ai-guardian sandbox delete NAME` | `openshell sandbox delete NAME` |
+| `ai-guardian sandbox exec NAME -- CMD` | `openshell sandbox exec --name NAME -- CMD` |
+| `ai-guardian sandbox logs NAME` | `openshell logs NAME` |
+
+`sandbox restart` is a convenience sequence that runs native `stop` followed
+by native `start`; for OpenShell it also ensures that the AI Guardian daemon is
+running after the sandbox process is relaunched. OpenShell's lifecycle
+documentation does not define a separate restart subcommand; see [Manage
+Sandboxes](https://docs.nvidia.com/openshell/sandboxes/manage-sandboxes).
+
+`sandbox create` is not a plain alias: it adds the AI Guardian image, managed
+labels, agent environment, optional repository/config uploads, providers,
+policies, and the gateway-managed AI Guardian service. `sandbox list` is also
+intentionally scoped to
+resources carrying the `ai-guardian.managed=true` label.
+
+The command records the final name in runtime metadata. An explicit name is
+preserved when available; if it is already in use, the collision-aware naming
+policy selects the timestamped name before creation. The tray and NiceGUI
+prefer this stable sandbox name over a daemon hostname that may otherwise be
+reported as a container ID. Existing OpenShell sandboxes also use their
+`openshell.ai/sandbox-name` metadata when available.
+
+For OpenShell log filtering, `--source`, `--level`, and `--since` are forwarded
+to `openshell logs`. `--follow` selects OpenShell's streaming `--tail` mode.
+
+## Create options
+
+Common options for `sandbox create` are:
+
+| Option | Purpose |
+| --- | --- |
+| `--name NAME` | Assign a stable base name. It is preserved when available; collision names follow runtime limits. If omitted, the base defaults to `ag-<cli>`. |
+| `--runtime {container,openshell}` | Select Docker/Podman or OpenShell. Creation defaults to OpenShell; lifecycle commands auto-detect it by name when omitted. |
+| `--container-engine COMMAND` | Override the Docker/Podman executable for this invocation; defaults to `$CONTAINER_ENGINE` or `podman`. |
+| `--openshell-cli COMMAND` | Override the OpenShell executable for this invocation; defaults to `$OPENSHELL_CLI` or `openshell`. |
+| `--cli NAME` | Select the CLI executable. Optional; defaults to Claude for OpenShell and Codex for containers. |
+| `--agent NAME` | OpenCode agent profile. Required with `--cli opencode`; valid only with that CLI and does not select the executable. |
+| `--image IMAGE` | Override the runtime image. `--base` is an alias. An explicit value is passed through unchanged; an invalid reference fails instead of falling back to the default. |
+| `--repo DIR` | Mount the repository into a container or upload it to OpenShell at `/sandbox/repo`. |
+| `--port PORT` | Use a specific host port for a container daemon REST endpoint. OpenShell uses the gateway-selected service port. Must be `1-65535`. |
+| `--profile PROFILE` | Use a bundled or custom AI Guardian security profile. |
+| `--restore-config latest` | Restore the latest saved snapshot for the named sandbox as its initial configuration. Requires `--name`; cannot be combined with `--profile` or `--config-dir`. |
+| `--config-dir DIR` | Use `ai-guardian.json` from DIR as the initial config snapshot when no sandbox-local config exists. `--guardian-home` is an alias. |
+| `--env KEY=VALUE` | Add an environment value; repeatable. |
+| `--provider NAME` | Attach an OpenShell provider; repeatable. |
+| `--policy FILE` | Add an OpenShell policy overlay; repeatable. The baseline and selected-CLI fragments are included automatically. |
+| `--label KEY=VALUE` | Add a runtime label; repeatable. |
+| `--model MODEL` | OpenShell inference model for a Claude-compatible route; defaults to `$AI_GUARDIAN_OPEN_SHELL_MODEL` or `claude-sonnet-4-6` when that route is selected. |
+| `--api-key KEY` | Pass a direct Anthropic key to container setup, or use it only while creating an OpenShell Claude provider. It is never placed in sandbox runtime arguments. |
+
+In the tray's **Create sandbox** form, **CLI** is a dropdown containing the
+CLI-capable sandbox integrations: `claude`, `copilot`, `codex`, `gemini`,
+`antigravity`, `kiro`, `openclaw`, `opencode`, and `crush`. Selecting `opencode`
+enables a separate **OpenCode agent** field.
+
+The **Image / base** field remains editable for registry references, local
+Dockerfile paths, and community sandbox names. Its **Browse...** button lists
+local images carrying the `ai-guardian.support-image=true` label from the
+configured Docker/Podman engine. Images without that label can still be used by
+typing their reference manually. For example, a locally built OpenShell image
+uses `localhost/ai-guardian-openshell:dev` (a slash separates the registry name
+from the image name).
+
+An optional command can follow `--`:
+
+```bash
+ai-guardian sandbox create --runtime container --name guardian-codex -- \
+  codex --help
+```
+
+Without an explicit command, a container sandbox starts a long-lived login
+shell with an allocated TTY so that it remains available for later `connect`
+and `exec` calls. It does not launch an interactive agent automatically; start
+one from the shell or with `sandbox exec`.
+
+OpenShell's native upload flow cannot reliably combine uploads with a trailing
+command. The subcommand handles this by creating the detached sandbox first,
+then invoking the image entrypoint through a non-interactive `sandbox exec`
+after uploads finish. This bootstrap returns after setup so `create` can expose
+the gateway-managed `ai-guardian` service, then the default create opens an
+independent interactive
+`sandbox exec --tty` shell. Exiting that shell returns to the host while the
+named sandbox remains available for a later `connect` or `exec`. If an explicit
+command follows `--`, it runs in a separate exec after bootstrap and the create
+command returns when that command exits.
+
+When `--provider` is omitted, staged OpenShell setup reuses or creates an
+`ai-guardian-<cli>` provider from the active gateway and local credentials
+when that CLI/backend has a matching provider profile. Existing providers can
+always be selected explicitly with repeatable `--provider` options. Claude
+Vertex AI setup is selected by `ANTHROPIC_VERTEX_PROJECT_ID` or
+`VERTEX_AI_PROJECT_ID`; it creates or updates and attaches the gateway Vertex
+provider and configures the `inference.local` route. Real provider values and
+credentials are kept out of the sandbox's `--env` and `--upload` arguments.
+Claude receives only the non-secret `ANTHROPIC_API_KEY=unused` protocol
+placeholder required by its client; OpenShell's warning for that known
+placeholder is suppressed. `--bare` skips Claude's OAuth login flow and uses
+that `ANTHROPIC_API_KEY` directly. The placeholder does not reach Vertex AI:
+`inference.local` strips it and injects the real GCP access token before
+forwarding the request. Run `claude --bare` explicitly, matching OpenShell's
+documented provider-backed workflow; AI Guardian does not install a persistent
+wrapper. Explicit automated `claude --print ...` commands passed during
+creation still receive `--bare` when it is missing.
+
+OpenCode is a CLI with its own agent profiles and model/provider selection.
+The profile is required whenever `--cli opencode` is selected. Use the explicit
+two-level form when an OpenCode profile should use Claude:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --cli opencode \
+    --agent claude \
+    --model claude-sonnet-4-6 \
+    --provider vertex-provider \
+    --repo .
+```
+
+This `opencode` + `claude` + Claude/Vertex combination has been tested. The
+`--cli` value selects the executable; `--agent claude` selects the tested
+OpenCode profile; and `--model` plus `--provider` select the inference backend.
+
+Here `--agent claude` is an OpenCode agent profile; `--model` selects the
+OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
+not providers: with the default `claude-sonnet-4-6` model they use the same
+Claude-compatible route, while an explicitly non-Claude model leaves generic
+OpenCode provider handling unchanged. The tested Claude route enables
+`ANTHROPIC_BASE_URL=https://inference.local/v1` and the non-secret
+`ANTHROPIC_API_KEY=unused` placeholder. OpenCode has no Claude-style `--bare`
+flag; launch it normally, or use `opencode --agent NAME`.
+
+## Configuration precedence
+
+Both runtimes use the same configuration precedence:
+
+1. An explicit `--profile` (including `@standard`) creates the sandbox-local
+   configuration from that profile.
+2. An explicit `--restore-config latest` seeds the sandbox from the newest
+   saved snapshot for the logical sandbox name.
+3. An existing sandbox-local `ai-guardian.json` is preserved and used.
+4. If no local config exists, the selected host config is copied into the
+   sandbox as a writable initial snapshot.
+5. If neither config exists, AI Guardian creates a sandbox-local default.
+
+The host config is never written back. When it supplies the initial config, the
+daemon reports `config_source=host` and `config_read_only=false`; edits made in
+the TUI, NiceGUI, or REST API affect only the sandbox's copy. OpenShell uploads
+the snapshot, while containers use a read-only bind mount for the staging file
+before copying it into the writable active config path.
+
+Both container and OpenShell images preinstall pinned versions of Gitleaks,
+BetterLeaks, LeakTK, detect-secrets, Secretlint, and the GitGuardian `ggshield`
+CLI. These engines are available regardless of whether the active config came
+from the host, a profile, a restored snapshot, or a sandbox-local file; startup
+does not download scanner tools or require an OpenShell policy for downloading
+scanner binaries. Pattern-server access, when configured, remains governed by
+the selected configuration and policy. Secretlint scans locally. The
+GitGuardian engine requires configured consent and an API key and sends scan
+data to the cloud service; OpenShell use also requires policy access to that
+service.
+
+TruffleHog is intentionally omitted from the stock images for now. Its AGPL-3.0
+installation path requires interactive license acknowledgement, which cannot be
+collected during an image build. A configuration that selects TruffleHog cannot
+use it in these images; use one of the bundled engines or provide it in a
+derived image after reviewing and acknowledging its license. Custom scanner
+binaries and Python scanner packages are outside the current pinned image set
+and must be added to a derived image when needed.
+
+## Configuration snapshots
+
+Configuration snapshots preserve changes made inside a sandbox without
+overwriting the host configuration. The commands contact the running sandbox
+daemon, retrieve its active global configuration, and write the result on the
+host. Snapshots are stored under `$XDG_STATE_HOME/ai-guardian/sandboxes/` (by
+default `~/.local/state/ai-guardian/sandboxes/`) using the logical sandbox name
+and a UTC timestamp. The runtime type is recorded as snapshot metadata and is
+used to select `latest`, so container and OpenShell snapshots with the same
+name cannot be mixed. The logical name remains the snapshot key and
+user-facing sandbox identity rather than a runtime-generated container ID or
+OpenShell UUID.
+
+When creating a sandbox with a reused logical name, AI Guardian automatically
+restores the newest snapshot for that name when a snapshot exists for the
+requested runtime. If no matching snapshot exists, creation uses the normal
+host/default configuration path. This automatic restore does not apply when a
+profile or explicit host configuration directory is selected.
+
+The tray Create sandbox form exposes the same behavior through Config source:
+
+- `Host/default` forces a fresh configuration and ignores saved snapshots.
+- `Latest saved snapshot` explicitly requires a matching snapshot and reports
+  an error when none exists.
+- A reused name with no explicit source automatically restores the newest
+  matching snapshot when available.
+
+Container and OpenShell runtimes have separate native name spaces, so the same
+logical name can exist in both. The tray displays the runtime alongside the
+name. Lifecycle commands auto-detect a unique match; if both runtimes contain
+the name, specify `--runtime container` or `--runtime openshell`.
+
+For OpenShell, stop and start through OpenShell when possible. If its generated
+container was stopped directly with Docker/Podman, the tray start action first
+tries OpenShell and then recovers by starting the underlying container when
+OpenShell reports that its control-plane state is not stopped.
+
+Save and inspect snapshots:
+
+```bash
+ai-guardian sandbox config save guardian-codex
+ai-guardian sandbox config list guardian-codex
+```
+
+Restore the latest snapshot into an existing running sandbox:
+
+```bash
+ai-guardian sandbox config restore guardian-codex --snapshot latest
+```
+
+Recreate a deleted sandbox with its latest saved configuration:
+
+```bash
+ai-guardian sandbox create \
+  --runtime container \
+  --name guardian-codex \
+  --restore-config latest \
+  --repo .
+```
+
+`--restore-config` is intentionally opt-in and cannot be combined with a
+profile or host `--config-dir`. It stages the selected snapshot as input, then
+the entrypoint copies it into the writable sandbox configuration. Saving and
+restoring never modifies the host config. `config save` and `config restore`
+require a running daemon; OpenShell also requires its `ai-guardian` service
+endpoint to be available.
+
+In the system tray, the top-level action for an OpenShell target is
+`Connect`. It uses the same independent OpenShell `exec` session as
+`Manage sandbox -> Connect`; the generic container `Terminal` action is kept
+for ordinary container sandboxes.
+
+## Inspecting and listing
+
+Use `status` for one named sandbox and `list` for the resources created by this
+command. Named lifecycle commands automatically discover the runtime, so
+`--runtime` is only needed when the same name exists in both runtime
+namespaces or when you want to force a specific runtime:
+
+```bash
+ai-guardian sandbox status guardian-codex
+ai-guardian sandbox status --json guardian-claude
+ai-guardian sandbox list --json
+ai-guardian sandbox list --runtime container --json
+ai-guardian sandbox list --runtime openshell --json
+```
+
+The `--json` option forwards JSON output to the selected runtime. Container
+listing is filtered by the `ai-guardian.managed=true` label; OpenShell listing
+uses the equivalent selector.
+
+When `--port` is omitted for a container, Docker/Podman publishes the internal
+daemon port `63152` on a runtime-assigned host port. Find that host port with
+`podman port NAME` or `docker port NAME`.
+
+For OpenShell, the command exposes the daemon's internal port through the
+gateway-managed service named `ai-guardian`:
+
+```bash
+openshell service expose NAME 63152 ai-guardian
+openshell service get NAME ai-guardian
+```
+
+The gateway assigns a unique URL for each sandbox, such as
+`http://NAME--ai-guardian.openshell.localhost:PORT/`. This endpoint is durable
+and independent for every OpenShell sandbox, so multiple sandboxes can expose
+the same internal daemon port. Tray and NiceGUI discovery query the gateway for
+each sandbox's service URL. `start` and `restart` reconcile the service after
+the daemon is started; `stop` leaves the service definition in place but it is
+unreachable while the sandbox is stopped. Deleting an AI Guardian sandbox also
+removes its `ai-guardian` service.
+
+## Lifecycle and cleanup
+
+`stop` retains the sandbox so it can be started later. `delete` removes the
+runtime resource and its gateway service, while host configuration snapshots
+remain available for a later `--restore-config latest`. `connect` opens an
+interactive container shell or an independent OpenShell `exec` session, while
+`exec` runs a command without replacing the sandbox's main process. The shell
+opened automatically by OpenShell `create` uses the same independent `exec`
+session, so exiting either shell does not replace or terminate the sandbox's
+main process:
+
+```bash
+ai-guardian sandbox stop guardian-claude
+ai-guardian sandbox start guardian-claude
+ai-guardian sandbox restart guardian-claude
+ai-guardian sandbox exec guardian-claude -- env
+ai-guardian sandbox delete guardian-claude
+```
+
+Do not use `delete` when the sandbox may be needed again; use `stop` instead.
 
 # === docs/SCANNER_INSTALLATION.md ===
 
@@ -12786,7 +16017,13 @@ AI Guardian provides automated installation and management of secret scanner eng
 |---------|-------|---------|--------------|
 | Gitleaks | Standard | MIT | `ai-guardian scanner install gitleaks` |
 | BetterLeaks | 20-40% faster | MIT | `ai-guardian scanner install betterleaks` |
-| LeakTK | Standard | MIT | `ai-guardian scanner install leaktk` |
+| LeakTK | Standard | Apache-2.0 | `ai-guardian scanner install leaktk` |
+| Secretlint | Local rules | MIT | `ai-guardian scanner install secretlint` |
+| GitGuardian (`ggshield`) | Cloud service | MIT CLI | `ai-guardian scanner install gitguardian` |
+
+The GitGuardian engine also requires explicit consent, an API key, and network
+access to its cloud service. See [Multi-Engine Support](MULTI_ENGINE_SUPPORT.md)
+for the data-flow and consent details.
 
 ## Quick Start
 
@@ -12858,6 +16095,10 @@ If no package manager is available, ai-guardian downloads the binary directly fr
 3. Extracts and installs to `/usr/local/bin` (or `~/.local/bin` if permission denied)
 4. Makes the binary executable (chmod +x on Unix-like systems)
 
+Secretlint and GitGuardian always use their upstream release assets directly so
+`--use-pinned` cannot be replaced by a package manager's different version.
+Their release assets are checksum-verified before installation.
+
 ### 3. From File (Air-Gapped)
 
 For environments without internet access:
@@ -12890,11 +16131,16 @@ When GitHub API is unavailable (offline, network issues), ai-guardian falls back
 ```toml
 [tool.ai-guardian.scanners]
 gitleaks = "8.30.1"
-betterleaks = "1.1.2"
+betterleaks = "1.3.1"
 leaktk = "0.3.4"
+secretlint = "13.0.5"
+gitguardian = "1.54.0"
 ```
 
-These versions are tested with each ai-guardian release and guaranteed to work.
+Container builds install these exact pins. CI checks GitHub release assets for
+both Linux container targets (`linux_x64` and `linux_arm64`); it checks the
+`detect-secrets` package release on PyPI. Update the pins deliberately when
+reviewing scanner releases.
 
 ### Override: Explicit Version
 
@@ -13142,6 +16388,143 @@ For details on model architecture, performance benchmarks, and advanced configur
 - See [README.md](../README.md) for general AI Guardian setup
 - See [CONFIGURATION.md](CONFIGURATION.md) for scanner configuration options
 - See [MCP_SERVER.md](MCP_SERVER.md) for programmatic scanner management
+
+# === docs/SCANNER_INTEGRATION_CHECKLIST.md ===
+
+# Scanner Integration Checklist
+
+Use this checklist when adding or changing an external secret scanner engine or
+a built-in security detection scanner. Complete the section that matches the
+change, and record any non-applicable items in the issue or pull request. For
+image and runtime changes, also follow the
+[CLI/Runtime Integration Checklist](CLI_RUNTIME_CHECKLIST.md).
+
+## Adding an External Secret Scanner Engine
+
+Use this checklist when adding a third-party secret scanner that AI Guardian
+installs or invokes as an external tool. The built-in detection scanner
+checklist below applies when adding a new detector to the hook pipeline.
+
+- [ ] **License and data flow** — Verify the upstream license for the selected
+  release and review any distribution or service terms. Preserve required
+  copyright and license notices when redistributing scanner binaries in
+  installers or images. Document the license in
+  `docs/SCANNER_INSTALLATION.md`; document copyleft terms and required notices
+  in `docs/MULTI_ENGINE_SUPPORT.md`, following its
+  [license considerations](MULTI_ENGINE_SUPPORT.md#license-considerations).
+  Document whether scans send content or metadata to a remote service, and any
+  required consent or credentials.
+- [ ] **Pinned version and update checks** — Add the exact version to
+  `[tool.ai-guardian.scanners]` in `pyproject.toml`; update
+  `scripts/check_scanner_versions.py` and the integration workflow so the
+  version and its release assets are verified.
+- [ ] **Installer and CLI** — Add platform and architecture asset resolution,
+  checksum or signature verification, scanner registration, CLI naming or
+  aliases, and version reporting. Add related unit tests for supported assets,
+  verification failures, installation, and CLI exposure.
+- [ ] **Container images** — Install the pinned scanner during each supported
+  image build, including OpenShell, so runtime policies do not need download
+  access for scanner installation. Update container build checks where
+  applicable.
+- [ ] **Documentation and release notes** — Update the supported-scanner and
+  installation documentation, explain any limitations or service
+  requirements, and add a `CHANGELOG.md` entry.
+
+## Adding a New Security Scanner
+
+A scanner is a new detection engine that integrates into the hook pipeline and
+`ai-guardian scan`. Use `supply_chain` (Issue #1055) and `code_scanning` (Issue
+#828) as reference implementations. Every item below is required — missing any
+one causes a broken or incomplete feature.
+
+### 1. Dependency
+- [ ] `pyproject.toml` — add fixed or optional dependency
+
+### 2. Scanner module
+- [ ] `src/ai_guardian/<scanner>.py` — scanner class with `scan(content, file_path)` → returns findings
+
+### 3. Violation type
+- [ ] `src/ai_guardian/constants.py` — add `ViolationType.<SCANNER> = "<scanner>"` to enum
+- [ ] `src/ai_guardian/hook_processing.py` — add entry to `_ASK_VIOLATION_LABELS`
+
+### 4. Config loading
+- [ ] `src/ai_guardian/config/loaders.py` — add `_<SCANNER>_DEFAULTS` dict + `_load_<scanner>_config()` function
+
+### 5. Hook integration
+- [ ] `src/ai_guardian/hook_processing.py`:
+  - Import `_load_<scanner>_config` at top of file
+  - Add `_log_<scanner>_violation()` (follow `_log_supply_chain_violation` pattern)
+  - Add `run_<scanner>_scan()` returning `ScanResult` with `result.extra["action"]` set
+  - Wire into the correct hook path (PreToolUse Write/Edit, PostToolUse Bash, UserPromptSubmit, etc.)
+  - Use `_handle_ask_mode_auto()` → `_log_ask_decision()` for ask-mode dispatch
+
+### 6. Batch scan (`ai-guardian scan`)
+- [ ] `src/ai_guardian/scanner.py` — add import, `_check_<scanner>()` method, call it in `_scan_file()` (and `_scan_image_file()` if applicable)
+- [ ] `src/ai_guardian/sarif_formatter.py` — add `create_<scanner>_finding()` factory; import it in `scanner.py` inside the `HAS_SARIF` try block
+
+### 7. MCP server
+- [ ] `src/ai_guardian/mcp_server.py` — add suggestion string to `_SAFE_SUGGESTIONS` dict; `scan_directory` picks up new findings automatically via `FileScanner`
+
+### 8. Config defaults & schema
+- [ ] `src/ai_guardian/setup/config.py` — add `"_comment_<scanner>"` (top-level) **and** `"_comment_action"`, `"_comment_enabled"` etc. (nested inside the scanner dict) to `_get_default_config_template()`. These are auto-extracted into `CONFIG_FIELD_HELP` by `_build_field_help()` — every `_comment_*` key you add here becomes a tooltip automatically.
+- [ ] `src/ai_guardian/help_content.py` — for any field not covered by a `_comment_*` key in `setup/config.py`, add a manual entry to `_FIELD_HELP_SUPPLEMENT` following the `"<scanner>.<field>"` key convention.
+- [ ] `src/ai_guardian/schemas/ai-guardian-config.schema.json`:
+  - Add `"<scanner>"` object with full property definitions
+  - Add `"<scanner>"` to the `violation_type` enum array (two places: `enum` + `default`)
+- [ ] `ai-guardian-example.json` — add fully-commented example block for the new section
+- [ ] All four profile templates: `src/ai_guardian/templates/profiles/{minimal,standard,strict,moderator}.json`
+
+### 9. TUI console
+- [ ] `src/ai_guardian/tui/<scanner>.py` — new `*Content(Container)` panel (config status, violations, inline help). Add `_apply_tooltips()` method that calls `CONFIG_FIELD_HELP.get("<scanner>.<field>")` and sets `.tooltip` on key widgets (enable toggle, action select, etc.). Call `_apply_tooltips()` from `on_mount()` after `load_config()`.
+- [ ] `src/ai_guardian/tui/app.py`:
+  - Add `("Label", "panel-<scanner>")` to the relevant `NAV_GROUPS` section
+  - Add `with Container(id="panel-<scanner>"): yield <Scanner>Content()` in the compose tree
+  - Add `"panel-<scanner>": ("...")` entry to `PANEL_DESCRIPTIONS`
+- [ ] `src/ai_guardian/tui/global_settings.py`:
+  - Add `("<scanner>", "gs_<scanner>", "emoji Label")` to `FEATURE_TOGGLES`
+  - Add `"<scanner>": {"schema_path": ..., "options": [...], "default": ...}` to `FEATURE_ACTIONS`
+- [ ] `src/ai_guardian/tui/violations.py`:
+  - Add `"<scanner>"` to `KNOWN_VIOLATION_TYPES`
+  - Handle `vtype == "<scanner>"` in `_extract_matched_from_violation()`
+  - Add `TabPane("Label", id="filter-<scanner>")` + `VerticalScroll(id="violations-list-<scanner>")` in compose
+  - Add load call in `load_all_filters()`
+- [ ] `tests/unit/test_tui.py` — update nav leaf count assertion
+
+### 10. Web console
+- [ ] `src/ai_guardian/web/pages/<scanner>.py` — new `create_<scanner>_page(service, daemon_name)` with enable toggle, action selector, config options. Import `field_help_icon` from `ai_guardian.web.components.help_panel` and add `field_help_icon("<scanner>")` next to section headers and `field_help_icon("<scanner>.<field>")` next to individual field labels (action, ignore_files, ignore_tools, etc.).
+- [ ] `src/ai_guardian/web/app.py` — add `@ui.page("/{daemon_name}/<slug>")` route
+- [ ] `src/ai_guardian/web/components/header.py` — add `("Label", "/<slug>")` to the relevant nav group
+- [ ] `src/ai_guardian/web/pages/global_settings.py`:
+  - Add `("<scanner>", "Label", "description")` to the relevant `DASHBOARD_SECTIONS` group
+  - Add `"<scanner>": {...}` to `ACTION_MODES`
+  - Add `"<scanner>": "<default>"` to `ACTION_DEFAULTS`
+- [ ] `src/ai_guardian/web/pages/dashboard.py`:
+  - Add `("<scanner>", "Label", "description")` to `DASHBOARD_SECTIONS`
+  - Add `"<scanner>": "<slug>"` to `FEATURE_PAGE_SLUGS`
+  - Add `"<scanner>": "<default_action>"` to `_DEFAULT_ACTIONS`
+  - Handle the scanner in `_get_scanner_label()` if it produces violations
+- [ ] `src/ai_guardian/web/pages/violations.py`:
+  - Add `"<scanner>"` to `KNOWN_VIOLATION_TYPES`
+  - Add `("Label", "<scanner>", "description")` to `FILTER_TABS`
+  - Add `"<scanner>": [("Field", "key"), ...]` to `DETAIL_FIELDS`
+  - Handle `vtype == "<scanner>"` in `_extract_matched_from_violation()`
+
+### 11. Tests
+- [ ] `tests/unit/test_<scanner>.py` — unit tests: clean input, known-bad input, config options (threshold, allowlist), suppression annotations, robustness (empty input, parse errors)
+
+### 12. Help tooltips
+- [ ] `src/ai_guardian/setup/config.py` — add `_comment_*` keys inside the scanner dict in `_get_default_config_template()` for each configurable field so they surface automatically as tooltips in both consoles
+- [ ] `src/ai_guardian/help_content.py` → `_FIELD_HELP_SUPPLEMENT` — add any field that `setup/config.py` doesn't cover with a `_comment_*` key (use `"<scanner>.<field>"` keys)
+- [ ] `src/ai_guardian/tui/<scanner>.py` — `_apply_tooltips()` sets `.tooltip` on key widgets from `CONFIG_FIELD_HELP`
+- [ ] `src/ai_guardian/web/pages/<scanner>.py` — `field_help_icon("<scanner>.<field>")` called next to every section and field label
+- [ ] `src/ai_guardian/web/pages/global_settings.py` — existing loop calls `field_help_icon(section)` and `field_help_icon(f"{section}.action")` automatically for any new scanner added to `FEATURE_GROUPS`
+- [ ] `src/ai_guardian/tui/global_settings.py` — existing `_apply_tooltips()` loop covers any new scanner added to `FEATURES`
+
+### 13. Don't forget
+- [ ] `.aiguardignore.toml` scanner type — add to `SCANNER_TYPES` in `aiguardignore.py` if file-content based
+- [ ] `docs/AGENT_SUPPORT.md` — add row to Violation Type Coverage Matrix
+- [ ] `CHANGELOG.md` — add entry under `[Unreleased]`
+- [ ] `src/ai_guardian/doctor.py` — add `check_<scanner>()` method to verify the scanner's underlying dependency is importable (use `importlib.util.find_spec()`); add it to the `checks` list in `run_all()`; add display name to `_CHECK_DISPLAY_NAMES`; update the check count assertion in `tests/unit/test_doctor.py::TestDoctorRunAll::test_run_all_returns_report`
 
 # === docs/SDK.md ===
 
@@ -13699,6 +17082,114 @@ agent = GuardedAgent(model="claude-sonnet-5", tools="coding")
 result = agent.run("fix the bug")
 ```
 
+## RunContext — Correlating Multiple SDK Calls
+
+When a program makes multiple `guarded()` calls or runs multiple `GuardedAgent` instances, each produces independent traces and violations. `RunContext` links them with a shared `run_id`.
+
+```python
+from ai_guardian.sdk import RunContext
+
+ctx = RunContext(
+    run_id="pipeline-2026-08-27",  # optional, auto-generated UUID if omitted
+    metadata={"jira": "AAP-12345", "pipeline": "remediation"},
+)
+```
+
+### With GuardedAgent
+
+```python
+agent1 = GuardedAgent(model="claude-sonnet-5", name="analyzer", context=ctx)
+agent2 = GuardedAgent(model="claude-sonnet-5", name="fixer", context=ctx)
+
+result1 = agent1.run("Analyze the bug")
+result2 = agent2.run(f"Fix based on: {result1['output']}")
+```
+
+### With monitor()
+
+```python
+from ai_guardian.sdk import monitor
+
+with monitor() as session:
+    result1 = session.check_content(text, context=ctx)
+    result2 = session.check_file("/path/to/file.py", context=ctx)
+    sanitized = session.sanitize(output, context=ctx)
+```
+
+### Mixed Pipeline
+
+```python
+ctx = RunContext(run_id="pipeline-123")
+
+with monitor() as session:
+    for f in files:
+        session.check_file(f, context=ctx)
+
+agent = GuardedAgent(model="claude-sonnet-5", name="fixer", context=ctx)
+agent.run("Fix the issues found")
+```
+
+### Correlating SDK and Hook-Based Agents
+
+`RunContext` propagates its `run_id` automatically for SDK operations. A
+hook-based IDE can include the same value as `run_id` in its hook events. When
+the IDE cannot supply that field, start the non-SDK agent with
+`AI_GUARDIAN_RUN_ID` in its environment:
+
+```bash
+export AI_GUARDIAN_RUN_ID="pipeline-123"
+my-ide-agent
+```
+
+The SDK and hook traces are grouped into one run on the **Sessions** page when
+their IDs match. Keep the value stable for the lifetime of one logical pipeline
+and use a new unique value for the next pipeline. Hook sessions without the
+event field or environment variable are still recorded, but they cannot be
+correlated with the SDK run.
+
+The daemon binds the first resolved run ID to the IDE `session_id` and persists
+that binding across daemon restarts. Resolution order is: an explicit `run_id`
+in the hook event, the persisted session binding, `AI_GUARDIAN_RUN_ID` forwarded
+by the hook process, then the daemon environment as a compatibility fallback.
+An explicit event value can update an existing binding.
+
+### RunContext Fields
+
+| Field | Type | Purpose |
+|---|---|---|
+| `run_id` | `str` | Links all traces/violations. Auto-generated UUID if omitted |
+| `metadata` | `dict` | Custom key-values attached to every trace and OTEL span |
+| `parent_trace_id` | `str` (optional) | Link to a parent trace for nested orchestration |
+
+### Where run_id Appears
+
+- **Traces**: `run_id` and `run_sequence` fields in trace JSON
+- **OTEL**: `ai_guardian.run_id` as span attribute — query Grafana by run_id
+- **violations.jsonl**: `run_id` in the context dict
+- **Trace meta**: `run_id` in `.meta.json` sidecar files
+- **Hook sessions**: supplied by hook-event `run_id` or `AI_GUARDIAN_RUN_ID`
+
+### Concurrency Detection
+
+Each SDK call records `started_at` / `ended_at` timestamps. Use `ran_concurrently()` to detect overlap:
+
+```python
+ctx = RunContext()
+# ... run agents in threads ...
+if ctx.ran_concurrently(1, 2):
+    print("agent1 and agent2 ran at the same time")
+```
+
+### Backward Compatibility
+
+`context` is an optional keyword argument defaulting to `None`. Existing code works unchanged:
+
+```python
+agent = GuardedAgent(model="claude-sonnet-5")       # still works
+session.check_content(text)                          # still works
+session.check_content(text, context=ctx)             # opt-in
+```
+
 ## GuardedAgent
 
 `GuardedAgent` provides a tool-use agent loop on top of `guarded()`. Every message — prompts, tool results, intermediate responses — is scanned for prompt injection, secrets, and PII. Supports Anthropic and OpenAI providers.
@@ -14020,7 +17511,9 @@ print(result["output"])  # validated structured object
 | `max_turns` | int | `100` | Max tool-use loop iterations |
 | `max_tokens` | int | `16000` | Max output tokens per API call |
 | `max_budget_tokens` | int | `-1` | Max cumulative tokens (input + output) across all turns. `-1` = no limit |
-| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX). On timeout: retries once, then stops with `stop_reason='timeout'` |
+| `api_timeout` | int | `300`/`600` | Per-API-call timeout in seconds. Default: 300 (cloud providers), 600 (local providers like Ollama/MLX) |
+| `retry_max_attempts` | int | `2` | Max total attempts per API call (1 = no retry). Retries on transient errors: timeouts, rate limits (429), overloaded (529), server errors (500/502/503), and connection failures |
+| `retry_base_delay` | float | `1.0` | Base delay in seconds for exponential backoff between retries. Actual delay: `base_delay * 2^(attempt-1) + random(0,1)` |
 | `client` | Any | `None` | Anthropic or OpenAI client (auto-detected if omitted) |
 | `mode` | str | `"direct"` | `"direct"` or `"rest"` for scanning |
 | `config` | dict | `None` | ai-guardian config override |
@@ -14033,6 +17526,8 @@ print(result["output"])  # validated structured object
 | `pre_run` | callable | `None` | `(prompt: str, config: dict) -> None` — called once before the agent loop starts |
 | `post_run` | callable | `None` | `(result: dict) -> None` — called once after the agent loop ends (even on exceptions, with `result=None`) |
 | `between_turns` | callable | `None` | `(messages: list, response: AgentResponse, turn: int) -> str \| None \| False` — called after each successful assistant turn. `response` is a normalized `AgentResponse` with `.text`, `.tool_calls`, `.stop_reason`, and `.raw` (original provider response). Return `str` to inject as next user message, `None` to continue normally, `False` to stop the loop |
+| `goal_evaluator` | callable | `None` | `(state: Any, response: AgentResponse, turn: int) -> GoalEvaluation \| str \| bool \| None` — evaluates an external goal after each successful turn. Return `GoalEvaluation(done=True)` to stop with `goal_completed`, or feedback to request another iteration |
+| `goal_timeout` | float | `None` | Maximum seconds for one `goal_evaluator` call. A timeout returns `stop_reason='goal_evaluator_timeout'`; `None` means no evaluator timeout |
 | `strip_chat_tokens` | bool | `None` | Strip chat template tokens (`<\|im_start\|>`, `[INST]`, etc.) from model output. `None` = auto-detect (enabled for Ollama, llama.cpp, vLLM). `True` = always strip. `False` = never strip |
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
@@ -14139,6 +17634,101 @@ agent = GuardedAgent(
 )
 result = agent.run("Write a pytest test for the calculate_discount function...")
 ```
+
+### Goal-oriented loops
+
+Use `between_turns` when you need a general extension point or already have
+loop state in application code. It supports the complete basic pattern:
+return a string to send feedback, return `False` to stop, and use `max_turns`
+as the safety bound. `post_run` can inspect the final result and `on_turn` can
+observe the trace while the loop runs.
+
+Use `goal_evaluator` when the application has an external definition of
+completion and wants an explicit, reusable contract for it. The evaluator is
+called after the assistant response has been scanned and, for tool-use turns,
+after tool results have been added to the conversation. It runs before the
+legacy `between_turns` callback when both are configured.
+
+```python
+from ai_guardian.integrations import GoalEvaluation
+from ai_guardian.integrations.anthropic import GuardedAgent
+
+
+def evaluate_tests(state, response, turn):
+    """Accept a draft only after the external test runner passes."""
+    state["checks"] += 1
+    test_result = run_project_tests()  # application-owned evaluator
+    if test_result.returncode == 0:
+        return GoalEvaluation(done=True, reason="tests_passed")
+    return GoalEvaluation(
+        feedback=(
+            f"The external tests failed on attempt {turn}. "
+            "Fix the implementation and try again.\n"
+            f"{test_result.stdout}\n{test_result.stderr}"
+        )
+    )
+
+
+state = {"checks": 0}
+agent = GuardedAgent(
+    model="claude-sonnet-5",
+    tools="coding",
+    max_turns=5,
+    goal_evaluator=evaluate_tests,
+)
+result = agent.run("Implement the function and its tests", goal_state=state)
+
+assert result["stop_reason"] == "goal_completed"
+assert result["goal_reason"] == "tests_passed"
+assert result["goal_state"] is state
+```
+
+The evaluator contract is:
+
+```python
+from dataclasses import dataclass
+from typing import Any, Optional
+
+
+@dataclass
+class GoalEvaluation:
+    done: bool = False
+    feedback: Optional[str] = None
+    reason: Optional[str] = None
+```
+
+`goal_state` is passed only to this run, defaults to a fresh dictionary, and
+is returned as `result["goal_state"]`. It is application-owned and is not
+serialized into the security trace. The `turn` argument is one-based. Return
+values have these meanings:
+
+| Return value | Behavior |
+|--------------|----------|
+| `GoalEvaluation(done=True, reason="...")` | Stop with `stop_reason="goal_completed"`; the reason is available as `result["goal_reason"]` and in the goal trace event. If `done=True`, completion wins over any feedback field |
+| `GoalEvaluation(feedback="...")` | Scan and inject feedback, then request another model turn |
+| non-empty `str` | Shorthand for `GoalEvaluation(feedback=...)` |
+| `None`, `False`, or `GoalEvaluation()` | Defer to normal loop behavior; an `end_turn` response completes naturally |
+| `True` | Shorthand for `GoalEvaluation(done=True)` |
+
+Feedback is passed through the same ai-guardian scan and optional secret
+redaction path as other generated context. Blocked feedback is replaced with
+a safe warning and the loop continues. The trace and `on_turn` callback record
+`type="goal_evaluation"` plus a scan event for evaluator feedback.
+
+Evaluator failures are returned rather than raised so callers can distinguish
+them from provider errors:
+
+| Condition | `stop_reason` | Result details |
+|-----------|---------------|----------------|
+| Evaluator accepts the goal | `goal_completed` | `goal_reason` and `goal_state` |
+| Evaluator raises an exception | `goal_evaluator_error` | Last response plus `goal_error` |
+| Evaluator exceeds `goal_timeout` | `goal_evaluator_timeout` | Last response plus `goal_error` |
+| `max_turns` is reached first | `max_turns` | Evaluator ran for the final turn; no further turn is started |
+| `max_budget_tokens` is reached first | `budget_exceeded` | The evaluator is not called for that turn |
+
+The timeout uses a daemon worker so the agent can return promptly; Python
+cannot force-stop a callback that is already running. Evaluators should keep
+side effects bounded and tolerate being abandoned after a timeout.
 
 ### Shell Hooks (Config-Driven)
 
@@ -14260,6 +17850,8 @@ def my_handler(turn: int, event: TurnEvent):
         print(f"[turn {turn}] tool: {event.name}({event.input})")
     elif event.type == "tool_result":
         print(f"[turn {turn}] result: {event.output[:100]}...")
+    elif event.type == "goal_evaluation":
+        print(f"[turn {turn}] goal done: {event.goal_done}")
     elif event.type == "scan":
         if event.violations:
             print(f"[turn {turn}] {len(event.violations)} violations")
@@ -14322,6 +17914,7 @@ Each turn is self-contained: `input` → optional `compaction` → `response` �
 | N | `tool_call` | `name`, `input` |
 | N | `tool_result` | `name`, `output` |
 | N | `scan` | `scanned` (what was scanned), `violations` (list) |
+| N | `goal_evaluation` | `goal_done`, optional `goal_reason`, and scanned/redacted `goal_feedback` |
 
 #### `AgentResponse` Dataclass
 
@@ -14343,7 +17936,7 @@ When `strip_chat_tokens` is enabled (auto for local providers), `text` has chat 
 ```python
 @dataclass
 class TurnEvent:
-    type: str                          # "system" | "input" | "response" | "tool_call" | "tool_result" | "scan" | "compaction"
+    type: str                          # "system" | "input" | "response" | "tool_call" | "tool_result" | "scan" | "compaction" | "goal_evaluation"
     text: Optional[str] = None
     name: Optional[str] = None
     input: Optional[dict] = None
@@ -14360,6 +17953,9 @@ class TurnEvent:
     method: Optional[str] = None         # compaction only
     messages_count: Optional[int] = None # input only
     compacted: Optional[bool] = None     # input only
+    goal_done: Optional[bool] = None     # goal_evaluation only
+    goal_reason: Optional[str] = None    # goal_evaluation only
+    goal_feedback: Optional[str] = None  # goal_evaluation only
 ```
 
 #### Auto-Persist Traces to Disk
@@ -14426,6 +18022,51 @@ Behavior:
 - Errors writing the trace are logged but don't fail the agent
 - Explicit relative paths resolve against `cwd`
 
+#### Cross-Daemon Trace Aggregation
+
+When running pipelines across multiple machines (e.g., triage on machine A, remediation on machine B), each daemon stores traces locally. The system tray aggregates traces from all discovered daemons into a unified view, persisting them locally so they survive container/pod restarts.
+
+**How it works:**
+
+1. **Push-on-write**: When the SDK pushes a trace to its local daemon, the daemon forwards it to the registered tray's local daemon via `POST /api/traces/remote`. The tray daemon persists it to `~/.local/state/ai-guardian/sdk/traces/_remote/<daemon-name>/`.
+
+2. **Catch-up pull**: When the tray discovers a new remote daemon, it pulls all existing traces in the background.
+
+3. **Web console reads from cache**: The Trace Viewer page reads local traces directly and remote traces from the `_remote/` cache — no live REST queries to remote daemons.
+
+Traces are grouped by `run_id` across daemons (via `RunContext`), ordered by `run_sequence`, and each trace shows a daemon source badge.
+
+**Direct-mode SDK on containers**: When the SDK runs in direct mode (no local daemon), set `AI_GUARDIAN_TRACE_ENDPOINT` and the receiving daemon token to push traces directly to the tray's daemon:
+
+```bash
+# In docker-compose or k8s spec
+AI_GUARDIAN_TRACE_ENDPOINT=https://host.docker.internal:63152
+AI_GUARDIAN_TRACE_AUTH_TOKEN=<receiving-daemon-token>
+```
+
+The SDK uses `hostname` as the daemon name for traces pushed this way.
+
+**Cache retention**: Cached remote traces are automatically cleaned up based on file age. Configure in `ai-guardian.json`:
+
+```json
+{
+  "tracing": {
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
+  }
+}
+```
+
+Tracing is enabled by default. Disabling it stops new SDK and hook trace files
+without affecting security scanning, violation logging, OTEL export, or existing
+trace browsing. Cache retention defaults to 90 days. Manual pruning:
+`ai-guardian trace prune <YYYY-MM-DD> [--dry-run] [--include-local]`.
+
+The deprecated `sdk.trace_viewer` location remains readable during 1.x. Values
+under top-level `tracing` take precedence and the compatibility path is
+scheduled for removal in 2.x (#2194).
+
 #### OTEL Custom Metadata
 
 For full OTEL configuration (endpoint, headers, resource attributes, span hierarchy) see the [Observability Guide](OBSERVABILITY.md).
@@ -14469,12 +18110,16 @@ The callback receives `(agent_name: str, context: dict)` where context contains 
 |-------|---------|
 | `end_turn` | Model returned a text response with no tool calls — natural completion |
 | `hook_early_stop` | `after_call` or `between_turns` callback returned `False` to stop the loop |
+| `goal_completed` | `goal_evaluator` accepted the latest response |
+| `goal_evaluator_error` | `goal_evaluator` raised an exception or returned an invalid value |
+| `goal_evaluator_timeout` | `goal_evaluator` exceeded `goal_timeout` |
 | `max_turns` | Reached the `max_turns` limit without the model finishing |
 | `budget_exceeded` | Total tokens spent reached `max_budget_tokens` |
 | `max_schema_nudges` | Model failed to call `submit_result` after `max_schema_nudges` re-prompts |
 | `refusal` | Model refused to respond |
 | `security_violation` | Response or tool result blocked by a security scan |
-| `timeout` | API call timed out on both initial attempt and retry — partial result returned |
+| `timeout` | API call timed out on all retry attempts — partial result returned |
+| `transient_error` | Non-timeout transient error (rate limit, overloaded, server error, connection failure) exhausted all retry attempts |
 | `error` | Exception during the agent loop (partial trace persisted) |
 | `in_progress` | Agent is still running (only appears in incremental trace files) |
 
@@ -15170,7 +18815,7 @@ Bash(command="mv .ai-read-deny .ai-read-deny.bak")
 AI Guardian's config directory is **always in the user's HOME directory**:
 - Default: `~/.config/ai-guardian/`
 - XDG: `$XDG_CONFIG_HOME/ai-guardian/`
-- Custom: `$AI_GUARDIAN_CONFIG_DIR`
+- Custom: `$AI_GUARDIAN_CONFIG_DIR` (or `$AI_GUARDIAN_HOME`)
 
 All paths resolve to the HOME directory, which is **always writable by the user** (and therefore by AI agents). Filesystem permissions cannot protect these files.
 
@@ -22201,7 +25846,7 @@ Tool Policy checking is **extremely fast**:
 
 # Troubleshooting Guide
 
-Common issues with the AI Guardian daemon, system tray, and container deployments.
+Common issues with the AI Guardian daemon, system tray, container deployments, and OpenShell.
 
 ## General Diagnostics
 
@@ -22367,7 +26012,7 @@ The daemon name is read from the **top-level** `name` field in `ai-guardian.json
 }
 ```
 
-The config file is located at `~/.config/ai-guardian/ai-guardian.json` by default (or `$XDG_CONFIG_HOME/ai-guardian/ai-guardian.json`).
+The config file is located at `~/.config/ai-guardian/ai-guardian.json` by default (or `$XDG_CONFIG_HOME/ai-guardian/ai-guardian.json`). Set `AI_GUARDIAN_CONFIG_DIR` or its compatibility alias `AI_GUARDIAN_HOME` to choose an explicit configuration directory.
 
 ### Daemon Started Before Config Is Written
 
@@ -22431,6 +26076,35 @@ uv tool install ai-guardian --python 3.13
 
 Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this automatically.
 
+### Linux Tray Health or Setup Prompt Has No Visible Result
+
+**Symptom:** The tray log reports that `notify-send`, Tkinter, or a native
+dialog failed, and the health result or setup prompt is not visible.
+
+**Cause:** Linux notifications use the logged-in desktop session's D-Bus
+notification service. Native dialogs also require a graphical session and an
+installed provider. AI Guardian prefers `kdialog` for KDE/Plasma sessions and
+`zenity` for GNOME and other Linux desktops, then tries the other provider;
+both providers can work over X11 or Wayland. Linux tray prompts then fall
+through to in-process Tkinter, NiceGUI in the browser, and Textual in a TTY.
+
+Check the session and available providers from the same environment that
+launches the tray:
+
+```bash
+printf 'DISPLAY=%s WAYLAND_DISPLAY=%s DBUS_SESSION_BUS_ADDRESS=%s\n' \
+  "${DISPLAY:+set}" "${WAYLAND_DISPLAY:+set}" "${DBUS_SESSION_BUS_ADDRESS:+set}"
+printf 'XDG_SESSION_TYPE=%s XDG_CURRENT_DESKTOP=%s\n' \
+  "${XDG_SESSION_TYPE:-unknown}" "${XDG_CURRENT_DESKTOP:-unknown}"
+command -v notify-send zenity kdialog
+```
+
+If the tray was launched by SSH, a system service, or outside the graphical
+login, start it from the logged-in desktop session so the notification and
+dialog providers can reach the user's display. If Tkinter fails to initialize,
+the log includes the provider, exit status, and non-sensitive display/session
+context; `ai-guardian doctor` can provide additional installation details.
+
 ### tkinter Crashes with SIGABRT on macOS
 
 **Symptom:** The tray popup crashes immediately with a `SIGABRT` or `NSInvalidArgumentException` on macOS.
@@ -22443,6 +26117,41 @@ Or use the NiceGUI/Textual fallback — the tray plugin cascade handles this aut
 ```bash
 export AI_GUARDIAN_NO_TKINTER=1
 ```
+
+### macOS Tray Health Check Has No Visible Result
+
+The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action uses a
+macOS desktop notification for the health result. If notification delivery
+fails, the tray falls back to a modal confirmation. Setup-required checks use a
+Tkinter subprocess or a native action dialog, never an in-process browser
+prompt, so **Set Up Now** remains available without opening a broken port-8080
+page.
+
+The tray also sends one separate **AI Guardian** health-result notification
+after its initial startup check. Later periodic checks stay silent when all
+integrations are healthy; seeing only **Web Console Ready** means the startup
+health result was not emitted by the running tray version.
+
+For reliable macOS delivery:
+
+1. In **System Settings → Notifications**, allow notifications for the sender
+   shown by macOS. The notification transport uses `osascript`, so macOS may
+   list the sender as **Script Editor** even when the tray was launched from
+   the installed application bundle.
+2. Prefer the installed tray application when notification identity matters:
+   `ai-guardian tray --install` creates `~/Applications/AI Guardian Tray.app`
+   with the AI Guardian bundle identifier and icon. This gives the tray
+   process a stable macOS identity; the `osascript` notification may still be
+   attributed to Script Editor.
+3. Start the tray from a logged-in graphical session. A terminal-only or
+   remote session cannot display macOS dialogs, so use the CLI setup command
+   when no desktop session is available.
+
+If the notification banner is still absent, check the sender's macOS
+notification settings or run `ai-guardian doctor` to inspect the detected
+IDE/MCP configuration. The modal appears only when the notification command
+reports failure; the tray records failed UI subprocesses in its log rather
+than treating them as successful delivery.
 
 ### Tcl Can't Find init.tcl from Tray Daemon
 
@@ -22528,6 +26237,62 @@ rm -f ~/.local/state/ai-guardian/daemon.pid
 # Start manually
 ai-guardian daemon start
 ```
+
+## OpenShell on macOS
+
+### OpenShell Gateway Cannot Find the Podman Network
+
+**Symptom:** OpenShell finds the selected provider, but sandbox creation fails
+with an error like:
+
+```
+create sandbox failed: podman API error (500): unable to find network with name or ID openshell: network not found
+```
+
+**Cause:** Podman Machine can expose separate rootless and rootful
+connections. For example, `podman-machine-default` may be the rootless
+connection while `podman-machine-default-root` is rootful. The `openshell`
+network must exist in the same rootless Podman connection used by the
+OpenShell gateway. Seeing the network in another connection does not make it
+available to the gateway.
+
+List the Podman connections and check the network in the rootless connection:
+
+```bash
+podman system connection list
+podman --connection podman-machine-default network ls
+```
+
+Use the rootless connection name configured for your OpenShell gateway in
+place of `podman-machine-default` if it differs. If `openshell` is missing,
+create it in that connection and verify it there:
+
+```bash
+podman --connection podman-machine-default network create openshell
+podman --connection podman-machine-default network inspect openshell
+```
+
+Do not use `sudo` for these commands: it can create the network in a different
+Podman context that the gateway cannot see.
+
+Restart the Homebrew-managed gateway and check that it is ready:
+
+```bash
+brew services restart openshell
+openshell status
+```
+
+A connection-refused message immediately after restarting the gateway can be
+transient. Wait for the service to finish starting, then retry `openshell
+status`.
+
+Provider lookup or authentication errors are separate from this network
+failure. Successfully selecting a provider does not confirm that sandbox
+creation can reach the Podman network; the `network not found` API error points
+to a mismatch between the gateway's Podman connection and the connection where
+the network exists. See the official
+[OpenShell sandbox compute-driver reference](https://docs.nvidia.com/openshell/reference/sandbox-compute-drivers)
+for gateway and compute-driver setup.
 
 ---
 
@@ -22680,6 +26445,27 @@ ai-guardian setup --ide claude --uninstall-ide cursor
 ai-guardian setup --ide cursor --uninstall-ide claude
 ```
 
+### Cursor CLI/desktop setup scope
+
+AI Guardian installs Cursor hooks and MCP globally for the local desktop/user
+account:
+
+```text
+~/.cursor/hooks.json
+~/.cursor/mcp.json
+```
+
+Run `ai-guardian setup --ide cursor` or use the tray's **Manual setup
+(specific IDE)** → **Cursor IDE/CLI** entry for local desktop and CLI sessions.
+The tray's **Check hooks/MCP installation...** action and `ai-guardian doctor`
+report the user installation scope separately from project-level Cursor files.
+For Cursor Cloud, use **Cursor Cloud (project setup)...** and select the
+workspace, or run `ai-guardian setup --ide cursor --project DIR`; this explicit
+flow writes only `<DIR>/.cursor/hooks.json`. Configure MCP for Cloud Agents in
+Cursor's dashboard/team settings or through the Cloud Agents API. A project
+`.cursor/mcp.json` remains a valid local Cursor configuration, but is not a
+Cloud Agent registration.
+
 ---
 
 ## Known Claude Code Limitations
@@ -22742,7 +26528,7 @@ For per-violation-type impact details, see [AGENT_SUPPORT.md — Known Limitatio
 | Violations | `~/.local/state/ai-guardian/violations.json` | Security violation audit log |
 
 Paths are governed by XDG conventions and can be overridden with environment variables:
-- `AI_GUARDIAN_CONFIG_DIR` or `XDG_CONFIG_HOME`
+- `AI_GUARDIAN_CONFIG_DIR`, `AI_GUARDIAN_HOME`, or `XDG_CONFIG_HOME`
 - `AI_GUARDIAN_STATE_DIR` or `XDG_STATE_HOME`
 
 # === docs/VIOLATION_LOGGING.md ===
@@ -23487,7 +27273,7 @@ Violation logging is **extremely efficient**:
       "_config": ["gitleaks", "secretlint"]
     },
     "_engines_gitguardian_example": {
-      "_comment": "GitGuardian (Proprietary, cloud): pip install ggshield. Requires consent and API key.",
+      "_comment": "GitGuardian (MIT ggshield CLI, cloud service): ai-guardian scanner install gitguardian. Requires consent and API key.",
       "_consent": "Run: ai-guardian engine consent gitguardian",
       "_api_key": "Set GITGUARDIAN_API_KEY environment variable",
       "_warning": "Content is sent to GitGuardian cloud API for scanning",
@@ -24328,7 +28114,11 @@ Violation logging is **extremely efficient**:
       "discover_kubernetes": false,
       "kubernetes": {
         "namespace": "ai-sdlc",
-        "label_selector": "app=ai-guardian"
+        "label_selector": "app=ai-guardian",
+        "ownership": {
+          "label": "ai-guardian.owner",
+          "value": "my-user"
+        }
       }
     }
   },
@@ -24411,6 +28201,27 @@ Violation logging is **extremely efficient**:
     "headers": {},
     "_comment_resource_attributes": "Static key-value pairs added as OTEL resource attributes on every span. Queryable in Grafana via resource.<key>.",
     "resource_attributes": {}
+  },
+
+  "update_checking": {
+    "_comment_update_checking": "Version update checking and self-upgrade notification (NEW in v1.18.0, Issue #2155). Checks PyPI for new releases. Disable for air-gapped environments.",
+    "enabled": true,
+    "check_interval_seconds": 300,
+    "_comment_check_interval": "How often the tray checks PyPI for new versions (seconds). CLI always checks live.",
+    "include_prerelease": false,
+    "notify": true,
+    "_comment_notify": "Show OS desktop notification when a new version is available.",
+    "auto_check_on_doctor": true,
+    "_comment_auto_check_on_doctor": "Include version currency in 'ai-guardian doctor' checks (cache-only, no network call).",
+    "cache_ttl_days": 7,
+    "_comment_cache_ttl_days": "Days before cached PyPI version info is discarded. Prevents stale 'update available' in air-gapped environments."
+  },
+
+  "tracing": {
+    "_comment": "Unified SDK and hook trace recording and Sessions viewer settings.",
+    "enabled": true,
+    "auto_refresh_interval_seconds": 5,
+    "trace_cache_retention_days": 90
   },
 
   "sdk": {
@@ -24523,7 +28334,7 @@ Violation logging is **extremely efficient**:
                   }
                 }
               ],
-              "description": "Skill directories to scan for auto-generation. Default: 'auto' scans standard locations (./.claude/skills, ~/.claude/skills, $CLAUDE_CONFIG_DIR/skills). Can also provide explicit array of paths.",
+              "description": "Skill directories to scan for auto-generation. Default: 'auto' scans project-local and standard user locations, including relocated IDE homes selected by their documented environment variables. Can also provide explicit array of paths.",
               "default": "auto"
             },
             "allow_symlinks": {
@@ -26434,6 +30245,9 @@ Violation logging is **extremely efficient**:
     "support": {
       "$ref": "#/definitions/support"
     },
+    "tracing": {
+      "$ref": "#/definitions/tracing"
+    },
     "sdk": {
       "$ref": "#/definitions/sdk"
     }
@@ -26785,10 +30599,40 @@ Violation logging is **extremely efficient**:
                   "default": "ai-sdlc",
                   "description": "Kubernetes namespace to search for daemon pods."
                 },
+                "namespaces": {
+                  "type": "array",
+                  "items": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"},
+                  "minItems": 1,
+                  "description": "Kubernetes namespaces to search. Overrides namespace when provided."
+                },
+                "contexts": {
+                  "type": "array",
+                  "items": {"type": "string", "minLength": 1},
+                  "minItems": 1,
+                  "description": "Kubeconfig contexts to search. Defaults to the active context."
+                },
                 "label_selector": {
                   "type": "string",
                   "default": "app=ai-guardian",
-                  "description": "Label selector for daemon pods. User label is added automatically."
+                  "description": "Base label selector for daemon pods. The ownership selector is added automatically."
+                },
+                "ownership": {
+                  "type": "object",
+                  "description": "Ownership scope for daemon pods.",
+                  "properties": {
+                    "label": {
+                      "type": "string",
+                      "default": "ai-guardian.owner",
+                      "pattern": "^(?:[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?/)?[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$"
+                    },
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$",
+                      "description": "Owner identity. Defaults to AI_GUARDIAN_K8S_OWNER or the current user."
+                    }
+                  },
+                  "additionalProperties": false
                 }
               },
               "additionalProperties": false
@@ -27147,7 +30991,19 @@ Violation logging is **extremely efficient**:
         "api_timeout": {
           "type": "integer",
           "minimum": 1,
-          "description": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local providers like Ollama/MLX). On timeout, retries once; if retry also times out, stops with stop_reason='timeout'."
+          "description": "Per-API-call timeout in seconds. Default: 300 (cloud), 600 (local providers like Ollama/MLX)."
+        },
+        "retry_max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2,
+          "description": "Max total attempts per API call (1 = no retry). Retries on transient errors: timeouts, rate limits (429), overloaded (529), server errors (500/502/503), and connection failures."
+        },
+        "retry_base_delay": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.0,
+          "description": "Base delay in seconds for exponential backoff between retries. Actual delay: base_delay * 2^(attempt-1) + random(0,1)."
         },
         "max_schema_nudges": {
           "type": "integer",
@@ -27328,6 +31184,32 @@ Violation logging is **extremely efficient**:
         }
       }
     },
+    "tracing": {
+      "type": "object",
+      "description": "Unified SDK and hook trace recording, viewer refresh, and cache retention settings.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Record new SDK and hook traces. Existing traces remain available when disabled.",
+          "default": true
+        },
+        "auto_refresh_interval_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300,
+          "description": "Polling interval in seconds for auto-refresh of active Sessions and IDE Conversations.",
+          "default": 5
+        },
+        "trace_cache_retention_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650,
+          "description": "Days to retain cached remote daemon traces before automatic cleanup.",
+          "default": 90
+        }
+      }
+    },
     "sdk": {
       "type": "object",
       "description": "SDK configuration for programmatic security checking (GuardedAgent, guarded() wrapper, monitor()). Controls scanning behavior, agent profiles, and client profiles.",
@@ -27400,15 +31282,27 @@ Violation logging is **extremely efficient**:
         },
         "trace_viewer": {
           "type": "object",
-          "description": "Console trace viewer settings. Traces are stored in the XDG state directory (~/.local/state/ai-guardian/sdk/traces/).",
+          "description": "Deprecated compatibility location for tracing settings. Use the top-level tracing section. Scheduled for removal in 2.x (#2194).",
           "additionalProperties": false,
           "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Deprecated compatibility setting for tracing.enabled.",
+              "default": true
+            },
             "auto_refresh_interval_seconds": {
               "type": "integer",
               "minimum": 1,
               "maximum": 300,
               "description": "Polling interval in seconds for auto-refresh of active conversations in the web console.",
               "default": 5
+            },
+            "trace_cache_retention_days": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 3650,
+              "description": "Days to retain cached remote daemon traces before automatic cleanup.",
+              "default": 90
             }
           }
         }
@@ -27453,6 +31347,47 @@ Violation logging is **extremely efficient**:
           "additionalProperties": {
             "type": ["string", "number", "boolean"]
           }
+        }
+      }
+    },
+    "update_checking": {
+      "type": "object",
+      "description": "Version update checking and self-upgrade notification (NEW in v1.18.0, Issue #2155). Checks PyPI for new releases. Disable for air-gapped environments.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled",
+          "description": "Enable periodic version checking. Default: true.",
+          "default": true
+        },
+        "check_interval_seconds": {
+          "type": "integer",
+          "minimum": 60,
+          "maximum": 604800,
+          "description": "How often to check PyPI for new versions (seconds). Only used by the tray; CLI always checks live. Default: 300.",
+          "default": 300
+        },
+        "include_prerelease": {
+          "type": "boolean",
+          "description": "Include pre-release versions (alpha, beta, rc) when checking for updates. Default: false.",
+          "default": false
+        },
+        "notify": {
+          "type": "boolean",
+          "description": "Show OS desktop notification when a new version is available. Default: true.",
+          "default": true
+        },
+        "auto_check_on_doctor": {
+          "type": "boolean",
+          "description": "Include version currency in doctor checks. Default: true.",
+          "default": true
+        },
+        "cache_ttl_days": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 30,
+          "description": "Days before cached PyPI version info is considered stale (air-gapped protection). Default: 7.",
+          "default": 7
         }
       }
     }
@@ -27890,6 +31825,474 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.18.0] - 2026-09-17
+
+### Added
+
+- **Sandbox lifecycle progress (#2332)**: Show isolated live output while
+  creating or deleting container and OpenShell sandboxes. Successful actions
+  close the modal automatically; failures keep output available with copy and
+  close controls.
+
+- **Tray status explanations**: Add a per-daemon Status submenu explaining
+  status symbols, current state, runtime, errors, and actionable warnings.
+
+- **Secret patterns (#2323)**: Add detection for Bitbucket Data Center,
+  Shopify (Admin API, Custom App, Private App, and Shared Secret), GitLab
+  pipeline/runner, OpenShift, Dynatrace, and Resend credentials. Sources include
+  [Betterleaks](https://github.com/betterleaks/betterleaks/blob/main/cmd/generate/config/rules/bitbucket.go)
+  (MIT), [LeakTK](https://github.com/leaktk/patterns/blob/main/patterns/gitleaks/8.27.0/98-general.toml)
+  (MIT), and [Resend public API documentation](https://resend.com/docs/api-reference/introduction).
+
+### Changed
+
+- **Sandbox configuration reuse**: Automatically restore newest matching
+  configuration snapshot when recreating a logical sandbox name, while keeping
+  explicit host/default and snapshot source choices available.
+
+- **Collision-aware sandbox names (#2334)**: Use the stable `ag-<cli>` base
+  name for container and OpenShell creation, preserve unused explicit names,
+  and add runtime-safe collision names. Containers use a local
+  `YYYYMMDD_HHMMSS` suffix; OpenShell uses compact timestamps and short UUID
+  fallbacks to stay within its 19-character limit. Propagate the final name
+  through runtime labels, OpenShell service operations, tray defaults, and
+  lifecycle commands.
+
+- **OpenShell OpenCode CLI pin**: Update `opencode-ai` from `1.18.30` to
+  `1.18.31` in the dedicated OpenShell support image.
+
+### Fixed
+
+- **Tray working-directory UX**: Keep sandbox creation repository defaults
+  aligned with the daemon whose working directory changed and foreground the
+  macOS directory picker on the display where it was opened.
+
+- **OpenShell upload preflight**: Show repository path, size, file count, Git
+  remote classification, image availability, safe command preview, and
+  large-upload warning before transferring a directory. Local images are
+  checked without pulling. Cancel returns to the populated creation form.
+
+- **OpenShell tray forwarding**: Accept Docker and Podman host-gateway aliases
+  during tray registration so healthy OpenShell sandboxes do not show a false
+  forwarding warning.
+
+- **OpenShell post-restart tray recovery (#2333)**: Treat transient sandbox
+  relay and gateway-service failures as retryable startup, converge back to a
+  running or paused target when the service recovers, and show a restart path
+  when recovery remains unsuccessful.
+  
+- **Tray project-directory refresh (#2335)**: Refresh single-daemon and
+  multi-daemon per-directory pause menus when newly observed or expired project
+  directories change, including while global scanning is paused.
+
+- **Tray sandbox lifecycle correctness (#2329)**: Preserve discovered container
+  engines and runtime names in tray actions, mark created containers for stopped
+  discovery, probe Docker and Podman during lifecycle auto-detection, classify
+  config write failures accurately, and surface failed web-console saves.
+
+- **Tray subprocess interpreter consistency (#2317)**: Launch local AI Guardian
+  commands with the interpreter already running the tray, preventing a different
+  `ai-guardian` executable on `PATH` from starting an older package installation.
+
+- **Tray stale-code inventory (#2312)**: Track the daemon's shared hook,
+  reporting, SDK, and observability dependencies along with bundled pattern and
+  runtime resource files. Exclude unrelated integrations, clients, and daemon
+  CLI helpers so only daemon-relevant edits trigger the development stale-code
+  warning.
+
+### Added
+
+- **Sandbox lifecycle CLI (#2302)**: Add `ai-guardian sandbox` commands for
+  creating, listing, inspecting, starting, stopping, restarting, connecting to,
+  executing commands in, viewing logs from, and deleting named Docker/Podman or
+  OpenShell sandboxes. Add daemon-backed timestamped configuration snapshots
+  with `sandbox config save/list/restore` and `create --restore-config latest`.
+  OpenShell setup, policy composition, provider preparation, and gateway service
+  exposure now
+  live in the subcommand, so the legacy `container/openshell.sh` wrapper is no
+  longer needed.
+
+- **Sandbox scanner dependencies (#2299)**: Preinstall the pinned Gitleaks,
+  BetterLeaks, LeakTK, detect-secrets, Secretlint, and GitGuardian `ggshield`
+  engines in container and OpenShell images. GitGuardian's cloud engine still
+  requires consent, an API key, and runtime network access. TruffleHog remains
+  unavailable in the stock images pending its interactive AGPL-3.0 license
+  acknowledgement. CI verifies the pinned release assets for both Linux image
+  architectures, and Windows GitGuardian upgrades stage a complete bundle
+  before switching the active launcher.
+
+- **Tray sandbox management**: Add sandbox creation to the main tray menu and
+  safe lifecycle, exec, logs, configuration snapshot, and confirmed deletion
+  actions to each discovered container/OpenShell target.
+  The create form provides a dropdown for the supported CLI selection,
+  disables runtime-specific fields, starts stopped container and OpenShell
+  sandboxes from a main-menu submenu, and runs non-interactive actions
+  in-process with captured output and failure logs. Its Image / base field can
+  browse labeled local AI Guardian images while retaining editable custom
+  references.
+
+- **Sandbox configuration notices**: Show whether the web console is using a
+  writable host configuration snapshot or a directly mounted read-only host
+  configuration, with clear editing guidance.
+
+- **OpenShell tray connection**: Route the top-level OpenShell connection
+  action through the same sandbox connect implementation used by sandbox
+  management instead of opening a generic container shell.
+
+- **Tray sandbox repository default**: Start the sandbox creation form at the
+  active daemon's Working Dir value, falling back to the user's home directory
+  when no working directory is configured.
+- **Tray sandbox profiles**: Offer built-in security profiles in an editable
+  dropdown while retaining support for custom profile names and paths.
+- **Sandbox CLI selection**: Use `--cli` for the executable and require the
+  `--agent` flag when selecting the OpenCode CLI for its agent profile.
+- **CLI/runtime integration checklist**: Add a dedicated onboarding and
+  validation checklist for normal containers and OpenShell, covering image
+  distribution, providers, policies, authentication, lifecycle behavior, and
+  runtime evidence separately from host IDE integrations.
+
+### Fixed
+
+- **GitGuardian scanner installation**: Preserve the complete `ggshield` release
+  bundle so its packaged Python runtime is available during verification and
+  use in container images; serialize concurrent bundle publication and cleanup
+  so the active launcher cannot be left pointing to a removed version.
+
+- **Tray daemon visibility**: Expose every discovered daemon instead of
+  limiting the multi-daemon menu to eight fixed slots.
+
+- OpenShell upload-based sandbox creation now bootstraps the entrypoint
+  non-interactively, exposes its gateway-managed service, and then opens an
+  independent
+  interactive shell so exiting does not terminate the sandbox.
+
+- OpenShell `sandbox connect` now uses an independent interactive exec session
+  for the same safe exit behavior.
+
+- Tray container discovery now retains last-known targets during temporary
+  Podman socket interruptions and retries automatically; the redundant per-target
+  `List sandboxes` action was removed because discovery already exposes all
+  managed instances.
+
+- OpenShell discovery now treats control-plane errors as authoritative and
+  validates Ready/running phases through the AI Guardian REST endpoint, so a
+  dead daemon or REST forward is not shown as active in the tray or NiceGUI.
+
+- Sandbox lifecycle commands now auto-detect Docker/Podman versus OpenShell by
+  the AI Guardian runtime labels and OpenShell metadata when `--runtime` is
+  omitted; an unqualified `list` covers both runtimes.
+- OpenShell sandboxes now use durable gateway-managed `service expose`
+  endpoints for tray/NiceGUI connectivity, with per-sandbox service discovery
+  and lifecycle reconciliation instead of host-side forward processes.
+- OpenShell `sandbox start` and `restart` now explicitly start the AI Guardian
+  daemon when the sandbox's persistent shell is relaunched.
+- OpenShell gateway services now accept the dedicated tray token header used
+  when the gateway strips the standard HTTP Authorization header, restoring
+  tray and NiceGUI communication with authenticated daemons.
+- Sandbox creation now rejects malformed explicit image references instead of
+  allowing an invalid value to be mistaken for a runtime default.
+- OpenShell Codex provider creation now bridges API-key authentication cached
+  in `auth.json` through OpenShell's environment-key credential form without
+  exposing the key in sandbox runtime arguments.
+- OpenShell Claude/Vertex startup now restores the `inference.local` endpoint
+  and non-secret client placeholder in the sandbox shell when an older
+  sandbox omitted those environment values.
+- OpenShell OpenCode sandboxes now route an omitted model through the default
+  Claude/Vertex inference path instead of trying to create an `opencode`
+  provider profile; explicit non-Claude models retain generic provider handling.
+- Tray one-shot sandbox logs now open the captured output in the log window
+  instead of appearing to do nothing after a successful command.
+- Tray sandbox creation forms now respond to mouse-wheel scrolling on the
+  scrollable field list.
+- Tray sandbox path browsers now open at the current field value, including the
+  active daemon's Working Dir repository default.
+- Tray directory browsing now replaces the current repository/config directory
+  instead of combining both paths into an invalid value.
+- OpenShell Codex API-key credentials now bootstrap Codex's native
+  `auth.json`, so API-key-authenticated sessions do not open the sign-in flow.
+- OpenShell Claude/Vertex sandboxes now explicitly suppress the credential
+  warning for Claude's non-secret `unused` client placeholder; model
+  authentication remains attached to the gateway Vertex provider.
+
+- Preserve named container and OpenShell sandboxes in tray and NiceGUI labels
+  instead of replacing their names with runtime-generated container IDs.
+- Make container and OpenShell configuration precedence consistent: explicit
+  profiles win, existing sandbox-local config is preserved, host config seeds a
+  writable sandbox snapshot, and only then is a default generated. Host files
+  are never written back. OpenShell lifecycle creation now invokes the
+  support-image entrypoint after native uploads and exposes the persistent
+  gateway service used by tray and NiceGUI discovery.
+
+### Changed
+
+- **Codex integration display name**: Rename setup, tray, doctor, and support
+  labels to `OpenAI Codex (CLI + Desktop)` while preserving the internal
+  `codex` identity, configuration paths, hook counts, and MCP status (#2275).
+- **Codex coverage documentation**: Clarify that the label covers Codex CLI and
+  desktop Codex mode, not regular ChatGPT mode, and that shared MCP
+  configuration does not imply lifecycle-hook enforcement (#2274).
+- **OpenShell marketplace documentation**: Clarify that Claude marketplace and
+  plugin installation requires the read-only GitHub policy overlay, while
+  Claude/Vertex inference does not.
+- **OpenShell validation documentation**: Record the tested Claude/Vertex and
+  Codex provider workflows, including Claude marketplace access with the
+  read-only GitHub overlay.
+
+### Fixed
+
+- **Container and release version alignment (#2292)**: Keep normal and
+  OpenShell image defaults on the latest stable AI Guardian release, require
+  release image builds to install the wheel produced by the same workflow run,
+  and derive the release-readiness upgrade baseline from the changelog.
+- **OpenShell Vertex routing**: Configure existing and newly created Vertex
+  providers with their project and region, route Claude Code through the
+  gateway-managed `inference.local` endpoint, keep direct GCP credential
+  discovery out of the sandbox. Claude now follows OpenShell's explicit
+  `claude --bare` invocation without a persistent wrapper; automated
+  `claude --print` commands still receive `--bare`. OpenCode now separates
+  the selected CLI from its optional agent profile; only an explicit
+  Claude-compatible OpenCode selection uses the documented
+  `https://inference.local/v1` base URL. Generic OpenCode providers remain
+  unchanged. The launcher also disables Claude's background self-updater
+  inside the immutable image; image rebuilds are the update path.
+
+- **Linux tray UI fallbacks (#2269)**: Prefer the detected native desktop
+  dialog provider, keep Tkinter in-process on Linux, and fall through to
+  NiceGUI or Textual when native UI tiers fail; UI diagnostics now include
+  non-sensitive session context without logging prompt contents.
+
+- **Hook violation attribution**: Record the actual agent identity in
+  `context.ide_type` for Codex and other integrations that share Claude Code's
+  response protocol, while preserving existing response formatting (#2276).
+
+- **Gemini/Antigravity setup detection**: Require an agent-specific config file
+  or executable before treating shared `.gemini` directories as installed,
+  preventing false proactive setup prompts.
+
+- **Daemon startup recovery**: Serialize stale-state cleanup, write PID files
+  atomically, preserve responsive sockets when PID state is missing or corrupt,
+  and allow reset to recover a daemon using its startup lock.
+
+- **OpenShell daemon discovery**: Record dynamically assigned
+  `forward service` ports for tray/NiceGUI discovery, since OpenShell does not
+  expose those local service forwards through `openshell forward list`; ignore
+  records after their forward process exits.
+
+- **OpenShell daemon authentication**: Discover the generated REST token from
+  the OpenShell sandbox home as well as the conventional container paths, so
+  authenticated tray/NiceGUI requests can reach `/api/config` and control
+  endpoints.
+
+- **OpenShell Codex bootstrap**: Keep the synthetic local JWT minimal and free
+  of hard-coded subscription or account claims while real OAuth credentials
+  remain gateway-managed.
+
+- **OpenShell CLI parity**: Pin independently overridable Codex, OpenCode, and
+  GitHub Copilot CLI releases in the dedicated support image so their model
+  catalogs and protocol support do not lag behind the host clients shipped
+  outside OpenShell.
+
+- **Cursor Cloud setup review fixes**: Keep cloud MCP registration separate from
+  local `.cursor/mcp.json`, recognize effective project hooks in MCP health
+  checks, fail closed on malformed Cursor tool inputs, preserve decoded shell
+  parameters, and keep native tray dismissal from submitting selections.
+
+### Added
+
+- **OpenShell support image workflow (#2289)**: Add Codex-default Docker/Podman
+  and OpenShell launchers with runtime agent selection, selected-agent hook
+  setup, file-only host config sharing, profile isolation, a read-only
+  and read/write GitHub access policy example, an OpenShell upload-compatible staging flow,
+  secure Codex OAuth provider bridging, Providers v2 prerequisite diagnostics,
+  daemon REST forwarding/tray guidance with active OpenShell-forward discovery,
+  and `AI_GUARDIAN_HOME`
+  configuration-directory compatibility. The OpenShell launcher selects a
+  free REST port by default, accepts `--port N` for stable mappings, and offers
+  `--no-forward`/`AI_GUARDIAN_OPEN_SHELL_FORWARD=false` when host UI access is
+  not wanted. The
+  OpenShell uses a dedicated `Dockerfile.openshell` based on the OpenShell
+  Community sandbox image, while the normal UBI `Dockerfile` keeps its ordinary
+  Docker/Podman runtime layout. The OpenShell image inherits the community
+  base's agent paths, networking tools, and sandbox permissions, and bootstraps
+  Codex OAuth through placeholder-backed `auth.json` state without copying
+  host tokens. OpenShell Codex sessions use Codex's sandbox-local
+  `danger-full-access` mode so OpenShell remains the single outer sandbox.
+
+- **Targeted container setup**: Configure only the selected agent by default;
+  all-CLI and all-integration setup remain available through
+  `AI_GUARDIAN_SETUP_SCOPE`.
+
+- **OpenShell policy composition (#2289)**: Split the support-image network
+  policy into shared, GitHub-access, and selected-agent overlays. The
+  OpenShell launcher now composes only the selected CLI policy and accepts
+  repeatable `--policy` overlays, keeping unrelated agent egress disabled. The
+  launcher opens a shell by default so users can start and exit the selected
+  agent repeatedly within the same repository snapshot.
+
+- **OpenShell image publishing and CLI health monitoring**: Publish the
+  dedicated OpenShell image to
+  `quay.io/redhatproductsecurity/ai-guardian-openshell` with `latest`/version
+  tags, without mirroring it to the legacy `itdove` repository. Release
+  automation verifies both the normal and OpenShell image repositories.
+  Add a twice-monthly version check for the explicit Codex and OpenCode pins
+  while keeping the inherited Claude Code and GitHub Copilot clients, plus
+  GUI integrations, outside the image-version check.
+
+- **IDE-specific home directory support (#2288)**: Centralize documented
+  environment-variable path resolution across hook setup, MCP registration and
+  audit, verification, session discovery, plugin/extension paths, and both
+  installers. Preserve project-local targets and existing defaults, including
+  `CLAUDE_CONFIG_DIR` and `CODEX_HOME`; document precedence and supported
+  variables in the agent support reference.
+- **Antigravity CLI (`agy`) hooks and MCP integration**: Add camelCase
+  payload normalization, canonical tool and MCP-name mapping, flat decision
+  responses, root-level `hooks.json` setup, and isolated hook regression
+  coverage (#2134).
+
+- **Cursor desktop/CLI hooks and MCP integration**: Normalize Cursor's six
+  managed command-hook events, recognize additional upstream MCP/failure
+  payloads without treating them as required setup, install local desktop
+  and CLI protection at the shared user scope by default, and add explicit
+  Cursor Cloud project setup through `--project` and the tray directory picker
+  (#2265)
+
+- **First-run tray security profile onboarding**: When no global
+  `ai-guardian.json` exists, automatic IDE setup offers the built-in security
+  profiles with `@standard` recommended by default, an explicit skip option,
+  and profile-before-hook setup ordering without overwriting existing config
+  (#2262)
+
+- **Global Codex MCP registration and setup checks**: Register AI Guardian in
+  Codex's user-level `config.toml` (respecting `CODEX_HOME`), preserve existing
+  configuration, migrate stale project-root entries, and distinguish missing
+  MCP registration from unhealthy hooks in tray setup health (#2261)
+
+- **Consolidated tray IDE/CLI setup menu**: Group the on-demand hook health
+  check, targeted per-IDE setup, and config creation under one clearly labeled
+  menu while keeping manual checks available without a daemon (#2257)
+
+- **Goal-oriented `GuardedAgent` loops**: Add an optional external goal
+  evaluator with per-run state, scanned feedback, explicit completion/error/
+  timeout stop reasons, and trace/on-turn decision events; document when to
+  use it versus the existing `between_turns` callback (#2252)
+
+- **NiceGUI proactive prompt state viewer** — added a read-only Configuration page
+  for inspecting the local XDG `proactive_prompts.json` file without mixing
+  personal prompt decisions into the shareable `ai-guardian.json` config.
+  - Syncs a current installed-IDE and hook-health snapshot without removing
+    historical prompt decisions.
+  - Added `ai-guardian ide-setup sync [--json]` for the same reconciliation.
+  - Added per-IDE reset controls in NiceGUI and
+    `ai-guardian ide-setup reset --ide <ide>`.
+
+- **Per-IDE tray setup choices**: When multiple local IDE/CLI integrations need
+  hooks, the tray offers per-integration Install now or Never install choices,
+  applies them with a single Submit action, persists exclusions in XDG state,
+  and keeps manual setup available (#2241)
+
+- **IDE/CLI setup detection**: Fresh installations detect supported IDE configuration directories and install/update AI Guardian hooks automatically when `--ide` is omitted; the tray provides an on-demand configuration check and reports doctor-style hook counts after setup (#2235)
+
+- **Codex hooks and ChatGPT desktop support**: Align the Codex adapter with the documented 12-event lifecycle, while keeping setup focused on its five managed hooks; add layered `hooks.json`/`config.toml` discovery, active-layer diagnostics, permission-request decisions, and preservation of existing matcher groups (#2244)
+
+- **Per-IDE hook E2E matrix**: Add isolated setup, verification, MCP-registration,
+  and managed-lifecycle runtime checks for every supported external integration;
+  the canonical IDE registry keeps adapter, setup, installer, documentation,
+  and release-readiness matrices synchronized (#2248, #2286)
+
+### Documentation
+
+- **Hook latency support matrix and Codex troubleshooting**: Document latency
+  coverage for every supported integration, direct/daemon configuration reload
+  behavior, restart requirements, and verification steps (#2259)
+
+- **IDE/agent integration checklist**: Consolidated implementation, setup,
+  testing, manual acceptance, documentation, and release-readiness guidance
+  in `docs/IDE_INTEGRATION_CHECKLIST.md`; added the mandatory onboarding test
+  gate and coverage-to-test matrix for every supported IDE.
+
+- **Proactive upgrade prompt**: Show a local tray popup for available releases with Upgrade Now, snooze, and version-specific dismissal actions (#2218)
+
+- **OpenCode IDE Conversations adapter**: Discover OpenCode SQLite sessions and render their titles, models, timestamps, messages, reasoning, and tool activity in the IDE Conversations page (#2206)
+
+- **Merged hook trace sessions**: Group trace fragments sharing a `session_id` into one Sessions entry and detail view, with combined turns, token usage, time boundaries, and visible fragment counts (#2208)
+
+- **IDE Conversations filters**: Add a searchable IDE dropdown with an "All" option for browsing conversations across every supported IDE (#2207)
+
+- **Published documentation site**: Added MkDocs Material and Read the Docs configuration, searchable navigation, Mermaid support, generated SDK API reference, and release-time verification of versioned documentation.
+  - Documentation dependencies: `mkdocs-material` (MIT) and `mkdocstrings` (ISC).
+
+### Fixed
+
+- **macOS proactive prompt fallback**: Use one foregrounded native Cocoa
+  prompt for simple and structured tray setup flows, with native per-IDE
+  checkboxes and a visible snooze selector; remove the legacy multi-dialog
+  AppleScript cascade, retain complete Tkinter failure diagnostics, return
+  native modal results reliably for snooze persistence, and deduplicate
+  overlapping health checks (#2268)
+
+- **Codex PostToolUse fail-open output**: Emit valid JSON when an unexpected
+  hook-processing error occurs, while preserving fail-open behavior (#2267)
+
+- **macOS tray IDE/MCP health-check visibility**: Check UI subprocess exit
+  status, avoid invisible Tkinter prompts from the accessory tray process, and
+  fall back to visible modal/action dialogs when native notification delivery
+  fails. The initial tray startup check now reports a separate health result
+  from the web-console-ready notification (#2264)
+
+- **NiceGUI Python 3.14 compatibility**: Require NiceGUI 3.0.4 or newer so
+  fresh installations receive the upstream vbuild compatibility fix.
+
+- **Hook latency configuration and lifecycle coverage**: Use the effective
+  global/project/overlay configuration and record normalized lifecycle events,
+  including Codex hooks, in both direct and daemon processing; surface paused
+  state in performance views (#2259)
+
+- **Codex proactive setup health**: Count and install only the five managed Codex hooks, and snooze automatic setup prompts after a failed or incomplete setup instead of immediately reopening the prompt (#2250)
+
+- **IDE setup health and proactive prompt reconciliation**: Base setup results
+  on final hook verification, surface actionable diagnostics, refresh the
+  persisted IDE health snapshot during tray monitoring, keep prompt history
+  decisions separate from current configuration health, and add an immediate
+  startup/direct tray hook check; ignore Codex ``[hooks.state]`` bookkeeping
+  when detecting inline-hook conflicts (#2254)
+
+- **NiceGUI 3.0 WebUI compatibility**: Avoid `Client.is_deleted` errors when opening session and auto-refresh pages on the minimum supported NiceGUI version
+
+- **Deferred source allowlisting**: Preserve a hashed, sanitized source-line context for violations detected through temporary scanner files, restoring the `Suppress in Source...` action only when the original line can be verified (#2162)
+
+- **Prompt-injection violation locations**: Preserve scanned file paths and line/column metadata in violation logs and `get_violations()` responses (#2238)
+
+- **KDE tray pause/resume stability**: Keep Linux pause labels stable and avoid countdown-driven native menu rebuilds that collapse an open nested submenu before **Resume** can be selected (#2242)
+
+- **IDE hook verification compatibility**: Verify Copilot's root-level hook schema,
+  recognize Windows script variants, and accept the supported Crush adapter in
+  the CLI setup and hook commands (#2248)
+
+- **Scenario-test container reliability**: Install the pinned OpenCode release
+  archive directly with architecture and CPU-feature selection instead of
+  relying on the mutable upstream installer script.
+
+- **Built-in scanner configuration propagation**: Apply top-level custom
+  patterns, entropy thresholds, and stopwords to the TOML-patterns engine so
+  configured hook-output redaction and scanning use the same rules.
+
+- **Large IDE conversation responsiveness**: Render individual session details in bounded pages, avoid reparsing unchanged transcripts during auto-refresh, bound oversized inline content, and prevent overlapping TUI session discovery work (#2230)
+
+- **Codex conversation titles**: Resolve explicit titles, genuine prompts, assistant fallbacks, and stable project/time titles while excluding bootstrap content in list and detail views (#2232)
+
+- **Session step formatting**: Syntax-highlight inline JSON, Python, JavaScript, and YAML content while preserving plain-text rendering, and serialize dictionary tool results as valid JSON (#2214)
+- **Hook trace finalization**: Finalize stale IDE hook traces as timed out with their last activity timestamp and computed token usage, including periodic daemon cleanup (#2209)
+- **Codex conversation titles**: Ignore injected AGENTS.md instruction messages when choosing session titles and omit empty model parentheses from detail headers (#2205)
+- **Web console header**: Keep the hamburger menu and header quicklinks interactive on IDE Conversations pages by removing overlapping sticky control layers (#2193)
+
+### Added
+
+- **Antigravity CLI (`agy`) support** — new `--ide antigravity` (alias `--ide agy`) target with a hook adapter, `~/.gemini/config/hooks.json` + `mcp_config.json` setup, and tool-name mapping onto canonical names. Antigravity has no "no opinion" PreToolUse decision (an absent decision denies the call), so a clean check returns `ask`, deferring to Antigravity's own permission prompt without widening existing permissions. Its PreToolUse and PostToolUse payloads are near-identical, so generated hook commands declare `--hook-event`, stamped into the hook data to survive daemon forwarding. MCP calls arrive as `call_mcp_tool` and are rebuilt as `mcp__{server}__{tool}` so MCP restriction and `mcp__*` rules keep applying. PostToolUse fires but carries no tool output, so post-tool redaction is not available on Antigravity
+
+- **Unified hook session traces**: Persist IDE hook sessions in the GuardedAgent JSON trace format, including prompts, tool calls, scan outcomes, session metadata, and `AI_GUARDIAN_RUN_ID` correlation for combined SDK and IDE pipeline views (#2190)
+
+- **secrets**: Add credential detection for six AI service providers — Cartesia, LlamaCloud, Voyage AI, fal.ai, Mem0, and Retell AI. Prefix-only detection for distinctive formats (sk_car_, llx-); keyword-context detection for generic shapes (Voyage, fal.ai, Mem0, Retell). Adapted from [Betterleaks](https://github.com/betterleaks/betterleaks) rules (MIT) (#2185)
+
 ## [1.17.1] - 2026-08-26
 
 ### Added
@@ -27907,76 +32310,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **release**: Use temp file for git-cliff output insertion
 - **release**: Source version from git tags for accurate calculation
 - **daemon**: Bind localhost in toolbox and distrobox containers
-
-## [1.17.0] - 2026-08-24
-
-### Added
-
-- **Text-as-tool-call parsing for OpenAI-compatible providers** — local models (Ollama, llama.cpp, MLX, vLLM) that write tool calls as plain text are now detected and executed automatically. The SDK extracts JSON tool-call patterns from text responses, including fenced code blocks, Python dict syntax, and multiple tool calls. Enabled by default for known local providers; opt in for others with `text_tool_parsing=True` (#2124)
-
-- **Text-as-structured-output parsing** — when `output_schema` is set and a local model returns valid JSON matching the schema as text instead of calling `submit_result`, the SDK now accepts it directly without nudging (#2124)
-
-- **Configurable schema nudge limit** — new `max_schema_nudges` parameter (default: 3) stops the agent loop after N failed attempts to get the model to call `submit_result`, returning `stop_reason='max_schema_nudges'` instead of burning through `max_turns` (#2124)
-
-- **Configurable API call timeout for GuardedAgent** — new `api_timeout` parameter (constructor and `sdk.agents.*.api_timeout` config) sets per-API-call timeout in seconds. Defaults: 300s for cloud providers (Anthropic, OpenAI, Azure), 600s for local providers (Ollama, llama.cpp, vLLM). On timeout: logs warning, retries once, then stops with `stop_reason='timeout'` and returns partial result. Timeout events emitted in trace (#2097)
-
-- **MCP server support for GuardedAgent** — configure MCP servers in `sdk.agents.*.mcpServers` to give agents access to external tools via the Model Context Protocol. Supports stdio and SSE transports, per-server trust levels and scan controls, and automatic tool discovery. MCP tools use `mcp__{server}__{tool}` naming convention. Requires Python >= 3.10 (#2084)
-
-- **`defer_loading` for MCP servers** — delay MCP server startup until the agent first needs a tool from that server, reducing initial agent startup time when servers are slow to initialize. Configure per-server with `defer_loading: true` in `mcpServers` config (#2090)
-
-- **Google Gemini integration** — new `gemini` provider for GuardedAgent enables using Google Gemini models with full security scanning. Supports both `google-genai` SDK and Vertex AI. Provider-specific content normalization handles Gemini's message format. Configure with `provider='gemini'` or `AI_GUARDIAN_SDK_PROVIDER=gemini` (#1865)
-
-- **Config-driven shell hooks for agent callbacks** — new `sdk.hooks` config section allows running shell commands at agent lifecycle points (`on_start`, `on_turn`, `on_stop`). Commands receive agent context as environment variables. Useful for logging, notifications, and custom integrations (#2087)
-
-- **Inline code annotations for false positive suppression** — suppress specific scanner findings on individual lines using `# ai-guardian:ignore <scanner>` comments. Supports all scanner types. Also available as block annotations with `# ai-guardian:ignore-start` / `# ai-guardian:ignore-end` pairs (#1664)
-
-- **Tray plugin management UI** — manage tray menu plugins from the web console and TUI. Create, edit, delete, and reorder custom menu items. Plugin files stored in project `.ai-guardian/plugins/` directory with JSON format (#1736)
-
-- **OpenCode plugin registration** — `ai-guardian setup` now detects and configures OpenCode IDE with appropriate hook settings (#2139)
-
-- **`--log-violations` flag for `ai-guardian scan`** — writes findings to `violations.jsonl` (the same log used by hooks), enabling unified violation tracking from both hooks and CLI scans. Also available as `ai-guardian setup --pre-commit --log-violations` to include the flag in auto-installed pre-commit hooks (#2068)
-
-- **Pagination with configurable search limit** — traces and IDE sessions pages now support pagination with a configurable page size. API endpoints accept `limit` and `offset` parameters. Default limit configurable via `console.search_limit` (#2125)
-
-- **Pause auto-refresh toggle** — traces and IDE sessions pages have a pause button to stop auto-refresh, allowing text selection and copy operations without interruption (#2119)
-
-- **Copy button on formatted modal views** — content viewer dialogs now include a copy-to-clipboard button for easy extraction of JSON and code content (#2119)
-
-- **Error step tracking in traces** — agent errors are now captured as explicit steps in the trace viewer, showing error messages and stack traces for debugging (#2101)
-
-- **Helpful error messages for missing provider packages** — when a provider SDK package is not installed, the error message now names the specific package to install (e.g., `pip install google-genai`) instead of a generic import error (#2081)
-
-- **Root span at agent start** — traces now emit an initial root span when the agent starts, providing early visibility in trace viewers before the first API call completes (#2104)
-
-### Changed
-
-- **AgentResponse for provider-agnostic normalized responses** — all provider strategies now return a unified `AgentResponse` dataclass instead of provider-specific response objects. Standardizes access to `content`, `tool_calls`, `stop_reason`, and `usage` across Anthropic, OpenAI, and Gemini providers (#2128)
-
-- **Structured logging throughout agent lifecycle** — replaced silent `except: pass` patterns with proper `logging.warning()` and `logging.debug()` calls. All SDK exceptions now log context before re-raising or swallowing (#2133)
-
-- **Sanitize violation messages in agent traces** — violation details written to trace files are now sanitized to remove raw secret values, replacing them with redacted placeholders (#2131)
-
-- **Provider compatibility tables in SDK docs** — added feature comparison matrix and provider capability tables to `docs/SDK.md` (#2082)
-
-### Fixed
-
-- **Windows `expanduser` compatibility** — tests now set `USERPROFILE` environment variable for Windows compatibility with `os.path.expanduser()` (#2139)
-
-- **Stale in-progress traces marked as crashed** — traces that remain in `in_progress` state beyond a timeout are now automatically detected and marked as `crashed` in the trace viewer (#2110)
-
-- **Output schema check runs after `between_turns` hook** — previously the schema validation ran before the hook, meaning hook modifications to the response were not validated (#2096)
-
-- **Project browse button in console** — fixed file browser dialog not opening when clicking the project browse button (#2089)
-
-### CI/CD
-
-- **Removed redundant post-merge test runs** — `test.yml`, `lint.yml`, and `integration-tests.yml` no longer trigger on pushes to `main`, eliminating duplicate runs after PR merges. Tests still run on pull requests (#2113)
-
-- **Decoupled scenario tests from Quay** — scenario tests no longer require Quay container registry access, enabling them to run on fork PRs (#2135)
-
-### Compatibility
-
-- Verified Cursor hook compatibility with Cursor v3.17.8
 
 
 *(Earlier versions omitted — see CHANGELOG.md for full history)*

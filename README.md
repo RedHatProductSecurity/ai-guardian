@@ -1,7 +1,7 @@
 # AI Guardian
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
+  <img src="https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/images/ai-guardian-320.png" alt="AI Guardian Logo" width="320">
 </p>
 
 > AI IDE security hook: controls MCP/skill permissions, blocks directories, detects prompt injection, scans secrets
@@ -142,21 +142,21 @@ decisions and Never install choice.
 
 ```bash
 # Auto-detect installed IDEs (Linux / macOS)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash
 
 # Linux / macOS (auto-detects uv → venv → pip)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --ide claude
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --ide claude
 
 # Force a specific install method
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --venv --ide claude  # venv + pip
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --pip --ide claude   # bare pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --uv --ide claude    # uv tool install (fastest)
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --venv --ide claude  # venv + pip
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --pip --ide claude   # bare pip
 
 # Windows (PowerShell)
-irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.ps1 | iex
 
 # Install without changing IDE hooks
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/install.sh | bash -s -- --no-setup
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/install.sh | bash -s -- --no-setup
 ```
 
 ### Container
@@ -171,7 +171,7 @@ available inside the container and may be readable by the selected agent.
 
 ```bash
 # Recommended — run.sh handles auth, port mapping, config sharing, and ToS consent
-curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/main/container/run.sh -o run.sh
+curl -fsSL https://raw.githubusercontent.com/RedHatProductSecurity/ai-guardian/v1.18.0/container/run.sh -o run.sh
 chmod +x run.sh
 OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
@@ -412,8 +412,8 @@ guide for the supported agent matrix.
 
 ```bash
 # Pinned release
-podman pull quay.io/redhatproductsecurity/ai-guardian:v1.17.1
-podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.17.1
+podman pull quay.io/redhatproductsecurity/ai-guardian:v1.18.0
+podman run -it -p 63152:63152 -e AI_GUARDIAN_AGENT=codex quay.io/redhatproductsecurity/ai-guardian:v1.18.0
 
 # Or build from source
 podman build -t ai-guardian container/
