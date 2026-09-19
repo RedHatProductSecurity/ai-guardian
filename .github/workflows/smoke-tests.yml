@@ -589,7 +589,7 @@ jobs:
 
       - name: "Verify MCP server in .claude.json"
         run: |
-          CLAUDE_JSON="$HOME/.claude.json"
+          CLAUDE_JSON="$CLAUDE_CONFIG_DIR/.claude.json"
           if [ -f "$CLAUDE_JSON" ] && grep -q "ai-guardian" "$CLAUDE_JSON"; then
               echo "MCP server verified in $CLAUDE_JSON"
           else
@@ -633,7 +633,7 @@ jobs:
 
       - name: "Verify MCP removed from .claude.json"
         run: |
-          CLAUDE_JSON="$HOME/.claude.json"
+          CLAUDE_JSON="$CLAUDE_CONFIG_DIR/.claude.json"
           if [ -f "$CLAUDE_JSON" ] && grep -q "ai-guardian" "$CLAUDE_JSON"; then
               echo "FAIL: MCP server still present"
               cat "$CLAUDE_JSON"
