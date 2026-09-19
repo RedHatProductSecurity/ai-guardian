@@ -1,6 +1,7 @@
 """Tests for install.sh and install.ps1 installers."""
 
 import os
+import json
 import shutil
 import subprocess
 import pathlib
@@ -11,6 +12,7 @@ import pytest
 from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "install.sh"
+UNINSTALL_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "uninstall.sh"
 PS1_SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "install.ps1"
 
 _skip_no_bash = pytest.mark.skipif(
@@ -231,6 +233,56 @@ class TestInstallScriptAgentDetection:
     def test_detection_includes_setup_for_unconfigured_agents(self, script_content):
         assert "Detected installed IDEs, setting up hooks" in script_content
         assert "--install-scanner --force --yes" in script_content
+
+
+@_skip_no_bash
+class TestUninstallScript:
+    """Verify uninstall cleanup honors relocated IDE configuration paths."""
+
+    def test_claude_mcp_cleanup_honors_config_dir(self, tmp_path):
+        home = tmp_path / "home"
+        claude_dir = home / "claude"
+        claude_dir.mkdir(parents=True)
+        mcp_config = claude_dir / ".claude.json"
+        mcp_config.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "ai-guardian": {"command": "/tmp/ai-guardian"},
+                        "other-server": {"command": "/tmp/other"},
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        env = dict(os.environ)
+        env.update(
+            {
+                "HOME": str(home),
+                "CLAUDE_CONFIG_DIR": str(claude_dir),
+                "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+                "AI_GUARDIAN_STATE_DIR": str(tmp_path / "state"),
+                "AI_GUARDIAN_CACHE_DIR": str(tmp_path / "cache"),
+                "PI_CODING_AGENT_DIR": str(tmp_path / "pi"),
+                "PATH": "/usr/bin:/bin",
+            }
+        )
+
+        result = subprocess.run(
+            ["bash", str(UNINSTALL_SCRIPT), "--keep-config", "--yes"],
+            capture_output=True,
+            text=True,
+            env=env,
+            cwd=tmp_path,
+        )
+
+        assert result.returncode == 0, result.stderr + result.stdout
+        remaining = json.loads(mcp_config.read_text(encoding="utf-8"))
+        assert "ai-guardian" not in remaining["mcpServers"]
+        assert remaining["mcpServers"]["other-server"] == {
+            "command": "/tmp/other"
+        }
 
 
 class TestInstallPs1:

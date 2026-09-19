@@ -191,7 +191,7 @@ remove_json_hooks() {
     # Each entry: "agent_name|hook_config_path|mcp_config_path"
     # MCP config path is empty if same file or not applicable
     local agents=(
-        "claude|${CLAUDE_CONFIG}|$HOME/.claude.json"
+        "claude|${CLAUDE_CONFIG}|${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
         "cursor|$HOME/.cursor/hooks.json|$HOME/.cursor/mcp.json"
         "copilot|$HOME/.github/hooks/hooks.json|"
         "codex|$HOME/.codex/hooks.json|$HOME/codex.json"
