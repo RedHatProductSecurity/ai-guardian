@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Pi coding-agent support (#2325)**: Add a dedicated Pi extension adapter with
+  global and project-local setup, six managed lifecycle events, Pi JSONL
+  transcript/session discovery, and explicit unsupported-MCP reporting.
+
 ## [1.18.0] - 2026-09-17
 
 ### Added

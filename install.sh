@@ -34,7 +34,7 @@ Options:
                         installed IDEs and set up their hooks automatically
                         Choices: claude, cursor, copilot, codex, windsurf,
                                  gemini, antigravity, cline, zoocode, kiro, aiderdesk,
-                                 openclaw, opencode, augment, crush, junie
+                                  openclaw, opencode, pi, augment, crush, junie
     --no-setup          Install only, don't auto-detect or update IDE hooks
     --profile PROFILE   Security profile: @minimal, @standard (default), @strict
     --version VERSION   Install a specific version or a local .whl file
@@ -170,6 +170,11 @@ detect_installed_agents() {
         [ -d "$OPENCLAW_HOME" ] && agents+=("openclaw")
     elif [ -d "$HOME/.openclaw/plugins" ]; then
         agents+=("openclaw")
+    fi
+
+    local pi_agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+    if [ -d "$pi_agent_dir" ]; then
+        agents+=("pi")
     fi
 
     echo "${agents[@]}"
@@ -581,7 +586,8 @@ if [ -z "$IDE" ] && [ "$NO_SETUP" = false ]; then
         echo ""
         echo "  No supported IDE installations detected. Run setup explicitly:"
         echo "    ai-guardian setup --ide claude"
-        echo "    ai-guardian setup --ide opencode"
+    echo "    ai-guardian setup --ide opencode"
+    echo "    ai-guardian setup --ide pi"
         echo "    ai-guardian setup --ide cursor"
         echo ""
     fi

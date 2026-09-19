@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1933,6 +1934,233 @@ class OpenCodeSessionAdapter(SessionAdapter):
 
 
 # ---------------------------------------------------------------------------
+# Pi
+# ---------------------------------------------------------------------------
+
+
+class PiSessionAdapter(SessionAdapter):
+    """Read Pi's tree-shaped v3 JSONL sessions."""
+
+    name = "pi"
+    session_dirs = {
+        "env": "PI_CODING_AGENT_SESSION_DIR",
+        "home_ide": "pi",
+        "home_subdir": ("sessions",),
+        "default_mac": "~/.pi/agent/sessions",
+        "default_linux": "~/.pi/agent/sessions",
+        "default_win": "%USERPROFILE%/.pi/agent/sessions",
+        "pattern": "*.jsonl",
+    }
+
+    @staticmethod
+    def _content_text(content) -> List[str]:
+        if isinstance(content, str):
+            return [content]
+        if not isinstance(content, list):
+            return []
+
+        texts = []
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            block_type = block.get("type")
+            if block_type == "text" and isinstance(block.get("text"), str):
+                texts.append(block["text"])
+            elif block_type == "thinking" and isinstance(block.get("thinking"), str):
+                texts.append(block["thinking"])
+        return texts
+
+    @classmethod
+    def _read_header(cls, path: Path) -> Dict:
+        try:
+            with path.open("r", encoding="utf-8") as stream:
+                first_line = stream.readline().strip()
+            header = json.loads(first_line) if first_line else {}
+            return header if isinstance(header, dict) else {}
+        except (OSError, json.JSONDecodeError, ValueError):
+            return {}
+
+    def discover(self, project_path=None, limit=100):
+        base = self.resolve_session_dir()
+        if not base or not base.is_dir():
+            return []
+
+        try:
+            jsonl_files = sorted(
+                (path for path in base.rglob("*.jsonl") if path.is_file()),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        except OSError:
+            return []
+
+        resolved_project = (
+            os.path.realpath(os.path.expanduser(project_path)) if project_path else None
+        )
+        sessions = []
+        for path in jsonl_files:
+            header = self._read_header(path)
+            if header.get("type") != "session":
+                continue
+            cwd = header.get("cwd", "")
+            if resolved_project and (
+                not cwd or os.path.realpath(os.path.expanduser(cwd)) != resolved_project
+            ):
+                continue
+
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+
+            steps = self.read_detail({"file_path": str(path)}, limit=None)
+            summary = steps.summary
+            sessions.append(
+                {
+                    "ide": self.name,
+                    "session_id": header.get("id", path.stem),
+                    "project_path": cwd,
+                    "file_path": str(path),
+                    "size_bytes": stat.st_size,
+                    "modified": stat.st_mtime,
+                    "title": summary["title"],
+                    "model": summary["model"],
+                    "message_count": summary["message_count"],
+                    "token_usage": summary["token_usage"],
+                }
+            )
+            if len(sessions) >= limit:
+                break
+
+        return sessions
+
+    def read_detail(self, session, offset=0, limit=None):
+        file_path = session.get("file_path", "")
+        if not file_path:
+            return []
+
+        steps = StepCollector(offset, limit)
+        try:
+            with open(file_path, "r", encoding="utf-8") as stream:
+                for line in stream:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    if not isinstance(entry, dict):
+                        continue
+
+                    entry_type = entry.get("type")
+                    timestamp = entry.get("timestamp", "")
+                    if entry_type == "session_info":
+                        steps.add_title_candidate(entry.get("name", ""), "explicit")
+                        continue
+
+                    if entry_type == "message" and isinstance(
+                        entry.get("message"), dict
+                    ):
+                        message = entry["message"]
+                        role = message.get("role")
+                        content = message.get("content")
+                        if role == "user":
+                            for text in self._content_text(content):
+                                steps.add_title_candidate(text, "user")
+                                steps.append(
+                                    {
+                                        "type": "user",
+                                        "content": text,
+                                        "timestamp": timestamp,
+                                    }
+                                )
+                        elif role == "assistant":
+                            for block in content if isinstance(content, list) else []:
+                                if not isinstance(block, dict):
+                                    continue
+                                block_type = block.get("type")
+                                if block_type == "text" and block.get("text"):
+                                    steps.append(
+                                        {
+                                            "type": "assistant",
+                                            "content": block["text"],
+                                            "timestamp": timestamp,
+                                            "model": message.get("model", ""),
+                                            "usage": message.get("usage", {}),
+                                        }
+                                    )
+                                elif block_type == "thinking":
+                                    steps.append(
+                                        {
+                                            "type": "thinking",
+                                            "content": block.get("thinking", ""),
+                                            "timestamp": timestamp,
+                                        }
+                                    )
+                                elif block_type == "toolCall":
+                                    steps.append(
+                                        {
+                                            "type": "tool_use",
+                                            "tool_name": block.get("name", ""),
+                                            "tool_input": block.get("arguments", {}),
+                                            "tool_id": block.get("id", ""),
+                                            "timestamp": timestamp,
+                                        }
+                                    )
+                        elif role == "toolResult":
+                            content_text = "\n".join(self._content_text(content))
+                            steps.append(
+                                {
+                                    "type": "tool_result",
+                                    "tool_name": message.get("toolName", ""),
+                                    "content": content_text,
+                                    "tool_id": message.get("toolCallId", ""),
+                                    "timestamp": timestamp,
+                                }
+                            )
+                    elif entry_type == "bashExecution":
+                        steps.append(
+                            {
+                                "type": "tool_result",
+                                "tool_name": "bash",
+                                "content": entry.get("output", ""),
+                                "timestamp": timestamp,
+                            }
+                        )
+                    elif entry_type in ("compaction", "branch_summary"):
+                        steps.append(
+                            {
+                                "type": "system",
+                                "content": entry.get("summary", ""),
+                                "timestamp": timestamp,
+                            }
+                        )
+        except OSError:
+            pass
+
+        steps.resolve_title()
+        return steps
+
+    def read_messages(self, session, limit=200):
+        messages = []
+        for step in self.read_detail(session, limit=None):
+            if step.get("type") not in ("user", "assistant", "tool_result"):
+                continue
+            messages.append(
+                {
+                    "role": step["type"],
+                    "content": truncate(str(step.get("content", "")), 500),
+                    "timestamp": step.get("timestamp", ""),
+                    **({"tool_id": step["tool_id"]} if step.get("tool_id") else {}),
+                }
+            )
+            if len(messages) >= limit:
+                break
+        return messages
+
+
+# ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
 
@@ -1947,5 +2175,6 @@ for _adapter in [
     ClineSessionAdapter(),
     KiroSessionAdapter(),
     OpenCodeSessionAdapter(),
+    PiSessionAdapter(),
 ]:
     SESSION_ADAPTERS[_adapter.name] = _adapter

@@ -458,6 +458,7 @@ class ConfigDisplay:
                 str(Path.home() / ".cursor" / "skills"),
                 str(Path.home() / ".vscode" / "skills"),
                 str(Path.home() / ".windsurf" / "skills"),
+                str(Path.home() / ".pi" / "agent" / "skills"),
             ]
 
             # Add relocated user skill directories without changing the
@@ -475,6 +476,7 @@ class ConfigDisplay:
                 "aiderdesk": "~/.aider-desk/skills",
                 "openclaw": "~/.openclaw/skills",
                 "opencode": "~/.config/opencode/skills",
+                "pi": "~/.pi/agent/skills",
                 "augment": "~/.augment/skills",
             }
             for ide_type, default_skill_dir in user_skill_defaults.items():

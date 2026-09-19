@@ -253,7 +253,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode augment crush junie"
+          IDES="claude cursor copilot codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -315,9 +315,10 @@ jobs:
           - zoocode
           - kiro
           - aiderdesk
-          - openclaw
-          - opencode
-          - augment
+           - openclaw
+           - opencode
+           - pi
+           - augment
           - crush
           - junie
 

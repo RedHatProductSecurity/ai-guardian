@@ -25,9 +25,9 @@ Options:
 
 What gets removed (default):
     • ai-guardian package (auto-detects: uv tool, venv, pyenv, pip)
-    • IDE agent hooks (Claude, Cursor, Copilot, Codex, Windsurf, Gemini, Augment)
+     • IDE agent hooks (Claude, Cursor, Copilot, Codex, Windsurf, Gemini, Augment, Pi)
     • MCP server entries from IDE configs
-    • Plugin/extension files (OpenCode, AiderDesk, OpenClaw)
+     • Plugin/extension files (OpenCode, AiderDesk, OpenClaw, Pi)
     • Desktop shortcuts and autostart entries
     • Running daemon and tray processes
 
@@ -38,7 +38,7 @@ What gets removed (--all, in addition to above):
 
 What is NEVER removed:
     • Your Python installation, pyenv, or uv
-    • Project-local hook files (.clinerules/, .kiro/, .junie/)
+     • Project-local hook files (.clinerules/, .kiro/, .junie/, .pi/)
       — these are noted but must be removed manually per-project
 
 Examples:
@@ -191,7 +191,7 @@ remove_json_hooks() {
     # Each entry: "agent_name|hook_config_path|mcp_config_path"
     # MCP config path is empty if same file or not applicable
     local agents=(
-        "claude|${CLAUDE_CONFIG}|$HOME/.claude.json"
+        "claude|${CLAUDE_CONFIG}|${CLAUDE_CONFIG_DIR:-$HOME/.claude}/.claude.json"
         "cursor|$HOME/.cursor/hooks.json|$HOME/.cursor/mcp.json"
         "copilot|$HOME/.github/hooks/hooks.json|"
         "codex|$HOME/.codex/hooks.json|$HOME/codex.json"
@@ -438,16 +438,30 @@ remove_file_agents() {
         fi
     fi
 
+    # Pi extension
+    local pi_extension="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/extensions/ai-guardian.ts"
+    if [ -f "$pi_extension" ]; then
+        found=true
+        if [ "$DRY_RUN" = true ]; then
+            dry "Would remove $pi_extension"
+        else
+            rm -f "$pi_extension"
+            ok "Removed Pi extension"
+            REMOVED+=("pi extension")
+        fi
+    fi
+
     if [ "$found" = false ]; then
         ok "No plugin/extension files found"
     fi
 
     # Warn about project-local hooks
-    warn "Project-local hooks (cline, zoocode, kiro, antigravity, junie) must be removed per-project:"
+    warn "Project-local hooks (cline, zoocode, kiro, antigravity, junie, pi) must be removed per-project:"
     echo "    rm -rf <project>/.clinerules/hooks/   # cline/zoocode"
     echo "    rm -rf <project>/.kiro/hooks/          # kiro"
     echo "    rm -rf <project>/.agents/hooks.json    # antigravity"
     echo "    rm -rf <project>/.junie/guidelines/    # junie"
+    echo "    rm -f <project>/.pi/extensions/ai-guardian.ts  # pi"
 }
 
 # ============================================================

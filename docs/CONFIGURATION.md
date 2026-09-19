@@ -465,7 +465,7 @@ This is a critical security feature.
 | `action` | `"block"` | `block` / `warn` / `log-only` |
 | `scan_hooks` | `true` | Scan hooks.json and settings.json for Claude, Cursor, Copilot, Codex, Windsurf, Gemini, Augment |
 | `scan_mcp_configs` | `true` | Scan MCP server command configs for suspicious patterns |
-| `scan_plugins` | `true` | Scan OpenCode plugins and AiderDesk extensions for dangerous APIs |
+| `scan_plugins` | `true` | Scan OpenCode and Pi plugins plus AiderDesk extensions for dangerous APIs |
 | `allowlist_paths` | `[]` | File paths to skip (supports `~` expansion and globs). AI Guardian's own plugin files are always skipped. |
 
 **Detection categories**: download-and-execute, obfuscation, env hijacking, network exfiltration, MCP suspicious commands, config key hijacking, reverse shells, plugin dangerous APIs.
