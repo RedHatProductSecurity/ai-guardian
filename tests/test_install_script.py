@@ -280,9 +280,7 @@ class TestUninstallScript:
         assert result.returncode == 0, result.stderr + result.stdout
         remaining = json.loads(mcp_config.read_text(encoding="utf-8"))
         assert "ai-guardian" not in remaining["mcpServers"]
-        assert remaining["mcpServers"]["other-server"] == {
-            "command": "/tmp/other"
-        }
+        assert remaining["mcpServers"]["other-server"] == {"command": "/tmp/other"}
 
 
 class TestInstallPs1:
