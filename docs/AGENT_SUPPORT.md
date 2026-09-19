@@ -47,6 +47,7 @@ upstream distinction.
 | AiderDesk | `--ide aiderdesk` | Extension | N/A | **Complete** |
 | OpenClaw | `--ide openclaw` | Plugin | N/A | **Complete** |
 | OpenCode | `--ide opencode` | Plugin | N/A | **Complete** |
+| Pi | `--ide pi` | Extension (eight managed callbacks) | N/A | **Complete** |
 | Antigravity CLI (agy) | `--ide antigravity` | Partial | Full | **Complete** |
 | Crush (Charmbracelet) | `--ide crush` | Partial | Full | **Complete** |
 | Junie (JetBrains) | `--ide junie` | N/A | Full | **MCP-only** |
@@ -73,6 +74,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
 | OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
 | OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins` | Project-local config remains project-local |
+| Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Extension: `<dir>/extensions/ai-guardian.ts`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions`; Pi has no native MCP surface |
 | Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
 | Crush | `CRUSH_GLOBAL_CONFIG` for the global MCP file; `CRUSH_GLOBAL_DATA` is not used for setup | Explicit global MCP file only | Hook and default `.crush.json` setup remain project-local |
@@ -86,7 +88,8 @@ These names follow the upstream contracts for [Claude](https://code.claude.com/d
 [Junie](https://junie.jetbrains.com/docs/environment-variables.html),
 [Cline](https://github.com/cline/cline/blob/main/docs/cli/cli-reference.mdx),
 [OpenClaw](https://github.com/openclaw/openclaw/blob/main/docs/help/environment.md),
-and [OpenCode](https://dev.opencode.ai/docs/config). The
+[OpenCode](https://dev.opencode.ai/docs/config), and
+[Pi](https://github.com/earendil-works/pi). The
 [AiderDesk release notes](https://github.com/hotovo/aider-desk/releases) and
 [Crush repository](https://github.com/charmbracelet/crush) document their
 custom directory/configuration variables. Integrations without a documented
@@ -117,6 +120,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `aiderdesk` | Extension bridge/package registration and shared Kiro response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
 | `openclaw` | Plugin bridge/package registration, rules setup, and shared Kiro response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
 | `opencode` | Plugin bridge, SQLite/session setup, and Claude-compatible response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
+| `pi` | Dedicated adapter, generated extension, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and no-native-MCP limitation |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
 | `junie` | MCP/rules setup and explicit no-hook adapter placeholder | No transcript/session adapter | Isolated MCP-only registration/health boundary; advisory, non-enforcing behavior |
@@ -143,6 +147,7 @@ future integrations. For this repository, the main evidence paths are
 | Kiro | N/A | Yes | Yes | Yes | N/A | N/A | N/A |
 | Augment Code | N/A | N/A | Yes | Yes | N/A | N/A | N/A |
 | OpenCode | N/A | Yes (chat.message) | Yes | Yes | N/A | N/A | N/A |
+| Pi | Yes (`session_start`) | Yes (`input`) | Yes (`tool_call`, `user_bash`) | Yes (`tool_result`) | N/A | N/A | Yes (`session_shutdown`) |
 | Antigravity CLI | N/A | Yes (PreInvocation) | Yes | Yes (no output) | N/A | N/A | N/A |
 | Crush | N/A | N/A | Yes | N/A | N/A | N/A | N/A |
 | Junie | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
@@ -175,6 +180,7 @@ integration guides.
 | AiderDesk | Extension | UserPromptSubmit, PreToolUse, PostToolUse | Supported |
 | OpenClaw | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
 | OpenCode | Plugin | UserPromptSubmit, PreToolUse, PostToolUse, Stop | Supported |
+| Pi | Extension | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, SessionEnd | Supported |
 | Crush | Command hooks | PreToolUse | Supported (partial hook surface) |
 | Junie | MCP | None | MCP-only; no hook latency |
 | Aider CLI | Git pre-commit hook | None | Commit-time scan; no per-interaction hook latency |
@@ -316,6 +322,7 @@ environment should provide `run_id` in their hook events when supported.
 | Kiro | JSONL | `~/.kiro/sessions/cli/{session_id}.jsonl` |
 | AiderDesk | Markdown | `.aider.chat.history.md` (project root) |
 | OpenClaw | JSONL | `~/.openclaw/transcripts/YYYY-MM-DD/{session}/transcript.jsonl` |
+| Pi | JSONL | `~/.pi/agent/sessions/**/*.jsonl` or `$PI_CODING_AGENT_SESSION_DIR` |
 
 Agents not listed above do not have transcript scanning support.
 
@@ -462,6 +469,25 @@ arrive as `call_mcp_tool` with the server and tool in the arguments, and are reb
 Only `matcher: "*"` in the grouped form is honoured for tool-scoped events. An empty matcher, a
 named matcher, and the flat handler list documented upstream were all observed not to fire.
 
+### Pi - native TypeScript extension
+
+Pi uses the generated `ai-guardian.ts` extension rather than MCP registration or a
+Python GuardedAgent loop. The extension is installed globally at
+`~/.pi/agent/extensions/ai-guardian.ts` (or under `$PI_CODING_AGENT_DIR`) or
+project-locally at `<project>/.pi/extensions/ai-guardian.ts`. Pi automatically
+discovers extensions in those locations and `/reload` reloads an updated extension.
+
+Pi extensions execute with the host process's permissions. Project-local
+extensions are loaded only after Pi's project-trust decision, so project setup
+must be treated as trusted code. The generated bridge delegates prompt,
+provider-request, tool-call, tool-result, user-bash, session, and assistant-output
+checks to the existing `ai-guardian` CLI and preserves unrelated extensions.
+
+This is agent-level protection for activity routed through a user-controlled Pi
+process. It does not enforce policy on activity outside that process; OpenShell
+or another outer runtime boundary is required for that enforcement. Pi has no
+native MCP surface, so setup does not create a fabricated MCP configuration.
+
 ### Crush (Charmbracelet) — PreToolUse only
 
 Crush currently implements only the `PreToolUse` hook event. PostToolUse, UserPromptSubmit, and other events are proposed but not yet available (see their `docs/hooks/FUTURE.md`). This means post-tool redaction, prompt scanning, and transcript scanning are not enforced. ai-guardian's MCP advisory server provides supplementary coverage.
@@ -492,6 +518,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | AiderDesk | Low | Extension-based, limited testing |
 | OpenClaw | Low | Plugin-based, limited testing |
 | OpenCode | Medium | Tested — plugin hooks install and work correctly |
+| Pi | Low | Extension-based; generated bridge and session parsing are covered, but host-runtime testing is limited |
 | Crush | Low | Compatible with Claude Code format; only PreToolUse available |
 
 ## Community Testing Feedback
@@ -508,16 +535,16 @@ Report via [GitHub Discussions](https://github.com/RedHatProductSecurity/ai-guar
 
 Each agent uses different event names. The adapter layer normalizes these.
 
-| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush | Antigravity |
-|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|-------------|
-| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A | N/A |
-| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` | `PreToolUse` |
-| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A | N/A |
-| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) | `PostToolUse` |
-| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) | `PreInvocation` |
-| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Concept | Claude Code | Copilot | Cursor | Windsurf | Gemini CLI | Cline | Kiro | OpenCode | Crush | Antigravity | Pi |
+|---------|------------|---------|--------|----------|-----------|-------|------|----------|-------|-------------|-----|
+| Session start | `SessionStart` | N/A | `sessionStart` (recognized; not installed) | N/A | `SessionStart` | N/A | N/A | N/A | N/A | N/A | `session_start` |
+| Before tool | `PreToolUse` | `preToolUse` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `subagentStart` | `pre_run_command` | `BeforeTool` | `PreToolUse` | `pre_tool_use` | `tool.execute.before` | `PreToolUse` | `PreToolUse` | `tool_call`, `user_bash` |
+| Before file read | N/A | N/A | `beforeReadFile`, `beforeTabFileRead` | `pre_read_code` | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| After tool | `PostToolUse` | `postToolUse` | `postToolUse`, `afterShellExecution`, `afterMCPExecution` | `post_run_command` | `AfterTool` | `PostToolUse` | `post_tool_use` | `tool.execute.after` | N/A (proposed) | `PostToolUse` | `tool_result` |
+| Tool failure | N/A | N/A | `postToolUseFailure` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| User prompt | `UserPromptSubmit` | `userPromptSubmitted` | `beforeSubmitPrompt` | `pre_user_prompt` | `BeforeAgent` | `UserPromptSubmit` | `prompt_submit` | `message.submit` | N/A (proposed) | `PreInvocation` | `input` |
+| After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | `session_start`, `session_shutdown` |
 
 Cursor's default managed user-level setup installs these six events:
 `beforeSubmitPrompt`, `beforeReadFile`, `beforeShellExecution`, `preToolUse`,
@@ -542,6 +569,7 @@ JSON object so error payloads are not echoed.
 | Windsurf | Exit code 2 + stderr | stderr = error message |
 | Codex | Same as Claude Code for shared events; `PermissionRequest` uses the Codex nested deny decision | Pre-tool denials use `hookSpecificOutput.permissionDecision`; permission requests use `hookSpecificOutput.decision.behavior = "deny"` |
 | OpenCode | Same as Claude Code | Same as Claude Code |
+| Pi | Same as Claude Code | Same as Claude Code via the generated extension |
 | Crush | Same as Claude Code | Same as Claude Code |
 | Antigravity CLI | Flat JSON `decision` field (required — an absent decision denies) | `{"decision": "deny", "reason": "..."}`; a clean check returns `{"decision": "ask"}` |
 
@@ -595,6 +623,7 @@ hook_adapters/
 ├── antigravity.py       # Google Antigravity CLI
 ├── augment.py           # Augment Code (extends ClaudeCodeAdapter)
 ├── opencode.py          # OpenCode (extends ClaudeCodeAdapter)
+├── pi.py                # Pi extension (extends ClaudeCodeAdapter)
 ├── crush.py             # Crush (extends ClaudeCodeAdapter)
 └── junie.py             # Junie (MCP-only placeholder)
 ```
@@ -615,6 +644,7 @@ Detection priority checks unique fields:
 - `kiro_hook_type` → Kiro
 - `is_mcp_tool` → Augment Code
 - `opencode_version` → OpenCode
+- `pi_version` or `hook_source=pi` → Pi
 - `CRUSH` env var or `event`+`tool_input` → Crush
 
 ### NormalizedHookInput
@@ -643,7 +673,7 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `augment`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `pi`, `augment`, `crush`, `junie`
 
 ### Config File Locations
 
@@ -664,6 +694,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension) |
 | OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin) |
 | OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
+| Pi | `~/.pi/agent/extensions/ai-guardian.ts` (extension), or `<project>/.pi/extensions/ai-guardian.ts` |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
 | Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |
 | Junie | `.junie/guidelines` (MCP only) |

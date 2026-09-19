@@ -201,6 +201,7 @@ class TestInstallScriptAgentDetection:
             ".config/opencode",
             ".aider-desk/extensions",
             ".openclaw/plugins",
+            "PI_CODING_AGENT_DIR",
         ],
     )
     def test_detection_checks_agent_path(self, script_content, agent_path):
@@ -290,6 +291,7 @@ class TestInstallPs1:
             "OPENCLAW_HOME",
             "OPENCLAW_CONFIG_PATH",
             "CRUSH_GLOBAL_CONFIG",
+            "PI_CODING_AGENT_DIR",
         ):
             assert f"$env:{env_var}" in content
 
@@ -309,6 +311,7 @@ class TestInstallPs1:
             "$opencodeDir",
             "$aiderdeskDir",
             "$openclawDir",
+            "$piAgentDir",
         ):
             assert f"Test-Path {config_dir} -PathType Container" in content
         assert "Test-Path $crushProjectFile -PathType Leaf" in content

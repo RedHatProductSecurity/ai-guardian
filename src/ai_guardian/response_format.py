@@ -37,6 +37,7 @@ class IDEType(Enum):
     CLINE = "cline"  # JSON: {"cancel": true, "reason": str}
     ANTIGRAVITY = "antigravity"  # JSON: {"decision": "deny", "reason": str}
     KIRO = "kiro"  # Exit codes: 0=allow, 1=block; stdout→context, stderr→agent on error
+    PI = "pi"  # Pi extension shares Claude-compatible JSON responses
     UNKNOWN = "unknown"  # Default to Claude Code format
 
 

@@ -21,6 +21,7 @@ from ai_guardian.hook_adapters.augment import AugmentAdapter
 from ai_guardian.hook_adapters.codex import CodexAdapter
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
 from ai_guardian.hook_adapters.opencode import OpenCodeAdapter
+from ai_guardian.hook_adapters.pi import PiAdapter
 from ai_guardian.hook_adapters.crush import CrushAdapter
 from ai_guardian.hook_adapters.junie import JunieAdapter
 from ai_guardian.hook_adapters.dummy_agent import DummyAgentAdapter
@@ -40,6 +41,7 @@ ADAPTER_CLASSES = [
     KiroAdapter,  # kiro_hook_type or kiro_version
     AugmentAdapter,  # is_mcp_tool + tool_name
     OpenCodeAdapter,  # opencode_version or hook_source
+    PiAdapter,  # pi_version or hook_source
     CrushAdapter,  # CRUSH env var or event+tool_input fields
     DummyAgentAdapter,  # dummy_agent field (simulated IDE)
     CodexAdapter,  # Codex protocol metadata or explicit Codex lifecycle fields
@@ -70,6 +72,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         AugmentAdapter,
         AntigravityAdapter,
         OpenCodeAdapter,
+        PiAdapter,
         CrushAdapter,
         JunieAdapter,
         DummyAgentAdapter,
@@ -170,6 +173,7 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.CLINE: "cline",
         IDEType.KIRO: "kiro",
         IDEType.ANTIGRAVITY: "antigravity",
+        IDEType.PI: "pi",
     }
     adapter_cls = ADAPTERS_BY_IDE_TYPE.get(
         _IDE_KEY_BY_TYPE.get(ide_type, ""), BaseAgentAdapter
@@ -195,6 +199,7 @@ __all__ = [
     "AugmentAdapter",
     "AntigravityAdapter",
     "OpenCodeAdapter",
+    "PiAdapter",
     "CrushAdapter",
     "JunieAdapter",
     "DummyAgentAdapter",

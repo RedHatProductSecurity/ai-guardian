@@ -121,6 +121,7 @@ def test_transcript_and_session_capabilities_have_registered_implementations():
         "AiderDesk Markdown": "AiderDesk",
         "OpenClaw JSONL": "OpenClaw",
         "OpenCode SQLite": "OpenCode",
+        "Pi JSONL": "Pi",
     }
 
     for integration in SUPPORTED_IDE_REGISTRY:

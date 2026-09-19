@@ -1826,7 +1826,11 @@ def inject_security_only(hook_data, daemon_state=None):
     """
     try:
         adapter = detect_adapter(hook_data)
-        if adapter.ide_type not in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY):
+        if adapter.ide_type not in (
+            IDEType.CLAUDE_CODE,
+            IDEType.ANTIGRAVITY,
+            IDEType.PI,
+        ):
             return None
 
         normalized = adapter.normalize_input(hook_data)
@@ -2037,7 +2041,7 @@ def _process_hook_data(hook_data, daemon_state=None):
         # Inject only on first prompt per session + after blocks (not every prompt)
         security_message = None
         if (
-            ide_type in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY)
+            ide_type in (IDEType.CLAUDE_CODE, IDEType.ANTIGRAVITY, IDEType.PI)
             and hook_event == HookEvent.PROMPT
         ):
             try:

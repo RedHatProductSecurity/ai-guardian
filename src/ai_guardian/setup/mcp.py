@@ -93,6 +93,13 @@ _MCP_IDE_CONFIGS = {
         "config_key": "mcp",
         "skill_dir": ".opencode/skills",
     },
+    # Pi does not expose a native MCP configuration surface.  Keep an explicit
+    # registry entry so setup/reporting can distinguish unsupported MCP from a
+    # missing integration, while get_mcp_config_path() returns None.
+    "pi": {
+        "config_key": "mcpServers",
+        "skill_dir": ".pi/skills",
+    },
     "crush": {
         "config_file": ".crush.json",
         "config_key": "mcp",

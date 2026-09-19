@@ -56,6 +56,10 @@ from ai_guardian.scanners.transcript.openclaw import (
     OpenClawTranscriptAdapter,
     scan_openclaw_transcript_incremental,
 )
+from ai_guardian.scanners.transcript.pi import (
+    PiTranscriptAdapter,
+    scan_pi_transcript_incremental,
+)
 from ai_guardian.scanners.transcript.windsurf import (
     WindsurfTranscriptAdapter,
     scan_windsurf_transcript_incremental,
@@ -68,6 +72,7 @@ TRANSCRIPT_ADAPTERS = [
     CopilotChatTranscriptAdapter(),
     KiroTranscriptAdapter(),
     WindsurfTranscriptAdapter(),
+    PiTranscriptAdapter(),
     JsonlTranscriptAdapter(),
     OpenCodeTranscriptAdapter(),
     CursorTranscriptAdapter(),
@@ -81,6 +86,7 @@ __all__ = [
     "CopilotChatTranscriptAdapter",
     "KiroTranscriptAdapter",
     "OpenClawTranscriptAdapter",
+    "PiTranscriptAdapter",
     "WindsurfTranscriptAdapter",
     "_advance_transcript_position",
     "_discover_path",
@@ -102,6 +108,7 @@ __all__ = [
     "scan_aiderdesk_transcript_incremental",
     "scan_kiro_transcript_incremental",
     "scan_openclaw_transcript_incremental",
+    "scan_pi_transcript_incremental",
     "scan_opencode_transcript_incremental",
     "scan_transcript_incremental",
     "scan_windsurf_transcript_incremental",

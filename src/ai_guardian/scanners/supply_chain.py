@@ -46,11 +46,13 @@ AGENT_CONFIG_PATHS_PROJECT = [
     ".claude/commands/*.md",
     ".cursor/hooks.json",
     ".github/hooks/hooks.json",
+    ".pi/extensions/*.ts",
 ]
 
 PLUGIN_PATHS_HOME = [
     ".config/opencode/plugins/*.ts",
     ".aider-desk/extensions/*/index.ts",
+    ".pi/agent/extensions/*.ts",
 ]
 
 SELF_ALLOWLIST = [
@@ -103,6 +105,7 @@ def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
             ("opencode", "~/.config/opencode/plugins", "*.ts", ("plugins",)),
             ("aiderdesk", "~/.aider-desk/extensions", "*/index.ts", ("extensions",)),
             ("openclaw", "~/.openclaw/plugins", "*/index.ts", ("plugins",)),
+            ("pi", "~/.pi/agent/extensions", "*.ts", ("extensions",)),
         )
         for ide_type, default_path, filename, env_subdir in plugin_specs:
             add(

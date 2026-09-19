@@ -19,6 +19,13 @@ from ai_guardian.config.utils import get_cache_dir, get_config_dir
 
 logger = logging.getLogger(__name__)
 
+_PROJECT_SCOPED_IDES = frozenset({"cursor", "pi"})
+
+
+def _supports_project_scope(ide_type: Optional[str]) -> bool:
+    """Return whether setup supports an explicit project-local target."""
+    return ide_type in _PROJECT_SCOPED_IDES
+
 
 def _normalize_cursor_setup_target(
     ide_type: Optional[str], scope: str, project_dir: Optional[str]
@@ -30,7 +37,7 @@ def _normalize_cursor_setup_target(
     installed in a checked-out workspace without changing the desktop setup
     policy for local Cursor sessions.
     """
-    if ide_type != "cursor":
+    if ide_type not in _PROJECT_SCOPED_IDES:
         if project_dir or scope != "user":
             return (
                 scope,
@@ -49,7 +56,7 @@ def _normalize_cursor_setup_target(
         return (
             scope,
             project_dir,
-            "Cursor setup scope must be 'user' or 'project'.",
+            f"{ide_type} setup scope must be 'user' or 'project'.",
         )
 
     if scope == "user":
@@ -59,7 +66,7 @@ def _normalize_cursor_setup_target(
         return (
             scope,
             project_dir,
-            "Cursor project setup requires a project directory.",
+            f"{ide_type} project setup requires a project directory.",
         )
 
     path = Path(project_dir).expanduser()
@@ -67,7 +74,7 @@ def _normalize_cursor_setup_target(
         return (
             scope,
             project_dir,
-            f"Cursor project directory does not exist or is not a directory: {path}",
+            f"{ide_type} project directory does not exist or is not a directory: {path}",
         )
     return scope, str(path.resolve()), None
 
@@ -119,6 +126,7 @@ from ai_guardian.setup.hooks import (  # noqa: F811,F401
     _AIDERDESK_EXTENSION_TS,
     _AIDERDESK_PACKAGE_JSON,
     _OPENCODE_PLUGIN_TS,
+    _PI_EXTENSION_TS,
     _OPENCLAW_PACKAGE_JSON,
     _OPENCLAW_PLUGIN_TS,
 )
@@ -428,8 +436,8 @@ def setup_hooks(
         ide_name = setup.IDE_CONFIGS[ide_type]["name"]
         config_path = setup.get_config_path(
             ide_type,
-            scope=scope if ide_type == "cursor" else "user",
-            project_dir=project_dir if ide_type == "cursor" else None,
+            scope=scope if _supports_project_scope(ide_type) else "user",
+            project_dir=project_dir if _supports_project_scope(ide_type) else None,
         )
 
         print(f"\nThis will configure ai-guardian hooks for {ide_name}")
@@ -446,7 +454,7 @@ def setup_hooks(
 
     # Setup IDE hooks
     hook_kwargs = {"dry_run": dry_run, "force": force}
-    if ide_type == "cursor" and (scope != "user" or project_dir):
+    if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
         hook_kwargs.update({"scope": scope, "project_dir": project_dir})
     success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
     mcp_repair = False
@@ -454,8 +462,8 @@ def setup_hooks(
         try:
             hook_verification = setup.verify_hooks_for_ide(
                 ide_type,
-                scope=scope if ide_type == "cursor" else "user",
-                project_dir=project_dir if ide_type == "cursor" else None,
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
             )
             mcp_repair = (
                 isinstance(hook_verification, dict)
@@ -475,12 +483,12 @@ def setup_hooks(
     if setup_success:
         if no_mcp:
             mcp_kwargs = {"no_mcp": True, "dry_run": dry_run}
-            if ide_type == "cursor" and (scope != "user" or project_dir):
+            if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
                 mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
             _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
         else:
             mcp_kwargs = {"dry_run": dry_run}
-            if ide_type == "cursor" and (scope != "user" or project_dir):
+            if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
                 mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
             _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
 
@@ -608,19 +616,19 @@ def _setup_hooks_json_output(
         Path(
             setup.get_config_path(
                 ide_type,
-                scope=scope if ide_type == "cursor" else "user",
-                project_dir=project_dir if ide_type == "cursor" else None,
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
             )
         ).expanduser()
     )
-    if ide_type == "cursor":
+    if _supports_project_scope(ide_type):
         result["scope"] = scope
 
     # Run IDE hook setup with all print output suppressed
     _devnull = io.StringIO()
     with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
         hook_kwargs = {"dry_run": dry_run, "force": force}
-        if ide_type == "cursor" and (scope != "user" or project_dir):
+        if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
             hook_kwargs.update({"scope": scope, "project_dir": project_dir})
         success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
 
@@ -629,8 +637,8 @@ def _setup_hooks_json_output(
         try:
             hook_verification = setup.verify_hooks_for_ide(
                 ide_type,
-                scope=scope if ide_type == "cursor" else "user",
-                project_dir=project_dir if ide_type == "cursor" else None,
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
             )
             mcp_repair = (
                 isinstance(hook_verification, dict)
@@ -656,12 +664,16 @@ def _setup_hooks_json_output(
         with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
             if no_mcp:
                 mcp_kwargs = {"no_mcp": True, "dry_run": dry_run}
-                if ide_type == "cursor" and (scope != "user" or project_dir):
+                if _supports_project_scope(ide_type) and (
+                    scope != "user" or project_dir
+                ):
                     mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
                 _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
             else:
                 mcp_kwargs = {"dry_run": dry_run}
-                if ide_type == "cursor" and (scope != "user" or project_dir):
+                if _supports_project_scope(ide_type) and (
+                    scope != "user" or project_dir
+                ):
                     mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
                 _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
 
@@ -676,16 +688,20 @@ def _setup_hooks_json_output(
         else:
             mcp_path = get_mcp_config_path(
                 ide_type,
-                scope=scope if ide_type == "cursor" else "user",
-                project_dir=project_dir if ide_type == "cursor" else None,
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
             )
             result["mcp_config_path"] = str(mcp_path) if mcp_path else None
-            abs_path = _resolve_binary_path()
-            mcp_entry = dict(_MCP_SERVER_ENTRY)
-            mcp_entry["command"] = abs_path
-            if ide_type == "cursor":
-                mcp_entry["type"] = "stdio"
-            result["mcp_servers"] = {"ai-guardian": mcp_entry}
+            if mcp_path is not None:
+                abs_path = _resolve_binary_path()
+                mcp_entry = dict(_MCP_SERVER_ENTRY)
+                mcp_entry["command"] = abs_path
+                if ide_type == "cursor":
+                    mcp_entry["type"] = "stdio"
+                result["mcp_servers"] = {"ai-guardian": mcp_entry}
+            else:
+                result["mcp_status"] = "unsupported"
+                result["mcp_registration"] = "none"
 
     # Handle rules/guidelines file setup (Issue #637)
     if setup_success and rules:

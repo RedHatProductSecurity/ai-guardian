@@ -13,7 +13,7 @@
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
     Choices: claude, cursor, copilot, codex, windsurf, gemini, cline,
-             antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, augment, crush, junie
+              antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, pi, augment, crush, junie
 
 .PARAMETER Profile
     Security profile: @minimal, @standard (default), @strict
@@ -214,6 +214,9 @@ function Detect-InstalledAgents {
     $openclawDir = if ($env:OPENCLAW_CONFIG_PATH) { Split-Path -Parent $env:OPENCLAW_CONFIG_PATH } elseif ($env:OPENCLAW_STATE_DIR) { $env:OPENCLAW_STATE_DIR } elseif ($env:OPENCLAW_HOME) { $env:OPENCLAW_HOME } else { Join-Path $HOME ".openclaw\plugins" }
     if (Test-Path $openclawDir -PathType Container) { $agents += "openclaw" }
 
+    $piAgentDir = if ($env:PI_CODING_AGENT_DIR) { $env:PI_CODING_AGENT_DIR } else { Join-Path $HOME ".pi\agent" }
+    if (Test-Path $piAgentDir -PathType Container) { $agents += "pi" }
+
     return $agents
 }
 
@@ -236,6 +239,7 @@ if (-not $IDE -and -not $NoSetup) {
         Write-Host "  No supported IDE installations detected. Run setup explicitly:"
         Write-Host "    ai-guardian setup --ide claude"
         Write-Host "    ai-guardian setup --ide opencode"
+        Write-Host "    ai-guardian setup --ide pi"
         Write-Host "    ai-guardian setup --ide cursor"
         Write-Host ""
     }
