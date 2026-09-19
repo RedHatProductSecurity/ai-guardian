@@ -198,6 +198,7 @@ class DirectoryRuleGenerator:
                 Path.home() / ".cursor" / "skills",
                 Path.home() / ".vscode" / "skills",
                 Path.home() / ".windsurf" / "skills",
+                Path.home() / ".pi" / "agent" / "skills",
             ]
 
             # Add user skill locations for relocated IDE homes. Keep the
@@ -217,6 +218,7 @@ class DirectoryRuleGenerator:
                 "aiderdesk": "~/.aider-desk/skills",
                 "openclaw": "~/.openclaw/skills",
                 "opencode": "~/.config/opencode/skills",
+                "pi": "~/.pi/agent/skills",
                 "augment": "~/.augment/skills",
             }
             for ide_type, default_skill_dir in user_skill_defaults.items():

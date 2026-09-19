@@ -35,7 +35,7 @@ class TestGetSupportedIdes:
     def test_returns_list(self):
         result = get_supported_ides()
         assert isinstance(result, list)
-        assert len(result) == 9
+        assert result == list(SUPPORTED_IDES)
 
     def test_claude_is_first(self):
         assert get_supported_ides()[0] == "claude"

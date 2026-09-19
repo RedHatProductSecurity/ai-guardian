@@ -25,6 +25,7 @@ IDE_HOME_ENV_VARS: Dict[str, Tuple[str, ...]] = {
     "aiderdesk": ("AIDER_DESK_DIR", "AIDER_DESK_HOME_DIR"),
     "openclaw": ("OPENCLAW_STATE_DIR", "OPENCLAW_HOME"),
     "opencode": ("OPENCODE_CONFIG_DIR",),
+    "pi": ("PI_CODING_AGENT_DIR",),
 }
 
 # These variables name a complete configuration file rather than a home

@@ -16,6 +16,19 @@ import yaml
 from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Pi's native extension is intentionally excluded from container/OpenShell
+# launchers; runtime packaging is tracked separately in issue #2326.
+CONTAINER_EXCLUDED_IDE_TYPES = frozenset({"pi"})
+CONTAINER_SUPPORTED_IDE_TYPES = tuple(
+    ide_type
+    for ide_type in SUPPORTED_IDE_TYPES
+    if ide_type not in CONTAINER_EXCLUDED_IDE_TYPES
+)
+CONTAINER_SUPPORTED_CLI_IDE_TYPES = tuple(
+    ide_type
+    for ide_type in SUPPORTED_CLI_IDE_TYPES
+    if ide_type not in CONTAINER_EXCLUDED_IDE_TYPES
+)
 RUN_SCRIPT = REPO_ROOT / "container" / "run.sh"
 ENTRYPOINT_SCRIPT = REPO_ROOT / "container" / "entrypoint.sh"
 DOCKERFILE = REPO_ROOT / "container" / "Dockerfile"
@@ -695,7 +708,7 @@ class TestContainerLaunchers:
         assert "custom profile file not found" in result.stderr
         assert not capture.exists()
 
-    @pytest.mark.parametrize("agent", [*SUPPORTED_IDE_TYPES, "dummy-agent"])
+    @pytest.mark.parametrize("agent", [*CONTAINER_SUPPORTED_IDE_TYPES, "dummy-agent"])
     def test_launcher_accepts_every_supported_agent(self, tmp_path, agent):
         capture = tmp_path / f"{agent}.args"
         engine = _capture_script(tmp_path / f"engine-{agent}")
@@ -761,7 +774,7 @@ fi
         for line in setup_calls
         if line.startswith("setup ") and "--ide " in line
     }
-    assert configured_agents == set(SUPPORTED_IDE_TYPES)
+    assert configured_agents == set(CONTAINER_SUPPORTED_IDE_TYPES)
     assert "Setup:        all supported agents" in result.stdout
 
     log_path.unlink()
@@ -781,7 +794,7 @@ fi
         for line in cli_setup_calls
         if line.startswith("setup ") and "--ide " in line
     }
-    assert cli_agents == set(SUPPORTED_CLI_IDE_TYPES)
+    assert cli_agents == set(CONTAINER_SUPPORTED_CLI_IDE_TYPES)
     assert "Setup:        supported CLI agents" in cli_result.stdout
 
     log_path.unlink()

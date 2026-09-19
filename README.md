@@ -497,7 +497,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Desktop Shortcut & Autostart](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#desktop-shortcuts) | Install tray as desktop app with optional login startup |
 | [Tray Plugins](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md#tray-plugins) | Custom menu items with native tkinter popup forms (Textual terminal fallback), platform-aware commands |
 | [TOML Pattern Engine](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOML_PATTERNS.md) | Built-in Python scanner with 425 pre-compiled patterns, no binary required |
-| [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 15 AI coding agents with normalized input/output |
+| [Multi-Agent Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapters for 17 AI coding agents with normalized input/output |
 | [Container Image](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/container/README.md) | UBI-based image with supported agent integrations and scanners, published to quay.io |
 | [Supply Chain Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONFIGURATION.md#supply-chain-scanning) | Detect malicious patterns in agent hooks, MCP configs, and plugin files |
 | [Context Poisoning Detection](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CONTEXT_POISONING.md) | Detect persistent instruction injection in conversation context (OWASP LLM03) |
@@ -518,6 +518,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Language-Aware FP Suppression](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | Tree-sitter AST parsing reduces false positives in code |
 | [ML Prompt Injection Setup](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/PROMPT_INJECTION.md) | One-command `ai-guardian ml setup` installs model + dependencies |
 | [Crush IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Hook adapter for Charmbracelet Crush with MCP advisory |
+| [Pi IDE Support](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/AGENT_SUPPORT.md) | Extension-based hook adapter for Pi with JSONL transcript scanning |
 | [Event-Driven Tray Updates](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/MULTI_DAEMON_TRAY.md) | Tray refreshes on daemon state changes instead of polling |
 | [Scan & Configure UI](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | Web console workflow to scan a project and generate config |
 

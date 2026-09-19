@@ -314,6 +314,14 @@ CRUSH_MANAGED_HOOK_EVENTS = ("PreToolUse",)
 AIDERDESK_MANAGED_HOOK_EVENTS = ()
 OPENCLAW_MANAGED_HOOK_EVENTS = ()
 OPENCODE_MANAGED_HOOK_EVENTS = ()
+PI_MANAGED_HOOK_EVENTS = (
+    "input",
+    "tool_call",
+    "tool_result",
+    "user_bash",
+    "session_start",
+    "session_shutdown",
+)
 JUNIE_MANAGED_HOOK_EVENTS = ()
 DUMMY_AGENT_MANAGED_HOOK_EVENTS = ()
 
@@ -333,6 +341,7 @@ MANAGED_HOOK_EVENTS_BY_IDE = {
     "aiderdesk": AIDERDESK_MANAGED_HOOK_EVENTS,
     "openclaw": OPENCLAW_MANAGED_HOOK_EVENTS,
     "opencode": OPENCODE_MANAGED_HOOK_EVENTS,
+    "pi": PI_MANAGED_HOOK_EVENTS,
     "junie": JUNIE_MANAGED_HOOK_EVENTS,
     "dummy-agent": DUMMY_AGENT_MANAGED_HOOK_EVENTS,
 }

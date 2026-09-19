@@ -19,6 +19,7 @@ from ai_guardian.sessions.adapters import (
     CodexSessionAdapter,
     GeminiSessionAdapter,
     KiroSessionAdapter,
+    PiSessionAdapter,
 )
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.setup.mcp import get_mcp_config_path
@@ -41,6 +42,8 @@ IDE_ENV_VARS = (
     "OPENCLAW_CONFIG_PATH",
     "OPENCODE_CONFIG_DIR",
     "OPENCODE_CONFIG",
+    "PI_CODING_AGENT_DIR",
+    "PI_CODING_AGENT_SESSION_DIR",
     "CRUSH_GLOBAL_CONFIG",
     "HOME",
     "USERPROFILE",
@@ -74,6 +77,7 @@ def clear_ide_environment(monkeypatch):
         ("aiderdesk", "AIDER_DESK_DIR", ()),
         ("openclaw", "OPENCLAW_STATE_DIR", ()),
         ("opencode", "OPENCODE_CONFIG_DIR", ()),
+        ("pi", "PI_CODING_AGENT_DIR", ()),
     ],
 )
 def test_get_ide_home_honors_documented_environment_variables(
@@ -121,6 +125,13 @@ def test_cline_data_dir_relocates_transcript_tasks_when_storage_alias_is_absent(
     assert ClineSessionAdapter().resolve_session_dir() == data_dir
 
 
+def test_pi_session_dir_honors_documented_override(monkeypatch, tmp_path):
+    session_dir = tmp_path / "pi-sessions"
+    monkeypatch.setenv("PI_CODING_AGENT_SESSION_DIR", str(session_dir))
+
+    assert PiSessionAdapter().resolve_session_dir() == session_dir
+
+
 @pytest.mark.parametrize(
     ("ide_type", "env_var", "relative_path"),
     [
@@ -132,6 +143,7 @@ def test_cline_data_dir_relocates_transcript_tasks_when_storage_alias_is_absent(
         ("aiderdesk", "AIDER_DESK_DIR", "extensions/ai-guardian"),
         ("openclaw", "OPENCLAW_STATE_DIR", "plugins/ai-guardian"),
         ("opencode", "OPENCODE_CONFIG_DIR", "plugins"),
+        ("pi", "PI_CODING_AGENT_DIR", "extensions"),
     ],
 )
 def test_setup_paths_follow_user_home_variables(

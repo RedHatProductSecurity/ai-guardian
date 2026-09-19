@@ -3,10 +3,11 @@ graph TD
         UP[User types prompt]
     end
 
-    subgraph IDE["AI IDE — 11 Agents Supported"]
+    subgraph IDE["AI IDE — 17 Agents Supported"]
         direction TB
-        AGENTS["Claude Code, Cursor, Copilot, Gemini CLI, OpenCode,
-        Codex, Windsurf, Cline/ZooCode, Augment Code, Kiro, Junie"]
+        AGENTS["Claude Code, Cursor, Copilot, Codex, Gemini CLI, Windsurf,
+        Cline/ZooCode, Kiro, Augment, AiderDesk, OpenClaw, OpenCode, Pi,
+        Crush, Junie, Antigravity"]
         UP --> H1["UserPromptSubmit hook"]
         H1 -->|stdin JSON| CLI
 

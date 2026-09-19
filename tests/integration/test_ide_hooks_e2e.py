@@ -188,9 +188,9 @@ def _assert_mcp_registration(ide_type: str) -> None:
     spec = _MCP_IDE_CONFIGS[ide_type]
     path = _mcp_config_path(ide_type)
     if path is None:
-        # Copilot has no local MCP config target in the current setup
-        # contract; its hook integration is still verified below.
-        assert ide_type == "copilot"
+        # Copilot and Pi have no local MCP config target in the current setup
+        # contract; their hook/extension integrations are still verified below.
+        assert ide_type in {"copilot", "pi"}
         return
 
     assert path.is_file(), f"{ide_type}/mcp-config: {path} was not created"
@@ -517,14 +517,23 @@ def _assert_runtime_case(
 def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
     config = setup.IDE_CONFIGS[ide_type]
     root = Path(setup.get_config_path(ide_type)).expanduser()
-    source_path = root / ("ai-guardian.ts" if config.get("plugin_file") else "index.ts")
+    if config.get("extension_file"):
+        source_path = root / config["extension_file"]
+    else:
+        source_path = root / (
+            "ai-guardian.ts" if config.get("plugin_file") else "index.ts"
+        )
     package_path = root / "package.json"
     assert source_path.is_file(), f"{ide_type}/setup: bridge source missing"
-    if config.get("extension_based"):
+    if config.get("extension_based") and not config.get("extension_file"):
         assert package_path.is_file(), f"{ide_type}/setup: package manifest missing"
     source = source_path.read_text(encoding="utf-8")
-    assert f"--ide {ide_type}" in source, f"{ide_type}/setup: IDE flag missing"
-    assert "execSync" in source and "AI_GUARDIAN_IDE_TYPE" in source
+    assert (
+        f"--ide {ide_type}" in source or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in source
+    ), f"{ide_type}/setup: IDE attribution missing"
+    assert (
+        "execSync" in source or "execFileSync" in source
+    ) and "AI_GUARDIAN_IDE_TYPE" in source
 
     if ide_type == "opencode":
         required_events = (
@@ -534,6 +543,17 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
         )
         registration = _read_json_config(_resolve_opencode_config())
         assert str(source_path) in registration.get("plugins", [])
+    elif ide_type == "pi":
+        required_events = (
+            'pi.on("input"',
+            'pi.on("before_provider_request"',
+            'pi.on("tool_call"',
+            'pi.on("tool_result"',
+            'pi.on("message_end"',
+            'pi.on("user_bash"',
+            'pi.on("session_start"',
+            'pi.on("session_shutdown"',
+        )
     else:
         required_events = ("prompt_submit", "pre_tool_use", "post_tool_use")
     for event_name in required_events:

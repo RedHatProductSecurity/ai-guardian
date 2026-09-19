@@ -386,6 +386,14 @@ class IDESetup:
             "config_filename": None,
             "plugin_file": True,
         },
+        "pi": {
+            "name": "Pi",
+            "config_path": "~/.pi/agent/extensions",
+            "config_dir_env_var": "PI_CODING_AGENT_DIR",
+            "config_filename": None,
+            "extension_based": True,
+            "extension_file": "ai-guardian.ts",
+        },
         "augment": {
             "name": "Augment Code",
             "mcp_client_name": "augment",
@@ -536,8 +544,15 @@ class IDESetup:
                 else self._cursor_project_root()
             )
             return str(project_root / ".cursor" / "hooks.json")
+        if ide_type == "pi" and scope == "project":
+            if not project_dir:
+                return str(Path(".pi") / "extensions")
+            project_root = Path(project_dir).expanduser().resolve()
+            return str(project_root / ".pi" / "extensions")
         if ide_type == "cursor" and scope not in ("user", "auto"):
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
+        if ide_type == "pi" and scope not in ("user", "auto"):
+            raise ValueError("Pi scope must be 'user', 'project', or 'auto'")
 
         ide_config = self.IDE_CONFIGS[ide_type]
         base_config_path = ide_config["config_path"]
@@ -564,6 +579,12 @@ class IDESetup:
                 ide_type,
                 base_config_path,
                 env_subdir=("plugins", "ai-guardian"),
+            )
+        if ide_type == "pi":
+            return resolve_ide_config_path(
+                ide_type,
+                base_config_path,
+                env_subdir=("extensions",),
             )
         if ide_type == "copilot":
             return resolve_ide_config_path(
@@ -794,6 +815,8 @@ class IDESetup:
             return {}
         if config.get("plugin_file"):
             return {"plugin": "plugin"}
+        if config.get("extension_file"):
+            return {"extension": "extension"}
         if config.get("extension_based"):
             return {"extension": "extension"}
         managed_events = MANAGED_HOOK_EVENTS_BY_IDE.get(ide_type)
@@ -943,11 +966,32 @@ class IDESetup:
                 content = ""
             if not self.check_hooks_configured(path, ide_type):
                 status = "missing"
-            elif f"--ide {ide_type}" not in content:
+            elif not (
+                f"--ide {ide_type}" in content
+                or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
+            ):
                 status = "changed"
             else:
                 status = "healthy"
             result["events"]["plugin"] = status
+            result["healthy"] = status == "healthy"
+            return result
+        if config.get("extension_file"):
+            extension_file = path / config["extension_file"]
+            try:
+                content = extension_file.read_text(encoding="utf-8")
+            except OSError:
+                content = ""
+            if not self.check_hooks_configured(path, ide_type):
+                status = "missing"
+            elif not (
+                f"--ide {ide_type}" in content
+                or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
+            ):
+                status = "changed"
+            else:
+                status = "healthy"
+            result["events"]["extension"] = status
             result["healthy"] = status == "healthy"
             return result
         if config.get("extension_based"):
@@ -1870,6 +1914,16 @@ class IDESetup:
                 except (json.JSONDecodeError, OSError):
                     return False
 
+            if ide_config.get("extension_file"):
+                extension_file = config_path / ide_config["extension_file"]
+                if not extension_file.exists():
+                    return False
+                try:
+                    content = extension_file.read_text(encoding="utf-8")
+                    return "ai-guardian" in content
+                except OSError:
+                    return False
+
             # Extension-based hooks (AiderDesk, OpenClaw): check directory for index.ts
             if ide_config.get("extension_based"):
                 ext_dir = config_path if config_path.is_dir() else config_path.parent
@@ -2178,6 +2232,45 @@ class IDESetup:
 
         return True, message
 
+    def _setup_single_file_extension(
+        self,
+        ide_type: str,
+        ide_config: Dict,
+        ext_dir: Path,
+        dry_run: bool = False,
+    ) -> Tuple[bool, str]:
+        """Install a single-file extension in a host discovery directory."""
+        ide_name = ide_config["name"]
+        extension_path = ext_dir / ide_config.get("extension_file", "ai-guardian.ts")
+
+        if dry_run:
+            return (
+                True,
+                f"[DRY RUN] Would configure {ide_name} extension:\n"
+                f"  Create: {extension_path}\n",
+            )
+
+        ext_dir.mkdir(parents=True, exist_ok=True)
+        binary_path = json.dumps(_resolve_binary_path())
+        content = _PI_EXTENSION_TS.replace(
+            'const GUARDIAN_BINARY = "ai-guardian";',
+            f"const GUARDIAN_BINARY = {binary_path};",
+        )
+        extension_path.write_text(content, encoding="utf-8")
+
+        gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        message = (
+            f"✓ Successfully configured {ide_name} extension at {extension_path}\n"
+        )
+        message += f"\n  {gitleaks_message}\n"
+        if not gitleaks_installed:
+            message += (
+                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
+                "      AI Guardian requires Gitleaks for secret detection.\n"
+            )
+        message += f"\n  Restart {ide_name} or reload its extensions for the change to take effect\n"
+        return True, message
+
     def setup_ide_hooks(
         self,
         ide_type: str,
@@ -2204,22 +2297,25 @@ class IDESetup:
             if ide_type not in self.IDE_CONFIGS:
                 return False, f"Unknown IDE type: {ide_type}"
 
-            if ide_type == "cursor":
+            if ide_type in ("cursor", "pi"):
                 if project_dir and scope == "user":
                     scope = "project"
                 if scope not in ("user", "project"):
-                    return False, "Cursor setup scope must be 'user' or 'project'."
+                    return (
+                        False,
+                        f"{self.IDE_CONFIGS[ide_type]['name']} setup scope must be 'user' or 'project'.",
+                    )
                 if scope == "project":
                     if not project_dir:
                         return (
                             False,
-                            "Cursor project setup requires a project directory.",
+                            f"{self.IDE_CONFIGS[ide_type]['name']} project setup requires a project directory.",
                         )
                     project_path = Path(project_dir).expanduser()
                     if not project_path.is_dir():
                         return (
                             False,
-                            "Cursor project directory does not exist or is not "
+                            f"{self.IDE_CONFIGS[ide_type]['name']} project directory does not exist or is not "
                             f"a directory: {project_path}",
                         )
                     project_dir = str(project_path.resolve())
@@ -2259,8 +2355,10 @@ class IDESetup:
                 # historical no-overwrite contract. Event-based hook files
                 # can be repaired in place, but an existing plugin/extension
                 # requires --force before replacing user-owned source.
-                generated_artifact = ide_config.get("plugin_file") or ide_config.get(
-                    "extension_based"
+                generated_artifact = (
+                    ide_config.get("plugin_file")
+                    or ide_config.get("extension_based")
+                    or ide_config.get("extension_file")
                 )
                 if self.expected_hook_manifest(ide_type) and not generated_artifact:
                     verification = self.verify_hooks_for_ide(
@@ -2289,6 +2387,11 @@ class IDESetup:
             # Plugin-file IDEs (OpenCode): drop a single .ts file in plugins dir
             if ide_config.get("plugin_file"):
                 return self._setup_plugin_file(
+                    ide_type, ide_config, config_path, dry_run
+                )
+
+            if ide_config.get("extension_file"):
+                return self._setup_single_file_extension(
                     ide_type, ide_config, config_path, dry_run
                 )
 
@@ -3204,6 +3307,307 @@ export default class AiGuardianExtension implements Extension {
 }
 """
 
+
+# Pi extension file contents.
+_PI_EXTENSION_TS = """\
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { execFileSync } from "node:child_process";
+
+const GUARDIAN_BINARY = "ai-guardian";
+
+interface GuardianResult {
+  blocked: boolean;
+  error?: string;
+  raw?: string;
+  updatedOutput?: unknown;
+}
+
+function textValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "toString" in value) {
+    return String(value);
+  }
+  return "";
+}
+
+function parseGuardian(raw: string): GuardianResult | undefined {
+  if (!raw.trim()) return undefined;
+  try {
+    const outer = JSON.parse(raw) as Record<string, any>;
+    const inner = typeof outer.output === "string"
+      ? JSON.parse(outer.output) as Record<string, any>
+      : outer;
+    const hookOutput = inner.hookSpecificOutput || outer.hookSpecificOutput || {};
+    const updatedOutput = hookOutput.updatedToolOutput ?? hookOutput.updatedMCPToolOutput;
+    const blocked = outer._blocked === true
+      || inner._blocked === true
+      || inner.decision === "block"
+      || hookOutput.permissionDecision === "deny"
+      || hookOutput.decision === "deny";
+    const error = textValue(
+      outer.systemMessage
+        || inner.systemMessage
+        || inner.reason
+        || outer.reason,
+    );
+    return { blocked, error: error || undefined, raw, updatedOutput };
+  } catch {
+    return undefined;
+  }
+}
+
+function runGuardian(hookData: Record<string, unknown>): GuardianResult {
+  try {
+    const stdout = execFileSync(GUARDIAN_BINARY, [], {
+      input: JSON.stringify(hookData),
+      encoding: "utf-8",
+      timeout: 30000,
+      env: { ...process.env, AI_GUARDIAN_IDE_TYPE: "pi" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    return parseGuardian(String(stdout)) || { blocked: false };
+  } catch (error) {
+    const failure = error as {
+      status?: number;
+      stdout?: unknown;
+      stderr?: unknown;
+    };
+    const parsed = parseGuardian(textValue(failure.stdout));
+    if (parsed) return parsed;
+    if (failure.status === 1 || failure.status === 2) {
+      return {
+        blocked: true,
+        error: textValue(failure.stderr) || "Blocked by ai-guardian",
+      };
+    }
+    return { blocked: false };
+  }
+}
+
+function contentText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content
+    .filter((part): part is { type: string; text?: string } =>
+      Boolean(part && typeof part === "object" && "type" in part),
+    )
+    .map((part) => part.type === "text" ? part.text || "" : "")
+    .filter(Boolean)
+    .join("\\n");
+}
+
+function hookData(
+  ctx: { cwd: string; sessionManager: { getSessionId(): string; getSessionFile(): string | undefined } },
+  hookEventName: string,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    hook_event_name: hookEventName,
+    pi_version: "1.0.0",
+    hook_source: "pi",
+    cwd: ctx.cwd,
+    session_id: ctx.sessionManager.getSessionId(),
+    transcript_path: ctx.sessionManager.getSessionFile(),
+    ...extra,
+  };
+}
+
+function updatedText(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "stdout" in value) {
+    return textValue((value as { stdout?: unknown }).stdout);
+  }
+  if (value === undefined || value === null) return undefined;
+  return JSON.stringify(value);
+}
+
+function replaceMessageText(message: any, replacement: string): any {
+  if (typeof message.content === "string") {
+    return { ...message, content: [{ type: "text", text: replacement }] };
+  }
+  if (!Array.isArray(message.content)) {
+    return message;
+  }
+  let replaced = false;
+  const content = message.content.map((part: any) => {
+    if (!replaced && part && part.type === "text") {
+      replaced = true;
+      return { ...part, text: replacement };
+    }
+    return part;
+  });
+  return replaced ? { ...message, content } : message;
+}
+
+function isProviderCredentialField(name: string): boolean {
+  const normalized = name.toLowerCase().replace(/[^a-z]/g, "");
+  return [
+    "authorization",
+    "proxyauthorization",
+    "xapikey",
+    "apikey",
+    "accesstoken",
+    "bearertoken",
+  ].includes(normalized);
+}
+
+function providerPayloadForScan(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(providerPayloadForScan);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key,
+      isProviderCredentialField(key)
+        ? "[provider credential omitted]"
+        : providerPayloadForScan(item),
+    ]),
+  );
+}
+
+function restoreProviderCredentials(original: unknown, candidate: unknown): unknown {
+  if (Array.isArray(original) && Array.isArray(candidate)) {
+    return candidate.map((item, index) =>
+      restoreProviderCredentials(original[index], item),
+    );
+  }
+  if (
+    original && typeof original === "object"
+    && candidate && typeof candidate === "object"
+    && !Array.isArray(original) && !Array.isArray(candidate)
+  ) {
+    const restored = { ...(candidate as Record<string, unknown>) };
+    for (const [key, value] of Object.entries(original)) {
+      if (isProviderCredentialField(key)) {
+        restored[key] = value;
+      } else if (key in restored) {
+        restored[key] = restoreProviderCredentials(value, restored[key]);
+      }
+    }
+    return restored;
+  }
+  return candidate;
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.on("input", async (event, ctx) => {
+    const result = runGuardian(hookData(ctx, "UserPromptSubmit", {
+      prompt: event.text,
+    }));
+    if (result.blocked) {
+      ctx.ui.notify(result.error || "Blocked by ai-guardian", "error");
+      return { action: "handled" };
+    }
+    return { action: "continue" };
+  });
+
+  pi.on("before_provider_request", async (event, ctx) => {
+    const serialized = JSON.stringify(providerPayloadForScan(event.payload));
+    if (!serialized) return;
+    const result = runGuardian(hookData(ctx, "PostToolUse", {
+      tool_name: "ProviderRequest",
+      tool_response: { output: serialized },
+    }));
+    if (result.blocked) {
+      // Pi's provider-request callback has no cancellation result; abort the
+      // active turn before returning the original payload unchanged.
+      ctx.abort();
+      ctx.ui.notify(result.error || "Provider request blocked by ai-guardian", "error");
+      return event.payload;
+    }
+    const replacement = updatedText(result.updatedOutput);
+    if (replacement === undefined) return;
+    try {
+      return restoreProviderCredentials(event.payload, JSON.parse(replacement));
+    } catch {
+      return event.payload;
+    }
+  });
+
+  pi.on("tool_call", async (event, ctx) => {
+    const result = runGuardian(hookData(ctx, "PreToolUse", {
+      tool_name: event.toolName,
+      tool_use: { name: event.toolName, input: event.input },
+      tool_use_id: event.toolCallId,
+    }));
+    if (result.blocked) {
+      return {
+        block: true,
+        terminate: true,
+        reason: result.error || "Blocked by ai-guardian",
+      };
+    }
+  });
+
+  pi.on("tool_result", async (event, ctx) => {
+    const result = runGuardian(hookData(ctx, "PostToolUse", {
+      tool_name: event.toolName,
+      tool_use: { name: event.toolName, input: event.input },
+      tool_use_id: event.toolCallId,
+      tool_response: { output: contentText(event.content) },
+    }));
+    if (result.blocked) {
+      return {
+        content: [{ type: "text", text: result.error || "Output blocked by ai-guardian" }],
+        isError: true,
+      };
+    }
+    const replacement = updatedText(result.updatedOutput);
+    if (replacement !== undefined) {
+      return { content: [{ type: "text", text: replacement }] };
+    }
+  });
+
+  pi.on("message_end", async (event, ctx) => {
+    if (event.message.role !== "assistant") return;
+    const output = contentText(event.message.content);
+    if (!output) return;
+    const result = runGuardian(hookData(ctx, "PostToolUse", {
+      tool_name: "AssistantResponse",
+      tool_response: { output },
+    }));
+    if (result.blocked) {
+      return {
+        message: replaceMessageText(
+          event.message,
+          result.error || "Assistant output blocked by ai-guardian",
+        ),
+      };
+    }
+    const replacement = updatedText(result.updatedOutput);
+    if (replacement !== undefined) {
+      return { message: replaceMessageText(event.message, replacement) };
+    }
+  });
+
+  pi.on("user_bash", async (event, ctx) => {
+    const result = runGuardian(hookData(ctx, "PreToolUse", {
+      tool_name: "Bash",
+      tool_use: { name: "Bash", input: { command: event.command } },
+    }));
+    if (result.blocked) {
+      return {
+        result: {
+          output: result.error || "Blocked by ai-guardian",
+          exitCode: 1,
+          cancelled: false,
+          truncated: false,
+        },
+      };
+    }
+  });
+
+  pi.on("session_start", async (_event, ctx) => {
+    const result = runGuardian(hookData(ctx, "SessionStart"));
+    if (result.blocked) {
+      ctx.ui.notify(result.error || "Session blocked by ai-guardian", "error");
+    }
+  });
+
+  pi.on("session_shutdown", async (_event, ctx) => {
+    runGuardian(hookData(ctx, "SessionEnd"));
+  });
+}
+"""
 
 # OpenCode plugin file contents (Issue #640)
 _OPENCODE_PLUGIN_TS = """\
