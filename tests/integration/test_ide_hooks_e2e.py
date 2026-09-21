@@ -523,20 +523,22 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
         source_path = root / (
             "ai-guardian.ts" if config.get("plugin_file") else "index.ts"
         )
-    bridge_path = root / config.get("bridge_file", "ai-guardian-bridge.ts")
+    bridge_path = root / config["bridge_file"] if config.get("bridge_file") else None
     package_path = root / "package.json"
-    assert source_path.is_file(), f"{ide_type}/setup: bridge source missing"
-    assert bridge_path.is_file(), f"{ide_type}/setup: shared bridge missing"
+    assert source_path.is_file(), f"{ide_type}/setup: plugin source missing"
+    if bridge_path is not None:
+        assert bridge_path.is_file(), f"{ide_type}/setup: shared bridge missing"
     if config.get("extension_based") and not config.get("extension_file"):
         assert package_path.is_file(), f"{ide_type}/setup: package manifest missing"
     source = source_path.read_text(encoding="utf-8")
-    bridge = bridge_path.read_text(encoding="utf-8")
     assert ide_type in source, f"{ide_type}/setup: IDE attribution missing"
-    assert (
-        "execFileSync" in bridge
-        and "AI_GUARDIAN_IDE_TYPE" in bridge
-        and "--ide" in bridge
-    ), f"{ide_type}/setup: shared process bridge missing"
+    if bridge_path is not None:
+        bridge = bridge_path.read_text(encoding="utf-8")
+        assert (
+            "execFileSync" in bridge
+            and "AI_GUARDIAN_IDE_TYPE" in bridge
+            and "--ide" in bridge
+        ), f"{ide_type}/setup: shared process bridge missing"
 
     if ide_type == "opencode":
         required_events = (
