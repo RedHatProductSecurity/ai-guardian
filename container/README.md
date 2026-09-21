@@ -480,9 +480,12 @@ systemctl --user is-active openshell-gateway
 journalctl --user -u openshell-gateway --no-pager -n 100
 ```
 
-On SELinux-enabled systems, inspect the recent AVC records for the denied
-path or operation instead of disabling enforcement or installing a broad local
-allow rule:
+On SELinux-enabled Fedora systems, OpenShell's hardened gateway may require a
+current host SELinux policy for the `nnp_transition`/`nosuid_transition` path
+into `container_runtime_t`. See the Fedora/Linux section in
+`docs/TROUBLESHOOTING.md` for diagnosis and the package-update remediation.
+Inspect recent AVC records for the denied path or operation instead of
+disabling enforcement or installing a broad local allow rule:
 
 ```bash
 sudo ausearch -m avc -ts recent -i
