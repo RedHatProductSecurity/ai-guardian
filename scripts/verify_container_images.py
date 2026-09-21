@@ -43,7 +43,7 @@ def _run_manifest_check(image: str, command_timeout_seconds: float) -> Optional[
 
 def _format_seconds(seconds: float) -> str:
     """Format retry intervals without unnecessary decimal places."""
-    if seconds.is_integer():
+    if float(seconds).is_integer():
         return f"{int(seconds)}s"
     return f"{seconds:g}s"
 

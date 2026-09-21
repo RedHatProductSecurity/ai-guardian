@@ -9,6 +9,7 @@ sys.path.insert(0, str(SCRIPTS_PATH))
 
 from verify_container_images import (  # noqa: E402
     CONTAINER_WORKFLOW_URL,
+    _format_seconds,
     verify_container_image,
     verify_container_images,
 )
@@ -17,6 +18,11 @@ from verify_container_images import (  # noqa: E402
 def _clock(values):
     values = iter(values)
     return lambda: next(values)
+
+
+def test_format_seconds_supports_python39_numeric_types():
+    assert _format_seconds(2) == "2s"
+    assert _format_seconds(2.5) == "2.5s"
 
 
 def test_immediate_success_does_not_retry():
