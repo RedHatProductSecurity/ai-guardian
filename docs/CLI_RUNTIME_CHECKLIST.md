@@ -20,7 +20,7 @@ runtime-installed, experimental, or explicitly unsupported.
 | --- | --- | --- |
 | Support status |  |  |
 | CLI key and display name |  |  |
-| Invocation (`--cli`, and `--agent` if applicable) |  |  |
+| Invocation (`--cli`, profile/provider options if applicable) |  |  |
 | Image source and version |  |  |
 | Installation mode (bundled/runtime/inherited) |  |  |
 | Authentication and provider profile |  |  |
@@ -30,10 +30,17 @@ runtime-installed, experimental, or explicitly unsupported.
 | Linux/macOS/Windows support |  |  |
 | Evidence and known limitations |  |  |
 
-For OpenCode, keep the two concepts separate: `--cli opencode` selects the
-executable and `--agent NAME` selects its profile. Do not use an agent profile
-name as a provider name. For all other CLIs, document whether an additional
-profile or model selector exists.
+For OpenCode, keep the concepts separate: `--cli opencode` selects the
+executable and `--opencode-agent-profile NAME` selects its profile (`--agent`
+is the legacy alias). Do not use an agent profile name as a provider name. For
+other CLIs, document whether `--agent-provider NAME`, an additional profile, or
+a model selector exists.
+
+For OpenShell, keep the selector limited to the clients present in the
+published image. The current selector is `claude`, `copilot`, `codex`,
+`opencode`, and `pi`; host/container-only integrations and custom-image agents
+must remain out of the default OpenShell list until their image, policy, auth,
+and runtime evidence is complete.
 
 ## 1. Scope, support, and legal classification
 

@@ -46,6 +46,7 @@ FROM registry.access.redhat.com/ubi10/ubi-minimal:latest AS builder
 ARG AI_GUARDIAN_VERSION=1.18.0
 ARG UV_VERSION=0.11.16
 ARG OPENCODE_VERSION=1.17.3
+ARG PI_VERSION=0.86.0
 ARG GH_VERSION=2.74.1
 ARG GLAB_VERSION=1.91.0
 
@@ -108,10 +109,13 @@ RUN DETECT_SECRETS_VERSION=$(/opt/uv-tools/ai-guardian/bin/python -c \
     && test -x /usr/local/bin/detect-secrets
 
 # Node.js CLIs (installed to /opt/npm for predictable COPY paths)
-RUN npm install -g --prefix /opt/npm @google/gemini-cli @openai/codex openclaw 2>/dev/null \
+RUN npm install -g --prefix /opt/npm \
+        @google/gemini-cli @openai/codex openclaw \
+        "@earendil-works/pi-coding-agent@${PI_VERSION}" 2>/dev/null \
     && (PATH="/opt/npm/bin:$PATH" gemini --version 2>/dev/null || echo "Gemini CLI installed") \
     && (PATH="/opt/npm/bin:$PATH" codex --version 2>/dev/null || echo "Codex CLI installed") \
-    && (PATH="/opt/npm/bin:$PATH" openclaw --version 2>/dev/null || echo "OpenClaw installed")
+    && (PATH="/opt/npm/bin:$PATH" openclaw --version 2>/dev/null || echo "OpenClaw installed") \
+    && (PATH="/opt/npm/bin:$PATH" pi --version 2>/dev/null || echo "Pi ${PI_VERSION} installed")
 
 # OpenCode (pinned Linux archive — avoid the mutable install script)
 RUN case "$(uname -m)" in \
@@ -198,7 +202,8 @@ RUN node -e " \
     var fs=require('fs'),p=require('path'); \
     ['/opt/npm/lib/node_modules/@google/gemini-cli', \
      '/opt/npm/lib/node_modules/@openai/codex', \
-     '/opt/npm/lib/node_modules/openclaw'].forEach(function(d){ \
+     '/opt/npm/lib/node_modules/openclaw', \
+     '/opt/npm/lib/node_modules/@earendil-works/pi-coding-agent'].forEach(function(d){ \
         try{ \
             var pkg=JSON.parse(fs.readFileSync(d+'/package.json')); \
             var b=pkg.bin||{}; \
@@ -213,7 +218,8 @@ RUN node -e " \
     });" \
     && (gemini --version 2>/dev/null || echo "Gemini CLI available") \
     && (codex --version 2>/dev/null || echo "Codex CLI available") \
-    && (openclaw --version 2>/dev/null || echo "OpenClaw available")
+    && (openclaw --version 2>/dev/null || echo "OpenClaw available") \
+    && (pi --version 2>/dev/null || echo "Pi CLI available")
 
 # Sandbox user
 RUN groupadd -g 1000 sandbox \
@@ -236,9 +242,10 @@ COPY --from=builder --chown=sandbox:sandbox /opt/opencode/.opencode /sandbox/.op
 
 # Prepare config directories
 RUN mkdir -p /sandbox/.claude /sandbox/.config /sandbox/.gemini /sandbox/.codex \
-        /sandbox/.kiro /sandbox/.openclaw \
+        /sandbox/.kiro /sandbox/.openclaw /sandbox/.pi/agent \
     && chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config \
-        /sandbox/.gemini /sandbox/.codex /sandbox/.kiro /sandbox/.openclaw
+        /sandbox/.gemini /sandbox/.codex /sandbox/.kiro /sandbox/.openclaw \
+        /sandbox/.pi
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
@@ -253,6 +260,7 @@ WORKDIR /sandbox
 USER sandbox
 ENV HOME=/sandbox
 ENV PATH="/sandbox/.local/bin:/sandbox/.opencode/bin:${PATH}"
+ENV PI_CODING_AGENT_DIR=/sandbox/.pi/agent
 
 ENTRYPOINT ["entrypoint.sh"]
 CMD ["bash", "-l"]

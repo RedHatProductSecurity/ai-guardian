@@ -22,7 +22,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ai_guardian.daemon.discovery import DaemonTarget
-from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
+from ai_guardian.ide_registry import (
+    SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
+    SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+    SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
+)
 
 CONTAINER_RUNTIME = "container"
 OPENSHELL_RUNTIME = "openshell"
@@ -184,9 +188,25 @@ def _opencode_agent(args, cli: str) -> Optional[str]:
     )
 
 
+def _agent_provider(args, cli: str) -> Optional[str]:
+    """Return the model provider selected for the active CLI."""
+    selected = getattr(args, "agent_provider", None)
+    if selected is None and cli == "pi":
+        selected = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER")
+    return str(selected or "").strip() or None
+
+
 def _openshell_inference_cli(args, cli: str) -> str:
     """Return the model client whose OpenShell inference route is requested."""
+    if cli == "pi":
+        provider = _agent_provider(args, cli)
+        if not provider:
+            return ""
+        if provider in {"anthropic", "claude"}:
+            return "claude"
+        return provider
     if cli == "claude":
+        # Claude uses the Anthropic Messages API and its OpenShell inference route.
         return "claude"
     if cli != "opencode":
         return cli
@@ -1093,8 +1113,37 @@ def _openshell_provider_environment(args, cli: str) -> Dict[str, str]:
     environment = os.environ.copy()
     environment.update(_openshell_environment_values(args))
 
+    if cli in {"openai", "openai-codex"}:
+        pi_agent_dir = Path(
+            environment.get(
+                "PI_CODING_AGENT_DIR", _openshell_host_home() / ".pi" / "agent"
+            )
+        )
+        try:
+            auth = json.loads((pi_agent_dir / "auth.json").read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError):
+            auth = {}
+        auth_entry = auth.get(cli) if isinstance(auth, dict) else None
+        if cli == "openai" and isinstance(auth_entry, dict):
+            if auth_entry.get("type") == "api_key":
+                key = auth_entry.get("key")
+                if isinstance(key, str):
+                    match = re.fullmatch(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?", key)
+                    resolved_key = environment.get(match.group(1)) if match else key
+                    if resolved_key and not key.startswith("!"):
+                        environment["OPENAI_API_KEY"] = resolved_key
+        elif cli == "openai-codex" and isinstance(auth_entry, dict):
+            for auth_name, environment_name in (
+                ("access", "CODEX_AUTH_ACCESS_TOKEN"),
+                ("refresh", "CODEX_AUTH_REFRESH_TOKEN"),
+                ("accountId", "CODEX_AUTH_ACCOUNT_ID"),
+            ):
+                value = auth_entry.get(auth_name)
+                if value and not environment.get(environment_name):
+                    environment[environment_name] = str(value)
+
     api_key = getattr(args, "api_key", None)
-    if api_key and cli == "claude" and not environment.get("ANTHROPIC_API_KEY"):
+    if api_key and cli in {"claude", "pi"} and not environment.get("ANTHROPIC_API_KEY"):
         environment["ANTHROPIC_API_KEY"] = api_key
 
     if cli == "codex":
@@ -1179,7 +1228,14 @@ def _ensure_openshell_cli_provider(
     args, cli: str, *, output: Optional[List[str]] = None
 ) -> str:
     """Create or reuse the default provider needed by staged CLI setup."""
-    if cli not in {"claude", "codex", "copilot", "opencode"}:
+    if cli not in {
+        "claude",
+        "codex",
+        "copilot",
+        "opencode",
+        "openai",
+        "openai-codex",
+    }:
         raise ValueError(
             f"the active OpenShell gateway has no automatic provider mapping for '{cli}'; "
             "create a compatible provider and pass it with --provider NAME"
@@ -1187,21 +1243,64 @@ def _ensure_openshell_cli_provider(
 
     profiles = _openshell_provider_profiles(args)
     provider_type = (
-        "claude-code" if cli == "claude" and "claude-code" in profiles else cli
+        "codex"
+        if cli == "openai-codex"
+        else (
+            "openai"
+            if cli == "openai"
+            else "claude-code" if cli == "claude" and "claude-code" in profiles else cli
+        )
     )
     if cli == "claude" and provider_type == "claude" and "claude" not in profiles:
         raise ValueError(
             "the active OpenShell gateway has no provider profile for 'claude'; "
             "create a compatible provider and pass it with --provider NAME"
         )
-    if provider_type not in profiles:
+    if provider_type not in profiles and provider_type != "openai":
         raise ValueError(
-            f"the active OpenShell gateway has no provider profile for '{cli}'; "
+            f"the active OpenShell gateway has no provider profile for '{provider_type}'; "
             "create a compatible provider and pass it with --provider NAME"
         )
 
     provider_name = f"ai-guardian-{cli}"
     if _openshell_provider_exists(args, provider_name):
+        if cli == "codex":
+            provider_environment = _openshell_provider_environment(args, cli)
+            if provider_environment.get("OPENAI_API_KEY"):
+                # API-key login can replace an older OAuth-backed provider. Keep
+                # the value in the provider subprocess environment, never argv.
+                credential_keys = ["OPENAI_API_KEY"]
+            else:
+                credential_keys = [
+                    "CODEX_AUTH_ACCESS_TOKEN",
+                    "CODEX_AUTH_REFRESH_TOKEN",
+                    "CODEX_AUTH_ACCOUNT_ID",
+                ]
+                if provider_environment.get("CODEX_AUTH_ID_TOKEN"):
+                    credential_keys.append("CODEX_AUTH_ID_TOKEN")
+            if all(provider_environment.get(key) for key in credential_keys):
+                _emit_output(
+                    f"Refreshing existing OpenShell provider from local credentials: {provider_name}",
+                    output=output,
+                )
+                refresh_command = [
+                    _openshell_cli(args),
+                    "provider",
+                    "update",
+                    provider_name,
+                ]
+                for key in credential_keys:
+                    refresh_command.extend(["--credential", key])
+                result = _run(
+                    refresh_command,
+                    env=provider_environment,
+                    output=output,
+                )
+                if result != 0:
+                    raise ValueError(
+                        f"unable to refresh OpenShell provider '{provider_name}'; "
+                        "refresh the local Codex login or pass a different provider"
+                    )
         _emit_output(
             f"Using existing OpenShell provider: {provider_name}", output=output
         )
@@ -1225,11 +1324,29 @@ def _ensure_openshell_cli_provider(
                     "set --global --key providers_v2_enabled --value true"
                 )
 
+    provider_environment = _openshell_provider_environment(args, cli)
+    if cli == "openai" and not provider_environment.get("OPENAI_API_KEY"):
+        raise ValueError(
+            "Pi's OpenAI provider requires OPENAI_API_KEY to create an OpenShell "
+            "provider; set it on the host or pass an existing provider with "
+            "--provider NAME. For ChatGPT/Codex OAuth, use the native codex CLI."
+        )
+    if cli == "openai-codex" and not all(
+        provider_environment.get(name)
+        for name in (
+            "CODEX_AUTH_ACCESS_TOKEN",
+            "CODEX_AUTH_REFRESH_TOKEN",
+            "CODEX_AUTH_ACCOUNT_ID",
+        )
+    ):
+        raise ValueError(
+            "Pi's OpenAI Codex provider requires Pi OAuth credentials; log in to "
+            "openai-codex on the host or pass an existing provider with --provider NAME"
+        )
     _emit_output(
         f"Creating OpenShell provider from existing local credentials: {provider_name}",
         output=output,
     )
-    provider_environment = _openshell_provider_environment(args, cli)
     provider_command = [
         _openshell_cli(args),
         "provider",
@@ -1239,7 +1356,7 @@ def _ensure_openshell_cli_provider(
         "--type",
         provider_type,
     ]
-    if cli == "codex" and provider_environment.get("OPENAI_API_KEY"):
+    if provider_type == "codex" and provider_environment.get("OPENAI_API_KEY"):
         # OpenShell's Codex --from-existing discovery only recognizes the
         # OAuth credential set. API-key auth must use the environment-key
         # credential form instead; the key value stays out of argv.
@@ -1381,7 +1498,7 @@ def _ensure_openshell_vertex_provider(
 def _configure_openshell_inference(
     args, provider_name: str, model: str, *, output=None
 ) -> None:
-    """Configure OpenShell's local inference route for a Vertex provider."""
+    """Configure OpenShell's local inference route for a provider."""
     _emit_output(
         f"Configuring OpenShell inference route: {provider_name} / {model}",
         output=output,
@@ -1401,13 +1518,15 @@ def _configure_openshell_inference(
     )
     if result != 0:
         raise ValueError(
-            "unable to configure OpenShell inference for Vertex AI; verify the "
-            "provider project/region and selected Vertex model"
+            "unable to configure OpenShell inference; verify the provider and "
+            "selected model"
         )
 
 
 def _openshell_cli_has_credentials(args, cli: str) -> bool:
     """Return whether staged setup needs an explicit provider instance."""
+    if not cli:
+        return False
     environment = dict(os.environ)
     environment.update(_openshell_environment_values(args))
     if cli == "codex":
@@ -1435,6 +1554,24 @@ def _openshell_cli_has_credentials(args, cli: str) -> bool:
             or environment.get("OPENROUTER_API_KEY")
             or environment.get("OPENAI_API_KEY")
         )
+    if cli == "pi":
+        return bool(
+            getattr(args, "api_key", None)
+            or environment.get("ANTHROPIC_API_KEY")
+            or environment.get("CLAUDE_API_KEY")
+        )
+    if cli in {"openai", "openai-codex"}:
+        provider_environment = _openshell_provider_environment(args, cli)
+        if cli == "openai-codex":
+            return all(
+                provider_environment.get(name)
+                for name in (
+                    "CODEX_AUTH_ACCESS_TOKEN",
+                    "CODEX_AUTH_REFRESH_TOKEN",
+                    "CODEX_AUTH_ACCOUNT_ID",
+                )
+            )
+        return bool(provider_environment.get("OPENAI_API_KEY"))
     return False
 
 
@@ -2001,10 +2138,10 @@ def _openshell_create(
     )
 
     cli = _selected_cli(args, DEFAULT_OPENSHELL_CLI)
-    if cli not in SUPPORTED_CLI_IDE_TYPES:
+    if cli not in SUPPORTED_OPENSHELL_CLI_IDE_TYPES:
         raise ValueError(
             f"unsupported OpenShell CLI '{cli}'; supported CLIs: "
-            + ", ".join(SUPPORTED_CLI_IDE_TYPES)
+            + ", ".join(SUPPORTED_OPENSHELL_CLI_IDE_TYPES)
         )
 
     name = _sandbox_base_name(args, OPENSHELL_RUNTIME)
@@ -2034,6 +2171,16 @@ def _openshell_create(
                 "AI_GUARDIAN_CODEX_SANDBOX_MODE=danger-full-access",
             ]
         )
+    if cli == "pi":
+        environment.append("PI_CODING_AGENT_DIR=/sandbox/.pi/agent")
+    agent_provider = _agent_provider(args, cli)
+    if agent_provider:
+        environment.append(f"AI_GUARDIAN_AGENT_PROVIDER={agent_provider}")
+    selected_model = getattr(args, "model", None) or os.environ.get(
+        "AI_GUARDIAN_AGENT_MODEL"
+    )
+    if selected_model:
+        environment.append(f"AI_GUARDIAN_AGENT_MODEL={selected_model}")
 
     profile = getattr(args, "profile", None)
     uploads_requested = False
@@ -2077,6 +2224,17 @@ def _openshell_create(
     suppress_credential_warnings = False
     project, region, model = _vertex_settings(args)
     inference_cli = _openshell_inference_cli(args, cli)
+    if cli == "pi" and inference_cli not in {
+        "",
+        "claude",
+        "openai",
+        "openai-codex",
+    }:
+        raise ValueError(
+            "Pi on OpenShell currently supports the anthropic and openai "
+            "provider paths; openai-codex is diagnostic-only. Use a custom "
+            "container/provider integration for other providers"
+        )
     vertex_provider_required = inference_cli == "claude" and bool(project)
     if vertex_provider_required:
         provider_name = (
@@ -2103,11 +2261,40 @@ def _openshell_create(
         )
         suppress_credential_warnings = True
 
-    if not provider_names and (
-        uploads_requested or _openshell_cli_has_credentials(args, inference_cli)
-    ):
+    provider_cli = inference_cli
+    direct_codex_api_key = False
+    openai_api_client = cli == "pi" and inference_cli == "openai"
+    if cli == "opencode" and inference_cli == "opencode":
+        requested_model = str(
+            getattr(args, "model", None)
+            or os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
+        ).lower()
+        openai_api_client = requested_model.startswith(("openai/", "gpt-"))
+    if not provider_names and openai_api_client:
+        # A Codex API-key login is usable by clients that speak the OpenAI API
+        # directly. Do not route it through OpenShell inference: the Codex
+        # provider type is not accepted by ``openshell inference set``.
+        if _openshell_provider_environment(args, "codex").get("OPENAI_API_KEY"):
+            provider_cli = "codex"
+            direct_codex_api_key = cli == "pi" and inference_cli == "openai"
+
+    should_auto_create_provider = bool(
+        not provider_names
+        and inference_cli
+        and (uploads_requested or _openshell_cli_has_credentials(args, provider_cli))
+    )
+    # Pi can authenticate its selected provider from its sandbox-local auth
+    # store. Keep provider routes explicit; do not silently reinterpret one as
+    # another provider.
+    if cli == "pi" and inference_cli not in {
+        "claude",
+        "openai",
+        "openai-codex",
+    }:
+        should_auto_create_provider = False
+    if should_auto_create_provider:
         provider_names = [
-            _ensure_openshell_cli_provider(args, inference_cli, output=output)
+            _ensure_openshell_cli_provider(args, provider_cli, output=output)
         ]
         provider_attached = True
 
@@ -2129,6 +2316,44 @@ def _openshell_create(
         )
         suppress_credential_warnings = True
 
+    if cli == "pi" and inference_cli == "claude" and provider_attached:
+        # Pi's built-in Anthropic provider does not consistently honor an
+        # environment-only base URL override. The entrypoint writes the
+        # matching models.json provider override inside the sandbox.
+        if not vertex_provider_required:
+            _configure_openshell_inference(
+                args, provider_names[0], model, output=output
+            )
+        environment.extend(
+            [
+                "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
+                "ANTHROPIC_BASE_URL=https://inference.local",
+                "ANTHROPIC_API_KEY=unused",
+            ]
+        )
+        suppress_credential_warnings = True
+
+    if cli == "pi" and inference_cli == "openai" and provider_attached:
+        # Pi's OpenAI client can use OpenShell's OpenAI-compatible inference
+        # route. The gateway owns the API key; Pi receives only a placeholder.
+        if direct_codex_api_key:
+            # A Codex API-key provider exposes OPENAI_API_KEY directly; Pi can
+            # use its normal OpenAI client without the inference router.
+            suppress_credential_warnings = True
+        else:
+            if not vertex_provider_required:
+                _configure_openshell_inference(
+                    args, provider_names[0], model, output=output
+                )
+            environment.extend(
+                [
+                    "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true",
+                    "OPENAI_BASE_URL=https://inference.local/v1",
+                    "OPENAI_API_KEY=unused",
+                ]
+            )
+            suppress_credential_warnings = True
+
     for value in environment:
         command.extend(["--env", value])
     for value in getattr(args, "environment", None) or []:
@@ -2142,7 +2367,9 @@ def _openshell_create(
         # warning when the actual authentication is provider-backed.
         command.append("--no-credential-warnings")
 
-    if cli == "codex" and provider_attached:
+    if provider_attached and (
+        cli == "codex" or (cli == "pi" and inference_cli == "openai-codex")
+    ):
         environment_marker = "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true"
         command.extend(["--env", environment_marker])
 
@@ -2293,11 +2520,30 @@ def _validate_create_options(args) -> None:
         DEFAULT_OPENSHELL_CLI if runtime == OPENSHELL_RUNTIME else DEFAULT_CONTAINER_CLI
     )
     cli = _selected_cli(args, default_cli)
+    supported_cli_types = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME.get(runtime, ())
+    if cli not in supported_cli_types:
+        raise ValueError(
+            f"CLI '{cli}' is not supported for {runtime} sandboxes; supported CLIs: "
+            + ", ".join(supported_cli_types)
+        )
     opencode_agent = _opencode_agent(args, cli)
     if getattr(args, "opencode_agent", None) and cli != "opencode":
-        raise ValueError("--agent is supported only with --cli opencode")
+        raise ValueError(
+            "--opencode-agent-profile/--agent is supported only with --cli opencode"
+        )
     if cli == "opencode" and not opencode_agent:
-        raise ValueError("--agent is required with --cli opencode")
+        raise ValueError(
+            "--opencode-agent-profile/--agent is required with --cli opencode"
+        )
+    agent_provider = _agent_provider(args, cli)
+    if agent_provider and cli != "pi":
+        raise ValueError("--agent-provider is supported only with --cli pi")
+    if runtime == OPENSHELL_RUNTIME and cli == "pi":
+        supported_providers = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
+        if agent_provider not in supported_providers:
+            raise ValueError(
+                "OpenShell Pi requires --agent-provider anthropic or openai"
+            )
     if runtime == CONTAINER_RUNTIME:
         if policy:
             raise ValueError("--policy is supported for OpenShell sandboxes only")

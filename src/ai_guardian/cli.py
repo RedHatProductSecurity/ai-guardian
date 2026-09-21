@@ -1125,10 +1125,11 @@ def main():
         )
         sandbox_create_parser.add_argument(
             "--agent",
+            "--opencode-agent-profile",
             dest="opencode_agent",
             help=(
-                "OpenCode agent profile; required with --cli opencode and only "
-                "valid with that CLI"
+                "OpenCode agent profile (legacy alias: --agent); required with "
+                "--cli opencode and only valid with that CLI"
             ),
         )
         sandbox_create_parser.add_argument(
@@ -1172,8 +1173,17 @@ def main():
         sandbox_create_parser.add_argument(
             "--model",
             help=(
-                "OpenShell inference model for a Claude-compatible route "
+                "Model selected by the CLI or OpenShell inference route "
                 "(default: $AI_GUARDIAN_OPEN_SHELL_MODEL or claude-sonnet-4-6)"
+            ),
+        )
+        sandbox_create_parser.add_argument(
+            "--agent-provider",
+            dest="agent_provider",
+            help=(
+                "Provider selected by the CLI; Container Pi supports "
+                "anthropic/openai/openai-codex, while OpenShell Pi supports "
+                "anthropic and experimental direct-API openai"
             ),
         )
         sandbox_create_parser.add_argument(
@@ -1198,9 +1208,10 @@ def main():
         )
         sandbox_create_parser.add_argument(
             "--provider",
+            "--openshell-provider",
             action="append",
             metavar="NAME",
-            help="OpenShell provider to attach (repeatable)",
+            help="OpenShell gateway provider to attach (repeatable)",
         )
         sandbox_create_parser.add_argument(
             "--label",

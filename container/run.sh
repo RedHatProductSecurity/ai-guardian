@@ -28,7 +28,7 @@ SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 
 SUPPORTED_AGENTS=(
     claude cursor copilot codex windsurf gemini cline zoocode kiro
-    aiderdesk openclaw opencode augment crush junie antigravity dummy-agent
+    aiderdesk openclaw opencode pi augment crush junie antigravity dummy-agent
 )
 
 _require_option_value() {
@@ -131,10 +131,10 @@ fi
 HOST_HOME="${HOME:-}"
 if [[ -z "$HOST_HOME" ]]; then
     for agent_home_var in \
-        CODEX_HOME CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME \
-        GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME \
-        AIDER_DESK_DIR AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME \
-        OPENCODE_CONFIG_DIR; do
+         CODEX_HOME CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME \
+         GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME \
+         AIDER_DESK_DIR AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME \
+         OPENCODE_CONFIG_DIR PI_CODING_AGENT_DIR; do
         agent_home="${!agent_home_var:-}"
         if [[ -n "$agent_home" ]]; then
             case "$agent_home_var" in

@@ -14,7 +14,9 @@ from ai_guardian.hook_adapters import (
 from ai_guardian.hook_adapters.base import NormalizedHookInput
 from ai_guardian.ide_registry import (
     ALL_IDE_TYPES,
+    SUPPORTED_CLI_IDE_TYPES,
     SUPPORTED_IDE_REGISTRY,
+    SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
     SUPPORTED_IDE_TYPES,
 )
 from ai_guardian.scanners.transcript import TRANSCRIPT_ADAPTERS
@@ -52,6 +54,17 @@ def test_canonical_registry_is_unique_and_complete():
     assert keys == SUPPORTED_IDE_TYPES
     assert len(keys) == len(set(keys))
     assert set(keys).issubset(ALL_IDE_TYPES)
+
+
+def test_openshell_cli_registry_matches_the_published_image_scope():
+    assert SUPPORTED_OPENSHELL_CLI_IDE_TYPES == (
+        "claude",
+        "copilot",
+        "codex",
+        "opencode",
+        "pi",
+    )
+    assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))
 
 
 def test_setup_registry_matches_canonical_registry():

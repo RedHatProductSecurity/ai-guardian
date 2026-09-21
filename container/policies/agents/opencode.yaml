@@ -4,6 +4,41 @@
 version: 1
 
 network_policies:
+  openai:
+    name: openai
+    endpoints:
+      - host: api.openai.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/opencode }
+      - { path: /usr/lib/node_modules/opencode-ai/bin/opencode.exe }
+      - { path: /usr/local/bin/opencode }
+      - { path: /sandbox/.opencode/bin/opencode }
+
+  opencode_metadata:
+    name: opencode-metadata
+    endpoints:
+      - host: models.opencode.ai
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
+      - host: registry.npmjs.org
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
+    binaries:
+      - { path: /usr/bin/node }
+      - { path: /usr/bin/opencode }
+      - { path: /usr/lib/node_modules/opencode-ai/bin/opencode.exe }
+      - { path: /usr/local/bin/opencode }
+      - { path: /sandbox/.opencode/bin/opencode }
+
   deepinfra:
     name: deepinfra
     endpoints:

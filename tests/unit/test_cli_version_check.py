@@ -18,6 +18,7 @@ def test_load_pinned_versions_reads_openshell_dockerfile():
     assert pinned == {
         "CODEX_VERSION": "0.154.0",
         "OPENCODE_VERSION": "1.18.31",
+        "PI_VERSION": "0.86.0",
     }
 
 
@@ -39,6 +40,7 @@ def test_check_versions_writes_report_and_detects_updates(tmp_path):
     latest = {
         "@openai/codex": "0.155.0",
         "opencode-ai": "1.18.31",
+        "@earendil-works/pi-coding-agent": "0.86.0",
     }
     report = tmp_path / "cli-versions.json"
 
@@ -51,6 +53,7 @@ def test_check_versions_writes_report_and_detects_updates(tmp_path):
     assert has_errors is False
     assert results["CODEX_VERSION"]["status"] == "OUTDATED"
     assert results["OPENCODE_VERSION"]["status"] == "OK"
+    assert results["PI_VERSION"]["status"] == "OK"
     assert report.exists()
 
 

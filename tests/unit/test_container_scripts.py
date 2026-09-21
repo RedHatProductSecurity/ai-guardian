@@ -16,9 +16,8 @@ import yaml
 from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES, SUPPORTED_IDE_TYPES
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-# Pi's native extension is intentionally excluded from container/OpenShell
-# launchers; runtime packaging is tracked separately in issue #2326.
-CONTAINER_EXCLUDED_IDE_TYPES = frozenset({"pi"})
+# Keep launcher coverage aligned with the complete supported IDE registry.
+CONTAINER_EXCLUDED_IDE_TYPES = frozenset()
 CONTAINER_SUPPORTED_IDE_TYPES = tuple(
     ide_type
     for ide_type in SUPPORTED_IDE_TYPES
@@ -33,8 +32,12 @@ RUN_SCRIPT = REPO_ROOT / "container" / "run.sh"
 ENTRYPOINT_SCRIPT = REPO_ROOT / "container" / "entrypoint.sh"
 DOCKERFILE = REPO_ROOT / "container" / "Dockerfile"
 OPENSHELL_DOCKERFILE = REPO_ROOT / "container" / "Dockerfile.openshell"
+OPENCODE_POLICY = REPO_ROOT / "container" / "policies" / "agents" / "opencode.yaml"
 CLI_VERSION_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "cli-version-health.yml"
 BUILD_CONTAINER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build-container.yml"
+RELEASE_READINESS_WORKFLOW = (
+    REPO_ROOT / ".github" / "workflows" / "release-readiness.yml"
+)
 POLICY_COMPOSER = REPO_ROOT / "container" / "compose_openshell_policy.py"
 POLICY_BASE = REPO_ROOT / "container" / "policies" / "base.yaml"
 AGENT_POLICY_DIR = REPO_ROOT / "container" / "policies" / "agents"
@@ -105,6 +108,7 @@ def _launcher_env(tmp_path: Path, executable: Path, capture: Path) -> dict:
         "AI_GUARDIAN_IMAGE",
         "AI_GUARDIAN_OPEN_SHELL_IMAGE",
         "OPENAI_API_KEY",
+        "PI_CODING_AGENT_DIR",
     ):
         env.pop(name, None)
     return env
@@ -158,6 +162,20 @@ class TestContainerLaunchers:
         assert 'CMD ["bash", "-l"]' in dockerfile
         assert "COPY --from=builder /opt/uv-tools /usr/lib/uv-tools" not in dockerfile
 
+    def test_images_include_the_pinned_pi_cli(self):
+        normal_image = DOCKERFILE.read_text(encoding="utf-8")
+        openshell_image = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
+
+        assert "ARG PI_VERSION=0.86.0" in normal_image
+        assert '"@earendil-works/pi-coding-agent@${PI_VERSION}"' in normal_image
+        assert "/opt/npm/lib/node_modules/@earendil-works/pi-coding-agent" in (
+            normal_image
+        )
+        assert "ARG PI_VERSION=0.86.0" in openshell_image
+        assert '"@earendil-works/pi-coding-agent@${PI_VERSION}"' in openshell_image
+        assert "&& pi --version" in openshell_image
+        assert "PI_CODING_AGENT_DIR=/sandbox/.pi/agent" in openshell_image
+
     def test_container_defaults_match_latest_stable_ai_guardian_release(self):
         expected_version = _latest_stable_release_version()
 
@@ -194,6 +212,16 @@ class TestContainerLaunchers:
 
         assert "scripts/sync_release_versions.py --repo . --check" in workflow
 
+    def test_release_readiness_smoke_tests_both_pi_images(self):
+        workflow = RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8")
+
+        assert "container-images:" in workflow
+        assert "Build normal support image" in workflow
+        assert "Build OpenShell support image" in workflow
+        assert "ai-guardian-readiness" in workflow
+        assert "ai-guardian-openshell-readiness" in workflow
+        assert "test -f /sandbox/.pi/agent/extensions/ai-guardian.ts" in workflow
+
     def test_openshell_image_uses_community_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
 
@@ -207,10 +235,17 @@ class TestContainerLaunchers:
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile
         assert "ARG OPENCODE_VERSION=1.18.31" in dockerfile
+        assert "ARG PI_VERSION=0.86.0" in dockerfile
         assert "ARG COPILOT_VERSION" not in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile
         assert '"@openai/codex@${CODEX_VERSION}"' in dockerfile
         assert '"opencode-ai@${OPENCODE_VERSION}"' in dockerfile
+        assert '"@earendil-works/pi-coding-agent@${PI_VERSION}"' in dockerfile
+        assert (
+            "apt-get install --no-install-recommends --yes fd-find ripgrep"
+            in dockerfile
+        )
+        assert "ln -sf /usr/bin/fdfind /usr/local/bin/fd" in dockerfile
         assert "command -v claude" in dockerfile
         assert "command -v copilot" in dockerfile
         assert "https://claude.ai/install.sh" not in dockerfile
@@ -219,6 +254,18 @@ class TestContainerLaunchers:
         assert "copilot --version" in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
         assert "ai-guardian.openshell-base=true" in dockerfile
+
+    def test_opencode_policy_covers_openai_and_startup_metadata(self):
+        policy = yaml.safe_load(OPENCODE_POLICY.read_text(encoding="utf-8"))
+        endpoints = {
+            endpoint["host"]
+            for network_policy in policy["network_policies"].values()
+            for endpoint in network_policy["endpoints"]
+        }
+
+        assert "api.openai.com" in endpoints
+        assert "models.opencode.ai" in endpoints
+        assert "registry.npmjs.org" in endpoints
 
     def test_images_preinstall_pinned_scanner_engines(self):
         for dockerfile_path in (DOCKERFILE, OPENSHELL_DOCKERFILE):
@@ -625,7 +672,14 @@ class TestContainerLaunchers:
             "gemini": {"gemini_api"},
             "kiro": set(),
             "openclaw": set(),
-            "opencode": {"deepinfra", "nvidia", "opencode_zen"},
+            "opencode": {
+                "deepinfra",
+                "nvidia",
+                "openai",
+                "opencode_metadata",
+                "opencode_zen",
+            },
+            "pi": {"anthropic", "openai"},
             "crush": {"deepinfra", "nvidia"},
         }
 
@@ -636,7 +690,15 @@ class TestContainerLaunchers:
             assert set(fragment.get("network_policies", {})) == expected
 
     def test_node_based_agent_policies_allow_the_community_base_node_binary(self):
-        for agent in ("claude", "codex", "copilot", "gemini", "opencode", "crush"):
+        for agent in (
+            "claude",
+            "codex",
+            "copilot",
+            "gemini",
+            "opencode",
+            "pi",
+            "crush",
+        ):
             fragment = yaml.safe_load(
                 (AGENT_POLICY_DIR / f"{agent}.yaml").read_text(encoding="utf-8")
             )
@@ -1046,6 +1108,237 @@ fi
         == "https://inference.local/v1"
     )
     assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_configures_pi_openshell_models_override(tmp_path):
+    pi_agent_dir = tmp_path / "pi-agent"
+    pi_agent_dir.mkdir()
+    models_path = pi_agent_dir / "models.json"
+    models_path.write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "custom": {
+                        "baseUrl": "https://example.invalid",
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    _executable_script(
+        tmp_path / "pi",
+        "#!/usr/bin/env bash\nprintf 'pi test\\n'\n",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "pi",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "AI_GUARDIAN_AGENT_PROVIDER": "anthropic",
+        "AI_GUARDIAN_AGENT_MODEL": "claude-sonnet-4-6",
+        "ANTHROPIC_API_KEY": "unused",
+        "PI_CODING_AGENT_DIR": str(pi_agent_dir),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "pi", "--version"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    models = json.loads(models_path.read_text(encoding="utf-8"))
+    assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
+    assert models["providers"]["anthropic"] == {
+        "baseUrl": "https://inference.local",
+        "apiKey": "unused",
+    }
+    settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
+    assert settings["defaultProvider"] == "anthropic"
+    assert settings["defaultModel"] == "claude-sonnet-4-6"
+    assert "Auth:         OpenShell inference route" in result.stdout
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_configures_pi_openai_openshell_models_override(tmp_path):
+    pi_agent_dir = tmp_path / "pi-agent"
+    pi_agent_dir.mkdir()
+    models_path = pi_agent_dir / "models.json"
+    models_path.write_text(
+        json.dumps({"providers": {"custom": {"baseUrl": "https://example.invalid"}}}),
+        encoding="utf-8",
+    )
+    _executable_script(
+        tmp_path / "pi",
+        "#!/usr/bin/env bash\nprintf 'pi test\n'\n",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "pi",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
+        "AI_GUARDIAN_AGENT_PROVIDER": "openai",
+        "AI_GUARDIAN_AGENT_MODEL": "gpt-5",
+        "OPENAI_API_KEY": "unused",
+        "PI_CODING_AGENT_DIR": str(pi_agent_dir),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "pi", "--version"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    models = json.loads(models_path.read_text(encoding="utf-8"))
+    assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
+    assert models["providers"]["openai"] == {
+        "baseUrl": "https://inference.local/v1",
+        "apiKey": "unused",
+    }
+    settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
+    assert settings["defaultProvider"] == "openai"
+    assert settings["defaultModel"] == "gpt-5"
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_configures_pi_openai_codex_auth(tmp_path):
+    pi_agent_dir = tmp_path / "pi-agent"
+    pi_agent_dir.mkdir()
+    (pi_agent_dir / "auth.json").write_text(
+        json.dumps({"openai": {"type": "api_key", "key": "placeholder"}}),
+        encoding="utf-8",
+    )
+    _executable_script(
+        tmp_path / "pi",
+        "#!/usr/bin/env bash\nprintf 'pi test\\n'\n",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "pi",
+        "AI_GUARDIAN_AGENT_PROVIDER": "openai-codex",
+        "AI_GUARDIAN_OPEN_SHELL_PROVIDER": "true",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "CODEX_AUTH_ACCESS_TOKEN": "access-placeholder",
+        "CODEX_AUTH_REFRESH_TOKEN": "refresh-placeholder",
+        "CODEX_AUTH_ACCOUNT_ID": "account-placeholder",
+        "PI_CODING_AGENT_DIR": str(pi_agent_dir),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "pi", "--version"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    auth = json.loads((pi_agent_dir / "auth.json").read_text(encoding="utf-8"))
+    assert auth["openai"]["key"] == "placeholder"
+    assert auth["openai-codex"]["type"] == "oauth"
+    assert auth["openai-codex"]["access"] == "access-placeholder"
+    assert auth["openai-codex"]["refresh"] == "refresh-placeholder"
+    assert auth["openai-codex"]["accountId"] == "account-placeholder"
+    assert auth["openai-codex"]["expires"] > int(time.time() * 1000)
+
+
+@pytest.mark.skipif(
+    os.name == "nt", reason="The container entrypoint is a POSIX shell script"
+)
+def test_entrypoint_rejects_pi_openai_codex_openshell_references(tmp_path):
+    pi_agent_dir = tmp_path / "pi-agent"
+    pi_agent_dir.mkdir()
+    _executable_script(
+        tmp_path / "pi",
+        "#!/usr/bin/env bash\nprintf 'pi test\n'\n",
+    )
+    _executable_script(
+        tmp_path / "ai-guardian",
+        """#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" = "setup" && " $* " = *" --create-config "* ]]; then
+    mkdir -p "$AI_GUARDIAN_CONFIG_DIR"
+    printf '{}\n' > "$AI_GUARDIAN_CONFIG_DIR/ai-guardian.json"
+fi
+""",
+    )
+    env = {
+        "PATH": f"{tmp_path}:{os.environ.get('PATH', '/usr/bin:/bin')}",
+        "HOME": str(tmp_path / "home"),
+        "AI_GUARDIAN_AGENT": "pi",
+        "AI_GUARDIAN_AGENT_PROVIDER": "openai-codex",
+        "AI_GUARDIAN_OPEN_SHELL_PROVIDER": "true",
+        "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
+        "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
+        "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "CODEX_AUTH_ACCESS_TOKEN": "openshell:resolve:env:CODEX_AUTH_ACCESS_TOKEN",
+        "CODEX_AUTH_REFRESH_TOKEN": "openshell:resolve:env:CODEX_AUTH_REFRESH_TOKEN",
+        "CODEX_AUTH_ACCOUNT_ID": "openshell:resolve:env:CODEX_AUTH_ACCOUNT_ID",
+        "PI_CODING_AGENT_DIR": str(pi_agent_dir),
+    }
+
+    result = subprocess.run(
+        ["bash", str(ENTRYPOINT_SCRIPT), "pi", "--version"],
+        cwd=REPO_ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "cannot consume OpenShell resolver-backed Codex credentials" in result.stderr
 
 
 @pytest.mark.skipif(

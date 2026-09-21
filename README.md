@@ -177,8 +177,8 @@ OPENAI_API_KEY=... \
     ./run.sh --agent codex --repo $(pwd)
 
 # Preferred OpenShell sandbox (published image; local build is also supported)
-# OpenShell defaults to Claude; select Codex explicitly when needed.
-# Experimental: OpenShell integration is still evolving. Claude, Codex, and
+# OpenShell defaults to Claude; select Codex or Pi explicitly when needed.
+# Experimental: OpenShell integration is still evolving. Claude, Codex, Pi, and
 # OpenCode using Claude have been tested; verify current compatibility before
 # important work.
 openshell settings set --global --key providers_v2_enabled --value true
@@ -186,6 +186,11 @@ podman pull quay.io/redhatproductsecurity/ai-guardian-openshell:latest
 ai-guardian sandbox create --runtime openshell \
     --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
     --cli codex --repo $(pwd)
+
+# Or use Pi through the Anthropic-compatible OpenShell inference route.
+ai-guardian sandbox create --runtime openshell \
+    --image quay.io/redhatproductsecurity/ai-guardian-openshell:latest \
+    --cli pi --repo $(pwd)
 
 # Or build and select a local OpenShell image
 podman build -f container/Dockerfile.openshell \
@@ -286,7 +291,8 @@ directly instead of opening the shell.
 
 OpenShell integration is experimental. The documented workflows have been
 tested with Claude Code through Google Vertex AI, Codex through its OpenShell
-provider, and OpenCode using Claude through Vertex AI. Claude
+provider, Pi through its Anthropic-compatible OpenShell route, and OpenCode
+using Claude through Vertex AI. Claude
 marketplace/plugin installation has also been tested with the read-only GitHub
 overlay described below.
 
