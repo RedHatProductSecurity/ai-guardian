@@ -314,7 +314,7 @@ Pip-installed ai-guardian on users' systems stays protected even if malicious co
 
 - Linux CI, release-readiness, wheel, PyPI, container, smoke, and scheduled maintenance jobs use the pinned `ubuntu-24.04` runner.
 - `ubuntu-latest` is not used by repository Linux workflow jobs, so the Ubuntu image migration cannot change release artifacts or coverage behavior unexpectedly.
-- `ubuntu-26-compatibility.yml` runs the Python 3.9-3.14 test matrix plus scanner, CLI smoke, scenario-container, Docker Buildx, and QEMU checks on `ubuntu-26.04`.
+- `ubuntu-26-compatibility.yml` keeps Python 3.9 on the pinned Ubuntu baseline and runs Python 3.10-3.14 plus scanner, CLI smoke, scenario-container, Docker Buildx, and QEMU checks on `ubuntu-26.04`; this reflects the current setup-python version manifest.
 - Release readiness calls the Ubuntu 26.04 workflow as an explicit migration gate; it is separate from the pinned release and publishing jobs.
 - `windows-latest` and `macos-latest` remain only in their platform-specific compatibility matrices.
 

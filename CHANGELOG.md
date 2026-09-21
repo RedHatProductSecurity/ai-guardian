@@ -22,9 +22,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Ubuntu 26.04 runner migration (#2341)**: Pin Linux CI, release-readiness,
   wheel, PyPI, container, smoke, and maintenance workflows to `ubuntu-24.04`;
-  add an explicit `ubuntu-26.04` compatibility gate covering Python 3.9-3.14,
-  scanner installation, smoke tests, scenario containers, Docker Buildx, and
-  QEMU.
+  add an explicit compatibility gate covering Python 3.9-3.14, scanner
+  installation, smoke tests, scenario containers, Docker Buildx, and QEMU.
+  Python 3.9 stays on the pinned baseline because setup-python does not
+  currently publish it for `ubuntu-26.04`; Python 3.10-3.14 run on the target.
 
 - **Container image release verification (#2342)**: Retry versioned normal and
   OpenShell manifest checks with bounded command timeouts and retry delays,

@@ -46,7 +46,11 @@ def test_ubuntu_26_compatibility_workflow_covers_release_risks():
     )
 
     assert "runs-on: ubuntu-26.04" in workflow
-    assert "'3.9', '3.10', '3.11', '3.12', '3.13', '3.14'" in workflow
+    assert "runs-on: ${{ matrix.os }}" in workflow
+    assert "os: ubuntu-24.04" in workflow
+    assert "python-version: '3.9'" in workflow
+    for version in ("3.10", "3.11", "3.12", "3.13", "3.14"):
+        assert f"os: ubuntu-26.04\n            python-version: '{version}'" in workflow
     assert "ai-guardian scanner install gitleaks --use-pinned" in workflow
     assert "ai-guardian scanner install betterleaks --use-pinned" in workflow
     assert "ai-guardian scanner install leaktk --use-pinned" in workflow
