@@ -1808,6 +1808,10 @@ def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path)
     with (
         patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=True),
         patch(
+            "ai_guardian.sandbox.Path.home",
+            side_effect=RuntimeError("Could not determine home directory."),
+        ),
+        patch(
             "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
         ),
         patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),

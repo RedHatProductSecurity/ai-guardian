@@ -1098,6 +1098,16 @@ def _openshell_host_home() -> Path:
     return Path(configured).expanduser() if configured else Path.home()
 
 
+def _openshell_environment_path(
+    environment: Dict[str, str], variable: str, *home_parts: str
+) -> Path:
+    """Resolve an environment path without probing the home directory unnecessarily."""
+    configured = environment.get(variable)
+    if configured:
+        return Path(configured).expanduser()
+    return _openshell_host_home().joinpath(*home_parts)
+
+
 def _openshell_environment_values(args) -> Dict[str, str]:
     """Parse explicit KEY=VALUE values for provider discovery as well."""
     values = {}
@@ -1114,10 +1124,8 @@ def _openshell_provider_environment(args, cli: str) -> Dict[str, str]:
     environment.update(_openshell_environment_values(args))
 
     if cli in {"openai", "openai-codex"}:
-        pi_agent_dir = Path(
-            environment.get(
-                "PI_CODING_AGENT_DIR", _openshell_host_home() / ".pi" / "agent"
-            )
+        pi_agent_dir = _openshell_environment_path(
+            environment, "PI_CODING_AGENT_DIR", ".pi", "agent"
         )
         try:
             auth = json.loads((pi_agent_dir / "auth.json").read_text(encoding="utf-8"))
@@ -1147,9 +1155,7 @@ def _openshell_provider_environment(args, cli: str) -> Dict[str, str]:
         environment["ANTHROPIC_API_KEY"] = api_key
 
     if cli == "codex":
-        codex_home = Path(
-            environment.get("CODEX_HOME", _openshell_host_home() / ".codex")
-        )
+        codex_home = _openshell_environment_path(environment, "CODEX_HOME", ".codex")
         auth_path = codex_home / "auth.json"
         try:
             auth = json.loads(auth_path.read_text(encoding="utf-8"))
@@ -1307,9 +1313,7 @@ def _ensure_openshell_cli_provider(
         return provider_name
 
     if cli == "codex" and not os.environ.get("OPENAI_API_KEY"):
-        codex_home = Path(
-            os.environ.get("CODEX_HOME", _openshell_host_home() / ".codex")
-        )
+        codex_home = _openshell_environment_path(os.environ, "CODEX_HOME", ".codex")
         auth_path = codex_home / "auth.json"
         try:
             auth = json.loads(auth_path.read_text(encoding="utf-8"))
@@ -1436,15 +1440,13 @@ def _ensure_openshell_vertex_provider(
         return provider_name
 
     provider_environment = _openshell_provider_environment(args, "claude")
-    adc_path = Path(
-        provider_environment.get(
-            "GOOGLE_APPLICATION_CREDENTIALS",
-            _openshell_host_home()
-            / ".config"
-            / "gcloud"
-            / "application_default_credentials.json",
-        )
-    ).expanduser()
+    adc_path = _openshell_environment_path(
+        provider_environment,
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        ".config",
+        "gcloud",
+        "application_default_credentials.json",
+    )
     vertex_token_present = any(
         provider_environment.get(name)
         for name in (
@@ -1530,9 +1532,7 @@ def _openshell_cli_has_credentials(args, cli: str) -> bool:
     environment = dict(os.environ)
     environment.update(_openshell_environment_values(args))
     if cli == "codex":
-        codex_home = Path(
-            environment.get("CODEX_HOME", _openshell_host_home() / ".codex")
-        )
+        codex_home = _openshell_environment_path(environment, "CODEX_HOME", ".codex")
         return (codex_home / "auth.json").is_file() or bool(
             environment.get("OPENAI_API_KEY")
         )
