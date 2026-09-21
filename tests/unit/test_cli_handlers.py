@@ -51,6 +51,26 @@ class TestSetDaemonModeInConfig:
         _set_daemon_mode_in_config("daemon")
 
 
+class TestDaemonStartCommand:
+    def test_daemon_start_refreshes_typescript_integrations(self):
+        args = mock.MagicMock()
+        args.daemon_command = "start"
+        args.background = False
+        args.idle_timeout = None
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.auto_setup.auto_upgrade_typescript_integrations"
+            ) as upgrade,
+            mock.patch("ai_guardian.daemon.server.DaemonServer") as daemon_server,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        upgrade.assert_called_once_with()
+        daemon_server.return_value.start.assert_called_once_with()
+
+
 class TestDaemonReloadCommand:
     def test_reload_when_running(self, capsys):
         args = mock.MagicMock()

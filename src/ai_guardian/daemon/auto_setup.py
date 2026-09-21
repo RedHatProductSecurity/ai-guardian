@@ -116,6 +116,28 @@ def notify_ide_setup_needed(runtime="local"):
         logger.warning("Unable to notify about IDE setup: %s", exc)
 
 
+def auto_upgrade_typescript_integrations():
+    """Refresh previously installed TypeScript integrations at daemon startup."""
+    try:
+        from ai_guardian.setup.hooks import IDESetup
+
+        results = IDESetup().upgrade_typescript_integrations()
+        for result in results:
+            ide_type = result.get("ide", "unknown")
+            if result.get("success"):
+                logger.info("Updated TypeScript integration for %s", ide_type)
+            else:
+                logger.warning(
+                    "Unable to update TypeScript integration for %s: %s",
+                    ide_type,
+                    result.get("message", "unknown error"),
+                )
+        return results
+    except Exception as exc:
+        logger.warning("Unable to update TypeScript integrations: %s", exc)
+        return []
+
+
 def auto_setup_tray():
     """Auto-install tray shortcut, autostart, and start tray on first run.
 

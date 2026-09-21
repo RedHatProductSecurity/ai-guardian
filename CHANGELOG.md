@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Automatic TypeScript integration upgrades**: On daemon startup, regenerate
+  previously configured OpenCode, AiderDesk, OpenClaw, and Pi TypeScript
+  integrations when their generated version marker is stale or an expected
+  generated artifact is missing. Unconfigured IDE directories are left alone.
+
+- **Shared TypeScript agent bridge (#2344)**: Refactor OpenCode, AiderDesk,
+  and OpenClaw integrations to use one generated process/response bridge for
+  executable invocation, timeout and environment handling, block decisions, and
+  redacted output parsing while preserving host-specific callback contracts.
+
 - **OpenShell selector scope**: Limit the default OpenShell CLI selector to the
   clients bundled and validated in the image (`claude`, `copilot`, `codex`,
   `opencode`, and `pi`). Pi's OpenShell form now advertises only its tested

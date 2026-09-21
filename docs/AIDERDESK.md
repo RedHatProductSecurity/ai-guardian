@@ -6,15 +6,16 @@ AI Guardian integrates with [AiderDesk](https://github.com/hotovo/aider-desk) vi
 
 ## How It Works
 
-Unlike other IDEs that use shell-based hooks or JSON config files, AiderDesk uses TypeScript/JavaScript extensions. AI Guardian ships a thin TypeScript extension that:
+Unlike other IDEs that use shell-based hooks or JSON config files, AiderDesk uses TypeScript/JavaScript extensions. AI Guardian ships a thin host extension plus a shared TypeScript process bridge that:
 
 1. Hooks into AiderDesk events (tool calls, prompts, file access, commits)
-2. Spawns `ai-guardian` CLI as a child process with event data on stdin
-3. Translates the response (exit code + stderr) into AiderDesk's expected format
+2. Delegates process execution, timeout handling, environment propagation, and response parsing to `ai-guardian-bridge.ts`
+3. Spawns `ai-guardian` as a child process with event data on stdin and translates the bridge result into AiderDesk's expected format
 
-The extension reuses the same exit-code protocol as Kiro hooks:
+The bridge reuses the same exit-code protocol as Kiro hooks:
 - **Exit 0** = allow (stdout content sent as context)
-- **Exit 1** = block (stderr content shown as error)
+- **Exit 1 or 2** = block (stderr content shown as error)
+- Other process failures and timeouts fail open, matching the existing extension behavior
 
 ## Prerequisites
 
@@ -72,6 +73,7 @@ After installation, the extension directory contains:
 ```
 ~/.aider-desk/extensions/ai-guardian/
   index.ts          # Extension source (TypeScript)
+  ai-guardian-bridge.ts  # Shared process and response bridge
   package.json      # Dependencies (@aiderdesk/extensions)
   node_modules/     # Created by npm install
 ```

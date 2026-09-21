@@ -100,6 +100,14 @@ class TestSelfAllowlist:
         result = scanner.scan(path, content)
         assert result == (False, None, None)
 
+    def test_ai_guardian_bridge_ts_skipped(self):
+        scanner = SupplyChainScanner()
+        home = os.path.expanduser("~")
+        path = f"{home}/.config/opencode/plugins/ai-guardian-bridge.ts"
+        content = "import { execFileSync } from 'child_process';"
+        result = scanner.scan(path, content)
+        assert result == (False, None, None)
+
 
 class TestUserAllowlist:
     def test_allowlisted_path_skipped(self):

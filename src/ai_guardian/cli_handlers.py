@@ -291,6 +291,12 @@ def _handle_daemon_command(args):
                 print("Failed to start daemon in background", file=sys.stderr)
                 return 1
         else:
+            from ai_guardian.daemon.auto_setup import (
+                auto_upgrade_typescript_integrations,
+            )
+
+            auto_upgrade_typescript_integrations()
+
             from ai_guardian.daemon.server import DaemonServer
 
             idle_timeout = (

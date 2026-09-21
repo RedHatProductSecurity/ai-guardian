@@ -163,6 +163,7 @@ class TestAiderDeskSetupFlow:
                 content = index_path.read_text()
                 assert "ai-guardian" in content
                 assert "AiGuardianExtension" in content
+                assert (Path(ext_dir) / "ai-guardian-bridge.ts").exists()
 
     def test_setup_creates_package_json(self):
         """setup_ide_hooks creates package.json."""
@@ -266,6 +267,7 @@ class TestAiderDeskHooksConfigured:
             ext_dir.mkdir()
             index_path = ext_dir / "index.ts"
             index_path.write_text("// ai-guardian extension code")
+            (ext_dir / "ai-guardian-bridge.ts").write_text("// shared bridge")
             from ai_guardian.setup import IDESetup
 
             setup = IDESetup()
@@ -374,18 +376,20 @@ class TestAiderDeskExtensionContent:
 
         assert "onBeforeCommit" in _AIDERDESK_EXTENSION_TS
 
-    def test_extension_sets_ide_type_env_var(self):
-        """Extension sets AI_GUARDIAN_IDE_TYPE=aiderdesk."""
+    def test_extension_uses_shared_bridge(self):
+        """Extension delegates process and response handling to the shared bridge."""
         from ai_guardian.setup import _AIDERDESK_EXTENSION_TS
 
-        assert "AI_GUARDIAN_IDE_TYPE" in _AIDERDESK_EXTENSION_TS
+        assert "./ai-guardian-bridge" in _AIDERDESK_EXTENSION_TS
+        assert "createGuardianBridge" in _AIDERDESK_EXTENSION_TS
         assert "aiderdesk" in _AIDERDESK_EXTENSION_TS
 
-    def test_extension_uses_execsync(self):
-        """Extension calls ai-guardian via execSync."""
+    def test_extension_does_not_spawn_process_directly(self):
+        """The extension does not duplicate the process bridge."""
         from ai_guardian.setup import _AIDERDESK_EXTENSION_TS
 
-        assert "execSync" in _AIDERDESK_EXTENSION_TS
+        assert "execSync" not in _AIDERDESK_EXTENSION_TS
+        assert "execFileSync" not in _AIDERDESK_EXTENSION_TS
 
     def test_package_json_has_dependency(self):
         """Package JSON includes @aiderdesk/extensions dependency."""

@@ -60,6 +60,23 @@ def _tag_antigravity_events(template_hooks: Dict) -> Dict:
 
 
 ANTIGRAVITY_HOOK_NAME = "ai-guardian"
+_TYPESCRIPT_VERSION_TOKEN = "__AI_GUARDIAN_VERSION__"
+_TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
+
+
+def _render_typescript_source(source: str) -> str:
+    """Stamp a generated TypeScript artifact with the installed package version."""
+    from ai_guardian import __version__
+
+    return source.replace(_TYPESCRIPT_VERSION_TOKEN, __version__)
+
+
+def _typescript_source_version(source: str) -> Optional[str]:
+    """Read the generated package version from a TypeScript artifact."""
+    for line in source.splitlines()[:5]:
+        if line.startswith(_TYPESCRIPT_VERSION_MARKER):
+            return line.split(":", 1)[1].strip()
+    return None
 
 
 class IDESetup:
@@ -370,6 +387,7 @@ class IDESetup:
             "config_dir_env_var": "AIDER_DESK_DIR",
             "config_filename": None,
             "extension_based": True,
+            "bridge_file": "ai-guardian-bridge.ts",
         },
         "openclaw": {
             "name": "OpenClaw",
@@ -377,6 +395,7 @@ class IDESetup:
             "config_dir_env_var": "OPENCLAW_STATE_DIR",
             "config_filename": None,
             "extension_based": True,
+            "bridge_file": "ai-guardian-bridge.ts",
         },
         "opencode": {
             "name": "OpenCode",
@@ -385,6 +404,7 @@ class IDESetup:
             "config_dir_env_var": "OPENCODE_CONFIG_DIR",
             "config_filename": None,
             "plugin_file": True,
+            "bridge_file": "ai-guardian-bridge.ts",
         },
         "pi": {
             "name": "Pi",
@@ -960,15 +980,21 @@ class IDESetup:
         ).expanduser()
         if config.get("plugin_file"):
             plugin_file = path / "ai-guardian.ts"
+            bridge_file = path / config.get("bridge_file", "ai-guardian-bridge.ts")
             try:
                 content = plugin_file.read_text(encoding="utf-8")
             except OSError:
                 content = ""
-            if not self.check_hooks_configured(path, ide_type):
+            if not bridge_file.is_file() or not self.check_hooks_configured(
+                path, ide_type
+            ):
                 status = "missing"
             elif not (
                 f"--ide {ide_type}" in content
                 or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
+                or f"AI_GUARDIAN_IDE_TYPE: '{ide_type}'" in content
+                or f"ideType: '{ide_type}'" in content
+                or f'ideType: "{ide_type}"' in content
             ):
                 status = "changed"
             else:
@@ -987,6 +1013,9 @@ class IDESetup:
             elif not (
                 f"--ide {ide_type}" in content
                 or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
+                or f"AI_GUARDIAN_IDE_TYPE: '{ide_type}'" in content
+                or f"ideType: '{ide_type}'" in content
+                or f'ideType: "{ide_type}"' in content
             ):
                 status = "changed"
             else:
@@ -996,13 +1025,20 @@ class IDESetup:
             return result
         if config.get("extension_based"):
             ext_file = path / "index.ts"
+            bridge_file = path / config.get("bridge_file", "ai-guardian-bridge.ts")
             try:
                 content = ext_file.read_text(encoding="utf-8")
             except OSError:
                 content = ""
-            if "ai-guardian" not in content:
+            if not bridge_file.is_file() or "ai-guardian" not in content:
                 status = "missing"
-            elif f"--ide {ide_type}" not in content:
+            elif not (
+                f"--ide {ide_type}" in content
+                or f'AI_GUARDIAN_IDE_TYPE: "{ide_type}"' in content
+                or f"AI_GUARDIAN_IDE_TYPE: '{ide_type}'" in content
+                or f"ideType: '{ide_type}'" in content
+                or f'ideType: "{ide_type}"' in content
+            ):
                 status = "changed"
             else:
                 status = "healthy"
@@ -1282,6 +1318,84 @@ class IDESetup:
             name = self.IDE_CONFIGS.get(ide_type, {}).get("name", ide_type)
             return True, f"{name}: hooks already current"
         return self.setup_ide_hooks(ide_type, dry_run=dry_run, force=True)
+
+    def _typescript_artifact_paths(
+        self, ide_type: str, config_path: Path
+    ) -> List[Path]:
+        """Return generated TypeScript files owned by an IDE integration."""
+        config = self.IDE_CONFIGS.get(ide_type, {})
+        if config.get("plugin_file"):
+            paths = [config_path / "ai-guardian.ts"]
+        elif config.get("extension_file"):
+            paths = [config_path / config["extension_file"]]
+        elif config.get("extension_based"):
+            paths = [config_path / "index.ts"]
+        else:
+            return []
+
+        bridge_file = config.get("bridge_file")
+        if bridge_file:
+            paths.append(config_path / bridge_file)
+        return paths
+
+    def _typescript_integration_needs_upgrade(self, ide_type: str) -> bool:
+        """Return whether an existing TypeScript integration needs regeneration."""
+        config = self.IDE_CONFIGS.get(ide_type, {})
+        if not (
+            config.get("plugin_file")
+            or config.get("extension_file")
+            or config.get("extension_based")
+        ):
+            return False
+
+        raw_path = self.get_config_path(ide_type)
+        if not raw_path:
+            return False
+        config_path = Path(raw_path).expanduser()
+
+        # Only repair an integration that the user previously installed. This
+        # must not turn daemon startup into first-run setup for every detected IDE.
+        if not self.check_hooks_configured(config_path, ide_type):
+            return False
+
+        from ai_guardian import __version__
+
+        for artifact_path in self._typescript_artifact_paths(ide_type, config_path):
+            try:
+                content = artifact_path.read_text(encoding="utf-8")
+            except OSError:
+                return True
+            if _typescript_source_version(content) != __version__:
+                return True
+        return False
+
+    def upgrade_typescript_integrations(self) -> List[Dict[str, Any]]:
+        """Regenerate installed TypeScript integrations after a package upgrade.
+
+        Only integrations with an existing AI Guardian artifact are considered;
+        ordinary IDE installation directories are never populated implicitly.
+        """
+        results = []
+        for ide_type in self.IDE_CONFIGS:
+            try:
+                if not self._typescript_integration_needs_upgrade(ide_type):
+                    continue
+                success, message = self.setup_ide_hooks(ide_type, force=True)
+                result = {
+                    "ide": ide_type,
+                    "success": bool(success),
+                    "message": message,
+                }
+                results.append(result)
+            except Exception as exc:
+                results.append(
+                    {
+                        "ide": ide_type,
+                        "success": False,
+                        "message": str(exc),
+                    }
+                )
+        return results
 
     @classmethod
     def _remove_owned_commands(cls, value: Any) -> Any:
@@ -2099,6 +2213,15 @@ class IDESetup:
 
         return None
 
+    @staticmethod
+    def _render_guardian_bridge(binary_path: str) -> str:
+        """Render the shared TypeScript bridge with the resolved executable."""
+        source = _AI_GUARDIAN_BRIDGE_TS.replace(
+            'const GUARDIAN_BINARY = "ai-guardian";',
+            f"const GUARDIAN_BINARY = {json.dumps(binary_path)};",
+        )
+        return _render_typescript_source(source)
+
     def _setup_plugin_file(
         self,
         ide_type: str,
@@ -2108,15 +2231,19 @@ class IDESetup:
     ) -> Tuple[bool, str]:
         """Setup plugin-file based hooks (OpenCode).
 
-        Drops a single .ts file into the IDE's plugins directory and
-        registers it in opencode.json so OpenCode loads it.
+        Drops the host plugin and shared bridge into the IDE's plugins
+        directory and registers the host plugin in opencode.json.
         """
         ide_name = ide_config["name"]
         plugin_file = plugins_dir / "ai-guardian.ts"
+        bridge_file = plugins_dir / ide_config.get(
+            "bridge_file", "ai-guardian-bridge.ts"
+        )
 
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} plugin:\n"
             message += f"  Create: {plugin_file}\n"
+            message += f"  Create: {bridge_file}\n"
             reg_msg = self._register_opencode_plugin(
                 plugin_file, plugins_dir, dry_run=True
             )
@@ -2127,17 +2254,17 @@ class IDESetup:
         plugins_dir.mkdir(parents=True, exist_ok=True)
 
         abs_path = _resolve_binary_path()
-        cmd = f"{abs_path} --ide {ide_type}"
         plugin_file.write_text(
-            _OPENCODE_PLUGIN_TS.replace("execSync('ai-guardian'", f"execSync('{cmd}'"),
-            encoding="utf-8",
+            _render_typescript_source(_OPENCODE_PLUGIN_TS), encoding="utf-8"
         )
+        bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
         self._register_opencode_plugin(plugin_file, plugins_dir)
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
         message = f"✓ Successfully configured {ide_name} plugin at {plugin_file}\n"
+        message += f"  Created shared bridge: {bridge_file}\n"
         message += f"\n  {gitleaks_message}\n"
 
         if not gitleaks_installed:
@@ -2165,7 +2292,8 @@ class IDESetup:
         """
         Setup extension-based hooks (AiderDesk, OpenClaw).
 
-        Creates a TypeScript extension/plugin that delegates to ai-guardian CLI.
+        Creates a TypeScript extension/plugin and shared bridge that delegate
+        to the ai-guardian CLI.
 
         Args:
             ide_type: IDE type ('aiderdesk', 'openclaw')
@@ -2179,38 +2307,31 @@ class IDESetup:
         ide_name = ide_config["name"]
         index_path = ext_dir / "index.ts"
         package_path = ext_dir / "package.json"
+        bridge_path = ext_dir / ide_config.get("bridge_file", "ai-guardian-bridge.ts")
 
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} extension at {ext_dir}:\n"
             message += f"  Create: {index_path}\n"
             message += f"  Create: {package_path}\n"
+            message += f"  Create: {bridge_path}\n"
             return True, message
 
         ext_dir.mkdir(parents=True, exist_ok=True)
 
         abs_path = _resolve_binary_path()
-        cmd = f"{abs_path} --ide {ide_type}"
         if ide_type == "openclaw":
             package_path.write_text(_OPENCLAW_PACKAGE_JSON, encoding="utf-8")
-            index_path.write_text(
-                _OPENCLAW_PLUGIN_TS.replace(
-                    "execSync('ai-guardian'", f"execSync('{cmd}'"
-                ),
-                encoding="utf-8",
-            )
+            index_source = _OPENCLAW_PLUGIN_TS
         else:
             package_path.write_text(_AIDERDESK_PACKAGE_JSON, encoding="utf-8")
-            index_path.write_text(
-                _AIDERDESK_EXTENSION_TS.replace(
-                    "execSync('ai-guardian'", f"execSync('{cmd}'"
-                ),
-                encoding="utf-8",
-            )
+            index_source = _AIDERDESK_EXTENSION_TS
+        index_path.write_text(_render_typescript_source(index_source), encoding="utf-8")
+        bridge_path.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
         message = f"✓ Successfully configured {ide_name} extension at {ext_dir}\n"
-        message += "  Created: index.ts, package.json\n"
+        message += "  Created: index.ts, package.json, ai-guardian-bridge.ts\n"
         message += f"\n  {gitleaks_message}\n"
 
         if not gitleaks_installed:
@@ -2252,7 +2373,7 @@ class IDESetup:
 
         ext_dir.mkdir(parents=True, exist_ok=True)
         binary_path = json.dumps(_resolve_binary_path())
-        content = _PI_EXTENSION_TS.replace(
+        content = _render_typescript_source(_PI_EXTENSION_TS).replace(
             'const GUARDIAN_BINARY = "ai-guardian";',
             f"const GUARDIAN_BINARY = {binary_path};",
         )
@@ -3187,9 +3308,150 @@ _AIDERDESK_PACKAGE_JSON = """\
 }
 """
 
+
+_AI_GUARDIAN_BRIDGE_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
+import { execFileSync } from 'child_process';
+
+export interface GuardianResult {
+  blocked: boolean;
+  error?: string;
+  output?: string;
+  updatedOutput?: unknown;
+}
+
+interface GuardianBridgeOptions {
+  ideType: string;
+  binary?: string;
+  timeoutMs?: number;
+}
+
+interface ProcessFailure {
+  status?: number;
+  stdout?: unknown;
+  stderr?: unknown;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+const GUARDIAN_BINARY = "ai-guardian";
+const DEFAULT_TIMEOUT_MS = 30000;
+
+function asRecord(value: unknown): JsonRecord | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return value as JsonRecord;
+}
+
+function textValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === undefined || value === null) return '';
+  return String(value);
+}
+
+function firstDefined(...values: unknown[]): unknown {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function parseRecord(value: string): JsonRecord | undefined {
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+export function parseGuardianOutput(raw: string): GuardianResult | undefined {
+  const output = raw.trim();
+  if (!output) return undefined;
+
+  const outer = parseRecord(output);
+  if (!outer) return undefined;
+  const inner = typeof outer.output === 'string'
+    ? parseRecord(outer.output) || outer
+    : outer;
+  const hookOutput = asRecord(inner.hookSpecificOutput)
+    || asRecord(outer.hookSpecificOutput)
+    || {};
+  const nestedDecision = asRecord(hookOutput.decision);
+  const updatedOutput = firstDefined(
+    hookOutput.updatedToolOutput,
+    hookOutput.updatedMCPToolOutput,
+    hookOutput.updated_mcp_tool_output,
+    inner.updatedToolOutput,
+    inner.updatedMCPToolOutput,
+    inner.updated_mcp_tool_output,
+    outer.updatedToolOutput,
+    outer.updatedMCPToolOutput,
+    outer.updated_mcp_tool_output,
+  );
+  const blocked = outer._blocked === true
+    || inner._blocked === true
+    || outer.decision === 'block'
+    || inner.decision === 'block'
+    || hookOutput.permissionDecision === 'deny'
+    || hookOutput.decision === 'deny'
+    || nestedDecision?.behavior === 'deny';
+  const error = textValue(firstDefined(
+    outer.systemMessage,
+    inner.systemMessage,
+    inner.reason,
+    outer.reason,
+    hookOutput.reason,
+    outer.error,
+    inner.error,
+  )).trim();
+  return {
+    blocked,
+    error: error || undefined,
+    output,
+    updatedOutput,
+  };
+}
+
+export function createGuardianBridge(options: GuardianBridgeOptions) {
+  const binary = options.binary || GUARDIAN_BINARY;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  return {
+    run(hookData: Record<string, unknown>): GuardianResult {
+      try {
+        const stdout = execFileSync(binary, ['--ide', options.ideType], {
+          input: JSON.stringify(hookData),
+          encoding: 'utf-8',
+          timeout: timeoutMs,
+          env: { ...process.env, AI_GUARDIAN_IDE_TYPE: options.ideType },
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
+        const output = textValue(stdout).trim();
+        return parseGuardianOutput(output) || {
+          blocked: false,
+          output: output || undefined,
+        };
+      } catch (error) {
+        const failure = error as ProcessFailure;
+        const output = textValue(failure.stdout).trim();
+        const parsed = parseGuardianOutput(output);
+        if (parsed) return parsed;
+        if (failure.status === 1 || failure.status === 2) {
+          return {
+            blocked: true,
+            error: textValue(failure.stderr).trim() || 'Blocked by ai-guardian',
+            output: output || undefined,
+          };
+        }
+        return { blocked: false, output: output || undefined };
+      }
+    },
+  };
+}
+"""
+
 _AIDERDESK_EXTENSION_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import type { Extension, ExtensionContext } from '@aiderdesk/extensions';
-import { execSync } from 'child_process';
+import { createGuardianBridge } from './ai-guardian-bridge';
+
+const guardian = createGuardianBridge({ ideType: 'aiderdesk' });
 
 export default class AiGuardianExtension implements Extension {
   static metadata = {
@@ -3199,36 +3461,13 @@ export default class AiGuardianExtension implements Extension {
     author: 'ai-guardian',
   };
 
-  private runGuardian(
-    hookData: Record<string, unknown>,
-  ): { blocked: boolean; error?: string; output?: string } {
-    try {
-      const input = JSON.stringify(hookData);
-      const result = execSync('ai-guardian', {
-        input,
-        encoding: 'utf-8',
-        timeout: 30000,
-        env: { ...process.env, AI_GUARDIAN_IDE_TYPE: 'aiderdesk' },
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      return { blocked: false, output: result?.trim() || undefined };
-    } catch (err: any) {
-      if (err.status === 1) {
-        const errorMsg =
-          err.stderr?.toString().trim() || 'Blocked by ai-guardian';
-        return { blocked: true, error: errorMsg };
-      }
-      return { blocked: false };
-    }
-  }
-
   async onToolApproval(event: any, context: ExtensionContext) {
     const hookData = {
       hook_event_name: 'pre_tool_use',
       tool_name: event.toolName,
       tool_input: event.input || {},
     };
-    const result = this.runGuardian(hookData);
+    const result = guardian.run(hookData);
     if (result.blocked) {
       context.log(`Blocked tool: ${event.toolName} - ${result.error}`, 'warn');
       return { blocked: true };
@@ -3241,7 +3480,7 @@ export default class AiGuardianExtension implements Extension {
       tool_name: event.toolName,
       tool_input: event.input || {},
     };
-    const result = this.runGuardian(hookData);
+    const result = guardian.run(hookData);
     if (result.blocked) {
       context.log(`Blocked tool: ${event.toolName} - ${result.error}`, 'warn');
       return { blocked: true, output: { error: result.error } };
@@ -3258,7 +3497,14 @@ export default class AiGuardianExtension implements Extension {
       tool_name: event.toolName,
       tool_response: { output },
     };
-    const result = this.runGuardian(hookData);
+    const result = guardian.run(hookData);
+    if (result.updatedOutput !== undefined) {
+      return {
+        output: typeof result.updatedOutput === 'string'
+          ? result.updatedOutput
+          : JSON.stringify(result.updatedOutput),
+      };
+    }
     if (result.output) {
       return { output: result.output };
     }
@@ -3269,7 +3515,7 @@ export default class AiGuardianExtension implements Extension {
       hook_event_name: 'prompt_submit',
       prompt: event.prompt || '',
     };
-    const result = this.runGuardian(hookData);
+    const result = guardian.run(hookData);
     if (result.blocked) {
       context.log(`Blocked prompt - ${result.error}`, 'warn');
       return { blocked: true };
@@ -3284,7 +3530,7 @@ export default class AiGuardianExtension implements Extension {
         tool_name: 'Read',
         tool_input: { file_path: file.path || file },
       };
-      const result = this.runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         context.log(`Blocked file: ${file.path || file} - ${result.error}`, 'warn');
         return { files: [] };
@@ -3298,7 +3544,7 @@ export default class AiGuardianExtension implements Extension {
       tool_name: 'Bash',
       tool_input: { command: 'git commit -m ' + JSON.stringify(event.message || '') },
     };
-    const result = this.runGuardian(hookData);
+    const result = guardian.run(hookData);
     if (result.blocked) {
       context.log(`Blocked commit - ${result.error}`, 'warn');
       return { blocked: true };
@@ -3310,6 +3556,7 @@ export default class AiGuardianExtension implements Extension {
 
 # Pi extension file contents.
 _PI_EXTENSION_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
 
@@ -3611,54 +3858,11 @@ export default function (pi: ExtensionAPI) {
 
 # OpenCode plugin file contents (Issue #640)
 _OPENCODE_PLUGIN_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import type { Plugin } from '@opencode-ai/plugin';
-import { execSync } from 'child_process';
+import { createGuardianBridge } from './ai-guardian-bridge';
 
-interface GuardianResult {
-  blocked: boolean;
-  error?: string;
-  output?: string;
-}
-
-function runGuardian(hookData: Record<string, unknown>): GuardianResult {
-  try {
-    const input = JSON.stringify(hookData);
-    const result = execSync('ai-guardian', {
-      input,
-      encoding: 'utf-8',
-      timeout: 30000,
-      env: { ...process.env, AI_GUARDIAN_IDE_TYPE: 'opencode' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const stdout = result?.trim() || '';
-    if (stdout) {
-      try {
-        const parsed = JSON.parse(stdout);
-        if (parsed._blocked) {
-          const msg = parsed.systemMessage
-            || JSON.parse(parsed.output || '{}').systemMessage
-            || 'Blocked by ai-guardian';
-          return { blocked: true, error: msg, output: stdout };
-        }
-        const inner = parsed.output ? JSON.parse(parsed.output) : parsed;
-        if (inner.decision === 'block') {
-          return { blocked: true, error: inner.reason || 'Blocked by ai-guardian', output: stdout };
-        }
-        if (inner.hookSpecificOutput?.permissionDecision === 'deny') {
-          return { blocked: true, error: inner.systemMessage || 'Blocked by ai-guardian', output: stdout };
-        }
-      } catch {}
-    }
-    return { blocked: false, output: stdout || undefined };
-  } catch (err: any) {
-    if (err.status === 1) {
-      const errorMsg =
-        err.stderr?.toString().trim() || 'Blocked by ai-guardian';
-      return { blocked: true, error: errorMsg };
-    }
-    return { blocked: false };
-  }
-}
+const guardian = createGuardianBridge({ ideType: 'opencode' });
 
 export const AiGuardian: Plugin = async (ctx) => {
   const cwd = ctx.directory || process.cwd();
@@ -3676,7 +3880,7 @@ export const AiGuardian: Plugin = async (ctx) => {
         tool_use_id: input.callID,
         cwd,
       };
-      const result = runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         throw new Error(result.error || 'Blocked by ai-guardian');
       }
@@ -3696,7 +3900,7 @@ export const AiGuardian: Plugin = async (ctx) => {
         session_id: input.sessionID,
         cwd,
       };
-      const result = runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         const firstPart = output.parts[0] || {};
         output.parts.length = 0;
@@ -3722,23 +3926,17 @@ export const AiGuardian: Plugin = async (ctx) => {
         tool_use_id: input.callID,
         cwd,
       };
-      const result = runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         throw new Error(result.error || 'Blocked by ai-guardian');
       }
-      if (result.output) {
-        try {
-          const parsed = JSON.parse(result.output);
-          const hookOutput = JSON.parse(parsed.output || '{}').hookSpecificOutput;
-          if (hookOutput?.updatedToolOutput) {
-            output.output = hookOutput.updatedToolOutput;
-          }
-        } catch {}
+      if (result.updatedOutput !== undefined) {
+        output.output = result.updatedOutput;
       }
     },
 
     async 'session.end'() {
-      runGuardian({ hook_event_name: 'session.end', opencode_version: '1.0.0', hook_source: 'opencode', cwd });
+      guardian.run({ hook_event_name: 'session.end', opencode_version: '1.0.0', hook_source: 'opencode', cwd });
     },
   };
 };
@@ -3760,31 +3958,11 @@ _OPENCLAW_PACKAGE_JSON = """\
 """
 
 _OPENCLAW_PLUGIN_TS = """\
+// ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import { definePluginEntry } from 'openclaw/plugin-sdk/plugin-entry';
-import { execSync } from 'child_process';
+import { createGuardianBridge } from './ai-guardian-bridge';
 
-function runGuardian(
-  hookData: Record<string, unknown>,
-): { blocked: boolean; error?: string; output?: string } {
-  try {
-    const input = JSON.stringify(hookData);
-    const result = execSync('ai-guardian', {
-      input,
-      encoding: 'utf-8',
-      timeout: 30000,
-      env: { ...process.env, AI_GUARDIAN_IDE_TYPE: 'openclaw' },
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    return { blocked: false, output: result?.trim() || undefined };
-  } catch (err: any) {
-    if (err.status === 1) {
-      const errorMsg =
-        err.stderr?.toString().trim() || 'Blocked by ai-guardian';
-      return { blocked: true, error: errorMsg };
-    }
-    return { blocked: false };
-  }
-}
+const guardian = createGuardianBridge({ ideType: 'openclaw' });
 
 export default definePluginEntry({
   id: 'ai-guardian',
@@ -3796,7 +3974,7 @@ export default definePluginEntry({
         tool_name: event.toolName,
         tool_input: event.params || {},
       };
-      const result = runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         return { block: true, blockReason: result.error };
       }
@@ -3812,7 +3990,7 @@ export default definePluginEntry({
         tool_name: event.toolName,
         tool_response: { output },
       };
-      runGuardian(hookData);
+      guardian.run(hookData);
     });
 
     api.on('message_received', async (event) => {
@@ -3820,18 +3998,18 @@ export default definePluginEntry({
         hook_event_name: 'prompt_submit',
         prompt: event.content || '',
       };
-      const result = runGuardian(hookData);
+      const result = guardian.run(hookData);
       if (result.blocked) {
         return { cancel: true, cancelReason: result.error };
       }
     });
 
     api.on('session_start', async () => {
-      runGuardian({ hook_event_name: 'prompt_submit', prompt: '' });
+      guardian.run({ hook_event_name: 'prompt_submit', prompt: '' });
     });
 
     api.on('session_end', async () => {
-      runGuardian({ hook_event_name: 'session.end', hook_source: 'openclaw' });
+      guardian.run({ hook_event_name: 'session.end', hook_source: 'openclaw' });
     });
   },
 });
