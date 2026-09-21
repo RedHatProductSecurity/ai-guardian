@@ -9,7 +9,7 @@ on:
 jobs:
   parser-compat-check:
     name: Verify Parser Compatibility
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -39,7 +39,7 @@ jobs:
 
   format-version-check:
     name: Check Pattern Format Versions
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       issues: write
 

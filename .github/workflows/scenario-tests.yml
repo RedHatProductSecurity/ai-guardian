@@ -34,7 +34,7 @@ on:
 jobs:
   scenario-tests:
     name: Scenario Tests (${{ matrix.profile }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         profile: [standard, strict, minimal]

@@ -1,0 +1,141 @@
+name: Ubuntu 26.04 Compatibility
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+      - 'release-*'
+    paths:
+      - '.github/workflows/ubuntu-26-compatibility.yml'
+      - '.github/workflows/release-readiness.yml'
+      - 'container/**'
+      - 'pyproject.toml'
+      - 'scripts/**'
+      - 'src/**'
+      - 'tests/**'
+
+jobs:
+  python:
+    name: Python ${{ matrix.python-version }}
+    runs-on: ubuntu-26.04
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12', '3.13', '3.14']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Display runner and Python versions
+        run: |
+          uname -a
+          python --version
+
+      - name: Install dependencies and scanners
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest pytest-asyncio pytest-cov pytest-mock pytest-timeout
+          ai-guardian scanner install gitleaks --use-pinned
+          ai-guardian scanner install betterleaks --use-pinned
+          ai-guardian scanner install leaktk --use-pinned
+
+      - name: Run the full test suite
+        env:
+          NO_COLOR: '1'
+          FORCE_COLOR: '0'
+          TERM: dumb
+        run: pytest tests/ -v --tb=short --timeout=30
+
+  smoke-and-containers:
+    name: Smoke, Scenario, Buildx, and QEMU
+    runs-on: ubuntu-26.04
+    needs: python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Install AI Guardian and build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . build
+          ai-guardian scanner install gitleaks --use-pinned
+          ai-guardian scanner install betterleaks --use-pinned
+          ai-guardian scanner install leaktk --use-pinned
+
+      - name: Run CLI smoke test
+        run: |
+          export XDG_CONFIG_HOME=$(mktemp -d)
+          ai-guardian setup --create-config
+          ai-guardian doctor --smoke-test
+
+      - name: Build scenario test images
+        run: |
+          python -m build --wheel
+          mkdir -p container/vendor
+          cp dist/*.whl container/vendor/
+          WHEEL=$(basename container/vendor/ai_guardian-*.whl)
+          echo "WHEEL=${WHEEL}" >> "$GITHUB_ENV"
+          docker build \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            -t ai-guardian-base \
+            container/
+          docker build \
+            -f container/Dockerfile.test \
+            --build-arg BASE_IMAGE=ai-guardian-base \
+            -t ai-guardian-test \
+            .
+
+      - name: Run scenario containers
+        run: |
+          for profile in standard strict minimal; do
+            docker run --rm \
+              -e AI_GUARDIAN_PROFILE="$profile" \
+              ai-guardian-test \
+              ai-guardian doctor --smoke-test
+            docker run --rm \
+              -e AI_GUARDIAN_PROFILE="$profile" \
+              ai-guardian-test \
+              /sandbox/run-scenarios.sh
+          done
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Bootstrap the multi-architecture builder
+        run: docker buildx inspect --bootstrap
+
+      - name: Build normal image for both architectures
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            --output type=oci,dest=/tmp/ai-guardian.tar \
+            container/
+
+      - name: Build OpenShell image for both architectures
+        run: |
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --file container/Dockerfile.openshell \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            --output type=oci,dest=/tmp/ai-guardian-openshell.tar \
+            container/

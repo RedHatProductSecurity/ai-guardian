@@ -9,7 +9,7 @@ on:
 jobs:
   fresh-install:
     name: Fresh Install (Python ${{ matrix.python-version }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -86,7 +86,7 @@ jobs:
 
   upgrade-from-previous:
     name: Upgrade from Previous Stable
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -205,7 +205,7 @@ jobs:
 
   multi-agent-setup:
     name: Multi-Agent IDE Setup
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -298,7 +298,7 @@ jobs:
 
   ide-hook-e2e:
     name: IDE Hook E2E (${{ matrix.ide }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     strategy:
       fail-fast: false
@@ -344,7 +344,7 @@ jobs:
 
   daemon-lifecycle:
     name: Daemon Lifecycle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -452,9 +452,14 @@ jobs:
     name: Scenario Tests
     uses: ./.github/workflows/scenario-tests.yml
 
+  ubuntu-26-compatibility:
+    name: Ubuntu 26.04 Compatibility
+    needs: fresh-install
+    uses: ./.github/workflows/ubuntu-26-compatibility.yml
+
   container-images:
     name: Container Images (Pi smoke test)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -511,7 +516,7 @@ jobs:
 
   config-validation:
     name: Config Validation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -667,7 +672,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
         python-version: ["3.12"]
 
     steps:
@@ -704,7 +709,7 @@ jobs:
 
   mcp-server:
     name: MCP Server
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code

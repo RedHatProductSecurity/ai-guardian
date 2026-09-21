@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Ubuntu 26.04 runner migration (#2341)**: Pin Linux CI, release-readiness,
+  wheel, PyPI, container, smoke, and maintenance workflows to `ubuntu-24.04`;
+  add an explicit `ubuntu-26.04` compatibility gate covering Python 3.9-3.14,
+  scanner installation, smoke tests, scenario containers, Docker Buildx, and
+  QEMU.
+
 - **Container image release verification (#2342)**: Retry versioned normal and
   OpenShell manifest checks with bounded command timeouts and retry delays,
   report delayed publication as success, and identify the Build Container Image
