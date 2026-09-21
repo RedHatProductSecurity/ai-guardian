@@ -20,6 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Fedora/OpenShell SELinux diagnostics (#2343)**: Document the host-policy
+  cause and security-preserving package-update remediation for
+  `nnp_transition`/`nosuid_transition` AVC denials during hardened OpenShell
+  gateway workflows. Add regression coverage to prevent guidance that disables
+  SELinux or container labeling.
+
 - **Ubuntu 26.04 runner migration (#2341)**: Pin Linux CI, release-readiness,
   wheel, PyPI, container, smoke, and maintenance workflows to `ubuntu-24.04`;
   add an explicit compatibility gate covering Python 3.9-3.14, scanner

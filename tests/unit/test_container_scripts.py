@@ -38,6 +38,7 @@ BUILD_CONTAINER_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "build-containe
 RELEASE_READINESS_WORKFLOW = (
     REPO_ROOT / ".github" / "workflows" / "release-readiness.yml"
 )
+TROUBLESHOOTING_DOC = REPO_ROOT / "docs" / "TROUBLESHOOTING.md"
 POLICY_COMPOSER = REPO_ROOT / "container" / "compose_openshell_policy.py"
 POLICY_BASE = REPO_ROOT / "container" / "policies" / "base.yaml"
 AGENT_POLICY_DIR = REPO_ROOT / "container" / "policies" / "agents"
@@ -254,6 +255,22 @@ class TestContainerLaunchers:
         assert "copilot --version" in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
         assert "ai-guardian.openshell-base=true" in dockerfile
+
+    def test_fedora_openshell_selinux_guidance_preserves_host_hardening(self):
+        troubleshooting = TROUBLESHOOTING_DOC.read_text(encoding="utf-8")
+
+        assert "### SELinux denies `nnp_transition` or `nosuid_transition`" in (
+            troubleshooting
+        )
+        assert "NoNewPrivileges=yes" in troubleshooting
+        assert "ProtectSystem=strict" in troubleshooting
+        assert "ps -Z -C openshell-gateway" in troubleshooting
+        assert "container_runtime_nnp_domtrans" in troubleshooting
+        assert "sudo dnf upgrade container-selinux" in troubleshooting
+        assert "systemctl --user restart openshell-gateway" in troubleshooting
+        assert "Do not disable SELinux enforcement" in troubleshooting
+        assert "generated `audit2allow` module" in troubleshooting
+        assert "setenforce 0" not in troubleshooting
 
     def test_opencode_policy_covers_openai_and_startup_metadata(self):
         policy = yaml.safe_load(OPENCODE_POLICY.read_text(encoding="utf-8"))
