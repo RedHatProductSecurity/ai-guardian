@@ -12,6 +12,7 @@ set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 HELPER="python3 ${REPO_ROOT}/.claude/skills/release/release_helper.py --repo ${REPO_ROOT}"
+CONTAINER_VERIFIER="${REPO_ROOT}/scripts/verify_container_images.py"
 
 # --- CLI parsing -----------------------------------------------------------
 
@@ -444,8 +445,7 @@ if $DRY_RUN; then
     echo "[dry-run] gh run watch (publish workflow)"
     echo "[dry-run] gh run watch (build-container workflow)"
     echo "[dry-run] pip install --dry-run ai-guardian==${NEW_VERSION}"
-    echo "[dry-run] docker manifest inspect ${NORMAL_CONTAINER_IMAGE}"
-    echo "[dry-run] docker manifest inspect ${OPENSHELL_CONTAINER_IMAGE}"
+    echo "[dry-run] python3 ${CONTAINER_VERIFIER} ${NORMAL_CONTAINER_IMAGE} ${OPENSHELL_CONTAINER_IMAGE}"
     echo "[dry-run] Verify https://ai-guardian.readthedocs.io/en/${TAG_NAME}/"
 else
     info "Waiting for publish workflow..."
@@ -469,17 +469,10 @@ else
         warn "PyPI verification failed — package may not be available yet (retry in a few minutes)"
     fi
 
-    info "Verifying container image..."
-    if docker manifest inspect "$NORMAL_CONTAINER_IMAGE" >/dev/null 2>&1; then
-        info "Container: ${NORMAL_CONTAINER_IMAGE} available"
-    else
-        warn "Normal container verification failed — image may not be available yet"
-    fi
-
-    if docker manifest inspect "$OPENSHELL_CONTAINER_IMAGE" >/dev/null 2>&1; then
-        info "OpenShell container: ${OPENSHELL_CONTAINER_IMAGE} available"
-    else
-        warn "OpenShell container verification failed — image may not be available yet"
+    info "Verifying container images with bounded retries..."
+    if ! python3 "$CONTAINER_VERIFIER" \
+        "$NORMAL_CONTAINER_IMAGE" "$OPENSHELL_CONTAINER_IMAGE"; then
+        warn "One or more versioned container images remain unavailable; inspect the Build Container Image workflow before continuing"
     fi
 
     info "Waiting for versioned documentation..."

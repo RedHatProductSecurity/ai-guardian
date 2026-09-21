@@ -14,7 +14,7 @@ scripts/release.sh --dry-run minor    # preview without executing
 scripts/release.sh --skip-cursor patch # skip Cursor hook verification
 ```
 
-The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, verification of both container repositories, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
+The script automates all steps documented below: prerequisite validation, release readiness CI, optional Cursor hook verification, version bump, CHANGELOG update, README URL updates, docs export generation, TestPyPI verification, tagging, CI and versioned Read the Docs verification, bounded retry verification of both container repositories, and post-release merge back. Re-runnable — if it fails mid-way, just fix the issue and re-run.
 
 **Requirements**: `gh` CLI (authenticated), `python3`, `git`, `sed`, `curl`, `git-cliff` (`brew install git-cliff`).
 
