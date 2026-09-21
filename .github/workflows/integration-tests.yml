@@ -26,7 +26,7 @@ on:
 jobs:
   version-check:
     name: Verify Scanner Versions Exist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -47,7 +47,7 @@ jobs:
 
   integration-tests:
     name: Run Integration Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version-check
 
     steps:
@@ -133,7 +133,7 @@ jobs:
 
   test-isolation:
     name: Test Isolation Verification
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version-check
 
     steps:
@@ -178,7 +178,7 @@ jobs:
 
   version-health-check:
     name: Scanner Version Health Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Only run on schedule, not on PR
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
@@ -345,7 +345,7 @@ jobs:
 
   performance-check:
     name: Performance Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: version-check
 
     steps:

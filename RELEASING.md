@@ -769,6 +769,19 @@ The repository includes four GitHub Actions workflows:
    - Triggered on: version tags (v*)
    - Requires: PyPI trusted publishing configured
 
+### Ubuntu Runner Policy
+
+All Linux release-readiness, wheel, PyPI, and container publishing jobs are
+pinned to `ubuntu-24.04`. This keeps release artifacts and trusted-publishing
+jobs independent of the moving `ubuntu-latest` image label. The
+`.github/workflows/ubuntu-26-compatibility.yml` workflow separately exercises
+Python 3.9 on the pinned Ubuntu baseline and Python 3.10 through 3.14,
+scanners, smoke tests, scenario containers, Docker Buildx, and QEMU on
+`ubuntu-26.04`; release readiness invokes it as a migration gate while normal
+release and publishing jobs remain pinned. Python 3.9 remains on the baseline
+because the current setup-python version manifest does not provide it for
+Ubuntu 26.04.
+
 ### Setting Up PyPI Trusted Publishing
 
 To enable automatic PyPI publishing:

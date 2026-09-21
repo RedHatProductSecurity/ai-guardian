@@ -305,10 +305,18 @@ Pip-installed ai-guardian on users' systems stays protected even if malicious co
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| Tests | Push to main, PRs | Python 3.9-3.12, coverage to Codecov |
+| Tests | Push to main, PRs | Python 3.9-3.14, coverage to Codecov |
 | Lint | PRs | pylint, black, ruff |
 | Publish | Version tags (`v*`) | Build, publish to PyPI, create GitHub Release |
 | Integration Tests | Daily 2 AM UTC, PRs | Scanner version checks, MCP integration, test isolation |
+
+#### Ubuntu Runner Policy
+
+- Linux CI, release-readiness, wheel, PyPI, container, smoke, and scheduled maintenance jobs use the pinned `ubuntu-24.04` runner.
+- `ubuntu-latest` is not used by repository Linux workflow jobs, so the Ubuntu image migration cannot change release artifacts or coverage behavior unexpectedly.
+- `ubuntu-26-compatibility.yml` keeps Python 3.9 on the pinned Ubuntu baseline and runs Python 3.10-3.14 plus scanner, CLI smoke, scenario-container, Docker Buildx, and QEMU checks on `ubuntu-26.04`; this reflects the current setup-python version manifest.
+- Release readiness calls the Ubuntu 26.04 workflow as an explicit migration gate; it is separate from the pinned release and publishing jobs.
+- `windows-latest` and `macos-latest` remain only in their platform-specific compatibility matrices.
 
 ### Dependabot
 

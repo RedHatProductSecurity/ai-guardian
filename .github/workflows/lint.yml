@@ -17,7 +17,7 @@ on:
 jobs:
   pylint:
     name: Pylint Code Quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -43,7 +43,7 @@ jobs:
 
   black:
     name: Black Code Formatting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -66,7 +66,7 @@ jobs:
 
   ruff:
     name: Ruff Linting
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code

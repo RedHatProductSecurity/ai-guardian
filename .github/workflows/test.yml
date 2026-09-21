@@ -17,7 +17,7 @@ on:
 jobs:
   version-check:
     name: Verify Scanner Versions Exist
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout code
@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
+        os: [ubuntu-24.04]
         python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
         include:
           - os: windows-latest
@@ -101,7 +101,7 @@ jobs:
           pytest tests/ -v --tb=short --timeout=30 --cov=ai_guardian --cov-report=term-missing --cov-report=xml --cov-report=html
 
       - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-24.04'
         uses: codecov/codecov-action@v7
         with:
           file: ./coverage.xml
@@ -109,7 +109,7 @@ jobs:
           verbose: true
 
       - name: Upload coverage HTML report
-        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-latest'
+        if: matrix.python-version == '3.12' && matrix.os == 'ubuntu-24.04'
         uses: actions/upload-artifact@v7
         with:
           name: coverage-report-${{ matrix.python-version }}
