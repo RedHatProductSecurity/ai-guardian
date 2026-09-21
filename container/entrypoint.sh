@@ -69,9 +69,9 @@ done
 
 SUPPORTED_AGENT_IDES=(
   claude cursor copilot codex windsurf gemini cline zoocode kiro
-  aiderdesk openclaw opencode augment crush junie antigravity
+  aiderdesk openclaw opencode pi augment crush junie antigravity
 )
-CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode crush antigravity)
+CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode pi crush antigravity)
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 
 # AI_GUARDIAN_AGENT is the name used by the sandbox command. Keep
@@ -280,7 +280,7 @@ _configure_openshell_inference_environment() {
   fi
 
   case "$IDE" in
-    claude) base_url="https://inference.local" ;;
+    claude|pi) base_url="https://inference.local" ;;
     opencode) base_url="https://inference.local/v1" ;;
     *) return 0 ;;
   esac
@@ -319,17 +319,173 @@ EOF
   fi
 }
 
+_configure_pi_settings() {
+  if [ "$IDE" != "pi" ] || {
+    [ -z "${AI_GUARDIAN_AGENT_PROVIDER:-}" ] &&
+    [ -z "${AI_GUARDIAN_AGENT_MODEL:-}" ];
+  }; then
+    return 0
+  fi
+
+  local pi_agent_dir
+  local settings_path
+  pi_agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+  settings_path="${pi_agent_dir}/settings.json"
+
+  if ! python3 - "$settings_path" "${AI_GUARDIAN_AGENT_PROVIDER:-}" "${AI_GUARDIAN_AGENT_MODEL:-}" <<'PY'
+import json
+import os
+import stat
+import sys
+import tempfile
+
+
+settings_path, provider, model = sys.argv[1:]
+try:
+    with open(settings_path, encoding="utf-8") as stream:
+        settings = json.load(stream)
+except FileNotFoundError:
+    settings = {}
+except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    print(f"unable to read Pi settings: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(settings, dict):
+    print("Pi settings must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+if provider:
+    settings["defaultProvider"] = provider
+if model:
+    settings["defaultModel"] = model
+
+settings_dir = os.path.dirname(os.path.abspath(settings_path))
+os.makedirs(settings_dir, exist_ok=True)
+try:
+    mode = stat.S_IMODE(os.stat(settings_path).st_mode)
+except FileNotFoundError:
+    mode = 0o600
+
+file_descriptor, temporary_path = tempfile.mkstemp(
+    prefix=".settings.json.", suffix=".tmp", dir=settings_dir
+)
+try:
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+        json.dump(settings, stream, indent=2)
+        stream.write("\n")
+    os.chmod(temporary_path, mode)
+    os.replace(temporary_path, settings_path)
+except (OSError, TypeError, ValueError):
+    try:
+        os.unlink(temporary_path)
+    except OSError:
+        # intentionally silent - cleanup of the temporary settings file
+        pass
+    raise
+PY
+  then
+    echo "Error: unable to configure Pi settings: $settings_path" >&2
+    return 1
+  fi
+}
+
+_configure_pi_openshell_models() {
+  if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" != "true" ] ||
+    [ "$IDE" != "pi" ]; then
+    return 0
+  fi
+
+  local pi_agent_dir
+  local models_path
+  pi_agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+  models_path="${pi_agent_dir}/models.json"
+
+  if ! python3 - "$models_path" <<'PY'
+import json
+import os
+import stat
+import sys
+import tempfile
+
+
+models_path = sys.argv[1]
+try:
+    with open(models_path, encoding="utf-8") as stream:
+        models = json.load(stream)
+except FileNotFoundError:
+    models = {}
+except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    print(f"unable to read Pi models configuration: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(models, dict):
+    print("Pi models configuration must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+providers = models.setdefault("providers", {})
+if not isinstance(providers, dict):
+    print("Pi models configuration providers must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+provider_name = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER", "anthropic")
+if provider_name == "openai":
+    provider = providers.setdefault("openai", {})
+    base_url = "https://inference.local/v1"
+else:
+    provider_name = "anthropic"
+    provider = providers.setdefault("anthropic", {})
+    base_url = "https://inference.local"
+if not isinstance(provider, dict):
+    print(f"Pi {provider_name} provider configuration must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+provider["baseUrl"] = base_url
+provider["apiKey"] = "unused"
+
+models_dir = os.path.dirname(os.path.abspath(models_path))
+os.makedirs(models_dir, exist_ok=True)
+try:
+    mode = stat.S_IMODE(os.stat(models_path).st_mode)
+except FileNotFoundError:
+    mode = 0o600
+
+file_descriptor, temporary_path = tempfile.mkstemp(
+    prefix=".models.json.", suffix=".tmp", dir=models_dir
+)
+try:
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+        json.dump(models, stream, indent=2)
+        stream.write("\n")
+    os.chmod(temporary_path, mode)
+    os.replace(temporary_path, models_path)
+except Exception:
+    try:
+        os.unlink(temporary_path)
+    except OSError:
+        # intentionally silent — cleanup of the temporary models file
+        pass
+    raise
+PY
+  then
+    echo "Error: unable to configure Pi for the OpenShell inference route: $models_path" >&2
+    return 1
+  fi
+}
+
 if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
-  { [ "$IDE" = "claude" ] || [ "$IDE" = "opencode" ]; }; then
+  { [ "$IDE" = "claude" ] || [ "$IDE" = "opencode" ] || [ "$IDE" = "pi" ]; }; then
   # Keep the route self-healing when an older OpenShell version or an existing
   # sandbox omitted the non-secret environment values from sandbox creation.
-  if [ "$IDE" = "claude" ]; then
+  if [ "$IDE" = "claude" ] || [ "$IDE" = "pi" ]; then
     export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local}"
   else
     export ANTHROPIC_BASE_URL="${ANTHROPIC_BASE_URL:-https://inference.local/v1}"
   fi
   export ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY:-unused}"
   if ! _configure_openshell_inference_environment; then
+    exit 1
+  fi
+  if ! _configure_pi_openshell_models; then
     exit 1
   fi
   if [ "$IDE" = "claude" ]; then
@@ -341,6 +497,10 @@ if [ "${AI_GUARDIAN_OPEN_SHELL_INFERENCE:-}" = "true" ] &&
         ;;
     esac
   fi
+fi
+
+if ! _configure_pi_settings; then
+  exit 1
 fi
 
 # dummy-agent: no API key required — launch REPL directly
@@ -475,6 +635,107 @@ PY
 }
 
 if ! _bootstrap_codex_openshell_auth; then
+  exit 1
+fi
+
+# Pi uses its own auth.json format for the ChatGPT/Codex subscription provider.
+# Keep the OpenShell-provided credential references isolated to the sandbox;
+# this route remains experimental until Pi can consume those references during
+# its direct OAuth refresh flow.
+_bootstrap_pi_codex_openshell_auth() {
+  local pi_agent_dir
+  local auth_path
+
+  if [ "$IDE" != "pi" ] ||
+    [ "${AI_GUARDIAN_AGENT_PROVIDER:-}" != "openai-codex" ]; then
+    return 0
+  fi
+
+  pi_agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
+  auth_path="${pi_agent_dir}/auth.json"
+  if ! mkdir -p "$pi_agent_dir"; then
+    echo "Error: unable to create Pi state directory: $pi_agent_dir" >&2
+    return 1
+  fi
+
+  if [ "${AI_GUARDIAN_OPEN_SHELL_PROVIDER:-false}" != "true" ]; then
+    return 0
+  fi
+
+  if [ -z "${CODEX_AUTH_ACCESS_TOKEN:-}" ] ||
+    [ -z "${CODEX_AUTH_REFRESH_TOKEN:-}" ] ||
+    [ -z "${CODEX_AUTH_ACCOUNT_ID:-}" ]; then
+    return 0
+  fi
+
+  case "${CODEX_AUTH_ACCESS_TOKEN}" in
+    openshell:* )
+      echo "Error: Pi's openai-codex provider cannot consume OpenShell resolver-backed Codex credentials; use --cli codex or direct Pi OAuth credentials" >&2
+      return 1
+      ;;
+  esac
+
+  if ! python3 - "$auth_path" <<'PY'
+import json
+import os
+import tempfile
+import time
+import sys
+
+
+auth_path = sys.argv[1]
+try:
+    with open(auth_path, encoding="utf-8") as stream:
+        auth = json.load(stream)
+except FileNotFoundError:
+    auth = {}
+except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    print(f"unable to read Pi auth file: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+
+if not isinstance(auth, dict):
+    print("Pi auth file must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+auth["openai-codex"] = {
+    "type": "oauth",
+    "access": os.environ["CODEX_AUTH_ACCESS_TOKEN"],
+    "refresh": os.environ["CODEX_AUTH_REFRESH_TOKEN"],
+    # Pi compares this value with JavaScript Date.now(), so keep milliseconds.
+    "expires": int(time.time() * 1000) + 3600 * 1000,
+    "accountId": os.environ["CODEX_AUTH_ACCOUNT_ID"],
+}
+
+auth_dir = os.path.dirname(auth_path)
+mode = 0o600
+try:
+    mode = os.stat(auth_path).st_mode & 0o777
+except FileNotFoundError:
+    pass
+try:
+    file_descriptor, temporary_path = tempfile.mkstemp(
+        prefix=".auth.json.", suffix=".tmp", dir=auth_dir
+    )
+    with os.fdopen(file_descriptor, "w", encoding="utf-8") as stream:
+        json.dump(auth, stream, separators=(",", ":"))
+        stream.write("\n")
+    os.chmod(temporary_path, mode or 0o600)
+    os.replace(temporary_path, auth_path)
+except Exception:
+    try:
+        os.unlink(temporary_path)
+    except OSError:
+        # intentionally silent - cleanup of the temporary auth file
+        pass
+    raise
+PY
+  then
+    echo "Error: unable to create provider-backed Pi auth file: $auth_path" >&2
+    return 1
+  fi
+}
+
+if ! _bootstrap_pi_codex_openshell_auth; then
   exit 1
 fi
 

@@ -17,7 +17,10 @@ from types import SimpleNamespace
 from urllib.parse import urlparse
 
 from ai_guardian.daemon.discovery import should_update_target_name
-from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
+from ai_guardian.ide_registry import (
+    SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
+    SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+)
 from ai_guardian.tray import icons as tray_icons
 from ai_guardian.tray import menu as tray_menu
 from ai_guardian.tray import notifications as tray_notifications
@@ -903,12 +906,13 @@ class TrayMenuBuilder:
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
-        cli_choices = SUPPORTED_CLI_IDE_TYPES
+        cli_choices = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME[runtime]
         default_cli = "claude" if runtime == "openshell" else "codex"
         cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
         if cli not in cli_choices:
             cli = default_cli
         opencode_agent = os.environ.get("AI_GUARDIAN_OPENCODE_AGENT", "")
+        agent_provider = os.environ.get("AI_GUARDIAN_AGENT_PROVIDER", "")
         repo_default = os.environ.get("AI_GUARDIAN_SANDBOX_REPO")
         if not repo_default:
             target = getattr(self._tray, "_active_target", None)
@@ -919,6 +923,11 @@ class TrayMenuBuilder:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
         opencode_agent_choices = ("", "build", "plan", "claude")
+        agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
+        if agent_provider not in agent_provider_choices:
+            agent_provider = ""
+        if runtime == "openshell" and cli == "pi" and not agent_provider:
+            agent_provider = "anthropic"
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
@@ -937,6 +946,11 @@ class TrayMenuBuilder:
                 "label": "CLI",
                 "type": "choice",
                 "choices": cli_choices,
+                "choices_by": {
+                    "field": "runtime",
+                    "values": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
+                },
+                "clear_when_choice_invalid": True,
                 "default": cli,
                 "required": True,
                 "help": "Select the CLI to configure in the sandbox.",
@@ -960,7 +974,7 @@ class TrayMenuBuilder:
             },
             {
                 "name": "agent",
-                "label": "OpenCode agent",
+                "label": "OpenCode agent profile",
                 "type": "choice",
                 "choices": opencode_agent_choices,
                 "editable": True,
@@ -971,6 +985,33 @@ class TrayMenuBuilder:
                     "type a custom name. Passed as opencode --agent NAME."
                 ),
                 "enabled_when": {"field": "cli", "values": ("opencode",)},
+            },
+            {
+                "name": "agent_provider",
+                "label": "Pi provider",
+                "type": "choice",
+                "choices": agent_provider_choices,
+                "editable": runtime == "container",
+                "editable_by": {
+                    "field": "runtime",
+                    "values": {"container": True, "openshell": False},
+                },
+                "choices_by": {
+                    "field": "runtime",
+                    "values": SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+                },
+                "clear_when_choice_invalid": True,
+                "clear_when_disabled": True,
+                "default": agent_provider,
+                "help": (
+                    "Provider selected by Pi. Anthropic is implemented; direct "
+                    "API OpenAI is experimental. ChatGPT/Codex OAuth uses the "
+                    "native codex CLI instead."
+                    if runtime == "openshell"
+                    else "Provider selected by Pi; add a provider-specific "
+                    "integration before advertising another choice."
+                ),
+                "enabled_when": {"field": "cli", "values": ("pi",)},
             },
             {
                 "name": "repo",
@@ -984,6 +1025,11 @@ class TrayMenuBuilder:
                 "type": "directory",
                 "default": "",
                 "help": "Optional directory containing the initial ai-guardian.json.",
+                "enabled_when": {
+                    "field": "config_source",
+                    "values": ("Host/default",),
+                },
+                "clear_when_disabled": True,
             },
             {
                 "name": "image",
@@ -1000,8 +1046,9 @@ class TrayMenuBuilder:
                 "name": "model",
                 "label": "Inference model",
                 "default": os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", ""),
-                "help": "OpenShell Vertex AI model; empty uses the default.",
+                "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "clear_when_disabled": True,
             },
             {
                 "name": "profile",
@@ -1014,6 +1061,11 @@ class TrayMenuBuilder:
                     "Optional profile; choose a built-in or type a custom "
                     "profile name/path."
                 ),
+                "enabled_when": {
+                    "field": "config_source",
+                    "values": ("Host/default",),
+                },
+                "clear_when_disabled": True,
             },
             {
                 "name": "policies",
@@ -1026,6 +1078,7 @@ class TrayMenuBuilder:
                     "commas or newlines."
                 ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "clear_when_disabled": True,
             },
             {
                 "name": "providers",
@@ -1033,6 +1086,7 @@ class TrayMenuBuilder:
                 "default": "",
                 "help": "OpenShell provider names; separate names with commas or newlines.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
+                "clear_when_disabled": True,
             },
             {
                 "name": "environment",
@@ -1093,8 +1147,33 @@ class TrayMenuBuilder:
             return
 
         opencode_agent = str(values.get("agent") or "").strip() or None
+        agent_provider = str(values.get("agent_provider") or "").strip() or None
         cli_value = str(values.get("cli") or "").strip() or None
         cli = cli_value or ("claude" if runtime == "openshell" else "codex")
+        supported_cli_types = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME.get(runtime, ())
+        if cli not in supported_cli_types:
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                f"CLI '{cli}' is not supported for {runtime} sandboxes.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return
+        if agent_provider and cli != "pi":
+            self._sandbox_error(
+                "Create AI Guardian sandbox",
+                "A Pi provider can only be selected when CLI is pi.",
+                **self._screen_bounds_kwargs(screen_bounds),
+            )
+            return
+        if runtime == "openshell" and cli == "pi":
+            supported_providers = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
+            if agent_provider not in supported_providers:
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    "OpenShell Pi supports only the anthropic or openai provider.",
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+                return
         agent_profile = opencode_agent if cli == "opencode" else None
         if cli == "opencode" and not agent_profile:
             self._sandbox_error(
@@ -1193,6 +1272,7 @@ class TrayMenuBuilder:
                 name=name,
                 cli=cli,
                 opencode_agent=agent_profile,
+                agent_provider=agent_provider,
                 profile=profile_value,
                 restore_config="latest" if restore else None,
                 fresh_config=values.get("config_source") == "Host/default",

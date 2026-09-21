@@ -13,6 +13,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   global and project-local setup, six managed lifecycle events, Pi JSONL
   transcript/session discovery, and explicit unsupported-MCP reporting.
 
+- **Pi container support (#2326)**: Add the pinned MIT Pi coding agent to the
+  normal and OpenShell images, selected-CLI setup, OpenShell policy coverage,
+  provider-backed Anthropic inference routing, experimental OpenAI provider
+  paths, version monitoring, and image smoke checks.
+
+### Changed
+
+- **OpenShell selector scope**: Limit the default OpenShell CLI selector to the
+  clients bundled and validated in the image (`claude`, `copilot`, `codex`,
+  `opencode`, and `pi`). Pi's OpenShell form now advertises only its tested
+  Anthropic-compatible provider route plus experimental direct-API `openai`;
+  the resolver-backed `openai-codex` route remains an explicit unsupported
+  diagnostic. Native Codex is selected as the `codex` CLI, not as a Pi provider.
+- **Agent onboarding checklist**: Expand the integration checklist with the
+  runtime, provider, policy, authentication, test, documentation, and release
+  gates required before advertising a new agent.
+- **OpenShell Codex credentials**: Refresh the auto-managed Codex provider from
+  the current local login before creating a new sandbox, while preserving
+  resolver-backed credentials and automatic policy composition. OpenAI-shaped
+  OpenCode and Pi routes can reuse a Codex API-key login without entering the
+  incompatible OpenShell inference route.
+- **Manual OpenShell smoke runner**: Add an opt-in local matrix under
+  `container/tests/` for developers to validate CLI/provider combinations with
+  their own subscriptions without requiring CI credentials. Add a matching
+  Docker/Podman runner for the broader Container matrix, with one-case and
+  `--all` execution modes.
+- **OpenShell OpenCode policy**: Allow the OpenAI API and OpenCode's read-only
+  model/package metadata endpoints required during generic OpenCode startup.
+
 ## [1.18.0] - 2026-09-17
 
 ### Added

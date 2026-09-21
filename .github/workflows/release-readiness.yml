@@ -452,6 +452,63 @@ jobs:
     name: Scenario Tests
     uses: ./.github/workflows/scenario-tests.yml
 
+  container-images:
+    name: Container Images (Pi smoke test)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build AI Guardian wheel
+        run: |
+          python -m pip install --upgrade pip build
+          python -m build --wheel
+          mkdir -p container/vendor
+          cp dist/*.whl container/vendor/
+          WHEEL=$(basename container/vendor/ai_guardian-*.whl)
+          echo "WHEEL=${WHEEL}" >> "$GITHUB_ENV"
+
+      - name: Build normal support image
+        run: |
+          docker build \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            -t ai-guardian-readiness \
+            container/
+
+      - name: Verify normal image Pi CLI and extension setup
+        run: |
+          docker run --rm --entrypoint pi ai-guardian-readiness --version
+          docker run --rm \
+            -e AI_GUARDIAN_AGENT=pi \
+            -e AI_GUARDIAN_SETUP_SCOPE=selected \
+            -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
+            ai-guardian-readiness \
+            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
+
+      - name: Build OpenShell support image
+        run: |
+          docker build \
+            -f container/Dockerfile.openshell \
+            --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
+            -t ai-guardian-openshell-readiness \
+            container/
+
+      - name: Verify OpenShell image Pi CLI and extension setup
+        run: |
+          docker run --rm --entrypoint pi ai-guardian-openshell-readiness --version
+          docker run --rm \
+            -e AI_GUARDIAN_AGENT=pi \
+            -e AI_GUARDIAN_SETUP_SCOPE=selected \
+            -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
+            ai-guardian-openshell-readiness \
+            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
+
   config-validation:
     name: Config Validation
     runs-on: ubuntu-latest

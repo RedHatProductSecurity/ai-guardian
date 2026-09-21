@@ -24,16 +24,25 @@ ARG AI_GUARDIAN_VERSION=1.18.0
 # unchanged from the OpenShell Community base image.
 ARG CODEX_VERSION=0.154.0
 ARG OPENCODE_VERSION=1.18.31
+ARG PI_VERSION=0.86.0
 
 # The community base image already supplies the supported CLI agents, Node,
-# Git, gh, iproute2, users, and the default OpenShell policy. Install only
-# the AI Guardian runtime and its scanner engines here.
+# Git, gh, iproute2, users, and the default OpenShell policy. Install the
+# small search utilities Pi expects, then add the AI Guardian runtime and
+# scanner engines here.
 USER root
 
 # Keep the complete system PATH during build-time scanner setup as well as at
 # runtime. The community base already includes utilities such as blkid under
 # /usr/sbin; omitting sbin here makes ONNX Runtime emit a misleading warning.
 ENV PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+# Pi otherwise attempts runtime downloads for these tools, which are not
+# available through the sandbox's deliberately narrow egress policy.
+RUN apt-get update \
+    && apt-get install --no-install-recommends --yes fd-find ripgrep \
+    && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY vendor/ /tmp/ai-guardian-vendor/
 
@@ -67,8 +76,10 @@ RUN set -eux; \
 RUN npm install --global --prefix /usr --no-fund --no-audit \
         "@openai/codex@${CODEX_VERSION}" \
         "opencode-ai@${OPENCODE_VERSION}" \
+        "@earendil-works/pi-coding-agent@${PI_VERSION}" \
     && codex --version \
-    && opencode --version
+    && opencode --version \
+    && pi --version
 
 # Avoid pulling X11 libraries into the headless support image through the
 # OCR dependency, matching the normal UBI image's runtime choice.
@@ -111,13 +122,13 @@ RUN mkdir -p \
         /sandbox/.gemini /sandbox/.github/hooks \
         /sandbox/.kiro /sandbox/.openclaw /sandbox/.cline \
         /sandbox/.clinerules /sandbox/.junie /sandbox/.aider-desk \
-        /sandbox/.augment /sandbox/.crush \
+        /sandbox/.augment /sandbox/.crush /sandbox/.pi/agent \
         /sandbox/.local/bin /sandbox/.local/state/ai-guardian \
     && chown -R sandbox:sandbox \
         /sandbox/.config /sandbox/.claude /sandbox/.cursor /sandbox/.codex \
         /sandbox/.gemini /sandbox/.github /sandbox/.kiro /sandbox/.openclaw \
         /sandbox/.cline /sandbox/.clinerules /sandbox/.junie \
-        /sandbox/.aider-desk /sandbox/.augment /sandbox/.crush \
+        /sandbox/.aider-desk /sandbox/.augment /sandbox/.crush /sandbox/.pi \
         /sandbox/.local
 
 # OpenShell currently supplies a reduced PATH without /usr/sbin. ONNX Runtime
@@ -132,6 +143,7 @@ ARG AI_GUARDIAN_REST_PORT=63152
 ENV AI_GUARDIAN_REST_PORT=${AI_GUARDIAN_REST_PORT} \
     AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian \
     HOME=/sandbox \
+    PI_CODING_AGENT_DIR=/sandbox/.pi/agent \
     PATH=/sandbox/.venv/bin:/sandbox/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 LABEL ai-guardian.daemon=true \

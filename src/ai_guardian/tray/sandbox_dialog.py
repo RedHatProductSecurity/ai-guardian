@@ -685,9 +685,36 @@ def _show_tkinter_form(
             row += 1
 
     def refresh_enabled_states(*_args) -> None:
-        """Enable or disable fields whose validity depends on another field."""
+        """Refresh dependent choices and enable or disable dependent fields."""
         for field in field_list:
             name = str(field.get("name", ""))
+            choices_spec = field.get("choices_by")
+            if isinstance(choices_spec, dict):
+                dependency = controls.get(str(choices_spec.get("field", "")))
+                choices_by_value = choices_spec.get("values")
+                if dependency and isinstance(choices_by_value, dict):
+                    choices = choices_by_value.get(str(dependency[1].get()), ())
+                    if isinstance(choices, (list, tuple, set)):
+                        normalized_choices = [str(choice) for choice in choices]
+                        for widget in control_widgets.get(name, ()):
+                            widget.configure(values=normalized_choices)
+                        if (
+                            field.get("clear_when_choice_invalid")
+                            and str(controls[name][1].get()) not in normalized_choices
+                        ):
+                            controls[name][1].set(
+                                normalized_choices[0] if normalized_choices else ""
+                            )
+            editable_spec = field.get("editable_by")
+            if isinstance(editable_spec, dict):
+                dependency = controls.get(str(editable_spec.get("field", "")))
+                editable_by_value = editable_spec.get("values")
+                if dependency and isinstance(editable_by_value, dict):
+                    editable = bool(
+                        editable_by_value.get(str(dependency[1].get()), False)
+                    )
+                    for widget in control_widgets.get(name, ()):
+                        widget.configure(state="normal" if editable else "readonly")
             condition = field.get("enabled_when")
             enabled = True
             if isinstance(condition, dict):
@@ -700,6 +727,8 @@ def _show_tkinter_form(
                     elif expected is not None:
                         enabled = dependency_value == expected
             enabled_states[name] = enabled
+            if not enabled and field.get("clear_when_disabled"):
+                controls[name][1].set("")
             for widget in control_widgets.get(name, ()):
                 widget.state(["!disabled"] if enabled else ["disabled"])
             for widget in field_labels.get(name, ()):
@@ -849,6 +878,11 @@ def _show_tkinter_form_subprocess(
     return value if isinstance(value, dict) else None
 
 
+def _set_text_wrap(text, enabled: bool) -> None:
+    """Switch a Tk text widget between wrapped and horizontally scrollable text."""
+    text.configure(wrap="word" if enabled else "none")
+
+
 def _show_tkinter_progress(
     title: str,
     message: str,
@@ -894,7 +928,28 @@ def _show_tkinter_progress(
     text.grid(row=0, column=0, sticky="nsew")
     scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=text.yview)
     scrollbar.grid(row=0, column=1, sticky="ns")
-    text.configure(yscrollcommand=scrollbar.set)
+    horizontal_scrollbar = ttk.Scrollbar(
+        log_frame,
+        orient="horizontal",
+        command=text.xview,
+    )
+    horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
+    text.configure(
+        xscrollcommand=horizontal_scrollbar.set,
+        yscrollcommand=scrollbar.set,
+    )
+
+    wrap_lines = tk.BooleanVar(master=root, value=False)
+
+    def toggle_wrap() -> None:
+        _set_text_wrap(text, wrap_lines.get())
+
+    ttk.Checkbutton(
+        frame,
+        text="Wrap lines",
+        variable=wrap_lines,
+        command=toggle_wrap,
+    ).grid(row=3, column=0, sticky="w", pady=(8, 0))
 
     def replace_log(value: str) -> None:
         text.configure(state="normal")
@@ -917,14 +972,14 @@ def _show_tkinter_progress(
         copy_status.set(_copy_sandbox_log("".join(log_parts), clipboard_owner=root))
 
     ttk.Label(frame, textvariable=copy_status, justify="left").grid(
-        row=3, column=0, sticky="w", pady=(8, 0)
+        row=4, column=0, sticky="w", pady=(8, 0)
     )
 
     def close() -> None:
         root.destroy()
 
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=4, column=0, sticky="e", pady=(12, 0))
+    button_frame.grid(row=5, column=0, sticky="e", pady=(12, 0))
     ttk.Button(button_frame, text="Copy", command=copy).pack(side="left")
     ttk.Button(button_frame, text="Close", command=close).pack(side="left", padx=(8, 0))
     root.protocol("WM_DELETE_WINDOW", close)
@@ -1028,7 +1083,16 @@ def _show_tkinter_log(
     text.grid(row=0, column=0, sticky="nsew")
     scrollbar = ttk.Scrollbar(log_frame, orient="vertical", command=text.yview)
     scrollbar.grid(row=0, column=1, sticky="ns")
-    text.configure(yscrollcommand=scrollbar.set)
+    horizontal_scrollbar = ttk.Scrollbar(
+        log_frame,
+        orient="horizontal",
+        command=text.xview,
+    )
+    horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
+    text.configure(
+        xscrollcommand=horizontal_scrollbar.set,
+        yscrollcommand=scrollbar.set,
+    )
     text.insert("1.0", log_text or "(no output)")
     text.configure(state="disabled")
     copy_status = tk.StringVar()
@@ -1036,15 +1100,26 @@ def _show_tkinter_log(
     def copy() -> None:
         copy_status.set(_copy_sandbox_log(log_text, clipboard_owner=root))
 
+    wrap_lines = tk.BooleanVar(master=root, value=False)
+
+    def toggle_wrap() -> None:
+        _set_text_wrap(text, wrap_lines.get())
+
+    ttk.Checkbutton(
+        frame,
+        text="Wrap lines",
+        variable=wrap_lines,
+        command=toggle_wrap,
+    ).grid(row=2, column=0, sticky="w", pady=(8, 0))
     ttk.Label(frame, textvariable=copy_status, justify="left").grid(
-        row=2, column=0, sticky="w", pady=(8, 0)
+        row=3, column=0, sticky="w", pady=(8, 0)
     )
 
     def close() -> None:
         root.destroy()
 
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=3, column=0, sticky="e", pady=(12, 0))
+    button_frame.grid(row=4, column=0, sticky="e", pady=(12, 0))
     ttk.Button(button_frame, text="Copy", command=copy).pack(side="left")
     ttk.Button(button_frame, text="Close", command=close).pack(side="left", padx=(8, 0))
     root.protocol("WM_DELETE_WINDOW", close)
@@ -1432,7 +1507,16 @@ def _show_tkinter_upload_confirmation(
         command=message_text.yview,
     )
     message_scrollbar.grid(row=0, column=1, sticky="ns")
-    message_text.configure(yscrollcommand=message_scrollbar.set)
+    horizontal_scrollbar = ttk.Scrollbar(
+        frame,
+        orient="horizontal",
+        command=message_text.xview,
+    )
+    horizontal_scrollbar.grid(row=1, column=0, sticky="ew")
+    message_text.configure(
+        xscrollcommand=horizontal_scrollbar.set,
+        yscrollcommand=message_scrollbar.set,
+    )
     error_lines = set(error_lines)
     message_text.tag_configure("error", foreground="#b00020")
     for line in message.splitlines() or ("",):
@@ -1453,8 +1537,20 @@ def _show_tkinter_upload_confirmation(
         confirmed = True
         root.destroy()
 
+    wrap_lines = tk.BooleanVar(master=root, value=True)
+
+    def toggle_wrap() -> None:
+        _set_text_wrap(message_text, wrap_lines.get())
+
+    ttk.Checkbutton(
+        frame,
+        text="Wrap lines",
+        variable=wrap_lines,
+        command=toggle_wrap,
+    ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+
     button_frame = ttk.Frame(frame)
-    button_frame.grid(row=1, column=0, sticky="e", pady=(18, 0))
+    button_frame.grid(row=3, column=0, sticky="e", pady=(18, 0))
     ttk.Button(button_frame, text="Cancel", command=cancel).pack(side="left")
     ttk.Button(
         button_frame,

@@ -39,6 +39,54 @@ ChatGPT desktop app. Regular ChatGPT mode is not currently protected by those
 Codex hooks. Shared MCP configuration must be documented independently; MCP
 availability does not imply hook enforcement.
 
+## New-agent issue checklist
+
+Use this shorter checklist in the tracking issue before adding a new agent. The
+sections below link the issue to the detailed implementation and runtime gates;
+an agent must not be added to a selector or support table before its applicable
+evidence exists.
+
+- [ ] Define the stable agent key, display name, executable, aliases, and the
+  distinction between the agent, its model provider, and any profile selector.
+- [ ] Record the upstream specifications, supported versions, platforms,
+  license, service terms, telemetry, and redistribution/consent requirements.
+- [ ] Classify the integration as hooks, plugin/extension, MCP-only, transcript,
+  pre-commit, CLI/runtime, or a combination of these modes.
+- [ ] Add the canonical registry row and document lifecycle events, matchers,
+  input/output contracts, exit codes, timeouts, and fail-open/fail-closed rules.
+- [ ] Implement adapter detection, normalization, tool mappings, response
+  formatting, precedence, and malformed-input handling.
+- [ ] Add setup, verification, reconciliation, auto-detection, installer,
+  MCP, rules, transcript, console, tray, doctor, and REST surfaces that apply.
+- [ ] Record user, project, cloud/team, and remote scope boundaries; preserve
+  unrelated settings and keep setup idempotent.
+- [ ] Decide support separately for Docker/Podman and OpenShell. Add an agent
+  to a runtime selector only when the image contains or explicitly installs it.
+- [ ] Add image/version checks, runtime home/config paths, workdir behavior,
+  package dependencies, startup modes, signals, exit handling, and lifecycle
+  commands for every supported runtime.
+- [ ] Define authentication modes, credential discovery, provider/profile
+  mapping, refresh behavior, gateway prerequisites, and explicit-provider
+  behavior without exposing secrets in argv, images, logs, labels, or policies.
+- [ ] Compose and validate the least-privilege filesystem and network policy;
+  test model requests, authentication refresh, package/catalog access, and
+  explicit denials separately.
+- [ ] Add focused unit tests for parsing, command construction, environment
+  propagation, auth redaction, provider selection, policy composition, setup,
+  and configuration reconciliation.
+- [ ] Add adapter, hook/UX, MCP, transcript, installer, platform, and isolated
+  E2E coverage, or record a tested exclusion for each non-applicable surface.
+- [ ] Build and smoke-test every claimed image/runtime with disposable HOME,
+  configuration, repository, provider, and sandbox state.
+- [ ] Verify at least one authenticated request, one security denial, one tool
+  operation, one repository operation, and one lifecycle operation.
+- [ ] Update support matrices, runtime selectors, policies, image docs,
+  troubleshooting, README links, changelog, version monitoring, and release
+  readiness workflows.
+- [ ] Attach reproducible commands, versions, image digest, gateway version,
+  host platform, known limitations, and the related test/CI evidence to the
+  issue before marking the agent supported.
+
 ### CLI/runtime onboarding
 
 The normal container and OpenShell are separate distribution targets. Adding

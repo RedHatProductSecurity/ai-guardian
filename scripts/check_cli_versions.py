@@ -44,6 +44,13 @@ CLI_VERSION_SPECS = {
         "source": "npm registry",
         "registry": "https://www.npmjs.com/package/opencode-ai",
     },
+    "PI_VERSION": {
+        "package": "@earendil-works/pi-coding-agent",
+        "name": "Pi coding agent",
+        "lookup": "@earendil-works/pi-coding-agent",
+        "source": "npm registry",
+        "registry": "https://www.npmjs.com/package/%40earendil-works/pi-coding-agent",
+    },
 }
 
 _ARG_PATTERN = re.compile(

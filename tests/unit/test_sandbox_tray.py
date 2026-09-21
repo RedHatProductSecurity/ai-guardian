@@ -5,7 +5,11 @@ from types import SimpleNamespace
 from unittest import mock
 
 from ai_guardian.daemon.discovery import DaemonTarget
-from ai_guardian.ide_registry import SUPPORTED_CLI_IDE_TYPES
+from ai_guardian.ide_registry import (
+    SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME,
+    SUPPORTED_CLI_IDE_TYPES,
+    SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
+)
 from ai_guardian.tray.app import DaemonTray
 from ai_guardian.tray.menu import (
     launch_sandbox_command,
@@ -645,6 +649,7 @@ class TestSandboxTrayMenu:
             "name": "ag-test",
             "agent": "",
             "cli": "claude",
+            "agent_provider": "",
             "repo": "/tmp/repo",
             "config_dir": "",
             "image": "localhost/ai-guardian:openshell",
@@ -676,6 +681,7 @@ class TestSandboxTrayMenu:
         assert args.name == "ag-test"
         assert args.cli == "claude"
         assert args.opencode_agent is None
+        assert args.agent_provider is None
         assert args.repo == "/tmp/repo"
         assert args.config_dir is None
         assert args.image == "localhost/ai-guardian:openshell"
@@ -912,6 +918,36 @@ class TestSandboxTrayMenu:
         assert args.opencode_agent == "build"
         assert args.fresh_config is True
 
+    def test_create_form_rejects_unsupported_openshell_pi_provider(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-pi",
+            "cli": "pi",
+            "agent_provider": "openai-codex",
+            "repo": "",
+            "config_dir": "",
+            "image": "",
+            "model": "",
+            "profile": "",
+            "policies": "",
+            "providers": "",
+            "environment": "",
+            "labels": "",
+            "config_source": "Host/default",
+            "port": "",
+        }
+
+        with (
+            mock.patch.object(tray._menu, "_sandbox_error") as show_error,
+            mock.patch("ai_guardian.sandbox.create_sandbox") as create,
+        ):
+            tray._menu._complete_sandbox_create_form(values)
+
+        show_error.assert_called_once()
+        assert "only the anthropic or openai provider" in show_error.call_args.args[1]
+        create.assert_not_called()
+
     def test_create_form_exposes_policy_file_field(self):
         tray = _make_tray([])
         base_env = {
@@ -935,7 +971,7 @@ class TestSandboxTrayMenu:
 
         cli_field = next(field for field in fields if field["name"] == "cli")
         assert cli_field["type"] == "choice"
-        assert cli_field["choices"] == SUPPORTED_CLI_IDE_TYPES
+        assert cli_field["choices"] == SUPPORTED_OPENSHELL_CLI_IDE_TYPES
         assert cli_field["default"] == "claude"
         assert cli_field["required"] is True
 
@@ -958,6 +994,21 @@ class TestSandboxTrayMenu:
             "values": ("opencode",),
         }
 
+        provider_field = next(
+            field for field in fields if field["name"] == "agent_provider"
+        )
+        assert provider_field["label"] == "Pi provider"
+        assert (
+            provider_field["choices"]
+            == SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME["openshell"]
+        )
+        assert provider_field["editable"] is False
+        assert provider_field["choices_by"]["field"] == "runtime"
+        assert provider_field["enabled_when"] == {
+            "field": "cli",
+            "values": ("pi",),
+        }
+
         opencode_env = base_env.copy()
         opencode_env.update(
             {
@@ -972,6 +1023,41 @@ class TestSandboxTrayMenu:
         assert agent_field["default"] == "build"
         name_field = next(field for field in fields if field["name"] == "name")
         assert name_field["default"] == "ag-opencode"
+
+        pi_env = base_env.copy()
+        pi_env.update(
+            {
+                "AI_GUARDIAN_CLI": "pi",
+                "AI_GUARDIAN_AGENT_PROVIDER": "openai",
+            }
+        )
+        with mock.patch.dict(os.environ, pi_env, clear=True):
+            fields = tray._menu._sandbox_create_fields()
+
+        provider_field = next(
+            field for field in fields if field["name"] == "agent_provider"
+        )
+        assert provider_field["default"] == "openai"
+        assert next(field for field in fields if field["name"] == "name")[
+            "default"
+        ] == ("ag-pi")
+
+        container_env = base_env.copy()
+        container_env.update({"AI_GUARDIAN_SANDBOX_RUNTIME": "container"})
+        with mock.patch.dict(os.environ, container_env, clear=True):
+            fields = tray._menu._sandbox_create_fields()
+
+        cli_field = next(field for field in fields if field["name"] == "cli")
+        assert cli_field["choices"] == SUPPORTED_CLI_IDE_TYPES
+        assert cli_field["choices_by"]["field"] == "runtime"
+        provider_field = next(
+            field for field in fields if field["name"] == "agent_provider"
+        )
+        assert (
+            provider_field["choices"]
+            == SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME["container"]
+        )
+        assert provider_field["editable"] is True
 
         policy_field = next(field for field in fields if field["name"] == "policies")
         assert policy_field["type"] == "file"
@@ -1002,6 +1088,11 @@ class TestSandboxTrayMenu:
             "@moderator",
         )
         assert profile_field["editable"] is True
+        assert profile_field["enabled_when"] == {
+            "field": "config_source",
+            "values": ("Host/default",),
+        }
+        assert profile_field["clear_when_disabled"] is True
         provider_field = next(field for field in fields if field["name"] == "providers")
         assert provider_field["enabled_when"] == {
             "field": "runtime",
@@ -1067,6 +1158,11 @@ class TestSandboxTrayMenu:
             field for field in fields if field["name"] == "config_dir"
         )
         assert config_dir_field["type"] == "directory"
+        assert config_dir_field["enabled_when"] == {
+            "field": "config_source",
+            "values": ("Host/default",),
+        }
+        assert config_dir_field["clear_when_disabled"] is True
 
         labels_field = next(field for field in fields if field["name"] == "labels")
         assert "KEY=VALUE" in labels_field["help"]
@@ -1454,6 +1550,19 @@ class TestSandboxDialogFallback:
             },
         ]
         process.stdin.close.assert_called_once_with()
+
+    def test_sandbox_text_wrap_switches_between_wrapped_and_unwrapped(self):
+        from ai_guardian.tray.sandbox_dialog import _set_text_wrap
+
+        text = mock.MagicMock()
+
+        _set_text_wrap(text, True)
+        _set_text_wrap(text, False)
+
+        assert text.configure.call_args_list == [
+            mock.call(wrap="word"),
+            mock.call(wrap="none"),
+        ]
 
     def test_progress_returns_none_when_tkinter_is_unavailable(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_progress

@@ -309,6 +309,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ),
         project_scope=True,
         platform_contract="global and project-local Pi extensions; MCP is not a native Pi surface",
+        cli_capable=True,
     ),
     IDEIntegration(
         "augment",
@@ -377,6 +378,27 @@ SUPPORTED_IDE_TYPES: Tuple[str, ...] = tuple(
 SUPPORTED_CLI_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in SUPPORTED_IDE_REGISTRY if integration.cli_capable
 )
+# The OpenShell image currently bundles these terminal clients. Keep this
+# separate from the broader host/container CLI registry so the OpenShell
+# selector cannot advertise agents that require a custom image.
+SUPPORTED_OPENSHELL_CLI_IDE_TYPES: Tuple[str, ...] = (
+    "claude",
+    "copilot",
+    "codex",
+    "opencode",
+    "pi",
+)
+# Runtime-specific sandbox selectors. Keep this matrix close to the canonical
+# CLI registry so the CLI validator and tray form cannot advertise different
+# runtime capabilities.
+SANDBOX_CLI_IDE_TYPES_BY_RUNTIME = {
+    "container": SUPPORTED_CLI_IDE_TYPES,
+    "openshell": SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
+}
+SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME = {
+    "container": ("", "anthropic", "openai", "openai-codex"),
+    "openshell": ("anthropic", "openai"),
+}
 ALL_IDE_TYPES: Tuple[str, ...] = tuple(
     integration.key for integration in ALL_IDE_REGISTRY
 )
@@ -410,8 +432,11 @@ __all__ = [
     "INTERNAL_IDE_REGISTRY",
     "SUPPORTED_IDES",
     "SUPPORTED_CLI_IDE_TYPES",
+    "SUPPORTED_OPENSHELL_CLI_IDE_TYPES",
     "SUPPORTED_IDE_REGISTRY",
     "SUPPORTED_IDE_TYPES",
+    "SANDBOX_CLI_IDE_TYPES_BY_RUNTIME",
+    "SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME",
     "get_e2e_event_cases",
     "get_ide_integration",
     "iter_supported_ide_integrations",

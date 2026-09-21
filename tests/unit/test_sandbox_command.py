@@ -23,6 +23,7 @@ from ai_guardian.sandbox import (
     _load_snapshot_config,
     _openshell_create,
     _openshell_explicit_command,
+    _openshell_inference_cli,
     _openshell_provider_environment,
     _expose_openshell_service,
     _run,
@@ -45,6 +46,7 @@ def _args(**overrides):
         "name": "demo",
         "cli": None,
         "opencode_agent": None,
+        "agent_provider": None,
         "restore_config": None,
         "fresh_config": False,
         "snapshot": "latest",
@@ -319,7 +321,8 @@ def test_sandbox_create_reserves_agent_for_opencode_profiles():
     )
 
     with pytest.raises(
-        ValueError, match="--agent is supported only with --cli opencode"
+        ValueError,
+        match="--opencode-agent-profile/--agent is supported only with --cli opencode",
     ):
         _validate_create_options(args)
 
@@ -331,7 +334,39 @@ def test_sandbox_create_requires_agent_for_opencode():
         cli="opencode",
     )
 
-    with pytest.raises(ValueError, match="--agent is required with --cli opencode"):
+    with pytest.raises(
+        ValueError,
+        match="--opencode-agent-profile/--agent is required with --cli opencode",
+    ):
+        _validate_create_options(args)
+
+
+def test_sandbox_create_rejects_cli_not_supported_by_openshell():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        cli="gemini",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="CLI 'gemini' is not supported for openshell sandboxes",
+    ):
+        _validate_create_options(args)
+
+
+def test_sandbox_create_rejects_unsupported_openshell_pi_provider():
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        cli="pi",
+        agent_provider="openai-codex",
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="OpenShell Pi requires --agent-provider anthropic or openai",
+    ):
         _validate_create_options(args)
 
 
@@ -1330,6 +1365,93 @@ def test_openshell_opencode_provider_does_not_force_anthropic_route(tmp_path):
         shutil.rmtree(policy_dir)
 
 
+def test_openshell_opencode_auto_attaches_codex_api_key_provider(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-codex-key",
+        cli="opencode",
+        opencode_agent="build",
+        model="openai/gpt-5",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[f"CODEX_HOME={codex_home}"],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-codex-key"
+        assert uploads is False
+        assert command[command.index("--provider") + 1] == "ai-guardian-codex"
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert "--no-auto-providers" in command
+        provider_command = run.call_args.args[0]
+        assert provider_command[provider_command.index("--type") + 1] == "codex"
+        assert provider_command[provider_command.index("--credential") + 1] == (
+            "OPENAI_API_KEY"
+        )
+        assert "api-secret" not in provider_command
+        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_opencode_non_openai_model_keeps_generic_provider_route(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="opencode-generic",
+        cli="opencode",
+        opencode_agent="build",
+        model="google/gemini-2.5-pro",
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        profile=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[f"CODEX_HOME={codex_home}"],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "opencode-generic"
+        assert uploads is False
+        assert "--provider" not in command
+        assert "--auto-providers" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        ensure.assert_not_called()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
 def test_openshell_opencode_claude_agent_uses_anthropic_route(tmp_path):
     args = _args(
         sandbox_command="create",
@@ -1422,6 +1544,356 @@ def test_openshell_opencode_default_model_uses_anthropic_route(tmp_path):
         assert "ANTHROPIC_API_KEY=unused" in command
         assert "--no-credential-warnings" in command
         configure.assert_called_once()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_pi_uses_anthropic_provider_route(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-demo",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        agent_provider="anthropic",
+        model="claude-sonnet-4-6",
+        environment=[],
+        policy=[],
+        provider=["pi-provider"],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._configure_openshell_inference") as configure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert _openshell_inference_cli(args, "pi") == "claude"
+        assert name == "pi-demo"
+        assert uploads is False
+        assert "PI_CODING_AGENT_DIR=/sandbox/.pi/agent" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
+        assert "ANTHROPIC_BASE_URL=https://inference.local" in command
+        assert "ANTHROPIC_API_KEY=unused" in command
+        assert command[command.index("--provider") + 1] == "pi-provider"
+        assert "--no-credential-warnings" in command
+        configure.assert_called_once()
+        policy_path = Path(command[command.index("--policy") + 1])
+        policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+        assert "anthropic" in policy["network_policies"]
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_pi_openai_uses_openai_inference_provider_from_pi_auth_file(tmp_path):
+    pi_agent_dir = tmp_path / ".pi" / "agent"
+    pi_agent_dir.mkdir(parents=True)
+    (pi_agent_dir / "auth.json").write_text(
+        json.dumps({"openai": {"type": "api_key", "key": "api-key-placeholder"}}),
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-openai-demo",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        agent_provider="openai",
+        model="gpt-5",
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._configure_openshell_inference") as configure,
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert _openshell_inference_cli(args, "pi") == "openai"
+        assert name == "pi-openai-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_AGENT_PROVIDER=openai" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" in command
+        assert "OPENAI_BASE_URL=https://inference.local/v1" in command
+        assert "OPENAI_API_KEY=unused" in command
+        assert command[command.index("--provider") + 1] == "ai-guardian-openai"
+        assert "--no-credential-warnings" in command
+        assert "--no-auto-providers" in command
+        provider_command = run.call_args.args[0]
+        assert provider_command[provider_command.index("--type") + 1] == "openai"
+        assert "--from-existing" in provider_command
+        assert "api-key-placeholder" not in provider_command
+        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-key-placeholder"
+        configure.assert_called_once()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_pi_openai_auto_uses_codex_api_key_provider(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-openai-codex-key",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        agent_provider="openai",
+        model="gpt-5",
+        environment=[f"CODEX_HOME={codex_home}"],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._configure_openshell_inference") as configure,
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert name == "pi-openai-codex-key"
+        assert uploads is False
+        assert command[command.index("--provider") + 1] == "ai-guardian-codex"
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert "OPENAI_BASE_URL=https://inference.local/v1" not in command
+        assert "OPENAI_API_KEY=unused" not in command
+        assert "--no-credential-warnings" in command
+        provider_command = run.call_args.args[0]
+        assert provider_command[provider_command.index("--type") + 1] == "codex"
+        assert provider_command[provider_command.index("--credential") + 1] == (
+            "OPENAI_API_KEY"
+        )
+        assert "api-secret" not in provider_command
+        assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
+        configure.assert_not_called()
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_pi_openai_codex_creates_codex_provider_from_pi_oauth(tmp_path):
+    pi_agent_dir = tmp_path / ".pi" / "agent"
+    pi_agent_dir.mkdir(parents=True)
+    (pi_agent_dir / "auth.json").write_text(
+        json.dumps(
+            {
+                "openai-codex": {
+                    "type": "oauth",
+                    "access": "access-placeholder",
+                    "refresh": "refresh-placeholder",
+                    "expires": 4102444800,
+                    "accountId": "account-placeholder",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-codex-demo",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        agent_provider="openai-codex",
+        model=None,
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with (
+        patch.dict(os.environ, {"HOME": str(tmp_path)}, clear=True),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=False),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert _openshell_inference_cli(args, "pi") == "openai-codex"
+        assert name == "pi-codex-demo"
+        assert uploads is False
+        assert "AI_GUARDIAN_AGENT_PROVIDER=openai-codex" in command
+        assert "AI_GUARDIAN_OPEN_SHELL_PROVIDER=true" in command
+        assert command[command.index("--provider") + 1] == "ai-guardian-openai-codex"
+        assert "--no-auto-providers" in command
+        provider_command = run.call_args.args[0]
+        assert provider_command[provider_command.index("--type") + 1] == "codex"
+        assert "--from-existing" in provider_command
+        assert all(
+            secret not in provider_command
+            for secret in (
+                "access-placeholder",
+                "refresh-placeholder",
+                "account-placeholder",
+            )
+        )
+        provider_environment = run.call_args.kwargs["env"]
+        assert provider_environment["CODEX_AUTH_ACCESS_TOKEN"] == "access-placeholder"
+        assert provider_environment["CODEX_AUTH_REFRESH_TOKEN"] == "refresh-placeholder"
+        assert provider_environment["CODEX_AUTH_ACCOUNT_ID"] == "account-placeholder"
+    finally:
+        shutil.rmtree(policy_dir)
+
+
+def test_openshell_pi_rejects_unimplemented_provider(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-unsupported-demo",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        agent_provider="google",
+        model="gemini-2.5-pro",
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with pytest.raises(ValueError, match="currently supports the anthropic"):
+        _openshell_create(args)
+
+
+def test_existing_openshell_codex_provider_refreshes_local_credentials(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps(
+            {
+                "tokens": {
+                    "access_token": "access-placeholder",
+                    "refresh_token": "refresh-placeholder",
+                    "account_id": "account-placeholder",
+                    "id_token": "id-placeholder",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    args = _args(environment=[])
+
+    with (
+        patch.dict(os.environ, {"CODEX_HOME": str(codex_home)}, clear=True),
+        patch(
+            "ai_guardian.sandbox.Path.home",
+            side_effect=RuntimeError("Could not determine home directory."),
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+
+    command = run.call_args.args[0]
+    assert command[:4] == [
+        "openshell",
+        "provider",
+        "update",
+        "ai-guardian-codex",
+    ]
+    assert command.count("--credential") == 4
+    assert "access-placeholder" not in command
+    assert run.call_args.kwargs["env"]["CODEX_AUTH_ACCESS_TOKEN"] == (
+        "access-placeholder"
+    )
+
+
+def test_existing_openshell_codex_provider_refreshes_api_key(tmp_path):
+    codex_home = tmp_path / ".codex"
+    codex_home.mkdir()
+    (codex_home / "auth.json").write_text(
+        json.dumps({"auth_mode": "apikey", "OPENAI_API_KEY": "api-secret"}),
+        encoding="utf-8",
+    )
+    args = _args(environment=[])
+
+    with (
+        patch.dict(
+            os.environ,
+            {"HOME": str(tmp_path), "CODEX_HOME": str(codex_home)},
+            clear=True,
+        ),
+        patch(
+            "ai_guardian.sandbox._openshell_provider_profiles", return_value=["codex"]
+        ),
+        patch("ai_guardian.sandbox._openshell_provider_exists", return_value=True),
+        patch("ai_guardian.sandbox._run", return_value=0) as run,
+    ):
+        assert _ensure_openshell_cli_provider(args, "codex") == "ai-guardian-codex"
+
+    command = run.call_args.args[0]
+    assert command[:4] == [
+        "openshell",
+        "provider",
+        "update",
+        "ai-guardian-codex",
+    ]
+    assert command[command.index("--credential") + 1] == "OPENAI_API_KEY"
+    assert "api-secret" not in command
+    assert run.call_args.kwargs["env"]["OPENAI_API_KEY"] == "api-secret"
+
+
+def test_openshell_pi_without_provider_does_not_create_claude_provider(tmp_path):
+    args = _args(
+        sandbox_command="create",
+        runtime="openshell",
+        name="pi-direct",
+        cli="pi",
+        profile=None,
+        config_dir=str(tmp_path / "config"),
+        repo=None,
+        image="example/ai-guardian-openshell:test",
+        environment=[],
+        policy=[],
+        provider=[],
+        label=[],
+    )
+
+    with patch("ai_guardian.sandbox._ensure_openshell_cli_provider") as ensure:
+        command, name, uploads, policy_dir = _openshell_create(args)
+    try:
+        assert _openshell_inference_cli(args, "pi") == ""
+        assert name == "pi-direct"
+        assert uploads is False
+        assert "AI_GUARDIAN_AGENT_PROVIDER" not in command
+        assert "AI_GUARDIAN_OPEN_SHELL_INFERENCE=true" not in command
+        assert "--auto-providers" in command
+        ensure.assert_not_called()
     finally:
         shutil.rmtree(policy_dir)
 
