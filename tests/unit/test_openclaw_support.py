@@ -163,6 +163,7 @@ class TestOpenClawSetupFlow:
                 content = index_path.read_text()
                 assert "ai-guardian" in content
                 assert "definePluginEntry" in content
+                assert (Path(ext_dir) / "ai-guardian-bridge.ts").exists()
 
     def test_setup_creates_package_json(self):
         """setup_ide_hooks creates package.json."""
@@ -266,6 +267,7 @@ class TestOpenClawHooksConfigured:
             ext_dir.mkdir()
             index_path = ext_dir / "index.ts"
             index_path.write_text("// ai-guardian plugin code")
+            (ext_dir / "ai-guardian-bridge.ts").write_text("// shared bridge")
             from ai_guardian.setup import IDESetup
 
             setup = IDESetup()
@@ -374,24 +376,27 @@ class TestOpenClawPluginContent:
         assert "session_start" in _OPENCLAW_PLUGIN_TS
         assert "session_end" in _OPENCLAW_PLUGIN_TS
 
-    def test_plugin_has_run_guardian(self):
-        """Plugin TS has runGuardian helper function."""
+    def test_plugin_uses_shared_bridge(self):
+        """Plugin TS delegates process and response handling to the shared bridge."""
         from ai_guardian.setup import _OPENCLAW_PLUGIN_TS
 
-        assert "runGuardian" in _OPENCLAW_PLUGIN_TS
+        assert "./ai-guardian-bridge" in _OPENCLAW_PLUGIN_TS
+        assert "createGuardianBridge" in _OPENCLAW_PLUGIN_TS
+        assert "guardian.run" in _OPENCLAW_PLUGIN_TS
 
-    def test_plugin_sets_ide_type_env_var(self):
-        """Plugin sets AI_GUARDIAN_IDE_TYPE=openclaw."""
+    def test_plugin_selects_ide_type(self):
+        """Plugin configures the shared bridge for OpenClaw."""
         from ai_guardian.setup import _OPENCLAW_PLUGIN_TS
 
-        assert "AI_GUARDIAN_IDE_TYPE" in _OPENCLAW_PLUGIN_TS
+        assert "ideType: 'openclaw'" in _OPENCLAW_PLUGIN_TS
         assert "openclaw" in _OPENCLAW_PLUGIN_TS
 
-    def test_plugin_uses_execsync(self):
-        """Plugin calls ai-guardian via execSync."""
+    def test_plugin_does_not_spawn_process_directly(self):
+        """The plugin does not duplicate the process bridge."""
         from ai_guardian.setup import _OPENCLAW_PLUGIN_TS
 
-        assert "execSync" in _OPENCLAW_PLUGIN_TS
+        assert "execSync" not in _OPENCLAW_PLUGIN_TS
+        assert "execFileSync" not in _OPENCLAW_PLUGIN_TS
 
     def test_plugin_returns_block_result(self):
         """Plugin returns block: true with blockReason on tool call blocking."""

@@ -117,9 +117,9 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `cline` | Cline adapter and script-hook setup/reconciliation | Cline JSON-array transcript; shared Cline session adapter | Isolated script-event matrix; project-local hook scope |
 | `zoocode` | ZooCode key mapped to the shared Cline adapter and script contract | Shared Cline JSON-array/session evidence | Isolated script-event matrix; explicit alias and shared-layout coverage |
 | `kiro` | Dedicated Kiro adapter and script-hook setup/reconciliation | Kiro JSONL; browser session adapter | Isolated script-event matrix; project-local hook scope |
-| `aiderdesk` | Extension bridge/package registration and shared Kiro response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
-| `openclaw` | Plugin bridge/package registration, rules setup, and shared Kiro response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
-| `opencode` | Plugin bridge, SQLite/session setup, and Claude-compatible response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
+| `aiderdesk` | Extension bridge/package registration and shared TypeScript process/response boundary | AiderDesk Markdown transcript; no hook session grouping | Generated bridge/registration E2E boundary; host SDK runtime is an explicit CI exclusion |
+| `openclaw` | Plugin bridge/package registration, rules setup, and shared TypeScript process/response boundary | OpenClaw JSONL; no hook session grouping | Generated bridge/registration E2E boundary; plugin SDK runtime is an explicit CI exclusion |
+| `opencode` | Plugin bridge, SQLite/session setup, and shared TypeScript process/response boundary | OpenCode SQLite; browser session adapter | Generated plugin/registration E2E boundary; project/user config reconciliation |
 | `pi` | Dedicated adapter, generated extension, and Claude-compatible response boundary | Pi JSONL; browser session adapter | Generated extension/registration E2E boundary; project/user trust and no-native-MCP limitation |
 | `augment` | Dedicated adapter/tool-name mapping and Pre/Post command-hook setup | No local transcript; server-side storage documented | Isolated Pre/Post matrix; local-hook and no-local-transcript limitation |
 | `crush` | Dedicated adapter and PreToolUse-only setup/response contract | No transcript/session adapter; upstream surface is partial | Isolated PreToolUse matrix; Windows generated-hook structure and partial-surface limitation |
@@ -482,11 +482,28 @@ extensions are loaded only after Pi's project-trust decision, so project setup
 must be treated as trusted code. The generated bridge delegates prompt,
 provider-request, tool-call, tool-result, user-bash, session, and assistant-output
 checks to the existing `ai-guardian` CLI and preserves unrelated extensions.
+The global generated extension is version-stamped and refreshed by the daemon
+after an AI Guardian upgrade; project-local extensions remain explicit project
+setup targets.
 
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell
 or another outer runtime boundary is required for that enforcement. Pi has no
 native MCP surface, so setup does not create a fabricated MCP configuration.
+
+### OpenCode, AiderDesk, and OpenClaw - shared TypeScript process bridge
+
+These three generated integrations keep their host-specific lifecycle callbacks
+in `ai-guardian.ts` or `index.ts`, and install the same adjacent
+`ai-guardian-bridge.ts`. The shared bridge owns executable invocation with
+`--ide`, the 30-second timeout, inherited environment plus
+`AI_GUARDIAN_IDE_TYPE`, nested JSON response parsing, block decisions, and
+`updatedToolOutput` redaction extraction. Host files retain only callback
+registration and the response shape required by their SDK. Generated
+TypeScript integrations are stamped with the installed AI Guardian version;
+when the daemon starts, previously configured integrations are regenerated if
+their artifacts are stale or incomplete. Unconfigured IDE directories are not
+populated automatically.
 
 ### Crush (Charmbracelet) — PreToolUse only
 
@@ -691,9 +708,9 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | Cline / ZooCode | `.clinerules/hooks/` (scripts) |
 | Kiro | `.kiro/hooks/` (scripts) |
 | Augment Code | `~/.augment/settings.json` |
-| AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension) |
-| OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin) |
-| OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` (plugin) |
+| AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension and `ai-guardian-bridge.ts`) |
+| OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin and `ai-guardian-bridge.ts`) |
+| OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` and adjacent `ai-guardian-bridge.ts` |
 | Pi | `~/.pi/agent/extensions/ai-guardian.ts` (extension), or `<project>/.pi/extensions/ai-guardian.ts` |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
 | Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |

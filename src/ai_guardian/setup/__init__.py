@@ -125,6 +125,7 @@ from ai_guardian.setup.utils import (  # noqa: F811,F401
 from ai_guardian.setup.hooks import (  # noqa: F811,F401
     _AIDERDESK_EXTENSION_TS,
     _AIDERDESK_PACKAGE_JSON,
+    _AI_GUARDIAN_BRIDGE_TS,
     _OPENCODE_PLUGIN_TS,
     _PI_EXTENSION_TS,
     _OPENCLAW_PACKAGE_JSON,

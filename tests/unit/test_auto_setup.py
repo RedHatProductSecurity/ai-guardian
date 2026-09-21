@@ -11,6 +11,7 @@ from ai_guardian.daemon.auto_setup import (
     _is_auto_install_disabled,
     _is_first_run,
     _start_tray_background,
+    auto_upgrade_typescript_integrations,
     auto_setup_tray,
     notify_ide_setup_needed,
 )
@@ -213,6 +214,24 @@ class TestStartTrayBackground:
         )
 
 
+class TestAutoUpgradeTypescriptIntegrations:
+    def test_delegates_to_setup_and_returns_results(self):
+        setup = mock.MagicMock()
+        results = [
+            {
+                "ide": "opencode",
+                "success": True,
+                "message": "updated",
+            }
+        ]
+        setup.upgrade_typescript_integrations.return_value = results
+
+        with mock.patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
+            assert auto_upgrade_typescript_integrations() == results
+
+        setup.upgrade_typescript_integrations.assert_called_once_with()
+
+
 class TestAutoSetupTray:
     def test_skips_in_ci(self, monkeypatch):
         monkeypatch.setenv("CI", "true")
@@ -379,6 +398,7 @@ class TestAutoSetupTray:
         ):
             auto_setup_tray()
         desktop.install_shortcut.assert_called_once()
+
         desktop.install_autostart.assert_called_once()
 
 

@@ -57,6 +57,7 @@ PLUGIN_PATHS_HOME = [
 
 SELF_ALLOWLIST = [
     "ai-guardian.ts",
+    "ai-guardian-bridge.ts",
     "ai-guardian/index.ts",
 ]
 

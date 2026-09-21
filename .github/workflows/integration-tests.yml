@@ -68,13 +68,9 @@ jobs:
 
       - name: Install scanners from pyproject.toml
         run: |
-          # Use scanner installer with --use-pinned to install exact versions from pyproject.toml
-          # This ensures CI uses the same versions as users and maintains single source of truth
+          # The performance suite exercises the default Gitleaks path. The
+          # integration-tests job covers installation of the complete matrix.
           ai-guardian scanner install gitleaks --use-pinned
-          ai-guardian scanner install betterleaks --use-pinned
-          ai-guardian scanner install leaktk --use-pinned
-          ai-guardian scanner install detect-secrets --use-pinned
-          # TruffleHog (AGPL-3.0) - skipped in CI, tested via mock data in unit tests
 
       - name: Run MCP Integration Tests
         run: |
