@@ -52,8 +52,17 @@ def test_setup_renders_resolved_binary_in_shared_bridge():
     assert (
         'const GUARDIAN_BINARY = "/tmp/guardian with spaces/ai-guardian";' in rendered
     )
-    assert "['--ide', options.ideType]" in rendered
+    assert "...binaryArgs, '--ide', options.ideType" in rendered
     assert "ai-guardian" in rendered
+
+
+def test_setup_renders_python_module_command_as_executable_and_args():
+    setup = IDESetup()
+    rendered = setup._render_guardian_bridge(r"C:\Python312\pythonw.exe -m ai_guardian")
+
+    expected_binary = json.dumps(r"C:\Python312\pythonw.exe")
+    assert f"const GUARDIAN_BINARY = {expected_binary};" in rendered
+    assert 'const GUARDIAN_BINARY_ARGS: string[] = ["-m", "ai_guardian"];' in rendered
 
 
 @pytest.mark.parametrize("ide_type", ["aiderdesk", "openclaw", "opencode"])
@@ -190,6 +199,7 @@ if (mode === 'allow') {
 const bridge = createGuardianBridge({
   ideType: 'test',
   binary: process.env.BRIDGE_BINARY,
+  args: process.env.BRIDGE_ARGS ? JSON.parse(process.env.BRIDGE_ARGS) : undefined,
   timeoutMs: Number(process.env.BRIDGE_TIMEOUT || 30000),
 });
 console.log(JSON.stringify(bridge.run({ source: 'unit-test' })));
@@ -219,7 +229,8 @@ def test_shared_bridge_runtime_contract(tmp_path, case_name, expected):
     fake_guardian, runner = _write_bridge_runtime(tmp_path)
     env = os.environ.copy()
     env["BRIDGE_CASE"] = case_name
-    env["BRIDGE_BINARY"] = str(fake_guardian)
+    env["BRIDGE_BINARY"] = str(NODE)
+    env["BRIDGE_ARGS"] = json.dumps([str(fake_guardian)])
     if case_name == "timeout":
         env["BRIDGE_TIMEOUT"] = "20"
 

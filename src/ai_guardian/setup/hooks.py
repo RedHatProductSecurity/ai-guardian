@@ -71,6 +71,26 @@ def _render_typescript_source(source: str) -> str:
     return source.replace(_TYPESCRIPT_VERSION_TOKEN, __version__)
 
 
+def _split_guardian_command(binary_path: str) -> Tuple[str, List[str]]:
+    """Split the Windows ``pythonw.exe -m ai_guardian`` command form."""
+    module_suffix = " -m ai_guardian"
+    if binary_path.endswith(module_suffix):
+        return binary_path[: -len(module_suffix)], ["-m", "ai_guardian"]
+    return binary_path, []
+
+
+def _render_guardian_command(source: str, binary_path: str) -> str:
+    """Render an executable and its optional arguments into a TS artifact."""
+    executable, args = _split_guardian_command(binary_path)
+    return source.replace(
+        'const GUARDIAN_BINARY = "ai-guardian";',
+        f"const GUARDIAN_BINARY = {json.dumps(executable)};",
+    ).replace(
+        "const GUARDIAN_BINARY_ARGS: string[] = [];",
+        f"const GUARDIAN_BINARY_ARGS: string[] = {json.dumps(args)};",
+    )
+
+
 def _typescript_source_version(source: str) -> Optional[str]:
     """Read the generated package version from a TypeScript artifact."""
     for line in source.splitlines()[:5]:
@@ -2216,11 +2236,9 @@ class IDESetup:
     @staticmethod
     def _render_guardian_bridge(binary_path: str) -> str:
         """Render the shared TypeScript bridge with the resolved executable."""
-        source = _AI_GUARDIAN_BRIDGE_TS.replace(
-            'const GUARDIAN_BINARY = "ai-guardian";',
-            f"const GUARDIAN_BINARY = {json.dumps(binary_path)};",
+        return _render_typescript_source(
+            _render_guardian_command(_AI_GUARDIAN_BRIDGE_TS, binary_path)
         )
-        return _render_typescript_source(source)
 
     def _setup_plugin_file(
         self,
@@ -2372,10 +2390,8 @@ class IDESetup:
             )
 
         ext_dir.mkdir(parents=True, exist_ok=True)
-        binary_path = json.dumps(_resolve_binary_path())
-        content = _render_typescript_source(_PI_EXTENSION_TS).replace(
-            'const GUARDIAN_BINARY = "ai-guardian";',
-            f"const GUARDIAN_BINARY = {binary_path};",
+        content = _render_guardian_command(
+            _render_typescript_source(_PI_EXTENSION_TS), _resolve_binary_path()
         )
         extension_path.write_text(content, encoding="utf-8")
 
@@ -3323,6 +3339,7 @@ export interface GuardianResult {
 interface GuardianBridgeOptions {
   ideType: string;
   binary?: string;
+  args?: string[];
   timeoutMs?: number;
 }
 
@@ -3335,6 +3352,7 @@ interface ProcessFailure {
 type JsonRecord = Record<string, unknown>;
 
 const GUARDIAN_BINARY = "ai-guardian";
+const GUARDIAN_BINARY_ARGS: string[] = [];
 const DEFAULT_TIMEOUT_MS = 30000;
 
 function asRecord(value: unknown): JsonRecord | undefined {
@@ -3410,12 +3428,13 @@ export function parseGuardianOutput(raw: string): GuardianResult | undefined {
 
 export function createGuardianBridge(options: GuardianBridgeOptions) {
   const binary = options.binary || GUARDIAN_BINARY;
+  const binaryArgs = options.args || GUARDIAN_BINARY_ARGS;
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
   return {
     run(hookData: Record<string, unknown>): GuardianResult {
       try {
-        const stdout = execFileSync(binary, ['--ide', options.ideType], {
+        const stdout = execFileSync(binary, [...binaryArgs, '--ide', options.ideType], {
           input: JSON.stringify(hookData),
           encoding: 'utf-8',
           timeout: timeoutMs,
@@ -3561,6 +3580,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
 
 const GUARDIAN_BINARY = "ai-guardian";
+const GUARDIAN_BINARY_ARGS: string[] = [];
 
 interface GuardianResult {
   blocked: boolean;
@@ -3605,7 +3625,7 @@ function parseGuardian(raw: string): GuardianResult | undefined {
 
 function runGuardian(hookData: Record<string, unknown>): GuardianResult {
   try {
-    const stdout = execFileSync(GUARDIAN_BINARY, [], {
+    const stdout = execFileSync(GUARDIAN_BINARY, GUARDIAN_BINARY_ARGS, {
       input: JSON.stringify(hookData),
       encoding: "utf-8",
       timeout: 30000,
