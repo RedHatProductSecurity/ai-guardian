@@ -484,6 +484,11 @@ podman run --rm --entrypoint /usr/local/bin/claude \
     quay.io/redhatproductsecurity/ai-guardian-openshell:X.Y.Z --version
 ```
 
+The automated `scripts/release.sh` verification retries each versioned manifest
+with bounded per-check timeouts and delays. It reports delayed publication as
+success; after the retry window, it identifies the image and links to the
+`Build Container Image` workflow for diagnosis.
+
 If the OpenShell repository has not been created or the workflow cannot push
 to it, stop the release and have a maintainer provision
 `quay.io/redhatproductsecurity/ai-guardian-openshell` before retrying.

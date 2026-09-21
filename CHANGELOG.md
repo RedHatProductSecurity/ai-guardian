@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Container image release verification (#2342)**: Retry versioned normal and
+  OpenShell manifest checks with bounded command timeouts and retry delays,
+  report delayed publication as success, and identify the Build Container Image
+  workflow when availability times out.
+
 - **Automatic TypeScript integration upgrades**: On daemon startup, regenerate
   previously configured OpenCode, AiderDesk, OpenClaw, and Pi TypeScript
   integrations when their generated version marker is stale or an expected

@@ -45,6 +45,7 @@ def test_release_script_help_and_docs_verification_contract():
     assert "https://ai-guardian.readthedocs.io/en/${TAG_NAME}/" in script
     assert "curl --fail --silent --location" in script
     assert "quay.io/redhatproductsecurity/ai-guardian:${NEW_VERSION}" not in script
+    assert "verify_container_images.py" in script
     assert "${NORMAL_CONTAINER_IMAGE}" in script
     assert "${OPENSHELL_CONTAINER_IMAGE}" in script
 
