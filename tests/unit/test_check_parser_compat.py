@@ -308,6 +308,7 @@ class TestRunFormatVersionCheck:
                         "keywords": [],
                         "secretGroup": 0,
                         "entropy": 3.0,
+                        "allowlists": [],
                     },
                 ]
             },

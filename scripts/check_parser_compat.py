@@ -44,7 +44,7 @@ EXPECTED_SCHEMAS: Dict[str, Dict[str, Any]] = {
         "top_level_keys": {"rules"},
         "rule_fields": {
             "id", "description", "regex", "keywords",
-            "secretGroup", "entropy", "allowlist", "path", "tags",
+            "secretGroup", "entropy", "allowlist", "allowlists", "path", "tags",
         },
         "required_rule_fields": {"id", "regex"},
     },
