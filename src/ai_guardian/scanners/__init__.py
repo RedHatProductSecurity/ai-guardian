@@ -65,6 +65,19 @@ from ai_guardian.scanners.secret_validator import (
     ValidationStatus,
     ValidationResult,
 )
+from ai_guardian.scanners.code_inspection import (
+    ASTInspector,
+    AstCodeInspector,
+    AstInspector,
+    CodeInspectionFinding,
+    CodeInspectionManager,
+    CodeInspectionResult,
+    CodeInspector,
+    CodeInspectorManager,
+    CodeInspectorTimeoutError,
+    CodeInspectorUnavailableError,
+    register_code_inspector,
+)
 
 __all__ = [
     "EngineConfig",
@@ -107,4 +120,15 @@ __all__ = [
     "SecretValidator",
     "ValidationStatus",
     "ValidationResult",
+    "ASTInspector",
+    "AstCodeInspector",
+    "AstInspector",
+    "CodeInspectionFinding",
+    "CodeInspectionManager",
+    "CodeInspectionResult",
+    "CodeInspector",
+    "CodeInspectorManager",
+    "CodeInspectorTimeoutError",
+    "CodeInspectorUnavailableError",
+    "register_code_inspector",
 ]

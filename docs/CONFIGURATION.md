@@ -129,6 +129,51 @@ A TOML file for declaring which files to skip during scanning, using a structure
 
 Remote configurations enable centralized policy management. Enterprises can deploy security policies that users automatically receive.
 
+## Code Security Inspection
+
+The `code_scanning` section runs pluggable inspectors for Python content during
+Write/Edit hooks and `ai-guardian scan`. The default configuration preserves the
+existing Bandit behavior:
+
+```json
+{
+  "code_scanning": {
+    "enabled": true,
+    "action": "warn",
+    "inspectors": ["bandit"],
+    "timeout_ms": 2000,
+    "severity_threshold": "MEDIUM",
+    "allowlist": []
+  }
+}
+```
+
+Supported inspectors:
+
+| Inspector | Availability | Coverage |
+|-----------|--------------|----------|
+| `bandit` | Requires the installed Bandit package | Broad Python security rules, including injection, weak cryptography, unsafe subprocess use, and insecure imports |
+| `ast` | Built in, no extra dependency | High-risk Python API calls such as dynamic execution, unsafe deserialization, unsafe YAML loading, and shell execution |
+
+Set `inspectors` to `["bandit", "ast"]` to combine both implementations.
+Every inspector returns the same normalized finding fields, so action handling,
+violation logging, SARIF output, and latency reporting are shared.
+
+`timeout_ms` applies independently to each inspector. A value of `0` disables
+the timeout. A timed-out, unavailable, or failed inspector is logged and skipped
+without blocking the operation; findings from other available inspectors still
+flow through the configured `block`, `warn`, or `log-only` policy.
+
+Limitations:
+
+- Both built-in inspectors currently analyze Python source files only.
+- AST inspection is syntax-based and does not perform data-flow or type analysis.
+- Bandit-specific `# nosec Bxxx` behavior applies to Bandit findings; the AST
+  inspector honors a same-line `# nosec` or `# ai-guardian:allow` annotation.
+- The default remains `bandit` only to avoid duplicate findings and preserve
+  existing deployments; enable `ast` explicitly when its complementary checks
+  are desired.
+
 ## Security Profiles
 
 Built-in profiles let you apply a complete security posture in one command:

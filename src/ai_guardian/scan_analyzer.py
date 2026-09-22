@@ -476,7 +476,7 @@ def _build_rule_allowlist(
     key: str,
     clusters: List[FindingCluster],
 ) -> None:
-    """Build allowlist from rule IDs (Bandit format)."""
+    """Build an allowlist from normalized code-inspection rule IDs."""
     rules = section.setdefault(key, [])
     seen_ids: Set[str] = {r["test_id"] for r in rules if "test_id" in r}
     for c in clusters:

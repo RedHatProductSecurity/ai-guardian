@@ -473,7 +473,7 @@ def run_code_security_scan(
     config=None,
     latency_timer=None,
 ):
-    """Run Bandit code security scan on Python content.
+    """Run configured code inspectors on Python content.
 
     Called from PreToolUse on Write/Edit tools when the target file is .py.
 
@@ -485,7 +485,7 @@ def run_code_security_scan(
 
     Returns:
         None if disabled or no Python file.
-        ScanResult with detection details otherwise (one entry per finding).
+        ScanResult with normalized detection details otherwise (one entry per finding).
     """
     if not content:
         return None
@@ -505,15 +505,27 @@ def run_code_security_scan(
     if not config or not is_feature_enabled(config.get("enabled"), default=True):
         return None
 
-    from ai_guardian.scanners.bandit_scanner import BanditScanner
+    from ai_guardian.scanners.code_inspection import CodeInspectionManager
 
-    scanner = BanditScanner(config)
+    scanner = CodeInspectionManager(config)
 
     with (latency_timer or _NULL_TIMER).check("code_security"):
-        findings = scanner.scan(content, file_path=file_path)
+        inspection = scanner.scan(content, file_path=file_path)
+
+    findings = inspection.findings
+
+    inspection_details = {
+        "inspectors": inspection.inspectors,
+        "unavailable": inspection.unavailable,
+        "timed_out": inspection.timed_out,
+        "errors": inspection.errors,
+        "elapsed_ms": inspection.elapsed_ms,
+    }
 
     if not findings:
-        return ScanResult.clean("code_security", file_path=file_path)
+        result = ScanResult.clean("code_security", file_path=file_path)
+        result.extra.update(inspection_details)
+        return result
 
     # Wrap first finding; caller iterates all findings from scanner directly.
     # Store full list in extra for multi-finding consumers.
@@ -532,6 +544,7 @@ def run_code_security_scan(
     )
     result.extra["action"] = config.get("action", "warn")
     result.extra["all_findings"] = findings
+    result.extra.update(inspection_details)
     return result
 
 

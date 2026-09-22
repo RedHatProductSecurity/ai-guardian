@@ -182,11 +182,11 @@ SCANNER_HELP = {
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },
     "code_scanning": {
-        "title": "Code Security Scanning (Bandit)",
+        "title": "Code Security Scanning",
         "summary": (
             "Scans Python code written by the AI for common security vulnerabilities "
-            "using Bandit: eval/exec usage, shell injection, weak crypto, SQL injection, "
-            "hardcoded credentials, and more."
+            "using configurable inspectors. Bandit covers broad Python rules and the "
+            "built-in AST inspector covers high-risk API usage."
         ),
         "catches": [
             "eval() and exec() with user input (B307, B102)",
@@ -195,6 +195,7 @@ SCANNER_HELP = {
             "SQL string formatting / injection risk (B608)",
             "assert statements in production code (B101)",
             "Hardcoded passwords and default key sizes (B105, B107)",
+            "Unsafe deserialization and dynamic execution through the AST inspector",
         ],
         "does_not_catch": [
             "Security issues in non-Python languages",
@@ -204,8 +205,9 @@ SCANNER_HELP = {
         "config_summary": (
             "code_scanning.enabled — toggle on/off\n"
             "code_scanning.action — block | warn | log-only\n"
-            "code_scanning.severity — LOW | MEDIUM | HIGH (minimum level to flag)\n"
-            "code_scanning.confidence — LOW | MEDIUM | HIGH"
+            "code_scanning.inspectors — bandit | ast\n"
+            "code_scanning.timeout_ms — maximum time per inspector\n"
+            "code_scanning.severity_threshold — LOW | MEDIUM | HIGH (minimum level to flag)"
         ),
         "doc_url": None,
     },
@@ -299,7 +301,7 @@ SCANNER_HELP = {
             "Security tradeoff:\n"
             "  'block' is safer but a scanner bug = blocked workflow.\n"
             "  Recommend: 'allow' for dev, 'block' for production/compliance environments.\n"
-            "  Applies to ALL scanners: secret, PII, prompt injection, Bandit, canary, etc."
+            "  Applies to ALL scanners: secret, PII, prompt injection, code security, canary, etc."
         ),
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },
@@ -529,13 +531,21 @@ _FIELD_HELP_SUPPLEMENT: dict = {
         "should not be accessible to the AI agent."
     ),
     # ── code_scanning sub-fields ────────────────────────────────────────────
-    "code_scanning.severity": (
-        "Minimum Bandit severity level to report: LOW, MEDIUM (default), or HIGH. "
+    "code_scanning.severity_threshold": (
+        "Minimum inspector severity level to report: LOW, MEDIUM (default), or HIGH. "
         "Lower values catch more issues but increase false positives."
     ),
     "code_scanning.allowlist": (
-        "Bandit test IDs or CWE numbers to suppress. "
-        "Example: ['B101'] to suppress assert-usage warnings in tests."
+        "Inspector rule IDs to suppress. Example: ['B101'] or ['AST001'] "
+        "for known-safe code."
+    ),
+    "code_scanning.inspectors": (
+        "Inspectors to run: bandit for broad package-backed rules, or ast for "
+        "dependency-free high-risk Python API checks."
+    ),
+    "code_scanning.timeout_ms": (
+        "Maximum time allowed for each inspector in milliseconds. Set to 0 to "
+        "disable the timeout."
     ),
     # ── canary_detection sub-fields ─────────────────────────────────────────
     "canary_detection.tokens": (
@@ -585,7 +595,7 @@ _FIELD_HELP_SUPPLEMENT: dict = {
         "Enable or disable supply chain scanning of agent config files."
     ),
     "code_scanning.enabled": (
-        "Enable or disable Bandit Python code security scanning."
+        "Enable or disable configured Python code security inspectors."
     ),
     "canary_detection.enabled": (
         "Enable canary token detection. Disabled by default — "

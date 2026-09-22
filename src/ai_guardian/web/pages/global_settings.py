@@ -67,7 +67,7 @@ FEATURE_GROUPS = [
             (
                 "code_scanning",
                 "Code Security",
-                "Python code security scanning (Bandit)",
+                "Python code security scanning",
             ),
             (
                 "scan_offensive",
@@ -393,7 +393,7 @@ def create_global_settings_page(service, daemon_name: str):
                         "- **block** — fail-closed: block the operation if *any* scanner fails. "
                         "Safer but a scanner bug = blocked workflow.\n\n"
                         "**Applies to all scanners:** secret, PII, prompt injection, "
-                        "Bandit, canary, exfil, etc. "
+                        "code security, canary, exfil, etc. "
                         "Recommended: `allow` for dev, `block` for production/compliance environments."
                     ).classes("text-xs text-gray-600 mt-2")
 

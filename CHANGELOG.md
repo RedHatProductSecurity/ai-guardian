@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pluggable code security inspection (#2303)**: Normalize code-inspection
+  findings behind a shared interface, preserve Bandit behavior, add a
+  dependency-free Python AST inspector, per-inspector timeouts, unavailable
+  inspector handling, and configuration for both TUI and web consoles.
+
 - **Pi coding-agent support (#2325)**: Add a dedicated Pi extension adapter with
   global and project-local setup, six managed lifecycle events, Pi JSONL
   transcript/session discovery, and explicit unsupported-MCP reporting.

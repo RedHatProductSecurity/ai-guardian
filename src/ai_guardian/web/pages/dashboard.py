@@ -61,7 +61,7 @@ FEATURE_GROUPS = [
             (
                 "code_scanning",
                 "Code Security",
-                "Python code security scanning (Bandit)",
+                "Python code security scanning",
             ),
             (
                 "scan_offensive",

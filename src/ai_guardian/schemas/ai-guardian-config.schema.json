@@ -1327,7 +1327,7 @@
     },
     "code_scanning": {
       "type": "object",
-      "description": "Python code security scanning with Bandit (NEW in v1.13.0, Issue #828). Detects insecure code patterns in .py files: eval/exec, subprocess shell injection, weak crypto (md5/sha1), SQL injection, hardcoded credentials, path traversal, and XML vulnerabilities. Runs on PreToolUse Write/Edit and ai-guardian scan.",
+      "description": "Pluggable Python code security inspection (Issue #2303). Bandit is enabled by default; the built-in AST inspector can be enabled alongside it. Runs on PreToolUse Write/Edit and ai-guardian scan.",
       "additionalProperties": true,
       "properties": {
         "enabled": {
@@ -1348,6 +1348,26 @@
           "default": "warn",
           "description": "Action when insecure code is detected. block = prevent Write/Edit, warn = allow with warning, log-only = silent logging, ask = interactive prompt."
         },
+        "inspectors": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "bandit",
+              "ast"
+            ]
+          },
+          "default": [
+            "bandit"
+          ],
+          "description": "Code inspectors to run. Bandit requires the bandit package; ast is a dependency-free Python AST inspector for high-risk API usage."
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 2000,
+          "description": "Maximum time allowed per inspector in milliseconds. Set to 0 to disable the timeout; timed-out inspectors are skipped and logged."
+        },
         "severity_threshold": {
           "type": "string",
           "enum": [
@@ -1356,7 +1376,7 @@
             "HIGH"
           ],
           "default": "MEDIUM",
-          "description": "Minimum Bandit severity to report. LOW = all findings, MEDIUM = medium+high (recommended), HIGH = critical only."
+          "description": "Minimum inspector severity to report. LOW = all findings, MEDIUM = medium+high (recommended), HIGH = high severity only."
         },
         "allowlist": {
           "type": "array",
@@ -1367,6 +1387,10 @@
                 "type": "string",
                 "description": "Bandit test ID to suppress (e.g. B101, B324)"
               },
+              "rule_id": {
+                "type": "string",
+                "description": "Normalized inspector rule ID to suppress (for example AST001)"
+              },
               "file": {
                 "type": "string",
                 "description": "Optional file path prefix to scope the suppression (e.g. tests/)"
@@ -1376,12 +1400,21 @@
                 "description": "Human-readable explanation of why this finding is safe"
               }
             },
-            "required": [
-              "test_id"
+            "anyOf": [
+              {
+                "required": [
+                  "test_id"
+                ]
+              },
+              {
+                "required": [
+                  "rule_id"
+                ]
+              }
             ]
           },
           "default": [],
-          "description": "Allowlist entries to suppress specific Bandit findings by test ID, optionally scoped to a file path prefix. Bandit's native # nosec annotation is also honored."
+          "description": "Allowlist entries to suppress normalized findings by test_id or rule_id, optionally scoped to a file path prefix. Bandit's native # nosec annotation and # ai-guardian:allow are honored."
         },
         "ignore_files": {
           "type": "array",

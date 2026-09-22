@@ -490,26 +490,30 @@
   },
 
   "code_scanning": {
-    "_comment": "Python code security scanning with Bandit (NEW in v1.13.0, Issue #828)",
-    "_comment2": "Detects insecure code patterns in .py files written by the AI agent: eval/exec, subprocess shell injection,",
-    "_comment3": "weak crypto (md5/sha1), SQL injection, hardcoded credentials, path traversal, XML vulnerabilities",
-    "_comment4": "Runs on PreToolUse Write/Edit and ai-guardian scan. Uses Bandit (Apache-2.0, fixed dependency).",
+    "_comment": "Pluggable Python code security inspection (Issue #2303)",
+    "_comment2": "Bandit is enabled by default; the built-in AST inspector can be enabled alongside it.",
+    "_comment3": "Both inspectors emit normalized findings used by hook warnings, blocking, logging, and SARIF output.",
+    "_comment4": "Runs on PreToolUse Write/Edit and ai-guardian scan.",
     "enabled": true,
     "action": "warn",
     "_action_options": ["block", "warn", "log-only", "ask", "ask:warn", "ask:log-only"],
     "_action_note": "block = prevent Write/Edit. warn = allow with warning (recommended). ask = interactive prompt.",
+    "inspectors": ["bandit"],
+    "_inspectors_note": "Supported inspectors: bandit (package-backed) and ast (dependency-free high-risk Python API checks).",
+    "timeout_ms": 2000,
+    "_timeout_note": "Maximum time per inspector. Set to 0 to disable the timeout; timed-out inspectors are skipped and logged.",
     "severity_threshold": "MEDIUM",
-    "_severity_note": "LOW = all findings. MEDIUM = medium+high (recommended). HIGH = critical only.",
+    "_severity_note": "LOW = all findings. MEDIUM = medium+high (recommended). HIGH = high severity only.",
     "allowlist": [],
-    "_allowlist_note": "Suppress specific Bandit test IDs, optionally scoped to a file prefix.",
+    "_allowlist_note": "Suppress normalized inspector rule IDs with test_id or rule_id, optionally scoped to a file prefix.",
     "_allowlist_example": [
       {"test_id": "B101", "file": "tests/", "reason": "assert in tests is expected"},
       {"test_id": "B324", "reason": "md5 used for checksums, not crypto"}
     ],
     "ignore_files": [],
     "_ignore_files_note": "Glob patterns for .py files to skip (e.g. tests/**/*.py, migrations/)",
-    "_nosec_note": "Bandit's native # nosec and # nosec B101 inline annotations are always honored.",
-    "_aiguard_note": "# ai-guardian:allow on a line suppresses all ai-guardian checks including Bandit."
+    "_nosec_note": "Bandit's native # nosec and # nosec B101 inline annotations are always honored; the AST inspector honors # nosec on the same line.",
+    "_aiguard_note": "# ai-guardian:allow on a line suppresses all ai-guardian checks including code inspectors."
   },
 
   "_comment_secret_redaction": "Redact secrets from tool outputs instead of blocking (NEW in v1.5.0, Phase 4)",

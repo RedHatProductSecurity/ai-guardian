@@ -144,7 +144,7 @@ try:
 except ImportError:
     HAS_ANNOTATIONS = False
 
-from ai_guardian.scanners.bandit_scanner import BanditScanner, BanditUnavailableError
+from ai_guardian.scanners.code_inspection import CodeInspectionManager
 
 logger = logging.getLogger(__name__)
 
@@ -234,7 +234,7 @@ class FileScanner:
         code_enabled = code_cfg.get("enabled", True)
         if HAS_ANNOTATIONS:
             code_enabled = is_feature_enabled(code_cfg.get("enabled"), default=True)
-        self._code_scanner = BanditScanner(code_cfg) if code_enabled else None
+        self._code_scanner = CodeInspectionManager(code_cfg) if code_enabled else None
         self._code_scanner_unavailable: Optional[str] = None
         self._code_scan_skipped_count: int = 0
         self._skip_rules: frozenset = frozenset()
@@ -1098,9 +1098,25 @@ class FileScanner:
             logger.warning(f"Error checking exfil detection: {e}")
 
     def _check_code_security(self, file_path: str, content: str) -> None:
-        """Check Python code for security issues using Bandit."""
+        """Check Python code for security issues using configured inspectors."""
         try:
-            code_findings = self._code_scanner.scan(content, file_path=file_path)
+            if self._code_scanner is None:
+                return
+            inspection = self._code_scanner.scan(content, file_path=file_path)
+            code_findings = inspection.findings
+            if inspection.unavailable or inspection.timed_out or inspection.errors:
+                details: List[str] = []
+                details.extend(
+                    f"{name}: {reason}"
+                    for name, reason in inspection.unavailable.items()
+                )
+                details.extend(f"{name}: timed out" for name in inspection.timed_out)
+                details.extend(
+                    f"{name}: {reason}" for name, reason in inspection.errors.items()
+                )
+                self._code_scan_skipped_count += 1
+                if self._code_scanner_unavailable is None:
+                    self._code_scanner_unavailable = "; ".join(details)
             for f in code_findings:
                 if HAS_SARIF:
                     finding = create_code_security_finding(
@@ -1111,7 +1127,9 @@ class FileScanner:
                         file_path=file_path,
                         line_number=f.line_number or None,
                         start_column=f.start_column,
+                        end_column=f.end_column,
                         snippet=f.snippet,
+                        inspector=f.inspector or "bandit",
                     )
                 else:
                     finding = {
@@ -1120,17 +1138,18 @@ class FileScanner:
                         "message": f"Code security issue ({f.severity}): {f.description}",
                         "file_path": file_path,
                         "line_number": f.line_number or None,
+                        "start_column": f.start_column,
+                        "end_column": f.end_column,
                         "snippet": f.snippet,
+                        "details": {"scanner": f.inspector or "bandit"},
                     }
                 self.findings.append(finding)
             if code_findings and self.verbose:
-                print(f"  [CODE-SECURITY] {len(code_findings)} issue(s) found (bandit)")
-        except BanditUnavailableError as e:
-            self._code_scan_skipped_count += 1
-            if self._code_scanner_unavailable is None:
-                self._code_scanner_unavailable = str(e)
-                if self.verbose:
-                    print(f"  ⚠️  Code security scanner (Bandit) unavailable: {e}")
+                inspectors = ", ".join(inspection.inspectors)
+                print(
+                    f"  [CODE-SECURITY] {len(code_findings)} issue(s) found"
+                    f" ({inspectors})"
+                )
         except Exception as e:
             logger.warning(f"Error checking code security: {e}")
 
@@ -1465,10 +1484,10 @@ def scan_command(args) -> int:
 
     # Text output (default)
     if not args.sarif_output and not args.json_output:
-        bandit_msg = getattr(scanner, "_code_scanner_unavailable", None)
+        code_inspector_msg = getattr(scanner, "_code_scanner_unavailable", None)
         skipped = getattr(scanner, "_code_scan_skipped_count", 0)
-        if bandit_msg:
-            print(f"\n⚠️  Code security scanner (Bandit) unavailable: {bandit_msg}")
+        if code_inspector_msg:
+            print("\n⚠️  Code security inspector unavailable: " f"{code_inspector_msg}")
             print("    Reinstall: uv tool install --force ai-guardian")
             if skipped:
                 print(f"    Code security scan SKIPPED for {skipped} file(s).")
@@ -1493,7 +1512,7 @@ def scan_command(args) -> int:
                     print(f"   Code: {finding['snippet']}")
                 print()
         else:
-            if bandit_msg:
+            if code_inspector_msg:
                 print("✅ No other security issues detected")
             else:
                 print("✅ No security issues detected")
@@ -1524,7 +1543,7 @@ _RULE_ID_TO_VIOLATION_TYPE = {
 def _violation_type_from_rule_id(rule_id: str) -> str:
     """Derive violation_type from a finding's rule_id.
 
-    Handles formats: PROMPT-INJECTION-001, SECRET-001, B101 (Bandit), etc.
+    Handles formats: PROMPT-INJECTION-001, SECRET-001, B101, AST001, etc.
     """
     if not rule_id:
         return "scan_finding"
