@@ -14,7 +14,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
@@ -437,14 +437,20 @@ class MultiDaemonClient:
             _launch_in_terminal(cmd_parts, keep_open=True)
         elif target.runtime == "container":
             engine = target.container_engine or "podman"
-            exec_cmd = [engine, "exec", "-it", target.container_id] + cmd
+            exec_cmd: List[str] = [
+                engine,
+                "exec",
+                "-it",
+                target.container_id or "",
+            ] + cmd
             _launch_in_terminal(exec_cmd, keep_open=True)
         elif target.runtime == "kubernetes":
+            pod_name = target.pod_name or ""
             exec_cmd = [
                 "kubectl",
                 "exec",
                 "-it",
-                target.pod_name,
+                pod_name,
                 "-n",
                 target.namespace or "default",
                 "--",
@@ -594,7 +600,7 @@ class MultiDaemonClient:
         cfg, _ = _load_config_file()
         if not cfg:
             cfg = {}
-        features = get_feature_flags(cfg)
+        features: Dict[str, Any] = get_feature_flags(cfg)
         si_section = cfg.get("security_instructions")
         features["security_instructions"] = is_feature_enabled(
             (
@@ -618,7 +624,7 @@ class MultiDaemonClient:
         global_action = cfg.get("action", "block")
         if isinstance(global_action, dict):
             global_action = global_action.get("mode", "block")
-        scanner_actions = {}
+        scanner_actions: Dict[str, Any] = {}
         for key in scanner_action_keys:
             section = cfg.get(key, {})
             if isinstance(section, dict):
@@ -1530,7 +1536,7 @@ class MultiDaemonClient:
         full_cmd = [
             "kubectl",
             "exec",
-            target.pod_name,
+            target.pod_name or "",
             "-n",
             target.namespace or "default",
             "--",

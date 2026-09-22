@@ -186,7 +186,7 @@ def _compile_patterns() -> Dict[str, List[Tuple[re.Pattern, str]]]:
                         logger.warning("Invalid exfil detection pattern: %s", regex)
             return by_group
 
-        result = load_bundled_rules(
+        result: Dict[str, List[Tuple[re.Pattern, str]]] = load_bundled_rules(
             "exfil_detection", _transform, {}, "Exfil detection scanner"
         )
         if result:

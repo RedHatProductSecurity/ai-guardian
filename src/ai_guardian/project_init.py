@@ -21,13 +21,16 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Set, Tuple
 
 from ai_guardian.patterns.language import (
     LANGUAGE_REGISTRY,
     SKIP_DIRS,
     LanguageDefinition,
 )
+
+if TYPE_CHECKING:
+    from ai_guardian.scan_analyzer import ProgressiveSuppressor
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +88,7 @@ class ProjectInitializer:
 
     def __init__(self, project_dir: Optional[Path] = None):
         self.project_dir = Path(project_dir) if project_dir else Path.cwd()
-        self._last_suppressor = None
+        self._last_suppressor: Optional["ProgressiveSuppressor"] = None
 
     def detect_languages(self) -> List[DetectedLanguage]:
         ext_to_langs: Dict[str, List[LanguageDefinition]] = {}
@@ -406,7 +409,8 @@ class ProjectInitializer:
 
         result.detected_languages = self.detect_languages()
 
-        entries, ignore_files = [], []
+        entries: List[AllowlistEntry] = []
+        ignore_files: List[str] = []
         if result.detected_languages:
             entries, ignore_files = self.generate_allowlist(result.detected_languages)
         result.allowlist_entries = entries
@@ -1020,9 +1024,9 @@ def get_language_allowlist_patterns(
     """
     cached = _language_fp_cache.get(project_dir)
     if cached is not None:
-        all_patterns, ts = cached
+        cached_patterns, ts = cached
         if (time.monotonic() - ts) < _LANGUAGE_FP_CACHE_TTL:
-            return list(all_patterns.get(scanner_name, []))
+            return list(cached_patterns.get(scanner_name, []))
 
     if not project_dir:
         _language_fp_cache[project_dir] = ({}, time.monotonic())

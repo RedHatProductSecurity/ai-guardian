@@ -9,6 +9,7 @@ Usage:
     Automated scenarios:  ai-guardian dummy-agent --script scenarios/basic-secret.yaml
 """
 
+import importlib
 import json
 import os
 import sys
@@ -566,7 +567,7 @@ def _run_scenario_event(
 def run_script(script_path: str, colors: bool = True) -> int:
     """Run scenarios from a YAML file. Returns exit code (0=all pass, 1=failure)."""
     try:
-        import yaml  # type: ignore[import]
+        yaml: Any = importlib.import_module("yaml")
     except ImportError:
         print(
             "PyYAML required for script mode. Install with: pip install pyyaml",

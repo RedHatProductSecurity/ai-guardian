@@ -324,7 +324,7 @@ class ScannerManager:
     def get_scanner_list_json(self) -> str:
         """Return installed scanners as JSON string."""
         scanners = self.list_installed()
-        data = {
+        data: Dict[str, Any] = {
             "scanners": [
                 {
                     "name": s.name,
@@ -350,14 +350,14 @@ class ScannerManager:
         installer = ScannerInstaller()
         repo = installer.get_github_repo(scanner_name)
 
-        data = {
+        info_data: Dict[str, Any] = {
             "name": scanner.name,
             "version": scanner.version,
             "path": scanner.path,
             "is_default": scanner.is_default,
             "github": f"https://github.com/{repo}",
         }
-        return json.dumps(data, indent=2)
+        return json.dumps(info_data, indent=2)
 
     def print_supported_scanners(self):
         """Print all supported scanners with versions and repos."""

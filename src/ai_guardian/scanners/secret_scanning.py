@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.violations.utils import is_temp_path
 
@@ -685,7 +685,7 @@ def _run_secret_validation(secret_config, secrets_list, content, context):
 _last_secret_matched_text = ""
 _last_secret_line_number = None
 _last_secret_start_column = None
-_last_secret_findings = []
+_last_secret_findings: list[Dict] = []
 
 
 def _extract_matched_text_for_ask(secret_details, content):
@@ -748,6 +748,7 @@ def check_secrets(
     _last_secret_line_number = None
     _last_secret_start_column = None
     _last_secret_findings = []
+    secret_details: Optional[Dict[str, Any]] = None
     context = dict(context or {})
     context.setdefault("_allowlist_file_path", file_path)
     try:
@@ -858,7 +859,7 @@ def check_secrets(
             # 2. Scanner Engines (first available from config) - Falls back automatically
             #    - Engines auto-detect .gitleaks.toml if they support it
             # 3. BLOCK if no scanner available
-            gitleaks_config_path = None
+            gitleaks_config_path: Optional[str] = None
             config_source = None
             pattern_server_attempted = False
             pattern_server_url = None
@@ -874,7 +875,7 @@ def check_secrets(
                         server_patterns = pattern_client.get_patterns_path()
                         if server_patterns:
                             # SUCCESS: Use pattern server
-                            gitleaks_config_path = server_patterns
+                            gitleaks_config_path = str(server_patterns)
                             config_source = "pattern server"
                             logger.info(
                                 f"Using pattern server config: {server_patterns}"
@@ -894,7 +895,7 @@ def check_secrets(
             engine_config = None
             execution_strategy_name = "first-match"
             consensus_threshold = 2
-            _all_available_engines = None
+            _all_available_engines: Optional[list[Any]] = None
             if not gitleaks_config_path and HAS_SCANNER_ENGINE:
                 try:
                     scanner_config = (
@@ -1080,10 +1081,10 @@ def check_secrets(
                                 }
                                 for s in strategy_result.secrets
                             ]
-                            remaining = _gitleaks_cfg.filter_findings(
+                            remaining_findings = _gitleaks_cfg.filter_findings(
                                 findings_dicts, gl_lines, file_path, _gitleaks_allowlist
                             )
-                            if not remaining:
+                            if not remaining_findings:
                                 logger.info(
                                     "All strategy findings matched .gitleaks.toml allowlist — skipping"
                                 )
@@ -1352,7 +1353,7 @@ def check_secrets(
                     return False, None
 
             # Build scanner command
-            resolved_config_path = None
+            resolved_config_path: Optional[str] = None
             if engine_config and HAS_SCANNER_ENGINE:
                 # Use flexible engine builder (Issue #154)
                 resolved_config_path = resolve_engine_config_path(
@@ -1484,23 +1485,24 @@ def check_secrets(
                         f"but produced no findings — treating as clean"
                     )
                     if (
-                        execution_strategy_name == "first-match"
+                        engine_config is not None
+                        and execution_strategy_name == "first-match"
                         and _all_available_engines
                         and len(_all_available_engines) > 1
                     ):
-                        remaining = [
+                        remaining_engines: List[Any] = [
                             e
                             for e in _all_available_engines
                             if e.type != engine_config.type
                         ]
-                        if remaining:
+                        if remaining_engines:
                             logger.info(
                                 f"Engine {engine_config.type} found no secrets, "
-                                f"trying remaining engines: {[e.type for e in remaining]}"
+                                f"trying remaining engines: {[e.type for e in remaining_engines]}"
                             )
                             strategy = get_strategy("first-match")
                             fallback_result = strategy.execute(
-                                engine_configs=remaining,
+                                engine_configs=remaining_engines,
                                 scanner_fn=run_engine,
                                 source_file=tmp_file_path,
                                 report_file_prefix=report_file.replace(".json", ""),
@@ -1656,17 +1658,18 @@ def check_secrets(
                                     break
                         else:
                             # Legacy parser or single finding — check via line number
+                            legacy_line_text: Optional[str] = None
                             line_num = secret_details.get("line_number", 0)
                             if line_num > 0 and line_num <= len(content_lines):
-                                line_text = content_lines[line_num - 1]
+                                legacy_line_text = content_lines[line_num - 1]
                             elif secret_details.get("matched_text"):
-                                line_text = secret_details["matched_text"]
+                                legacy_line_text = secret_details["matched_text"]
                             else:
-                                line_text = None
+                                legacy_line_text = None
                             if (
-                                line_text is None
+                                legacy_line_text is None
                                 or not allowlist_utils.check_allowlist(
-                                    line_text, compiled_allowlist
+                                    legacy_line_text, compiled_allowlist
                                 )
                             ):
                                 all_allowlisted = False
@@ -1853,23 +1856,24 @@ def check_secrets(
                 # No secrets found by primary engine.
                 # For first-match: try remaining engines (Issue #523)
                 if (
-                    execution_strategy_name == "first-match"
+                    engine_config is not None
+                    and execution_strategy_name == "first-match"
                     and _all_available_engines
                     and len(_all_available_engines) > 1
                 ):
-                    remaining = [
+                    remaining_engines = [
                         e
                         for e in _all_available_engines
                         if e.type != engine_config.type
                     ]
-                    if remaining:
+                    if remaining_engines:
                         logger.info(
                             f"Engine {engine_config.type} found no secrets, "
-                            f"trying remaining engines: {[e.type for e in remaining]}"
+                            f"trying remaining engines: {[e.type for e in remaining_engines]}"
                         )
                         strategy = get_strategy("first-match")
                         fallback_result = strategy.execute(
-                            engine_configs=remaining,
+                            engine_configs=remaining_engines,
                             scanner_fn=run_engine,
                             source_file=tmp_file_path,
                             report_file_prefix=report_file.replace(".json", ""),
@@ -1963,7 +1967,12 @@ def check_secrets(
 
                             scanner_name = fallback_result.engine
                             fallback_engine_config = next(
-                                (e for e in remaining if e.type == scanner_name), None
+                                (
+                                    e
+                                    for e in remaining_engines
+                                    if e.type == scanner_name
+                                ),
+                                None,
                             )
                             fallback_resolved = (
                                 resolve_engine_config_path(

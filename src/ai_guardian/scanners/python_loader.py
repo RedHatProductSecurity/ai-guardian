@@ -105,7 +105,7 @@ def discover_entry_points() -> Dict[str, Type[Scanner]]:
     Returns:
         Dict mapping entry point name to Scanner subclass
     """
-    discovered = {}
+    discovered: Dict[str, Type[Scanner]] = {}
     try:
         if sys.version_info >= (3, 12):
             eps = importlib.metadata.entry_points(group="ai_guardian.scanners")
@@ -146,7 +146,7 @@ def discover_scanner_directory() -> Dict[str, Type[Scanner]]:
     if not scanner_dir.is_dir():
         return {}
 
-    discovered = {}
+    discovered: Dict[str, Type[Scanner]] = {}
     for py_file in sorted(scanner_dir.glob("*.py")):
         if py_file.name.startswith("_"):
             continue
@@ -160,10 +160,13 @@ def discover_scanner_directory() -> Dict[str, Type[Scanner]]:
                     and issubclass(attr, Scanner)
                     and attr is not Scanner
                 ):
-                    discovered[attr.name] = attr
+                    scanner_cls = _validate_scanner_class(
+                        attr, f"directory {py_file}::{attr_name}"
+                    )
+                    discovered[scanner_cls.name] = scanner_cls
                     logger.info(
                         f"Discovered scanner from directory: "
-                        f"{attr.name} ({py_file.name}::{attr_name})"
+                        f"{scanner_cls.name} ({py_file.name}::{attr_name})"
                     )
         except Exception as e:
             logger.warning(f"Failed to load scanner from {py_file}: {e}")

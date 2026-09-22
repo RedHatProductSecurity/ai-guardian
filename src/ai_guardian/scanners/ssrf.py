@@ -71,7 +71,7 @@ import re
 import socket
 import struct
 import urllib.parse
-from typing import Tuple, Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 from ai_guardian.patterns import load_bundled_rules
 
@@ -172,6 +172,9 @@ class SSRFProtector:
         self.action = self.config.get("action", "block")
         self.allow_localhost = self.config.get("allow_localhost", False)
         self.findings: List[Dict[str, Any]] = []
+        self.last_line_number: Optional[int] = None
+        self.last_start_column: Optional[int] = None
+        self.last_end_column: Optional[int] = None
 
         # Parse allowed domains (for allow-list functionality)
         # Dual-path: exact strings use exact/subdomain matching (backward compat),
@@ -239,7 +242,7 @@ class SSRFProtector:
                 else:
                     cidr = ip_range
 
-                network = ipaddress.ip_network(cidr, strict=False)
+                network = ipaddress.ip_network(cast(str, cidr), strict=False)
                 self._blocked_ip_networks.append(network)
             except (ValueError, TypeError) as e:
                 logger.warning(f"Invalid IP range in SSRF config: {ip_range} - {e}")
@@ -771,6 +774,8 @@ class SSRFProtector:
 
         if not scheme:
             # Failed to parse - fail closed (treat as immutable)
+            return True, "failed to parse URL", True
+        if path is None:
             return True, "failed to parse URL", True
 
         # IMMUTABLE: Check dangerous schemes (cannot be overridden by allow-list)

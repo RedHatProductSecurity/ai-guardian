@@ -312,7 +312,7 @@ class SecretRedactionContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             # Get recent violations related to secret redaction
             recent = logger.get_recent_violations(limit=1000)
             redaction_count = 0
-            secret_types = {}
+            secret_types: dict[str, int] = {}
 
             for v in recent:
                 reason = v.get("reason", "")

@@ -547,7 +547,7 @@ def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
             "tool.execute.after",
         )
         registration = _read_json_config(_resolve_opencode_config())
-        assert str(source_path) in registration.get("plugins", [])
+        assert str(source_path) in registration.get("plugin", [])
     elif ide_type == "pi":
         required_events = (
             'pi.on("input"',

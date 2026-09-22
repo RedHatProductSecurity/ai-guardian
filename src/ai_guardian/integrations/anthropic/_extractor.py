@@ -260,7 +260,7 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
         if base_url:
             kwargs.setdefault("azure_endpoint", base_url)
         client = openai.AzureOpenAI(**kwargs)
-        client._ai_guardian_provider = provider  # type: ignore[attr-defined]
+        client._ai_guardian_provider = provider
         return client
 
     ctor_kwargs: dict = {}
@@ -272,7 +272,7 @@ def _build_openai_client(provider: str, pcfg: dict, **kwargs: Any) -> Any:
         ctor_kwargs.setdefault("api_key", "not-needed")
     ctor_kwargs.update(kwargs)
     client = openai.OpenAI(**ctor_kwargs)
-    client._ai_guardian_provider = provider  # type: ignore[attr-defined]
+    client._ai_guardian_provider = provider
     return client
 
 

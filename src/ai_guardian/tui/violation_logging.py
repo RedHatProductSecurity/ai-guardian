@@ -250,7 +250,7 @@ class ViolationLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             recent = logger.get_recent_violations(limit=1000)
             total = len(recent)
 
-            type_counts = {}
+            type_counts: Dict[str, int] = {}
             for v in recent:
                 vtype = v.get("type", "unknown")
                 type_counts[vtype] = type_counts.get(vtype, 0) + 1

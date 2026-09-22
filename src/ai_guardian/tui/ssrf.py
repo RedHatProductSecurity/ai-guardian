@@ -427,9 +427,10 @@ class SSRFContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         """Load and display SSRF detection statistics."""
         try:
             from ai_guardian.violations.logger import ViolationLogger
+            from ai_guardian.violations.counter import ViolationCounter
 
             logger = ViolationLogger()
-            stats = logger.get_statistics()
+            stats = ViolationCounter().get_counters()
 
             # Filter for SSRF violations
             ssrf_count = 0

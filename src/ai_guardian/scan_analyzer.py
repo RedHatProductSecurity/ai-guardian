@@ -15,7 +15,17 @@ import shutil
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    cast,
+)
 
 if TYPE_CHECKING:
     import threading
@@ -557,8 +567,8 @@ def build_recommendations(
 
     dir_scanner_map: Dict[str, Set[str]] = defaultdict(set)
     for finding in findings:
-        fp = finding.get("file_path") or ""
-        parts = PurePosixPath(fp).parts
+        file_path = cast(str, finding.get("file_path") or "")
+        parts = PurePosixPath(file_path).parts
         if parts and len(parts) > 1:
             scanner = _scanner_for_rule_id(finding.get("rule_id", ""))
             if scanner:

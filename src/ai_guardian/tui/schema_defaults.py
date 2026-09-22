@@ -10,7 +10,9 @@ import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Protocol, Tuple, cast
+
+from textual.widget import Widget
 
 from ai_guardian.config.utils import CONFIG_READ_ONLY_MESSAGE, is_config_read_only
 from ai_guardian.tui.widgets import sanitize_enabled_value
@@ -29,6 +31,28 @@ class _MissingSentinel:
 
 
 _MISSING = _MissingSentinel()
+
+
+class _WidgetHost(Protocol):
+    """Textual widget surface supplied by classes using the mixin."""
+
+    def query_one(self, selector: str) -> Widget: ...
+
+
+class _ConfigApp(Protocol):
+    """Application attributes used by config panels."""
+
+    config_scope: str
+
+    def notify(self, message: str, *, severity: str) -> Any: ...
+
+
+class _ConfigHost(Protocol):
+    """Host methods supplied by Textual config panels."""
+
+    app: _ConfigApp
+
+    def load_config(self) -> None: ...
 
 
 class SchemaDefaults:
@@ -65,7 +89,8 @@ class SchemaDefaults:
         ref = node.get("$ref", "")
         if ref.startswith("#/definitions/"):
             def_name = ref[len("#/definitions/") :]
-            resolved = self._schema.get("definitions", {}).get(def_name)
+            schema = self._schema or {}
+            resolved = schema.get("definitions", {}).get(def_name)
             if resolved is not None:
                 return resolved
         return node
@@ -195,7 +220,7 @@ class SchemaDefaultsMixin:
             current_val = config_section.get(field_name, default_val)
             is_changed = current_val != default_val
             try:
-                widget = self.query_one(f"#{widget_id}")
+                widget = cast(_WidgetHost, self).query_one(f"#{widget_id}")
                 if is_changed:
                     widget.add_class("changed-from-default")
                 else:
@@ -218,7 +243,7 @@ class SchemaDefaultsMixin:
         if default_val is _MISSING:
             return
         try:
-            widget = self.query_one(f"#{widget_id}")
+            widget = cast(_WidgetHost, self).query_one(f"#{widget_id}")
             if new_value != default_val:
                 widget.add_class("changed-from-default")
             else:
@@ -239,7 +264,7 @@ class ConfigSaveMixin:
     @property
     def _is_project_scope(self) -> bool:
         try:
-            return self.app.config_scope == "project"
+            return cast(_ConfigHost, self).app.config_scope == "project"
         except Exception:
             return False
 
@@ -344,25 +369,26 @@ class ConfigSaveMixin:
         Clears input_widget and calls self.load_config() on success.
         """
         sect = section if section is not None else self.CONFIG_SECTION
+        host = cast(_ConfigHost, self)
         try:
             config = self._load_full_config()
             target = _ensure_section(config, sect)
             if field not in target:
                 target[field] = []
             if value in target[field]:
-                self.app.notify("Already in list", severity="warning")
+                host.app.notify("Already in list", severity="warning")
                 return False
             target[field].append(value)
             if self._write_full_config(config):
                 if input_widget is not None:
                     input_widget.value = ""
-                self.load_config()
-                self.app.notify(f"Added to {field}: {value}", severity="success")
+                host.load_config()
+                host.app.notify(f"Added to {field}: {value}", severity="success")
                 return True
-            self.app.notify(f"Error adding to {field}", severity="error")
+            host.app.notify(f"Error adding to {field}", severity="error")
             return False
         except Exception as e:
-            self.app.notify(f"Error: {e}", severity="error")
+            host.app.notify(f"Error: {e}", severity="error")
             return False
 
 

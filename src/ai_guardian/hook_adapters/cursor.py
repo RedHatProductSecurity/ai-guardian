@@ -111,8 +111,9 @@ class CursorAdapter(HookAdapter):
             return "Task"
         return None
 
-    def _extract_tool_input(self, hook_data: Dict) -> Dict:
-        result = super()._extract_tool_input(hook_data)
+    @staticmethod
+    def _extract_tool_input(hook_data: Dict) -> Dict:
+        result = HookAdapter._extract_tool_input(hook_data)
         if isinstance(hook_data.get("tool_input"), str):
             try:
                 decoded = json.loads(hook_data["tool_input"])
@@ -124,7 +125,7 @@ class CursorAdapter(HookAdapter):
             command = hook_data.get("command")
             if isinstance(command, str) and command:
                 result = {"command": command}
-        if self._event_name(hook_data) == "subagentstart":
+        if CursorAdapter._event_name(hook_data) == "subagentstart":
             result = {
                 key: hook_data[key]
                 for key in ("subagent_id", "subagent_type", "task")
@@ -197,7 +198,9 @@ class CursorAdapter(HookAdapter):
             HookEvent.BEFORE_READ_FILE,
             HookEvent.SUBAGENT_START,
         ):
-            response = {"permission": "deny" if has_secrets else "allow"}
+            response: Dict[str, Any] = {
+                "permission": "deny" if has_secrets else "allow"
+            }
             # Cursor documents `permission` for tool/file pre-hooks.  Keep
             # `continue` for beforeReadFile compatibility with older Cursor
             # hook contracts already supported by AI Guardian.

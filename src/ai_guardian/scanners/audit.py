@@ -88,7 +88,7 @@ class ScanAuditLogger:
         limit: int = 100,
         engine_filter: Optional[str] = None,
     ) -> List[Dict]:
-        entries = []
+        entries: List[Dict] = []
         if not self.log_path.exists():
             return entries
         try:

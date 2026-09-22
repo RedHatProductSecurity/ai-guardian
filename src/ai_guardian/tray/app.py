@@ -331,6 +331,7 @@ class DaemonTray:
 
         # Remote trace cache (#2188)
         self._trace_catchup_done: set = set()
+        self._tray_forwarding_token: str = ""
 
     def start(self):
         """Start tray icon in a background thread.

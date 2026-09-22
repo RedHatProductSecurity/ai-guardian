@@ -6,7 +6,7 @@ and JSON responses with decision/systemMessage fields.
 
 import json
 import logging
-from typing import ClassVar, Dict, List, Optional
+from typing import Any, ClassVar, Dict, List, Optional
 
 from ai_guardian.constants import ALL_HOOK_EVENT_DISPLAY_NAMES, HookEvent
 from ai_guardian.hook_adapters.base import HookAdapter, NormalizedHookInput
@@ -84,6 +84,7 @@ class GeminiCLIAdapter(HookAdapter):
         redacted_output: Optional[str] = None,
         tool_name: Optional[str] = None,
     ) -> Dict:
+        response: Dict[str, Any]
         if has_secrets and error_message:
             final_error = self._combine_error_messages(error_message, warning_message)
             response = {

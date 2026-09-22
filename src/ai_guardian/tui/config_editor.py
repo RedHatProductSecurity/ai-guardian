@@ -387,13 +387,16 @@ class ConfigEditorContent(Container):
         """Write config file with backup. Returns (success, error_message)."""
         if is_config_read_only():
             return False, CONFIG_READ_ONLY_MESSAGE
+        config_path = self._config_path
+        if config_path is None:
+            return False, "Config path is not configured"
         try:
-            if self._config_path.exists():
-                backup_path = self._config_path.with_suffix(".json.bak")
-                shutil.copy2(self._config_path, backup_path)
+            if config_path.exists():
+                backup_path = config_path.with_suffix(".json.bak")
+                shutil.copy2(config_path, backup_path)
 
-            self._config_path.parent.mkdir(parents=True, exist_ok=True)
-            self._config_path.write_text(text, encoding="utf-8")
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            config_path.write_text(text, encoding="utf-8")
             return True, None
         except Exception as e:
             return False, str(e)

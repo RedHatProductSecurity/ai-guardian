@@ -98,6 +98,7 @@ class SecretRedactor:
         for pattern_info in patterns_to_use:
             try:
                 # Handle both tuple format (hardcoded) and dict format (TOML/pattern server)
+                flags: int
                 if isinstance(pattern_info, tuple):
                     pattern, strategy, secret_type = pattern_info
                     flags = re.IGNORECASE | re.MULTILINE
@@ -328,7 +329,7 @@ class SecretRedactor:
         redactions = []
 
         # Track claimed regions in original-text coordinates
-        claimed_regions = []
+        claimed_regions: List[Tuple[int, int]] = []
 
         # Phase 1: Collect ALL matches from original text across all patterns.
         # Always search the original text so positions are in original coordinates.
@@ -356,7 +357,7 @@ class SecretRedactor:
 
                 redacted, metadata = self._apply_strategy(match, strategy, secret_type)
 
-                if redacted is None:
+                if redacted is None or metadata is None:
                     continue
 
                 all_pending.append(
@@ -436,7 +437,7 @@ class SecretRedactor:
 
     def _apply_strategy(
         self, match: re.Match, strategy: str, secret_type: str
-    ) -> Tuple[str, Dict]:
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """Apply a masking strategy to a matched secret."""
         if strategy == "full_redact":
             return self._full_redact(secret_type)
@@ -498,7 +499,7 @@ class SecretRedactor:
         """
         var_name = match.group(1)
         # Check if there's a quote group
-        if match.lastindex >= 3:
+        if match.lastindex is not None and match.lastindex >= 3:
             # Has quote marks
             quote = match.group(2) if match.group(2) else ""
             redacted = f"{var_name}={quote}[HIDDEN]{quote}"
@@ -600,7 +601,9 @@ class SecretRedactor:
             {"method": "context_secret", "context": context_prefix.strip()},
         )
 
-    def _redact_credit_card(self, match: re.Match) -> Tuple[str, Dict]:
+    def _redact_credit_card(
+        self, match: re.Match
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """
         Redact credit card number after Luhn and IIN/BIN prefix validation.
 
@@ -629,7 +632,7 @@ class SecretRedactor:
         domain = email[at_idx + 1 :]
         return (f"[HIDDEN]@{domain}", {"method": "pii_email", "domain": domain})
 
-    def _redact_iban(self, match: re.Match) -> Tuple[str, Dict]:
+    def _redact_iban(self, match: re.Match) -> Tuple[Optional[str], Optional[Dict]]:
         """
         Redact IBAN after mod-97 validation.
 
@@ -645,7 +648,9 @@ class SecretRedactor:
             {"method": "iban", "country": country},
         )
 
-    def _redact_canada_sin(self, match: re.Match) -> Tuple[str, Dict]:
+    def _redact_canada_sin(
+        self, match: re.Match
+    ) -> Tuple[Optional[str], Optional[Dict]]:
         """
         Redact Canadian SIN after Luhn validation.
 
@@ -656,7 +661,7 @@ class SecretRedactor:
             return (None, None)
         return ("[HIDDEN Canadian SIN]", {"method": "canada_sin"})
 
-    def _redact_aadhaar(self, match: re.Match) -> Tuple[str, Dict]:
+    def _redact_aadhaar(self, match: re.Match) -> Tuple[Optional[str], Optional[Dict]]:
         """
         Redact Indian Aadhaar number after validation.
 

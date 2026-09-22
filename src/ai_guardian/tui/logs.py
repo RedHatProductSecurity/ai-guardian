@@ -172,13 +172,23 @@ class LogsContent(Container):
         pattern_v = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - [^ ]+ - ([^ ]+) - ([A-Z]+) - (.+)$"
         match = re.match(pattern_v, line)
         if match:
-            return match.groups()
+            return (
+                match.group(1),
+                match.group(2),
+                match.group(3),
+                match.group(4),
+            )
 
         # Legacy format without version: timestamp - module - LEVEL - message
         pattern = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) - ([^ ]+) - ([A-Z]+) - (.+)$"
         match = re.match(pattern, line)
         if match:
-            return match.groups()
+            return (
+                match.group(1),
+                match.group(2),
+                match.group(3),
+                match.group(4),
+            )
 
         return None
 

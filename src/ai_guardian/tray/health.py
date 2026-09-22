@@ -154,12 +154,12 @@ class TrayHealthMonitor:
         self._stale_code_warned = stale
         self._tray._anim._invalidate_discovery_frames()
         if self._tray._icon:
-            self._tray._dispatch_to_main(
-                lambda: (
-                    setattr(self._tray._icon, "icon", self._tray._create_icon()),
-                    self._tray._icon.update_menu(),
-                )
-            )
+
+            def refresh_icon() -> None:
+                self._tray._icon.icon = self._tray._create_icon()
+                self._tray._icon.update_menu()
+
+            self._tray._dispatch_to_main(refresh_icon)
 
     def _is_target_stale(self, target) -> bool:
         """Return True if a specific daemon target is running stale code."""

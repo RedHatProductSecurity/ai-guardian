@@ -484,7 +484,7 @@ class ProactivePromptDialog:
         for tier in tiers:
             try:
                 if tier == "tkinter" and _tkinter_available():
-                    if tray_safe and system == "Darwin":
+                    if tray_safe and system in {"Darwin", "Windows"}:
                         result = self._show_tkinter_subprocess()
                         if result is not None:
                             return result

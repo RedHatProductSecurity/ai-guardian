@@ -9,6 +9,7 @@ import platform
 import subprocess
 import tempfile
 from pathlib import Path
+from typing import TextIO, cast
 
 from ai_guardian.desktop_utils import open_url
 
@@ -307,7 +308,7 @@ class MetricsContent(Container):
                 tmp.write(format_audit_json(report))
             elif fmt == "csv":
                 violations = computer._read_violations()
-                format_audit_csv(violations, tmp)
+                format_audit_csv(violations, cast(TextIO, tmp.file))
 
             tmp.close()
             self._last_export_path = tmp.name

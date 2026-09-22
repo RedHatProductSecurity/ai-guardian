@@ -33,10 +33,10 @@ BUNDLED_FILES = {
 }
 
 import logging
-from typing import Any, Callable, List, TypeVar
+from typing import Any, Callable, List, Sized, TypeVar
 
 _logger = logging.getLogger(__name__)
-T = TypeVar("T")
+T = TypeVar("T", bound=Sized)
 
 
 def load_bundled_rules(

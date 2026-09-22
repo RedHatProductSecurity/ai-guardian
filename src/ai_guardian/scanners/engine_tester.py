@@ -159,7 +159,9 @@ def test_engine(
                 global_path = client.get_patterns_path()
             else:
                 global_path = None
-            config_path = resolve_engine_config_path(engine_config, global_path)
+            config_path = resolve_engine_config_path(
+                engine_config, str(global_path) if global_path is not None else None
+            )
         except Exception as exc:
             logger.warning("Pattern server resolution failed: %s", exc)
 

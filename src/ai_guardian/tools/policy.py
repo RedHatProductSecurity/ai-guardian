@@ -18,7 +18,7 @@ import os
 import platform
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Set, Union
+from typing import Any, Dict, List, Optional, Tuple, Set, Union
 
 from ai_guardian.constants import (
     ANTIGRAVITY_FILE_ARG_KEYS,
@@ -113,9 +113,9 @@ class ToolPolicyChecker:
         """
         self._config_warnings: List[str] = []
         self.config = config or self._load_config()
-        self.last_deny_action = None
-        self.last_deny_matched_pattern = None
-        self.last_deny_check_value = None
+        self.last_deny_action: Optional[str] = None
+        self.last_deny_matched_pattern: Optional[str] = None
+        self.last_deny_check_value: Optional[str] = None
 
     def _should_skip_immutable_protection(self, file_path: str, tool_name: str) -> bool:
         """
@@ -1543,7 +1543,7 @@ class ToolPolicyChecker:
         tool_name: str,
         check_value: str,
         reason: str,
-        matcher: str,
+        matcher: Optional[str],
         hook_data: Dict,
         violation_type: str = ViolationType.TOOL_PERMISSION,
     ):
@@ -2067,7 +2067,7 @@ class ToolPolicyChecker:
         This prevents users from bypassing enterprise policies by adding their own
         remote URLs when an enterprise system config is deployed.
         """
-        remote_entries = []
+        remote_entries: List[Tuple[Union[str, Dict[str, Any]], Optional[Path]]] = []
 
         # Priority 1: System-wide config (enterprise deployment)
         system_config_path = self._get_system_config_path()
@@ -2186,10 +2186,11 @@ class ToolPolicyChecker:
 
                 for key_path in security_critical_keys:
                     # Navigate nested dict
-                    current = config
+                    current: Optional[Dict[Any, Any]] = config
                     for key in key_path[:-1]:
-                        if key in current:
-                            current = current[key]
+                        if current is not None and key in current:
+                            nested = current[key]
+                            current = nested if isinstance(nested, dict) else None
                         else:
                             current = None
                             break
@@ -2253,12 +2254,17 @@ class ToolPolicyChecker:
         for entry, base_path in remote_entries:
             try:
                 # Parse entry (string or dict with token_env)
+                url: Optional[str] = None
+                token_env: Optional[str] = None
                 if isinstance(entry, str):
                     url = entry
-                    token_env = None
                 elif isinstance(entry, dict):
-                    url = entry.get("url")
-                    token_env = entry.get("token_env")
+                    raw_url = entry.get("url")
+                    raw_token_env = entry.get("token_env")
+                    if isinstance(raw_url, str):
+                        url = raw_url
+                    if isinstance(raw_token_env, str):
+                        token_env = raw_token_env
                 else:
                     logger.warning(f"Invalid remote_configs entry: {entry}")
                     continue

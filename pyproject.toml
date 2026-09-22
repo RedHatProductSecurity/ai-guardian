@@ -83,6 +83,8 @@ otel = [
 dev = [
   "pytest>=8.4.2",
   "pytest-asyncio>=1.0.0",
+  "mypy>=1.18,<2",
+  "types-PyYAML>=6.0.12",
 ]
 
 [project.urls]
@@ -172,6 +174,21 @@ ignore = [
 "src/ai_guardian/setup.py" = ["F821"]
 "src/ai_guardian/tui/ask_dialog_textual.py" = ["F821"]
 "src/ai_guardian/tui/violation_logging.py" = ["F821"]
+
+[tool.mypy]
+# Type-check on the CI runtime. Runtime compatibility with Python 3.9 remains
+# covered by the test matrix; this avoids parsing newer third-party stubs with
+# syntax unavailable to older mypy targets.
+python_version = "3.12"
+implicit_optional = true
+show_error_codes = true
+warn_unused_ignores = true
+
+# Several integrations are optional or platform-specific and do not publish
+# usable stubs for every supported environment. Ignore only import metadata;
+# all errors in ai_guardian source remain enforced.
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.ai-guardian.scanners]
 # Pinned versions used by `scanner install --use-pinned` and container builds.

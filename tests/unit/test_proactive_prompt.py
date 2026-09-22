@@ -234,6 +234,25 @@ def test_tray_prompt_uses_tkinter_subprocess():
     show.assert_called_once_with()
 
 
+def test_windows_tray_prompt_uses_tkinter_subprocess():
+    dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
+    with (
+        patch("platform.system", return_value="Windows"),
+        patch(
+            "ai_guardian.tray.proactive_prompt.get_preferred_ui", return_value="auto"
+        ),
+        patch(
+            "ai_guardian.tray.proactive_prompt._tkinter_available", return_value=True
+        ),
+        patch.object(dialog, "_show_tkinter_subprocess", return_value="action") as show,
+        patch.object(dialog, "_show_tkinter") as in_process,
+    ):
+        assert dialog.show(tray_safe=True) == "action"
+
+    show.assert_called_once_with()
+    in_process.assert_not_called()
+
+
 def test_linux_tray_prompt_uses_in_process_tkinter():
     dialog = ProactivePromptDialog("Title", "Message", "Update", "Skip")
     with (
@@ -755,6 +774,7 @@ def test_manual_ide_check_reports_unconfigured_codex_as_warning():
         patch.object(monitor, "_get_installed_ides", return_value=["codex"]),
         patch.object(monitor, "_get_unconfigured_ides", return_value=["codex"]),
         patch("ai_guardian.tray.plugins.send_notification") as notify,
+        patch("ai_guardian.tray.health.threading.Thread"),
     ):
         monitor._check_ide_setup_notification(manual=True)
 

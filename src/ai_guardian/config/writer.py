@@ -13,7 +13,7 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 try:
     import fcntl
@@ -175,7 +175,7 @@ def add_allowlist_pattern(
     if config_path is None:
         config_path = _resolve_config_path("global")
 
-    pattern_entry = pattern
+    pattern_entry: Union[str, Dict[str, str]] = pattern
     if valid_until:
         pattern_entry = {"pattern": pattern, "valid_until": valid_until}
 
@@ -629,6 +629,13 @@ _PROVENANCE_LABELS = {
 }
 
 
+def _provenance_label(value: object) -> str:
+    """Return a display label for a validated provenance value."""
+    if isinstance(value, str):
+        return _PROVENANCE_LABELS.get(value, value)
+    return ""
+
+
 def format_provenance_text(
     config: dict,
     provenance: dict,
@@ -659,7 +666,7 @@ def format_provenance_text(
             if isinstance(prov, dict):
                 lines.append(format_provenance_text(value, prov, indent + 1))
             else:
-                label = _PROVENANCE_LABELS.get(prov, prov or "")
+                label = _provenance_label(prov)
                 for sub_key in sorted(value.keys()):
                     if sub_key.startswith("_"):
                         continue
@@ -676,11 +683,11 @@ def format_provenance_text(
                         f"{prefix}  - {_format_scalar(item_val):<28s} ({label})"
                     )
             else:
-                label = _PROVENANCE_LABELS.get(prov, prov or "")
+                label = _provenance_label(prov)
                 for item in value:
                     lines.append(f"{prefix}  - {_format_scalar(item):<28s} ({label})")
         else:
-            label = _PROVENANCE_LABELS.get(prov, prov or "")
+            label = _provenance_label(prov)
             lines.append(f"{prefix}{key}: {_format_scalar(value):<30s} ({label})")
 
     return "\n".join(lines)

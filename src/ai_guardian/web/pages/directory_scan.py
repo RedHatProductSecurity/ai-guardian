@@ -3,6 +3,7 @@
 import threading
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
 
 from nicegui import run, ui
 
@@ -182,7 +183,7 @@ def create_directory_scan_page(service, daemon_name: str):
 
         results_container = ui.column().classes("w-full gap-4")
 
-        all_findings = []
+        all_findings: list[dict[str, Any]] = []
         cancel_event = threading.Event()
 
         with ui.row().classes("items-center gap-2"):

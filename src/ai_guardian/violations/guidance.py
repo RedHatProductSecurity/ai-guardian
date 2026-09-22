@@ -28,6 +28,11 @@ def _temp_file_notice(section: str, key: str) -> str:
     return f"Detection in temporary file. Add {verb} to {section}.{key}:"
 
 
+def _is_temp_file_path(value: object) -> bool:
+    """Check a dynamically loaded violation path before calling the utility."""
+    return isinstance(value, str) and is_temp_path(value)
+
+
 def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
     """Return (instructions_text, config_snippet) for a violation type.
 
@@ -60,7 +65,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     if vtype == "prompt_injection":
         file_path = blocked.get("file_path")
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             return _temp_file_notice("prompt_injection", "allowlist_patterns"), ""
         pattern = blocked.get("pattern", "<pattern>")
         snippet = json.dumps(
@@ -70,7 +75,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     if vtype == "jailbreak_detected":
         file_path = blocked.get("file_path")
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             return _temp_file_notice("prompt_injection", "allowlist_patterns"), ""
         pattern = blocked.get("pattern", blocked.get("matched_text", "<pattern>"))
         snippet = json.dumps(
@@ -84,7 +89,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         placeholder = (
             f"<regex-for-{secret_type}>" if secret_type != "unknown" else "<regex>"
         )
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             snippet = json.dumps(
                 {"secret_scanning": {"allowlist_patterns": [placeholder]}}, indent=2
             )
@@ -120,7 +125,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     if vtype == "pii_detected":
         file_path = blocked.get("file_path")
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             return _temp_file_notice("scan_pii", "allowlist_patterns"), ""
         pii_types = blocked.get("pii_types", [])
         placeholders = _type_placeholders(pii_types)
@@ -163,7 +168,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     if vtype == "config_file_exfil":
         file_path = blocked.get("file_path")
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             return _temp_file_notice("config_file_scanning", "ignore_files"), ""
         snippet = json.dumps(
             {"config_file_scanning": {"ignore_files": [file_path or "<file>"]}},
@@ -201,7 +206,7 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     if vtype in ("image_secret_detected", "image_pii_detected"):
         file_path = blocked.get("file_path")
-        if is_temp_path(file_path):
+        if _is_temp_file_path(file_path):
             return _temp_file_notice("image_scanning", "ignore_files"), ""
         snippet = json.dumps(
             {"image_scanning": {"ignore_files": [file_path or "<file>"]}}, indent=2

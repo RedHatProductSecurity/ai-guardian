@@ -4,7 +4,7 @@ import logging
 import platform
 import shutil
 import subprocess
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def open_in_editor(
 def _build_editor_command(
     file_path: str,
     line_number: Optional[int] = None,
-) -> Tuple[list, str]:
+) -> Tuple[Union[List[str], str], str]:
     """Build the command to open a file in the best available editor."""
     line = line_number or 1
 

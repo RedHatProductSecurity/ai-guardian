@@ -15,7 +15,7 @@ NEW in v1.9.0: Pattern server support for PII Detection.
 
 import logging
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
 
 from ai_guardian.patterns.server import PatternServerClient
 from ai_guardian.patterns import BUNDLED_FILES
@@ -44,7 +44,7 @@ class PatternLoader(ABC):
         """
         self.feature_name = feature_name
         self.pattern_type = pattern_type
-        self.pattern_sources = {}  # Track where each pattern came from
+        self.pattern_sources: Dict[str, str] = {}  # Track where each pattern came from
 
     @abstractmethod
     def get_immutable_patterns(self) -> Dict[str, Any]:

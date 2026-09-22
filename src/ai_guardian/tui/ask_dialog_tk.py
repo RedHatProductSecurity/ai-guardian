@@ -155,7 +155,7 @@ class _TkinterAskDialog:
         )
         if v.total_findings and v.total_findings > 1:
             remaining = v.total_findings - (v.finding_index or 0) - 1
-            counter_text = f"  ({v.finding_index + 1} of {v.total_findings}"
+            counter_text = f"  ({(v.finding_index or 0) + 1} of {v.total_findings}"
             if remaining > 0:
                 counter_text += f", {remaining} more"
             counter_text += ")"

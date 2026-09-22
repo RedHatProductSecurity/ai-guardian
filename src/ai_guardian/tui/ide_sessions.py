@@ -163,7 +163,7 @@ class IDESessionsContent(Container):
             from ai_guardian.sessions.discovery import get_default_ide
 
             try:
-                from ai_guardian.config.loaders import get_config
+                from ai_guardian.config.utils import get_config
 
                 config = get_config()
             except Exception:
@@ -179,10 +179,8 @@ class IDESessionsContent(Container):
 
     def _get_refresh_interval(self) -> float:
         try:
-            from ai_guardian.config.loaders import (
-                get_config,
-                resolve_tracing_config,
-            )
+            from ai_guardian.config.loaders import resolve_tracing_config
+            from ai_guardian.config.utils import get_config
 
             cfg = get_config()
             return resolve_tracing_config(cfg)["auto_refresh_interval_seconds"]
@@ -302,7 +300,7 @@ class IDESessionsContent(Container):
         if not page_sessions:
             tree.root.add_leaf("[dim]No sessions found.[/dim]")
         else:
-            projects = {}
+            projects: dict[str, list[dict]] = {}
             for s in page_sessions:
                 proj = s.get("project_path", "") or "No project"
                 projects.setdefault(proj, []).append(s)

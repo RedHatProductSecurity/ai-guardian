@@ -158,7 +158,7 @@ class OffensiveLanguageContent(Container):
             from ai_guardian.violations.logger import ViolationLogger
 
             vl = ViolationLogger()
-            violations = vl.get_violations(
+            violations = vl.get_recent_violations(
                 limit=10, violation_type="offensive_language"
             )
             if not violations:

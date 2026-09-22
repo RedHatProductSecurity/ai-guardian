@@ -224,6 +224,8 @@ def run_python_scanner(
         ScanResult with findings from this scanner
     """
     scanner = engine_config.python_scanner
+    if scanner is None:
+        raise ValueError(f"Python scanner is not configured for {engine_config.type}")
     scanner_name = getattr(scanner, "name", "python")
 
     cached, cfg_hash = _cache_get(cache, content_hash, engine_config, scanner_name)
@@ -432,7 +434,7 @@ def _parse_secrets_result(
         parsed = parser.parse(report_file)
 
         result = _build_scan_result_from_dict(
-            engine_config.type, parsed, elapsed_ms, original_file_path
+            engine_config.type, parsed or {}, elapsed_ms, original_file_path
         )
         extra = ""
         if not result.has_secrets:

@@ -273,13 +273,13 @@ def prepare_bundle(
         from ai_guardian.reporting.metrics import MetricsComputer
 
         mc = MetricsComputer(since_days=30)
-        report = mc.compute()
+        metrics_report = mc.compute()
         metrics = {
-            "total_violations": report.total_violations,
-            "by_type": dict(report.by_type),
-            "by_severity": dict(report.by_severity),
-            "resolved": report.resolved_count,
-            "unresolved": report.unresolved_count,
+            "total_violations": metrics_report.total_violations,
+            "by_type": dict(metrics_report.by_type),
+            "by_severity": dict(metrics_report.by_severity),
+            "resolved": metrics_report.resolved_count,
+            "unresolved": metrics_report.unresolved_count,
         }
         (temp_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
         files_info.append(
@@ -298,10 +298,10 @@ def prepare_bundle(
         from ai_guardian.doctor import Doctor
 
         doc = Doctor()
-        report = doc.run_all()
+        doctor_report = doc.run_all()
         checks = [
             {"name": c.name, "status": c.status.value, "message": c.message}
-            for c in report.checks
+            for c in doctor_report.checks
         ]
         (temp_dir / "doctor.json").write_text(json.dumps({"checks": checks}, indent=2))
         files_info.append(
@@ -976,6 +976,7 @@ def _send_to_email(bundle_id: str, temp_path: Path, destination: str) -> Dict:
     # method == "none" → no credentials
 
     try:
+        server: smtplib.SMTP
         if smtp_port == 465:
             # Implicit SSL (SMTPS)
             server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=30)

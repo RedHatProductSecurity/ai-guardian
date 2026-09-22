@@ -19,7 +19,7 @@ import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from ai_guardian.daemon.discovery import DaemonTarget
 from ai_guardian.ide_registry import (
@@ -367,7 +367,7 @@ def _run(
     """Run a native runtime command, optionally capturing its output."""
     try:
         if output is None:
-            result = subprocess.run(list(command), env=env, check=False)
+            return subprocess.run(list(command), env=env, check=False).returncode
         elif callable(getattr(output, "stream_callback", None)):
             process = subprocess.Popen(
                 list(command),
@@ -1008,7 +1008,9 @@ def _openshell_policy_assets(args, cli: str) -> Tuple[Path, Path]:
 def _load_openshell_policy(path: Path) -> Dict[str, Any]:
     """Load one YAML OpenShell policy fragment as a mapping."""
     try:
-        import yaml
+        import importlib
+
+        yaml = importlib.import_module("yaml")
 
         value = yaml.safe_load(path.read_text(encoding="utf-8"))
     except OSError as exc:
@@ -1099,7 +1101,7 @@ def _openshell_host_home() -> Path:
 
 
 def _openshell_environment_path(
-    environment: Dict[str, str], variable: str, *home_parts: str
+    environment: Mapping[str, str], variable: str, *home_parts: str
 ) -> Path:
     """Resolve an environment path without probing the home directory unnecessarily."""
     configured = environment.get(variable)
@@ -2580,7 +2582,8 @@ def _lifecycle_command(
     args, operation: str, *, runtime: Optional[str] = None, name: Optional[str] = None
 ) -> List[str]:
     runtime = runtime or _runtime(args)
-    name = getattr(args, "name", None) if name is None else name
+    requested_name = getattr(args, "name", None) if name is None else name
+    name = requested_name if isinstance(requested_name, str) else ""
     if runtime == CONTAINER_RUNTIME:
         engine = _container_engine(args)
         name = _container_runtime_name(args, name)
