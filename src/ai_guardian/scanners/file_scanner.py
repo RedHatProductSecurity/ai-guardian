@@ -164,7 +164,7 @@ def _get_line_snippet(
     return snippet if snippet else None
 
 
-def _parse_position_from_details(details: str) -> Optional[int]:
+def _parse_position_from_details(details: Optional[str]) -> Optional[int]:
     """Extract character position from unicode detector details string."""
     if not details:
         return None
@@ -210,7 +210,9 @@ class FileScanner:
             config: AI Guardian configuration dict
             verbose: Enable verbose output
         """
-        self.config = config or {}
+        if config is None:
+            config = {}
+        self.config: Dict[str, Any] = config
         self.verbose = verbose
         self.findings: List[Dict[str, Any]] = []
 
@@ -829,9 +831,15 @@ class FileScanner:
                 file_path, content, self.config
             )
             if is_malicious:
+                if details is None:
+                    logger.warning(
+                        "Config scanner reported a threat without details for %s",
+                        file_path,
+                    )
+                    return
                 finding = create_config_finding(
                     pattern=details.get("pattern", "unknown"),
-                    reason=reason,
+                    reason=reason or "Configuration threat detected",
                     file_path=file_path,
                     line_number=details.get("line_number"),
                     snippet=details.get("snippet"),
@@ -844,6 +852,8 @@ class FileScanner:
 
     def _check_ssrf(self, file_path: str, content: str) -> None:
         """Check for SSRF patterns in file content."""
+        if self.ssrf_protector is None:
+            return
         try:
             # Check content as if it were a Bash command
             # This allows us to detect URLs in any context
@@ -874,7 +884,7 @@ class FileScanner:
 
                         finding = create_ssrf_finding(
                             url=url,
-                            reason=url_reason or reason,
+                            reason=url_reason or reason or "SSRF request blocked",
                             file_path=file_path,
                             line_number=line_number,
                             snippet=snippet,
@@ -887,6 +897,8 @@ class FileScanner:
 
     def _check_unicode_attacks(self, file_path: str, content: str) -> None:
         """Check for Unicode attacks in file content."""
+        if self.unicode_detector is None:
+            return
         try:
             checks = [
                 ("zero-width characters", self.unicode_detector.detect_zero_width),
@@ -981,7 +993,7 @@ class FileScanner:
             if has_pii and redactions:
                 pii_types_found = sorted({r.get("type", "unknown") for r in redactions})
                 for pii_type in pii_types_found:
-                    first_of_type = next(
+                    first_of_type: Dict[str, Any] = next(
                         (r for r in redactions if r.get("type") == pii_type), {}
                     )
                     line_number = first_of_type.get("line_number")

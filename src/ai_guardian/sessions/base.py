@@ -4,7 +4,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.ide_paths import resolve_ide_session_dir
 
@@ -113,7 +113,7 @@ class StepCollector(list):
         self.limit = limit if limit is None or limit > 0 else 1
         self.total_count = 0
         self._tail = offset < 0
-        self._title_candidates = {
+        self._title_candidates: Dict[str, List[Any]] = {
             "explicit": [],
             "user": [],
             "assistant": [],
@@ -339,7 +339,7 @@ class SessionAdapter:
 
     def read_detail_page(
         self, session: Dict, offset: int = 0, limit: int = 50
-    ) -> StepCollector:
+    ) -> List[Dict]:
         """Read one bounded page of structured conversation steps.
 
         Adapters use ``StepCollector`` so the existing format parsers can be

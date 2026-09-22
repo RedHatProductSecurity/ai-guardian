@@ -7,12 +7,16 @@ Connects to daemons via their REST APIs using MultiDaemonClient.
 Requires NiceGUI (Python >= 3.10).
 """
 
-try:
-    from ai_guardian.web.app import WebConsole
+from typing import Any, Optional, Type
 
+WebConsole: Optional[Type[Any]] = None
+
+try:
+    from ai_guardian.web.app import WebConsole as _WebConsole
+
+    WebConsole = _WebConsole
     HAS_NICEGUI = True
 except ImportError:
     HAS_NICEGUI = False
-    WebConsole = None
 
 __all__ = ["WebConsole", "HAS_NICEGUI"]

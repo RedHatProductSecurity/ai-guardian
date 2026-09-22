@@ -1,6 +1,7 @@
 """Tray Plugins page — manage tray menu plugin JSON files."""
 
 import json
+from typing import Any
 
 from nicegui import run, ui
 
@@ -156,7 +157,11 @@ def create_tray_plugins_page(service, daemon_name: str):
         ).classes("text-xs text-grey-6")
 
         table_container = ui.column().classes("w-full gap-2")
-        state = {"files": [], "plugins": [], "templates": []}
+        state: dict[str, list[Any]] = {
+            "files": [],
+            "plugins": [],
+            "templates": [],
+        }
 
         async def _load():
             data = await run.io_bound(service.get_tray_plugins, target)

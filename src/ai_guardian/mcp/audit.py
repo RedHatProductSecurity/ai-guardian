@@ -512,7 +512,7 @@ class MCPAuditor:
         return findings
 
     def _audit_npx(self, server: MCPServerInfo) -> List[AuditFinding]:
-        findings = []
+        findings: List[AuditFinding] = []
         if server.command != "npx":
             return findings
         if "-y" in server.args or "--yes" in server.args:
@@ -533,7 +533,7 @@ class MCPAuditor:
         return findings
 
     def _audit_unpinned(self, server: MCPServerInfo) -> List[AuditFinding]:
-        findings = []
+        findings: List[AuditFinding] = []
         if server.command not in ("npx", "uvx"):
             return findings
 
@@ -737,7 +737,7 @@ class MCPAuditor:
             claude_settings = resolve_ide_config_path(
                 "claude", "~/.claude/settings.json", filename="settings.json"
             )
-            if target == Path(claude_settings).expanduser():
+            if claude_settings and target == Path(claude_settings).expanduser():
                 return "Claude"
             for ide_type in _MCP_IDE_CONFIGS:
                 expected = get_mcp_config_path(ide_type)
@@ -895,7 +895,7 @@ class MCPAuditor:
 
         print(f"Findings: {len(report.findings)}\n")
 
-        by_severity = {}
+        by_severity: Dict[str, List[AuditFinding]] = {}
         for f in report.findings:
             by_severity.setdefault(f.severity, []).append(f)
 
@@ -945,7 +945,7 @@ class MCPAuditor:
 
         print(f"Findings: {len(report.findings)}\n")
 
-        by_severity = {}
+        by_severity: Dict[str, List[ScanFinding]] = {}
         for f in report.findings:
             by_severity.setdefault(f.severity, []).append(f)
 

@@ -5,6 +5,7 @@ from collections import Counter
 
 from nicegui import run, ui
 
+from ai_guardian.patterns.lister import DetectionRule
 from ai_guardian.patterns.lister import test_rule_matches as _test_rule_matches
 from ai_guardian.web.components.header import create_header, create_sidebar
 
@@ -184,7 +185,7 @@ def create_detection_patterns_page(service, daemon_name: str):
                     ]
             return filtered
 
-        all_rules_cache = []
+        all_rules_cache: list[DetectionRule] = []
 
         def _render_table(all_rules):
             all_rules_cache.clear()

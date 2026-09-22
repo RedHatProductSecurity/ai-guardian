@@ -31,13 +31,13 @@ class ConfigDisplay:
         Args:
             config: Optional pre-loaded configuration. If None, loads from disk.
         """
-        self.config = config
-        if self.config is None:
+        if config is None:
             # Import here to avoid circular dependency
             from ai_guardian.tools.policy import ToolPolicyChecker
 
             checker = ToolPolicyChecker()
-            self.config = checker.config
+            config = checker.config
+        self.config: Dict = config
 
     def show(
         self,

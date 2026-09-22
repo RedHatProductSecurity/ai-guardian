@@ -5,7 +5,7 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
 from ai_guardian.setup.utils import (
@@ -107,7 +107,7 @@ _MCP_IDE_CONFIGS = {
     },
 }
 
-_MCP_SERVER_ENTRY = {
+_MCP_SERVER_ENTRY: Dict[str, object] = {
     "args": ["mcp-server"],
 }
 
@@ -127,7 +127,8 @@ def get_codex_mcp_config_path() -> Path:
     ``.codex/config.toml`` files are intentionally not returned here: AI
     Guardian installs its MCP server in the global user layer.
     """
-    return resolve_ide_mcp_path("codex", "~/.codex/config.toml")
+    path = resolve_ide_mcp_path("codex", "~/.codex/config.toml")
+    return path if path is not None else Path("~/.codex/config.toml").expanduser()
 
 
 def _cursor_project_root(cwd: Optional[str] = None) -> Path:
@@ -224,7 +225,7 @@ def verify_cursor_mcp_config(
         }
 
     if scope == "auto":
-        paths = [
+        paths: List[Tuple[str, Optional[Path]]] = [
             ("user", get_mcp_config_path("cursor", scope="user")),
             (
                 "project",
@@ -236,8 +237,19 @@ def verify_cursor_mcp_config(
             (scope, get_mcp_config_path("cursor", scope=scope, project_dir=project_dir))
         ]
 
-    config_scopes = []
+    config_scopes: List[Dict] = []
     for layer_scope, path in paths:
+        if path is None:
+            config_scopes.append(
+                {
+                    "scope": layer_scope,
+                    "config_path": None,
+                    "exists": False,
+                    "configured": False,
+                    "status": "missing",
+                }
+            )
+            continue
         configured = _cursor_mcp_entry_exists(path)
         config_scopes.append(
             {
@@ -539,11 +551,12 @@ def _install_mcp_config(
 
     # Warn if MCP entry exists in settings.json (hooks file) for Claude
     if ide_type == "claude":
-        settings_path = Path(
-            resolve_ide_config_path(
-                "claude", "~/.claude/settings.json", filename="settings.json"
-            )
-        ).expanduser()
+        raw_settings_path = resolve_ide_config_path(
+            "claude", "~/.claude/settings.json", filename="settings.json"
+        )
+        if raw_settings_path is None:
+            return
+        settings_path = Path(raw_settings_path).expanduser()
         try:
             if settings_path.exists():
                 with open(settings_path, "r") as f:
@@ -704,6 +717,8 @@ def _remove_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
         if _TOML_INLINE_MCP_SERVERS.search(raw):
             if found:
                 updated_data = dict(data)
+                if not isinstance(mcp_servers, dict):
+                    return
                 updated_mcp_servers = dict(mcp_servers)
                 updated_mcp_servers.pop("ai-guardian", None)
                 updated_data["mcp_servers"] = updated_mcp_servers

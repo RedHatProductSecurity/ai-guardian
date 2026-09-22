@@ -103,6 +103,8 @@ def get_most_recent_transcript(transcripts_dir: str) -> Optional[str]:
         if result:
             return os.path.join(result[0], "transcript.jsonl")
 
+    return None
+
 
 def scan_openclaw_transcript_incremental(
     transcript_path: str,

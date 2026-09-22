@@ -1676,7 +1676,7 @@ def _log_directory_blocking_violation(
         file_path=file_path,
         error_message=reason,
     )
-    ctx_overrides = {"path_in_exclusion": is_excluded}
+    ctx_overrides: Dict[str, Any] = {"path_in_exclusion": is_excluded}
     if is_excluded:
         ctx_overrides["note"] = (
             "Directory exclusions can override .ai-read-deny markers "
@@ -1700,36 +1700,6 @@ def _log_directory_blocking_violation(
         context_overrides=ctx_overrides,
         suggestion=suggestion,
     )
-
-
-def _pii_redactions_to_findings(pii_redactions, content, error_msg=""):
-    """Convert PII redaction list to findings format for multi-finding ask dialog."""
-    if not pii_redactions or not content:
-        return None
-    findings = []
-    for r in pii_redactions:
-        pos = r.get("position", -1)
-        length = r.get("original_length", 0)
-        matched = ""
-        if pos >= 0 and length > 0 and pos + length <= len(content):
-            matched = content[pos : pos + length]
-        findings.append(
-            {
-                "matched_text": matched,
-                "line_number": r.get("line_number"),
-                "start_column": r.get("column"),
-                "error_message": f"PII: {r.get('type', 'unknown')}",
-            }
-        )
-    return findings if findings else None
-
-
-def _extract_file_path_from_pii_warning(pii_warning):
-    """Extract file path from PII warning message as fallback when tool_input has no file_path."""
-    if not pii_warning:
-        return None
-    match = re.search(r"File:\s*(\S+)", pii_warning)
-    return match.group(1) if match else None
 
 
 @dataclass

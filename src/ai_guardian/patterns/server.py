@@ -98,7 +98,7 @@ class PatternServerClient:
         # Default to True since config presence = enabled (v1.7.0+)
         # Only False if explicitly set (backward compatibility)
         self.enabled_config = config.get("enabled", True)
-        self.base_url = config.get("url")
+        self.base_url: Optional[str] = config.get("url")
 
         # Get endpoint - use config value or default for pattern type
         default_endpoint = self.DEFAULT_ENDPOINTS.get(
@@ -267,6 +267,10 @@ class PatternServerClient:
             True if successful, False otherwise
         """
         try:
+            if not self.base_url:
+                logger.error("Pattern server enabled but no URL configured")
+                return False
+
             # Build URL
             url = f"{self.base_url.rstrip('/')}{self.patterns_endpoint}"
 

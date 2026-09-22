@@ -449,7 +449,7 @@ class SecurityDashboardContent(ConfigSaveMixin, Container):
                     pass  # intentionally silent — best-effort operation
 
             if recent:
-                violation_types = {}
+                violation_types: dict[str, int] = {}
                 for v in recent:
                     reason = v.get("reason", "Unknown")
                     violation_type = self._categorize_violation(reason)

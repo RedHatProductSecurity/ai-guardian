@@ -49,7 +49,8 @@ def _tag_antigravity_events(template_hooks: Dict) -> Dict:
             for entry in entries:
                 if not isinstance(entry, dict):
                     continue
-                handlers = entry.get("hooks") if "hooks" in entry else [entry]
+                raw_handlers = entry.get("hooks") if "hooks" in entry else [entry]
+                handlers = raw_handlers if isinstance(raw_handlers, list) else []
                 for handler in handlers:
                     if not isinstance(handler, dict):
                         continue
@@ -107,7 +108,7 @@ class IDESetup:
     # - config_path: Default path to config file
     # - config_dir_env_var: Optional environment variable for custom config directory
     # - config_filename: Filename to use with custom config directory
-    IDE_CONFIGS = {
+    IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "claude": {
             "name": "Claude Code",
             "mcp_client_name": "claude-code",
@@ -515,11 +516,12 @@ class IDESetup:
         Returns:
             str: Path to Claude Code settings.json
         """
-        return resolve_ide_config_path(
+        config_path = resolve_ide_config_path(
             "claude",
             "~/.claude/settings.json",
             filename="settings.json",
         )
+        return config_path if config_path is not None else "~/.claude/settings.json"
 
     @staticmethod
     def _cursor_project_root(cwd: Optional[str] = None) -> Path:
@@ -537,10 +539,13 @@ class IDESetup:
         self, cwd: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Return Cursor's user and project hook configuration layers."""
-        user_path = Path(self.get_config_path("cursor", scope="user")).expanduser()
+        user_path_value = self.get_config_path("cursor", scope="user")
+        if user_path_value is None:
+            return []
+        user_path = Path(user_path_value).expanduser()
         project_root = self._cursor_project_root(cwd)
         project_path = project_root / ".cursor" / "hooks.json"
-        layers = [{"scope": "user", "path": str(user_path)}]
+        layers: List[Dict[str, Any]] = [{"scope": "user", "path": str(user_path)}]
         if project_path != user_path:
             layers.append({"scope": "project", "path": str(project_path)})
         for layer in layers:
@@ -552,7 +557,7 @@ class IDESetup:
         ide_type: str,
         scope: str = "user",
         project_dir: Optional[str] = None,
-    ) -> str:
+    ) -> Optional[str]:
         """
         Get IDE config path, respecting IDE-specific environment variables.
 
@@ -731,7 +736,10 @@ class IDESetup:
     def _codex_setup_diagnostic(self) -> Optional[str]:
         """Return a clear diagnostic when the target layer cannot be used."""
         layers = self.get_codex_config_layers()
-        target_dir = str(Path(self.get_config_path("codex")).expanduser().parent)
+        config_path = self.get_config_path("codex")
+        if config_path is None:
+            return f"{CODEX_DISPLAY_NAME} setup stopped: no configuration path"
+        target_dir = str(Path(config_path).expanduser().parent)
         for layer in layers:
             if layer["parse_error"]:
                 return (
@@ -978,12 +986,13 @@ class IDESetup:
                 for layer in result["config_layers"]
                 if layer["parse_error"]
             ]
-            target_dir = str(
-                Path(
-                    self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
-                )
-                .expanduser()
-                .parent
+            config_path_value = self.get_config_path(
+                ide_type, scope=scope, project_dir=project_dir
+            )
+            target_dir = (
+                str(Path(config_path_value).expanduser().parent)
+                if config_path_value is not None
+                else ""
             )
             if any(
                 layer["directory"] == target_dir and layer["inline_hooks"]
@@ -995,9 +1004,12 @@ class IDESetup:
         if config.get("mcp_only"):
             return result
 
-        path = Path(
-            self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
-        ).expanduser()
+        path_value = self.get_config_path(
+            ide_type, scope=scope, project_dir=project_dir
+        )
+        if path_value is None:
+            return result
+        path = Path(path_value).expanduser()
         if config.get("plugin_file"):
             plugin_file = path / "ai-guardian.ts"
             bridge_file = path / config.get("bridge_file", "ai-guardian-bridge.ts")
@@ -1196,8 +1208,14 @@ class IDESetup:
 
         mcp = verify_cursor_mcp_config(scope="auto", project_dir=project_dir)
         mcp_layers = mcp.get("config_scopes", [])
-        user_mcp = next(
-            (layer for layer in mcp_layers if layer.get("scope") == "user"),
+        if not isinstance(mcp_layers, list):
+            mcp_layers = []
+        user_mcp: Dict[str, Any] = next(
+            (
+                layer
+                for layer in mcp_layers
+                if isinstance(layer, dict) and layer.get("scope") == "user"
+            ),
             {},
         )
         user_mcp_installed = user_mcp.get("configured") is True
@@ -2472,9 +2490,12 @@ class IDESetup:
                 return False, "ai-guardian binary not found in PATH"
 
             ide_config = self.IDE_CONFIGS[ide_type]
-            config_path = Path(
-                self.get_config_path(ide_type, scope=scope, project_dir=project_dir)
-            ).expanduser()
+            config_path_value = self.get_config_path(
+                ide_type, scope=scope, project_dir=project_dir
+            )
+            if config_path_value is None:
+                return False, f"Unknown IDE type: {ide_type}"
+            config_path = Path(config_path_value).expanduser()
             ide_name = ide_config["name"]
 
             if ide_config.get("mcp_only"):
@@ -2566,7 +2587,7 @@ class IDESetup:
             )
 
             # Merge hooks
-            hook_warnings = []
+            hook_warnings: List[str] = []
             if ide_type == "claude":
                 merged_config, hook_warnings = self.merge_hooks(
                     existing_config, resolved_hooks, ide_type

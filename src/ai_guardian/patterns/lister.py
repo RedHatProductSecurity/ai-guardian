@@ -141,7 +141,7 @@ class PatternLister:
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        self._schema = None
+        self._schema: Optional[Dict[str, Any]] = None
 
     def _load_schema(self) -> Dict[str, Any]:
         if self._schema is not None:

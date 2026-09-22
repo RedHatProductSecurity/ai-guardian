@@ -418,7 +418,7 @@ class ConfigInspector:
         Returns:
             JSON string of effective configuration
         """
-        effective_config = {
+        effective_config: Dict[str, Any] = {
             "ssrf_protection": {},
             "secret_redaction": {},
             "unicode_detection": {},

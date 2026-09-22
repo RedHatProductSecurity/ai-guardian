@@ -9,7 +9,7 @@ Uses TimeBasedToggle widgets (same as individual panels) without help text for c
 import logging
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
@@ -47,7 +47,14 @@ FEATURES = [
     ("latency_tracking", "gs_latency_tracking", "⏱️ Latency Tracking"),
 ]
 
-FEATURE_ACTIONS = {
+
+class FeatureAction(TypedDict):
+    schema_path: str
+    options: list[tuple[str, str]]
+    default: str
+
+
+FEATURE_ACTIONS: dict[str, FeatureAction] = {
     "secret_redaction": {
         "schema_path": "secret_redaction.action",
         "options": [

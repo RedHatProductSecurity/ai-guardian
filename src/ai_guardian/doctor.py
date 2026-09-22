@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple, Union
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
 
@@ -949,8 +949,13 @@ class Doctor:
         any_configured = False
 
         for ide_type in detected:
-            config_path = Path(setup.get_config_path(ide_type)).expanduser()
-            ide_name = setup.IDE_CONFIGS[ide_type]["name"]
+            raw_config_path = setup.get_config_path(ide_type)
+            if raw_config_path is None:
+                results.append(f"{ide_type}: config path unavailable")
+                all_configured = False
+                continue
+            config_path = Path(raw_config_path).expanduser()
+            ide_name = str(setup.IDE_CONFIGS[ide_type].get("name", ide_type))
 
             cursor_layers = []
             if ide_type == "cursor":
@@ -1474,7 +1479,7 @@ class Doctor:
             if "default" in prop_schema and "type" in prop_schema:
                 default_val = prop_schema["default"]
                 expected_type = prop_schema["type"]
-                type_map = {
+                type_map: Dict[str, Union[type, Tuple[type, ...]]] = {
                     "boolean": bool,
                     "string": str,
                     "integer": int,

@@ -1,6 +1,7 @@
 """Shared header and navigation components for the web console."""
 
 from pathlib import Path
+from typing import Any, List, Optional, Tuple
 
 from nicegui import ui
 
@@ -297,7 +298,7 @@ def create_sidebar(daemon_name: str, current: str = ""):
                 g_label = ui.label(group_name).classes(
                     "text-xs text-grey-6 font-bold uppercase mt-4 mb-1 px-2"
                 )
-                g_links = []
+                g_links: List[Optional[Tuple[Any, str]]] = []
                 for label, suffix in items:
                     path = f"{prefix}{suffix}"
                     classes = "w-full no-underline rounded px-2 py-1 text-sm "

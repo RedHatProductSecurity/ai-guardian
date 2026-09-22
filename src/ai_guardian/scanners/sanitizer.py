@@ -14,7 +14,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,7 @@ def _sanitize_prompt_injection(text: str, detector=None) -> tuple:
         + detector._compiled_suspicious
     )
 
-    redacted_regions = []
+    redacted_regions: List[Tuple[int, int]] = []
     replacements = []
 
     for pattern in all_patterns:
@@ -300,7 +300,7 @@ def sanitize_text_batch(
     det_config = dict(_PI_DETECTOR_CONFIG, **(pi_config or {}))
     detector = get_cached_detector(det_config)
 
-    results = []
+    results: List[str] = []
     for text in texts:
         if not text:
             results.append(text)

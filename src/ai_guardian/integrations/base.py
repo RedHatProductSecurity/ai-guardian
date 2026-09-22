@@ -5,7 +5,18 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generic,
+    List,
+    Optional,
+    Protocol,
+    Type,
+    TypeVar,
+    Union,
+)
 
 from ai_guardian.sdk import SecurityViolation, monitor
 
@@ -520,7 +531,13 @@ class AgentLoopStrategy(ABC):
 # Generic type registry
 # ---------------------------------------------------------------------------
 
-T = TypeVar("T")
+class _Detectable(Protocol):
+    @classmethod
+    def detect(cls, client: Any) -> bool:
+        ...
+
+
+T = TypeVar("T", bound=_Detectable)
 
 
 def _resolve_class(dotted: str) -> Optional[type]:

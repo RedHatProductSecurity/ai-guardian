@@ -901,7 +901,7 @@ class OtelSpanEmitter:
             start_nano = _iso_to_unix_nano(started_at)
             end_nano = str(int(start_nano) + 1_000_000) if start_nano != "0" else "0"
 
-            run_attrs = []
+            run_attrs: List[tuple[str, Any]] = []
             if self._run_id:
                 run_attrs.append(("ai_guardian.run_id", self._run_id))
             if self._run_sequence is not None:

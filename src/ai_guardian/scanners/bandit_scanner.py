@@ -78,7 +78,7 @@ class BanditScanner(CodeInspector):
         return [f for f in findings if not self._is_allowlisted(f, file_path)]
 
     def _run_bandit(self, content: str, file_path: str) -> List[CodeInspectionFinding]:
-        from bandit.core import config as b_config  # type: ignore[import-untyped]
+        from bandit.core import config as b_config
         from bandit.core import manager as b_manager
 
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".py", prefix="ai-guardian-bandit-")
@@ -143,7 +143,7 @@ class BanditScanner(CodeInspector):
             except OSError:
                 pass
 
-    def _is_allowlisted(self, finding: CodeSecurityFinding, file_path: str) -> bool:
+    def _is_allowlisted(self, finding: CodeInspectionFinding, file_path: str) -> bool:
         """Check if finding matches any allowlist entry.
 
         Allowlist entry format:

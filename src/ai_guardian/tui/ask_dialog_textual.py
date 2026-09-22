@@ -4,6 +4,8 @@ Terminal-based dialog for ask mode decisions with pattern editor
 and inline config editor using TextArea.
 """
 
+from typing import Any
+
 from rich.markup import escape
 
 from ai_guardian.theme import violation_badge
@@ -43,6 +45,8 @@ class _TextualAskDialog:
         dialog_self = self
 
         class AskApp(App):
+            _debounce_timer: Any = None
+
             CSS = """
             Screen {
                 align: center middle;
@@ -106,7 +110,7 @@ class _TextualAskDialog:
                     title_text = f"[bold]{icon} {build_dialog_title(v)}[/bold]"
                     if v.total_findings and v.total_findings > 1:
                         remaining = v.total_findings - (v.finding_index or 0) - 1
-                        counter = f" ({v.finding_index + 1} of {v.total_findings}"
+                        counter = f" ({(v.finding_index or 0) + 1} of {v.total_findings}"
                         if remaining > 0:
                             counter += f", {remaining} more"
                         counter += ")"
@@ -214,7 +218,8 @@ class _TextualAskDialog:
                 elif bid == "btn-view-file":
                     from ai_guardian.tui.file_opener import open_in_editor
 
-                    open_in_editor(violation.file_path, violation.line_number)
+                    if violation.file_path:
+                        open_in_editor(violation.file_path, violation.line_number)
                 elif bid == "btn-suppress-source":
                     self._show_suppress_in_source()
                 elif bid == "btn-ignore-file":

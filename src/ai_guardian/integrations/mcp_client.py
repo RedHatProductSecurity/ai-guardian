@@ -188,16 +188,20 @@ class MCPClientManager:
         if not self._started:
             return f"Error: MCP server '{server_name}' is not connected"
 
+        loop = self._loop
+        if loop is None:
+            return f"Error: MCP server '{server_name}' is not connected"
+
         if server_name not in self._sessions:
             if server_name in self._deferred:
                 startup_timeout = self._config.get(server_name, {}).get(
                     "startup_timeout", 10
                 )
-                future = asyncio.run_coroutine_threadsafe(
-                    self._lazy_connect(server_name), self._loop
+                lazy_future = asyncio.run_coroutine_threadsafe(
+                    self._lazy_connect(server_name), loop
                 )
                 try:
-                    future.result(timeout=startup_timeout + 5)
+                    lazy_future.result(timeout=startup_timeout + 5)
                 except Exception as exc:
                     return (
                         f"Error: failed to start deferred MCP server "
@@ -207,12 +211,12 @@ class MCPClientManager:
                 return f"Error: MCP server '{server_name}' is not connected"
 
         timeout = self._config.get(server_name, {}).get("timeout", 30)
-        future = asyncio.run_coroutine_threadsafe(
+        call_future = asyncio.run_coroutine_threadsafe(
             self._call_tool_async(server_name, tool_name, arguments),
-            self._loop,
+            loop,
         )
         try:
-            return future.result(timeout=timeout)
+            return call_future.result(timeout=timeout)
         except TimeoutError:
             return f"Error: MCP tool call timed out after {timeout}s"
         except Exception as exc:
@@ -246,8 +250,11 @@ class MCPClientManager:
 
     def _run_event_loop(self) -> None:
         """Background thread target — runs the event loop until stopped."""
-        asyncio.set_event_loop(self._loop)
-        self._loop.run_forever()
+        loop = self._loop
+        if loop is None:
+            return
+        asyncio.set_event_loop(loop)
+        loop.run_forever()
 
     async def _connect_all(self, servers: Dict[str, Dict[str, Any]]) -> None:
         """Connect to all configured MCP servers.

@@ -3,9 +3,11 @@
 Used by both the TUI HelpModal and the web console help panel.
 """
 
+from typing import Any, Dict
+
 _GITHUB_DOCS = "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs"
 
-SCANNER_HELP = {
+SCANNER_HELP: Dict[str, Dict[str, Any]] = {
     "secret_scanning": {
         "title": "Secret Scanning",
         "summary": (

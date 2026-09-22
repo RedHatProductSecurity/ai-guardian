@@ -1,7 +1,7 @@
 """PostToolUse event handler extracted from hook_processing.py (Phase 5e.2, #1491)."""
 
 import logging
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 import ai_guardian.config.loaders as _loaders
 from ai_guardian.config.utils import get_project_dir, is_feature_enabled
@@ -84,8 +84,9 @@ def _sanitize_source_command(command: str) -> str:
 # ---------------------------------------------------------------------------
 
 try:
-    from ai_guardian.violations.logger import ViolationLogger
+    from ai_guardian.violations.logger import ViolationLogger as _ViolationLogger
 
+    ViolationLogger: Any = _ViolationLogger
     HAS_VIOLATION_LOGGER = True
 except ImportError:
     ViolationLogger = None

@@ -16,7 +16,7 @@ import threading
 import time
 from dataclasses import dataclass, field as dc_field, replace
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 try:
     import docker as docker_sdk
@@ -251,7 +251,7 @@ class DaemonDiscovery:
                 for target in cached_targets
             ]
 
-        unique = {}
+        unique: Dict[object, DaemonTarget] = {}
         for target in targets:
             if target.container_id:
                 unique.setdefault(target.container_id, target)
@@ -270,7 +270,9 @@ class DaemonDiscovery:
         daemon_cfg = self._config.get("daemon", {})
         tray_cfg = daemon_cfg.get("tray", {})
 
-        tasks = {"local": self.discover_local}
+        tasks: Dict[
+            str, Callable[[], Union[Optional[DaemonTarget], List[DaemonTarget]]]
+        ] = {"local": self.discover_local}
 
         if tray_cfg.get("discover_containers", True):
             tasks["containers"] = self.discover_containers
@@ -291,9 +293,9 @@ class DaemonDiscovery:
                 try:
                     result = future.result()
                     if name == "local":
-                        if result:
+                        if isinstance(result, DaemonTarget):
                             results.append(result)
-                    else:
+                    elif isinstance(result, list):
                         results.extend(result)
                 except Exception as e:
                     logger.debug("Discovery stage %s failed: %s", name, e)
@@ -1268,7 +1270,7 @@ class DaemonDiscovery:
         """Discover pods in a single kubeconfig context."""
         v1 = k8s_client.CoreV1Api(api_client)
 
-        pods = []
+        pods: List[Tuple[Any, str]] = []
         try:
             if namespaces:
                 for ns in namespaces:
@@ -1416,7 +1418,12 @@ class DaemonDiscovery:
         target_namespaces = namespaces or ["ai-sdlc"]
 
         all_targets: List[DaemonTarget] = []
-        for context in contexts or [None]:
+        context_values: List[Optional[str]] = []
+        if contexts:
+            context_values.extend(contexts)
+        else:
+            context_values.append(None)
+        for context in context_values:
             for namespace in target_namespaces:
                 if not re.fullmatch(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", namespace):
                     logger.debug("Invalid Kubernetes namespace: %s", namespace)
@@ -1581,7 +1588,7 @@ class DaemonDiscovery:
         self._callback = callback
         self._refresh_event = threading.Event()
         self._last_refresh = 0.0
-        self._pending_done: List[threading.Event] = []
+        self._pending_done = []
         self._done_lock = threading.Lock()
 
         def _loop():

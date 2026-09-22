@@ -20,7 +20,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -314,7 +314,7 @@ def create_server() -> "MCPServer":
         Returns summary of files processed and redactions made."""
         try:
             valid, err, resolved = _validate_scan_path(path)
-            if not valid:
+            if not valid or resolved is None:
                 return {"status": "error", "message": err}
 
             if not resolved.is_dir():
@@ -457,7 +457,7 @@ def create_server() -> "MCPServer":
             config, _ = _load_config_file()
             if config is None:
                 config = {}
-            features = {}
+            features: Dict[str, Any] = {}
 
             feature_keys = [
                 "secret_scanning",
@@ -605,7 +605,7 @@ def create_server() -> "MCPServer":
             report = doc.run_all()
             checks = []
             for c in report.checks:
-                entry = {
+                entry: Dict[str, Union[str, bool]] = {
                     "name": c.name,
                     "status": c.status.value,
                     "message": c.message,
@@ -658,7 +658,7 @@ def create_server() -> "MCPServer":
         Returns summary only — no actual secret/PII values."""
         try:
             valid, err, resolved = _validate_scan_path(path)
-            if not valid:
+            if not valid or resolved is None:
                 return {"status": "error", "message": err}
 
             from ai_guardian.scanners.file_scanner import FileScanner

@@ -24,7 +24,7 @@ import zipfile
 from contextlib import contextmanager
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Callable, Dict, Iterator, Optional, cast
 import sys
 
 logger = logging.getLogger(__name__)
@@ -61,11 +61,16 @@ def _interprocess_file_lock(lock_path: Path) -> Iterator[None]:
                 lock_file.write(b"\0")
                 lock_file.flush()
 
+            locking = cast(
+                Callable[[int, int, int], None], getattr(msvcrt, "locking")
+            )
+            lock_nonblocking = cast(int, getattr(msvcrt, "LK_NBLCK"))
+            lock_unlock = cast(int, getattr(msvcrt, "LK_UNLCK"))
             conflict_errnos = {errno.EACCES, getattr(errno, "EDEADLK", None)}
             while True:
                 lock_file.seek(0)
                 try:
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    locking(lock_file.fileno(), lock_nonblocking, 1)
                     break
                 except OSError as exc:
                     if exc.errno not in conflict_errnos:
@@ -76,7 +81,7 @@ def _interprocess_file_lock(lock_path: Path) -> Iterator[None]:
                 yield
             finally:
                 lock_file.seek(0)
-                msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                locking(lock_file.fileno(), lock_unlock, 1)
         else:
             import fcntl
 

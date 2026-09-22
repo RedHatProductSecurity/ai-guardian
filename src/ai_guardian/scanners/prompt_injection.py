@@ -346,14 +346,17 @@ class UnicodeAttackDetector:
             )
 
             # Convert dict format to tuple format
-            homoglyph_list = []
+            homoglyph_list: List[Tuple[str, str]] = []
             for pattern in merged_patterns.get("homoglyph_patterns", []):
                 if isinstance(pattern, dict):
-                    homoglyph_list.append(
-                        (pattern.get("source"), pattern.get("target"))
-                    )
+                    source = pattern.get("source")
+                    target = pattern.get("target")
+                    if isinstance(source, str) and isinstance(target, str):
+                        homoglyph_list.append((source, target))
                 elif isinstance(pattern, (list, tuple)) and len(pattern) >= 2:
-                    homoglyph_list.append((pattern[0], pattern[1]))
+                    source, target = pattern[0], pattern[1]
+                    if isinstance(source, str) and isinstance(target, str):
+                        homoglyph_list.append((source, target))
 
             if homoglyph_list:
                 logger.debug(
@@ -831,7 +834,7 @@ class PromptInjectionDetector:
         self.fallback_on_error = self.config.get("fallback_on_error", "heuristic")
 
         # ML result tracking
-        self.last_ml_results = []
+        self.last_ml_results: List[Dict[str, Any]] = []
         self.last_ml_strategy = ""
 
         # Load patterns from bundled TOML (primary source, fallback to class attributes)
@@ -878,13 +881,13 @@ class PromptInjectionDetector:
         ]
 
         # Track the last detected attack type and details for violation logging
-        self.last_attack_type = "injection"
-        self.last_matched_pattern = None
-        self.last_matched_text = None
-        self.last_confidence = None
-        self.last_line_number = None
-        self.last_start_column = None
-        self.last_end_column = None
+        self.last_attack_type: str = "injection"
+        self.last_matched_pattern: Optional[str] = None
+        self.last_matched_text: Optional[str] = None
+        self.last_confidence: Optional[float] = None
+        self.last_line_number: Optional[int] = None
+        self.last_start_column: Optional[int] = None
+        self.last_end_column: Optional[int] = None
         self.findings: List[Dict[str, Any]] = []
 
         # Initialize Unicode attack detector

@@ -16,7 +16,7 @@ import shlex
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -335,7 +335,7 @@ def _parse_item(raw: dict, filename: str, index: int) -> Optional[PluginItem]:
         )
         return None
 
-    if has_items:
+    if isinstance(raw_items, list):
         children = []
         for ci, child_raw in enumerate(raw_items):
             child = _parse_item(child_raw, filename, ci)
@@ -718,6 +718,7 @@ def validate_param_value(param: PluginParam, value: str) -> Tuple[bool, str]:
     ptype = param.type
 
     if ptype == "int":
+        n: float
         try:
             n = int(value)
         except ValueError:
@@ -887,7 +888,7 @@ def _item_to_dict(item: PluginItem) -> dict:
 
 def _param_to_dict(param: PluginParam) -> dict:
     """Serialize a PluginParam to a dict."""
-    d = {"name": param.name}
+    d: Dict[str, Any] = {"name": param.name}
     if param.hint:
         d["hint"] = param.hint
     if param.default:
@@ -1136,7 +1137,7 @@ def _linux_action_result(
     if not ide_choices and not profile_choices:
         return result
 
-    value = {
+    value: Dict[str, Any] = {
         "result": result,
         "install": [],
         "never": [],

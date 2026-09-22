@@ -122,7 +122,7 @@ class ContextPoisoningDetector:
         now = datetime.now(timezone.utc)
         for pat in raw_allowlist:
             if isinstance(pat, dict):
-                if is_expired(pat, now):
+                if is_expired(pat.get("valid_until", ""), now):
                     continue
                 pat = pat.get("pattern", "")
             if pat and validate_regex_pattern(pat):

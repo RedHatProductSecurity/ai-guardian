@@ -506,7 +506,11 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         },
-        "duration_seconds": _compute_duration(started_at, stop_reason, filepath),
+        "duration_seconds": _compute_duration(
+            started_at,
+            stop_reason if isinstance(stop_reason, str) else "",
+            filepath,
+        ),
         "violation_count": meta.get("violation_count", 0),
         "file_mtime": file_mtime,
     }
@@ -1006,7 +1010,10 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         },
-        "duration_seconds": _compute_duration(doc.get("started_at", ""), stop_reason),
+        "duration_seconds": _compute_duration(
+            doc.get("started_at", ""),
+            stop_reason if isinstance(stop_reason, str) else "",
+        ),
         "violation_count": violation_count,
         "file_mtime": 0.0,
     }

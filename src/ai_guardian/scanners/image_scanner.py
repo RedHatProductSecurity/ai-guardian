@@ -21,7 +21,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 
 try:
     from PIL import Image, ImageFilter
@@ -319,7 +319,7 @@ class FaceDetector:
         try:
             import numpy as np
 
-            nparr = np.frombuffer(image_data, np.uint8)
+            nparr: Any = np.frombuffer(image_data, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
             if img is None:
                 return []

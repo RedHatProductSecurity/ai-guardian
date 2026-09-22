@@ -177,7 +177,7 @@ class BaseAgentAdapter(HookAdapter):
         if has_secrets and error_message:
             final_error = self._combine_error_messages(error_message, warning_message)
             response = self._block_response(
-                hook_event, final_error, violation_type, redacted_output
+                hook_event, final_error or error_message, violation_type, redacted_output
             )
         elif hook_event == HookEvent.POST_TOOL_USE:
             if has_secrets:

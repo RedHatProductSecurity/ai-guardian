@@ -119,7 +119,11 @@ class ConsoleSettingsContent(SchemaDefaultsMixin, Container):
     """Content widget for Console Settings panel."""
 
     SCHEMA_SECTION = "console"
-    SCHEMA_FIELDS = ["editor_theme", "preferred_ui", "preferred_theme"]
+    SCHEMA_FIELDS = [
+        ("editor-theme-select", "editor_theme", "select"),
+        ("preferred-ui-select", "preferred_ui", "select"),
+        ("color-theme-select", "preferred_theme", "select"),
+    ]
 
     CSS = """
     ConsoleSettingsContent {

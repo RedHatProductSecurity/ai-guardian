@@ -14,15 +14,23 @@ Features:
 """
 
 import hashlib
+import importlib
 import json
 import logging
 import os
 import time
 from pathlib import Path
-from typing import Dict, Optional, Set, Tuple
+from typing import Any, Dict, Optional, Protocol, Set, Tuple, cast
 from urllib.parse import urlparse
 
-import yaml
+
+
+class _YamlModule(Protocol):
+    def safe_load(self, stream: str) -> Any:
+        ...
+
+
+yaml = cast(_YamlModule, importlib.import_module("yaml"))
 
 logger = logging.getLogger(__name__)
 
@@ -818,7 +826,7 @@ class SkillDiscovery:
         Returns:
             dict: Cache statistics
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "cache_dir": str(self.cache_dir),
             "total_cached": 0,
             "cache_files": [],

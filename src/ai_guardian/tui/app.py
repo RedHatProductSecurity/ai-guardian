@@ -1932,31 +1932,6 @@ class AIGuardianTUI(App):
         switcher = self.query_one("#panels", ContentSwitcher)
         return switcher.current
 
-    def check_action(self, action: str, parameters: tuple) -> Optional[bool]:
-        """Control which actions are available based on current panel."""
-        current_panel = self._get_current_panel_id()
-
-        tab_actions = {
-            "panel-skills": ["add_allow_pattern", "add_deny_pattern"],
-            "panel-mcp": ["add_allow_pattern"],
-            "panel-pi-detection": ["save_setting"],
-            "panel-pi-patterns": ["add_allow_pattern", "add_custom"],
-            "panel-secrets": [],
-            "panel-ssrf": ["save_setting"],
-            "panel-config-scanner": ["save_setting"],
-            "panel-secret-redaction": ["save_setting"],
-        }
-
-        current_tab_actions = tab_actions.get(current_panel, [])
-        if action in current_tab_actions:
-            return True
-
-        for actions in tab_actions.values():
-            if action in actions:
-                return False
-
-        return True
-
     def action_focus_nav(self) -> None:
         """Focus navigation tree (ESC handler)."""
         focused = self.focused

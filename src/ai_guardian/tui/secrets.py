@@ -430,8 +430,8 @@ class SecretsContent(ConfigSaveMixin, Container):
                         import tomllib
                     else:
                         import tomli as tomllib
-                    with open(bundled_path, "rb") as f:
-                        data = tomllib.load(f)
+                    with open(bundled_path, "rb") as pattern_file:
+                        data = tomllib.load(pattern_file)
                     bundled_count = len(data.get("stopwords", {}).get("words", []))
                 except Exception:
                     pass  # intentionally silent — optional dependency
@@ -561,8 +561,8 @@ class SecretsContent(ConfigSaveMixin, Container):
                 self._save_secret_scanning_field("min_entropy", None)
             else:
                 try:
-                    val = float(raw)
-                    if val < 0 or val > 8:
+                    entropy_value = float(raw)
+                    if entropy_value < 0 or entropy_value > 8:
                         self.app.notify(
                             "Entropy must be between 0.0 and 8.0",
                             severity="error",

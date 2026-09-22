@@ -234,7 +234,7 @@ def _compile_patterns() -> Dict[str, List[Tuple[re.Pattern, str]]]:
                         logger.warning("Invalid supply chain pattern: %s", regex)
             return by_group
 
-        result = load_bundled_rules(
+        result: Dict[str, List[Tuple[re.Pattern, str]]] = load_bundled_rules(
             "supply_chain", _transform, {}, "Supply chain scanner"
         )
         if result:

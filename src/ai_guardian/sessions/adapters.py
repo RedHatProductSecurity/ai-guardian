@@ -6,7 +6,7 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.ide_paths import get_ide_home
 from ai_guardian.sessions.base import (
@@ -1176,7 +1176,7 @@ class CodexSessionAdapter(SessionAdapter):
             return meta
 
         msg_count = 0
-        title_candidates = {
+        title_candidates: Dict[str, List[Any]] = {
             "explicit": [],
             "user": [],
             "assistant": [],

@@ -529,11 +529,11 @@ def _show_tkinter_form(
 
     _ensure_tcl_library()
     field_list = tuple(fields)
-    controls = {}
-    control_widgets = {}
-    field_labels = {}
-    enabled_states = {}
-    dynamic_defaults = {}
+    controls: Dict[str, Tuple[str, tk.Variable]] = {}
+    control_widgets: Dict[str, list[ttk.Widget]] = {}
+    field_labels: Dict[str, list[ttk.Label]] = {}
+    enabled_states: Dict[str, bool] = {}
+    dynamic_defaults: Dict[str, str] = {}
     result: Dict[str, Any] = {}
 
     root = tk.Tk()
@@ -568,6 +568,9 @@ def _show_tkinter_form(
 
     frame.bind("<Configure>", update_scroll_region)
     canvas.bind("<Configure>", resize_form)
+    variable: tk.Variable
+    control: ttk.Widget
+    widgets: list[ttk.Widget]
     for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
         root.bind(sequence, scroll_form, add="+")
     ttk.Label(frame, text=message, justify="left", wraplength=600).grid(
@@ -616,12 +619,14 @@ def _show_tkinter_form(
             )
             control.grid(row=0, column=0, sticky="ew")
             control_frame.columnconfigure(0, weight=1)
+
+            def browse_image(variable: tk.Variable = variable) -> None:
+                _show_local_image_picker(root, variable, screen_bounds)
+
             browse_button = ttk.Button(
                 control_frame,
                 text="Browse...",
-                command=lambda variable=variable: _show_local_image_picker(
-                    root, variable, screen_bounds
-                ),
+                command=browse_image,
             )
             browse_button.grid(row=0, column=1, padx=(6, 0))
             widgets = [control, browse_button]
@@ -697,7 +702,7 @@ def _show_tkinter_form(
                     if isinstance(choices, (list, tuple, set)):
                         normalized_choices = [str(choice) for choice in choices]
                         for widget in control_widgets.get(name, ()):
-                            widget.configure(values=normalized_choices)
+                            widget.configure({"values": normalized_choices})
                         if (
                             field.get("clear_when_choice_invalid")
                             and str(controls[name][1].get()) not in normalized_choices
@@ -714,7 +719,9 @@ def _show_tkinter_form(
                         editable_by_value.get(str(dependency[1].get()), False)
                     )
                     for widget in control_widgets.get(name, ()):
-                        widget.configure(state="normal" if editable else "readonly")
+                        widget.configure(
+                            {"state": "normal" if editable else "readonly"}
+                        )
             condition = field.get("enabled_when")
             enabled = True
             if isinstance(condition, dict):
@@ -748,7 +755,9 @@ def _show_tkinter_form(
             target_variable = target[1]
             if str(target_variable.get()) != dynamic_defaults.get(name):
                 continue
-            updated = _dynamic_default_value(specification, dependency[1].get())
+            updated = _dynamic_default_value(
+                specification, str(dependency[1].get())
+            )
             if updated is None:
                 continue
             target_variable.set(updated)
@@ -896,8 +905,8 @@ def _show_tkinter_progress(
     from ai_guardian.tui.display import _ensure_tcl_library
 
     _ensure_tcl_library()
-    updates = queue.Queue()
-    log_parts = []
+    updates: queue.Queue[Dict[str, Any]] = queue.Queue()
+    log_parts: list[str] = []
     completed = False
     root = tk.Tk()
     root.title(title)

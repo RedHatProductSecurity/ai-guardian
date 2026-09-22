@@ -1,6 +1,7 @@
 """SDK Agent Profiles page — manage GuardedAgent configuration profiles."""
 
 import copy
+from typing import Any
 
 from nicegui import run, ui
 
@@ -256,7 +257,7 @@ def create_sdk_agents_page(service, daemon_name: str):
         ).classes("text-xs text-grey-6")
 
         table_container = ui.column().classes("w-full gap-2")
-        state = {"config": {}, "agents": {}}
+        state: dict[str, dict[str, Any]] = {"config": {}, "agents": {}}
 
         async def _load():
             config = await run.io_bound(load_web_config)

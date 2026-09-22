@@ -154,7 +154,7 @@ class GuardSession:
         Default implementation loops over :meth:`sanitize`; subclasses
         override to amortize pattern compilation.
         """
-        results = []
+        results: List[str] = []
         for text in texts:
             if not text:
                 results.append(text)
@@ -504,7 +504,8 @@ class _DirectSession(GuardSession):
     ) -> Dict[str, Any]:
         from ai_guardian.scanners.sanitizer import sanitize_text
 
-        pi_config = self._config.get("prompt_injection")
+        config = self._config or {}
+        pi_config = config.get("prompt_injection")
         if context is not None:
             seq = context.next_sequence()
             try:
@@ -516,8 +517,9 @@ class _DirectSession(GuardSession):
     def sanitize_batch(self, texts: List[str]) -> List[str]:
         from ai_guardian.scanners.sanitizer import sanitize_text_batch
 
+        config = self._config or {}
         return sanitize_text_batch(
-            texts, pi_config=self._config.get("prompt_injection")
+            texts, pi_config=config.get("prompt_injection")
         )
 
     def get_violations(
@@ -534,14 +536,15 @@ class _DirectSession(GuardSession):
         from ai_guardian.violations.logger import ViolationLogger
 
         limit = max(1, min(limit, 1000))
-        vl = ViolationLogger(config=self._config.get("violation_logging") or {})
+        config = self._config or {}
+        vl = ViolationLogger(config=config.get("violation_logging") or {})
         raw = vl.get_recent_violations(
             limit=limit,
             violation_type=violation_type,
             tool_use_id=tool_use_id,
             session_id=session_id,
         )
-        pi_config = self._config.get("prompt_injection")
+        pi_config = config.get("prompt_injection")
         sanitize_fn = partial(sanitize_text, pi_config=pi_config)
         return [self._sanitize_violation(v, sanitize_fn) for v in raw]
 
@@ -595,6 +598,7 @@ class _RestSession(GuardSession):
         text: str,
         *,
         filename: str = "input",
+        source_command: Optional[str] = None,
         context: Optional[RunContext] = None,
     ) -> CheckResult:
         data: Dict[str, Any] = {"text": text, "filename": filename}
@@ -766,6 +770,7 @@ def monitor(
         raise ValueError(f"mode must be 'direct' or 'rest', got {mode!r}")
 
     if mode == "direct":
+        session: GuardSession
         session = _DirectSession(config=config, cwd=cwd, target_dir=target_dir)
     else:
         session = _RestSession(config=config, cwd=cwd, target_dir=target_dir)

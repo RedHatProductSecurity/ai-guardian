@@ -559,6 +559,12 @@ class ConfigFileScanner:
                 # No threats detected
                 return False, None, None
 
+            if reason is None or details is None:
+                logger.error(
+                    "Config scanner reported a threat without complete details"
+                )
+                return False, None, None
+
             # Threat detected - format message based on action mode
             if self.action == "warn":
                 warn_msg = self._format_warning_message(file_path, reason, details)
@@ -648,6 +654,12 @@ class ConfigFileScanner:
             )
 
             if not is_malicious:
+                return False, None, None
+
+            if reason is None or details is None:
+                logger.error(
+                    "Config scanner reported a threat without complete details"
+                )
                 return False, None, None
 
             if self.action == "warn":

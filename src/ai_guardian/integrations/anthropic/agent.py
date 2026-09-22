@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from urllib.parse import urlparse
 
 from ai_guardian.integrations.anthropic.tools import (
@@ -369,7 +369,7 @@ class GuardedAgent:
         before_call: Optional[Callable[[str, tuple, dict], None]] = None,
         after_call: Optional[Callable[[str, Any], Any]] = None,
         pre_run: Optional[Callable[[str, dict], None]] = None,
-        post_run: Optional[Callable[[dict], None]] = None,
+        post_run: Optional[Callable[[Optional[Dict[str, Any]]], None]] = None,
         between_turns: Optional[Callable[[list, AgentResponse, int], Any]] = None,
         on_turn: Optional[Callable[[int, TurnEvent], None]] = None,
         strategy: Optional[AgentLoopStrategy] = None,
@@ -873,6 +873,7 @@ class GuardedAgent:
 
     def _resolve_trace_filepath(self, started_at: datetime) -> str:
         """Compute the trace file path once per run for reuse."""
+        assert self._trace_dir is not None
         agent_name = self._name or "agent"
         timestamp = started_at.strftime("%Y%m%d-%H%M%S")
         unique = uuid.uuid4().hex[:8]
@@ -1179,18 +1180,19 @@ class GuardedAgent:
         self, goal_state: Any, response: AgentResponse, turn_num: int
     ) -> Any:
         """Call the goal evaluator, enforcing its optional timeout."""
-        if self._goal_evaluator is None:
+        goal_evaluator = self._goal_evaluator
+        if goal_evaluator is None:
             return None
 
         if self._goal_timeout is None:
-            return self._goal_evaluator(goal_state, response, turn_num)
+            return goal_evaluator(goal_state, response, turn_num)
 
-        result_queue = queue.Queue(maxsize=1)
+        result_queue: queue.Queue[Tuple[bool, Any]] = queue.Queue(maxsize=1)
 
         def _invoke() -> None:
             try:
                 result_queue.put(
-                    (True, self._goal_evaluator(goal_state, response, turn_num))
+                    (True, goal_evaluator(goal_state, response, turn_num))
                 )
             except Exception as exc:
                 result_queue.put((False, exc))
@@ -1425,7 +1427,7 @@ class GuardedAgent:
                     goal_state=goal_state,
                 )
             except BaseException as exc:
-                exc.trace = trace
+                setattr(exc, "trace", trace)
                 error_msg = f"{type(exc).__name__}: {exc}"
                 if trace:
                     last_turn = trace[-1]
@@ -1655,6 +1657,7 @@ class GuardedAgent:
                 )
 
                 if did_compact:
+                    assert compact_result is not None
                     _emit(
                         turn_num,
                         TurnEvent(
@@ -1698,10 +1701,10 @@ class GuardedAgent:
                     _emit,
                 )
                 if response is None:
-                    exc = self._last_transient_exc
+                    transient_exc = self._last_transient_exc
                     stop_reason = (
                         "timeout"
-                        if exc is not None and _is_timeout_error(exc)
+                        if transient_exc is not None and _is_timeout_error(transient_exc)
                         else "transient_error"
                     )
                     break

@@ -180,7 +180,9 @@ class CanaryDetectionContent(Container):
             from ai_guardian.violations.logger import ViolationLogger
 
             vl = ViolationLogger()
-            violations = vl.get_violations(limit=10, violation_type="canary_detected")
+            violations = vl.get_recent_violations(
+                limit=10, violation_type="canary_detected"
+            )
             if not violations:
                 self.query_one("#cd-violations", Static).update(
                     "[bold]Recent Violations[/bold]\n\n[dim]No canary token violations logged.[/dim]"

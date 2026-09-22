@@ -141,7 +141,9 @@ def detect_adapter(hook_data: Dict) -> HookAdapter:
     # 3. Auto-detect from hook data structure
     for adapter_cls in ADAPTER_CLASSES:
         if adapter_cls.can_handle(hook_data):
-            adapter = adapter_cls()
+            # The registry contains only concrete adapters, but mypy sees the
+            # abstract base type because the classes are stored heterogeneously.
+            adapter = adapter_cls()  # type: ignore[abstract]
             logger.debug("Adapter auto-detected: %s", adapter.name)
             return adapter
 

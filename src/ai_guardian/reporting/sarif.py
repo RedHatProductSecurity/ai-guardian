@@ -240,7 +240,7 @@ class SARIFFormatter:
             start_col = finding.get("start_column")
             end_col = finding.get("end_column")
             if line_number is not None or snippet is not None or start_col is not None:
-                region = {}
+                region: Dict[str, Any] = {}
                 if line_number is not None:
                     region["startLine"] = int(line_number)
                 if start_col is not None:

@@ -18,7 +18,7 @@ import logging
 import os
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +32,19 @@ except ImportError:
         "requests library not installed - HTTP/HTTPS remote configs not available"
     )
 
+toml: Any = None
 try:
     # Python 3.11+ has tomllib built-in
-    import tomllib as toml
+    import tomllib as _tomllib
 
+    toml = _tomllib
     HAS_TOML = True
 except ImportError:
     try:
         # Python < 3.11 uses tomli (backport)
-        import tomli as toml
+        import tomli as _tomli
 
+        toml = _tomli
         HAS_TOML = True
     except ImportError:
         HAS_TOML = False
@@ -480,7 +483,7 @@ class RemoteFetcher:
         Returns:
             dict: Cache statistics
         """
-        stats = {
+        stats: Dict[str, Any] = {
             "cache_dir": str(self.cache_dir),
             "total_cached": 0,
             "cache_files": [],

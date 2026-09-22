@@ -153,7 +153,7 @@ def log_violation(
                 ),
             )
 
-        log_kwargs = {
+        log_kwargs: Dict[str, Any] = {
             "violation_type": result.violation_type,
             "blocked": blocked,
             "context": ctx,

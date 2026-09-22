@@ -7,7 +7,7 @@ permissions and settings from enterprise/team sources.
 """
 
 import json
-from typing import List, Dict, Any
+from typing import Any, Dict, List, Union
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
@@ -76,7 +76,9 @@ class RemoteConfigEntry(Container):
             self.index = index
             self.url = url
 
-    def __init__(self, index: int, url_config: Dict[str, Any], **kwargs):
+    def __init__(
+        self, index: int, url_config: Union[str, Dict[str, Any]], **kwargs
+    ):
         """
         Initialize remote config entry.
 
@@ -87,6 +89,9 @@ class RemoteConfigEntry(Container):
         super().__init__(**kwargs)
         self.index = index
         self.url_config = url_config
+        self.url: str
+        self.enabled: bool
+        self.token_env: str
 
         # Parse config - handle both string and object formats
         if isinstance(url_config, str):
@@ -94,9 +99,9 @@ class RemoteConfigEntry(Container):
             self.enabled = True
             self.token_env = ""
         else:
-            self.url = url_config.get("url", "")
-            self.enabled = url_config.get("enabled", True)
-            self.token_env = url_config.get("token_env", "")
+            self.url = str(url_config.get("url", ""))
+            self.enabled = bool(url_config.get("enabled", True))
+            self.token_env = str(url_config.get("token_env", ""))
 
     def compose(self) -> ComposeResult:
         """Compose the remote config entry widgets."""

@@ -435,14 +435,14 @@ def setup_hooks(
     # Confirm with user if interactive
     if interactive and not dry_run and not force:
         ide_name = setup.IDE_CONFIGS[ide_type]["name"]
-        config_path = setup.get_config_path(
+        ide_config_path = setup.get_config_path(
             ide_type,
             scope=scope if _supports_project_scope(ide_type) else "user",
             project_dir=project_dir if _supports_project_scope(ide_type) else None,
         )
 
         print(f"\nThis will configure ai-guardian hooks for {ide_name}")
-        print(f"Config file: {config_path}")
+        print(f"Config file: {ide_config_path}")
 
         try:
             response = input("\nContinue? [y/N]: ")
@@ -454,7 +454,7 @@ def setup_hooks(
             return False
 
     # Setup IDE hooks
-    hook_kwargs = {"dry_run": dry_run, "force": force}
+    hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
     if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
         hook_kwargs.update({"scope": scope, "project_dir": project_dir})
     success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
@@ -483,7 +483,7 @@ def setup_hooks(
     setup_success = success or mcp_repair
     if setup_success:
         if no_mcp:
-            mcp_kwargs = {"no_mcp": True, "dry_run": dry_run}
+            mcp_kwargs: Dict[str, Any] = {"no_mcp": True, "dry_run": dry_run}
             if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
                 mcp_kwargs.update({"scope": scope, "project_dir": project_dir})
             _handle_mcp_setup(setup, ide_type, **mcp_kwargs)
@@ -613,14 +613,15 @@ def _setup_hooks_json_output(
         return False
 
     result["ide"] = ide_type
-    result["config_path"] = str(
-        Path(
-            setup.get_config_path(
-                ide_type,
-                scope=scope if _supports_project_scope(ide_type) else "user",
-                project_dir=project_dir if _supports_project_scope(ide_type) else None,
-            )
-        ).expanduser()
+    config_path_value = setup.get_config_path(
+        ide_type,
+        scope=scope if _supports_project_scope(ide_type) else "user",
+        project_dir=project_dir if _supports_project_scope(ide_type) else None,
+    )
+    result["config_path"] = (
+        str(Path(config_path_value).expanduser())
+        if config_path_value is not None
+        else None
     )
     if _supports_project_scope(ide_type):
         result["scope"] = scope
@@ -628,7 +629,7 @@ def _setup_hooks_json_output(
     # Run IDE hook setup with all print output suppressed
     _devnull = io.StringIO()
     with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
-        hook_kwargs = {"dry_run": dry_run, "force": force}
+        hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
         if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
             hook_kwargs.update({"scope": scope, "project_dir": project_dir})
         success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
@@ -664,7 +665,7 @@ def _setup_hooks_json_output(
     if setup_success:
         with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
             if no_mcp:
-                mcp_kwargs = {"no_mcp": True, "dry_run": dry_run}
+                mcp_kwargs: Dict[str, Any] = {"no_mcp": True, "dry_run": dry_run}
                 if _supports_project_scope(ide_type) and (
                     scope != "user" or project_dir
                 ):
@@ -695,7 +696,7 @@ def _setup_hooks_json_output(
             result["mcp_config_path"] = str(mcp_path) if mcp_path else None
             if mcp_path is not None:
                 abs_path = _resolve_binary_path()
-                mcp_entry = dict(_MCP_SERVER_ENTRY)
+                mcp_entry: Dict[str, Any] = dict(_MCP_SERVER_ENTRY)
                 mcp_entry["command"] = abs_path
                 if ide_type == "cursor":
                     mcp_entry["type"] = "stdio"

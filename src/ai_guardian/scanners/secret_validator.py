@@ -549,7 +549,7 @@ class SecretValidator:
                     message="Validation skipped",
                 )
 
-        return results
+        return [result for result in results if result is not None]
 
     def filter_inactive(
         self,

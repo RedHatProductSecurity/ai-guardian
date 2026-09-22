@@ -8,7 +8,7 @@ scanned live — nothing is cached or persisted.
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +369,7 @@ def _find_nearest_redaction(redactions, target_line, sub_type, content):
     return {"text": text, "line_number": best.get("line_number", target_line)}
 
 
-_SCAN_HANDLERS = {
+_SCAN_HANDLERS: Dict[str, Callable[..., Dict]] = {
     "secret_detected": _scan_secrets,
     "pii_detected": _scan_pii,
     "prompt_injection": _scan_prompt_injection,

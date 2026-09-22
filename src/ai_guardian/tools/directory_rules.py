@@ -291,7 +291,7 @@ class DirectoryRuleGenerator:
             Dict mapping skill names to list of full paths
             Example: {"daf-git": [Path("~/.claude/skills/daf-git")], ...}
         """
-        skills = {}
+        skills: Dict[str, List[Path]] = {}
         allow_symlinks = self._get_allow_symlinks()
 
         for skill_dir in skill_dirs:

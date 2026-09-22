@@ -433,12 +433,12 @@ def metrics_command(args) -> int:
         )
 
         since_value = getattr(args, "since", "30d") or "30d"
-        computer = LatencyComputer(since_date=since_value)
-        report = computer.compute()
+        latency_computer = LatencyComputer(since_date=since_value)
+        latency_report = latency_computer.compute()
         if getattr(args, "json", False):
-            print(format_latency_json(report))
+            print(format_latency_json(latency_report))
         else:
-            print(format_latency_human(report))
+            print(format_latency_human(latency_report))
         return 0
 
     use_audit = (

@@ -122,7 +122,10 @@ def _advance_transcript_position(hook_data: dict) -> None:
                 positions = _load_transcript_positions()
                 if transcript_path not in positions:
                     return
-                if file_size > positions[transcript_path]:
+                position = positions[transcript_path]
+                if not isinstance(position, int):
+                    return
+                if file_size > position:
                     positions[transcript_path] = file_size
                     _save_transcript_positions(positions)
             finally:
