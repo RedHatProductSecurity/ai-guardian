@@ -518,9 +518,7 @@ class _DirectSession(GuardSession):
         from ai_guardian.scanners.sanitizer import sanitize_text_batch
 
         config = self._config or {}
-        return sanitize_text_batch(
-            texts, pi_config=config.get("prompt_injection")
-        )
+        return sanitize_text_batch(texts, pi_config=config.get("prompt_injection"))
 
     def get_violations(
         self,

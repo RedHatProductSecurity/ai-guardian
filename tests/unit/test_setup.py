@@ -4719,7 +4719,7 @@ class TestOpenCodePluginRegistration:
         )
 
     def test_registers_plugin_in_existing_json(self, tmp_path):
-        """Plugin path added to plugins array in existing opencode.json."""
+        """Plugin path added to the V1 plugin array in existing opencode.json."""
         opencode_dir = tmp_path / ".config" / "opencode"
         plugins_dir = opencode_dir / "plugins"
         plugins_dir.mkdir(parents=True)
@@ -4734,7 +4734,7 @@ class TestOpenCodePluginRegistration:
             setup._register_opencode_plugin(plugin_file, plugins_dir)
 
         config = json.loads(config_file.read_text())
-        assert str(plugin_file) in config["plugins"]
+        assert str(plugin_file) in config["plugin"]
 
     def test_registers_plugin_in_jsonc(self, tmp_path):
         """When only opencode.jsonc exists, register plugin there."""
@@ -4752,10 +4752,10 @@ class TestOpenCodePluginRegistration:
             setup._register_opencode_plugin(plugin_file, plugins_dir)
 
         config = json.loads(config_file.read_text())
-        assert str(plugin_file) in config["plugins"]
+        assert str(plugin_file) in config["plugin"]
 
     def test_creates_jsonc_when_neither_exists(self, tmp_path):
-        """When no config exists, create opencode.jsonc with plugins."""
+        """When no config exists, create opencode.jsonc with a plugin entry."""
         opencode_dir = tmp_path / ".config" / "opencode"
         plugins_dir = opencode_dir / "plugins"
         plugins_dir.mkdir(parents=True)
@@ -4770,7 +4770,7 @@ class TestOpenCodePluginRegistration:
 
         assert config_file.exists()
         config = json.loads(config_file.read_text())
-        assert str(plugin_file) in config["plugins"]
+        assert str(plugin_file) in config["plugin"]
 
     def test_idempotent_no_duplicates(self, tmp_path):
         """Running setup twice does not duplicate plugin entry."""
@@ -4789,10 +4789,10 @@ class TestOpenCodePluginRegistration:
             setup._register_opencode_plugin(plugin_file, plugins_dir)
 
         config = json.loads(config_file.read_text())
-        assert config["plugins"].count(str(plugin_file)) == 1
+        assert config["plugin"].count(str(plugin_file)) == 1
 
     def test_preserves_existing_plugins(self, tmp_path):
-        """Existing plugins array entries preserved."""
+        """Legacy plugins entries are preserved while migrating to plugin."""
         opencode_dir = tmp_path / ".config" / "opencode"
         plugins_dir = opencode_dir / "plugins"
         plugins_dir.mkdir(parents=True)
@@ -4807,8 +4807,9 @@ class TestOpenCodePluginRegistration:
             setup._register_opencode_plugin(plugin_file, plugins_dir)
 
         config = json.loads(config_file.read_text())
-        assert "/some/other-plugin.ts" in config["plugins"]
-        assert str(plugin_file) in config["plugins"]
+        assert "plugins" not in config
+        assert "/some/other-plugin.ts" in config["plugin"]
+        assert str(plugin_file) in config["plugin"]
 
     def test_dry_run_returns_message(self, tmp_path):
         """Dry run returns registration message without modifying config."""
@@ -4849,7 +4850,7 @@ class TestOpenCodePluginRegistration:
         config = json.loads(config_file.read_text())
         assert config["mcp"] == {"some-server": {}}
         assert config["theme"] == "dark"
-        assert str(plugin_file) in config["plugins"]
+        assert str(plugin_file) in config["plugin"]
 
 
 class TestResolveOpenCodeConfig:

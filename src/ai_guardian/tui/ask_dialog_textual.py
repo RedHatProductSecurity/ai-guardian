@@ -110,7 +110,9 @@ class _TextualAskDialog:
                     title_text = f"[bold]{icon} {build_dialog_title(v)}[/bold]"
                     if v.total_findings and v.total_findings > 1:
                         remaining = v.total_findings - (v.finding_index or 0) - 1
-                        counter = f" ({(v.finding_index or 0) + 1} of {v.total_findings}"
+                        counter = (
+                            f" ({(v.finding_index or 0) + 1} of {v.total_findings}"
+                        )
                         if remaining > 0:
                             counter += f", {remaining} more"
                         counter += ")"

@@ -36,8 +36,7 @@ _MISSING = _MissingSentinel()
 class _WidgetHost(Protocol):
     """Textual widget surface supplied by classes using the mixin."""
 
-    def query_one(self, selector: str) -> Widget:
-        ...
+    def query_one(self, selector: str) -> Widget: ...
 
 
 class _ConfigApp(Protocol):
@@ -45,8 +44,7 @@ class _ConfigApp(Protocol):
 
     config_scope: str
 
-    def notify(self, message: str, *, severity: str) -> Any:
-        ...
+    def notify(self, message: str, *, severity: str) -> Any: ...
 
 
 class _ConfigHost(Protocol):
@@ -54,8 +52,7 @@ class _ConfigHost(Protocol):
 
     app: _ConfigApp
 
-    def load_config(self) -> None:
-        ...
+    def load_config(self) -> None: ...
 
 
 class SchemaDefaults:

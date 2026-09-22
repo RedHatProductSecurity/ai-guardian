@@ -531,10 +531,10 @@ class AgentLoopStrategy(ABC):
 # Generic type registry
 # ---------------------------------------------------------------------------
 
+
 class _Detectable(Protocol):
     @classmethod
-    def detect(cls, client: Any) -> bool:
-        ...
+    def detect(cls, client: Any) -> bool: ...
 
 
 T = TypeVar("T", bound=_Detectable)

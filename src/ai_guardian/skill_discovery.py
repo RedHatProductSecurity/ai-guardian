@@ -24,10 +24,8 @@ from typing import Any, Dict, Optional, Protocol, Set, Tuple, cast
 from urllib.parse import urlparse
 
 
-
 class _YamlModule(Protocol):
-    def safe_load(self, stream: str) -> Any:
-        ...
+    def safe_load(self, stream: str) -> Any: ...
 
 
 yaml = cast(_YamlModule, importlib.import_module("yaml"))

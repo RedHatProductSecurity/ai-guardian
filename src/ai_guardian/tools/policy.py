@@ -2067,9 +2067,7 @@ class ToolPolicyChecker:
         This prevents users from bypassing enterprise policies by adding their own
         remote URLs when an enterprise system config is deployed.
         """
-        remote_entries: List[
-            Tuple[Union[str, Dict[str, Any]], Optional[Path]]
-        ] = []
+        remote_entries: List[Tuple[Union[str, Dict[str, Any]], Optional[Path]]] = []
 
         # Priority 1: System-wide config (enterprise deployment)
         system_config_path = self._get_system_config_path()
@@ -2190,8 +2188,9 @@ class ToolPolicyChecker:
                     # Navigate nested dict
                     current: Optional[Dict[Any, Any]] = config
                     for key in key_path[:-1]:
-                        if key in current:
-                            current = current[key]
+                        if current is not None and key in current:
+                            nested = current[key]
+                            current = nested if isinstance(nested, dict) else None
                         else:
                             current = None
                             break

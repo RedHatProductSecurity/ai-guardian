@@ -755,9 +755,7 @@ def _show_tkinter_form(
             target_variable = target[1]
             if str(target_variable.get()) != dynamic_defaults.get(name):
                 continue
-            updated = _dynamic_default_value(
-                specification, str(dependency[1].get())
-            )
+            updated = _dynamic_default_value(specification, str(dependency[1].get()))
             if updated is None:
                 continue
             target_variable.set(updated)

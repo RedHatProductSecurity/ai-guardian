@@ -2062,7 +2062,8 @@ class IDESetup:
                     if config_file.suffix == ".jsonc":
                         raw = _strip_jsonc_comments(raw)
                     cfg = json.loads(raw) if raw.strip() else {}
-                    return str(plugin_file) in cfg.get("plugins", [])
+                    registered_plugins = cfg.get("plugin", cfg.get("plugins", []))
+                    return str(plugin_file) in registered_plugins
                 except (json.JSONDecodeError, OSError):
                     return False
 
@@ -2240,10 +2241,17 @@ class IDESetup:
             except (json.JSONDecodeError, OSError):
                 pass
 
-        plugins = config.get("plugins", [])
+        plugins = config.get("plugin", config.get("plugins", []))
+        needs_write = "plugins" in config or "plugin" not in config
+        if not isinstance(plugins, list):
+            plugins = []
+            needs_write = True
         if plugin_path not in plugins:
             plugins.append(plugin_path)
-            config["plugins"] = plugins
+            needs_write = True
+        config.pop("plugins", None)
+        config["plugin"] = plugins
+        if needs_write:
             config_file.parent.mkdir(parents=True, exist_ok=True)
             config_file.write_text(
                 json.dumps(config, indent=2) + "\n", encoding="utf-8"
@@ -3399,7 +3407,8 @@ function parseRecord(value: string): JsonRecord | undefined {
   }
 }
 
-export function parseGuardianOutput(raw: string): GuardianResult | undefined {
+export function parseGuardianOutput(raw: unknown): GuardianResult | undefined {
+  if (typeof raw !== 'string') return undefined;
   const output = raw.trim();
   if (!output) return undefined;
 

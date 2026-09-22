@@ -437,7 +437,12 @@ class MultiDaemonClient:
             _launch_in_terminal(cmd_parts, keep_open=True)
         elif target.runtime == "container":
             engine = target.container_engine or "podman"
-            exec_cmd: List[str] = [engine, "exec", "-it", target.container_id or ""] + cmd
+            exec_cmd: List[str] = [
+                engine,
+                "exec",
+                "-it",
+                target.container_id or "",
+            ] + cmd
             _launch_in_terminal(exec_cmd, keep_open=True)
         elif target.runtime == "kubernetes":
             pod_name = target.pod_name or ""

@@ -10,7 +10,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.violations.utils import is_temp_path
 
@@ -1081,10 +1081,10 @@ def check_secrets(
                                 }
                                 for s in strategy_result.secrets
                             ]
-                            remaining = _gitleaks_cfg.filter_findings(
+                            remaining_findings = _gitleaks_cfg.filter_findings(
                                 findings_dicts, gl_lines, file_path, _gitleaks_allowlist
                             )
-                            if not remaining:
+                            if not remaining_findings:
                                 logger.info(
                                     "All strategy findings matched .gitleaks.toml allowlist — skipping"
                                 )
@@ -1490,19 +1490,19 @@ def check_secrets(
                         and _all_available_engines
                         and len(_all_available_engines) > 1
                     ):
-                        remaining = [
+                        remaining_engines: List[Any] = [
                             e
                             for e in _all_available_engines
                             if e.type != engine_config.type
                         ]
-                        if remaining:
+                        if remaining_engines:
                             logger.info(
                                 f"Engine {engine_config.type} found no secrets, "
-                                f"trying remaining engines: {[e.type for e in remaining]}"
+                                f"trying remaining engines: {[e.type for e in remaining_engines]}"
                             )
                             strategy = get_strategy("first-match")
                             fallback_result = strategy.execute(
-                                engine_configs=remaining,
+                                engine_configs=remaining_engines,
                                 scanner_fn=run_engine,
                                 source_file=tmp_file_path,
                                 report_file_prefix=report_file.replace(".json", ""),
@@ -1643,7 +1643,7 @@ def check_secrets(
                         # Check findings from modern parser
                         if scan_result and scan_result.get("findings"):
                             for finding in scan_result["findings"]:
-                        line_num = finding.get("line_number", 0)
+                                line_num = finding.get("line_number", 0)
                                 if line_num > 0 and line_num <= len(content_lines):
                                     line_text = content_lines[line_num - 1]
                                 elif finding.get("matched_text"):
@@ -1658,18 +1658,18 @@ def check_secrets(
                                     break
                         else:
                             # Legacy parser or single finding — check via line number
-                            line_text: Optional[str] = None
+                            legacy_line_text: Optional[str] = None
                             line_num = secret_details.get("line_number", 0)
                             if line_num > 0 and line_num <= len(content_lines):
-                                line_text = content_lines[line_num - 1]
+                                legacy_line_text = content_lines[line_num - 1]
                             elif secret_details.get("matched_text"):
-                                line_text = secret_details["matched_text"]
+                                legacy_line_text = secret_details["matched_text"]
                             else:
-                                line_text = None
+                                legacy_line_text = None
                             if (
-                                line_text is None
+                                legacy_line_text is None
                                 or not allowlist_utils.check_allowlist(
-                                    line_text, compiled_allowlist
+                                    legacy_line_text, compiled_allowlist
                                 )
                             ):
                                 all_allowlisted = False
@@ -1861,19 +1861,19 @@ def check_secrets(
                     and _all_available_engines
                     and len(_all_available_engines) > 1
                 ):
-                    remaining = [
+                    remaining_engines = [
                         e
                         for e in _all_available_engines
                         if e.type != engine_config.type
                     ]
-                    if remaining:
+                    if remaining_engines:
                         logger.info(
                             f"Engine {engine_config.type} found no secrets, "
-                            f"trying remaining engines: {[e.type for e in remaining]}"
+                            f"trying remaining engines: {[e.type for e in remaining_engines]}"
                         )
                         strategy = get_strategy("first-match")
                         fallback_result = strategy.execute(
-                            engine_configs=remaining,
+                            engine_configs=remaining_engines,
                             scanner_fn=run_engine,
                             source_file=tmp_file_path,
                             report_file_prefix=report_file.replace(".json", ""),
@@ -1967,7 +1967,12 @@ def check_secrets(
 
                             scanner_name = fallback_result.engine
                             fallback_engine_config = next(
-                                (e for e in remaining if e.type == scanner_name), None
+                                (
+                                    e
+                                    for e in remaining_engines
+                                    if e.type == scanner_name
+                                ),
+                                None,
                             )
                             fallback_resolved = (
                                 resolve_engine_config_path(

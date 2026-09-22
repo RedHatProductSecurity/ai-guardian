@@ -43,6 +43,8 @@ def test_shared_bridge_contains_process_and_response_contracts():
     assert "updatedToolOutput" in _AI_GUARDIAN_BRIDGE_TS
     assert "updatedMCPToolOutput" in _AI_GUARDIAN_BRIDGE_TS
     assert "updated_mcp_tool_output" in _AI_GUARDIAN_BRIDGE_TS
+    assert "parseGuardianOutput(raw: unknown)" in _AI_GUARDIAN_BRIDGE_TS
+    assert "typeof raw !== 'string'" in _AI_GUARDIAN_BRIDGE_TS
 
 
 def test_setup_renders_resolved_binary_in_shared_bridge():
@@ -105,7 +107,7 @@ def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):
     plugin_file.write_text("// existing ai-guardian plugin\n", encoding="utf-8")
     config_file = tmp_path / "opencode.json"
     config_file.write_text(
-        json.dumps({"plugins": [str(plugin_file)]}) + "\n", encoding="utf-8"
+        json.dumps({"plugin": [str(plugin_file)]}) + "\n", encoding="utf-8"
     )
     setup.IDE_CONFIGS = {"opencode": dict(IDESetup.IDE_CONFIGS["opencode"])}
 

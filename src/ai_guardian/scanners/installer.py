@@ -61,9 +61,7 @@ def _interprocess_file_lock(lock_path: Path) -> Iterator[None]:
                 lock_file.write(b"\0")
                 lock_file.flush()
 
-            locking = cast(
-                Callable[[int, int, int], None], getattr(msvcrt, "locking")
-            )
+            locking = cast(Callable[[int, int, int], None], getattr(msvcrt, "locking"))
             lock_nonblocking = cast(int, getattr(msvcrt, "LK_NBLCK"))
             lock_unlock = cast(int, getattr(msvcrt, "LK_UNLCK"))
             conflict_errnos = {errno.EACCES, getattr(errno, "EDEADLK", None)}

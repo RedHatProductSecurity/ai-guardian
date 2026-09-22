@@ -76,9 +76,7 @@ class RemoteConfigEntry(Container):
             self.index = index
             self.url = url
 
-    def __init__(
-        self, index: int, url_config: Union[str, Dict[str, Any]], **kwargs
-    ):
+    def __init__(self, index: int, url_config: Union[str, Dict[str, Any]], **kwargs):
         """
         Initialize remote config entry.
 

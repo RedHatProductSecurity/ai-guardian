@@ -239,7 +239,9 @@ class AntigravityAdapter(HookAdapter):
             else:
                 # Only PreToolUse honours a decision. For every other event the
                 # best available signal is an injected message.
-                response = self._inject_message(hook_event, final_error or error_message)
+                response = self._inject_message(
+                    hook_event, final_error or error_message
+                )
         else:
             parts = [
                 part

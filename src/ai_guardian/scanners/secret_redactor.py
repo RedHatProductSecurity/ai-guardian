@@ -661,9 +661,7 @@ class SecretRedactor:
             return (None, None)
         return ("[HIDDEN Canadian SIN]", {"method": "canada_sin"})
 
-    def _redact_aadhaar(
-        self, match: re.Match
-    ) -> Tuple[Optional[str], Optional[Dict]]:
+    def _redact_aadhaar(self, match: re.Match) -> Tuple[Optional[str], Optional[Dict]]:
         """
         Redact Indian Aadhaar number after validation.
 

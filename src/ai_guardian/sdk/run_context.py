@@ -50,11 +50,6 @@ class RunContext:
         a_end = self._ended_at.get(a)
         b_start = self._started_at.get(b)
         b_end = self._ended_at.get(b)
-        if (
-            a_start is None
-            or a_end is None
-            or b_start is None
-            or b_end is None
-        ):
+        if a_start is None or a_end is None or b_start is None or b_end is None:
             return False
         return a_start < b_end and b_start < a_end

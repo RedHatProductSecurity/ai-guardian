@@ -1191,9 +1191,7 @@ class GuardedAgent:
 
         def _invoke() -> None:
             try:
-                result_queue.put(
-                    (True, goal_evaluator(goal_state, response, turn_num))
-                )
+                result_queue.put((True, goal_evaluator(goal_state, response, turn_num)))
             except Exception as exc:
                 result_queue.put((False, exc))
 
@@ -1704,7 +1702,8 @@ class GuardedAgent:
                     transient_exc = self._last_transient_exc
                     stop_reason = (
                         "timeout"
-                        if transient_exc is not None and _is_timeout_error(transient_exc)
+                        if transient_exc is not None
+                        and _is_timeout_error(transient_exc)
                         else "transient_error"
                     )
                     break
@@ -1946,8 +1945,8 @@ class GuardedAgent:
                                         exc.result.message,
                                     )
                                     _injection_blocked = True
-                                    _violation_type = exc.result.violation_type
-                                    _violation_id = exc.result.violation_id
+                                    _violation_type = str(exc.result.violation_type)
+                                    _violation_id = str(exc.result.violation_id)
                             if _injection_blocked:
                                 user_text = (
                                     "[ai-guardian] Injected content was "
@@ -2271,8 +2270,8 @@ class GuardedAgent:
                                         exc.result.message,
                                     )
                                     _injection_blocked = True
-                                    _violation_type = exc.result.violation_type
-                                    _violation_id = exc.result.violation_id
+                                    _violation_type = str(exc.result.violation_type)
+                                    _violation_id = str(exc.result.violation_id)
                             if _injection_blocked:
                                 strategy.inject_user_text_after_results(
                                     messages,
