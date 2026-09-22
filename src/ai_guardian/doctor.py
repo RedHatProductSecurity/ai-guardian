@@ -2027,7 +2027,7 @@ class Doctor:
         )
 
     def check_bandit_scanner(self) -> CheckResult:
-        """Check if Bandit code security scanner is available."""
+        """Check availability of the configured code-security inspectors."""
         import importlib.util
 
         self._ensure_config()
@@ -2047,11 +2047,25 @@ class Doctor:
                 message="Code scanning disabled in config",
             )
 
+        configured = code_cfg.get("inspectors", ["bandit"])
+        if isinstance(configured, str):
+            configured = [configured]
+        configured = [str(name).lower() for name in configured]
+        if "bandit" not in configured:
+            return CheckResult(
+                name="bandit_scanner",
+                status=CheckStatus.PASS,
+                message=(
+                    "Bandit not selected; configured code inspectors: "
+                    + ", ".join(configured)
+                ),
+            )
+
         if importlib.util.find_spec("bandit") is None:
             return CheckResult(
                 name="bandit_scanner",
                 status=CheckStatus.FAIL,
-                message="Bandit not found — code security scan will be SKIPPED",
+                message="Bandit not found — Bandit code inspection will be SKIPPED",
                 fix_hint="uv tool install --force ai-guardian",
             )
 
@@ -2065,7 +2079,7 @@ class Doctor:
         return CheckResult(
             name="bandit_scanner",
             status=CheckStatus.PASS,
-            message=f"Bandit (code security) v{bandit_version} installed",
+            message=f"Bandit (code inspector) v{bandit_version} installed",
         )
 
     def check_email_auth(self) -> CheckResult:

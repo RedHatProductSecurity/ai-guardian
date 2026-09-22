@@ -8,47 +8,45 @@ import importlib.util
 import logging
 import os
 import tempfile
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
+
+from ai_guardian.scanners.code_inspection import (
+    CodeInspectionFinding,
+    CodeInspector,
+    CodeInspectorUnavailableError,
+    SEVERITY_ORDER,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class BanditUnavailableError(RuntimeError):
+class BanditUnavailableError(CodeInspectorUnavailableError):
     """Raised when bandit is not importable in the current environment."""
 
 
-_SEVERITY_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
+_SEVERITY_ORDER = SEVERITY_ORDER
+CodeSecurityFinding = CodeInspectionFinding
 
 
-@dataclass
-class CodeSecurityFinding:
-    rule_id: str
-    description: str
-    line_number: int
-    severity: str
-    confidence: str
-    file_path: str
-    end_line: Optional[int] = None
-    start_column: Optional[int] = None
-    snippet: Optional[str] = None
-
-
-class BanditScanner:
+class BanditScanner(CodeInspector):
     """Python code security scanner using Bandit."""
 
     name = "bandit"
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         self.config = config or {}
-        raw_threshold = self.config.get("severity_threshold", "MEDIUM")
+        raw_threshold = str(self.config.get("severity_threshold", "MEDIUM"))
         self._threshold = _SEVERITY_ORDER.get(raw_threshold.upper(), 1)
         self._allowlist: List[Dict[str, Any]] = self.config.get("allowlist", []) or []
         self._available: bool = importlib.util.find_spec("bandit") is not None
 
+    @property
+    def available(self) -> bool:
+        return self._available
+
     def scan(
         self, content: str, file_path: str = "unknown.py"
-    ) -> List[CodeSecurityFinding]:
+    ) -> List[CodeInspectionFinding]:
         """Scan Python source code for security issues.
 
         Writes content to a temp file, runs Bandit in-process, then applies
@@ -79,8 +77,8 @@ class BanditScanner:
 
         return [f for f in findings if not self._is_allowlisted(f, file_path)]
 
-    def _run_bandit(self, content: str, file_path: str) -> List[CodeSecurityFinding]:
-        from bandit.core import config as b_config
+    def _run_bandit(self, content: str, file_path: str) -> List[CodeInspectionFinding]:
+        from bandit.core import config as b_config  # type: ignore[import-untyped]
         from bandit.core import manager as b_manager
 
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".py", prefix="ai-guardian-bandit-")
@@ -135,6 +133,7 @@ class BanditScanner:
                         confidence=confidence,
                         file_path=file_path,
                         snippet=snippet,
+                        inspector=self.name,
                     )
                 )
             return findings
@@ -161,3 +160,7 @@ class BanditScanner:
                 continue
             return True
         return False
+
+
+# Keep the historical scanner name while exposing the generic inspector term.
+BanditInspector = BanditScanner

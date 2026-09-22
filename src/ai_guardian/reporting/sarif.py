@@ -522,9 +522,11 @@ def create_code_security_finding(
     file_path: str,
     line_number: Optional[int] = None,
     start_column: Optional[int] = None,
+    end_column: Optional[int] = None,
     snippet: Optional[str] = None,
+    inspector: str = "bandit",
 ) -> Dict[str, Any]:
-    """Create a finding dict for code security (Bandit) issues."""
+    """Create a finding dict for normalized code-inspection issues."""
     level = "error" if severity.upper() == "HIGH" else "warning"
     return {
         "rule_id": rule_id,
@@ -533,11 +535,12 @@ def create_code_security_finding(
         "file_path": file_path,
         "line_number": line_number,
         "start_column": start_column,
+        "end_column": end_column,
         "snippet": snippet,
         "details": {
             "severity": severity,
             "confidence": confidence,
-            "scanner": "bandit",
+            "scanner": inspector,
         },
     }
 

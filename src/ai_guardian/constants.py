@@ -449,7 +449,7 @@ VIOLATION_FILTER_TYPES = [
     (
         "Code Security",
         "code_security",
-        "Insecure Python code patterns detected by Bandit",
+        "Insecure Python code patterns detected by configured inspectors",
     ),
     (
         "Offensive Language",

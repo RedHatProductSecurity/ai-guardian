@@ -676,6 +676,8 @@ def _load_supply_chain_config():
 _CODE_SCANNING_DEFAULTS = {
     "enabled": True,
     "action": "warn",
+    "inspectors": ["bandit"],
+    "timeout_ms": 2000,
     "severity_threshold": "MEDIUM",
     "allowlist": [],
     "ignore_files": [],
@@ -683,7 +685,7 @@ _CODE_SCANNING_DEFAULTS = {
 
 
 def _load_code_scanning_config():
-    """Load code security scanning (Bandit) configuration. Returns defaults when section is absent."""
+    """Load code inspection configuration. Returns defaults when absent."""
     return _load_config_section(
         "code_scanning", defaults=_CODE_SCANNING_DEFAULTS, merge_ignore=True
     )

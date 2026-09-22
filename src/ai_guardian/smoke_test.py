@@ -667,12 +667,15 @@ class SmokeTestRunner:
 
         import importlib.util
 
-        if importlib.util.find_spec("bandit") is None:
+        inspectors = config.get("inspectors", ["bandit"])
+        if isinstance(inspectors, str):
+            inspectors = [inspectors]
+        if "bandit" in inspectors and importlib.util.find_spec("bandit") is None:
             return SmokeTestResult(
                 scanner_name="",
                 display_name="",
                 outcome=SmokeTestOutcome.SKIPPED,
-                message="Bandit not installed",
+                message="Configured Bandit inspector not installed",
                 fix_hint="uv tool install --force ai-guardian",
             )
 
@@ -702,7 +705,7 @@ class SmokeTestRunner:
             expected_action=expected,
             actual_detected=False,
             message="Canary NOT detected",
-            fix_hint="Check code_scanning settings and bandit installation",
+            fix_hint="Check code_scanning inspectors and installed dependencies",
             elapsed_ms=elapsed,
         )
 

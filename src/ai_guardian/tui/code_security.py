@@ -1,4 +1,4 @@
-"""Code Security (Bandit) TUI panel — configuration and violation view."""
+"""Code Security TUI panel — configuration and violation view."""
 
 import json
 import logging
@@ -21,7 +21,7 @@ def _format_enabled(value: Union[bool, Dict[str, Any]]) -> str:
 
 
 class CodeSecurityContent(ConfigSaveMixin, Container):
-    """Content widget for Code Security (Bandit) tab."""
+    """Content widget for the code security tab."""
 
     CSS = """
     CodeSecurityContent {
@@ -49,7 +49,7 @@ class CodeSecurityContent(ConfigSaveMixin, Container):
     """
 
     def compose(self) -> ComposeResult:
-        yield Static("[bold]Code Security Scanning (Bandit)[/bold]", id="cs-header")
+        yield Static("[bold]Code Security Scanning[/bold]", id="cs-header")
 
         with VerticalScroll():
             with Container(classes="cs-section"):
@@ -75,7 +75,7 @@ class CodeSecurityContent(ConfigSaveMixin, Container):
 
             with Container(classes="cs-section"):
                 yield Static(
-                    "[bold]Bandit Categories Detected[/bold]\n"
+                    "[bold]Built-in Inspector Coverage[/bold]\n"
                     "[dim]  B1xx  Injection / Injection equivalents\n"
                     "  B2xx  General hardcoded tests\n"
                     "  B3xx  Blacklist calls (weak crypto, eval, exec)\n"
@@ -83,6 +83,8 @@ class CodeSecurityContent(ConfigSaveMixin, Container):
                     "  B5xx  Cryptography\n"
                     "  B6xx  XML / injection\n"
                     "  B7xx  YAML / subprocess\n\n"
+                    "The AST inspector covers high-risk Python APIs such as unsafe\n"
+                    "deserialization and dynamic execution.\n\n"
                     "Suppress with:  # nosec  or  # ai-guardian:allow[/dim]"
                 )
 
@@ -116,6 +118,12 @@ class CodeSecurityContent(ConfigSaveMixin, Container):
 
         enabled = cs.get("enabled", True)
         action = cs.get("action", "warn")
+        inspectors = cs.get("inspectors", ["bandit"])
+        if isinstance(inspectors, str):
+            inspectors = [inspectors]
+        if not isinstance(inspectors, list):
+            inspectors = ["bandit"]
+        timeout_ms = cs.get("timeout_ms", 2000)
         threshold = cs.get("severity_threshold", "MEDIUM")
         enabled_text = _format_enabled(enabled)
 
@@ -123,6 +131,8 @@ class CodeSecurityContent(ConfigSaveMixin, Container):
             self.query_one("#cs-status", Static).update(
                 f"  Enabled:            {enabled_text}\n"
                 f"  Action:             {action}\n"
+                f"  Inspectors:         {', '.join(inspectors)}\n"
+                f"  Timeout:            {timeout_ms} ms per inspector\n"
                 f"  Severity threshold: {threshold}"
             )
         except Exception:

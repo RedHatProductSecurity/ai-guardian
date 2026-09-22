@@ -500,7 +500,7 @@ Use `logging.getLogger(__name__)` in all modules. Choose levels as follows:
 
 ### Linting
 
-When the user says "lint", it means run both **ruff** and **black** (in that order).
+When the user says "lint", it means run **ruff**, **black**, and **mypy**.
 
 The project uses multiple linters enforced by CI. **Run these after finishing all implementations:**
 
@@ -521,9 +521,10 @@ black --target-version py39 --check src/ai_guardian/ tests/
 pylint src/ai_guardian/ --disable=all --enable=E \
   --disable=E1101,E0611,E2515,E2502,E0602,E0601,E1123,E1120,E0213,E0102,E0203,E1129,E0401 \
   --output-format=text
+mypy src/ai_guardian/
 ```
 
-Ruff configuration is in `pyproject.toml` under `[tool.ruff]`. Pylint only checks for E-level (error) violations — conventions and warnings are excluded.
+Ruff configuration is in `pyproject.toml` under `[tool.ruff]`. Pylint only checks for E-level (error) violations — conventions and warnings are excluded. Mypy checks the source package for type errors.
 
 ### Pre-commit Checks
 
@@ -533,7 +534,7 @@ Before submitting a PR:
 1. Run `/simplify` on changed files — catch dead code, duplicates, over-abstraction
 2. Run only related unit tests under `tests/unit/`
 3. Check coverage only for those related unit tests when needed
-4. Run linters: `black`, `ruff check`, `pylint` (required — CI will block if they fail)
+4. Run linters: `black`, `ruff check`, `pylint`, `mypy` (required — CI will block if they fail)
 5. Update CHANGELOG.md if making notable changes
 
 **For documentation-only changes:**

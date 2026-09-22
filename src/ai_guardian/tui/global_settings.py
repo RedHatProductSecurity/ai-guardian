@@ -39,7 +39,7 @@ FEATURES = [
     ("config_file_scanning", "gs_config_file_scanning", "📄 Config File Scanning"),
     ("context_poisoning", "gs_context_poisoning", "🧪 Context Poisoning Detection"),
     ("supply_chain", "gs_supply_chain", "🔗 Supply Chain Scanning"),
-    ("code_scanning", "gs_code_scanning", "🐍 Code Security (Bandit)"),
+    ("code_scanning", "gs_code_scanning", "🐍 Code Security"),
     ("scan_offensive", "gs_scan_offensive", "🚫 Offensive Language"),
     ("canary_detection", "gs_canary_detection", "🪤 Canary Detection"),
     ("exfil_detection", "gs_exfil_detection", "🔓 Exfil Detection"),

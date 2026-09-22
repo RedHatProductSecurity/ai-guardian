@@ -1,4 +1,4 @@
-"""Code Security (Bandit) page — configuration and statistics."""
+"""Code Security page — configuration and statistics."""
 
 from nicegui import run, ui
 
@@ -21,6 +21,11 @@ _ACTION_OPTS = {
     "log-only": "Log Only — silent logging",
 }
 
+_INSPECTOR_OPTS = {
+    "bandit": "Bandit — package-backed Python security rules",
+    "ast": "AST — dependency-free high-risk Python API checks",
+}
+
 
 def _load_cs_stats():
     from ai_guardian.web.config_helpers import load_web_violations
@@ -32,7 +37,7 @@ def _load_cs_stats():
 
 
 def create_code_security_page(service, daemon_name: str):
-    """Create the Code Security (Bandit) page."""
+    """Create the Code Security page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/code-security")
     create_header(daemon_name, drawer=sidebar)
 
@@ -41,8 +46,8 @@ def create_code_security_page(service, daemon_name: str):
             ui.label("Code Security Scanning").classes("text-2xl font-bold")
             add_help_button("code_scanning")
         ui.label(
-            "Python code security scanning using Bandit — detects insecure patterns "
-            "including eval/exec, subprocess shell injection, weak crypto, and SQL injection."
+            "Python code security scanning with configurable inspectors. Bandit provides "
+            "broad rules; the built-in AST inspector adds dependency-free high-risk API checks."
         ).classes("text-xs text-grey-6")
 
         content = ui.column().classes("w-full gap-4")
@@ -109,11 +114,83 @@ def create_code_security_page(service, daemon_name: str):
 
                     act_sel.on_value_change(save_action)
 
+                # Inspectors
+                with ui.card().classes("w-full"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label("Inspectors").classes("text-lg font-bold")
+                        field_help_icon("code_scanning.inspectors")
+                    ui.label(
+                        "Choose one or more inspectors. Bandit is enabled by default; AST "
+                        "adds dependency-free checks for high-risk Python APIs."
+                    ).classes("text-xs text-grey-6")
+                    configured_inspectors = cs.get("inspectors", ["bandit"])
+                    if isinstance(configured_inspectors, str):
+                        configured_inspectors = [configured_inspectors]
+                    configured_inspectors = [
+                        name
+                        for name in configured_inspectors
+                        if name in _INSPECTOR_OPTS
+                    ] or ["bandit"]
+                    inspector_sel = (
+                        ui.select(
+                            options=_INSPECTOR_OPTS,
+                            value=configured_inspectors,
+                        )
+                        .props("multiple")
+                        .classes("w-full max-w-xl")
+                    )
+
+                    async def save_inspectors(e):
+                        cfg = await run.io_bound(load_web_config)
+                        sect = cfg.get("code_scanning", {})
+                        if not isinstance(sect, dict):
+                            sect = {}
+                        values = e.value if isinstance(e.value, list) else [e.value]
+                        values = [value for value in values if value in _INSPECTOR_OPTS]
+                        if not values:
+                            ui.notify("Select at least one inspector", type="negative")
+                            inspector_sel.value = configured_inspectors
+                            return
+                        sect["inspectors"] = values
+                        cfg["code_scanning"] = sect
+                        await run.io_bound(save_web_config, cfg)
+                        ui.notify("Inspectors updated", type="positive")
+
+                    inspector_sel.on_value_change(save_inspectors)
+
+                # Inspector timeout
+                with ui.card().classes("w-full"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label("Inspector Timeout").classes("text-lg font-bold")
+                        field_help_icon("code_scanning.timeout_ms")
+                    ui.label(
+                        "Maximum time allowed for each inspector. Use 0 to disable the timeout."
+                    ).classes("text-xs text-grey-6")
+                    timeout_input = ui.number(
+                        "Timeout (milliseconds)",
+                        value=cs.get("timeout_ms", 2000),
+                        min=0,
+                        max=120000,
+                        step=100,
+                    ).classes("w-full max-w-md")
+
+                    async def save_timeout(e):
+                        cfg = await run.io_bound(load_web_config)
+                        sect = cfg.get("code_scanning", {})
+                        if not isinstance(sect, dict):
+                            sect = {}
+                        sect["timeout_ms"] = max(0, int(e.value or 0))
+                        cfg["code_scanning"] = sect
+                        await run.io_bound(save_web_config, cfg)
+                        ui.notify("Inspector timeout updated", type="positive")
+
+                    timeout_input.on_value_change(save_timeout)
+
                 # Severity threshold
                 with ui.card().classes("w-full"):
                     with ui.row().classes("items-center gap-1"):
                         ui.label("Severity Threshold").classes("text-lg font-bold")
-                        field_help_icon("code_scanning.severity")
+                        field_help_icon("code_scanning.severity_threshold")
                     ui.label(
                         "Minimum severity level to report. Findings below the threshold are silently ignored."
                     ).classes("text-xs text-grey-6")
@@ -141,8 +218,8 @@ def create_code_security_page(service, daemon_name: str):
                         ui.label("Allowlist").classes("text-lg font-bold")
                         field_help_icon("code_scanning.allowlist")
                     ui.label(
-                        "Suppress specific Bandit findings by test ID, optionally scoped to a path prefix. "
-                        "The # nosec annotation in source code is also honored by Bandit natively."
+                        "Suppress normalized inspector findings by rule ID, optionally scoped to a path prefix. "
+                        "The # nosec annotation and # ai-guardian:allow are honored."
                     ).classes("text-xs text-grey-6")
 
                     allowlist = cs.get("allowlist", [])
@@ -188,7 +265,7 @@ def create_code_security_page(service, daemon_name: str):
 
                     with ui.row().classes("items-center gap-2 mt-2 flex-wrap"):
                         tid_input = (
-                            ui.input(placeholder="Test ID (e.g. B101)")
+                            ui.input(placeholder="Rule ID (e.g. B101 or AST001)")
                             .props("dense outlined")
                             .classes("w-32")
                         )
@@ -207,7 +284,7 @@ def create_code_security_page(service, daemon_name: str):
                             tid = tid_input.value.strip()
                             if not tid:
                                 ui.notify(
-                                    "Enter a Bandit test ID (e.g. B101)",
+                                    "Enter an inspector rule ID (e.g. B101 or AST001)",
                                     type="negative",
                                 )
                                 return

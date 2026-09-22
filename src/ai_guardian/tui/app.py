@@ -385,7 +385,7 @@ HELP_DOCS = {
         "but a scanner bug = blocked workflow.\n"
         "  Recommend: 'allow' for dev, 'block' for production/compliance.\n"
         "  Applies to ALL scanners: secret, PII, prompt injection, "
-        "Bandit, canary, exfil, etc."
+        "code security, canary, exfil, etc."
     ),
     "panel-skills": (
         "[bold]Skills Permissions[/bold]\n\n"
@@ -618,17 +618,20 @@ HELP_DOCS = {
         "  - Ignore files via glob patterns (e.g., tests/**)"
     ),
     "panel-code-security": (
-        "[bold]Code Security Scanning (Bandit)[/bold]\n\n"
-        "Detect insecure Python code patterns: eval/exec, subprocess shell "
-        "injection, weak crypto, SQL injection, hardcoded credentials, etc.\n\n"
+        "[bold]Code Security Scanning[/bold]\n\n"
+        "Configured inspectors detect insecure Python code patterns: eval/exec, "
+        "subprocess shell injection, weak crypto, SQL injection, hardcoded credentials, etc.\n\n"
         "[bold]Severity levels:[/bold]\n"
         "  HIGH   — Critical vulnerabilities (shell injection, eval)\n"
         "  MEDIUM — Important issues (weak crypto, unsafe deserialization)\n"
         "  LOW    — Minor concerns (bare except, debug mode)\n\n"
         "[bold]Suppression:[/bold]\n"
-        "  # nosec           — Suppress all Bandit checks on a line\n"
+        "  # nosec           — Suppress supported inspector checks on a line\n"
         "  # nosec B101      — Suppress a specific check\n"
         "  # ai-guardian:allow — Suppress all ai-guardian checks on a line\n\n"
+        "[bold]Inspectors:[/bold]\n"
+        "  bandit — broad package-backed Python security rules\n"
+        "  ast    — dependency-free high-risk Python API checks\n\n"
         "[bold]Note:[/bold]\n"
         "  This panel is read-only. Use the web console or edit\n"
         "  ai-guardian.json to change code security settings."
