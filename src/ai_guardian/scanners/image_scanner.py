@@ -319,16 +319,19 @@ class FaceDetector:
         try:
             import numpy as np
 
+            # OpenCV's optional Python stubs do not expose these runtime APIs
+            # consistently across supported environments.
+            opencv: Any = cv2
             nparr: Any = np.frombuffer(image_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_GRAYSCALE)
+            img = opencv.imdecode(nparr, opencv.IMREAD_GRAYSCALE)
             if img is None:
                 return []
 
             if cls._cascade is None:
                 cascade_path = (
-                    cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+                    opencv.data.haarcascades + "haarcascade_frontalface_default.xml"
                 )
-                cls._cascade = cv2.CascadeClassifier(cascade_path)
+                cls._cascade = opencv.CascadeClassifier(cascade_path)
 
             faces = cls._cascade.detectMultiScale(
                 img, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30)
