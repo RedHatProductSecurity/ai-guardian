@@ -607,6 +607,29 @@ sandboxes for inspection. It uses `openshell sandbox exec` by default; use
 case is reported as an expected failure until Pi can consume OpenShell resolver
 references.
 
+For release qualification, use the fixed three-row matrix and emit the
+versioned, sanitized report:
+
+```bash
+python container/tests/test_openshell_agents.py \
+    --qualify \
+    --image quay.io/redhatproductsecurity/ai-guardian-openshell:1.18.0 \
+    --provider claude=ai-guardian-google-vertex-ai \
+    --provider codex=ai-guardian-codex \
+    --provider opencode-claude=ai-guardian-google-vertex-ai \
+    --report openshell-compatibility-report.json
+```
+
+The matrix covers Claude Code with Vertex AI, native Codex with the OpenShell
+provider, and OpenCode's `claude` profile with Vertex AI. It verifies creation,
+daemon/service reachability, real agent execution, deterministic violation
+detection, restart/reconnect, and cleanup. CI runs only the credential-free
+contract and image metadata checks; live provider qualification remains manual.
+The report schema and upgrade procedure are documented in
+[`docs/Sandbox.md`](../docs/Sandbox.md) and
+[`container/tests/README.md`](tests/README.md). No provider credential, prompt,
+model output, service URL, or raw command output is written to the report.
+
 For the broader Docker/Podman matrix, use the companion runner:
 
 ```bash
@@ -1413,6 +1436,13 @@ Access from the host: `http://localhost:63152`
 | `UV_VERSION` | `0.11.16` | uv package manager version |
 | `OPENCODE_VERSION` | `1.17.3` | OpenCode version for the normal image |
 | `PI_VERSION` | `0.86.0` | Pi coding agent version for the normal image |
+
+The dedicated OpenShell image also records its qualification inputs as OCI
+labels: the report schema version, AI Guardian build value, pinned Community
+base reference, and managed Codex/OpenCode/Pi versions. Claude Code and
+Copilot are inherited from the Community base and are labeled as such. Release
+readiness inspects these labels and runs `--version` for all five bundled CLI
+clients without contacting a provider.
 
 ## Test Image (Dockerfile.test)
 

@@ -28,6 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   provider-backed Anthropic inference routing, experimental OpenAI provider
   paths, version monitoring, and image smoke checks.
 
+- **Versioned OpenShell qualification (#2394)**: Add a credential-free contract
+  around the three documented provider workflows plus an opt-in manual runner
+  that records sanitized creation, detection, lifecycle, service, and image
+  metadata results.
+
 ### Changed
 
 - **Fedora/OpenShell SELinux diagnostics (#2343)**: Document the host-policy
