@@ -401,7 +401,8 @@ remove_file_agents() {
 
     # OpenCode plugin
     local opencode_plugin="$HOME/.config/opencode/plugins/ai-guardian.ts"
-    local opencode_bridge="$HOME/.config/opencode/plugins/ai-guardian-bridge.ts"
+    local opencode_bridge="$HOME/.config/opencode/ai-guardian/ai-guardian-bridge.ts"
+    local opencode_legacy_bridge="$HOME/.config/opencode/plugins/ai-guardian-bridge.ts"
     if [ -f "$opencode_plugin" ]; then
         found=true
         if [ "$DRY_RUN" = true ]; then
@@ -418,8 +419,19 @@ remove_file_agents() {
             dry "Would remove $opencode_bridge"
         else
             rm -f "$opencode_bridge"
+            rmdir "$(dirname "$opencode_bridge")" 2>/dev/null || true
             ok "Removed OpenCode shared bridge"
             REMOVED+=("opencode shared bridge")
+        fi
+    fi
+    if [ -f "$opencode_legacy_bridge" ]; then
+        found=true
+        if [ "$DRY_RUN" = true ]; then
+            dry "Would remove $opencode_legacy_bridge"
+        else
+            rm -f "$opencode_legacy_bridge"
+            ok "Removed legacy OpenCode shared bridge"
+            REMOVED+=("legacy OpenCode shared bridge")
         fi
     fi
 

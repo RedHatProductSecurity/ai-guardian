@@ -425,7 +425,9 @@ class IDESetup:
             "config_dir_env_var": "OPENCODE_CONFIG_DIR",
             "config_filename": None,
             "plugin_file": True,
-            "bridge_file": "ai-guardian-bridge.ts",
+            # OpenCode V1 auto-loads every direct TypeScript file in this
+            # directory, so keep helper exports outside the discovery path.
+            "bridge_file": "../ai-guardian/ai-guardian-bridge.ts",
         },
         "pi": {
             "name": "Pi",
@@ -2266,6 +2268,20 @@ class IDESetup:
             _render_guardian_command(_AI_GUARDIAN_BRIDGE_TS, binary_path)
         )
 
+    @staticmethod
+    def _remove_legacy_opencode_bridge(plugins_dir: Path) -> bool:
+        """Remove the generated bridge from OpenCode's old discovery path."""
+        legacy_path = plugins_dir / "ai-guardian-bridge.ts"
+        if not legacy_path.is_file():
+            return False
+
+        content = legacy_path.read_text(encoding="utf-8")
+        if _typescript_source_version(content) is None:
+            return False
+
+        legacy_path.unlink()
+        return True
+
     def _setup_plugin_file(
         self,
         ide_type: str,
@@ -2283,11 +2299,14 @@ class IDESetup:
         bridge_file = plugins_dir / ide_config.get(
             "bridge_file", "ai-guardian-bridge.ts"
         )
+        legacy_bridge_file = plugins_dir / "ai-guardian-bridge.ts"
 
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} plugin:\n"
             message += f"  Create: {plugin_file}\n"
             message += f"  Create: {bridge_file}\n"
+            if ide_type == "opencode" and legacy_bridge_file.is_file():
+                message += f"  Remove stale generated bridge: {legacy_bridge_file}\n"
             reg_msg = self._register_opencode_plugin(
                 plugin_file, plugins_dir, dry_run=True
             )
@@ -2301,6 +2320,7 @@ class IDESetup:
         plugin_file.write_text(
             _render_typescript_source(_OPENCODE_PLUGIN_TS), encoding="utf-8"
         )
+        bridge_file.parent.mkdir(parents=True, exist_ok=True)
         bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
         self._register_opencode_plugin(plugin_file, plugins_dir)
@@ -2309,6 +2329,14 @@ class IDESetup:
 
         message = f"✓ Successfully configured {ide_name} plugin at {plugin_file}\n"
         message += f"  Created shared bridge: {bridge_file}\n"
+        if ide_type == "opencode":
+            if self._remove_legacy_opencode_bridge(plugins_dir):
+                message += f"  Removed stale bridge: {legacy_bridge_file}\n"
+            elif legacy_bridge_file.is_file():
+                message += (
+                    "  ⚠️  WARNING: An existing bridge remains in the OpenCode "
+                    f"plugin directory: {legacy_bridge_file}\n"
+                )
         message += f"\n  {gitleaks_message}\n"
 
         if not gitleaks_installed:
@@ -3910,7 +3938,7 @@ export default function (pi: ExtensionAPI) {
 _OPENCODE_PLUGIN_TS = """\
 // ai-guardian-generated-version: __AI_GUARDIAN_VERSION__
 import type { Plugin } from '@opencode-ai/plugin';
-import { createGuardianBridge } from './ai-guardian-bridge';
+import { createGuardianBridge } from '../ai-guardian/ai-guardian-bridge';
 
 const guardian = createGuardianBridge({ ideType: 'opencode' });
 
