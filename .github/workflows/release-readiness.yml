@@ -480,8 +480,11 @@ jobs:
           echo "WHEEL=${WHEEL}" >> "$GITHUB_ENV"
 
       - name: Build normal support image
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker build \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
             -t ai-guardian-readiness \
             container/
@@ -497,9 +500,12 @@ jobs:
             /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
 
       - name: Build OpenShell support image
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker build \
             -f container/Dockerfile.openshell \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
             -t ai-guardian-openshell-readiness \
             container/

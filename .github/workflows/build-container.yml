@@ -163,6 +163,8 @@ jobs:
           tags: quay.io/redhatproductsecurity/ai-guardian:${{ steps.params.outputs.image_tag }}
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
+          secrets: |
+            github_token=${{ github.token }}
 
       # SHA tag: 24h expiry so commit-tagged images don't accumulate (#1895)
       - name: Push SHA-tagged image (24h expiry)
@@ -176,6 +178,8 @@ jobs:
           labels: quay.expires-after=24h
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
+          secrets: |
+            github_token=${{ github.token }}
 
       # --- OpenShell sandbox image ---
       # This image is deliberately published to its own primary Quay
@@ -201,3 +205,5 @@ jobs:
           tags: quay.io/redhatproductsecurity/ai-guardian-openshell:${{ steps.params.outputs.openshell_tag }}
           build-args: |
             AI_GUARDIAN_VERSION=${{ steps.wheel.outputs.version }}
+          secrets: |
+            github_token=${{ github.token }}

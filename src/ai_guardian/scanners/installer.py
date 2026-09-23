@@ -343,7 +343,11 @@ class ScannerInstaller:
         api_url = f"https://api.github.com/repos/{repo}/releases/latest"
 
         try:
-            response = requests.get(api_url, timeout=5)
+            request_kwargs: Dict[str, Any] = {"timeout": 5}
+            headers = self._github_api_headers()
+            if headers:
+                request_kwargs["headers"] = headers
+            response = requests.get(api_url, **request_kwargs)
             response.raise_for_status()
             version = response.json()["tag_name"]
             # Remove 'v' prefix if present
@@ -355,6 +359,20 @@ class ScannerInstaller:
             logger.warning(f"Failed to fetch latest version from GitHub: {e}")
             logger.info("Falling back to pinned version from pyproject.toml")
             return self.get_pinned_version(scanner_name)
+
+    @staticmethod
+    def _github_api_headers() -> Optional[Dict[str, str]]:
+        """Return authenticated headers when a GitHub token is available."""
+        token = (
+            os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or ""
+        ).strip()
+        if not token:
+            return None
+        return {
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
 
     def install_via_package_manager(self, scanner_name: str) -> bool:
         """
@@ -466,7 +484,10 @@ class ScannerInstaller:
 
     @staticmethod
     def _download_with_retry(
-        url: str, timeout: int = 60, max_attempts: int = 3
+        url: str,
+        timeout: int = 60,
+        max_attempts: int = 3,
+        headers: Optional[Dict[str, str]] = None,
     ) -> "requests.Response":
         """Download a URL with retry and exponential backoff.
 
@@ -474,6 +495,7 @@ class ScannerInstaller:
             url: URL to download
             timeout: Request timeout in seconds
             max_attempts: Maximum number of attempts
+            headers: Optional HTTP headers for authenticated API requests
 
         Returns:
             requests.Response object
@@ -484,7 +506,10 @@ class ScannerInstaller:
         last_error = None
         for attempt in range(1, max_attempts + 1):
             try:
-                response = requests.get(url, timeout=timeout)
+                request_kwargs: Dict[str, Any] = {"timeout": timeout}
+                if headers:
+                    request_kwargs["headers"] = headers
+                response = requests.get(url, **request_kwargs)
                 response.raise_for_status()
                 return response
             except Exception as e:
@@ -534,7 +559,11 @@ class ScannerInstaller:
                 f"https://api.github.com/repos/{repo}/releases/tags/v{version}"
             )
             try:
-                response = self._download_with_retry(release_url, timeout=30)
+                response = self._download_with_retry(
+                    release_url,
+                    timeout=30,
+                    headers=self._github_api_headers(),
+                )
                 assets = response.json().get("assets", [])
                 asset = next(
                     (item for item in assets if item.get("name") == asset_filename),

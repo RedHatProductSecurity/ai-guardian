@@ -16,6 +16,9 @@ on:
       - 'src/**'
       - 'tests/**'
 
+permissions:
+  contents: read
+
 jobs:
   python:
     name: Python ${{ matrix.python-version }} (${{ matrix.os }})
@@ -100,6 +103,8 @@ jobs:
           ai-guardian doctor --smoke-test
 
       - name: Build scenario test images
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           python -m build --wheel
           mkdir -p container/vendor
@@ -107,6 +112,7 @@ jobs:
           WHEEL=$(basename container/vendor/ai_guardian-*.whl)
           echo "WHEEL=${WHEEL}" >> "$GITHUB_ENV"
           docker build \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
             -t ai-guardian-base \
             container/
@@ -139,18 +145,24 @@ jobs:
         run: docker buildx inspect --bootstrap
 
       - name: Build normal image for both architectures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
             --output type=oci,dest=/tmp/ai-guardian.tar \
             container/
 
       - name: Build OpenShell image for both architectures
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --file container/Dockerfile.openshell \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHEEL" \
             --output type=oci,dest=/tmp/ai-guardian-openshell.tar \
             container/

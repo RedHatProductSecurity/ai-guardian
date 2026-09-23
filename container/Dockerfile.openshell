@@ -90,7 +90,14 @@ RUN uv pip uninstall --python /sandbox/.venv/bin/python opencv-python || true \
 # TruffleHog, whose license acknowledgement requires an interactive install.
 # These tools are present before OpenShell starts, so no runtime egress policy
 # is needed for scanner downloads.
-RUN ai-guardian scanner install gitleaks --use-pinned \
+# The optional BuildKit secret authenticates GitHub API requests without
+# persisting the token in an image layer. Local builds remain unauthenticated.
+RUN --mount=type=secret,id=github_token,required=false \
+    if [ -f /run/secrets/github_token ]; then \
+        export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; \
+    fi; \
+    set -eux; \
+    ai-guardian scanner install gitleaks --use-pinned \
     && test -x /usr/local/bin/gitleaks \
     && ai-guardian scanner install betterleaks --use-pinned \
     && test -x /usr/local/bin/betterleaks \
