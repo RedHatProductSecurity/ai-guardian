@@ -1393,9 +1393,22 @@ class IDESetup:
             return False
         config_path = Path(raw_path).expanduser()
 
-        # Only repair an integration that the user previously installed. This
-        # must not turn daemon startup into first-run setup for every detected IDE.
-        if not self.check_hooks_configured(config_path, ide_type):
+        # Only repair an integration that the user previously installed. OpenCode
+        # V1 auto-discovers local plugin files without requiring a JSON entry, so
+        # a generated host file is sufficient evidence for that integration.
+        if ide_type == "opencode":
+            plugin_path = config_path / "ai-guardian.ts"
+            try:
+                plugin_source = plugin_path.read_text(encoding="utf-8")
+            except OSError:
+                return False
+            if "ai-guardian" not in plugin_source:
+                return False
+            if _typescript_source_version(
+                plugin_source
+            ) is None and not self.check_hooks_configured(config_path, ide_type):
+                return False
+        elif not self.check_hooks_configured(config_path, ide_type):
             return False
 
         from ai_guardian import __version__
