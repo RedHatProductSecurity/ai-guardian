@@ -73,7 +73,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | Junie | `JUNIE_HOME` | MCP: `<dir>/mcp.json` | Guidelines remain project-local at `.junie/guidelines`; `JUNIE_CONFIG_LOCATION` is an additive upstream search path, not a replacement selected by AI Guardian |
 | AiderDesk | `AIDER_DESK_DIR`, then `AIDER_DESK_HOME_DIR` | Extension: `<dir>/extensions/ai-guardian`; MCP: `<dir>/settings.json` | Project transcript history remains `.aider.chat.history.md` |
 | OpenClaw | `OPENCLAW_STATE_DIR`, then `OPENCLAW_HOME`; `OPENCLAW_CONFIG_PATH` is an explicit MCP file | Plugin: `<state>/plugins/ai-guardian`; MCP: the exact `OPENCLAW_CONFIG_PATH`, otherwise `<state>/settings.json` | Explicit config-file selection does not redirect plugin state |
-| OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins` | Project-local config remains project-local |
+| OpenCode | `OPENCODE_CONFIG` (file), then `OPENCODE_CONFIG_DIR` (directory) | Config: selected JSON/JSONC file; plugin: its adjacent `<config-dir>/plugins`; shared bridge: `<config-dir>/ai-guardian` | Project-local config remains project-local |
 | Pi | `PI_CODING_AGENT_DIR` for the agent home; `PI_CODING_AGENT_SESSION_DIR` for sessions | Extension: `<dir>/extensions/ai-guardian.ts`; sessions: `<session-dir>/*.jsonl` | Project extension remains under `<project>/.pi/extensions`; Pi has no native MCP surface |
 | Windsurf | No documented home relocation variable; `WINDSURF_TRANSCRIPTS_DIR` is transcript-only | Existing defaults remain unchanged | Project hooks/settings retain their existing scope |
 | Augment Code | No documented home relocation variable | Existing defaults remain unchanged | Project paths retain their existing scope |
@@ -494,8 +494,11 @@ native MCP surface, so setup does not create a fabricated MCP configuration.
 ### OpenCode, AiderDesk, and OpenClaw - shared TypeScript process bridge
 
 These three generated integrations keep their host-specific lifecycle callbacks
-in `ai-guardian.ts` or `index.ts`, and install the same adjacent
-`ai-guardian-bridge.ts`. The shared bridge owns executable invocation with
+in `ai-guardian.ts` or `index.ts`, and install the same shared
+`ai-guardian-bridge.ts`. AiderDesk and OpenClaw keep the bridge adjacent to
+their host file. OpenCode stores it outside its auto-discovered plugin
+directory because OpenCode V1 loads every direct TypeScript file there. The
+shared bridge owns executable invocation with
 `--ide`, the 30-second timeout, inherited environment plus
 `AI_GUARDIAN_IDE_TYPE`, nested JSON response parsing, block decisions, and
 `updatedToolOutput` redaction extraction. Host files retain only callback
@@ -710,7 +713,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | Augment Code | `~/.augment/settings.json` |
 | AiderDesk | `~/.aider-desk/extensions/ai-guardian/` (extension and `ai-guardian-bridge.ts`) |
 | OpenClaw | `~/.openclaw/plugins/ai-guardian/` (plugin and `ai-guardian-bridge.ts`) |
-| OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` and adjacent `ai-guardian-bridge.ts` |
+| OpenCode | `~/.config/opencode/plugins/ai-guardian.ts` and `~/.config/opencode/ai-guardian/ai-guardian-bridge.ts` |
 | Pi | `~/.pi/agent/extensions/ai-guardian.ts` (extension), or `<project>/.pi/extensions/ai-guardian.ts` |
 | Crush | `.crush.json` (project) or `~/.config/crush/crush.json` (global) |
 | Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |

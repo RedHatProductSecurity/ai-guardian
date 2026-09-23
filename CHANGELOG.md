@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **OpenCode plugin discovery compatibility (#2404)**: Store the generated
+  shared bridge outside OpenCode's auto-discovered plugin directory and remove
+  stale bridge files during setup upgrades, preventing OpenCode V1 from loading
+  bridge helper exports as standalone plugins.
+
 - **Fedora/OpenShell SELinux diagnostics (#2343)**: Document the host-policy
   cause and security-preserving package-update remediation for
   `nnp_transition`/`nosuid_transition` AVC denials during hardened OpenShell

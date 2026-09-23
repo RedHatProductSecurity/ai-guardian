@@ -26,7 +26,12 @@ def test_generated_hosts_delegate_to_shared_bridge():
         (_OPENCLAW_PLUGIN_TS, "openclaw"),
         (_OPENCODE_PLUGIN_TS, "opencode"),
     ):
-        assert "./ai-guardian-bridge" in source
+        bridge_import = (
+            "../ai-guardian/ai-guardian-bridge"
+            if ide_type == "opencode"
+            else "./ai-guardian-bridge"
+        )
+        assert bridge_import in source
         assert "createGuardianBridge" in source
         assert f"ideType: '{ide_type}'" in source
         assert "execSync" not in source
@@ -87,12 +92,13 @@ def test_setup_and_health_check_include_shared_bridge(tmp_path, ide_type):
         verification = setup.verify_hooks_for_ide(ide_type)
 
     assert success is True, message
-    assert (install_root / "ai-guardian-bridge.ts").is_file()
+    bridge_path = install_root / setup.IDE_CONFIGS[ide_type]["bridge_file"]
+    assert bridge_path.is_file()
     assert verification["healthy"] is True, verification
     host_file = "ai-guardian.ts" if ide_type == "opencode" else "index.ts"
     for artifact in (
         install_root / host_file,
-        install_root / "ai-guardian-bridge.ts",
+        bridge_path,
     ):
         assert f"// ai-guardian-generated-version: {__version__}" in artifact.read_text(
             encoding="utf-8"
@@ -105,6 +111,10 @@ def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):
     install_root.mkdir()
     plugin_file = install_root / "ai-guardian.ts"
     plugin_file.write_text("// existing ai-guardian plugin\n", encoding="utf-8")
+    legacy_bridge_file = install_root / "ai-guardian-bridge.ts"
+    legacy_bridge_file.write_text(
+        setup._render_guardian_bridge("ai-guardian"), encoding="utf-8"
+    )
     config_file = tmp_path / "opencode.json"
     config_file.write_text(
         json.dumps({"plugin": [str(plugin_file)]}) + "\n", encoding="utf-8"
@@ -128,7 +138,44 @@ def test_existing_opencode_is_upgraded_without_first_run_setup(tmp_path):
     assert f"// ai-guardian-generated-version: {__version__}" in plugin_file.read_text(
         encoding="utf-8"
     )
-    assert (install_root / "ai-guardian-bridge.ts").is_file()
+    bridge_path = install_root / setup.IDE_CONFIGS["opencode"]["bridge_file"]
+    assert bridge_path.is_file()
+    assert not legacy_bridge_file.exists()
+
+
+def test_opencode_auto_upgrade_does_not_require_registration(tmp_path):
+    setup = IDESetup()
+    install_root = tmp_path / "plugins"
+    install_root.mkdir()
+    plugin_file = install_root / "ai-guardian.ts"
+    plugin_file.write_text(
+        _OPENCODE_PLUGIN_TS.replace("__AI_GUARDIAN_VERSION__", __version__),
+        encoding="utf-8",
+    )
+    legacy_bridge_file = install_root / "ai-guardian-bridge.ts"
+    legacy_bridge_file.write_text(
+        setup._render_guardian_bridge("ai-guardian"), encoding="utf-8"
+    )
+    config_file = tmp_path / "opencode.json"
+    config_file.write_text("{}\n", encoding="utf-8")
+    setup.IDE_CONFIGS = {"opencode": dict(IDESetup.IDE_CONFIGS["opencode"])}
+
+    with (
+        mock.patch.object(setup, "get_config_path", return_value=str(install_root)),
+        mock.patch.object(
+            setup, "verify_gitleaks_installed", return_value=(True, "ok")
+        ),
+        mock.patch(
+            "ai_guardian.setup.hooks._resolve_opencode_config",
+            return_value=config_file,
+        ),
+    ):
+        results = setup.upgrade_typescript_integrations()
+
+    assert results and results[0]["success"] is True
+    bridge_path = install_root / setup.IDE_CONFIGS["opencode"]["bridge_file"]
+    assert bridge_path.is_file()
+    assert not legacy_bridge_file.exists()
 
 
 def test_current_typescript_integration_is_not_rewritten(tmp_path):

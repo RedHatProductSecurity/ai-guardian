@@ -243,6 +243,16 @@ class TestUninstallScript:
         home = tmp_path / "home"
         claude_dir = home / "claude"
         claude_dir.mkdir(parents=True)
+        opencode_plugins = home / ".config" / "opencode" / "plugins"
+        opencode_plugins.mkdir(parents=True)
+        opencode_plugin = opencode_plugins / "ai-guardian.ts"
+        opencode_plugin.write_text("// generated plugin\n", encoding="utf-8")
+        opencode_bridge_dir = home / ".config" / "opencode" / "ai-guardian"
+        opencode_bridge_dir.mkdir(parents=True)
+        opencode_bridge = opencode_bridge_dir / "ai-guardian-bridge.ts"
+        opencode_bridge.write_text("// generated bridge\n", encoding="utf-8")
+        legacy_bridge = opencode_plugins / "ai-guardian-bridge.ts"
+        legacy_bridge.write_text("// legacy generated bridge\n", encoding="utf-8")
         mcp_config = claude_dir / ".claude.json"
         mcp_config.write_text(
             json.dumps(
@@ -281,6 +291,9 @@ class TestUninstallScript:
         remaining = json.loads(mcp_config.read_text(encoding="utf-8"))
         assert "ai-guardian" not in remaining["mcpServers"]
         assert remaining["mcpServers"]["other-server"] == {"command": "/tmp/other"}
+        assert not opencode_plugin.exists()
+        assert not opencode_bridge.exists()
+        assert not legacy_bridge.exists()
 
 
 class TestInstallPs1:
