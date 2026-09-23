@@ -2072,6 +2072,47 @@ class TestProjectDirectoryMenuRefresh:
 class TestWakeDetection:
     """Tests for system wake detection and tray rebuild (issue #703)."""
 
+    def test_stats_refresh_schedules_periodic_ide_setup_check(self):
+        tray = DaemonTray(
+            get_stats_callback=lambda: {},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._icon = mock.MagicMock()
+
+        def stop_after_check(*_args, **_kwargs):
+            tray._stats_refresh_running = False
+
+        with (
+            mock.patch.object(tray._refresh_event, "wait", return_value=False),
+            mock.patch.object(
+                tray._health,
+                "_start_ide_setup_check",
+                side_effect=stop_after_check,
+            ) as start_check,
+            mock.patch.object(tray, "_dispatch_to_main"),
+            mock.patch.object(tray._health, "_check_config_error_notification"),
+            mock.patch.object(tray._health, "_check_version_mismatch"),
+            mock.patch.object(tray._health, "_check_stale_code"),
+            mock.patch.object(tray._health, "_check_pypi_version"),
+            mock.patch.object(tray._health, "_check_self_upgrade_notification"),
+            mock.patch.object(tray._plugins, "_poll_plugins"),
+            mock.patch.object(tray._anim, "_request_discovery_refresh"),
+            mock.patch.object(tray, "_register_tray_with_remotes"),
+        ):
+            tray._stats_refresh_running = True
+            tray._start_stats_refresh()
+
+            for thread in threading.enumerate():
+                if thread.name == "stats-refresh":
+                    thread.join(timeout=2.0)
+                    break
+
+        start_check.assert_called_once_with(
+            manual=False,
+            name="ide-setup-periodic-check",
+        )
+
     def test_rebuild_tray_refreshes_icon_and_menu(self):
         tray = DaemonTray(
             get_stats_callback=lambda: {},
