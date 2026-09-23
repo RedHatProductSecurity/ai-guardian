@@ -550,6 +550,8 @@ class TestCheckEndpoint:
         assert data["findings"] == []
         assert data["redacted"] is None
         assert isinstance(data["elapsed_ms"], (int, float))
+        assert data["policy_decision"]["decision"] == "allow"
+        assert data["policy_decision"]["source"] == "rest_api"
 
     def test_post_check_missing_content(self, rest_api):
         api, port, state = rest_api
@@ -645,6 +647,8 @@ class TestCheckEndpoint:
         assert len(data["findings"]) >= 1
         assert data["findings"][0]["type"] == "secret_detected"
         assert data["redacted"] is not None
+        assert data["policy_decision"]["decision"] == "block"
+        assert data["findings"][0]["policy_decision"]["decision"] == "block"
 
 
 class TestRedactEndpoint:

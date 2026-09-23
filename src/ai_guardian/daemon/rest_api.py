@@ -988,12 +988,45 @@ class _RestHandler(BaseHTTPRequestHandler):
 
             elapsed = (_time.monotonic() - t0) * 1000
 
+            from ai_guardian.violations.decision import PolicyDecision
+
+            correlation_id = body.get("correlation_id") or body.get("session_id")
+            overall_decision = PolicyDecision(
+                event="rest_check",
+                decision=(action if findings else "allow"),
+                reason=(
+                    "security finding detected"
+                    if findings
+                    else "no policy violation detected"
+                ),
+                severity="warning" if findings else "none",
+                source="rest_api",
+                agent="daemon",
+                repository=project_dir,
+                correlation_id=correlation_id,
+                latency_ms=elapsed,
+            ).to_dict()
+            for finding in findings:
+                finding["policy_decision"] = PolicyDecision(
+                    event="rest_check_finding",
+                    decision=action,
+                    reason="security finding detected",
+                    severity="warning",
+                    source="rest_api",
+                    agent="daemon",
+                    repository=project_dir,
+                    correlation_id=correlation_id,
+                    latency_ms=elapsed,
+                    violation_type=finding.get("type"),
+                ).to_dict()
+
             self._send_json(
                 {
                     "clean": len(findings) == 0,
                     "findings": findings,
                     "redacted": redacted,
                     "elapsed_ms": round(elapsed, 1),
+                    "policy_decision": overall_decision,
                 }
             )
         except Exception as e:

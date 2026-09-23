@@ -51,6 +51,43 @@ Logs are stored in your AI Guardian state directory:
 
 Each violation is logged as a single JSON object per line (JSONL format).
 
+### Unified Policy Decision
+
+New entries include a `policy_decision` object. Its versioned schema is defined
+in `src/ai_guardian/schemas/policy-decision.schema.json` and is shared by hook,
+MCP, SDK, daemon, scanner, and external-inspector paths.
+
+```json
+{
+  "schema_version": "1.0",
+  "timestamp": "2026-09-22T12:00:00Z",
+  "event": "PreToolUse",
+  "decision": "block",
+  "reason": "secret detected",
+  "severity": "high",
+  "confidence": 0.99,
+  "policy_version": "ai-guardian/1.19.0-dev",
+  "source": "secret_scanning",
+  "agent": "claude_code",
+  "repository": "/home/user/projects/example",
+  "correlation_id": "agent-run-123",
+  "latency_ms": 12.4,
+  "violation_id": "viol_1234abcd",
+  "violation_type": "secret_detected",
+  "rule_id": "generic-api-key"
+}
+```
+
+The object contains policy metadata only. Raw commands, matched text, snippets,
+and scanner payloads are excluded by default. The correlation ID uses an
+explicit run ID when available, then the session ID or tool-use ID, so related
+checks can be grouped without copying agent content.
+
+The existing top-level JSONL fields remain unchanged. Consumers that read older
+entries can treat a missing `policy_decision` field as a legacy record; the
+current REST, SDK, SARIF, and OTEL adapters preserve their existing shapes and
+add the normalized record or its safe fields.
+
 ### Example Log Entry (Blocked Command)
 
 ```json

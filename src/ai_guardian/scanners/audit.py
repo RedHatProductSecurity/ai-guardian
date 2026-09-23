@@ -9,10 +9,11 @@ import json
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Any, Dict, List, Optional
 
 from ai_guardian.config.utils import get_state_dir
 from ai_guardian.scanners.strategies import ScanResult
+from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,12 @@ class ScanAuditLogger:
         filename: str,
         strategy: str = "first-match",
         context: Optional[Dict] = None,
+        policy_decision: Optional[PolicyDecision] = None,
     ) -> None:
         if not self.enabled:
             return
 
-        entry = {
+        entry: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "scan_completed",
             "engine": result.engine,
@@ -55,6 +57,28 @@ class ScanAuditLogger:
         }
         if context:
             entry["context"] = context
+        if policy_decision is None:
+            context = context or {}
+            policy_decision = PolicyDecision(
+                event="scan_completed",
+                decision="block" if result.has_secrets else "allow",
+                reason=("secret detected" if result.has_secrets else "no violation"),
+                severity="high" if result.has_secrets else "none",
+                confidence=(
+                    max((match.confidence for match in result.secrets), default=0.0)
+                    if result.has_secrets
+                    else None
+                ),
+                source=result.engine or "secret_scanner",
+                agent=context.get("agent", context.get("ide_type", "unknown")),
+                repository=context.get("repository", context.get("project_path")),
+                correlation_id=context.get(
+                    "correlation_id",
+                    context.get("run_id", context.get("session_id")),
+                ),
+                latency_ms=result.scan_time_ms,
+            )
+        entry["policy_decision"] = safe_policy_decision(policy_decision)
 
         self._write_entry(entry)
 
@@ -63,17 +87,27 @@ class ScanAuditLogger:
         engine_type: str,
         error: str,
         filename: str,
+        policy_decision: Optional[PolicyDecision] = None,
     ) -> None:
         if not self.enabled:
             return
 
-        entry = {
+        entry: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "event": "engine_failure",
             "engine": engine_type,
             "error": error,
             "filename": filename,
         }
+        if policy_decision is None:
+            policy_decision = PolicyDecision(
+                event="scan_failed",
+                decision="error",
+                reason="scanner engine failure",
+                severity="warning",
+                source=engine_type or "secret_scanner",
+            )
+        entry["policy_decision"] = safe_policy_decision(policy_decision)
         self._write_entry(entry)
 
     def _write_entry(self, entry: Dict) -> None:

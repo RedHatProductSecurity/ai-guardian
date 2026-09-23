@@ -489,7 +489,7 @@ ai-guardian setup --ide claude --create-config --profile @strict --install-scann
 | [Config File Scanning](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/CREDENTIAL_EXFILTRATION.md) | Detect exfiltration of sensitive config files |
 | [Directory Blocking](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/DIRECTORY_RULES.md) | `.ai-read-deny` markers + config-based rules |
 | [Tool Permissions](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
-| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail of all blocked operations |
+| [Violation Logging](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
 | [Sanitize Command](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/security/SECRET_REDACTION.md) | Clean sensitive data from files |
 | [Interactive Console](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/CONSOLE.md) | TUI for managing configuration visually |
 | [Scanner Management](https://github.com/RedHatProductSecurity/ai-guardian/blob/main/docs/SCANNER_INSTALLATION.md) | Install and manage 8 scanner engines (including built-in toml-patterns) |

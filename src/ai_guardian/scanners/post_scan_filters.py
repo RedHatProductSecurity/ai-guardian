@@ -12,6 +12,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Callable, Dict, List, Optional
 
 from ai_guardian.scanners.scan_result import ScanResult, generate_violation_id
+from ai_guardian.violations.decision import PolicyDecision
 from ai_guardian.violations.log_violation import ScanContext, log_violation
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class PostScanContext:
     hook_event: str
     hook_session_id: Optional[str] = None
     hook_tool_use_id: Optional[str] = None
+    correlation_id: Optional[str] = None
     tool_name: Optional[str] = None
     # Stable agent identity persisted as context.ide_type.  This is separate
     # from the response-protocol IDEType used by hook processing.
@@ -61,6 +63,7 @@ class PostScanContext:
     # shared logger converts it to hashed/sanitized metadata before writing.
     allowlist_content: Optional[str] = None
     allowlist_file_path: Optional[str] = None
+    policy_version: Optional[str] = None
 
 
 @dataclass
@@ -71,6 +74,7 @@ class PostScanDecision:
     error_message: str = ""
     warnings: List[str] = field(default_factory=list)
     ask_decision: Any = None
+    policy_decision: Optional[Dict[str, Any]] = None
 
 
 def build_detailed_warn_message(
@@ -122,10 +126,37 @@ def _scan_context_from_post_scan(ctx: PostScanContext) -> ScanContext:
         project_path=get_project_dir(),
         session_id=ctx.hook_session_id,
         tool_use_id=ctx.hook_tool_use_id,
+        correlation_id=ctx.correlation_id or ctx.hook_session_id,
         tool_name=ctx.tool_name,
+        agent=ctx.ide_type_value,
+        policy_version=ctx.policy_version,
         allowlist_content=ctx.allowlist_content,
         allowlist_file_path=ctx.allowlist_file_path,
     )
+
+
+def _effective_scan_result(
+    entry: Any,
+    result: ScanResult,
+    severity_override: Optional[str] = None,
+) -> ScanResult:
+    """Apply the same configured severity used by the violation logger."""
+    if severity_override:
+        return replace(result, severity=severity_override)
+    entry_severity = getattr(entry, "violation_severity", None)
+    if entry_severity:
+        return replace(result, severity=entry_severity)
+    return result
+
+
+def _decision_context(
+    ctx: PostScanContext,
+    context_overrides: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    context = _scan_context_from_post_scan(ctx).to_dict()
+    if context_overrides:
+        context.update(context_overrides)
+    return context
 
 
 def log_scan_violation(
@@ -137,15 +168,13 @@ def log_scan_violation(
     blocked_overrides: Optional[Dict[str, Any]] = None,
     context_overrides: Optional[Dict[str, Any]] = None,
     severity_override: Optional[str] = None,
+    policy_decision: Optional[PolicyDecision] = None,
 ) -> None:
     """Log a violation using ScannerEntry metadata + ScanResult fields."""
     if ctx.violation_logger is None:
         return
 
-    if severity_override:
-        result = replace(result, severity=severity_override)
-    elif hasattr(entry, "violation_severity") and entry.violation_severity:
-        result = replace(result, severity=entry.violation_severity)
+    result = _effective_scan_result(entry, result, severity_override)
 
     log_violation(
         result,
@@ -159,6 +188,7 @@ def log_scan_violation(
             else None
         ),
         source=source,
+        policy_decision=policy_decision,
     )
 
 
@@ -228,20 +258,10 @@ def apply_post_scan_pipeline(
     if not result.detected:
         return PostScanDecision(should_block=False)
 
-    if not skip_violation_log:
-        log_scan_violation(
-            entry,
-            result,
-            ctx,
-            source=source,
-            blocked_overrides=blocked_overrides,
-            context_overrides=context_overrides,
-            severity_override=severity_override,
-        )
-
     should_block = result.should_block
     error_msg = result.error_message or ""
     warnings: List[str] = []
+    effective_result = _effective_scan_result(entry, result, severity_override)
 
     if entry.supports_ask_mode and should_block:
         action_str = result.extra.get("action", "block") if result.extra else "block"
@@ -297,19 +317,57 @@ def apply_post_scan_pipeline(
                 finding_fingerprints=finding_fingerprints,
             )
 
+            canonical_decision = PolicyDecision.from_scan_result(
+                effective_result,
+                _decision_context(ctx, context_overrides),
+                source=source,
+                decision_override="block" if should_block else "allow",
+            )
+            if not skip_violation_log:
+                log_scan_violation(
+                    entry,
+                    result,
+                    ctx,
+                    source=source,
+                    blocked_overrides=blocked_overrides,
+                    context_overrides=context_overrides,
+                    severity_override=severity_override,
+                    policy_decision=canonical_decision,
+                )
+
             return PostScanDecision(
                 should_block=should_block,
                 error_message=error_msg,
                 warnings=warnings,
                 ask_decision=ask_result,
+                policy_decision=canonical_decision.to_dict(),
             )
 
     if not should_block and error_msg:
         detailed = build_detailed_warn_message(entry, result, file_path)
         warnings.append(detailed)
 
+    canonical_decision = PolicyDecision.from_scan_result(
+        effective_result,
+        _decision_context(ctx, context_overrides),
+        source=source,
+        decision_override="block" if should_block else None,
+    )
+    if not skip_violation_log:
+        log_scan_violation(
+            entry,
+            result,
+            ctx,
+            source=source,
+            blocked_overrides=blocked_overrides,
+            context_overrides=context_overrides,
+            severity_override=severity_override,
+            policy_decision=canonical_decision,
+        )
+
     return PostScanDecision(
         should_block=should_block,
         error_message=error_msg,
         warnings=warnings,
+        policy_decision=canonical_decision.to_dict(),
     )

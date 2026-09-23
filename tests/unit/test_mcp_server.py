@@ -44,6 +44,8 @@ class TestCheckPath:
         tool = server._tool_manager._tools["check_path"]
         result = tool.fn(path=str(safe_file))
         assert result["status"] == "allowed"
+        assert result["policy_decision"]["decision"] == "allow"
+        assert result["policy_decision"]["source"] == "mcp"
 
     @patch("ai_guardian.tools.policy.ToolPolicyChecker")
     def test_denied_path(self, mock_checker_cls, tmp_path):
@@ -61,12 +63,14 @@ class TestCheckPath:
         tool = server._tool_manager._tools["check_path"]
         result = tool.fn(path=str(denied_file))
         assert result["status"] == "denied"
+        assert result["policy_decision"]["decision"] == "block"
 
     def test_not_found_path(self):
         server = create_server()
         tool = server._tool_manager._tools["check_path"]
         result = tool.fn(path="/nonexistent/path/file.py")
         assert result["status"] == "not_found"
+        assert result["policy_decision"]["decision"] == "allow"
 
     @patch("ai_guardian.tools.policy.ToolPolicyChecker")
     def test_default_operation_is_read(self, mock_checker_cls, tmp_path):
@@ -194,7 +198,13 @@ class TestCheckPath:
         result = tool.fn(path=str(secret_file))
         assert "rule" not in json.dumps(result).lower()
         assert "pattern" not in json.dumps(result).lower()
-        assert set(result.keys()) <= {"status"}
+        assert set(result.keys()) <= {"status", "policy_decision"}
+        assert set(result["policy_decision"]) >= {
+            "schema_version",
+            "decision",
+            "reason",
+            "correlation_id",
+        }
 
 
 class TestCheckCommand:
@@ -535,6 +545,13 @@ class TestGetViolations:
                 "severity": "critical",
                 "blocked": True,
                 "context": {"tool_name": "Write", "file_path": "/tmp/test.py"},
+                "policy_decision": {
+                    "decision": "block",
+                    "reason": "secret=raw-value",
+                    "source": "secret_scanning",
+                    "agent": "claude_code",
+                    "secret_value": "do-not-copy",
+                },
             }
         ]
         mock_vl_cls.return_value = mock_vl
@@ -548,6 +565,8 @@ class TestGetViolations:
         assert v["severity"] == "critical"
         assert "context" not in v
         assert "blocked" not in v
+        assert v["policy_decision"]["decision"] == "block"
+        assert "secret_value" not in json.dumps(v["policy_decision"])
 
     @patch("ai_guardian.violations.logger.ViolationLogger")
     def test_filters_annotation_suppressed(self, mock_vl_cls):

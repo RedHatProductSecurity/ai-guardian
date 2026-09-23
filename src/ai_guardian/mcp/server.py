@@ -40,6 +40,28 @@ _SAFE_SUGGESTIONS: Dict[str, str] = {
     "exfil_detection": "This command contains credential exfiltration patterns — if legitimate, add a regex to exfil_detection.allowlist_patterns",
 }
 
+
+def _mcp_policy_metadata(
+    event: str,
+    decision: str,
+    reason: str,
+    *,
+    correlation_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Build safe policy metadata for advisory MCP responses."""
+    from ai_guardian.violations.decision import PolicyDecision
+
+    return PolicyDecision(
+        event=event,
+        decision=decision,
+        reason=reason,
+        severity="warning" if decision in ("block", "warn") else "none",
+        source="mcp",
+        agent="mcp_server",
+        correlation_id=correlation_id,
+    ).to_dict()
+
+
 try:
     from mcp.server import MCPServer
 
@@ -203,7 +225,7 @@ def create_server() -> "MCPServer":
     _OPERATION_TO_TOOL = {"read": "Read", "write": "Write", "edit": "Edit"}
 
     @server.tool()
-    def check_path(path: str, operation: str = "read") -> Dict[str, str]:
+    def check_path(path: str, operation: str = "read") -> Dict[str, Any]:
         """Check if a file path is protected by directory rules. Call before Read/Write/Edit on unfamiliar paths. Returns allowed/denied/not_found so you can distinguish between protected paths and missing files.
 
         Args:
@@ -213,7 +235,12 @@ def create_server() -> "MCPServer":
         try:
             resolved = Path(path).expanduser()
             if not resolved.exists():
-                return {"status": "not_found"}
+                return {
+                    "status": "not_found",
+                    "policy_decision": _mcp_policy_metadata(
+                        "mcp_check_path", "allow", "path_not_found"
+                    ),
+                }
 
             from ai_guardian.tools.policy import ToolPolicyChecker
 
@@ -225,14 +252,30 @@ def create_server() -> "MCPServer":
             }
             allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
             if allowed:
-                return {"status": "allowed"}
-            return {"status": "denied"}
+                return {
+                    "status": "allowed",
+                    "policy_decision": _mcp_policy_metadata(
+                        "mcp_check_path", "allow", "policy_allow"
+                    ),
+                }
+            return {
+                "status": "denied",
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_path", "block", "directory_blocking"
+                ),
+            }
         except Exception as e:
             logger.error("check_path error: %s", e)
-            return {"status": "error", "message": "Unable to check path"}
+            return {
+                "status": "error",
+                "message": "Unable to check path",
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_path", "error", "policy_check_error"
+                ),
+            }
 
     @server.tool()
-    def check_command(command: str) -> Dict[str, str]:
+    def check_command(command: str) -> Dict[str, Any]:
         """Check if a Bash command would be blocked. Call before running commands with URLs or file paths. Results are advisory — hooks provide enforcement."""
         try:
             from ai_guardian.tools.policy import ToolPolicyChecker
@@ -244,7 +287,12 @@ def create_server() -> "MCPServer":
             }
             allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
             if allowed:
-                return {"status": "allowed"}
+                return {
+                    "status": "allowed",
+                    "policy_decision": _mcp_policy_metadata(
+                        "mcp_check_command", "allow", "policy_allow"
+                    ),
+                }
             reason = "policy_denied"
             if error_msg:
                 msg_lower = error_msg.lower()
@@ -256,13 +304,25 @@ def create_server() -> "MCPServer":
                     reason = "prompt_injection"
                 elif "directory" in msg_lower or "denied" in msg_lower:
                     reason = "directory_blocked"
-            return {"status": "blocked", "reason": reason}
+            return {
+                "status": "blocked",
+                "reason": reason,
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_command", "block", reason
+                ),
+            }
         except Exception as e:
             logger.error("check_command error: %s", e)
-            return {"status": "error", "message": "Unable to check command"}
+            return {
+                "status": "error",
+                "message": "Unable to check command",
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_command", "error", "policy_check_error"
+                ),
+            }
 
     @server.tool()
-    def check_mcp_trust(server_name: str) -> Dict[str, str]:
+    def check_mcp_trust(server_name: str) -> Dict[str, Any]:
         """Check if an MCP server is trusted based on permission rules. Call before suggesting MCP server usage."""
         try:
             from ai_guardian.tools.policy import ToolPolicyChecker
@@ -274,11 +334,27 @@ def create_server() -> "MCPServer":
             }
             allowed, _, _ = checker.check_tool_allowed(hook_data)
             if allowed:
-                return {"status": "trusted"}
-            return {"status": "untrusted"}
+                return {
+                    "status": "trusted",
+                    "policy_decision": _mcp_policy_metadata(
+                        "mcp_check_trust", "allow", "trusted_server"
+                    ),
+                }
+            return {
+                "status": "untrusted",
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_trust", "block", "untrusted_server"
+                ),
+            }
         except Exception as e:
             logger.error("check_mcp_trust error: %s", e)
-            return {"status": "error", "message": "Unable to check MCP trust"}
+            return {
+                "status": "error",
+                "message": "Unable to check MCP trust",
+                "policy_decision": _mcp_policy_metadata(
+                    "mcp_check_trust", "error", "policy_check_error"
+                ),
+            }
 
     @server.tool()
     def sanitize_text(text: str) -> Dict[str, Any]:
@@ -405,6 +481,7 @@ def create_server() -> "MCPServer":
         """Get recent security violations. Filter by type (secret_detected, prompt_injection, directory_blocking, tool_permission, ssrf_blocked, config_file_exfil, pii_detected, jailbreak_detected)."""
         try:
             from ai_guardian.violations.logger import ViolationLogger
+            from ai_guardian.violations.decision import safe_policy_decision
 
             vl = ViolationLogger()
             violations = vl.get_recent_violations(
@@ -441,6 +518,9 @@ def create_server() -> "MCPServer":
                     entry["start_column"] = blocked["start_column"] + 1
                 if blocked.get("end_column") is not None:
                     entry["end_column"] = blocked["end_column"] + 1
+                policy_decision = safe_policy_decision(v.get("policy_decision"))
+                if policy_decision is not None:
+                    entry["policy_decision"] = policy_decision
                 filtered.append(entry)
             return {"violations": filtered, "count": len(filtered)}
         except Exception as e:

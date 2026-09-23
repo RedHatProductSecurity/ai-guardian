@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Unified policy decision and audit schema (#2307)**: Add a versioned,
+  content-safe decision record shared by hook, MCP, SDK, daemon REST, scanner,
+  external-inspector, JSONL, SARIF, and OTEL outputs while preserving legacy
+  fields and correlation identifiers.
+
 - **Pluggable code security inspection (#2303)**: Normalize code-inspection
   findings behind a shared interface, preserve Bandit behavior, add a
   dependency-free Python AST inspector, per-inspector timeouts, unavailable

@@ -793,6 +793,7 @@ class MultiDaemonClient:
     @staticmethod
     def _local_violations(limit: int, violation_type: Optional[str]) -> dict:
         from ai_guardian.violations.logger import ViolationLogger
+        from ai_guardian.violations.decision import safe_policy_decision
 
         _ALLOWED_FIELDS = {
             "type",
@@ -806,13 +807,16 @@ class MultiDaemonClient:
             "timestamp",
             "session_id",
             "ide_type",
+            "policy_decision",
         }
         vl = ViolationLogger()
         entries = vl.get_recent_violations(limit=limit, violation_type=violation_type)
-        curated = [
-            {k: v for k, v in entry.items() if k in _ALLOWED_FIELDS}
-            for entry in entries
-        ]
+        curated = []
+        for entry in entries:
+            item = {k: v for k, v in entry.items() if k in _ALLOWED_FIELDS}
+            if "policy_decision" in item:
+                item["policy_decision"] = safe_policy_decision(item["policy_decision"])
+            curated.append(item)
         return {"violations": curated, "count": len(curated)}
 
     def get_violation_context(

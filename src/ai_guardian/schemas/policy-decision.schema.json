@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/RedHatProductSecurity/ai-guardian/blob/main/src/ai_guardian/schemas/policy-decision.schema.json",
+  "title": "AI Guardian Policy Decision",
+  "description": "Versioned, safe policy decision metadata embedded in audit and enforcement outputs. Raw commands, matched text, snippets, and scanner payloads are excluded.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "timestamp",
+    "event",
+    "decision",
+    "reason",
+    "severity",
+    "confidence",
+    "policy_version",
+    "source",
+    "agent",
+    "repository",
+    "correlation_id",
+    "latency_ms"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Policy decision schema version, currently 1.0."
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "event": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Normalized hook, API, scanner, or audit event."
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "block", "warn", "log", "redact", "error"]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Safe policy summary; never raw input content."
+    },
+    "severity": {
+      "type": ["string", "null"]
+    },
+    "confidence": {
+      "type": ["number", "null"],
+      "minimum": 0,
+      "maximum": 1
+    },
+    "policy_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository": {
+      "type": ["string", "null"]
+    },
+    "correlation_id": {
+      "type": ["string", "null"]
+    },
+    "latency_ms": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "violation_id": {
+      "type": "string"
+    },
+    "violation_type": {
+      "type": "string"
+    },
+    "rule_id": {
+      "type": "string"
+    }
+  }
+}

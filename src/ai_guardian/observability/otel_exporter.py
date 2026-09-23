@@ -1039,11 +1039,28 @@ def _violation_entry_to_span(
     parent_span_id: str,
 ) -> Dict[str, Any]:
     """Convert a single violations.jsonl entry to an OTEL span."""
+    from ai_guardian.violations.decision import safe_policy_decision
+
     blocked = entry.get("blocked") or {}
     ctx = entry.get("context") or {}
+    policy = safe_policy_decision(entry.get("policy_decision")) or {}
     timestamp_nano = _iso_to_unix_nano(entry.get("timestamp", ""))
 
-    action = blocked.get("action", "block")
+    action = policy.get("decision") or blocked.get("action", "block")
+    policy_attrs = _attrs(
+        ("ai_guardian.policy.schema_version", policy.get("schema_version")),
+        ("ai_guardian.policy.event", policy.get("event")),
+        ("ai_guardian.policy.decision", policy.get("decision")),
+        ("ai_guardian.policy.reason", policy.get("reason")),
+        ("ai_guardian.policy.severity", policy.get("severity")),
+        ("ai_guardian.policy.confidence", policy.get("confidence")),
+        ("ai_guardian.policy.version", policy.get("policy_version")),
+        ("ai_guardian.policy.source", policy.get("source")),
+        ("ai_guardian.policy.agent", policy.get("agent")),
+        ("ai_guardian.policy.repository", policy.get("repository")),
+        ("ai_guardian.policy.correlation_id", policy.get("correlation_id")),
+        ("ai_guardian.policy.latency_ms", policy.get("latency_ms")),
+    )
     if action == "block":
         return _make_span(
             trace_id=trace_id,
@@ -1056,7 +1073,8 @@ def _violation_entry_to_span(
                 ("tool.name", ctx.get("tool_name")),
                 ("ai_guardian.reason", blocked.get("reason")),
                 ("ai_guardian.scanner", entry.get("violation_type")),
-            ),
+            )
+            + policy_attrs,
         )
     return _make_span(
         trace_id=trace_id,
@@ -1071,7 +1089,8 @@ def _violation_entry_to_span(
             ("tool.name", ctx.get("tool_name")),
             ("ai_guardian.violation_id", entry.get("id")),
             ("ai_guardian.scanner", entry.get("violation_type")),
-        ),
+        )
+        + policy_attrs,
     )
 
 

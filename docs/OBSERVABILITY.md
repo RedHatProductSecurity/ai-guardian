@@ -80,6 +80,19 @@ OTEL configuration lives in the top-level `otel` section of `ai-guardian.json`.
 | `OTEL_SERVICE_NAME` | `service_name` | string |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `headers` (config takes precedence) | `key1=val1,key2=val2` |
 
+## Unified Policy Decisions
+
+Violation spans include safe `ai_guardian.policy.*` attributes derived from the
+versioned policy decision schema. The attributes include the event, decision,
+reason, severity, confidence, policy version, source, agent, repository,
+correlation ID, and latency. Raw commands, matched text, snippets, and other
+scanner payloads are not copied into these attributes.
+
+The same decision metadata is embedded in `violations.jsonl`, returned by the
+daemon REST violation and check endpoints, and exposed in SARIF result
+properties. Existing fields and OTEL span names remain compatible with older
+consumers.
+
 ## What Gets Exported
 
 ### SDK Agent Runs (GuardedAgent)
