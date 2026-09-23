@@ -507,12 +507,24 @@ jobs:
       - name: Verify OpenShell image Pi CLI and extension setup
         run: |
           docker run --rm --entrypoint pi ai-guardian-openshell-readiness --version
+          docker run --rm --entrypoint codex ai-guardian-openshell-readiness --version
+          docker run --rm --entrypoint opencode ai-guardian-openshell-readiness --version
+          docker run --rm --entrypoint claude ai-guardian-openshell-readiness --version
+          docker run --rm --entrypoint copilot ai-guardian-openshell-readiness --version
           docker run --rm \
             -e AI_GUARDIAN_AGENT=pi \
             -e AI_GUARDIAN_SETUP_SCOPE=selected \
             -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
             ai-guardian-openshell-readiness \
             /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
+
+      - name: Verify OpenShell compatibility metadata
+        run: |
+          test "$(docker inspect --format='{{index .Config.Labels "ai-guardian.compatibility-report-schema"}}' ai-guardian-openshell-readiness)" = "1"
+          test "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.base-image"}}' ai-guardian-openshell-readiness)" = "ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:aeef1c63f00e2913ea002ccb3aaf925f338b5c5d70e63576f0d95c16a138044e"
+          test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.codex-version"}}' ai-guardian-openshell-readiness)"
+          test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.opencode-version"}}' ai-guardian-openshell-readiness)"
+          test -n "$(docker inspect --format='{{index .Config.Labels "ai-guardian.openshell.pi-version"}}' ai-guardian-openshell-readiness)"
 
   config-validation:
     name: Config Validation

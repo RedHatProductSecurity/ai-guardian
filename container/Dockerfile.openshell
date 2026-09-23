@@ -148,7 +148,15 @@ ENV AI_GUARDIAN_REST_PORT=${AI_GUARDIAN_REST_PORT} \
 
 LABEL ai-guardian.daemon=true \
       ai-guardian.support-image=true \
-      ai-guardian.openshell-base=true
+      ai-guardian.openshell-base=true \
+      ai-guardian.compatibility-report-schema=1 \
+      ai-guardian.version="${AI_GUARDIAN_VERSION}" \
+      ai-guardian.openshell.base-image="${BASE_IMAGE}" \
+      ai-guardian.openshell.claude-version="inherited-from-base" \
+      ai-guardian.openshell.copilot-version="inherited-from-base" \
+      ai-guardian.openshell.codex-version="${CODEX_VERSION}" \
+      ai-guardian.openshell.opencode-version="${OPENCODE_VERSION}" \
+      ai-guardian.openshell.pi-version="${PI_VERSION}"
 
 EXPOSE ${AI_GUARDIAN_REST_PORT}
 

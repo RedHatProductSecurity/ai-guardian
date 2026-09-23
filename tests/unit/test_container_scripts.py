@@ -255,6 +255,20 @@ class TestContainerLaunchers:
         assert "copilot --version" in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
         assert "ai-guardian.openshell-base=true" in dockerfile
+        assert "ai-guardian.compatibility-report-schema=1" in dockerfile
+        assert 'ai-guardian.version="${AI_GUARDIAN_VERSION}"' in dockerfile
+        assert 'ai-guardian.openshell.base-image="${BASE_IMAGE}"' in dockerfile
+        assert (
+            'ai-guardian.openshell.claude-version="inherited-from-base"' in dockerfile
+        )
+        assert (
+            'ai-guardian.openshell.copilot-version="inherited-from-base"' in dockerfile
+        )
+        assert 'ai-guardian.openshell.codex-version="${CODEX_VERSION}"' in dockerfile
+        assert (
+            'ai-guardian.openshell.opencode-version="${OPENCODE_VERSION}"' in dockerfile
+        )
+        assert 'ai-guardian.openshell.pi-version="${PI_VERSION}"' in dockerfile
 
     def test_fedora_openshell_selinux_guidance_preserves_host_hardening(self):
         troubleshooting = TROUBLESHOOTING_DOC.read_text(encoding="utf-8")

@@ -1,0 +1,166 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AI Guardian OpenShell compatibility report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_type",
+    "generated_at",
+    "sanitized",
+    "mode",
+    "versions",
+    "host",
+    "image",
+    "summary",
+    "cases",
+    "known_failures",
+    "exclusions"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "report_type": { "const": "ai-guardian-openshell-compatibility" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "sanitized": { "const": true },
+    "mode": { "enum": ["manual-qualification"] },
+    "versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ai_guardian", "openshell_cli", "openshell_gateway"],
+      "properties": {
+        "ai_guardian": { "type": "string", "minLength": 1 },
+        "openshell_cli": { "type": "string", "minLength": 1 },
+        "openshell_gateway": { "type": "string", "minLength": 1 }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["os", "architecture"],
+      "properties": {
+        "os": { "type": "string", "minLength": 1 },
+        "architecture": { "type": "string", "minLength": 1 }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "tag",
+        "digest",
+        "base_reference",
+        "base_digest",
+        "bundled_cli_versions"
+      ],
+      "properties": {
+        "reference": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "digest": { "type": "string", "minLength": 1 },
+        "base_reference": { "type": "string", "minLength": 1 },
+        "base_digest": { "type": "string", "minLength": 1 },
+        "bundled_cli_versions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["claude", "copilot", "codex", "opencode", "pi"],
+          "properties": {
+            "claude": { "type": "string", "minLength": 1 },
+            "copilot": { "type": "string", "minLength": 1 },
+            "codex": { "type": "string", "minLength": 1 },
+            "opencode": { "type": "string", "minLength": 1 },
+            "pi": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["passed", "failed", "skipped"],
+      "properties": {
+        "passed": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0 },
+        "skipped": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "agent",
+          "profile",
+          "provider_class",
+          "model_family",
+          "result",
+          "steps",
+          "known_failures"
+        ],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "agent": { "type": "string", "enum": ["claude", "codex", "opencode"] },
+          "profile": { "type": "string", "minLength": 1 },
+          "provider_class": { "type": "string", "enum": ["google-vertex-ai", "openshell-codex"] },
+          "model_family": { "type": "string", "enum": ["Claude", "Codex"] },
+          "result": { "enum": ["passed", "failed", "skipped"] },
+          "steps": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "creation",
+              "daemon",
+              "service",
+              "agent",
+              "detection",
+              "restart",
+              "reconnect",
+              "cleanup"
+            ],
+            "patternProperties": {
+              "^(creation|daemon|service|agent|detection|restart|reconnect|cleanup)$": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["status", "exit_code", "failure_code"],
+                "properties": {
+                  "status": { "enum": ["passed", "failed", "skipped", "not_run"] },
+                  "exit_code": { "type": ["integer", "null"] },
+                  "failure_code": {
+                    "type": ["string", "null"],
+                    "enum": [
+                      null,
+                      "command_failed",
+                      "command_unavailable",
+                      "timed_out",
+                      "gateway_unreachable",
+                      "daemon_unreachable",
+                      "service_unreachable",
+                      "violation_not_detected",
+                      "provider_not_configured",
+                      "retained_for_inspection",
+                      "not_run_after_failure"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "known_failures": {
+            "type": "array",
+            "items": { "type": "string", "pattern": "^[a-z0-9_:-]+$" }
+          }
+        }
+      }
+    },
+    "known_failures": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9_:-]+$" }
+    },
+    "exclusions": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9_:-]+$" }
+    }
+  }
+}
