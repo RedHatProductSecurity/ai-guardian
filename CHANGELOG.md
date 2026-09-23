@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Sandbox creation feedback (#2409)**: Show preparation progress during
+  OpenShell repository preflight, wait for the isolated progress window before
+  starting runtime work, and ignore duplicate tray create actions.
+
 - **Doctor hook inventory (#2400)**: Report every supported IDE/CLI integration
   in canonical order with explicit `Not installed` statuses, structured JSON/REST
   records, and separate CLI, TUI, and web health-check rows.
