@@ -88,6 +88,37 @@ class TestPerformanceRouting:
         assert result["paused"] is True
 
 
+class TestHealthCheckRouting:
+    def test_local_health_check_preserves_hook_integrations(self):
+        from ai_guardian.doctor import CheckResult, CheckStatus, DoctorReport
+
+        report = DoctorReport(
+            checks=[
+                CheckResult(
+                    name="hooks",
+                    status=CheckStatus.WARN,
+                    message="No IDEs detected",
+                    integrations=[
+                        {
+                            "ide": "claude",
+                            "display_name": "Claude Code",
+                            "status": "skip",
+                            "message": "Not installed",
+                            "installed": False,
+                        }
+                    ],
+                )
+            ],
+            version="1.0.0",
+        )
+
+        with mock.patch("ai_guardian.doctor.Doctor") as doctor_cls:
+            doctor_cls.return_value.run_all.return_value = report
+            result = MultiDaemonClient._local_health_check()
+
+        assert result["checks"][0]["integrations"][0]["display_name"] == "Claude Code"
+
+
 class TestRestTransportSecurity:
     @mock.patch("ai_guardian.daemon.multi_client.urlopen")
     def test_rejects_http_for_non_loopback_target(self, mock_urlopen):

@@ -1,9 +1,18 @@
 """User experience contract for tray IDE/CLI setup flows (#2257)."""
 
+import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.doctor import (
+    CheckStatus,
+    Doctor,
+    DoctorReport,
+    format_human,
+    format_json,
+)
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.setup.hooks import IDESetup
 from ai_guardian.tray.health import TrayHealthMonitor
 from ai_guardian.tray.menu_builder import TrayMenuBuilder
@@ -11,6 +20,40 @@ from ai_guardian.tray.proactive_prompt import (
     ProactivePromptDialog,
     ProactivePromptState,
 )
+
+
+def test_doctor_lists_complete_hook_inventory_without_false_failures():
+    """
+    USER EXPERIENCE: Doctor shows every supported integration independently.
+
+    Scenario:
+    1. The user runs ``ai-guardian doctor`` on a machine with no supported
+       IDE/CLI installation evidence.
+    2. Doctor checks the canonical supported integration registry.
+
+    Expected User Experience:
+    - Every public integration appears exactly once in canonical order.
+    - Each absent integration says ``Not installed`` and is neutral to the
+      overall Hooks warning.
+    - Human output has one integration per line, while JSON keeps structured
+      machine-readable integration records.
+    """
+    with patch("ai_guardian.setup.IDESetup.list_detected_ides", return_value=[]):
+        result = Doctor().check_hooks()
+
+    expected = [integration.key for integration in SUPPORTED_IDE_REGISTRY]
+    assert result.status == CheckStatus.WARN
+    assert [item["ide"] for item in result.integrations] == expected
+    assert all(item["message"] == "Not installed" for item in result.integrations)
+
+    report = DoctorReport(checks=[result])
+    human = format_human(report)
+    structured = json.loads(format_json(report))["checks"][0]["integrations"]
+
+    assert human.count("Claude Code") == 1
+    assert human.count("OpenCode") == 1
+    assert ";" not in human
+    assert [item["ide"] for item in structured] == expected
 
 
 def test_local_daemon_prompts_for_installed_unconfigured_ide():

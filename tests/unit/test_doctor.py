@@ -24,6 +24,7 @@ from ai_guardian.doctor import (
     format_human,
     format_json,
 )
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.setup import IDESetup
 
 # --- Data model tests ---
@@ -44,6 +45,7 @@ class TestCheckResult:
         assert r.fix_hint is None
         assert r.fixable is False
         assert r.fixed is False
+        assert r.integrations is None
 
 
 class TestDoctorReport:
@@ -343,6 +345,16 @@ class TestCheckHooks:
             assert result.status == CheckStatus.WARN
             assert "No IDEs detected" in result.message
 
+            assert [item["ide"] for item in result.integrations] == [
+                integration.key for integration in SUPPORTED_IDE_REGISTRY
+            ]
+            assert all(
+                item["status"] == CheckStatus.SKIP.value
+                and item["message"] == "Not installed"
+                and item["installed"] is False
+                for item in result.integrations
+            )
+
     def test_hooks_configured(self, _isolate_config_dir, tmp_path):
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
@@ -438,6 +450,35 @@ class TestCheckHooks:
                 result = doctor.check_hooks()
                 assert result.status == CheckStatus.WARN
                 assert "needs attention" in result.message
+                claude = next(
+                    item for item in result.integrations if item["ide"] == "claude"
+                )
+                assert claude["status"] == CheckStatus.WARN.value
+                assert "needs attention" in claude["message"]
+
+    def test_installed_ide_without_hook_file_is_failure(
+        self, _isolate_config_dir, tmp_path
+    ):
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        settings_path = claude_dir / "settings.json"
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(settings_path),
+            ),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.FAIL
+        claude = next(item for item in result.integrations if item["ide"] == "claude")
+        assert claude["status"] == CheckStatus.FAIL.value
+        assert "not configured" in claude["message"]
 
     def test_cursor_reports_user_scope_and_effective_project_scope(
         self, _isolate_config_dir, tmp_path
@@ -715,6 +756,9 @@ class TestCheckHooks:
                 assert result.status == CheckStatus.PASS
                 assert "6/6" in result.message
                 assert "not installed" in result.message
+                statuses = {item["ide"]: item for item in result.integrations}
+                assert statuses["claude"]["status"] == CheckStatus.PASS.value
+                assert statuses["crush"]["message"] == "Not installed"
 
 
 class TestCheckStateDir:
@@ -1775,6 +1819,42 @@ class TestFormatHuman:
         assert "Fixed" in output
         assert "1 fixed" in output
 
+    def test_hooks_render_each_integration_on_its_own_line(self):
+        report = DoctorReport(
+            version="1.0.0",
+            checks=[
+                CheckResult(
+                    name="hooks",
+                    status=CheckStatus.WARN,
+                    message="Claude Code: 6/6 hooks; Cursor IDE: not installed",
+                    integrations=[
+                        {
+                            "ide": "claude",
+                            "display_name": "Claude Code",
+                            "status": "pass",
+                            "message": "6/6 hooks",
+                            "installed": True,
+                        },
+                        {
+                            "ide": "cursor",
+                            "display_name": "Cursor IDE",
+                            "status": "skip",
+                            "message": "Not installed",
+                            "installed": False,
+                        },
+                    ],
+                )
+            ],
+        )
+
+        output = format_human(report)
+
+        assert "Claude Code" in output
+        assert "Cursor IDE" in output
+        assert output.count("Claude Code") == 1
+        assert output.count("Cursor IDE") == 1
+        assert ";" not in output
+
 
 class TestFormatJson:
     def test_valid_json(self):
@@ -1812,6 +1892,37 @@ class TestFormatJson:
         assert data["summary"]["fail"] == 1
         assert data["checks"][1]["fix_hint"] == "do X"
         assert data["checks"][1]["fixable"] is True
+
+    def test_hooks_include_structured_integrations(self):
+        report = DoctorReport(
+            version="1.0.0",
+            checks=[
+                CheckResult(
+                    name="hooks",
+                    status=CheckStatus.WARN,
+                    message="No IDEs detected",
+                    integrations=[
+                        {
+                            "ide": "claude",
+                            "display_name": "Claude Code",
+                            "status": "skip",
+                            "message": "Not installed",
+                            "installed": False,
+                        }
+                    ],
+                )
+            ],
+        )
+
+        data = json.loads(format_json(report))
+
+        assert data["checks"][0]["integrations"][0] == {
+            "ide": "claude",
+            "display_name": "Claude Code",
+            "status": "skip",
+            "message": "Not installed",
+            "installed": False,
+        }
 
 
 # --- CLI entry point tests ---

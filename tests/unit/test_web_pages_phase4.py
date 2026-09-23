@@ -449,6 +449,35 @@ class TestHealthCheckData:
             assert isinstance(icon, str)
             assert isinstance(color, str)
 
+    def test_hook_integration_rows_preserve_order_and_details(self):
+        from ai_guardian.web.pages.health_check import _get_hook_integrations
+
+        check = {
+            "name": "hooks",
+            "integrations": [
+                {
+                    "ide": "claude",
+                    "display_name": "Claude Code",
+                    "status": "pass",
+                    "message": "6/6 hooks",
+                },
+                {
+                    "ide": "cursor",
+                    "display_name": "Cursor IDE",
+                    "status": "skip",
+                    "message": "Not installed",
+                    "detail": "scope: user",
+                },
+            ],
+        }
+
+        rows = _get_hook_integrations(check)
+
+        assert [row["ide"] for row in rows] == ["claude", "cursor"]
+        assert rows[0]["message"] == "6/6 hooks"
+        assert rows[1]["detail"] == "scope: user"
+        assert _get_hook_integrations({"name": "hooks"}) == []
+
 
 # ---------------------------------------------------------------------------
 # Config load/save

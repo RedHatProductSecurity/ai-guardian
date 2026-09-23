@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Doctor hook inventory (#2400)**: Report every supported IDE/CLI integration
+  in canonical order with explicit `Not installed` statuses, structured JSON/REST
+  records, and separate CLI, TUI, and web health-check rows.
+
 - **OpenCode plugin discovery compatibility (#2404)**: Store the generated
   shared bridge outside OpenCode's auto-discovered plugin directory and remove
   stale bridge files during setup upgrades, preventing OpenCode V1 from loading

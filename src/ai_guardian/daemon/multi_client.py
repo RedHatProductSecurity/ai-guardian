@@ -1097,23 +1097,12 @@ class MultiDaemonClient:
 
     @staticmethod
     def _local_health_check(fix: bool = False) -> dict:
-        from ai_guardian.doctor import Doctor
+        from ai_guardian.doctor import Doctor, check_result_to_dict
 
         doctor = Doctor(fix=fix)
         report = doctor.run_all()
         return {
-            "checks": [
-                {
-                    "name": c.name,
-                    "status": c.status.value,
-                    "message": c.message,
-                    "detail": c.detail,
-                    "fix_hint": c.fix_hint,
-                    "fixable": c.fixable,
-                    "fixed": c.fixed,
-                }
-                for c in report.checks
-            ],
+            "checks": [check_result_to_dict(c) for c in report.checks],
             "version": report.version,
         }
 
