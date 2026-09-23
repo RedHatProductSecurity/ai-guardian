@@ -20,7 +20,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -685,7 +685,7 @@ def create_server() -> "MCPServer":
             report = doc.run_all()
             checks = []
             for c in report.checks:
-                entry: Dict[str, Union[str, bool]] = {
+                entry: Dict[str, Any] = {
                     "name": c.name,
                     "status": c.status.value,
                     "message": c.message,
@@ -696,6 +696,8 @@ def create_server() -> "MCPServer":
                     if c.fix_hint:
                         entry["fix_hint"] = c.fix_hint
                     entry["fixable"] = c.fixable
+                if c.integrations is not None:
+                    entry["integrations"] = c.integrations
                 checks.append(entry)
             return {
                 "checks": checks,

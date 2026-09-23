@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # ai-guardian container image
 #
 # Multi-stage UBI-based container with ai-guardian and all headless-capable IDEs.
@@ -86,7 +87,13 @@ RUN uv pip uninstall --python /opt/uv-tools/ai-guardian/bin/python3 opencv-pytho
     && uv pip install --python /opt/uv-tools/ai-guardian/bin/python3 opencv-python-headless
 
 # Secret scanners. Versions come from the scanner pins bundled with AI Guardian.
-RUN ai-guardian scanner install gitleaks --use-pinned \
+# The optional BuildKit secret authenticates GitHub API requests without
+# persisting the token in an image layer. Local builds remain unauthenticated.
+RUN --mount=type=secret,id=github_token,required=false \
+    if [ -f /run/secrets/github_token ]; then \
+        export GITHUB_TOKEN="$(cat /run/secrets/github_token)"; \
+    fi; \
+    ai-guardian scanner install gitleaks --use-pinned \
     && test -x /usr/local/bin/gitleaks \
     && ai-guardian scanner install betterleaks --use-pinned \
     && test -x /usr/local/bin/betterleaks \

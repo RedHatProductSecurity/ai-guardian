@@ -19,6 +19,8 @@ from ai_guardian.tui.health_check import (
     HealthCheckContent,
     format_check_status,
     format_check_detail,
+    format_hook_integration_detail,
+    format_hook_integration_status,
     format_summary,
 )
 from ai_guardian.tui.app import NAV_GROUPS, HELP_DOCS
@@ -93,6 +95,43 @@ class TestFormatCheckStatus:
         )
         result = format_check_status(check)
         assert "unknown_check" in result
+
+    def test_structured_hooks_omit_aggregate_message(self):
+        check = CheckResult(
+            name="hooks",
+            status=CheckStatus.WARN,
+            message="Claude Code: 6/6 hooks; Cursor IDE: Not installed",
+            integrations=[
+                {
+                    "display_name": "Claude Code",
+                    "status": "pass",
+                    "message": "6/6 hooks",
+                }
+            ],
+        )
+
+        result = format_check_status(check)
+
+        assert "Hooks" in result
+        assert ";" not in result
+
+    def test_hook_integration_status_and_detail(self):
+        integration = {
+            "display_name": "Cursor IDE",
+            "status": "warn",
+            "message": "6/6 hooks (scope: user; effective: project)",
+            "detail": "beforeReadFile, MCP server (missing)",
+            "fix_hint": "Run: ai-guardian setup",
+        }
+
+        status = format_hook_integration_status(integration)
+        detail = format_hook_integration_detail(integration)
+
+        assert "WARN" in status
+        assert "Cursor IDE" in status
+        assert "scope: user" in status
+        assert "beforeReadFile" in detail
+        assert "ai-guardian setup" in detail
 
     def test_all_display_names_mapped(self):
         known_checks = [

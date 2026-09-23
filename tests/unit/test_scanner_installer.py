@@ -860,6 +860,31 @@ class TestChecksumVerification:
             "/repos/GitGuardian/ggshield/releases/tags/v1.54.0"
         )
 
+    @mock.patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}, clear=False)
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_gitguardian_checksum_lookup_uses_github_token(self, mock_requests):
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_response.json.return_value = {
+            "assets": [
+                {
+                    "name": "ggshield-1.54.0-x86_64-unknown-linux-gnu.tar.gz",
+                    "digest": "sha256:" + "c" * 64,
+                }
+            ]
+        }
+        mock_requests.get.return_value = mock_response
+
+        installer = ScannerInstaller()
+        filename = "ggshield-1.54.0-x86_64-unknown-linux-gnu.tar.gz"
+        installer._download_checksums(
+            "gitguardian", "1.54.0", "GitGuardian/ggshield", filename
+        )
+
+        headers = mock_requests.get.call_args.kwargs["headers"]
+        assert headers["Authorization"] == "Bearer test-token"
+        assert headers["X-GitHub-Api-Version"] == "2022-11-28"
+
     @pytest.mark.parametrize(
         ("platform_arch", "expected_asset"),
         [
@@ -1621,6 +1646,22 @@ class TestDownloadWithRetry:
         )
         mock_requests.get.assert_called_once_with(
             "https://example.com/file.tar.gz", timeout=120
+        )
+
+    @mock.patch("ai_guardian.scanners.installer.requests")
+    def test_passes_headers_to_requests(self, mock_requests):
+        """Optional request headers are forwarded without changing defaults."""
+        mock_response = mock.Mock()
+        mock_response.raise_for_status = mock.Mock()
+        mock_requests.get.return_value = mock_response
+
+        headers = {"Authorization": "Bearer test-token"}
+        ScannerInstaller._download_with_retry(
+            "https://api.github.com/example", headers=headers
+        )
+
+        mock_requests.get.assert_called_once_with(
+            "https://api.github.com/example", timeout=60, headers=headers
         )
 
     @mock.patch("ai_guardian.scanners.installer.time")

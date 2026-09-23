@@ -3,8 +3,9 @@
 # Builds the container image locally and runs all bundled scenarios
 # for each profile to catch regressions in hook processing before merge.
 #
-# No registry or secrets required — the base image is built from source
-# so fork PRs get full scenario coverage (#2135).
+# No registry or user-provided secrets required — the base image is built from
+# source and uses the read-only workflow token for GitHub API rate limits so
+# fork PRs get full scenario coverage (#2135).
 #
 # Profiles tested: standard, strict, minimal
 # Moderator profile is excluded — action=ask auto-dismisses in headless CI,
@@ -30,6 +31,9 @@ on:
       - '.github/workflows/scenario-tests.yml'
   workflow_call:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   scenario-tests:
@@ -57,9 +61,12 @@ jobs:
           cp dist/*.whl container/vendor/
 
       - name: Build base image locally
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           WHL=$(ls container/vendor/ai_guardian-*.whl | xargs basename)
           docker build \
+            --secret id=github_token,env=GITHUB_TOKEN \
             --build-arg AI_GUARDIAN_VERSION="$WHL" \
             -t ai-guardian-base \
             container/

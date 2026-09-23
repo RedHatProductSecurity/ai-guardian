@@ -41,7 +41,43 @@ def format_check_status(check: CheckResult) -> str:
     icon = _STATUS_ICONS.get(check.status, "")
     label = _STATUS_MARKUP.get(check.status, str(check.status.value))
     display_name = _CHECK_DISPLAY_NAMES.get(check.name, check.name)
-    return f"{icon} {label}  {display_name:<20s}  {check.message}"
+    message = (
+        ""
+        if check.name == "hooks" and check.integrations is not None
+        else check.message
+    )
+    return f"{icon} {label}  {display_name:<20s}  {message}".rstrip()
+
+
+def format_hook_integration_status(integration: dict) -> str:
+    """Format one structured hook integration result as a rich-text line."""
+    try:
+        status = CheckStatus(integration.get("status", CheckStatus.SKIP.value))
+    except (TypeError, ValueError):
+        status = CheckStatus.SKIP
+    icon = _STATUS_ICONS.get(status, "")
+    label = _STATUS_MARKUP.get(status, str(status.value))
+    display_name = (
+        integration.get("display_name")
+        or integration.get("name")
+        or integration.get("ide", "integration")
+    )
+    return f"{icon} {label}  {display_name:<32s}  " f"{integration.get('message', '')}"
+
+
+def format_hook_integration_detail(integration: dict) -> str:
+    """Format the expandable detail section for one hook integration."""
+    parts = []
+    if integration.get("detail"):
+        parts.append(f"[dim]Detail:[/dim]\n{integration['detail']}")
+    if integration.get("fix_hint"):
+        prefix = (
+            "[green]Fixed[/green]"
+            if integration.get("fixed")
+            else "[yellow]Hint[/yellow]"
+        )
+        parts.append(f"{prefix}: {integration['fix_hint']}")
+    return "\n".join(parts) if parts else "[dim]No additional details.[/dim]"
 
 
 def format_check_detail(check: CheckResult) -> str:
@@ -180,6 +216,27 @@ class HealthCheckContent(ScrollableContainer):
         results_container.remove_children()
 
         for check in report.checks:
+            if check.name == "hooks" and check.integrations is not None:
+                results_container.mount(Static(format_check_status(check)))
+                for integration in check.integrations:
+                    has_detail = bool(
+                        integration.get("detail") or integration.get("fix_hint")
+                    )
+                    summary_line = format_hook_integration_status(integration)
+                    if has_detail:
+                        collapsible = Collapsible(
+                            Static(
+                                format_hook_integration_detail(integration),
+                                classes="hc-check-detail",
+                            ),
+                            title=summary_line,
+                            collapsed=True,
+                        )
+                        results_container.mount(collapsible)
+                    else:
+                        results_container.mount(Static(summary_line))
+                continue
+
             has_detail = bool(check.detail or check.fix_hint or check.fixable)
             summary_line = format_check_status(check)
 

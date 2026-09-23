@@ -25,9 +25,10 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,7 @@ class CheckResult:
     fix_hint: Optional[str] = None
     fixable: bool = False
     fixed: bool = False
+    integrations: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
@@ -934,38 +936,59 @@ class Doctor:
             )
 
         setup = IDESetup()
-        detected = setup.list_detected_ides()
-
-        if not detected:
-            return CheckResult(
-                name="hooks",
-                status=CheckStatus.WARN,
-                message="No IDEs detected",
-                fix_hint="Install Claude Code, Cursor, or GitHub Copilot",
-            )
-
+        detected = set(setup.list_detected_ides())
         results = []
+        integration_results = []
         all_configured = True
         any_configured = False
+        any_installed = False
 
-        for ide_type in detected:
+        for integration in SUPPORTED_IDE_REGISTRY:
+            ide_type = integration.key
+            ide_name = integration.display_name
             raw_config_path = setup.get_config_path(ide_type)
-            if raw_config_path is None:
-                results.append(f"{ide_type}: config path unavailable")
-                all_configured = False
-                continue
-            config_path = Path(raw_config_path).expanduser()
-            ide_name = str(setup.IDE_CONFIGS[ide_type].get("name", ide_type))
-
             cursor_layers = []
-            if ide_type == "cursor":
+            if ide_type == "cursor" and ide_type in detected:
                 cursor_layers = setup.get_cursor_config_layers()
 
-            if not config_path.exists() and not any(
-                layer.get("exists") for layer in cursor_layers
-            ):
-                results.append(f"{ide_name}: not installed (no config)")
+            installed = ide_type in detected and (
+                raw_config_path is None
+                or self._has_ide_install_evidence(
+                    setup, ide_type, raw_config_path, cursor_layers
+                )
+            )
+            if not installed:
+                results.append(f"{ide_name}: not installed")
+                integration_results.append(
+                    {
+                        "ide": ide_type,
+                        "name": ide_name,
+                        "display_name": ide_name,
+                        "status": CheckStatus.SKIP.value,
+                        "message": "Not installed",
+                        "installed": False,
+                    }
+                )
                 continue
+
+            any_installed = True
+            if raw_config_path is None:
+                message = "Configuration path unavailable"
+                results.append(f"{ide_name}: {message}")
+                integration_results.append(
+                    {
+                        "ide": ide_type,
+                        "name": ide_name,
+                        "display_name": ide_name,
+                        "status": CheckStatus.FAIL.value,
+                        "message": message,
+                        "installed": True,
+                    }
+                )
+                all_configured = False
+                continue
+
+            config_path = Path(raw_config_path).expanduser()
 
             if ide_type == "codex":
                 verification = setup.verify_ide_setup(ide_type)
@@ -973,9 +996,28 @@ class Doctor:
                 hook_count = sum(status == "healthy" for status in events.values())
                 total = len(setup.expected_hook_manifest("codex"))
                 mcp_status = verification.get("mcp_status", "missing")
-                results.append(
-                    f"{ide_name}: {hook_count}/{total} hooks; MCP: {mcp_status}; "
+                message = (
+                    f"{hook_count}/{total} hooks; MCP: {mcp_status}; "
                     f"{CODEX_COVERAGE_NOTE}"
+                )
+                results.append(f"{ide_name}: {message}")
+                detail = self._hook_verification_detail(verification)
+                integration_results.append(
+                    {
+                        "ide": ide_type,
+                        "name": ide_name,
+                        "display_name": ide_name,
+                        "status": (
+                            CheckStatus.PASS.value
+                            if verification.get("healthy") is True
+                            and hook_count >= total
+                            else CheckStatus.WARN.value
+                        ),
+                        "message": message,
+                        "detail": detail,
+                        "installed": True,
+                        "verification": verification,
+                    }
                 )
                 any_configured = True
                 if verification.get("healthy") is not True or hook_count < total:
@@ -1008,9 +1050,25 @@ class Doctor:
                 mcp_detail = f"MCP: {mcp_status}"
                 if effective_mcp_status != mcp_status:
                     mcp_detail += f"; effective: {effective_mcp_status}"
-                results.append(
-                    f"{ide_name}: {hook_detail} (scope: {scope_detail}); "
-                    f"{mcp_detail}"
+                message = f"{hook_detail} (scope: {scope_detail}); {mcp_detail}"
+                results.append(f"{ide_name}: {message}")
+                detail = self._hook_verification_detail(verification)
+                integration_results.append(
+                    {
+                        "ide": ide_type,
+                        "name": ide_name,
+                        "display_name": ide_name,
+                        "status": (
+                            CheckStatus.PASS.value
+                            if verification.get("healthy") is True
+                            and hook_count >= total
+                            else CheckStatus.WARN.value
+                        ),
+                        "message": message,
+                        "detail": detail,
+                        "installed": True,
+                        "verification": verification,
+                    }
                 )
                 any_configured = True
                 if verification.get("healthy") is not True or hook_count < total:
@@ -1023,31 +1081,96 @@ class Doctor:
                 if ide_type == "claude":
                     hook_count = self._count_claude_hooks(config_path)
                     total = len(setup.expected_hook_manifest("claude"))
-                    results.append(f"{ide_name}: {hook_count}/{total} hooks")
+                    message = f"{hook_count}/{total} hooks"
+                    item_status = (
+                        CheckStatus.PASS if hook_count >= total else CheckStatus.WARN
+                    )
+                    results.append(f"{ide_name}: {message}")
+                    integration_results.append(
+                        {
+                            "ide": ide_type,
+                            "name": ide_name,
+                            "display_name": ide_name,
+                            "status": item_status.value,
+                            "message": message,
+                            "installed": True,
+                        }
+                    )
                     if hook_count < total:
                         all_configured = False
                 elif ide_type == "codex":
                     hook_count = self._count_codex_hooks(config_path)
                     total = len(setup.expected_hook_manifest("codex"))
-                    results.append(f"{ide_name}: {hook_count}/{total} hooks")
+                    message = f"{hook_count}/{total} hooks"
+                    results.append(f"{ide_name}: {message}")
+                    integration_results.append(
+                        {
+                            "ide": ide_type,
+                            "name": ide_name,
+                            "display_name": ide_name,
+                            "status": (
+                                CheckStatus.PASS.value
+                                if hook_count >= total
+                                else CheckStatus.WARN.value
+                            ),
+                            "message": message,
+                            "installed": True,
+                        }
+                    )
                     if hook_count < total:
                         all_configured = False
                 else:
-                    results.append(detail)
+                    message = self._hook_detail_without_name(detail, ide_name)
+                    results.append(f"{ide_name}: {message}")
+                    integration_results.append(
+                        {
+                            "ide": ide_type,
+                            "name": ide_name,
+                            "display_name": ide_name,
+                            "status": CheckStatus.PASS.value,
+                            "message": message,
+                            "installed": True,
+                        }
+                    )
                 any_configured = True
             else:
-                results.append(detail)
+                message = self._hook_detail_without_name(detail, ide_name)
+                item_status = (
+                    CheckStatus.WARN
+                    if "needs attention" in detail
+                    else CheckStatus.FAIL
+                )
+                results.append(f"{ide_name}: {message}")
+                integration_results.append(
+                    {
+                        "ide": ide_type,
+                        "name": ide_name,
+                        "display_name": ide_name,
+                        "status": item_status.value,
+                        "message": message,
+                        "installed": True,
+                    }
+                )
                 if "needs attention" in detail:
                     any_configured = True
                 all_configured = False
 
         detail_str = "; ".join(results)
 
+        if not any_installed:
+            return CheckResult(
+                name="hooks",
+                status=CheckStatus.WARN,
+                message="No IDEs detected" if not detected else detail_str,
+                fix_hint="Install a supported IDE or CLI integration",
+                integrations=integration_results,
+            )
         if all_configured:
             return CheckResult(
                 name="hooks",
                 status=CheckStatus.PASS,
                 message=detail_str,
+                integrations=integration_results,
             )
         elif any_configured:
             return CheckResult(
@@ -1055,6 +1178,7 @@ class Doctor:
                 status=CheckStatus.WARN,
                 message=detail_str,
                 fix_hint="Run: ai-guardian setup",
+                integrations=integration_results,
             )
         else:
             return CheckResult(
@@ -1062,7 +1186,59 @@ class Doctor:
                 status=CheckStatus.FAIL,
                 message=detail_str,
                 fix_hint="Run: ai-guardian setup",
+                integrations=integration_results,
             )
+
+    @staticmethod
+    def _has_ide_install_evidence(
+        setup, ide_type: str, raw_config_path: str, cursor_layers: List[Dict]
+    ) -> bool:
+        """Return whether a detected integration has local installation evidence."""
+        if ide_type == "cursor":
+            return any(
+                layer.get("exists")
+                or (
+                    layer.get("path")
+                    and Path(layer["path"]).expanduser().parent.is_dir()
+                )
+                for layer in cursor_layers
+            )
+
+        config_path = Path(raw_config_path).expanduser()
+        if config_path.exists():
+            return True
+
+        ide_config = setup.IDE_CONFIGS.get(ide_type, {})
+        executable = ide_config.get("executable")
+        if executable:
+            return shutil.which(executable) is not None
+
+        # Crush is project-local and its file is the installation evidence;
+        # treating the repository root as evidence would mark every project as
+        # an installed Crush integration.
+        if ide_type == "crush":
+            return False
+
+        return config_path.parent != Path(".") and config_path.parent.is_dir()
+
+    @staticmethod
+    def _hook_detail_without_name(detail: str, ide_name: str) -> str:
+        prefix = f"{ide_name}: "
+        return detail[len(prefix) :] if detail.startswith(prefix) else detail
+
+    @staticmethod
+    def _hook_verification_detail(verification: Dict[str, Any]) -> Optional[str]:
+        """Return concise attention details for an installed hook integration."""
+        attention = [
+            name
+            for name, status in verification.get("events", {}).items()
+            if status != "healthy"
+        ]
+        attention.extend(
+            f"obsolete:{name}" for name in verification.get("obsolete", [])
+        )
+        attention.extend(str(item) for item in verification.get("diagnostics", []))
+        return ", ".join(attention) or None
 
     def _count_claude_hooks(self, config_path: Path) -> int:
         from ai_guardian.setup import IDESetup
@@ -2308,19 +2484,64 @@ _CHECK_DISPLAY_NAMES = {
 }
 
 
+def _coerce_check_status(status: Union[CheckStatus, str]) -> CheckStatus:
+    if isinstance(status, CheckStatus):
+        return status
+    try:
+        return CheckStatus(status)
+    except (TypeError, ValueError):
+        return CheckStatus.SKIP
+
+
+def _format_status(status: Union[CheckStatus, str], use_color: bool) -> str:
+    status = _coerce_check_status(status)
+    label = _STATUS_LABELS[status]
+    if use_color:
+        return f"{_STATUS_COLORS[status]}[{label}]{_RESET}"
+    return f"[{label}]"
+
+
 def format_human(report: DoctorReport) -> str:
     use_color = sys.stdout.isatty()
     lines = [f"ai-guardian doctor v{report.version}", ""]
 
     for check in report.checks:
-        label = _STATUS_LABELS[check.status]
         display_name = _CHECK_DISPLAY_NAMES.get(check.name, check.name)
+        status_str = _format_status(check.status, use_color)
 
-        if use_color:
-            color = _STATUS_COLORS[check.status]
-            status_str = f"{color}[{label}]{_RESET}"
-        else:
-            status_str = f"[{label}]"
+        if check.name == "hooks" and check.integrations is not None:
+            line = f"  {status_str} {display_name:<20s}"
+            lines.append(line.rstrip())
+            for integration in check.integrations:
+                integration_status = _format_status(
+                    integration.get("status", CheckStatus.SKIP.value), use_color
+                )
+                integration_name = (
+                    integration.get("display_name")
+                    or integration.get("name")
+                    or integration.get("ide", "integration")
+                )
+                integration_message = integration.get("message", "")
+                lines.append(
+                    f"       {' ' * 20}{integration_status} "
+                    f"{integration_name:<32s} {integration_message}"
+                )
+                if integration.get("detail"):
+                    for detail_line in str(integration["detail"]).split("\n"):
+                        lines.append(f"       {' ' * 28} {detail_line}")
+                if integration.get("fix_hint"):
+                    prefix = "Fixed" if integration.get("fixed") else "Hint"
+                    lines.append(
+                        f"       {' ' * 28} {prefix}: {integration['fix_hint']}"
+                    )
+
+            if check.detail:
+                for detail_line in check.detail.split("\n"):
+                    lines.append(f"       {' ' * 20} {detail_line}")
+            if check.fix_hint:
+                prefix = "Fixed" if check.fixed else "Hint"
+                lines.append(f"       {' ' * 20} {prefix}: {check.fix_hint}")
+            continue
 
         line = f"  {status_str} {display_name:<20s} {check.message}"
         lines.append(line)
@@ -2358,20 +2579,24 @@ def format_human(report: DoctorReport) -> str:
     return "\n".join(lines)
 
 
+def check_result_to_dict(check: CheckResult) -> Dict[str, Any]:
+    """Serialize a doctor check for CLI, REST, and other consumers."""
+    data: Dict[str, Any] = {
+        "name": check.name,
+        "status": check.status.value,
+        "message": check.message,
+        "detail": check.detail,
+        "fix_hint": check.fix_hint,
+        "fixable": check.fixable,
+        "fixed": check.fixed,
+    }
+    if check.integrations is not None:
+        data["integrations"] = check.integrations
+    return data
+
+
 def format_json(report: DoctorReport) -> str:
-    checks_data = []
-    for check in report.checks:
-        checks_data.append(
-            {
-                "name": check.name,
-                "status": check.status.value,
-                "message": check.message,
-                "detail": check.detail,
-                "fix_hint": check.fix_hint,
-                "fixable": check.fixable,
-                "fixed": check.fixed,
-            }
-        )
+    checks_data = [check_result_to_dict(check) for check in report.checks]
 
     pass_count = sum(1 for c in report.checks if c.status == CheckStatus.PASS)
     warn_count = sum(1 for c in report.checks if c.status == CheckStatus.WARN)

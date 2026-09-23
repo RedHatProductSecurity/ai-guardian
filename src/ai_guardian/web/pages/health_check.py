@@ -13,6 +13,12 @@ _STATUS_ICONS = {
 }
 
 
+def _get_hook_integrations(check: dict) -> list:
+    """Return structured hook rows when a daemon provides them."""
+    integrations = check.get("integrations")
+    return integrations if isinstance(integrations, list) else []
+
+
 def create_health_check_page(service, daemon_name: str):
     """Create the Health Check page."""
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/health-check")
@@ -98,6 +104,72 @@ def create_health_check_page(service, daemon_name: str):
                             status,
                             ("help", "grey"),
                         )
+
+                        if (
+                            check.get("name") == "hooks"
+                            and check.get("integrations") is not None
+                        ):
+                            with ui.row().classes("items-center gap-2 w-full"):
+                                ui.icon(icon_name).classes(f"text-{color}")
+                                ui.label("Hooks").classes("font-bold text-sm")
+                                ui.label("Supported integrations").classes(
+                                    "text-sm text-grey-4 flex-grow"
+                                )
+
+                            with ui.column().classes("w-full gap-1 ml-6"):
+                                for integration in _get_hook_integrations(check):
+                                    integration_status = integration.get(
+                                        "status", "skip"
+                                    )
+                                    integration_icon, integration_color = (
+                                        _STATUS_ICONS.get(
+                                            integration_status,
+                                            ("help", "grey"),
+                                        )
+                                    )
+                                    integration_name = (
+                                        integration.get("display_name")
+                                        or integration.get("name")
+                                        or integration.get("ide", "integration")
+                                    )
+                                    with ui.row().classes("items-center gap-2 w-full"):
+                                        ui.icon(integration_icon).classes(
+                                            f"text-{integration_color}"
+                                        )
+                                        ui.label(integration_name).classes(
+                                            "font-bold text-sm"
+                                        )
+                                        ui.label(
+                                            integration.get("message", "")
+                                        ).classes("text-sm text-grey-4 flex-grow")
+
+                                    detail = integration.get("detail")
+                                    fix_hint = integration.get("fix_hint")
+                                    if detail or fix_hint:
+                                        with ui.expansion("Details").classes("w-full"):
+                                            if detail:
+                                                ui.label(detail).classes(
+                                                    "text-xs text-grey-6"
+                                                )
+                                            if fix_hint:
+                                                ui.label(f"Fix: {fix_hint}").classes(
+                                                    "text-xs text-blue-4"
+                                                )
+
+                            if check.get("detail") or check.get("fix_hint"):
+                                with ui.expansion("Hooks details").classes(
+                                    "w-full ml-6"
+                                ):
+                                    if check.get("detail"):
+                                        ui.label(check["detail"]).classes(
+                                            "text-xs text-grey-6"
+                                        )
+                                    if check.get("fix_hint"):
+                                        ui.label(f"Fix: {check['fix_hint']}").classes(
+                                            "text-xs text-blue-4"
+                                        )
+                            continue
+
                         with ui.row().classes("items-center gap-2 w-full"):
                             ui.icon(icon_name).classes(f"text-{color}")
                             ui.label(check.get("name", "")).classes("font-bold text-sm")
