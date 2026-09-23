@@ -1082,7 +1082,10 @@ class DaemonTray:
                         self._health._check_stale_code()
                         self._health._check_pypi_version()
                         self._health._check_self_upgrade_notification()
-                        self._health._check_ide_setup_notification()
+                        self._health._start_ide_setup_check(
+                            manual=False,
+                            name="ide-setup-periodic-check",
+                        )
                         self._plugins._poll_plugins()
                         self._anim._request_discovery_refresh(wait=False)
                         self._register_tray_with_remotes()
