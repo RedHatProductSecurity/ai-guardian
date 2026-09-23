@@ -776,6 +776,12 @@ class MCPBlockReasonUXTest(TestCase):
                         "line_number": 3,
                     },
                     "context": {"tool_name": "Read"},
+                    "policy_decision": {
+                        "decision": "block",
+                        "reason": "secret detected",
+                        "source": "secret_scanning",
+                        "agent": "claude_code",
+                    },
                 }
             ]
             mock_vl_cls.return_value = mock_vl
@@ -793,6 +799,7 @@ class MCPBlockReasonUXTest(TestCase):
                 violation["file"] == "/tmp/test.txt"
             ), "File path must be included for context"
             assert violation["line"] == 3, "Line number must be included when available"
+            assert violation["policy_decision"]["decision"] == "block"
 
     @pytest.mark.skipif(
         sys.version_info < (3, 10),

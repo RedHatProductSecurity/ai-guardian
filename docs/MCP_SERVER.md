@@ -116,19 +116,23 @@ Configure via:
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `check_path` | `path`, `operation?` | `allowed` / `denied` / `not_found` | Is this path protected? |
-| `check_command` | `command` | `allowed` / `blocked` + reason | Would this command be blocked? |
-| `check_mcp_trust` | `server_name` | `trusted` / `untrusted` | Is this MCP server allowed? |
+| `check_path` | `path`, `operation?` | `allowed` / `denied` / `not_found` + policy decision | Is this path protected? |
+| `check_command` | `command` | `allowed` / `blocked` + reason + policy decision | Would this command be blocked? |
+| `check_mcp_trust` | `server_name` | `trusted` / `untrusted` + policy decision | Is this MCP server allowed? |
 | `sanitize_text` | `text` | sanitized text + redaction count | Redact secrets/PII from text |
 | `check_annotations` | `file_path` | valid/invalid + warnings | Are annotation pairs matched? |
 
 `operation` (v1.12.0+): `"read"` (default), `"write"`, or `"edit"`. Checks whether the specific operation type is allowed on the path.
 
+Security check and violation responses include the normalized `policy_decision`
+object when available. Its versioned, redacted shape is documented in
+[`VIOLATION_LOGGING.md`](VIOLATION_LOGGING.md#unified-policy-decision).
+
 ### Information (Query)
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `get_violations` | `violation_type?`, `limit?` | violation list with file:line | Recent security violations |
+| `get_violations` | `violation_type?`, `limit?` | violation list with file:line and policy decision | Recent security violations |
 | `get_config` | — | feature enabled/disabled map | Current security posture |
 | `get_scanner_status` | — | installed scanners + versions | Scanner inventory |
 | `get_scanner_supported` | — | all available scanners | What can be installed |
@@ -160,7 +164,7 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 | `check_path` | allowed/denied for operation | Which rule matched, full rules list |
 | `check_command` | allowed/blocked + reason category | Which pattern matched, the deny list |
 | `get_config` | Feature on/off, action mode | Allowlist patterns, regex, rule details |
-| `get_violations` | Type, timestamp, file:line, action | Matched pattern internals |
+| `get_violations` | Type, timestamp, file:line, action, normalized policy decision | Matched pattern internals or raw content |
 | `get_patterns_list` | Category names and counts | Regex patterns |
 
 ### Self-protection

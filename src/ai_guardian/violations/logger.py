@@ -14,9 +14,10 @@ import json
 import logging
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ai_guardian.config.utils import get_config_dir, get_state_dir, is_feature_enabled
+from ai_guardian.violations.decision import PolicyDecision, safe_policy_decision
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class ViolationLogger:
         severity: str = "warning",
         violation_id: Optional[str] = None,
         allowlist_context: Optional[Dict] = None,
+        policy_decision: Optional[Union[PolicyDecision, Dict[str, Any]]] = None,
     ):
         """
         Log a violation to JSONL file.
@@ -65,6 +67,7 @@ class ViolationLogger:
             suggestion: Optional suggestion for resolving the violation
             severity: Severity level (warning, high, critical)
             allowlist_context: Safe source metadata for deferred annotation.
+            policy_decision: Optional safe, versioned policy decision metadata.
         """
         # Check if logging is enabled
         if not self._is_logging_enabled():
@@ -79,16 +82,26 @@ class ViolationLogger:
             return
 
         try:
+            timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            canonical_decision = safe_policy_decision(policy_decision)
+            if canonical_decision is None:
+                canonical_decision = PolicyDecision.from_violation(
+                    violation_type,
+                    blocked=blocked,
+                    context=context,
+                    severity=severity,
+                    violation_id=violation_id,
+                    timestamp=timestamp,
+                ).to_dict()
             entry = {
                 "id": violation_id,
-                "timestamp": datetime.now(timezone.utc)
-                .isoformat()
-                .replace("+00:00", "Z"),
+                "timestamp": timestamp,
                 "violation_type": violation_type,
                 "severity": severity,
                 "blocked": blocked,
                 "context": context,
                 "suggestion": suggestion or {},
+                "policy_decision": canonical_decision,
                 "resolved": False,
                 "resolved_at": None,
                 "resolved_action": None,

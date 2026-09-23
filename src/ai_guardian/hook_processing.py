@@ -397,7 +397,14 @@ def _is_latency_enabled():
         return False
 
 
-def _finalize_latency(timer, hook_event, tool_name):
+def _finalize_latency(
+    timer,
+    hook_event,
+    tool_name,
+    correlation_id=None,
+    agent=None,
+    repository=None,
+):
     if timer is None or not timer._enabled:
         return
     try:
@@ -417,6 +424,12 @@ def _finalize_latency(timer, hook_event, tool_name):
         }
         if timer.ask_wait_total_ms > 0:
             entry["ask_dialog_ms"] = round(timer.ask_wait_total_ms, 2)
+        if correlation_id:
+            entry["correlation_id"] = correlation_id
+        if agent:
+            entry["agent"] = agent
+        if repository:
+            entry["repository"] = repository
         LatencyLogger().log_timing(entry)
     except Exception:
         pass  # intentionally silent — optional dependency
@@ -1691,6 +1704,11 @@ def _log_directory_blocking_violation(
             session_id=hctx.get("session_id"),
             tool_use_id=hctx.get("tool_use_id"),
             tool_name=hctx.get("tool_name"),
+            run_id=hctx.get("run_id"),
+            correlation_id=hctx.get("correlation_id") or hctx.get("run_id"),
+            agent=hctx.get("agent") or hctx.get("ide_type"),
+            repository=hctx.get("repository") or hctx.get("project_path"),
+            policy_version=hctx.get("policy_version"),
         ),
         violation_logger=violation_logger,
         blocked_overrides={
@@ -1844,6 +1862,9 @@ def _process_hook_data(hook_data, daemon_state=None):
     _latency_timer = None
     _latency_event = None
     _latency_tool = ""
+    _latency_correlation_id = None
+    _latency_agent = None
+    _latency_repository = None
     try:
         now = datetime.now(timezone.utc)
         violation_logger = ViolationLogger() if HAS_VIOLATION_LOGGER else None
@@ -1873,6 +1894,14 @@ def _process_hook_data(hook_data, daemon_state=None):
         # Use correlation IDs from normalized input
         hook_tool_use_id = normalized.tool_use_id or hook_data.get("tool_use_id")
         hook_session_id = normalized.session_id or hook_data.get("session_id")
+        _latency_correlation_id = (
+            hook_data.get("run_id")
+            or hook_data.get("_ai_guardian_run_id")
+            or hook_session_id
+            or hook_tool_use_id
+        )
+        _latency_agent = agent_type
+        _latency_repository = normalized.working_dir or hook_data.get("cwd")
 
         # Allowed findings scoped to this invocation only — prevents Allow Once
         # from persisting to the next hook invocation via daemon_state (#1439).
@@ -2275,6 +2304,7 @@ def _process_hook_data(hook_data, daemon_state=None):
             hook_event=hook_event,
             hook_session_id=hook_session_id,
             hook_tool_use_id=hook_tool_use_id,
+            correlation_id=_latency_correlation_id,
             tool_name=tool_name,
             # This field is persisted as context.ide_type.  Keep it separate
             # from ``ide_type``, which controls the response protocol.
@@ -2403,6 +2433,11 @@ def _process_hook_data(hook_data, daemon_state=None):
                             "tool_use_id": hook_tool_use_id,
                             "hook_event": hook_event,
                             "tool_name": tool_name,
+                            "correlation_id": _latency_correlation_id,
+                            "run_id": hook_data.get("run_id")
+                            or hook_data.get("_ai_guardian_run_id"),
+                            "agent": agent_type,
+                            "repository": _latency_repository,
                         },
                     )
 
@@ -2922,7 +2957,14 @@ def _process_hook_data(hook_data, daemon_state=None):
         return {"output": None, "exit_code": 0}
     finally:
         logging.disable(logging.NOTSET)
-        _finalize_latency(_latency_timer, _latency_event, _latency_tool)
+        _finalize_latency(
+            _latency_timer,
+            _latency_event,
+            _latency_tool,
+            _latency_correlation_id,
+            _latency_agent,
+            _latency_repository,
+        )
         if (
             _latency_timer is not None
             and _latency_timer.ask_wait_total_ms > 0

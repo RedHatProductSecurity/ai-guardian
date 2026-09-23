@@ -45,6 +45,8 @@ class TestScanAuditLogger(unittest.TestCase):
         self.assertEqual(entries[0]["event"], "scan_completed")
         self.assertEqual(entries[0]["engine"], "gitleaks")
         self.assertEqual(entries[0]["filename"], "test.py")
+        self.assertEqual(entries[0]["policy_decision"]["decision"], "allow")
+        self.assertEqual(entries[0]["policy_decision"]["event"], "scan_completed")
 
     def test_log_engine_failure(self):
         self.logger.log_engine_failure("trufflehog", "binary not found", "test.py")
@@ -93,6 +95,7 @@ class TestScanAuditLogger(unittest.TestCase):
         entries = self.logger.get_recent_entries()
         self.assertEqual(entries[0]["strategy"], "any-match")
         self.assertEqual(entries[0]["context"]["ide_type"], "claude-code")
+        self.assertEqual(entries[0]["policy_decision"]["agent"], "claude-code")
 
 
 if __name__ == "__main__":

@@ -541,6 +541,7 @@ def run_code_security_scan(
         severity=first.severity,
         file_path=file_path,
         total_findings=len(findings),
+        scan_time_ms=inspection.elapsed_ms,
     )
     result.extra["action"] = config.get("action", "warn")
     result.extra["all_findings"] = findings

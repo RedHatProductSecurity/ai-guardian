@@ -12,6 +12,8 @@ import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime, timezone
 
+from ai_guardian.violations.decision import safe_policy_decision
+
 
 class SARIFFormatter:
     """Format security findings as SARIF 2.1.0 JSON output."""
@@ -253,9 +255,15 @@ class SARIFFormatter:
 
             result["locations"] = [location]
 
-        # Add additional details as properties
+        # Keep legacy details and add only the safe, normalized decision shape.
+        properties = {}
         if finding.get("details"):
-            result["properties"] = {"details": finding["details"]}
+            properties["details"] = finding["details"]
+        policy_decision = safe_policy_decision(finding.get("policy_decision"))
+        if policy_decision is not None:
+            properties["policy_decision"] = policy_decision
+        if properties:
+            result["properties"] = properties
 
         return result
 

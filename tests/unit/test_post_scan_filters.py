@@ -152,6 +152,17 @@ class TestLogScanViolation:
         call_kwargs = ctx.violation_logger.log_violation.call_args[1]
         assert call_kwargs["severity"] == "critical"
 
+    def test_policy_decision_uses_effective_severity(self):
+        ctx = _make_ctx()
+        entry = _make_entry(violation_severity="critical")
+        result = _detected_result(severity="low")
+        with patch("ai_guardian.config.utils.get_project_dir", return_value="/proj"):
+            decision = apply_post_scan_pipeline(entry, result, ctx)
+
+        assert decision.policy_decision["severity"] == "critical"
+        logged = ctx.violation_logger.log_violation.call_args[1]["policy_decision"]
+        assert logged.to_dict()["severity"] == "critical"
+
     def test_context_includes_hook_ids(self):
         ctx = _make_ctx()
         entry = _make_entry()

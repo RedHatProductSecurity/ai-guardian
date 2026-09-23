@@ -207,6 +207,8 @@ class GuardSession:
     @staticmethod
     def _sanitize_violation(v: Dict, sanitize_fn) -> Dict[str, Any]:
         """Extract and sanitize a single violation record."""
+        from ai_guardian.violations.decision import safe_policy_decision
+
         blocked = v.get("blocked", {})
         if not isinstance(blocked, dict):
             blocked = {}
@@ -231,6 +233,7 @@ class GuardSession:
             "session_id": ctx.get("session_id", ""),
             "timestamp": v.get("timestamp", ""),
             "severity": v.get("severity", ""),
+            "policy_decision": safe_policy_decision(v.get("policy_decision")),
         }
 
     @staticmethod
@@ -380,10 +383,13 @@ class _DirectSession(GuardSession):
             ctx = ScanContext(
                 ide_type="sdk",
                 project_path=self._cwd or os.getcwd(),
+                agent="sdk",
+                repository=self._cwd or os.getcwd(),
+                correlation_id=run_id,
                 run_id=run_id,
                 run_sequence=run_sequence,
             )
-            log_violations(detected, ctx)
+            log_violations(detected, ctx, source="sdk")
         except Exception as e:
             logger.debug("SDK violation logging failed: %s", e)
 

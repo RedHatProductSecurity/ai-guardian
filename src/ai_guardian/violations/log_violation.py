@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from ai_guardian.scanners.scan_result import ScanResult
+from ai_guardian.violations.decision import PolicyDecision
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,11 @@ class ScanContext:
     tool_name: Optional[str] = None
     run_id: Optional[str] = None
     run_sequence: Optional[int] = None
+    correlation_id: Optional[str] = None
+    agent: Optional[str] = None
+    repository: Optional[str] = None
+    policy_version: Optional[str] = None
+    latency_ms: Optional[float] = None
     # Private, in-memory source data used to build safe deferred-resolution
     # metadata.  These fields are deliberately excluded from ``to_dict``.
     allowlist_content: Optional[str] = None
@@ -58,6 +64,18 @@ class ScanContext:
             session_id=hctx.get("session_id"),
             tool_use_id=hctx.get("tool_use_id"),
             tool_name=hctx.get("tool_name"),
+            run_id=ctx.get("run_id", hctx.get("run_id")),
+            run_sequence=ctx.get("run_sequence", hctx.get("run_sequence")),
+            correlation_id=ctx.get(
+                "correlation_id",
+                hctx.get("correlation_id", hctx.get("run_id")),
+            ),
+            agent=ctx.get("agent", ctx.get("agent_type", ctx.get("ide_type"))),
+            repository=ctx.get(
+                "repository", ctx.get("project_path") or get_project_dir()
+            ),
+            policy_version=ctx.get("policy_version", hctx.get("policy_version")),
+            latency_ms=ctx.get("latency_ms", hctx.get("latency_ms")),
             allowlist_content=ctx.get(
                 "_allowlist_content", hctx.get("_allowlist_content")
             ),
@@ -89,6 +107,16 @@ class ScanContext:
             ctx["run_id"] = self.run_id
         if self.run_sequence is not None:
             ctx["run_sequence"] = self.run_sequence
+        if self.correlation_id:
+            ctx["correlation_id"] = self.correlation_id
+        if self.agent:
+            ctx["agent"] = self.agent
+        if self.repository:
+            ctx["repository"] = self.repository
+        if self.policy_version:
+            ctx["policy_version"] = self.policy_version
+        if self.latency_ms is not None:
+            ctx["latency_ms"] = self.latency_ms
         return ctx
 
 
@@ -102,6 +130,7 @@ def log_violation(
     suggestion: Optional[Dict[str, Any]] = None,
     source: str = "",
     allowlist_context: Optional[Dict[str, Any]] = None,
+    policy_decision: Optional[Union[PolicyDecision, Dict[str, Any]]] = None,
 ) -> None:
     """Log a single violation to ``violations.jsonl``.
 
@@ -115,6 +144,8 @@ def log_violation(
         suggestion: Optional suggestion dict for resolving the violation.
         source: Source label (e.g. ``"prompt"``, ``"file"``, ``"transcript"``).
         allowlist_context: Pre-built safe source metadata, if available.
+        policy_decision: Optional pre-built safe decision metadata.  When it is
+            omitted, the record is derived from ``result`` and ``context``.
     """
     if violation_logger is None:
         from ai_guardian.violations.logger import ViolationLogger
@@ -129,6 +160,12 @@ def log_violation(
         ctx = context.to_dict()
         if context_overrides:
             ctx.update(context_overrides)
+
+        canonical_decision = policy_decision or PolicyDecision.from_scan_result(
+            result,
+            ctx,
+            source=source,
+        )
 
         metadata = allowlist_context or context.allowlist_context
         if metadata is None and context.allowlist_content is not None:
@@ -163,6 +200,7 @@ def log_violation(
         }
         if metadata:
             log_kwargs["allowlist_context"] = metadata
+        log_kwargs["policy_decision"] = canonical_decision
         violation_logger.log_violation(**log_kwargs)
     except Exception as e:
         logger.error("Failed to log %s violation: %s", result.violation_type, e)
