@@ -1183,6 +1183,27 @@ class TestShowDialog:
         )
         mock_run.assert_not_called()
 
+    def test_macos_screen_aware_dialog_skips_tk_when_disabled(self):
+        bounds = (1920, 37, 2560, 1380)
+        with mock.patch("ai_guardian.tray.plugins.platform") as m:
+            m.system.return_value = "Darwin"
+            with (
+                mock.patch(
+                    "ai_guardian.tui.display.get_preferred_ui", return_value="auto"
+                ),
+                mock.patch(
+                    "ai_guardian.tui.display._tkinter_available", return_value=False
+                ),
+                mock.patch(
+                    "ai_guardian.tray.dialog_placement.show_tkinter_message_subprocess"
+                ) as show_tk,
+                mock.patch("subprocess.run") as mock_run,
+            ):
+                assert show_dialog("Test Title", "Hello", screen_bounds=bounds)
+
+        show_tk.assert_not_called()
+        assert mock_run.call_args.args[0][0] == "osascript"
+
     def test_linux_uses_zenity(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"

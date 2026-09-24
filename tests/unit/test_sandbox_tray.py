@@ -1683,13 +1683,16 @@ class TestSandboxDialogFallback:
             mock.call(wrap="none"),
         ]
 
-    def test_progress_returns_none_when_tkinter_is_unavailable(self):
+    def test_progress_uses_captured_output_fallback_when_tkinter_is_unavailable(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
 
         with mock.patch(
             "ai_guardian.tui.display._tkinter_available", return_value=False
         ):
-            assert show_sandbox_progress("Title", "Message") is None
+            progress = show_sandbox_progress("Title", "Message")
+
+        assert progress is not None
+        assert progress.finish(False, "failed", "output") is False
 
     def test_progress_isolated_in_subprocess_when_tkinter_is_available(self):
         from ai_guardian.tray.sandbox_dialog import show_sandbox_progress
@@ -1785,3 +1788,91 @@ class TestSandboxDialogFallback:
             "Upload summary",
             error_lines=(),
         )
+
+    def test_form_uses_nicegui_when_selected_without_tkinter(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+        with (
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="nicegui"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_nicegui_form",
+                return_value={"runtime": "openshell"},
+            ) as show_form,
+        ):
+            result = show_sandbox_form("Title", "Message", [])
+
+        assert result == {"runtime": "openshell"}
+        show_form.assert_called_once_with("Title", "Message", [], screen_bounds=None)
+
+    def test_macos_native_upload_confirmation_works_without_tkinter(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_upload_confirmation
+
+        with (
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="native"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog._show_native_confirmation",
+                return_value=True,
+            ) as confirm,
+        ):
+            result = show_sandbox_upload_confirmation("Upload summary")
+
+        assert result is True
+        confirm.assert_called_once_with(
+            "Confirm OpenShell repository upload",
+            "Upload summary",
+            "Continue upload",
+        )
+
+    def test_headless_form_is_cancelled_without_provider_lookup(self):
+        from ai_guardian.tray.sandbox_dialog import show_sandbox_form
+
+        with mock.patch(
+            "ai_guardian.tui.display.select_ui_provider", return_value="headless"
+        ):
+            assert show_sandbox_form("Title", "Message", []) is None
+
+    def test_native_macos_upload_confirmation_parses_button_result(self):
+        from ai_guardian.tray.sandbox_dialog import _show_native_confirmation
+
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="button returned: Continue upload\n",
+        )
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system", return_value="Darwin"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.subprocess.run", return_value=result
+            ) as run,
+        ):
+            assert _show_native_confirmation("Title", "Message", "Continue upload")
+
+        assert run.call_args.args[0][0] == "osascript"
+        assert "display dialog" in run.call_args.args[0][2]
+
+    def test_native_macos_delete_confirmation_requires_exact_name(self):
+        from ai_guardian.tray.sandbox_dialog import _show_native_confirmation
+
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="button returned: Delete sandbox, text returned: ag-test\n",
+        )
+        with (
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.platform.system", return_value="Darwin"
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.subprocess.run", return_value=result
+            ),
+        ):
+            assert _show_native_confirmation(
+                "Title",
+                "Message",
+                "Delete sandbox",
+                expected_text="ag-test",
+            )

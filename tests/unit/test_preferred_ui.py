@@ -100,6 +100,56 @@ class TestGetPreferredUi:
                 assert get_preferred_ui() == "headless"
 
 
+class TestSelectUiProvider:
+    """Tests for tray dialog provider precedence."""
+
+    def test_macos_auto_prefers_native_for_simple_dialogs(self):
+        from ai_guardian.tui.display import select_ui_provider
+
+        with (
+            patch("ai_guardian.tui.display.get_preferred_ui", return_value="auto"),
+            patch("ai_guardian.tui.display.platform.system", return_value="Darwin"),
+            patch("ai_guardian.tui.display._tkinter_available", return_value=False),
+            patch("ai_guardian.tui.display._nicegui_available", return_value=False),
+            patch("ai_guardian.tui.display._textual_installed", return_value=False),
+        ):
+            assert select_ui_provider("simple") == "native"
+
+    def test_macos_auto_uses_available_tk_for_placed_action(self):
+        from ai_guardian.tui.display import select_ui_provider
+
+        with (
+            patch("ai_guardian.tui.display.get_preferred_ui", return_value="auto"),
+            patch("ai_guardian.tui.display.platform.system", return_value="Darwin"),
+            patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+        ):
+            assert select_ui_provider("action", screen_bounds=(0, 0, 100, 100)) == (
+                "tkinter"
+            )
+
+    def test_headless_never_checks_optional_providers(self):
+        from ai_guardian.tui.display import select_ui_provider
+
+        with (
+            patch("ai_guardian.tui.display.get_preferred_ui", return_value="headless"),
+            patch("ai_guardian.tui.display._tkinter_available") as tkinter,
+            patch("ai_guardian.tui.display._nicegui_available") as nicegui,
+        ):
+            assert select_ui_provider("form") == "headless"
+            tkinter.assert_not_called()
+            nicegui.assert_not_called()
+
+    def test_nicegui_preference_does_not_fall_back_to_tk(self):
+        from ai_guardian.tui.display import select_ui_provider
+
+        with (
+            patch("ai_guardian.tui.display.get_preferred_ui", return_value="nicegui"),
+            patch("ai_guardian.tui.display._nicegui_available", return_value=True),
+            patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+        ):
+            assert select_ui_provider("form") == "nicegui"
+
+
 class TestAskDialogHeadless:
     """Tests for show_ask_dialog() headless shortcut."""
 

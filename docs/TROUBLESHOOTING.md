@@ -272,6 +272,13 @@ context; `ai-guardian doctor` can provide additional installation details.
 export AI_GUARDIAN_NO_TKINTER=1
 ```
 
+Sandbox creation and deletion use the same provider policy. The create form
+falls back to NiceGUI or Textual, while upload/delete confirmations use the
+native macOS dialog when Tkinter is unavailable. Long-running sandbox output
+continues without a progress window and is shown through the captured
+output/log fallback, so missing Tkinter does not prevent the runtime command
+from completing.
+
 ### macOS Tray Health Check Has No Visible Result
 
 The tray's **IDE/CLI Setup... → Check hooks/MCP installation...** action uses a

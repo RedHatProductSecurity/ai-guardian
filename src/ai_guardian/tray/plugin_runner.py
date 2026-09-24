@@ -171,12 +171,16 @@ class TrayPluginMenuBuilder:
         run_on_target = plugin_item_dict.get("run_on_target", False)
         params = plugin_item_dict.get("params", [])
 
-        from ai_guardian.tui.display import (
-            _nicegui_available,
-            _tkinter_available,
-        )
+        from ai_guardian.tui.display import select_ui_provider
 
-        if _tkinter_available():
+        provider = select_ui_provider("form", screen_bounds=screen_bounds)
+        if provider == "headless":
+            logger.warning(
+                "Plugin parameter form unavailable: preferred UI is headless"
+            )
+            return
+
+        if provider == "tkinter":
             logger.info("Plugin prompt: using tkinter subprocess")
             tmpdir = tempfile.mkdtemp(prefix="ai-guardian-prompt-")
             output_path = os.path.join(tmpdir, "command")
@@ -221,7 +225,7 @@ class TrayPluginMenuBuilder:
                 daemon=True,
                 name="plugin-prompt-watch",
             ).start()
-        elif _nicegui_available():
+        elif provider == "nicegui":
 
             def _run_prompt_and_dispatch():
                 try:
@@ -375,12 +379,16 @@ class TrayPluginMenuBuilder:
         run_on_target = plugin_item.run_on_target
         params = item_dict.get("params", [])
 
-        from ai_guardian.tui.display import (
-            _nicegui_available,
-            _tkinter_available,
-        )
+        from ai_guardian.tui.display import select_ui_provider
 
-        if _tkinter_available():
+        provider = select_ui_provider("form", screen_bounds=screen_bounds)
+        if provider == "headless":
+            logger.warning(
+                "Plugin parameter form unavailable: preferred UI is headless"
+            )
+            return
+
+        if provider == "tkinter":
             tmpdir = tempfile.mkdtemp(prefix="ai-guardian-prompt-")
             output_path = os.path.join(tmpdir, "command")
 
@@ -422,7 +430,7 @@ class TrayPluginMenuBuilder:
                 daemon=True,
                 name="multi-plugin-prompt-watch",
             ).start()
-        elif _nicegui_available():
+        elif provider == "nicegui":
 
             def _run_prompt_and_dispatch():
                 try:

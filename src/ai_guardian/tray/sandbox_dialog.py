@@ -9,6 +9,7 @@ import platform
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
@@ -133,6 +134,40 @@ class SandboxProgress:
             logger.debug(
                 "Sandbox progress dialog process cleanup failed", exc_info=True
             )
+
+
+class _FallbackSandboxProgress:
+    """Keep sandbox output flowing when no live desktop provider is usable."""
+
+    def __init__(self, title: str, message: str, provider: str):
+        self._title = title
+        self._provider = provider
+        self._closed = False
+        self._status = message
+
+    def append(self, _text) -> None:
+        """Accept output without duplicating potentially sensitive log text."""
+
+    def update_status(self, message: str) -> None:
+        if message and not self._closed:
+            self._status = str(message)
+            logger.debug("Sandbox progress (%s): %s", self._provider, self._status)
+
+    def close(self) -> bool:
+        self._closed = True
+        return True
+
+    def finish(self, success: bool, message: str, _log_text: str) -> bool:
+        self._closed = True
+        logger.debug(
+            "Sandbox progress finished (%s, success=%s): %s",
+            self._provider,
+            success,
+            message,
+        )
+        # Returning False makes failure paths show the captured log through the
+        # normal log-dialog fallback instead of silently discarding it.
+        return False
 
 
 def _rect_components(rect) -> Optional[Tuple[float, float, float, float]]:
@@ -1431,28 +1466,650 @@ def _show_tkinter_progress_subprocess(
     return progress
 
 
+def _field_enabled(field: Dict[str, Any], values: Dict[str, Any]) -> bool:
+    """Return whether a sandbox form field is active for current values."""
+    condition = field.get("enabled_when")
+    if not isinstance(condition, dict):
+        return True
+    actual = values.get(str(condition.get("field", "")))
+    expected = condition.get("values", condition.get("equals"))
+    if isinstance(expected, (list, tuple, set)):
+        return actual in expected
+    return expected is None or actual == expected
+
+
+def _field_choices(field: Dict[str, Any], values: Dict[str, Any]):
+    """Return the currently applicable choices for a form field."""
+    choices = field.get("choices", ())
+    choices_spec = field.get("choices_by")
+    if isinstance(choices_spec, dict):
+        selected = values.get(str(choices_spec.get("field", "")))
+        choices_by_value = choices_spec.get("values")
+        if isinstance(choices_by_value, dict):
+            choices = choices_by_value.get(selected, choices)
+    if not isinstance(choices, (list, tuple, set)):
+        return ()
+    return tuple(str(choice) for choice in choices)
+
+
+def _form_label(field: Dict[str, Any]) -> str:
+    """Build a consistent label for the non-Tk sandbox form providers."""
+    label = str(field.get("label", field.get("name", "")))
+    return f"{label} *" if field.get("required") else label
+
+
+def _find_free_port() -> int:
+    """Return an available loopback port for a temporary browser dialog."""
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def _textual_available_for_current_process() -> bool:
+    """Return whether this process can run Textual without opening a terminal."""
+    from ai_guardian.tui.display import _textual_available
+
+    return _textual_available()
+
+
+def _show_nicegui_form(
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> Optional[Dict[str, Any]]:
+    """Show the sandbox form in a browser using NiceGUI."""
+    del screen_bounds
+    from nicegui import app, ui
+
+    field_list = tuple(fields)
+    result_holder: Dict[str, Any] = {"value": None}
+    widgets: Dict[str, Tuple[str, Any]] = {}
+    enabled_states: Dict[str, bool] = {}
+
+    def collect_values() -> Dict[str, Any]:
+        values: Dict[str, Any] = {}
+        for field in field_list:
+            name = str(field.get("name", ""))
+            kind, widget = widgets[name]
+            value = widget.value
+            if kind == "bool":
+                values[name] = bool(value)
+            elif value is None:
+                values[name] = ""
+            else:
+                values[name] = str(value).strip()
+        return values
+
+    def close() -> None:
+        ui.run_javascript("window.close()")
+        ui.timer(0.1, app.shutdown, once=True)
+
+    def submit() -> None:
+        values = collect_values()
+        missing = [
+            str(field.get("label", field.get("name", "")))
+            for field in field_list
+            if field.get("required")
+            and _field_enabled(field, values)
+            and not values.get(str(field.get("name", "")))
+        ]
+        if missing:
+            ui.notify("Required: " + ", ".join(missing), type="negative")
+            return
+        result_holder["value"] = values
+        close()
+
+    @ui.page("/")
+    def _form_page() -> None:
+        ui.query("body").style("background: #1a1a2e")
+        with (
+            ui.card()
+            .classes("mx-auto mt-8")
+            .style("min-width: 460px; max-width: 760px")
+        ):
+            ui.label(title).classes("text-xl font-bold")
+            ui.label(message).classes("whitespace-pre-wrap")
+            ui.separator()
+            for field in field_list:
+                name = str(field.get("name", ""))
+                kind = field.get("type", "text")
+                default = field.get("default", "")
+                label = _form_label(field)
+                current_values = {
+                    other_name: str(other.get("default", ""))
+                    for other in field_list
+                    if (other_name := str(other.get("name", "")))
+                }
+                if kind == "bool":
+                    widget = ui.checkbox(label, value=bool(default))
+                    widgets[name] = ("bool", widget)
+                elif kind == "choice":
+                    choices = list(_field_choices(field, current_values))
+                    if field.get("editable"):
+                        widget = ui.select(
+                            options=choices,
+                            value=str(default) if default else None,
+                            label=label,
+                            with_input=True,
+                            new_value_mode="add-unique",
+                        ).classes("w-full")
+                    else:
+                        widget = ui.select(
+                            options=choices,
+                            value=str(default) if default in choices else None,
+                            label=label,
+                        ).classes("w-full")
+                    widgets[name] = ("choice", widget)
+                else:
+                    widget = ui.input(
+                        label=label,
+                        value="" if default is None else str(default),
+                    ).classes("w-full")
+                    widgets[name] = ("text", widget)
+                help_text = field.get("help")
+                if help_text:
+                    ui.label(str(help_text)).classes("text-xs text-grey-6")
+
+            def refresh() -> None:
+                values = collect_values()
+                for field in field_list:
+                    name = str(field.get("name", ""))
+                    enabled = _field_enabled(field, values)
+                    enabled_states[name] = enabled
+                    widget = widgets[name][1]
+                    if enabled:
+                        widget.enable()
+                    else:
+                        if field.get("clear_when_disabled"):
+                            widget.set_value(
+                                False if widgets[name][0] == "bool" else ""
+                            )
+                        widget.disable()
+
+            for _kind, widget in widgets.values():
+                widget.on_value_change(lambda _event: refresh())
+            refresh()
+            ui.separator()
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Cancel", on_click=close).props("flat")
+                ui.button("Continue", on_click=submit, color="primary")
+
+    port = _find_free_port()
+    from ai_guardian.desktop_utils import open_url
+
+    url = f"http://127.0.0.1:{port}"
+    app.on_startup(lambda: open_url(url))
+    ui.run(
+        host="127.0.0.1",
+        port=port,
+        title=title,
+        dark=True,
+        show=False,
+        reload=False,
+    )
+    return result_holder["value"]
+
+
+def _show_textual_form(
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> Optional[Dict[str, Any]]:
+    """Show the sandbox form in a terminal using Textual."""
+    del screen_bounds
+    from textual.app import App, ComposeResult
+    from textual.containers import Container, Horizontal
+    from textual.widgets import Button, Checkbox, Footer, Header, Input, Label, Select
+
+    field_list = tuple(fields)
+    widget_ids = {
+        str(field.get("name", "")): f"sandbox-field-{index}"
+        for index, field in enumerate(field_list)
+    }
+
+    class _SandboxFormApp(App):
+        CSS = """
+        #form-container { padding: 1 2; }
+        .field-row { margin: 1 0 0 0; }
+        .field-row Input, .field-row Select { width: 100%; }
+        #button-row { margin: 2 0 0 0; }
+        #button-row Button { margin: 0 1 0 0; }
+        """
+
+        BINDINGS = [("escape", "cancel", "Cancel")]
+
+        def compose(self_inner) -> ComposeResult:
+            yield Header(show_clock=False)
+            with Container(id="form-container"):
+                yield Label(f"[bold]{title}[/bold]")
+                yield Label(message)
+                for field in field_list:
+                    name = str(field.get("name", ""))
+                    kind = field.get("type", "text")
+                    default = field.get("default", "")
+                    with Container(classes="field-row"):
+                        yield Label(_form_label(field))
+                        if kind == "bool":
+                            yield Checkbox(
+                                "",
+                                value=bool(default),
+                                id=widget_ids[name],
+                            )
+                        elif kind == "choice" and not field.get("editable"):
+                            choices = _field_choices(
+                                field,
+                                {
+                                    other_name: str(other.get("default", ""))
+                                    for other in field_list
+                                    if (other_name := str(other.get("name", "")))
+                                },
+                            )
+                            value = (
+                                str(default)
+                                if str(default) in choices
+                                else Select.BLANK
+                            )
+                            yield Select(
+                                [(choice, choice) for choice in choices],
+                                value=value,
+                                id=widget_ids[name],
+                            )
+                        else:
+                            yield Input(
+                                value="" if default is None else str(default),
+                                id=widget_ids[name],
+                            )
+                        if field.get("help"):
+                            yield Label(f"[dim]{field['help']}[/dim]")
+                with Horizontal(id="button-row"):
+                    yield Button("Continue", id="continue-btn", variant="primary")
+                    yield Button("Cancel", id="cancel-btn")
+            yield Footer()
+
+        def _collect(self_inner) -> Dict[str, Any]:
+            values: Dict[str, Any] = {}
+            for field in field_list:
+                name = str(field.get("name", ""))
+                widget = self_inner.query_one(f"#{widget_ids[name]}")
+                if isinstance(widget, Checkbox):
+                    values[name] = bool(widget.value)
+                elif isinstance(widget, Select):
+                    values[name] = (
+                        "" if widget.value is Select.BLANK else str(widget.value)
+                    )
+                else:
+                    values[name] = widget.value.strip()
+            return values
+
+        def on_button_pressed(self_inner, event) -> None:
+            if event.button.id == "cancel-btn":
+                self_inner.exit(result=None)
+                return
+            values = self_inner._collect()
+            missing = [
+                str(field.get("label", field.get("name", "")))
+                for field in field_list
+                if field.get("required")
+                and _field_enabled(field, values)
+                and not values.get(str(field.get("name", "")))
+            ]
+            if missing:
+                self_inner.notify("Required: " + ", ".join(missing), severity="error")
+                return
+            self_inner.exit(result=values)
+
+        def action_cancel(self_inner) -> None:
+            self_inner.exit(result=None)
+
+    return _SandboxFormApp().run()
+
+
+def _show_textual_form_terminal(
+    title: str,
+    message: str,
+    fields: Iterable[Dict[str, Any]],
+    *,
+    screen_bounds: Optional[ScreenBounds] = None,
+) -> Optional[Dict[str, Any]]:
+    """Run the Textual form in a newly opened terminal and wait for its result."""
+    from ai_guardian.daemon.multi_client import _launch_in_terminal
+    from ai_guardian.tray.plugins import poll_output_file
+
+    tmpdir = tempfile.mkdtemp(prefix="ai-guardian-sandbox-form-")
+    output_path = str(Path(tmpdir) / "values.json")
+    payload = json.dumps(
+        {"title": title, "message": message, "fields": tuple(fields)},
+        ensure_ascii=False,
+    )
+    child = (
+        "import json,sys; "
+        "from ai_guardian.tray.sandbox_dialog import _show_textual_form; "
+        "p=json.loads(sys.argv[1]); "
+        "v=_show_textual_form(p['title'],p['message'],p['fields']); "
+        "open(sys.argv[2],'w',encoding='utf-8').write("
+        "json.dumps(v,ensure_ascii=False) if v is not None else '')"
+    )
+    command = [sys.executable, "-c", child, payload, output_path]
+    if not _launch_in_terminal(command, keep_open=False, clear=True):
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        return None
+    output = poll_output_file(output_path, tmpdir)
+    if not output:
+        return None
+    try:
+        value = json.loads(output)
+    except json.JSONDecodeError:
+        logger.warning("Textual sandbox form returned invalid JSON")
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _show_native_confirmation(
+    title: str,
+    message: str,
+    confirm_label: str,
+    *,
+    expected_text: Optional[str] = None,
+) -> Optional[bool]:
+    """Show a native confirmation, returning ``None`` if no provider starts."""
+    system = platform.system()
+    try:
+        if system == "Darwin":
+            from ai_guardian.daemon.multi_client import _escape_for_applescript
+
+            escaped_message = (
+                _escape_for_applescript(message)
+                .replace("\r", "")
+                .replace("\n", '" & return & "')
+            )
+            escaped_title = _escape_for_applescript(title).replace("\n", " ")
+            escaped_confirm = _escape_for_applescript(confirm_label)
+            buttons = '{"Cancel", "' + escaped_confirm + '"}'
+            answer = ' default answer ""' if expected_text is not None else ""
+            script = (
+                f'display dialog "{escaped_message}" with title "{escaped_title}"'
+                f'{answer} buttons {buttons} default button "{escaped_confirm}"'
+                f' cancel button "Cancel"'
+            )
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                return False
+            output = (result.stdout or "").strip()
+            if expected_text is None:
+                return f"button returned: {confirm_label}" in output
+            marker = "text returned:"
+            returned = (
+                output.split(marker, 1)[1].split(",", 1)[0].strip()
+                if marker in output
+                else ""
+            )
+            return returned == expected_text
+
+        if system == "Linux":
+            commands = []
+            if expected_text is None:
+                commands = [
+                    [
+                        "zenity",
+                        "--question",
+                        "--title",
+                        title,
+                        "--text",
+                        message,
+                        "--ok-label",
+                        confirm_label,
+                        "--cancel-label",
+                        "Cancel",
+                    ],
+                    ["kdialog", "--title", title, "--yesno", message],
+                ]
+            else:
+                prompt = f"{message}\n\nType {expected_text} to confirm:"
+                commands = [
+                    [
+                        "zenity",
+                        "--entry",
+                        "--title",
+                        title,
+                        "--text",
+                        prompt,
+                        "--ok-label",
+                        confirm_label,
+                        "--cancel-label",
+                        "Cancel",
+                    ],
+                    ["kdialog", "--title", title, "--inputbox", prompt, ""],
+                ]
+            for command in commands:
+                try:
+                    result = subprocess.run(
+                        command,
+                        capture_output=True,
+                        text=True,
+                        timeout=120,
+                    )
+                except (FileNotFoundError, OSError):
+                    continue
+                if result.returncode != 0:
+                    return False
+                if expected_text is None:
+                    return True
+                return (result.stdout or "").strip() == expected_text
+            return None
+
+        if system == "Windows":
+            escaped_title = title.replace("'", "''")
+            escaped_message = message.replace("'", "''")
+            if expected_text is None:
+                script = (
+                    "Add-Type -AssemblyName PresentationFramework; "
+                    f"$r=[System.Windows.MessageBox]::Show('{escaped_message}',"
+                    f"'{escaped_title}','YesNo'); Write-Output $r"
+                )
+            else:
+                script = (
+                    "Add-Type -AssemblyName Microsoft.VisualBasic; "
+                    f"$r=[Microsoft.VisualBasic.Interaction]::InputBox('{escaped_message}',"
+                    f"'{escaped_title}',''); Write-Output $r"
+                )
+            result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", script],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+            if result.returncode != 0:
+                return None
+            if expected_text is None:
+                return (result.stdout or "").strip().casefold() == "yes"
+            return (result.stdout or "").strip() == expected_text
+    except (FileNotFoundError, OSError, subprocess.TimeoutExpired) as exc:
+        logger.debug("Native sandbox confirmation unavailable: %s", exc)
+        return None
+    return None
+
+
+def _show_nicegui_confirmation(
+    title: str,
+    message: str,
+    confirm_label: str,
+    *,
+    expected_text: Optional[str] = None,
+) -> bool:
+    """Show an actionable confirmation in a browser using NiceGUI."""
+    from nicegui import app, ui
+
+    result_holder = {"value": False}
+    expected_input: Dict[str, Any] = {"widget": None}
+
+    def close() -> None:
+        ui.run_javascript("window.close()")
+        ui.timer(0.1, app.shutdown, once=True)
+
+    def confirm() -> None:
+        if expected_text is not None:
+            value = expected_input["widget"].value
+            if str(value or "").strip() != expected_text:
+                ui.notify("The sandbox name does not match.", type="negative")
+                return
+        result_holder["value"] = True
+        close()
+
+    @ui.page("/")
+    def _confirmation_page() -> None:
+        with (
+            ui.card()
+            .classes("mx-auto mt-8")
+            .style("min-width: 460px; max-width: 760px")
+        ):
+            ui.label(title).classes("text-xl font-bold")
+            ui.label(message).classes("whitespace-pre-wrap")
+            if expected_text is not None:
+                expected_input["widget"] = ui.input(
+                    label=f"Type {expected_text} to confirm"
+                ).classes("w-full")
+            with ui.row().classes("w-full justify-end"):
+                ui.button("Cancel", on_click=close).props("flat")
+                ui.button(confirm_label, on_click=confirm, color="primary")
+
+    port = _find_free_port()
+    from ai_guardian.desktop_utils import open_url
+
+    url = f"http://127.0.0.1:{port}"
+    app.on_startup(lambda: open_url(url))
+    ui.run(
+        host="127.0.0.1", port=port, title=title, dark=True, show=False, reload=False
+    )
+    return bool(result_holder["value"])
+
+
+def _show_textual_confirmation(
+    title: str,
+    message: str,
+    confirm_label: str,
+    *,
+    expected_text: Optional[str] = None,
+) -> bool:
+    """Show an actionable confirmation in a Textual terminal."""
+    from textual.app import App, ComposeResult
+    from textual.containers import Horizontal, Vertical
+    from textual.widgets import Button, Footer, Header, Input, Label
+
+    class _ConfirmationApp(App):
+        def compose(self_inner) -> ComposeResult:
+            yield Header(show_clock=False)
+            with Vertical(id="confirmation-body"):
+                yield Label(f"[bold]{title}[/bold]")
+                yield Label(message)
+                if expected_text is not None:
+                    yield Input(
+                        placeholder=f"Type {expected_text} to confirm", id="name"
+                    )
+                with Horizontal(id="confirmation-buttons"):
+                    yield Button(confirm_label, id="confirm-btn", variant="error")
+                    yield Button("Cancel", id="cancel-btn")
+            yield Footer()
+
+        def on_button_pressed(self_inner, event) -> None:
+            if event.button.id == "cancel-btn":
+                self_inner.exit(result=False)
+                return
+            if expected_text is not None:
+                value = self_inner.query_one("#name", Input).value.strip()
+                if value != expected_text:
+                    self_inner.notify(
+                        "The sandbox name does not match.", severity="error"
+                    )
+                    return
+            self_inner.exit(result=True)
+
+    return bool(_ConfirmationApp().run())
+
+
+def _show_textual_confirmation_terminal(
+    title: str,
+    message: str,
+    confirm_label: str,
+    *,
+    expected_text: Optional[str] = None,
+) -> bool:
+    """Run a Textual confirmation in a terminal and wait for its result."""
+    from ai_guardian.daemon.multi_client import _launch_in_terminal
+    from ai_guardian.tray.plugins import poll_output_file
+
+    tmpdir = tempfile.mkdtemp(prefix="ai-guardian-confirmation-")
+    output_path = str(Path(tmpdir) / "result")
+    payload = json.dumps(
+        {
+            "title": title,
+            "message": message,
+            "confirm_label": confirm_label,
+            "expected_text": expected_text,
+        },
+        ensure_ascii=False,
+    )
+    child = (
+        "import json,sys; "
+        "from ai_guardian.tray.sandbox_dialog import _show_textual_confirmation; "
+        "p=json.loads(sys.argv[1]); "
+        "v=_show_textual_confirmation(p['title'],p['message'],p['confirm_label'],"
+        "expected_text=p.get('expected_text')); "
+        "open(sys.argv[2],'w').write('1' if v else '0')"
+    )
+    command = [sys.executable, "-c", child, payload, output_path]
+    if not _launch_in_terminal(command, keep_open=False, clear=True):
+        import shutil
+
+        shutil.rmtree(tmpdir, ignore_errors=True)
+        return False
+    return poll_output_file(output_path, tmpdir) == "1"
+
+
 def show_sandbox_progress(
     title: str,
     message: str,
     *,
     screen_bounds: Optional[ScreenBounds] = None,
-) -> Optional[SandboxProgress]:
-    """Start a live sandbox progress dialog, or return ``None`` on fallback."""
+) -> Optional[Any]:
+    """Start sandbox progress using the configured provider cascade."""
     try:
-        from ai_guardian.tui.display import _tkinter_available
+        from ai_guardian.tui.display import select_ui_provider
 
-        if not _tkinter_available():
-            return None
-        if screen_bounds is None:
-            return _show_tkinter_progress_subprocess(title, message)
-        return _show_tkinter_progress_subprocess(
-            title,
-            message,
-            screen_bounds=screen_bounds,
-        )
+        provider = select_ui_provider("stream", screen_bounds=screen_bounds)
+        if provider == "tkinter":
+            if screen_bounds is None:
+                progress = _show_tkinter_progress_subprocess(title, message)
+            else:
+                progress = _show_tkinter_progress_subprocess(
+                    title,
+                    message,
+                    screen_bounds=screen_bounds,
+                )
+            if progress is not None:
+                return progress
+        if provider != "headless":
+            logger.info(
+                "Sandbox progress has no live %s implementation; using captured-output fallback",
+                provider,
+            )
+            return _FallbackSandboxProgress(title, message, provider)
+        return _FallbackSandboxProgress(title, message, provider)
     except Exception as exc:
         logger.warning("Sandbox progress dialog unavailable: %s", exc)
-        return None
+        return _FallbackSandboxProgress(title, message, "headless")
 
 
 def show_sandbox_log(
@@ -1464,9 +2121,10 @@ def show_sandbox_log(
 ) -> bool:
     """Show captured sandbox output in a modal log dialog."""
     try:
-        from ai_guardian.tui.display import _tkinter_available
+        from ai_guardian.tui.display import select_ui_provider
 
-        if _tkinter_available():
+        provider = select_ui_provider("stream", screen_bounds=screen_bounds)
+        if provider == "tkinter":
             if screen_bounds is None:
                 shown = _show_tkinter_log_subprocess(title, message, log_text)
             else:
@@ -1480,6 +2138,15 @@ def show_sandbox_log(
                 return True
     except Exception as exc:
         logger.warning("Sandbox log dialog unavailable: %s", exc)
+
+    try:
+        from ai_guardian.tui.display import select_ui_provider
+
+        if select_ui_provider("stream", screen_bounds=screen_bounds) == "headless":
+            logger.warning("Sandbox log unavailable: no interactive UI provider")
+            return False
+    except Exception:
+        return False
 
     # Keep a useful fallback for systems without Tk or when the child process
     # cannot initialize a display.  Native simple dialogs may truncate very
@@ -1508,26 +2175,55 @@ def show_sandbox_confirmation(
 ) -> bool:
     """Confirm permanent deletion without exposing tray GUI toolkit state."""
     try:
-        from ai_guardian.tui.display import _tkinter_available
+        from ai_guardian.tui.display import select_ui_provider
 
-        if not _tkinter_available():
-            logger.warning("Sandbox confirmation unavailable: tkinter is not installed")
-            return False
         message = (
             f"Permanently delete sandbox '{name}' ({runtime})?\n\n"
             "The runtime sandbox will be removed. Saved host configuration "
             "snapshots are kept."
         )
-        if screen_bounds is None:
+        provider = select_ui_provider("action", screen_bounds=screen_bounds)
+        if provider == "tkinter":
+            if screen_bounds is None:
+                return _show_tkinter_confirmation_subprocess(
+                    "Delete AI Guardian sandbox", message, name
+                )
             return _show_tkinter_confirmation_subprocess(
-                "Delete AI Guardian sandbox", message, name
+                "Delete AI Guardian sandbox",
+                message,
+                name,
+                screen_bounds=screen_bounds,
             )
-        return _show_tkinter_confirmation_subprocess(
-            "Delete AI Guardian sandbox",
-            message,
-            name,
-            screen_bounds=screen_bounds,
-        )
+        if provider == "native":
+            result = _show_native_confirmation(
+                "Delete AI Guardian sandbox",
+                message,
+                "Delete sandbox",
+                expected_text=name,
+            )
+            return bool(result) if result is not None else False
+        if provider == "nicegui":
+            return _show_nicegui_confirmation(
+                "Delete AI Guardian sandbox",
+                message,
+                "Delete sandbox",
+                expected_text=name,
+            )
+        if provider == "textual":
+            if _textual_available_for_current_process():
+                return _show_textual_confirmation(
+                    "Delete AI Guardian sandbox",
+                    message,
+                    "Delete sandbox",
+                    expected_text=name,
+                )
+            return _show_textual_confirmation_terminal(
+                "Delete AI Guardian sandbox",
+                message,
+                "Delete sandbox",
+                expected_text=name,
+            )
+        return False
     except Exception as exc:
         logger.warning("Sandbox confirmation unavailable: %s", exc)
         return False
@@ -1690,26 +2386,37 @@ def show_sandbox_upload_confirmation(
 ) -> bool:
     """Confirm an OpenShell repository upload before transfer begins."""
     try:
-        from ai_guardian.tui.display import _tkinter_available
+        from ai_guardian.tui.display import select_ui_provider
 
-        if not _tkinter_available():
-            logger.warning(
-                "Sandbox upload confirmation unavailable: tkinter is not installed"
-            )
-            return False
         title = "Confirm OpenShell repository upload"
-        if screen_bounds is None:
+        provider = select_ui_provider("action", screen_bounds=screen_bounds)
+        if provider == "tkinter":
+            if screen_bounds is None:
+                return _show_tkinter_upload_confirmation_subprocess(
+                    title,
+                    message,
+                    error_lines=error_lines,
+                )
             return _show_tkinter_upload_confirmation_subprocess(
                 title,
                 message,
                 error_lines=error_lines,
+                screen_bounds=screen_bounds,
             )
-        return _show_tkinter_upload_confirmation_subprocess(
-            title,
-            message,
-            error_lines=error_lines,
-            screen_bounds=screen_bounds,
-        )
+        if provider == "native":
+            result = _show_native_confirmation(title, message, "Continue upload")
+            return bool(result) if result is not None else False
+        if provider == "nicegui":
+            return _show_nicegui_confirmation(title, message, "Continue upload")
+        if provider == "textual":
+            if _textual_available_for_current_process():
+                return _show_textual_confirmation(title, message, "Continue upload")
+            return _show_textual_confirmation_terminal(
+                title,
+                message,
+                "Continue upload",
+            )
+        return False
     except Exception as exc:
         logger.warning("Sandbox upload confirmation unavailable: %s", exc)
         return False
@@ -1722,23 +2429,51 @@ def show_sandbox_form(
     *,
     screen_bounds: Optional[ScreenBounds] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Show a native sandbox form from a tray worker thread."""
+    """Show a sandbox form using the configured provider cascade."""
     try:
-        from ai_guardian.tui.display import _tkinter_available
+        from ai_guardian.tui.display import select_ui_provider
 
-        if not _tkinter_available():
-            logger.warning("Sandbox form unavailable: tkinter is not installed")
+        field_list = list(fields)
+        provider = select_ui_provider("form", screen_bounds=screen_bounds)
+        if provider == "nicegui":
+            return _show_nicegui_form(
+                title,
+                message,
+                field_list,
+                screen_bounds=screen_bounds,
+            )
+        if provider == "textual":
+            if _textual_available_for_current_process():
+                return _show_textual_form(
+                    title,
+                    message,
+                    field_list,
+                    screen_bounds=screen_bounds,
+                )
+            return _show_textual_form_terminal(
+                title,
+                message,
+                field_list,
+                screen_bounds=screen_bounds,
+            )
+        if provider == "headless":
+            logger.warning("Sandbox form unavailable: preferred UI is headless")
+            return None
+        if provider != "tkinter":
+            logger.warning(
+                "Sandbox form unavailable: unsupported provider %s", provider
+            )
             return None
         # pystray owns the process' native event loop.  Creating and destroying
         # Tk widgets in the tray callback thread can terminate the tray on
         # some Linux/GTK combinations, so keep the form in a short-lived child
         # process on every platform.
         if screen_bounds is None:
-            return _show_tkinter_form_subprocess(title, message, fields)
+            return _show_tkinter_form_subprocess(title, message, field_list)
         return _show_tkinter_form_subprocess(
             title,
             message,
-            fields,
+            field_list,
             screen_bounds=screen_bounds,
         )
     except Exception as exc:

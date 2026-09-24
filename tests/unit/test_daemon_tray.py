@@ -3396,6 +3396,26 @@ class TestPluginMenuItems:
                     time.sleep(0.1)
                     mock_app.assert_called_once()
 
+    def test_execute_plugin_command_with_params_headless_skips_prompt(self):
+        tray = self._make_tray()
+        item_dict = {
+            "label": "Deploy",
+            "command": "deploy {tray.env}",
+            "type": "terminal",
+            "params": [{"name": "env", "default": "dev"}],
+        }
+        with (
+            mock.patch(
+                "ai_guardian.tui.display.get_preferred_ui", return_value="headless"
+            ),
+            mock.patch("subprocess.Popen") as mock_popen,
+            mock.patch("ai_guardian.daemon.multi_client._launch_in_terminal") as launch,
+        ):
+            tray._plugins._execute_plugin_command_with_params(item_dict)
+
+        mock_popen.assert_not_called()
+        launch.assert_not_called()
+
     def test_execute_plugin_command_with_params_platform_map(self):
         tray = self._make_tray()
         item_dict = {
