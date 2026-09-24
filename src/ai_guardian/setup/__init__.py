@@ -99,6 +99,7 @@ from ai_guardian.setup.hooks import (
 from ai_guardian.setup.mcp import (
     _MCP_IDE_CONFIGS,
     _MCP_SERVER_ENTRY,
+    _codex_mcp_entry,
     _handle_mcp_setup,
     _install_mcp_config,
     _remove_mcp_config,
@@ -696,10 +697,13 @@ def _setup_hooks_json_output(
             result["mcp_config_path"] = str(mcp_path) if mcp_path else None
             if mcp_path is not None:
                 abs_path = _resolve_binary_path()
-                mcp_entry: Dict[str, Any] = dict(_MCP_SERVER_ENTRY)
-                mcp_entry["command"] = abs_path
-                if ide_type == "cursor":
-                    mcp_entry["type"] = "stdio"
+                if ide_type == "codex":
+                    mcp_entry = _codex_mcp_entry(abs_path)
+                else:
+                    mcp_entry = dict(_MCP_SERVER_ENTRY)
+                    mcp_entry["command"] = abs_path
+                    if ide_type == "cursor":
+                        mcp_entry["type"] = "stdio"
                 result["mcp_servers"] = {"ai-guardian": mcp_entry}
             else:
                 result["mcp_status"] = "unsupported"
