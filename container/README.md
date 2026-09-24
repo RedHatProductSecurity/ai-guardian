@@ -90,7 +90,8 @@ is reported separately from an unsupported scenario.
 | Codex CLI | Apache 2.0 | Build time |
 | OpenClaw | MIT | Build time |
 | Pi coding agent | MIT | Build time |
-| rapidocr-onnxruntime | Apache 2.0 | Build time |
+| rapidocr | Apache 2.0 | Build time |
+| onnxruntime | MIT | Build time |
 | Claude Code | Proprietary (Anthropic) | **Runtime — ToS consent required** |
 | Kiro CLI | Proprietary (AWS) | **Runtime — ToS consent required** |
 

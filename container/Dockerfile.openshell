@@ -52,11 +52,11 @@ RUN set -eux; \
             wheel="/tmp/ai-guardian-vendor/${AI_GUARDIAN_VERSION}"; \
             test -f "$wheel"; \
             uv pip install --python /sandbox/.venv/bin/python \
-                "$wheel" rapidocr-onnxruntime==1.4.4 ;; \
+                "$wheel" rapidocr==3.9.2 ;; \
         *) \
             uv pip install --python /sandbox/.venv/bin/python \
                 "ai-guardian==${AI_GUARDIAN_VERSION}" \
-                rapidocr-onnxruntime==1.4.4 ;; \
+                rapidocr==3.9.2 ;; \
     esac; \
     rm -rf /tmp/ai-guardian-vendor; \
     ln -sf /sandbox/.venv/bin/ai-guardian /usr/local/bin/ai-guardian; \

@@ -254,7 +254,7 @@ class PIMLEnginesContent(ConfigSaveMixin, Container):
                     "]\n\n"
                     "Valid engine types: llm-guard\n"
                     "threshold: 0.0-1.0 (default 0.85)\n\n"
-                    "Requires: onnxruntime (included on Python < 3.13)\n"
+                    "Requires: onnxruntime\n"
                     "Download models: ai-guardian ml download",
                     markup=False,
                 )

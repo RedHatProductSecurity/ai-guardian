@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Python 3.14 image OCR support (#2408)**: Replace the Python-version-gated
+  `rapidocr-onnxruntime` package with pinned `rapidocr` and
+  Python-compatible `onnxruntime` dependencies, and update OCR result parsing
+  and installation guidance.
+
 - **Codex MCP activation (#2408)**: Write an explicit `enabled = true` flag
   during setup, re-enable stale disabled registrations, and report disabled
   Codex MCP entries as inactive during health checks.

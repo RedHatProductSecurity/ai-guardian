@@ -9,6 +9,7 @@ import io
 import os
 import sys
 import tempfile
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch, MagicMock
 
@@ -177,7 +178,7 @@ class TestImageDetector(TestCase):
 
 
 class TestOCREngine(TestCase):
-    """Test OCR engine with mocked rapidocr."""
+    """Test OCR engine with mocked RapidOCR output."""
 
     @patch("ai_guardian.scanners.image_scanner.HAS_RAPIDOCR", True)
     @pytest.mark.skipif(
@@ -186,12 +187,13 @@ class TestOCREngine(TestCase):
     )
     def test_extract_text_basic(self):
         mock_engine = MagicMock()
-        mock_engine.return_value = (
-            [
-                [[[10, 10], [100, 10], [100, 30], [10, 30]], "API_KEY=secret123", 0.95],
-                [[[10, 40], [100, 40], [100, 60], [10, 60]], "normal text", 0.88],
+        mock_engine.return_value = SimpleNamespace(
+            boxes=[
+                [[10, 10], [100, 10], [100, 30], [10, 30]],
+                [[10, 40], [100, 40], [100, 60], [10, 60]],
             ],
-            0.5,
+            txts=("API_KEY=secret123", "normal text"),
+            scores=(0.95, 0.88),
         )
 
         ocr = OCREngine(config={"min_confidence": 0.5})
@@ -201,12 +203,18 @@ class TestOCREngine(TestCase):
         self.assertIn("API_KEY=secret123", result.text)
         self.assertIn("normal text", result.text)
         self.assertEqual(len(result.regions), 2)
+        self.assertEqual(result.regions[0].bbox, (10, 10, 90, 20))
+        self.assertEqual(result.regions[0].confidence, 0.95)
         self.assertGreaterEqual(result.confidence, 0)
         self.assertGreaterEqual(result.elapsed_ms, 0)
 
     def test_extract_text_empty_result(self):
         mock_engine = MagicMock()
-        mock_engine.return_value = (None, 0.0)
+        mock_engine.return_value = SimpleNamespace(
+            boxes=None,
+            txts=None,
+            scores=None,
+        )
 
         ocr = OCREngine()
         ocr._engine = mock_engine
@@ -217,12 +225,13 @@ class TestOCREngine(TestCase):
 
     def test_confidence_filtering(self):
         mock_engine = MagicMock()
-        mock_engine.return_value = (
-            [
-                [[[10, 10], [100, 10], [100, 30], [10, 30]], "high conf", 0.9],
-                [[[10, 40], [100, 40], [100, 60], [10, 60]], "low conf", 0.2],
+        mock_engine.return_value = SimpleNamespace(
+            boxes=[
+                [[10, 10], [100, 10], [100, 30], [10, 30]],
+                [[10, 40], [100, 40], [100, 60], [10, 60]],
             ],
-            0.5,
+            txts=("high conf", "low conf"),
+            scores=(0.9, 0.2),
         )
 
         ocr = OCREngine(config={"min_confidence": 0.5})

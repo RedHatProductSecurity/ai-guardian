@@ -679,7 +679,7 @@ def _sanitize_image(input_path: str, args) -> int:
         )
     except ImportError:
         print(
-            "Error: Image scanning dependencies not available (rapidocr-onnxruntime, Pillow).",
+            "Error: Image scanning dependencies not available (rapidocr, onnxruntime, Pillow).",
             file=sys.stderr,
         )
         return 1

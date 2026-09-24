@@ -9,7 +9,7 @@ OCR-based secret and PII detection in images. Extracts text from image files usi
 When an AI agent reads an image file (PNG, JPEG, GIF, BMP, TIFF, WebP), AI Guardian:
 
 1. Detects the file is an image (by extension and magic bytes)
-2. Extracts text using OCR (rapidocr-onnxruntime)
+2. Extracts text using RapidOCR (`rapidocr` with `onnxruntime`)
 3. Scans the extracted text through existing scanners (secrets, PII, prompt injection, SSRF)
 4. Blocks/warns/logs based on the configured action
 
@@ -128,9 +128,13 @@ Image scanning is configured in `ai-guardian.json` under the `image_scanning` se
 
 ## Dependencies
 
-- **rapidocr-onnxruntime** (required) — included as a regular dependency
+- **rapidocr** and **onnxruntime** (required) — included as regular dependencies
 - **pyzbar** (optional) — for QR code scanning (`qr_scanning: true`)
 - **opencv-python-headless** (optional) — for face detection (`face_detection: true`)
+
+AI Guardian pins RapidOCR to `3.9.2`. ONNX Runtime is pinned per Python
+version so supported interpreters use available wheels: `1.19.2` on Python
+3.9, `1.23.2` on Python 3.10, and `1.29.0` on Python 3.11 and newer.
 
 ## Image Redaction
 
@@ -153,12 +157,12 @@ Detection uses both file extension and magic byte signatures for reliability.
 Run `ai-guardian doctor` to verify OCR availability:
 
 ```
-image_scanning .... PASS  rapidocr-onnxruntime available for image OCR scanning
+image_scanning .... PASS  rapidocr and onnxruntime available for image OCR scanning
 ```
 
 If the OCR engine is not installed:
 
 ```
-image_scanning .... FAIL  rapidocr-onnxruntime not installed
-  Fix: pip install rapidocr-onnxruntime
+image_scanning .... FAIL  rapidocr/onnxruntime not available (required for image scanning)
+  Fix: pip install rapidocr onnxruntime
 ```
