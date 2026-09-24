@@ -132,9 +132,18 @@ Image scanning is configured in `ai-guardian.json` under the `image_scanning` se
 - **pyzbar** (optional) — for QR code scanning (`qr_scanning: true`)
 - **opencv-python-headless** (optional) — for face detection (`face_detection: true`)
 
-AI Guardian pins RapidOCR to `3.9.2`. ONNX Runtime is pinned per Python
-version so supported interpreters use available wheels: `1.19.2` on Python
-3.9, `1.23.2` on Python 3.10, and `1.29.0` on Python 3.11 and newer.
+AI Guardian pins RapidOCR to `3.9.2`. ONNX Runtime is pinned per Python and
+platform so supported interpreters use available wheels:
+
+- `1.19.2` on Python 3.9 and older supported interpreters
+- `1.23.2` on Python 3.10, and on Python 3.11-3.13 for macOS 13+ Intel or
+  ARM64
+- `1.29.0` on Python 3.11 and newer for Linux/Windows and macOS 14+ ARM64
+
+Python 3.14 on Intel macOS or macOS versions before 14 on ARM64 has no
+compatible published ONNX Runtime wheel and therefore does not select the
+dependency. Image OCR is unavailable on those targets unless a compatible
+runtime is installed by the user.
 
 ## Image Redaction
 

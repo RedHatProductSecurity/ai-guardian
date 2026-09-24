@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from packaging.requirements import Requirement
 
 try:
     import tomllib
@@ -29,6 +30,68 @@ from ai_guardian.setup import (
     _upgrade_ide_flag,
     _walk_commands,
 )
+
+
+def test_onnxruntime_markers_select_available_wheels():
+    """Select an ONNX Runtime pin only where its published wheel is usable."""
+    project = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    dependencies = tomllib.loads(project.read_text(encoding="utf-8"))["project"][
+        "dependencies"
+    ]
+    requirements = [
+        Requirement(dependency)
+        for dependency in dependencies
+        if dependency.startswith("onnxruntime")
+    ]
+
+    cases = [
+        ({"python_version": "3.9", "sys_platform": "linux"}, "==1.19.2"),
+        ({"python_version": "3.10", "sys_platform": "linux"}, "==1.23.2"),
+        (
+            {
+                "python_version": "3.13",
+                "sys_platform": "darwin",
+                "platform_machine": "x86_64",
+                "platform_release": "23.0",
+            },
+            "==1.23.2",
+        ),
+        (
+            {
+                "python_version": "3.13",
+                "sys_platform": "darwin",
+                "platform_machine": "arm64",
+                "platform_release": "22.0",
+            },
+            "==1.23.2",
+        ),
+        (
+            {
+                "python_version": "3.14",
+                "sys_platform": "darwin",
+                "platform_machine": "arm64",
+                "platform_release": "23.0",
+            },
+            "==1.29.0",
+        ),
+        (
+            {
+                "python_version": "3.14",
+                "sys_platform": "darwin",
+                "platform_machine": "x86_64",
+                "platform_release": "23.0",
+            },
+            None,
+        ),
+    ]
+
+    for environment, expected in cases:
+        selected = [
+            str(requirement.specifier)
+            for requirement in requirements
+            if requirement.marker is None or requirement.marker.evaluate(environment)
+        ]
+        assert selected == ([] if expected is None else [expected])
 
 
 class TestIDESetup:

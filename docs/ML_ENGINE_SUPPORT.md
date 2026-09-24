@@ -57,7 +57,8 @@ Models run exclusively in the daemon process to avoid the startup cost on every 
 
 ```bash
 # tokenizers is included as a main dependency
-# onnxruntime is an explicit main dependency on all supported Python versions.
+# onnxruntime is an explicit main dependency where a compatible wheel is
+# published for the selected Python version and platform.
 
 # Download the default model (~370 MB)
 ai-guardian ml download
