@@ -1,7 +1,7 @@
 """
 Image Scanner Module - OCR-based secret and PII detection in images.
 
-Extracts text from images using OCR (rapidocr-onnxruntime), then the
+Extracts text from images using OCR (RapidOCR), then the
 extracted text is passed through existing secret/PII scanners by the
 hook processing pipeline.
 
@@ -9,7 +9,7 @@ Only runs on the inbound path (PreToolUse file reads, UserPromptSubmit
 image attachments). PostToolUse is excluded — the AI already converted
 image content to text, which existing text scanners handle.
 
-Enabled by default. Requires rapidocr-onnxruntime (regular dependency).
+Enabled by default. Requires rapidocr and onnxruntime (regular dependencies).
 
 NEW in v1.10.0 (Issue #720)
 """
@@ -31,7 +31,7 @@ except ImportError:
     HAS_PILLOW = False
 
 try:
-    from rapidocr_onnxruntime import RapidOCR
+    from rapidocr import RapidOCR
 
     HAS_RAPIDOCR = True
 except ImportError:
@@ -171,7 +171,7 @@ class ImageDetector:
 
 
 class OCREngine:
-    """Extracts text from images using rapidocr-onnxruntime."""
+    """Extracts text from images using RapidOCR."""
 
     def __init__(self, config: Optional[dict] = None):
         self._engine = None
@@ -181,8 +181,7 @@ class OCREngine:
         if self._engine is None:
             if not HAS_RAPIDOCR:
                 raise ImportError(
-                    "rapidocr-onnxruntime is required for image scanning "
-                    "(available on Python < 3.13)"
+                    "rapidocr and onnxruntime are required for image scanning"
                 )
             self._engine = RapidOCR()
         return self._engine
@@ -198,31 +197,36 @@ class OCREngine:
             if result is None:
                 return OCRResult(text="", elapsed_ms=_elapsed(start))
 
-            # rapidocr returns: (list_of_results, elapsed_time)
-            # Each item: [[box_points], text, confidence]
-            ocr_items = result[0] if result[0] else []
+            # RapidOCR returns a RapidOCROutput with parallel boxes, text,
+            # and confidence collections.
+            boxes = getattr(result, "boxes", None)
+            ocr_texts = getattr(result, "txts", None)
+            scores = getattr(result, "scores", None)
+            if boxes is None or ocr_texts is None or scores is None:
+                return OCRResult(text="", elapsed_ms=_elapsed(start))
+
             regions = []
-            texts = []
+            recognized_texts = []
             total_conf = 0.0
 
-            for item in ocr_items:
-                box_points, text, confidence = item
+            for box_points, text, confidence in zip(boxes, ocr_texts, scores):
+                confidence = float(confidence)
                 if confidence < min_confidence:
                     continue
 
                 bbox = _box_points_to_bbox(box_points)
                 regions.append(
                     TextRegion(
-                        text=text,
+                        text=str(text),
                         bbox=bbox,
                         confidence=confidence,
                     )
                 )
-                texts.append(text)
+                recognized_texts.append(str(text))
                 total_conf += confidence
 
             avg_conf = total_conf / len(regions) if regions else 0.0
-            full_text = "\n".join(texts)
+            full_text = "\n".join(recognized_texts)
 
             return OCRResult(
                 text=full_text,
@@ -379,7 +383,7 @@ def scan_image(image_data: bytes, config: dict) -> ImageScanResult:
         result.text_regions = ocr_result.regions
         result.ocr_confidence = ocr_result.confidence
     except ImportError:
-        logger.warning("rapidocr-onnxruntime not available, skipping OCR")
+        logger.warning("rapidocr/onnxruntime not available, skipping OCR")
     except Exception as e:
         logger.warning(f"OCR failed: {e}")
 

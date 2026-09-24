@@ -381,7 +381,7 @@
     "_detector_options": ["heuristic", "ml", "hybrid"],
     "_detector_note": "heuristic = local patterns (default, <1ms), ml = ML-only via daemon (10-50ms), hybrid = heuristic first then ML for uncertain cases",
     "ml_engines": [],
-    "_ml_engines_note": "ML engines for prompt injection detection (NEW in v1.11.0). Requires daemon mode, onnxruntime (included on Python < 3.13), and ai-guardian ml download.",
+    "_ml_engines_note": "ML engines for prompt injection detection (NEW in v1.11.0). Requires daemon mode, the onnxruntime dependency, and ai-guardian ml download.",
     "_ml_engines_example": [
       {
         "type": "llm-guard",
@@ -692,7 +692,7 @@
   },
 
   "image_scanning": {
-    "_comment": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720)",
+    "_comment": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Uses rapidocr with onnxruntime.",
     "_comment2": "Scans PreToolUse (file reads) and UserPromptSubmit (image attachments). PostToolUse excluded (AI already extracted text).",
     "_comment3": "Performance: ~300ms typical, ~1.5s worst case per image",
     "enabled": true,

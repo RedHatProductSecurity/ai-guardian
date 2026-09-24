@@ -2037,28 +2037,32 @@ class Doctor:
                 message="Image scanning not enabled",
             )
 
-        import sys
+        missing = []
+        try:
+            from rapidocr import RapidOCR  # noqa: F401
+        except ImportError:
+            missing.append("rapidocr")
 
         try:
-            from rapidocr_onnxruntime import RapidOCR  # noqa: F401
-
-            return CheckResult(
-                name="image_scanning",
-                status=CheckStatus.PASS,
-                message="rapidocr-onnxruntime available for image OCR scanning",
-            )
+            import onnxruntime  # noqa: F401
         except ImportError:
-            if sys.version_info >= (3, 13):
-                return CheckResult(
-                    name="image_scanning",
-                    status=CheckStatus.WARN,
-                    message=f"rapidocr-onnxruntime not available on Python {sys.version_info.major}.{sys.version_info.minor} (requires <3.13)",
-                )
+            missing.append("onnxruntime")
+
+        if missing:
             return CheckResult(
                 name="image_scanning",
                 status=CheckStatus.FAIL,
-                message="rapidocr-onnxruntime not available (required for image scanning)",
+                message=(
+                    f"{', '.join(missing)} not available "
+                    "(required for image scanning)"
+                ),
             )
+
+        return CheckResult(
+            name="image_scanning",
+            status=CheckStatus.PASS,
+            message="rapidocr and onnxruntime available for image OCR scanning",
+        )
 
     def check_ml_detection(self) -> CheckResult:
         """Check ML prompt injection model availability."""

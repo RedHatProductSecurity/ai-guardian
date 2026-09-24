@@ -5,7 +5,7 @@ Provides multi-engine ML detection that runs inside the daemon process.
 Models are loaded once and kept in memory for fast inference (~10-50ms).
 Hook-mode invocations query the daemon via socket/REST.
 
-Requires onnxruntime (bundled via rapidocr-onnxruntime) and tokenizers (main dependency).
+Requires onnxruntime and tokenizers (main dependencies).
 """
 
 import hashlib
@@ -43,8 +43,7 @@ _HF_BASE_URL = "https://huggingface.co"
 def is_ml_available():
     """Check if ML dependencies (onnxruntime) are available.
 
-    tokenizers is always installed as a main dependency.
-    onnxruntime is available via rapidocr-onnxruntime on Python < 3.13.
+    tokenizers and onnxruntime are installed as main dependencies.
     """
     try:
         import onnxruntime  # noqa: F401
@@ -352,7 +351,7 @@ class MLEngine:
                 - max_length: Max token length (default from registry)
 
         Raises:
-            ImportError: If onnxruntime not installed (Python 3.13+)
+            ImportError: If onnxruntime is not installed
             FileNotFoundError: If model files not downloaded
         """
         import onnxruntime

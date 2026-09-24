@@ -222,7 +222,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "ignore_tools": [],
             "allowlist_patterns": [],
         },
-        "_comment_image_scanning": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Scans image files for embedded secrets before they reach the AI model.",
+        "_comment_image_scanning": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Uses rapidocr with onnxruntime to scan image files before they reach the AI model.",
         "image_scanning": {
             "enabled": True,
             "action": "block",

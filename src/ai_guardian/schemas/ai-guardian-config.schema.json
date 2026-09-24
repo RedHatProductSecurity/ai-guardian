@@ -864,7 +864,7 @@
         },
         "ml_engines": {
           "type": "array",
-          "description": "ML engines for prompt injection detection (NEW in v1.11.0, Issue #185). Each engine runs an ONNX model in the daemon process. Requires: onnxruntime (included on Python < 3.13) and ai-guardian ml download.",
+          "description": "ML engines for prompt injection detection (NEW in v1.11.0, Issue #185). Each engine runs an ONNX model in the daemon process. Requires: onnxruntime and ai-guardian ml download.",
           "items": {
             "type": "object",
             "properties": {
@@ -2428,7 +2428,7 @@
     },
     "image_scanning": {
       "type": "object",
-      "description": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Enabled by default. Scans image files during PreToolUse (file reads) and image attachments during UserPromptSubmit. PostToolUse is excluded (AI already extracted text). Requires rapidocr-onnxruntime (included as dependency).",
+      "description": "OCR-based image scanning for secrets and PII (NEW in v1.10.0, Issue #720). Enabled by default. Scans image files during PreToolUse (file reads) and image attachments during UserPromptSubmit. PostToolUse is excluded (AI already extracted text). Requires rapidocr and onnxruntime (included as dependencies).",
       "properties": {
         "enabled": {
           "$ref": "#/definitions/time_based_enabled"

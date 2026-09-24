@@ -33,8 +33,13 @@ dependencies = [
   "Pillow>=9.0.0",
   "docker>=7.0,<9",
   "mcp>=2.0.0; python_version >= '3.10'",
-  "rapidocr-onnxruntime>=1.4.0; python_version < '3.13'",
-  "onnxruntime>=1.15.0",
+  "rapidocr==3.9.2",
+  "onnxruntime==1.19.2; python_version < '3.10'",
+  # 1.29.0 has macOS wheels only for macOS 14+ ARM64. Use the last
+  # universal macOS release where compatible, and omit unsupported targets.
+  "onnxruntime==1.23.2; python_version >= '3.10' and python_version < '3.11' and (sys_platform != 'darwin' or platform_release >= '22')",
+  "onnxruntime==1.23.2; python_version >= '3.11' and python_version < '3.14' and sys_platform == 'darwin' and platform_release >= '22' and (platform_machine != 'arm64' or platform_release < '23')",
+  "onnxruntime==1.29.0; python_version >= '3.11' and (sys_platform != 'darwin' or (platform_machine == 'arm64' and platform_release >= '23'))",
   "nicegui>=3.0.4; python_version >= '3.10'",
   "tokenizers>=0.15.0; python_version >= '3.10'",
   "boto3>=1.28.0",

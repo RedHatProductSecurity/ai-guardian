@@ -2158,7 +2158,10 @@ class TestCheckImageScanning:
         config_path = _isolate_config_dir / "ai-guardian.json"
         config_path.write_text(json.dumps({"secret_scanning": {"enabled": True}}))
         doctor = Doctor()
-        with mock.patch("ai_guardian.doctor.RapidOCR", create=True):
+        with mock.patch.dict(
+            "sys.modules",
+            {"rapidocr": mock.MagicMock(), "onnxruntime": mock.MagicMock()},
+        ):
             result = doctor.check_image_scanning()
         assert result.status != CheckStatus.SKIP
 
@@ -2167,7 +2170,10 @@ class TestCheckImageScanning:
         config_path = _isolate_config_dir / "ai-guardian.json"
         config_path.write_text(json.dumps({"image_scanning": {}}))
         doctor = Doctor()
-        with mock.patch("ai_guardian.doctor.RapidOCR", create=True):
+        with mock.patch.dict(
+            "sys.modules",
+            {"rapidocr": mock.MagicMock(), "onnxruntime": mock.MagicMock()},
+        ):
             result = doctor.check_image_scanning()
         assert result.status != CheckStatus.SKIP
 
@@ -2185,14 +2191,37 @@ class TestCheckImageScanning:
         config_path = _isolate_config_dir / "ai-guardian.json"
         config_path.write_text(json.dumps({"image_scanning": {"enabled": True}}))
         doctor = Doctor()
-        with mock.patch.dict("sys.modules", {"rapidocr_onnxruntime": mock.MagicMock()}):
+        with mock.patch.dict(
+            "sys.modules",
+            {"rapidocr": mock.MagicMock(), "onnxruntime": mock.MagicMock()},
+        ):
             result = doctor.check_image_scanning()
         assert result.status == CheckStatus.PASS
+        assert (
+            result.message
+            == "rapidocr and onnxruntime available for image OCR scanning"
+        )
+
+    def test_missing_rapidocr_is_failure(self, _isolate_config_dir):
+        """Missing OCR dependencies should fail regardless of Python version."""
+        config_path = _isolate_config_dir / "ai-guardian.json"
+        config_path.write_text(json.dumps({"image_scanning": {"enabled": True}}))
+        doctor = Doctor()
+        with mock.patch.dict(
+            "sys.modules",
+            {"rapidocr": None, "onnxruntime": mock.MagicMock()},
+        ):
+            result = doctor.check_image_scanning()
+        assert result.status == CheckStatus.FAIL
+        assert result.message == "rapidocr not available (required for image scanning)"
 
     def test_no_config_file_defaults_enabled(self, _isolate_config_dir):
         """With no config file at all, image scanning defaults enabled."""
         doctor = Doctor()
-        with mock.patch.dict("sys.modules", {"rapidocr_onnxruntime": mock.MagicMock()}):
+        with mock.patch.dict(
+            "sys.modules",
+            {"rapidocr": mock.MagicMock(), "onnxruntime": mock.MagicMock()},
+        ):
             result = doctor.check_image_scanning()
         assert result.status != CheckStatus.SKIP
 

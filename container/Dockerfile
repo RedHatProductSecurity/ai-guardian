@@ -71,10 +71,10 @@ RUN echo "Installing ai-guardian: ${AI_GUARDIAN_VERSION}" \
     && case "${AI_GUARDIAN_VERSION}" in \
         *.whl) UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
                uv tool install "/tmp/${AI_GUARDIAN_VERSION}" \
-               --with rapidocr-onnxruntime==1.4.4 ;; \
+               --with rapidocr==3.9.2 ;; \
         *)     UV_TOOL_DIR=/opt/uv-tools UV_TOOL_BIN_DIR=/usr/local/bin \
                uv tool install "ai-guardian==${AI_GUARDIAN_VERSION}" \
-               --with rapidocr-onnxruntime==1.4.4 ;; \
+               --with rapidocr==3.9.2 ;; \
     esac \
     && chmod -R a+rX /opt/uv-tools \
     && rm -f /tmp/ai_guardian-*.whl /tmp/Dockerfile \

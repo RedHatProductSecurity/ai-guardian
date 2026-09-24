@@ -422,7 +422,7 @@ def create_pi_ml_engines_page(service, daemon_name: str):
                         "threshold is optional (default: 0.85, range: 0.0-1.0)"
                     ).classes("text-xs text-grey-6 mt-1")
                     ui.label(
-                        "Requires: onnxruntime (included on Python < 3.13) and ai-guardian ml download"
+                        "Requires: onnxruntime and ai-guardian ml download"
                     ).classes("text-xs text-grey-6")
 
         ui.timer(0.1, refresh, once=True)
