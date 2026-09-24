@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 import json
+import types
 from unittest import mock
 
 import pytest
@@ -84,7 +85,14 @@ class TestLinuxTrayBackend:
         monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
         monkeypatch.delenv("PYSTRAY_BACKEND", raising=False)
 
-        _configure_linux_tray_backend()
+        fake_gi = mock.MagicMock()
+        fake_repository = types.ModuleType("gi.repository")
+        fake_repository.AppIndicator3 = object()
+        with mock.patch.dict(
+            sys.modules,
+            {"gi": fake_gi, "gi.repository": fake_repository},
+        ):
+            _configure_linux_tray_backend()
 
         assert os.environ["PYSTRAY_BACKEND"] == "appindicator"
 
