@@ -45,8 +45,24 @@ def test_onnxruntime_markers_select_available_wheels():
     ]
 
     cases = [
-        ({"python_version": "3.9", "sys_platform": "linux"}, "==1.19.2"),
-        ({"python_version": "3.10", "sys_platform": "linux"}, "==1.23.2"),
+        (
+            {
+                "python_version": "3.9",
+                "sys_platform": "linux",
+                "platform_machine": "x86_64",
+                "platform_release": "6.0",
+            },
+            "==1.19.2",
+        ),
+        (
+            {
+                "python_version": "3.10",
+                "sys_platform": "linux",
+                "platform_machine": "x86_64",
+                "platform_release": "6.0",
+            },
+            "==1.23.2",
+        ),
         (
             {
                 "python_version": "3.13",
