@@ -71,6 +71,42 @@ def _is_codex_post_tool_use(hook_data):
         return False
 
 
+def _normalize_codex_post_tool_use_output(hook_data, output):
+    """Return a JSON object for Codex PostToolUse stdout."""
+    if not _is_codex_post_tool_use(hook_data):
+        return output
+
+    if not output:
+        return "{}"
+
+    if isinstance(output, dict):
+        try:
+            return json.dumps(output)
+        except (TypeError, ValueError):
+            logger.warning(
+                "Replacing malformed Codex PostToolUse response with empty JSON"
+            )
+            return "{}"
+
+    if not isinstance(output, str):
+        logger.warning("Replacing malformed Codex PostToolUse response with empty JSON")
+        return "{}"
+
+    try:
+        parsed = json.loads(output)
+    except (TypeError, ValueError):
+        logger.warning("Replacing malformed Codex PostToolUse response with empty JSON")
+        return "{}"
+
+    if not isinstance(parsed, dict):
+        logger.warning(
+            "Replacing non-object Codex PostToolUse response with empty JSON"
+        )
+        return "{}"
+
+    return output
+
+
 def _ensure_daemon_started():
     """Auto-start daemon if not running. Silent — no output on success or failure."""
     local_daemon = False
@@ -2736,11 +2772,9 @@ def main():
             response = process_hook_input()
 
     # Output JSON to stdout if needed (for Cursor). Codex requires a JSON
-    # response for PostToolUse even when processing fails open; keep this
-    # boundary fallback for responses from an older or unavailable daemon.
-    output = response.get("output")
-    if not output and _is_codex_post_tool_use(hook_data):
-        output = "{}"
+    # object for PostToolUse even when processing fails open; normalize at
+    # this boundary because daemon responses may come from older versions.
+    output = _normalize_codex_post_tool_use_output(hook_data, response.get("output"))
     if output:
         print(output, flush=True)  # Force flush for Cursor
         sys.stdout.flush()  # Explicit flush for compatibility

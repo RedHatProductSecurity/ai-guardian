@@ -47,6 +47,40 @@ def test_codex_posttooluse_internal_error_emits_valid_json(capsys):
     assert json.loads(capsys.readouterr().out) == {}
 
 
+def test_codex_posttooluse_malformed_daemon_output_is_replaced(capsys):
+    """
+    USER EXPERIENCE: Malformed Codex daemon output -> empty JSON and fail-open.
+
+    A daemon from an older version can return a non-empty malformed response.
+    The CLI boundary must prevent that response from reaching Codex stdout.
+    """
+    malformed_output = "secret-scanning error: synthetic-secret-value"
+    hook_data = {
+        "_ide_type": "codex",
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Bash",
+        "tool_response": {"output": "command output"},
+    }
+
+    with (
+        patch("ai_guardian.cli._load_config_file", return_value=({}, None)),
+        patch("ai_guardian.daemon.client.is_daemon_running", return_value=True),
+        patch(
+            "ai_guardian.daemon.client.send_hook_request",
+            return_value={"output": malformed_output, "exit_code": 0},
+        ),
+        patch("sys.argv", ["ai-guardian"]),
+        patch("sys.stdin", StringIO(json.dumps(hook_data))),
+    ):
+        with pytest.raises(SystemExit) as exc_info:
+            main()
+
+    captured = capsys.readouterr()
+    assert exc_info.value.code == 0
+    assert json.loads(captured.out) == {}
+    assert malformed_output not in captured.out
+
+
 def test_codex_blocked_operation_records_codex_identity():
     """
     USER EXPERIENCE: Codex block -> violation context identifies Codex.
