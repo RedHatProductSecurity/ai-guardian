@@ -2,7 +2,7 @@
 
 > OpenWolf's learning memory. Updated automatically as the AI learns from interactions.
 > Do not edit manually unless correcting an error.
-> Last updated: 2026-06-25
+> Last updated: 2026-08-20
 
 ## User Preferences
 
@@ -20,7 +20,7 @@
 
 - **Web console violation stats pages should use `load_web_violations()` not `ViolationLogger` directly:** `ViolationLogger` reads local filesystem. `load_web_violations()` routes through DaemonService which handles local vs remote internally. The limit should come from `violation_logging.max_entries` config, not hardcoded.
 
-- **All daemons (local and remote) support project scope via header selector (#1354):** The header shows a project dropdown for ALL daemons, populated from `/api/stats` `active_project_dirs`. Selection stored in `app.storage.user["project_dir"]` and mirrored to module-level `_current_project_dir` (thread-safe for `run.io_bound()`). All config load/save/provenance calls route through DaemonService for both local and remote targets — DaemonService internally handles local (filesystem) vs remote (REST) routing. When scope is "project" and a project is selected, `config_helpers.py` passes `project_dir` to `get_config_scoped()` and `write_config_bulk()`. Without a project selected, falls back to global scope. The fallback local-filesystem path in config_helpers only runs when no DaemonService is available (e.g., standalone mode without daemon).
+- **All daemons (local and remote) support project scope via header selector (#1354):** The header shows a project dropdown for ALL daemons, populated from `/api/stats` `active_project_dirs`. Selection stored in `app.storage.user["project_dir"]` and mirrored to module-level `_current_project_dir`, which is shared across sessions and can be overwritten by another session. Config workers must receive the requesting session's `project_dir` explicitly or use session-bound state. All config load/save/provenance calls route through DaemonService for both local and remote targets — DaemonService internally handles local (filesystem) vs remote (REST) routing. When scope is "project" and a project is selected, `config_helpers.py` passes `project_dir` to `get_config_scoped()` and `write_config_bulk()`. Without a project selected, falls back to global scope. The fallback local-filesystem path in config_helpers only runs when no DaemonService is available (e.g., standalone mode without daemon).
 
 - **glab mr diff uses different header format than git/gh:** `glab mr diff` outputs `+++ path/to/file` (no `b/` prefix), while `git diff` and `gh pr diff` output `+++ b/path/to/file`. The `_DIFF_FILE_HEADER` regex must use `(?:b/)?` to handle both.
 
