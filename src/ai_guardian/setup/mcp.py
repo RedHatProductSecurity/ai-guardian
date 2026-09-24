@@ -119,6 +119,24 @@ _TOML_TABLE_HEADER = re.compile(
 _TOML_INLINE_MCP_SERVERS = re.compile(r"^\s*mcp_servers\s*=", re.MULTILINE)
 
 
+def _register_mcp_identity(binary_path: str) -> bool:
+    """Record the package identity used by the installed MCP entry point."""
+    try:
+        from ai_guardian.mcp.identity import register_mcp_identity
+
+        registered = register_mcp_identity(binary_path)
+    except Exception as exc:
+        logger.error("Unable to register AI Guardian MCP identity: %s", exc)
+        registered = False
+
+    if not registered:
+        print(
+            "  MCP: Warning: identity registration failed; the MCP server will "
+            "fail closed until setup succeeds"
+        )
+    return registered
+
+
 def get_codex_mcp_config_path() -> Path:
     """Return Codex's global MCP configuration path.
 
@@ -562,6 +580,7 @@ def _install_mcp_config(
         f.write("\n")
 
     print(f"  MCP: Added ai-guardian MCP server to {config_path}")
+    _register_mcp_identity(abs_path)
 
     # Warn if MCP entry exists in settings.json (hooks file) for Claude
     if ide_type == "claude":
@@ -638,6 +657,7 @@ def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
         return
 
     print(f"  MCP: Added ai-guardian MCP server to {config_path}")
+    _register_mcp_identity(_resolve_binary_path())
     _clean_legacy_codex_mcp_entry(target_path=config_path)
 
 

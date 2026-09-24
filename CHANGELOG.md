@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Verified MCP server identity attestation (#2416)**: Register the canonical
+  AI Guardian executable and package identity during setup, require a
+  nonce-based process attestation before auto-allowing built-in MCP tools, and
+  fail closed for spoofed, tampered, expired, or missing identity records.
+
 - **Unified policy decision and audit schema (#2307)**: Add a versioned,
   content-safe decision record shared by hook, MCP, SDK, daemon REST, scanner,
   external-inspector, JSONL, SARIF, and OTEL outputs while preserving legacy
@@ -34,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   metadata results.
 
 ### Changed
+
+- **KDE tray compatibility (#2416)**: Prefer the D-Bus AppIndicator backend on
+  KDE Wayland sessions and preserve the white symbolic icon used by dark KDE
+  panels.
 
 - **Python 3.14 image OCR support (#2408)**: Replace the Python-version-gated
   `rapidocr-onnxruntime` package with pinned `rapidocr` and

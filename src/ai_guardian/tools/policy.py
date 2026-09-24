@@ -47,6 +47,10 @@ from ai_guardian.config.utils import (
 )
 from ai_guardian.config.loaders import _load_json_config
 from ai_guardian.constants import ViolationType
+from ai_guardian.mcp.identity import (
+    is_ai_guardian_mcp_tool,
+    verify_active_attestation,
+)
 from ai_guardian.tools.patterns import (
     IMMUTABLE_DENY_PATTERNS,
     MIXED_SETTINGS_PATTERNS,
@@ -507,6 +511,26 @@ class ToolPolicyChecker:
                             hook_data=hook_data,
                         )
                         return False, error_msg, tool_name
+
+            # The built-in namespace is not an identity proof.  Require a
+            # process-bound attestation before any permission rule can allow it.
+            if is_ai_guardian_mcp_tool(tool_name) and not verify_active_attestation(
+                "ai-guardian"
+            ):
+                error_msg = self._format_mcp_identity_deny_message(tool_name)
+                self.last_deny_action = "block"
+                self.last_deny_matched_pattern = "unverified MCP identity"
+                self.last_deny_check_value = tool_name
+                self._log_violation(
+                    tool_name=tool_name,
+                    check_value=tool_name,
+                    reason="MCP server identity verification failed",
+                    matcher="mcp__ai-guardian__*",
+                    hook_data=hook_data,
+                    violation_type=ViolationType.TOOL_PERMISSION,
+                )
+                logger.error("Blocked unverified AI Guardian MCP tool: %s", tool_name)
+                return False, error_msg, tool_name
 
             # PRIORITY 2: Check user-configured permissions
             # Skip if permissions are disabled
@@ -1123,7 +1147,7 @@ class ToolPolicyChecker:
         """
         Check if a tool type is restricted (requires explicit allow rule).
 
-        Skills and MCP tools (except ai-guardian's own) are restricted.
+        Skills and MCP tools (except an attested ai-guardian process) are restricted.
         Built-in tools (Bash, Read, Write, Edit, etc.) are allowed by default
         when no permission rule targets them.
         """
@@ -1131,9 +1155,22 @@ class ToolPolicyChecker:
             return True
         if tool_name.startswith("mcp__"):
             if tool_name.startswith("mcp__ai-guardian__"):
+                # Identity is verified before this method is reached.
                 return False
             return True
         return False
+
+    def _format_mcp_identity_deny_message(self, tool_name: str) -> str:
+        """Format a safe denial without exposing configuration or bypass hints."""
+        return (
+            "MCP Identity Verification Failed\n\n"
+            "Protection: Built-in AI Guardian MCP server identity\n"
+            f"Tool: {tool_name}\n"
+            "Reason: The MCP server process could not be verified as the installed "
+            "AI Guardian server.\n\n"
+            "This operation has been blocked for security.\n"
+            "Only a verified AI Guardian MCP server process may use this namespace."
+        )
 
     def _format_deny_message(
         self,

@@ -14,16 +14,30 @@ import sys
 import threading
 import time
 
+
+def _configure_linux_tray_backend():
+    """Prefer AppIndicator on KDE, whose Wayland panel does not show Gtk.StatusIcon."""
+    if not sys.platform.startswith("linux"):
+        return
+    desktop = os.environ.get("XDG_CURRENT_DESKTOP", "")
+    if "KDE" not in desktop.upper() or os.environ.get("PYSTRAY_BACKEND"):
+        return
+    try:
+        import gi
+
+        try:
+            gi.require_version("AppIndicator3", "0.1")
+            from gi.repository import AppIndicator3  # noqa: F401
+        except (ImportError, ValueError):
+            gi.require_version("AyatanaAppIndicator3", "0.1")
+            from gi.repository import AyatanaAppIndicator3  # noqa: F401
+    except (ImportError, ValueError):
+        return
+    os.environ["PYSTRAY_BACKEND"] = "appindicator"
+
+
 from ai_guardian.daemon import is_mcp_installed
 from ai_guardian.daemon.discovery import should_update_target_name
-from ai_guardian.tray import icons as tray_icons
-from ai_guardian.tray import menu as tray_menu
-from ai_guardian.tray import notifications as tray_notifications
-from ai_guardian.tray import plugins as tray_plugins
-from ai_guardian.tray.animation import TrayIconManager
-from ai_guardian.tray.health import TrayHealthMonitor
-from ai_guardian.tray.menu_builder import TrayMenuBuilder
-from ai_guardian.tray.plugin_runner import TrayPluginMenuBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +157,16 @@ def _ensure_system_gi():
 
 
 _ensure_system_gi()
+_configure_linux_tray_backend()
+
+from ai_guardian.tray import icons as tray_icons
+from ai_guardian.tray import menu as tray_menu
+from ai_guardian.tray import notifications as tray_notifications
+from ai_guardian.tray import plugins as tray_plugins
+from ai_guardian.tray.animation import TrayIconManager
+from ai_guardian.tray.health import TrayHealthMonitor
+from ai_guardian.tray.menu_builder import TrayMenuBuilder
+from ai_guardian.tray.plugin_runner import TrayPluginMenuBuilder
 
 try:
     import pystray

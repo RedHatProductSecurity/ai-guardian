@@ -1,5 +1,6 @@
 """Tests for daemon system tray integration."""
 
+import os
 import sys
 import threading
 import time
@@ -13,6 +14,7 @@ from ai_guardian.tray.app import (
     DaemonTray,
     HAS_PYSTRAY,
     is_tray_available,
+    _configure_linux_tray_backend,
     _is_tray_running,
     _check_gi_available,
     _suppress_gtk_stderr,
@@ -74,6 +76,26 @@ class TestCheckGiAvailable:
     def test_returns_true_when_gi_available(self):
         with mock.patch.dict("sys.modules", {"gi": mock.MagicMock()}):
             assert _check_gi_available() is True
+
+
+class TestLinuxTrayBackend:
+    def test_kde_defaults_to_appindicator_backend(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+        monkeypatch.delenv("PYSTRAY_BACKEND", raising=False)
+
+        _configure_linux_tray_backend()
+
+        assert os.environ["PYSTRAY_BACKEND"] == "appindicator"
+
+    def test_explicit_backend_is_preserved(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+        monkeypatch.setenv("PYSTRAY_BACKEND", "appindicator")
+
+        _configure_linux_tray_backend()
+
+        assert os.environ["PYSTRAY_BACKEND"] == "appindicator"
 
 
 class TestIsTrayAvailable:
@@ -542,7 +564,7 @@ class TestIconInversion:
     """Tests for dark icon on light GNOME panels (issue #754)."""
 
     @pytest.mark.parametrize(
-        "platform_name, env, gsettings_stdout, expected",
+        "platform_name, env, scheme_stdout, expected",
         [
             ("Darwin", {}, None, False),
             ("Linux", {"XDG_CURRENT_DESKTOP": "KDE"}, None, False),
@@ -551,14 +573,14 @@ class TestIconInversion:
         ],
         ids=["macos", "kde", "gnome-light", "gnome-dark"],
     )
-    def test_needs_dark_icon(self, platform_name, env, gsettings_stdout, expected):
+    def test_needs_dark_icon(self, platform_name, env, scheme_stdout, expected):
         with (
             mock.patch("platform.system", return_value=platform_name),
             mock.patch.dict("os.environ", env, clear=False),
             mock.patch("subprocess.run") as mock_run,
         ):
-            if gsettings_stdout is not None:
-                mock_run.return_value = mock.MagicMock(stdout=gsettings_stdout)
+            if scheme_stdout is not None:
+                mock_run.return_value = mock.MagicMock(stdout=scheme_stdout)
             assert needs_dark_icon() is expected
 
     @pytest.mark.skipif(not HAS_PYSTRAY, reason="pystray/Pillow not installed")

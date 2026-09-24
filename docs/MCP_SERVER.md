@@ -169,7 +169,16 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
 
 ### Self-protection
 
-- ai-guardian's own MCP tools (`mcp__ai-guardian__*`) are auto-allowed — they don't need explicit permission rules
+- The `mcp__ai-guardian__*` namespace is not an identity proof. A same-name or
+  otherwise unverified MCP registration is blocked before permission rules are
+  evaluated.
+- Setup records the canonical AI Guardian package, executable, entry point, and
+  installation hash in a signed local identity record.
+- Each AI Guardian MCP process performs a nonce-based attestation and receives a
+  short-lived process-bound session. Hook policy checks require a live verified
+  session before allowing built-in MCP tools.
+- Missing, tampered, expired, or mismatched identity data fails closed with an
+  MCP identity verification error. Permission rules cannot override this gate.
 - All other MCP servers require explicit allow rules in the permissions config
 - The MCP server process runs separately from the daemon — if the daemon is unavailable, MCP tools still work
 

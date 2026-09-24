@@ -349,12 +349,13 @@ When no permission rule matches a tool, the decision depends on the tool type:
 | Built-in (Bash, Read, Write, Edit, WebFetch, Agent) | **Allowed** | Hooks scan input/output for secrets, PII, SSRF, prompt injection |
 | MCP server tools (`mcp__*`) | **Denied** | Third-party code that bypasses hook scanning; requires explicit allow |
 | Skills | **Denied** | Can override AI behavior and instructions; requires explicit allow |
-| ai-guardian MCP tools (`mcp__ai-guardian__*`) | **Allowed** | Auto-allowed (own security tools) |
+| ai-guardian MCP tools (`mcp__ai-guardian__*`) | **Allowed after identity verification** | Built-in namespace plus a live verified AI Guardian MCP process |
 
 This means:
 - You only need allow rules for MCP servers and Skills you want to use
 - Built-in tools work without any rules (unless you want to restrict them with deny rules)
 - Forgetting to add an allow rule for an MCP server results in a "no permission rule" denial
+- A permission rule for `mcp__ai-guardian__*` does not authenticate a server. The identity gate runs first and blocks unverified registrations even when permissions are disabled or an allow rule matches.
 
 ### Config Merge Behavior
 
@@ -403,7 +404,7 @@ Combined array (after merge):
 ]
 ```
 
-Result: All three MCP servers are allowed. The project config **adds** to the global rules without affecting them.
+Result: All three MCP servers are allowed when the AI Guardian MCP identity is verified. The project config **adds** to the global rules without affecting them; it cannot authenticate an unverified AI Guardian registration.
 
 **Pitfall — project deny-all overrides global allows:**
 
@@ -704,7 +705,7 @@ Multiple layers ensure protection even if one layer has a gap.
 
 ### MCP Server Auto-Allow
 
-AI Guardian's own MCP server tools (`mcp__ai-guardian__*`) are automatically allowed — they don't need explicit permission rules. All other MCP servers require explicit allow rules. The MCP server provides an additional **proactive** layer: the AI can check security before acting via `check_path`, `check_command`, etc. See [MCP Server](MCP_SERVER.md).
+AI Guardian's own MCP server tools (`mcp__ai-guardian__*`) are allowed only after the running MCP process passes identity attestation. The namespace alone is not trusted, and permission rules cannot bypass a failed attestation. All other MCP servers require explicit allow rules. The MCP server provides an additional **proactive** layer: the AI can check security before acting via `check_path`, `check_command`, etc. See [MCP Server](MCP_SERVER.md).
 
 ---
 
