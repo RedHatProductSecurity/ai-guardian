@@ -1,5 +1,6 @@
 """Tests for sandbox actions exposed by the system tray."""
 
+import io
 import os
 from types import SimpleNamespace
 from unittest import mock
@@ -463,6 +464,19 @@ class TestSandboxTrayMenu:
             items = tray._menu._build_sandbox_create_menu_items()
 
         assert [item.label for item in items] == ["Create sandbox..."]
+        assert items[0].kwargs["enabled"](None) is True
+
+    def test_create_action_ignores_repeated_click_while_form_is_open(self):
+        tray = _make_tray([])
+        action = tray._menu._mk_sandbox_create_action()
+
+        with mock.patch.object(tray._menu, "_start_sandbox_form") as start_form:
+            action(None, None)
+            action(None, None)
+
+        start_form.assert_called_once()
+        assert tray._menu._sandbox_create_is_in_progress() is True
+        tray._menu._end_sandbox_create()
 
     def test_single_daemon_menu_explains_current_status_symbol(self):
         tray = _make_tray(
@@ -718,6 +732,49 @@ class TestSandboxTrayMenu:
             "Unable to create sandbox 'ag-test'.",
             "runtime failed",
         )
+
+    def test_openshell_preflight_shows_preparation_before_upload_confirmation(
+        self, tmp_path
+    ):
+        tray = _make_tray([])
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "main.py").write_text("print('ok')\n", encoding="utf-8")
+        values = {
+            "runtime": "openshell",
+            "name": "ag-test",
+            "cli": "claude",
+            "repo": str(repo),
+        }
+        preparation = mock.MagicMock()
+
+        def show_confirmation(_message, **_kwargs):
+            assert preparation.update_status.call_count >= 3
+            return True
+
+        with (
+            mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=preparation
+            ) as show_progress,
+            mock.patch.object(
+                tray._menu, "_sandbox_image_status", return_value="Found locally."
+            ),
+            mock.patch(
+                "ai_guardian.tray.sandbox_dialog.show_sandbox_upload_confirmation",
+                side_effect=show_confirmation,
+            ),
+            mock.patch.object(tray._menu, "_run_sandbox_create") as run_create,
+        ):
+            tray._menu._complete_sandbox_create_form(values)
+
+        show_progress.assert_called_once_with(
+            "Preparing sandbox 'ag-test'",
+            "Operation: create\nRuntime: openshell\n"
+            "Preparing repository upload; preflight stages appear below.",
+            screen_bounds=None,
+        )
+        preparation.close.assert_called_once_with()
+        run_create.assert_called_once()
 
     def test_upload_preflight_summarizes_size_and_git_remote(self, tmp_path):
         tray = _make_tray([])
@@ -1550,6 +1607,68 @@ class TestSandboxDialogFallback:
             },
         ]
         process.stdin.close.assert_called_once_with()
+
+    def test_progress_reports_readiness_and_closes_without_completion(self):
+        import json
+
+        from ai_guardian.tray.sandbox_dialog import SandboxProgress, _PROGRESS_READY
+
+        process = SimpleNamespace(
+            stdout=io.StringIO(f"{_PROGRESS_READY}\n"),
+            stdin=mock.MagicMock(),
+            wait=mock.MagicMock(),
+        )
+        progress = SandboxProgress(process)
+
+        assert progress.wait_ready(timeout=1) is True
+        progress.update_status("Scanning repository files...")
+        assert progress.close() is True
+
+        updates = [
+            json.loads(call.args[0]) for call in process.stdin.write.call_args_list
+        ]
+        assert updates == [
+            {"type": "status", "message": "Scanning repository files..."},
+            {"type": "close"},
+        ]
+        process.stdin.close.assert_called_once_with()
+
+    def test_progress_subprocess_falls_back_when_child_is_not_ready(self):
+        from ai_guardian.tray.sandbox_dialog import _show_tkinter_progress_subprocess
+
+        process = SimpleNamespace(
+            stdout=io.StringIO(),
+            stdin=mock.MagicMock(),
+            wait=mock.MagicMock(),
+            terminate=mock.MagicMock(),
+        )
+        with mock.patch(
+            "ai_guardian.tray.sandbox_dialog.subprocess.Popen", return_value=process
+        ):
+            assert _show_tkinter_progress_subprocess("Title", "Message") is None
+
+        process.stdin.close.assert_called_once_with()
+        process.terminate.assert_called_once_with()
+
+    def test_progress_subprocess_waits_for_child_readiness(self):
+        from ai_guardian.tray.sandbox_dialog import (
+            SandboxProgress,
+            _PROGRESS_READY,
+            _show_tkinter_progress_subprocess,
+        )
+
+        process = SimpleNamespace(
+            stdout=io.StringIO(f"{_PROGRESS_READY}\n"),
+            stdin=mock.MagicMock(),
+            wait=mock.MagicMock(),
+        )
+        with mock.patch(
+            "ai_guardian.tray.sandbox_dialog.subprocess.Popen", return_value=process
+        ):
+            progress = _show_tkinter_progress_subprocess("Title", "Message")
+
+        assert isinstance(progress, SandboxProgress)
+        progress.close()
 
     def test_sandbox_text_wrap_switches_between_wrapped_and_unwrapped(self):
         from ai_guardian.tray.sandbox_dialog import _set_text_wrap

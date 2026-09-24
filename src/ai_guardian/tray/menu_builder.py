@@ -61,6 +61,8 @@ class TrayMenuBuilder:
     def __init__(self, tray):
         self._tray = tray
         self._single_daemon_closures = {}
+        self._sandbox_create_lock = threading.Lock()
+        self._sandbox_create_in_progress = False
 
     def _on_about(self, icon, item):
         """Show About info via OS dialog."""
@@ -600,6 +602,8 @@ class TrayMenuBuilder:
         name="sandbox-form",
         icon=None,
         screen_bounds=None,
+        on_cancel=None,
+        on_error=None,
     ):
         """Show a sandbox form away from the tray callback thread."""
         if screen_bounds is None:
@@ -620,10 +624,32 @@ class TrayMenuBuilder:
                     )
                 if values is not None:
                     callback(values, screen_bounds=screen_bounds)
+                elif on_cancel is not None:
+                    on_cancel()
             except Exception:
                 logger.exception("Sandbox form action failed")
+                if on_error is not None:
+                    on_error()
 
         threading.Thread(target=run_form, daemon=True, name=name).start()
+
+    def _begin_sandbox_create(self):
+        """Reserve the single tray sandbox creation flow."""
+        with self._sandbox_create_lock:
+            if self._sandbox_create_in_progress:
+                return False
+            self._sandbox_create_in_progress = True
+            return True
+
+    def _end_sandbox_create(self):
+        """Release the tray sandbox creation flow reservation."""
+        with self._sandbox_create_lock:
+            self._sandbox_create_in_progress = False
+
+    def _sandbox_create_is_in_progress(self):
+        """Return whether a tray sandbox creation flow is active."""
+        with self._sandbox_create_lock:
+            return self._sandbox_create_in_progress
 
     @staticmethod
     def _capture_tray_screen_bounds(icon=None):
@@ -683,12 +709,33 @@ class TrayMenuBuilder:
         return "Not found locally; remote pull not probed."
 
     @staticmethod
-    def _sandbox_repo_upload_summary(repo):
+    def _sandbox_progress_update(progress, message):
+        """Update a live sandbox dialog without making it a hard dependency."""
+        if progress is None:
+            return
+        update_status = getattr(progress, "update_status", None)
+        if callable(update_status):
+            update_status(message)
+
+    @staticmethod
+    def _sandbox_progress_close(progress):
+        """Close a preparation dialog before showing the next state."""
+        if progress is None:
+            return
+        close = getattr(progress, "close", None)
+        if callable(close):
+            close()
+
+    @staticmethod
+    def _sandbox_repo_upload_summary(repo, *, progress=None):
         """Inspect repository size and remote classification without uploading."""
         path = Path(repo).expanduser()
         if not path.is_dir():
             return None
 
+        TrayMenuBuilder._sandbox_progress_update(
+            progress, "Scanning repository files..."
+        )
         total_size = 0
         file_count = 0
         pending = [path]
@@ -708,6 +755,7 @@ class TrayMenuBuilder:
                 except OSError:
                     continue
 
+        TrayMenuBuilder._sandbox_progress_update(progress, "Checking Git remote...")
         source = "Not a Git repository"
         try:
             result = subprocess.run(
@@ -823,9 +871,11 @@ class TrayMenuBuilder:
             f"{warning}"
         )
 
-    def _confirm_sandbox_upload(self, values, repo, *, screen_bounds=None):
+    def _confirm_sandbox_upload(
+        self, values, repo, *, screen_bounds=None, progress=None
+    ):
         """Confirm an OpenShell repository upload before starting runtime work."""
-        summary = self._sandbox_repo_upload_summary(repo)
+        summary = self._sandbox_repo_upload_summary(repo, progress=progress)
         if summary is None:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
@@ -837,6 +887,7 @@ class TrayMenuBuilder:
 
         image = str(values.get("image") or "").strip() or DEFAULT_OPENSHELL_IMAGE
         summary["image"] = image
+        self._sandbox_progress_update(progress, "Checking local container image...")
         summary["image_status"] = self._sandbox_image_status(image)
         image_error = summary["image_status"].startswith("Missing locally;")
         error_lines = (
@@ -847,6 +898,8 @@ class TrayMenuBuilder:
                 show_sandbox_upload_confirmation,
             )
 
+            self._sandbox_progress_update(progress, "Ready for upload confirmation.")
+            self._sandbox_progress_close(progress)
             return show_sandbox_upload_confirmation(
                 self._sandbox_upload_confirmation_message(values, summary),
                 error_lines=error_lines,
@@ -856,16 +909,26 @@ class TrayMenuBuilder:
             logger.exception("Unable to show sandbox upload confirmation")
             return False
 
-    def _reopen_sandbox_create_form(self, values, screen_bounds):
+    def _reopen_sandbox_create_form(self, values, screen_bounds, *, on_finished=None):
         """Reopen create form after upload confirmation cancellation."""
+
+        def complete(next_values, *, screen_bounds=None):
+            self._complete_sandbox_create_form(
+                next_values,
+                screen_bounds=screen_bounds,
+                on_finished=on_finished,
+            )
+
         self._start_sandbox_form(
             "Create AI Guardian sandbox",
             "Choose the sandbox runtime and initial configuration. Creation "
             "runs in the background; failures show the captured runtime log.",
             self._sandbox_create_fields(values),
-            self._complete_sandbox_create_form,
+            complete,
             name="sandbox-create-form",
             screen_bounds=screen_bounds,
+            on_cancel=on_finished,
+            on_error=on_finished,
         )
 
     @staticmethod
@@ -887,17 +950,33 @@ class TrayMenuBuilder:
         """Create the main-menu callback for sandbox creation."""
 
         def action(icon, __):
-            self._start_sandbox_form(
-                "Create AI Guardian sandbox",
-                "Choose the sandbox runtime and initial configuration. Creation "
-                "runs in the background; failures show the captured runtime log.",
-                # The complete form is built in one place so its defaults stay
-                # aligned with the current environment at click time.
-                self._sandbox_create_fields(),
-                self._complete_sandbox_create_form,
-                name="sandbox-create-form",
-                icon=icon,
-            )
+            if not self._begin_sandbox_create():
+                return
+
+            def complete(values, *, screen_bounds=None):
+                self._complete_sandbox_create_form(
+                    values,
+                    screen_bounds=screen_bounds,
+                    on_finished=self._end_sandbox_create,
+                )
+
+            try:
+                self._start_sandbox_form(
+                    "Create AI Guardian sandbox",
+                    "Choose the sandbox runtime and initial configuration. Creation "
+                    "runs in the background; failures show the captured runtime log.",
+                    # The complete form is built in one place so its defaults stay
+                    # aligned with the current environment at click time.
+                    self._sandbox_create_fields(),
+                    complete,
+                    name="sandbox-create-form",
+                    icon=icon,
+                    on_cancel=self._end_sandbox_create,
+                    on_error=self._end_sandbox_create,
+                )
+            except Exception:
+                self._end_sandbox_create()
+                raise
 
         return action
 
@@ -1125,8 +1204,15 @@ class TrayMenuBuilder:
                     field["default"] = values[name]
         return fields
 
-    def _complete_sandbox_create_form(self, values, *, screen_bounds=None):
+    def _complete_sandbox_create_form(
+        self, values, *, screen_bounds=None, on_finished=None
+    ):
         """Validate create form values and launch the selected command."""
+
+        def finish_flow():
+            if on_finished is not None:
+                on_finished()
+
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
@@ -1137,6 +1223,7 @@ class TrayMenuBuilder:
                 "A saved configuration snapshot cannot be combined with a profile.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         if runtime not in {"container", "openshell"} or not name:
             self._sandbox_error(
@@ -1144,6 +1231,7 @@ class TrayMenuBuilder:
                 "A valid runtime and sandbox name are required.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
 
         opencode_agent = str(values.get("agent") or "").strip() or None
@@ -1157,6 +1245,7 @@ class TrayMenuBuilder:
                 f"CLI '{cli}' is not supported for {runtime} sandboxes.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         if agent_provider and cli != "pi":
             self._sandbox_error(
@@ -1164,6 +1253,7 @@ class TrayMenuBuilder:
                 "A Pi provider can only be selected when CLI is pi.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         if runtime == "openshell" and cli == "pi":
             supported_providers = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
@@ -1173,6 +1263,7 @@ class TrayMenuBuilder:
                     "OpenShell Pi supports only the anthropic or openai provider.",
                     **self._screen_bounds_kwargs(screen_bounds),
                 )
+                finish_flow()
                 return
         agent_profile = opencode_agent if cli == "opencode" else None
         if cli == "opencode" and not agent_profile:
@@ -1181,6 +1272,7 @@ class TrayMenuBuilder:
                 "An OpenCode agent profile is required when CLI is opencode.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         repo = str(values.get("repo") or "").strip() or None
         config_dir = str(values.get("config_dir") or "").strip() or None
@@ -1193,6 +1285,7 @@ class TrayMenuBuilder:
                 "The host config directory cannot be combined with a profile or saved snapshot.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         policies = str(values.get("policies") or "").strip()
         if policies and runtime != "openshell":
@@ -1201,6 +1294,7 @@ class TrayMenuBuilder:
                 "Policy files are supported for OpenShell sandboxes only.",
                 **self._screen_bounds_kwargs(screen_bounds),
             )
+            finish_flow()
             return
         policy_paths = []
         for policy in policies.replace("\n", ",").split(","):
@@ -1230,6 +1324,7 @@ class TrayMenuBuilder:
                         "Labels must use KEY=VALUE entries separated by commas.",
                         **self._screen_bounds_kwargs(screen_bounds),
                     )
+                    finish_flow()
                     return
                 label_values.append(label)
         port = str(values.get("port") or "").strip()
@@ -1241,6 +1336,7 @@ class TrayMenuBuilder:
                     "Host port is supported for container sandboxes only.",
                     **self._screen_bounds_kwargs(screen_bounds),
                 )
+                finish_flow()
                 return
             try:
                 if not 1 <= int(port) <= 65535:
@@ -1251,16 +1347,34 @@ class TrayMenuBuilder:
                     "Host port must be an integer between 1 and 65535.",
                     **self._screen_bounds_kwargs(screen_bounds),
                 )
+                finish_flow()
                 return
             port_value = int(port)
 
+        preparation = None
         if runtime == "openshell" and repo:
-            if not self._confirm_sandbox_upload(
-                values,
-                repo,
+            preparation = self._show_sandbox_progress(
+                f"Preparing sandbox '{name}'",
+                "Operation: create\nRuntime: openshell\n"
+                "Preparing repository upload; preflight stages appear below.",
                 screen_bounds=screen_bounds,
-            ):
-                self._reopen_sandbox_create_form(values, screen_bounds)
+            )
+            try:
+                confirmed = self._confirm_sandbox_upload(
+                    values,
+                    repo,
+                    screen_bounds=screen_bounds,
+                    progress=preparation,
+                )
+            except Exception:
+                self._sandbox_progress_close(preparation)
+                raise
+            if not confirmed:
+                self._sandbox_progress_close(preparation)
+                reopen_kwargs = (
+                    {"on_finished": on_finished} if on_finished is not None else {}
+                )
+                self._reopen_sandbox_create_form(values, screen_bounds, **reopen_kwargs)
                 return
 
         self._run_sandbox_create(
@@ -1290,6 +1404,7 @@ class TrayMenuBuilder:
             ),
             **self._screen_bounds_kwargs(screen_bounds),
         )
+        finish_flow()
 
     def _run_sandbox_create(self, args, *, screen_bounds=None):
         """Create a sandbox in-process and stream output to an isolated dialog."""
@@ -1788,6 +1903,7 @@ class TrayMenuBuilder:
             pystray.MenuItem(
                 "Create sandbox...",
                 self._mk_sandbox_create_action(),
+                enabled=lambda _item: not self._sandbox_create_is_in_progress(),
             )
         ]
 

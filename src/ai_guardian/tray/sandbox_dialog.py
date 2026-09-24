@@ -16,6 +16,8 @@ from typing import Any, Dict, Iterable, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 ScreenBounds = Tuple[int, int, int, int]
+_PROGRESS_READY = "__AI_GUARDIAN_SANDBOX_PROGRESS_READY__"
+_PROGRESS_READY_TIMEOUT = 5.0
 
 
 class SandboxProgress:
@@ -26,6 +28,35 @@ class SandboxProgress:
         self._lock = threading.Lock()
         self._closed = False
         self._failed = False
+        self._ready = threading.Event()
+        self._ready_success = False
+        stream = getattr(process, "stdout", None)
+        if stream is None:
+            self._ready_success = True
+            self._ready.set()
+        else:
+            threading.Thread(
+                target=self._read_ready_signal,
+                args=(stream,),
+                daemon=True,
+                name="sandbox-progress-ready",
+            ).start()
+
+    def _read_ready_signal(self, stream) -> None:
+        """Wait for the child Tk process to finish initializing its window."""
+        try:
+            for line in stream:
+                if str(line).strip() == _PROGRESS_READY:
+                    self._ready_success = True
+                    break
+        except (OSError, ValueError, TypeError):
+            logger.debug("Unable to read sandbox progress readiness", exc_info=True)
+        finally:
+            self._ready.set()
+
+    def wait_ready(self, timeout: float = _PROGRESS_READY_TIMEOUT) -> bool:
+        """Wait for the isolated progress window to become usable."""
+        return self._ready.wait(timeout) and self._ready_success
 
     def _send(self, payload: Dict[str, Any]) -> bool:
         with self._lock:
@@ -49,8 +80,13 @@ class SandboxProgress:
         if text:
             self._send({"type": "output", "text": str(text)})
 
-    def finish(self, success: bool, message: str, log_text: str) -> bool:
-        """Tell the dialog whether to close or remain open for inspection."""
+    def update_status(self, message: str) -> None:
+        """Update the visible state without adding a runtime log line."""
+        if message:
+            self._send({"type": "status", "message": str(message)})
+
+    def _send_terminal(self, payload: Dict[str, Any]) -> bool:
+        """Send a terminal dialog update and release the child stdin."""
         with self._lock:
             if self._closed or self._failed:
                 return False
@@ -59,18 +95,7 @@ class SandboxProgress:
                 self._failed = True
                 return False
             try:
-                stream.write(
-                    json.dumps(
-                        {
-                            "type": "complete",
-                            "success": bool(success),
-                            "message": str(message),
-                            "log": str(log_text or ""),
-                        },
-                        ensure_ascii=False,
-                    )
-                    + "\n"
-                )
+                stream.write(json.dumps(payload, ensure_ascii=False) + "\n")
                 stream.flush()
                 stream.close()
             except (BrokenPipeError, OSError, ValueError) as exc:
@@ -85,6 +110,21 @@ class SandboxProgress:
             name="sandbox-progress-reaper",
         ).start()
         return True
+
+    def close(self) -> bool:
+        """Close the dialog without presenting a completed operation."""
+        return self._send_terminal({"type": "close"})
+
+    def finish(self, success: bool, message: str, log_text: str) -> bool:
+        """Tell the dialog whether to close or remain open for inspection."""
+        return self._send_terminal(
+            {
+                "type": "complete",
+                "success": bool(success),
+                "message": str(message),
+                "log": str(log_text or ""),
+            }
+        )
 
     def _wait_for_process(self) -> None:
         try:
@@ -1010,6 +1050,11 @@ def _show_tkinter_progress(
                 update_type = update.get("type")
                 if update_type == "output":
                     append_log(str(update.get("text") or ""))
+                elif update_type == "status":
+                    status.set(str(update.get("message") or "Running..."))
+                elif update_type == "close":
+                    completed = True
+                    root.after(0, close)
                 elif update_type == "complete":
                     completed = True
                     final_log = update.get("log")
@@ -1049,6 +1094,8 @@ def _show_tkinter_progress(
         # Some desktop environments reject modal/topmost hints. The progress
         # window remains usable as an ordinary window in that case.
         pass
+    root.update_idletasks()
+    print(_PROGRESS_READY, flush=True)
     root.mainloop()
 
 
@@ -1366,7 +1413,7 @@ def _show_tkinter_progress_subprocess(
         process = subprocess.Popen(
             [sys.executable, "-c", child, payload],
             stdin=subprocess.PIPE,
-            stdout=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             text=True,
             bufsize=1,
@@ -1374,7 +1421,14 @@ def _show_tkinter_progress_subprocess(
     except OSError as exc:
         logger.warning("Sandbox progress dialog could not be shown: %s", exc)
         return None
-    return SandboxProgress(process)
+    progress = SandboxProgress(process)
+    if not progress.wait_ready():
+        progress.close()
+        terminate = getattr(process, "terminate", None)
+        if callable(terminate):
+            terminate()
+        return None
+    return progress
 
 
 def show_sandbox_progress(
