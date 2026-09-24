@@ -118,6 +118,10 @@ def choose_directory(
     """
     system = platform.system()
     try:
+        from ai_guardian.tui.display import get_preferred_ui
+
+        if get_preferred_ui() == "headless":
+            return None
         if system == "Darwin":
             return _choose_directory_macos(current, title, screen_bounds=screen_bounds)
         elif system == "Linux":
@@ -135,7 +139,13 @@ def _choose_directory_macos(
     *,
     screen_bounds=None,
 ) -> Optional[str]:
-    if screen_bounds is not None:
+    from ai_guardian.tui.display import _tkinter_available, get_preferred_ui
+
+    if (
+        screen_bounds is not None
+        and get_preferred_ui() in {"auto", "tkinter"}
+        and _tkinter_available()
+    ):
         launched, chosen = _choose_directory_tkinter_subprocess(
             current,
             title,

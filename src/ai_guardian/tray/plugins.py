@@ -1025,17 +1025,23 @@ def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     try:
         if system == "Darwin":
             if screen_bounds is not None:
-                from ai_guardian.tray.dialog_placement import (
-                    show_tkinter_message_subprocess,
+                from ai_guardian.tui.display import (
+                    _tkinter_available,
+                    get_preferred_ui,
                 )
 
-                shown = show_tkinter_message_subprocess(
-                    title,
-                    message,
-                    screen_bounds=screen_bounds,
-                )
-                if shown is not None:
-                    return shown
+                if get_preferred_ui() in {"auto", "tkinter"} and _tkinter_available():
+                    from ai_guardian.tray.dialog_placement import (
+                        show_tkinter_message_subprocess,
+                    )
+
+                    shown = show_tkinter_message_subprocess(
+                        title,
+                        message,
+                        screen_bounds=screen_bounds,
+                    )
+                    if shown is not None:
+                        return shown
             from ai_guardian.daemon.multi_client import _escape_for_applescript
 
             msg = (

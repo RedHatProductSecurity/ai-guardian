@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   OpenShell repository preflight, wait for the isolated progress window before
   starting runtime work, and ignore duplicate tray create actions.
 
+- **Optional Tkinter tray dialogs (#2410)**: Apply one provider-selection policy
+  to sandbox forms, confirmations, progress, and output so macOS can use native
+  dialogs or NiceGUI/Textual fallbacks when Tkinter is unavailable or disabled.
+
 - **Doctor hook inventory (#2400)**: Report every supported IDE/CLI integration
   in canonical order with explicit `Not installed` statuses, structured JSON/REST
   records, and separate CLI, TUI, and web health-check rows.

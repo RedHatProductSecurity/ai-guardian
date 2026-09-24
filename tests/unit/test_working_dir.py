@@ -206,6 +206,38 @@ class TestChooseDirectory:
 
     @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
     @mock.patch("ai_guardian.daemon.working_dir.subprocess.run")
+    def test_macos_tray_picker_skips_tk_when_disabled(self, mock_run, _mock_sys):
+        bounds = (1920, 37, 2560, 1380)
+        mock_run.return_value = mock.Mock(returncode=0, stdout="/Users/dev/project\n")
+        with (
+            mock.patch("ai_guardian.tui.display.get_preferred_ui", return_value="auto"),
+            mock.patch(
+                "ai_guardian.tui.display._tkinter_available", return_value=False
+            ),
+            mock.patch(
+                "ai_guardian.daemon.working_dir._choose_directory_tkinter_subprocess"
+            ) as picker,
+        ):
+            result = choose_directory("/Users/dev", screen_bounds=bounds)
+
+        assert result == "/Users/dev/project"
+        picker.assert_not_called()
+        assert mock_run.call_args.args[0][0] == "osascript"
+
+    @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
+    def test_headless_preference_skips_directory_picker(self, _mock_sys):
+        with (
+            mock.patch(
+                "ai_guardian.tui.display.get_preferred_ui", return_value="headless"
+            ),
+            mock.patch("ai_guardian.daemon.working_dir.subprocess.run") as mock_run,
+        ):
+            assert choose_directory() is None
+
+        mock_run.assert_not_called()
+
+    @mock.patch("ai_guardian.daemon.working_dir.platform.system", return_value="Darwin")
+    @mock.patch("ai_guardian.daemon.working_dir.subprocess.run")
     def test_macos_returns_path(self, mock_run, _mock_sys):
         mock_run.return_value = mock.Mock(returncode=0, stdout="/Users/dev/project\n")
         result = choose_directory("/Users/dev")

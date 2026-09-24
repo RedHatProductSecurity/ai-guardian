@@ -320,6 +320,19 @@ remote registry availability is not probed. Cancelling preflight returns to the
 populated creation form. Container
 repositories are mounted directly and do not show this upload confirmation.
 
+Tray sandbox dialogs use the shared display-provider policy. In `auto` mode on
+macOS, simple confirmations use the native Cocoa/AppleScript dialog when no
+display placement is required; a placed tray dialog uses isolated Tkinter when
+available and then the native fallback. The complex create form uses Tkinter,
+NiceGUI, or Textual in that order, and Textual opens in a terminal when the
+tray process has no TTY. Tkinter is optional: `AI_GUARDIAN_NO_TKINTER=1` and
+`console.preferred_ui` are respected by sandbox forms, upload confirmations,
+delete confirmations, progress, and captured output. `preferred_ui=headless`
+leaves the form/confirmation cancelled and lets operations use the captured
+output fallback rather than attempting to create a hidden window. The tray's
+working-directory picker also skips its display-placement Tk parent when Tk is
+disabled and uses the native picker instead.
+
 The form separates the selected **CLI** from the **OpenCode agent profile** and
 the CLI's **model provider**. When `opencode` is selected, enter `build`,
 `plan`, or a custom profile name; the OpenCode profile field is required. The
@@ -334,9 +347,9 @@ on the display containing the tray menu interaction. This includes About and
 health/setup dialogs, working-directory and Cursor Cloud directory pickers,
 plugin parameter/modal dialogs, and sandbox forms, configuration output,
 runtime logs, and delete confirmations. The tray captures that display before
-starting an isolated Tkinter dialog process (or passes it to the native Cocoa
-fallback); if display detection is unavailable, the normal window-manager
-placement remains the fallback.
+using the selected provider (normally an isolated Tkinter process, or the
+native Cocoa fallback); if display detection is unavailable, the normal
+window-manager placement remains the fallback.
 
 Manual verification on macOS with two displays:
 
