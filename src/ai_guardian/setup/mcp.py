@@ -305,7 +305,7 @@ def _dump_toml(data: Dict) -> str:
 
 
 def is_codex_mcp_configured(config_path: Optional[Path] = None) -> bool:
-    """Return whether the global Codex config contains AI Guardian's server."""
+    """Return whether Codex has an enabled AI Guardian MCP server."""
     path = config_path or get_codex_mcp_config_path()
     if not path.is_file():
         return False
@@ -317,7 +317,17 @@ def is_codex_mcp_configured(config_path: Optional[Path] = None) -> bool:
         return False
 
     mcp_servers = data.get("mcp_servers", {})
-    return isinstance(mcp_servers, dict) and "ai-guardian" in mcp_servers
+    if not isinstance(mcp_servers, dict):
+        return False
+
+    entry = mcp_servers.get("ai-guardian")
+    if not isinstance(entry, dict):
+        return False
+
+    # Codex treats an omitted ``enabled`` key as enabled.  An explicit false
+    # value means the server is present but inactive, so setup verification
+    # must not report it as healthy.
+    return entry.get("enabled", True) is not False
 
 
 def _toml_table_name(line: str) -> Optional[str]:
@@ -368,7 +378,11 @@ def _remove_codex_mcp_tables(raw: str) -> Tuple[str, bool]:
 
 def _codex_mcp_entry(binary_path: str) -> Dict:
     """Build the stdio MCP entry used by Codex."""
-    return {"command": binary_path, "args": ["mcp-server"]}
+    return {
+        "command": binary_path,
+        "args": ["mcp-server"],
+        "enabled": True,
+    }
 
 
 def _legacy_codex_mcp_path() -> Path:

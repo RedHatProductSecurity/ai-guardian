@@ -35,6 +35,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Codex MCP activation (#2408)**: Write an explicit `enabled = true` flag
+  during setup, re-enable stale disabled registrations, and report disabled
+  Codex MCP entries as inactive during health checks.
+
 - **Sandbox creation feedback (#2409)**: Show preparation progress during
   OpenShell repository preflight, wait for the isolated progress window before
   starting runtime work, and ignore duplicate tray create actions.

@@ -1869,8 +1869,69 @@ class TestCodexSetup:
         assert installed["mcp_servers"]["ai-guardian"] == {
             "command": "/usr/local/bin/ai-guardian",
             "args": ["mcp-server"],
+            "enabled": True,
         }
         assert project_config.read_text(encoding="utf-8") == project_before
+
+    def test_codex_mcp_install_reenables_existing_disabled_entry(
+        self, monkeypatch, tmp_path
+    ):
+        """Re-running setup explicitly enables a previously disabled server."""
+        from ai_guardian.setup.mcp import _install_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        global_config = codex_home / "config.toml"
+        global_config.write_text(
+            'model = "user-model"\n\n'
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/old/ai-guardian"\n'
+            'args = ["mcp-server"]\n'
+            "enabled = false\n\n"
+            "[mcp_servers.other]\n"
+            'command = "other"\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        with mock.patch(
+            "ai_guardian.setup.mcp._resolve_binary_path",
+            return_value="/usr/local/bin/ai-guardian",
+        ):
+            _install_mcp_config(IDESetup(), "codex")
+
+        installed = tomllib.loads(global_config.read_text(encoding="utf-8"))
+        assert installed["mcp_servers"]["ai-guardian"]["enabled"] is True
+        assert installed["mcp_servers"]["other"]["command"] == "other"
+
+    def test_codex_mcp_verification_rejects_disabled_entry(self, tmp_path):
+        """Codex health reports an explicitly disabled server as inactive."""
+        from ai_guardian.setup.mcp import is_codex_mcp_configured
+
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n'
+            "enabled = false\n",
+            encoding="utf-8",
+        )
+
+        assert is_codex_mcp_configured(config_path) is False
+
+    def test_codex_mcp_verification_accepts_omitted_enabled(self, tmp_path):
+        """Codex health preserves the default-enabled behavior when omitted."""
+        from ai_guardian.setup.mcp import is_codex_mcp_configured
+
+        config_path = tmp_path / "config.toml"
+        config_path.write_text(
+            "[mcp_servers.ai-guardian]\n"
+            'command = "/usr/local/bin/ai-guardian"\n'
+            'args = ["mcp-server"]\n',
+            encoding="utf-8",
+        )
+
+        assert is_codex_mcp_configured(config_path) is True
 
     def test_codex_mcp_remove_preserves_unrelated_toml(self, monkeypatch, tmp_path):
         """MCP removal deletes only AI Guardian from the global Codex table."""
@@ -3583,6 +3644,37 @@ class TestSetupJsonOutput:
         assert "ai-guardian" in result["mcp_servers"]
         assert _is_ai_guardian_command(result["mcp_servers"]["ai-guardian"]["command"])
         assert result["mcp_servers"]["ai-guardian"]["args"] == ["mcp-server"]
+
+    def test_json_output_codex_mcp_is_enabled(self, monkeypatch, tmp_path, capsys):
+        """Codex JSON setup reports an explicitly enabled MCP server."""
+        codex_home = tmp_path / "codex"
+        ide_config_file = codex_home / "hooks.json"
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        with mock.patch("ai_guardian.setup.IDESetup") as MockSetup:
+            mock_instance = MockSetup.return_value
+            mock_instance.IDE_CONFIGS = {
+                "codex": {"name": "Codex", "config_path": str(ide_config_file)}
+            }
+            mock_instance.get_config_path.return_value = str(ide_config_file)
+            mock_instance.setup_ide_hooks.return_value = (True, "Success")
+            mock_instance._last_merged_config = {"hooks": {}}
+
+            with (
+                mock.patch("ai_guardian.setup._handle_mcp_setup"),
+                mock.patch(
+                    "ai_guardian.setup._resolve_binary_path",
+                    return_value="/usr/local/bin/ai-guardian",
+                ),
+            ):
+                setup_hooks(
+                    ide_type="codex",
+                    json_output=True,
+                    interactive=False,
+                )
+
+        result = json.loads(capsys.readouterr().out)
+        assert result["mcp_servers"]["ai-guardian"]["enabled"] is True
 
     def test_json_output_cursor_project_reports_external_mcp(self, tmp_path, capsys):
         """Cursor Cloud JSON setup reports external MCP registration."""
