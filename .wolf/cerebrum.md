@@ -12,6 +12,8 @@
 
 ## Key Learnings
 
+- **IDE detection must separate installation evidence from protection status:** Project metadata such as OpenWolf's `.cursor/rules/` is not proof of an IDE installation. Require an IDE-owned config file or artifact for discovery, then use structured hook/MCP verification to determine whether AI Guardian is configured.
+
 - **Never call `format_response(ide_type, ...)` wrapper from hook_processing.py:** The wrapper in `response_format.py` re-creates an adapter via `get_adapter_by_ide_type(ide_type)`, which maps `IDEType` enum → adapter class. Adapters that inherit from `BaseAgentAdapter` (Windsurf, Augment, Codex, OpenCode) share `IDEType.CLAUDE_CODE`, so the wrapper always returns `BaseAgentAdapter` — the subclass's `format_response()` is never called. Use `_format_response(adapter, ...)` instead, which calls the already-detected adapter directly.
 
 - **NiceGUI `ui.timer` callbacks lose client context for dialog creation:** `ui.timer(0.1, lambda: create_dialog(), once=True)` creates UI elements that aren't attached to the right client page — dialog renders but is invisible. Call dialog creation functions directly from event handlers (sync or async) where NiceGUI's client context is preserved. Also: programmatically setting `select.value` triggers `on_value_change`, so guard against re-entrant handler calls causing unintended side effects (e.g., page reload).

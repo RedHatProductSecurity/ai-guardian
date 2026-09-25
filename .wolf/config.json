@@ -27,14 +27,15 @@
         ".output",
         "*.min.js",
         "*.min.css"
-      ]
+      ],
+      "respect_gitignore": true
     },
     "token_audit": {
       "enabled": true,
       "report_frequency": "weekly",
       "waste_threshold_percent": 15,
       "chars_per_token_code": 3.5,
-      "chars_per_token_prose": 4.0
+      "chars_per_token_prose": 4
     },
     "cron": {
       "enabled": true,
@@ -58,16 +59,71 @@
     },
     "dashboard": {
       "enabled": true,
-      "port": 18791
+      "port": 18791,
+      "host": "127.0.0.1"
     },
     "designqc": {
       "enabled": true,
       "viewports": [
-        { "name": "desktop", "width": 1440, "height": 900 },
-        { "name": "mobile", "width": 375, "height": 812 }
+        {
+          "name": "desktop",
+          "width": 1440,
+          "height": 900
+        },
+        {
+          "name": "mobile",
+          "width": 375,
+          "height": 812
+        }
       ],
       "max_screenshots": 6,
       "chrome_path": null
-    }
+    },
+    "reads": {
+      "duplicate_mode": "warn",
+      "skeleton_hints": true
+    },
+    "bash": {
+      "filter_mode": "suggest",
+      "governor": {
+        "mode": "replace",
+        "threshold_tokens": 2000,
+        "families": {
+          "grep_flood": "replace",
+          "file_print": "replace",
+          "git_show": "replace",
+          "test": "suggest",
+          "build": "suggest",
+          "unknown": "suggest"
+        }
+      }
+    },
+    "context": {
+      "session_digest_budget_tokens": 1500,
+      "reinjection_interval": 25,
+      "state_budgets": {
+        ".wolf/cerebrum.md": 2000,
+        ".wolf/STATUS.md": 1000
+      },
+      "budgets": {
+        "claude": 1500,
+        "codex": 1200,
+        "gemini": 1200,
+        "opencode": 1200,
+        "cursor": 800
+      }
+    },
+    "visibility": {
+      "mode": "quiet"
+    },
+    "updates": {
+      "mode": "compatible"
+    },
+    "agents": [
+      "claude",
+      "codex",
+      "opencode",
+      "cursor"
+    ]
   }
 }

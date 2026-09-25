@@ -1,0 +1,139 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/session-start.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf session bootstrap"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/pre-bash.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf shell precheck"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/pre-read.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf read precheck"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/pre-write.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf write precheck"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/post-bash.js\"",
+            "timeout": 10,
+            "statusMessage": "OpenWolf shell tracking"
+          }
+        ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/post-read.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf read tracking"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit|apply_patch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/post-write.js\"",
+            "timeout": 10,
+            "statusMessage": "OpenWolf anatomy update"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/precompact.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf compaction snapshot"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/session-end.js\"",
+            "timeout": 3,
+            "statusMessage": "OpenWolf final flush"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/user-prompt-submit.js\"",
+            "timeout": 5,
+            "statusMessage": "OpenWolf context refresh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"/home/itdove/development/ai/ai-guardian/.wolf/hooks/stop.js\"",
+            "timeout": 10,
+            "statusMessage": "OpenWolf session wrap-up"
+          }
+        ]
+      }
+    ]
+  }
+}
