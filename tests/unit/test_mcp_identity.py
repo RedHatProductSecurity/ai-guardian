@@ -65,13 +65,10 @@ def test_nonce_cannot_be_replayed(monkeypatch):
     monkeypatch.setattr(identity, "_load_verified_manifest", lambda: manifest)
     monkeypatch.setattr(identity, "_current_identity", lambda: observed)
     monkeypatch.setattr(identity, "_process_executable", lambda pid: None)
-    try:
-        with patch.object(identity, "_write_json") as write_json:
-            assert identity.complete_identity_handshake(challenge, response) is True
-            assert identity.complete_identity_handshake(challenge, response) is False
-        write_json.assert_called_once()
-    finally:
-        identity.revoke_active_attestation()
+    with patch.object(identity, "_write_json") as write_json:
+        assert identity.complete_identity_handshake(challenge, response) is True
+        assert identity.complete_identity_handshake(challenge, response) is False
+    write_json.assert_called_once()
 
 
 def test_tampered_manifest_is_rejected(tmp_path, monkeypatch):
