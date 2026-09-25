@@ -54,7 +54,7 @@ def test_nonce_cannot_be_replayed(monkeypatch):
     observed = {
         "package_version": "1.0.0",
         "package_sha256": "package-digest",
-        "runtime_executable": str(identity.Path(identity.sys.executable).resolve()),
+        "runtime_executable": "runtime-executable",
         "runtime_executable_sha256": "runtime-digest",
         "entrypoint_sha256": None,
     }
