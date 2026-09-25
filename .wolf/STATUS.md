@@ -23,33 +23,32 @@ budget_tokens: 1000
 - Installed IDE detection is separate from AI Guardian protection verification; unprotected configs remain discoverable for setup.
 - Follow-up commit `d282bb87` is pushed to branch `2416` / PR `#2421`.
 - Full local suite: 12,422 passed, 4 skipped; Mypy, Pylint, Ruff, and Black passed.
+- Windows CI interruption diagnosed: MCP identity liveness used `os.kill(pid, 0)` after `test_genuine_process_passes_nonce_attestation`; all three Windows jobs stalled at the same point.
+- Reused `ai_guardian.daemon.is_pid_alive()` for Windows-safe `OpenProcess` checking and added regression coverage. Affected tests and all required linters pass.
 
 ---
 
 ## 🚀 Next phase
 
-**Goal:** Resolve the remaining CI matrix failures for PR `#2421`.
+**Goal:** Verify PR `#2421` CI after pushing the Windows-safe MCP identity fix.
 
 ### Acceptance criteria
-1. CI test matrices complete successfully or have a documented external failure.
+1. Windows Python 3.10, 3.13, and 3.14 CI jobs complete successfully or have a documented external failure.
 2. Test runs do not open desktop, browser, or Textual windows.
 3. MCP setup, diagnostics, and IDE detection remain regression-free.
 
 ### Files to create / edit
 | Type | File | Content |
 |---|---|---|
-| changed | `tests/conftest.py` | Default test-only headless UI environment |
-| changed | `src/ai_guardian/tray/plugins.py` | Skip native dialogs in headless mode |
-| changed | `src/ai_guardian/setup/hooks.py` | File/artifact-based IDE detection and Cursor layer evidence |
-| changed | `tests/unit/test_setup.py` | OpenWolf metadata and installed/protected detection contracts |
-| changed | `tests/ux/test_user_experience_contract_ide_setup.py` | No false setup popup for project metadata directories |
+| changed | `src/ai_guardian/mcp/identity.py` | Use the cross-platform process liveness helper |
+| changed | `tests/unit/test_mcp_identity.py` | Regression coverage for the Windows-safe process check |
 
 ### Closed decisions
 - Use headless mode for tests rather than auto-closing windows; this prevents blocking and works without a display.
 - Keep provider-specific tests explicit and mocked so they still verify backend command construction.
 
 ### Open decisions
-- Decide whether registry entries for Windsurf/Gemini should remain explicitly MCP-unsupported.
+- None for the Windows identity fix; verify remote CI before merging.
 
 ---
 
@@ -63,7 +62,7 @@ budget_tokens: 1000
 
 ## ⚠️ External blockers (don't block coding)
 
-- CI run `36134638189` and compatibility run `36134638254` have matrix test failures with only `Process completed with exit code 1` annotations. Local full suite is green; raw logs contain protected Unicode/escape content and were not bypassed.
+- The latest Windows jobs in run `36140124301` stalled after 5,703 passed tests; the next remote run must verify the Windows-safe identity fix.
 - Pi MCP remains intentionally unimplemented; issue `#2426` tracks a future managed TypeScript extension bridge.
 
 ---

@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from ai_guardian.config.utils import get_config_dir, get_state_dir
+from ai_guardian.daemon import is_pid_alive
 
 logger = logging.getLogger(__name__)
 
@@ -365,15 +366,7 @@ def _process_start_token(pid: int) -> Optional[str]:
 
 def _process_exists(pid: int) -> bool:
     """Return whether a process currently exists."""
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        return True
-    except OSError:
-        return False
-    return True
+    return is_pid_alive(pid)
 
 
 def begin_identity_handshake() -> Dict[str, str]:

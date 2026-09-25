@@ -1114,7 +1114,7 @@
 
 - `__init__.py` — MCP server and audit logging. (~11 tok)
 - `audit.py` — class: discover_servers, in, audit_config (~10482 tok)
-- `identity.py` — Local identity attestation for the built-in AI Guardian MCP server. (~5257 tok)
+- `identity.py` — Local identity attestation for the built-in AI Guardian MCP server. (~5224 tok)
 - `server.py` — HookCheckMiddleware: create_server, check_path, check_command, check_mcp_trust + 2 more (~10302 tok)
 
 ## src/ai_guardian/observability/

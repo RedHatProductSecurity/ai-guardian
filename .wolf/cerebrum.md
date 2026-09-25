@@ -35,6 +35,7 @@
 - **Display tier detection is shared in `tui/display.py`:** `_tkinter_available()`, `_nicegui_available()`, `_textual_available()`, `_ensure_tcl_library()`, and `is_interactive_available()` are all in `display.py`. Both `tray_prompt.py` and `ask_dialog.py` import from there. When mocking in tests, mock in the consuming module's namespace (e.g., `ai_guardian.tui.display._tkinter_available` for daemon/tray.py, but `ai_guardian.tui.tray_prompt._tkinter_available` for tray_prompt.py tests since it re-exports the name).
 
 - **Windows test patterns:** (1) `open(f, 'a')` writes `\r\n` on Windows — use `'ab'` mode with `.encode('utf-8')` for byte-accurate position tracking. (2) `patch.dict('os.environ', {}, clear=True)` removes USERPROFILE/HOMEDRIVE/HOMEPATH on Windows — preserve home-related vars with a `_minimal_env()` helper. (3) `tempfile.NamedTemporaryFile(dir="/tmp")` fails on Windows — omit `dir` to use platform default. (4) Tests relying on `/etc`, `/dev`, `HOME` env var, or XDG paths need `skipif(sys.platform == "win32")`. (5) `_read_shell_path()` checks `SHELL` env var which is unset on Windows — tests must `monkeypatch.setenv("SHELL", "/bin/bash")`.
+- **Windows process liveness:** Do not use `os.kill(pid, 0)` for MCP identity checks; reuse `ai_guardian.daemon.is_pid_alive()`, whose Windows branch uses `OpenProcess` and avoids console-interrupt behavior.
 
 ## Do-Not-Repeat
 

@@ -42,6 +42,13 @@ def test_missing_manifest_fails_closed(tmp_path, monkeypatch):
     assert identity.verify_active_attestation() is False
 
 
+def test_process_exists_uses_cross_platform_pid_check():
+    with patch("ai_guardian.mcp.identity.is_pid_alive", return_value=True) as check:
+        assert identity._process_exists(12345) is True
+
+    check.assert_called_once_with(12345)
+
+
 def test_genuine_process_passes_nonce_attestation(tmp_path, monkeypatch):
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
     monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
