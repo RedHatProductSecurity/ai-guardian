@@ -1078,11 +1078,11 @@ class Doctor:
             configured, detail = setup.check_hooks_for_ide(ide_type)
             mcp_verification = None
             mcp_status = None
-            integration = get_ide_integration(ide_type)
+            mcp_integration = get_ide_integration(ide_type)
             if (
                 ide_type not in ("codex", "cursor")
-                and integration is not None
-                and integration.supports_mcp
+                and mcp_integration is not None
+                and mcp_integration.supports_mcp
             ):
                 from ai_guardian.setup.mcp import verify_mcp_config
 
