@@ -252,6 +252,45 @@ def register_mcp_identity(command: str) -> bool:
         return False
 
 
+def _runtime_command() -> str:
+    """Return the current launch command for automatic identity migration."""
+    return shlex.join(sys.argv) if sys.argv else ENTRY_POINT
+
+
+def ensure_mcp_identity() -> bool:
+    """Create or migrate the identity record before starting the MCP server.
+
+    A missing record is expected for existing, manually configured, and ``uvx``
+    registrations.  An authenticated record may be refreshed when the package
+    or runtime changes during an upgrade.  Existing tampering remains fail
+    closed instead of being silently replaced.
+    """
+    manifest_path = get_identity_manifest_path()
+    key_path = get_identity_key_path()
+    try:
+        manifest_exists = manifest_path.exists()
+        key_exists = key_path.exists()
+    except OSError:
+        return False
+
+    if not manifest_exists:
+        if key_exists:
+            logger.error("AI Guardian MCP identity key exists without its manifest")
+            return False
+        logger.info("Registering AI Guardian MCP identity for an existing MCP setup")
+        return register_mcp_identity(_runtime_command())
+
+    manifest = _load_verified_manifest()
+    if manifest is None:
+        logger.error("AI Guardian MCP identity manifest failed authentication")
+        return False
+    if _identity_matches(manifest, _current_identity()):
+        return True
+
+    logger.info("Migrating AI Guardian MCP identity after an installation change")
+    return register_mcp_identity(_runtime_command())
+
+
 def _load_verified_manifest() -> Optional[Dict[str, Any]]:
     """Load and authenticate the setup-time identity manifest."""
     try:

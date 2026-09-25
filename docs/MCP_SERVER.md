@@ -38,6 +38,10 @@ remains user/desktop-scoped.
 
 ### Manual setup
 
+Existing manual registrations are migrated automatically the first time the
+server starts after this security feature is installed. Package upgrades also
+refresh a valid identity record, so setup does not need to be rerun.
+
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
 
 ```json
@@ -173,12 +177,14 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
   otherwise unverified MCP registration is blocked before permission rules are
   evaluated.
 - Setup records the canonical AI Guardian package, executable, entry point, and
-  installation hash in a signed local identity record.
+  installation hash in a signed local identity record. Existing, manual, and
+  `uvx` registrations create or migrate that record automatically at startup.
 - Each AI Guardian MCP process performs a nonce-based attestation and receives a
   short-lived process-bound session. Hook policy checks require a live verified
   session before allowing built-in MCP tools.
-- Missing, tampered, expired, or mismatched identity data fails closed with an
-  MCP identity verification error. Permission rules cannot override this gate.
+- Tampered, invalid, expired, or orphaned identity data fails closed with an
+  MCP identity verification error. Missing records and valid stale records are
+  migrated automatically; permission rules cannot override this gate.
 - All other MCP servers require explicit allow rules in the permissions config
 - The MCP server process runs separately from the daemon — if the daemon is unavailable, MCP tools still work
 

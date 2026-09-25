@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Verified MCP server identity attestation (#2416)**: Register the canonical
   AI Guardian executable and package identity during setup, require a
   nonce-based process attestation before auto-allowing built-in MCP tools, and
-  fail closed for spoofed, tampered, expired, or missing identity records.
+  automatically migrate missing or stale records for existing, manual, and
+  `uvx` registrations while failing closed for spoofed or tampered records.
 
 - **Unified policy decision and audit schema (#2307)**: Add a versioned,
   content-safe decision record shared by hook, MCP, SDK, daemon REST, scanner,

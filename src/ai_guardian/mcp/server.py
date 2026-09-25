@@ -892,9 +892,13 @@ def run_mcp_server() -> int:
         )
         return 1
 
-    from ai_guardian.mcp.identity import attest_mcp_server, revoke_active_attestation
+    from ai_guardian.mcp.identity import (
+        attest_mcp_server,
+        ensure_mcp_identity,
+        revoke_active_attestation,
+    )
 
-    if not attest_mcp_server():
+    if not ensure_mcp_identity() or not attest_mcp_server():
         print(
             "Error: AI Guardian MCP server identity verification failed.",
             file=sys.stderr,

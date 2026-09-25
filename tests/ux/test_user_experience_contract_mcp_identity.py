@@ -85,10 +85,11 @@ class TestMCPIdentityUX:
         assert "identity" in message.lower()
 
     @patch("ai_guardian.mcp.server.HAS_MCP", True)
+    @patch("ai_guardian.mcp.identity.ensure_mcp_identity", return_value=True)
     @patch("ai_guardian.mcp.identity.attest_mcp_server", return_value=False)
     @patch("ai_guardian.mcp.server.create_server")
     def test_unverified_server_refuses_startup(
-        self, mock_create_server, mock_attest, capsys
+        self, mock_create_server, mock_attest, mock_ensure, capsys
     ):
         """
         USER EXPERIENCE: Unverified AI Guardian MCP process -> startup fails closed.
@@ -98,9 +99,30 @@ class TestMCPIdentityUX:
         from ai_guardian.mcp.server import run_mcp_server
 
         assert run_mcp_server() == 1
+        mock_ensure.assert_called_once_with()
         mock_attest.assert_called_once_with()
         mock_create_server.assert_not_called()
         assert (
             "Error: AI Guardian MCP server identity verification failed."
             in capsys.readouterr().err
         )
+
+    @patch("ai_guardian.mcp.server.HAS_MCP", True)
+    @patch("ai_guardian.mcp.server.create_server")
+    def test_existing_mcp_registration_migrates_identity_before_startup(
+        self, mock_create_server
+    ):
+        """
+        USER EXPERIENCE: Existing MCP registration -> automatic identity migration.
+
+        All supported clients launch the same server entry point, so a manual,
+        upgraded, or ``uvx`` registration must recover without client-specific
+        setup steps.
+        """
+        from ai_guardian.mcp.identity import get_identity_manifest_path
+        from ai_guardian.mcp.server import run_mcp_server
+
+        assert not get_identity_manifest_path().exists()
+        assert run_mcp_server() == 0
+        assert get_identity_manifest_path().is_file()
+        mock_create_server.return_value.run.assert_called_once_with(transport="stdio")

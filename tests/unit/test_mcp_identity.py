@@ -46,6 +46,52 @@ def test_genuine_process_passes_nonce_attestation(tmp_path, monkeypatch):
         identity.revoke_active_attestation()
 
 
+def test_missing_identity_is_migrated_on_startup(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+
+    assert identity.ensure_mcp_identity() is True
+    assert identity._load_verified_manifest() is not None
+
+    try:
+        assert identity.attest_mcp_server() is True
+    finally:
+        identity.revoke_active_attestation()
+
+
+def test_stale_identity_is_migrated_after_upgrade(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+    assert identity.register_mcp_identity(_module_command()) is True
+
+    assert identity._load_verified_manifest() is not None
+    stale_identity = {
+        **identity._current_identity(),
+        "package_sha256": "stale-package-digest",
+    }
+    monkeypatch.setattr(identity, "_current_identity", lambda: stale_identity)
+    with patch.object(identity, "register_mcp_identity", return_value=True) as migrate:
+        assert identity.ensure_mcp_identity() is True
+
+    migrate.assert_called_once()
+
+
+def test_tampered_identity_is_not_migrated(tmp_path, monkeypatch):
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
+    assert identity.register_mcp_identity(_module_command()) is True
+
+    manifest_path = identity.get_identity_manifest_path()
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["signature"] = "tampered"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    with patch.object(identity, "register_mcp_identity") as migrate:
+        assert identity.ensure_mcp_identity() is False
+
+    migrate.assert_not_called()
+
+
 @pytest.mark.timeout(0)
 def test_nonce_cannot_be_replayed(monkeypatch):
     challenge = identity.begin_identity_handshake()
