@@ -1289,7 +1289,7 @@
 - `dialog_placement.py` — Shared display-aware placement helpers for tray-created dialogs. (~1078 tok)
 - `health.py` — Declares TrayHealthMonitor (~15678 tok)
 - `icons.py` — URL configuration (~1302 tok)
-- `menu_builder.py` — TrayMenuBuilder: action, pause_dir_fn, resume_dir_fn, action + 1 more (~35844 tok)
+- `menu_builder.py` — URL configuration (~35978 tok)
 - `menu.py` — about_label, build_about_text, daemon_status_label, launch_console (~2945 tok)
 - `notifications.py` — show_notification, send_config_error_notification, parse_version_tuple, send_version_mismatch_notification + 1 more (~1019 tok)
 - `plugin_runner.py` — Declares TrayPluginMenuBuilder (~8891 tok)

@@ -1233,6 +1233,19 @@ class TrayMenuBuilder:
             )
             finish_flow()
             return
+        if restore:
+            from ai_guardian.sandbox import _load_snapshot_config
+
+            try:
+                _load_snapshot_config(name, "latest", runtime=runtime)
+            except ValueError as exc:
+                self._sandbox_error(
+                    "Create AI Guardian sandbox",
+                    str(exc),
+                    **self._screen_bounds_kwargs(screen_bounds),
+                )
+                finish_flow()
+                return
 
         opencode_agent = str(values.get("agent") or "").strip() or None
         agent_provider = str(values.get("agent_provider") or "").strip() or None

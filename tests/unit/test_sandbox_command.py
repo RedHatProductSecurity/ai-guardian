@@ -938,6 +938,62 @@ def test_restore_config_requires_name(capsys):
     assert "--name is required with --restore-config" in capsys.readouterr().err
 
 
+def test_restore_config_missing_snapshot_is_rejected_before_runtime(tmp_path, capsys):
+    args = _args(
+        sandbox_command="create",
+        runtime="container",
+        name="new-sandbox",
+        restore_config="latest",
+        config_dir=None,
+        image="example/ai-guardian:test",
+    )
+
+    with (
+        patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_STATE_DIR": str(tmp_path / "state")},
+            clear=False,
+        ),
+        patch("ai_guardian.sandbox.subprocess.run") as run,
+    ):
+        assert handle_sandbox_command(args) == 2
+
+    run.assert_not_called()
+    assert "no configuration snapshot found" in capsys.readouterr().err
+
+
+def test_first_time_container_create_uses_generated_config_without_snapshot(
+    tmp_path,
+):
+    args = _args(
+        sandbox_command="create",
+        runtime="container",
+        name="new-sandbox",
+        restore_config=None,
+        config_dir=str(tmp_path / "missing-config"),
+        fresh_config=True,
+        image="example/ai-guardian:test",
+        command_args=[],
+    )
+
+    with (
+        patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_STATE_DIR": str(tmp_path / "state")},
+            clear=False,
+        ),
+        patch(
+            "ai_guardian.sandbox.subprocess.run",
+            return_value=subprocess.CompletedProcess([], 0),
+        ) as run,
+    ):
+        assert handle_sandbox_command(args) == 0
+
+    command = run.call_args.args[0]
+    assert "AI_GUARDIAN_HOST_CONFIG_MOUNTED=false" in command
+    assert "AI_GUARDIAN_RESTORE_CONFIG=true" not in command
+
+
 def test_restore_config_cannot_be_combined_with_profile(capsys):
     args = _args(
         sandbox_command="create",
