@@ -177,7 +177,7 @@ except ImportError:
     HAS_GITLEAKS_CONFIG = False
 
 try:
-    from ai_guardian.tools.policy import ToolPolicyChecker
+    from ai_guardian.tools.policy import ToolPolicyChecker, is_ai_guardian_mcp_tool
 
     HAS_TOOL_POLICY = True
 except ImportError:
@@ -2124,11 +2124,17 @@ def _process_hook_data(hook_data, daemon_state=None):
                     warning_messages.append(config_error)
 
                 # Check if permissions enforcement is enabled (supports time-based disabling)
-                if is_feature_enabled(
+                permissions_enabled = is_feature_enabled(
                     permissions_config.get("enabled") if permissions_config else None,
                     now,
                     default=True,
-                ):
+                )
+                # Identity verification remains mandatory even when the user
+                # disables ordinary permission rules.
+                identity_required = bool(
+                    tool_name and is_ai_guardian_mcp_tool(tool_name)
+                )
+                if permissions_enabled or identity_required:
                     policy_checker = ToolPolicyChecker()
                     with _latency_timer.check("permissions"):
                         is_allowed, error_message, checked_tool_name = (

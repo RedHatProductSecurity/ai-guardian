@@ -129,7 +129,8 @@ class LastMatchWinsLayeredPolicyTests(TestCase):
         assert warn_msg is not None, "Should produce a warning message"
         assert "warn" in warn_msg.lower() or "⚠️" in warn_msg
 
-    def test_known_mcp_server_allowed_no_warning(self):
+    @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
+    def test_known_mcp_server_allowed_no_warning(self, mock_verify):
         """Known MCP server (ai-guardian) should be allowed without warning."""
         config = self._standard_profile_config()
         policy = ToolPolicyChecker(config=config)
@@ -139,6 +140,7 @@ class LastMatchWinsLayeredPolicyTests(TestCase):
         allowed, warn_msg, _ = policy.check_tool_allowed(hook_data)
         assert allowed, "ai-guardian MCP should be allowed"
         assert warn_msg is None, "ai-guardian MCP should have no warning"
+        mock_verify.assert_called_once_with("ai-guardian")
 
     def test_builtin_tools_allowed(self):
         """Built-in tools should be allowed by the catch-all rule."""
@@ -445,7 +447,8 @@ class StrictProfileTests(TestCase):
         allowed, _, _ = policy.check_tool_allowed(hook_data)
         assert allowed, "Built-in tools should be allowed when no rules target them"
 
-    def test_strict_with_explicit_allow_works(self):
+    @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
+    def test_strict_with_explicit_allow_works(self, mock_verify):
         """Strict profile with explicit allow should work."""
         config = {
             "permissions": {
@@ -471,6 +474,7 @@ class StrictProfileTests(TestCase):
         )
         allowed, _, _ = policy.check_tool_allowed(hook_data)
         assert allowed, "Explicitly allowed MCP should work"
+        mock_verify.assert_called_once_with("ai-guardian")
 
         hook_data = create_hook_data(tool_name="mcp__other__tool", tool_input={})
         allowed, _, _ = policy.check_tool_allowed(hook_data)

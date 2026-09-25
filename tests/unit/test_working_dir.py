@@ -146,6 +146,12 @@ class TestShortenPath:
 
 
 class TestChooseDirectory:
+    @pytest.fixture(autouse=True)
+    def _enable_directory_picker(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
+
     def test_tk_picker_activates_hidden_parent_on_captured_screen(self):
         from ai_guardian.daemon.working_dir import _show_tkinter_directory
 

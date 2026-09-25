@@ -119,6 +119,24 @@ _TOML_TABLE_HEADER = re.compile(
 _TOML_INLINE_MCP_SERVERS = re.compile(r"^\s*mcp_servers\s*=", re.MULTILINE)
 
 
+def _register_mcp_identity(binary_path: str) -> bool:
+    """Record the package identity used by the installed MCP entry point."""
+    try:
+        from ai_guardian.mcp.identity import register_mcp_identity
+
+        registered = register_mcp_identity(binary_path)
+    except Exception as exc:
+        logger.error("Unable to register AI Guardian MCP identity: %s", exc)
+        registered = False
+
+    if not registered:
+        print(
+            "  MCP: Warning: identity registration failed; the MCP server will "
+            "fail closed until setup succeeds"
+        )
+    return registered
+
+
 def get_codex_mcp_config_path() -> Path:
     """Return Codex's global MCP configuration path.
 
@@ -283,6 +301,73 @@ def verify_cursor_mcp_config(
         "effective_mcp_config_path": effective_path,
         "config_scopes": config_scopes,
     }
+
+
+def verify_mcp_config(
+    ide_type: str,
+    scope: str = "user",
+    project_dir: Optional[str] = None,
+) -> Dict:
+    """Return read-only health information for a local MCP registration.
+
+    This checks only the host configuration.  It deliberately does not launch
+    the configured command, create an identity manifest, or create a runtime
+    attestation; those actions belong to MCP server startup.
+    """
+    mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
+    if not mcp_ide:
+        return {
+            "mcp_installed": None,
+            "mcp_status": "unsupported",
+            "mcp_registration": "none",
+            "mcp_config_path": None,
+        }
+
+    config_path = get_mcp_config_path(ide_type, scope=scope, project_dir=project_dir)
+    base = {
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_registration": "local",
+        "mcp_config_path": str(config_path) if config_path else None,
+    }
+    if config_path is None:
+        base["mcp_status"] = "unsupported"
+        base["mcp_registration"] = "none"
+        return base
+    if not config_path.is_file():
+        return base
+
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+        if ide_type != "codex" and config_path.suffix == ".jsonc":
+            raw = _strip_jsonc_comments(raw)
+        if ide_type == "codex":
+            config = _load_toml_text(raw)
+            servers = config.get("mcp_servers", {})
+        else:
+            config = json.loads(raw) if raw.strip() else {}
+            if not isinstance(config, dict):
+                base["mcp_status"] = "invalid"
+                return base
+            servers = config.get(mcp_ide["config_key"], {})
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        base["mcp_status"] = "invalid"
+        return base
+
+    if not isinstance(servers, dict):
+        base["mcp_status"] = "invalid"
+        return base
+
+    entry = servers.get("ai-guardian")
+    if not isinstance(entry, dict):
+        return base
+    if entry.get("enabled") is False:
+        base["mcp_status"] = "disabled"
+        return base
+
+    base["mcp_installed"] = True
+    base["mcp_status"] = "healthy"
+    return base
 
 
 def _load_toml_text(text: str) -> Dict:
@@ -562,6 +647,7 @@ def _install_mcp_config(
         f.write("\n")
 
     print(f"  MCP: Added ai-guardian MCP server to {config_path}")
+    _register_mcp_identity(abs_path)
 
     # Warn if MCP entry exists in settings.json (hooks file) for Claude
     if ide_type == "claude":
@@ -638,6 +724,7 @@ def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
         return
 
     print(f"  MCP: Added ai-guardian MCP server to {config_path}")
+    _register_mcp_identity(_resolve_binary_path())
     _clean_legacy_codex_mcp_entry(target_path=config_path)
 
 

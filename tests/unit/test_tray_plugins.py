@@ -884,6 +884,10 @@ class TestPluginsToDict:
 
 
 class TestSendNotification:
+    @pytest.fixture(autouse=True)
+    def _enable_dialog_provider(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+
     def test_macos_uses_osascript(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Darwin"
@@ -1132,6 +1136,18 @@ class TestDictToPlugins:
 
 
 class TestShowDialog:
+    @pytest.fixture(autouse=True)
+    def _enable_dialog_provider(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
+
+    def test_headless_does_not_launch_dialog(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
+        with mock.patch("subprocess.run") as mock_run:
+            assert show_dialog("Title", "Message") is False
+        mock_run.assert_not_called()
+
     def test_linux_provider_order_prefers_kdialog_on_kde_wayland(self):
         with mock.patch.dict(
             "os.environ",
@@ -1277,6 +1293,16 @@ class TestShowDialog:
 
 
 class TestShowActionDialog:
+    @pytest.fixture(autouse=True)
+    def _enable_dialog_provider(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+
+    def test_headless_does_not_launch_action_dialog(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
+        with mock.patch("subprocess.run") as mock_run:
+            assert show_action_dialog("Title", "Message", "Continue", "Cancel") is None
+        mock_run.assert_not_called()
+
     def test_linux_uses_zenity_question(self):
         with mock.patch("ai_guardian.tray.plugins.platform") as m:
             m.system.return_value = "Linux"

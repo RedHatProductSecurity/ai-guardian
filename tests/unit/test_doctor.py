@@ -406,17 +406,64 @@ class TestCheckHooks:
             )
         )
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides", return_value=["claude"]
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 return_value=str(settings_path),
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
+
+    def test_generic_integration_reports_mcp_status(
+        self, _isolate_config_dir, tmp_path
+    ):
+        """Doctor exposes MCP state for integrations outside Codex/Cursor."""
+        plugin_dir = tmp_path / "opencode" / "plugins"
+        plugin_dir.mkdir(parents=True)
+        verification = {
+            "mcp_installed": False,
+            "mcp_status": "missing",
+            "mcp_registration": "local",
+            "mcp_config_path": str(tmp_path / "opencode.json"),
+        }
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["opencode"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(plugin_dir),
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+                return_value=(True, "OpenCode: configured"),
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value=verification,
+            ),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.WARN
+        assert "OpenCode: configured; MCP: missing" in result.message
+        opencode = next(
+            item for item in result.integrations if item["ide"] == "opencode"
+        )
+        assert opencode["status"] == CheckStatus.WARN.value
 
     def test_partial_hooks(self, _isolate_config_dir, tmp_path):
         claude_dir = tmp_path / ".claude"
@@ -610,17 +657,24 @@ class TestCheckHooks:
             )
         )
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides", return_value=["claude"]
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 return_value=str(settings_path),
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
 
     def test_codex_hooks_use_managed_event_count(self, _isolate_config_dir, tmp_path):
         """Doctor reports only the Codex hooks managed by AI Guardian."""
@@ -743,22 +797,28 @@ class TestCheckHooks:
                 return str(settings_path)
             return str(nonexistent)
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides",
-            return_value=["claude", "crush"],
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude", "crush"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 side_effect=fake_config_path,
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
-                assert "not installed" in result.message
-                statuses = {item["ide"]: item for item in result.integrations}
-                assert statuses["claude"]["status"] == CheckStatus.PASS.value
-                assert statuses["crush"]["message"] == "Not installed"
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
+            assert "not installed" in result.message
+            statuses = {item["ide"]: item for item in result.integrations}
+            assert statuses["claude"]["status"] == CheckStatus.PASS.value
+            assert statuses["crush"]["message"] == "Not installed"
 
 
 class TestCheckStateDir:

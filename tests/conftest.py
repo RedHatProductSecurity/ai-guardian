@@ -31,6 +31,14 @@ def _capture_package_logs(caplog):
 
 
 @pytest.fixture(autouse=True)
+def _disable_visible_ui(monkeypatch):
+    """Prevent automated tests from opening desktop or browser UI."""
+    monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "headless")
+    monkeypatch.setenv("AI_GUARDIAN_NO_TKINTER", "1")
+    monkeypatch.setenv("AI_GUARDIAN_NO_NICEGUI", "1")
+
+
+@pytest.fixture(autouse=True)
 def _isolate_config_dir(tmp_path):
     """
     Automatically isolate every test from the real config directory.

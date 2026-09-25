@@ -554,6 +554,27 @@ class IDESetup:
             layer["exists"] = Path(layer["path"]).is_file()
         return layers
 
+    @staticmethod
+    def _cursor_layer_has_install_evidence(layer: Dict[str, Any]) -> bool:
+        """Return whether a Cursor layer contains recognizable config evidence.
+
+        Project ``.cursor`` directories can contain editor-neutral rules from
+        other tools, so the directory alone is not enough to identify Cursor.
+        """
+        config_path = Path(layer["path"]).expanduser()
+        return any(
+            (config_path.parent / filename).is_file()
+            for filename in ("hooks.json", "mcp.json")
+        )
+
+    @staticmethod
+    def _mcp_config_exists(ide_type: str) -> bool:
+        """Return whether an IDE's native MCP configuration file exists."""
+        from ai_guardian.setup.mcp import get_mcp_config_path
+
+        config_path = get_mcp_config_path(ide_type, scope="user")
+        return config_path is not None and config_path.is_file()
+
     def get_config_path(
         self,
         ide_type: str,
@@ -1268,7 +1289,7 @@ class IDESetup:
         verification = self.verify_hooks_for_ide(
             ide_type, scope=scope, project_dir=project_dir
         )
-        if not isinstance(verification, dict) or ide_type not in ("codex", "cursor"):
+        if not isinstance(verification, dict):
             return verification
 
         if ide_type == "cursor":
@@ -1297,20 +1318,45 @@ class IDESetup:
                 )
             return combined
 
-        from ai_guardian.setup.mcp import (
-            get_codex_mcp_config_path,
-            is_codex_mcp_configured,
-        )
+        if ide_type == "codex":
+            from ai_guardian.setup.mcp import (
+                get_codex_mcp_config_path,
+                is_codex_mcp_configured,
+            )
 
-        hooks_healthy = verification.get("healthy") is True
-        mcp_config_path = get_codex_mcp_config_path()
-        mcp_installed = is_codex_mcp_configured(mcp_config_path)
+            hooks_healthy = verification.get("healthy") is True
+            mcp_config_path = get_codex_mcp_config_path()
+            mcp_installed = is_codex_mcp_configured(mcp_config_path)
+            combined = dict(verification)
+            combined["hooks_healthy"] = hooks_healthy
+            combined["mcp_config_path"] = str(mcp_config_path)
+            combined["mcp_installed"] = mcp_installed
+            combined["mcp_status"] = "healthy" if mcp_installed else "missing"
+            combined["healthy"] = hooks_healthy and mcp_installed
+            return combined
+
+        from ai_guardian.ide_registry import get_ide_integration
+
+        integration = get_ide_integration(ide_type)
+        if integration is None or not integration.supports_mcp:
+            return verification
+
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        mcp = verify_mcp_config(ide_type, scope=scope, project_dir=project_dir)
         combined = dict(verification)
-        combined["hooks_healthy"] = hooks_healthy
-        combined["mcp_config_path"] = str(mcp_config_path)
-        combined["mcp_installed"] = mcp_installed
-        combined["mcp_status"] = "healthy" if mcp_installed else "missing"
-        combined["healthy"] = hooks_healthy and mcp_installed
+        combined["hooks_healthy"] = verification.get("healthy") is True
+        combined.update(
+            {
+                "mcp_config_path": mcp.get("mcp_config_path"),
+                "mcp_installed": mcp.get("mcp_installed", False),
+                "mcp_status": mcp.get("mcp_status", "missing"),
+                "mcp_registration": mcp.get("mcp_registration", "local"),
+            }
+        )
+        combined["healthy"] = (
+            combined["hooks_healthy"] and combined["mcp_installed"] is True
+        )
         return combined
 
     def _remove_obsolete_owned_hooks(
@@ -1524,28 +1570,13 @@ class IDESetup:
         Auto-detect installed IDE based on config files.
 
         Returns:
-            str or None: IDE type ('claude' or 'cursor') or None if not detected
+            str or None: Detected IDE type or None if none or multiple are found
         """
-        detected_ides = []
-
-        for ide_type in self.IDE_CONFIGS.keys():
-            if ide_type == "cursor":
-                if any(
-                    Path(layer["path"]).expanduser().parent.exists()
-                    for layer in self.get_cursor_config_layers()
-                ):
-                    detected_ides.append(ide_type)
-                continue
-            if self.IDE_CONFIGS[ide_type].get("executable"):
-                if self._ide_has_install_evidence(ide_type):
-                    detected_ides.append(ide_type)
-                continue
-            raw_path = self.get_config_path(ide_type)
-            if not raw_path:
-                continue
-            config_path = Path(raw_path).expanduser()
-            if config_path.parent.exists():
-                detected_ides.append(ide_type)
+        detected_ides = [
+            ide_type
+            for ide_type in self.IDE_CONFIGS
+            if self._ide_has_install_evidence(ide_type)
+        ]
 
         if not detected_ides:
             return None
@@ -1562,36 +1593,14 @@ class IDESetup:
         Returns:
             list: List of detected IDE types
         """
-        detected = []
-        for ide_type in self.IDE_CONFIGS.keys():
-            if ide_type == "cursor":
-                if any(
-                    Path(layer["path"]).expanduser().parent.is_dir()
-                    for layer in self.get_cursor_config_layers()
-                ):
-                    detected.append(ide_type)
-                continue
-            if self.IDE_CONFIGS[ide_type].get("executable"):
-                if self._ide_has_install_evidence(ide_type):
-                    detected.append(ide_type)
-                continue
-            raw_path = self.get_config_path(ide_type)
-            if not raw_path:
-                continue
-            config_path = Path(raw_path).expanduser()
-            if config_path.parent.exists():
-                detected.append(ide_type)
-        return detected
+        return [
+            ide_type
+            for ide_type in self.IDE_CONFIGS
+            if self._ide_has_install_evidence(ide_type)
+        ]
 
     def _ide_has_install_evidence(self, ide_type: str) -> bool:
-        """Return whether an IDE's configuration directory exists.
-
-        ``list_detected_ides`` intentionally uses parent directories because
-        setup needs to find a place to create a missing config file. That is too
-        broad for a user-facing notification when the path is project-local.
-        Checking the actual configuration directory works for both GUI IDEs and
-        CLI tools, including CLI tools without an executable on ``PATH``.
-        """
+        """Return whether an IDE has recognizable local installation evidence."""
         raw_path = self.get_config_path(ide_type)
         if not raw_path:
             return False
@@ -1600,7 +1609,7 @@ class IDESetup:
 
         if ide_type == "cursor":
             return any(
-                Path(layer["path"]).expanduser().parent.is_dir()
+                self._cursor_layer_has_install_evidence(layer)
                 for layer in self.get_cursor_config_layers()
             )
 
@@ -1613,19 +1622,33 @@ class IDESetup:
         if executable:
             return config_path.is_file() or shutil.which(executable) is not None
 
-        # For file, plugin, extension, and script integrations, the parent is
-        # the IDE's configuration directory. Requiring it to exist avoids
-        # treating the current project directory as an installed IDE.
-        config_dir = config_path.parent
-        return config_dir != Path(".") and config_dir.is_dir()
+        ide_config = self.IDE_CONFIGS.get(ide_type, {})
+        if ide_config.get("config_filename") or config_path.suffix:
+            return config_path.is_file()
+
+        if self._mcp_config_exists(ide_type):
+            return True
+
+        if ide_config.get("plugin_file"):
+            return (config_path / "ai-guardian.ts").is_file()
+        if ide_config.get("extension_file"):
+            return (config_path / ide_config["extension_file"]).is_file()
+        if ide_config.get("extension_based"):
+            return (config_path / "index.ts").is_file()
+        if ide_config.get("script_based"):
+            manifest = self.expected_hook_manifest(ide_type)
+            return any((config_path / name).is_file() for name in manifest)
+
+        return False
 
     def list_installed_ides(self) -> List[str]:
         """List IDEs with evidence of an actual local installation.
 
-        This stricter companion to :meth:`list_detected_ides` is used by
-        user-facing setup notifications. It avoids treating a project-root
-        relative path as an installed IDE while still recognizing an IDE whose
-        config directory is fresh and empty.
+        This companion to :meth:`list_detected_ides` is used by user-facing
+        setup notifications. It requires a real configuration file or another
+        IDE-specific installation artifact instead of an empty directory.
+        Presence does not imply AI Guardian protection; hook and MCP
+        verification checks that separately.
         """
         return [
             ide_type

@@ -56,6 +56,45 @@ def test_doctor_lists_complete_hook_inventory_without_false_failures():
     assert [item["ide"] for item in structured] == expected
 
 
+def test_doctor_reports_mcp_status_for_generic_local_clients(tmp_path):
+    """
+    USER EXPERIENCE: Generic local MCP client -> doctor shows registration state.
+
+    Claude Code and OpenCode use the same local MCP server lifecycle as Codex,
+    so their doctor output must distinguish configured hooks from missing MCP.
+    """
+    plugin_dir = tmp_path / "opencode" / "plugins"
+    plugin_dir.mkdir(parents=True)
+    verification = {
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_registration": "local",
+        "mcp_config_path": str(tmp_path / "opencode.json"),
+    }
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["opencode"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(plugin_dir),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+            return_value=(True, "OpenCode: configured"),
+        ),
+        patch("ai_guardian.setup.mcp.verify_mcp_config", return_value=verification),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.WARN
+    assert "OpenCode: configured; MCP: missing" in result.message
+    opencode = next(item for item in result.integrations if item["ide"] == "opencode")
+    assert opencode["status"] == CheckStatus.WARN.value
+
+
 def test_local_daemon_prompts_for_installed_unconfigured_ide():
     """
     USER EXPERIENCE: Installed local IDE without hooks -> offer setup choices.
@@ -892,8 +931,8 @@ def test_local_daemon_ignores_project_root_only_ide(tmp_path, monkeypatch):
     """
     USER EXPERIENCE: Project-root config path only -> do not show a false popup.
 
-    A project-local path such as ``.crush.json`` has the current directory as
-    its parent, so it must not be treated as proof that the IDE is installed.
+    A project-local metadata directory such as ``.cursor/rules`` must not be
+    treated as proof that the IDE is installed.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -915,17 +954,18 @@ def test_local_daemon_ignores_project_root_only_ide(tmp_path, monkeypatch):
     setup.check_hooks_for_ide = MagicMock(return_value=(False, "IDE: not configured"))
 
     with patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
-        assert monitor._get_unconfigured_ides() == ["cursor"]
+        assert monitor._get_unconfigured_ides() == []
 
-    setup.check_hooks_for_ide.assert_called_once_with("cursor", integrity=True)
+    setup.check_hooks_for_ide.assert_not_called()
 
 
 def test_local_daemon_accepts_cursor_config_directory(tmp_path, monkeypatch):
     """
-    USER EXPERIENCE: Cursor config directory -> include Cursor in the check.
+    USER EXPERIENCE: Cursor config file -> include Cursor in the check.
 
     Cursor may be a desktop installation without a ``cursor`` executable on
-    PATH. Its canonical ``~/.cursor`` directory is the installation signal.
+    PATH. Its canonical hooks or MCP configuration file is the installation
+    signal.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)

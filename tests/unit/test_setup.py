@@ -113,8 +113,10 @@ def test_onnxruntime_markers_select_available_wheels():
 class TestIDESetup:
     """Test cases for IDESetup class."""
 
-    def test_detect_ide_none(self, tmp_path):
+    def test_detect_ide_none(self, tmp_path, monkeypatch):
         """Test IDE detection when no IDE is installed."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".cursor" / "rules").mkdir(parents=True)
         setup = IDESetup()
 
         # Mock config paths to non-existent directories
@@ -137,13 +139,15 @@ class TestIDESetup:
             detected = setup.detect_ide()
             assert detected is None
 
-    def test_detect_ide_single(self, tmp_path):
+    def test_detect_ide_single(self, tmp_path, monkeypatch):
         """Test IDE detection when only one IDE is installed."""
+        monkeypatch.chdir(tmp_path)
         setup = IDESetup()
 
         # Create Claude Code directory
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir(parents=True)
+        (claude_dir / "settings.json").write_text("{}")
 
         with mock.patch.object(
             setup,
@@ -160,15 +164,18 @@ class TestIDESetup:
             detected = setup.detect_ide()
             assert detected == "claude"
 
-    def test_detect_ide_multiple(self, tmp_path):
+    def test_detect_ide_multiple(self, tmp_path, monkeypatch):
         """Test IDE detection when multiple IDEs are installed."""
+        monkeypatch.chdir(tmp_path)
         setup = IDESetup()
 
         # Create both IDE directories
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir(parents=True)
+        (claude_dir / "settings.json").write_text("{}")
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir(parents=True)
+        (cursor_dir / "hooks.json").write_text("{}")
 
         with mock.patch.object(
             setup,
@@ -181,15 +188,18 @@ class TestIDESetup:
             detected = setup.detect_ide()
             assert detected is None  # Returns None when multiple detected
 
-    def test_list_detected_ides(self, tmp_path):
+    def test_list_detected_ides(self, tmp_path, monkeypatch):
         """Test listing all detected IDEs."""
+        monkeypatch.chdir(tmp_path)
         setup = IDESetup()
 
         # Create both IDE directories
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir(parents=True)
+        (claude_dir / "settings.json").write_text("{}")
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir(parents=True)
+        (cursor_dir / "hooks.json").write_text("{}")
 
         with mock.patch.object(
             setup,
@@ -202,11 +212,42 @@ class TestIDESetup:
             detected = setup.list_detected_ides()
             assert set(detected) == {"claude", "cursor"}
 
+    def test_unprotected_cursor_config_is_detected_but_not_configured(
+        self, tmp_path, monkeypatch
+    ):
+        """Installed and AI Guardian-protected are separate detection states."""
+        monkeypatch.chdir(tmp_path)
+        cursor_hooks = tmp_path / ".cursor" / "hooks.json"
+        cursor_hooks.parent.mkdir()
+        cursor_hooks.write_text(
+            json.dumps({"hooks": {"beforeSubmitPrompt": [{"command": "other"}]}})
+        )
+        setup = IDESetup()
+
+        with mock.patch.object(
+            setup,
+            "IDE_CONFIGS",
+            {
+                "cursor": {
+                    **IDESetup.IDE_CONFIGS["cursor"],
+                    "config_path": str(tmp_path / "user" / "hooks.json"),
+                }
+            },
+        ):
+            assert setup.list_detected_ides() == ["cursor"]
+            configured, detail = setup.check_hooks_for_ide(
+                "cursor", scope="project", project_dir=str(tmp_path)
+            )
+
+        assert configured is False
+        assert "not configured" in detail
+
     def test_list_installed_ides_uses_config_directories(self, tmp_path, monkeypatch):
         """User-facing detection uses IDE config directories, not project root."""
         setup = IDESetup()
         claude_dir = tmp_path / ".claude"
         claude_dir.mkdir()
+        (claude_dir / "settings.json").write_text("{}")
         cursor_dir = tmp_path / ".cursor"
         cursor_dir.mkdir()
         (cursor_dir / "mcp.json").write_text("{}")
@@ -1787,9 +1828,10 @@ class TestCodexSetup:
         )
 
     def test_list_installed_ides_detects_codex_home(self, monkeypatch, tmp_path):
-        """A fresh Codex config directory is installation evidence."""
+        """A Codex hook configuration file is installation evidence."""
         codex_home = tmp_path / "codex"
         codex_home.mkdir()
+        (codex_home / "hooks.json").write_text('{"hooks": {}}')
         monkeypatch.setenv("CODEX_HOME", str(codex_home))
 
         setup = IDESetup()
@@ -2011,6 +2053,87 @@ class TestCodexSetup:
         )
 
         assert is_codex_mcp_configured(config_path) is True
+
+    def test_generic_mcp_verification_reads_json_registration(
+        self, monkeypatch, tmp_path
+    ):
+        """Generic local MCP integrations report a configured JSON entry."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        claude_home = tmp_path / "claude"
+        claude_home.mkdir()
+        config_path = claude_home / ".claude.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "ai-guardian": {
+                            "command": "/usr/local/bin/ai-guardian",
+                            "args": ["mcp-server"],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_home))
+
+        result = verify_mcp_config("claude")
+
+        assert result["mcp_installed"] is True
+        assert result["mcp_status"] == "healthy"
+        assert result["mcp_registration"] == "local"
+        assert result["mcp_config_path"] == str(config_path)
+
+    def test_generic_mcp_verification_reports_disabled_json_registration(
+        self, monkeypatch, tmp_path
+    ):
+        """An explicitly disabled generic MCP entry is not reported healthy."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.jsonc"
+        config_path.write_text(
+            "// OpenCode config\n" '{"mcp": {"ai-guardian": {"enabled": false,},},}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_installed"] is False
+        assert result["mcp_status"] == "disabled"
+        assert result["mcp_config_path"] == str(config_path)
+
+    def test_generic_mcp_verification_reports_invalid_json(self, monkeypatch, tmp_path):
+        """Malformed local MCP configuration is surfaced as invalid."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.json"
+        config_path.write_text("not-json", encoding="utf-8")
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_installed"] is False
+        assert result["mcp_status"] == "invalid"
+
+    def test_generic_ide_setup_includes_mcp_health(self, monkeypatch, tmp_path):
+        """Combined setup health includes MCP for MCP-only integrations."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        junie_home = tmp_path / "junie"
+        junie_home.mkdir()
+        (junie_home / "mcp.json").write_text(
+            json.dumps({"mcpServers": {"ai-guardian": {"command": "ai-guardian"}}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("JUNIE_HOME", str(junie_home))
+
+        result = IDESetup().verify_ide_setup("junie")
+
+        assert result["mcp_installed"] is True
+        assert result["mcp_status"] == "healthy"
+        assert result["healthy"] is True
 
     def test_codex_mcp_remove_preserves_unrelated_toml(self, monkeypatch, tmp_path):
         """MCP removal deletes only AI Guardian from the global Codex table."""

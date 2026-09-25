@@ -1,9 +1,11 @@
 """Tests for daemon system tray integration."""
 
+import os
 import sys
 import threading
 import time
 import json
+import types
 from unittest import mock
 
 import pytest
@@ -13,6 +15,7 @@ from ai_guardian.tray.app import (
     DaemonTray,
     HAS_PYSTRAY,
     is_tray_available,
+    _configure_linux_tray_backend,
     _is_tray_running,
     _check_gi_available,
     _suppress_gtk_stderr,
@@ -74,6 +77,33 @@ class TestCheckGiAvailable:
     def test_returns_true_when_gi_available(self):
         with mock.patch.dict("sys.modules", {"gi": mock.MagicMock()}):
             assert _check_gi_available() is True
+
+
+class TestLinuxTrayBackend:
+    def test_kde_defaults_to_appindicator_backend(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+        monkeypatch.delenv("PYSTRAY_BACKEND", raising=False)
+
+        fake_gi = mock.MagicMock()
+        fake_repository = types.ModuleType("gi.repository")
+        fake_repository.AppIndicator3 = object()
+        with mock.patch.dict(
+            sys.modules,
+            {"gi": fake_gi, "gi.repository": fake_repository},
+        ):
+            _configure_linux_tray_backend()
+
+        assert os.environ["PYSTRAY_BACKEND"] == "appindicator"
+
+    def test_explicit_backend_is_preserved(self, monkeypatch):
+        monkeypatch.setattr(sys, "platform", "linux")
+        monkeypatch.setenv("XDG_CURRENT_DESKTOP", "KDE")
+        monkeypatch.setenv("PYSTRAY_BACKEND", "appindicator")
+
+        _configure_linux_tray_backend()
+
+        assert os.environ["PYSTRAY_BACKEND"] == "appindicator"
 
 
 class TestIsTrayAvailable:
@@ -542,7 +572,7 @@ class TestIconInversion:
     """Tests for dark icon on light GNOME panels (issue #754)."""
 
     @pytest.mark.parametrize(
-        "platform_name, env, gsettings_stdout, expected",
+        "platform_name, env, scheme_stdout, expected",
         [
             ("Darwin", {}, None, False),
             ("Linux", {"XDG_CURRENT_DESKTOP": "KDE"}, None, False),
@@ -551,14 +581,14 @@ class TestIconInversion:
         ],
         ids=["macos", "kde", "gnome-light", "gnome-dark"],
     )
-    def test_needs_dark_icon(self, platform_name, env, gsettings_stdout, expected):
+    def test_needs_dark_icon(self, platform_name, env, scheme_stdout, expected):
         with (
             mock.patch("platform.system", return_value=platform_name),
             mock.patch.dict("os.environ", env, clear=False),
             mock.patch("subprocess.run") as mock_run,
         ):
-            if gsettings_stdout is not None:
-                mock_run.return_value = mock.MagicMock(stdout=gsettings_stdout)
+            if scheme_stdout is not None:
+                mock_run.return_value = mock.MagicMock(stdout=scheme_stdout)
             assert needs_dark_icon() is expected
 
     @pytest.mark.skipif(not HAS_PYSTRAY, reason="pystray/Pillow not installed")
@@ -2891,6 +2921,13 @@ class TestShellMenuItem:
 
 class TestPluginMenuItems:
     """Tests for tray plugin menu integration (issue #590)."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_provider_selection(self, monkeypatch):
+        """Allow provider-dispatch tests to exercise their mocked backends."""
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
 
     def _make_tray(self, targets=None, multi_client=None):
         tray = DaemonTray(
