@@ -42,6 +42,12 @@ Existing manual registrations are migrated automatically the first time the
 server starts after this security feature is installed. Package upgrades also
 refresh a valid identity record, so setup does not need to be rerun.
 
+`ai-guardian doctor` and IDE setup health checks report the local MCP
+registration state for supported clients without starting the server. A
+`healthy` registration means the client config contains an enabled
+`ai-guardian` entry; `missing`, `disabled`, and `invalid` states identify
+configuration problems separately from runtime identity failures.
+
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
 
 ```json

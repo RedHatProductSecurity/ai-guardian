@@ -2012,6 +2012,87 @@ class TestCodexSetup:
 
         assert is_codex_mcp_configured(config_path) is True
 
+    def test_generic_mcp_verification_reads_json_registration(
+        self, monkeypatch, tmp_path
+    ):
+        """Generic local MCP integrations report a configured JSON entry."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        claude_home = tmp_path / "claude"
+        claude_home.mkdir()
+        config_path = claude_home / ".claude.json"
+        config_path.write_text(
+            json.dumps(
+                {
+                    "mcpServers": {
+                        "ai-guardian": {
+                            "command": "/usr/local/bin/ai-guardian",
+                            "args": ["mcp-server"],
+                        }
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(claude_home))
+
+        result = verify_mcp_config("claude")
+
+        assert result["mcp_installed"] is True
+        assert result["mcp_status"] == "healthy"
+        assert result["mcp_registration"] == "local"
+        assert result["mcp_config_path"] == str(config_path)
+
+    def test_generic_mcp_verification_reports_disabled_json_registration(
+        self, monkeypatch, tmp_path
+    ):
+        """An explicitly disabled generic MCP entry is not reported healthy."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.jsonc"
+        config_path.write_text(
+            "// OpenCode config\n" '{"mcp": {"ai-guardian": {"enabled": false,},},}\n',
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_installed"] is False
+        assert result["mcp_status"] == "disabled"
+        assert result["mcp_config_path"] == str(config_path)
+
+    def test_generic_mcp_verification_reports_invalid_json(self, monkeypatch, tmp_path):
+        """Malformed local MCP configuration is surfaced as invalid."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.json"
+        config_path.write_text("not-json", encoding="utf-8")
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_installed"] is False
+        assert result["mcp_status"] == "invalid"
+
+    def test_generic_ide_setup_includes_mcp_health(self, monkeypatch, tmp_path):
+        """Combined setup health includes MCP for MCP-only integrations."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        junie_home = tmp_path / "junie"
+        junie_home.mkdir()
+        (junie_home / "mcp.json").write_text(
+            json.dumps({"mcpServers": {"ai-guardian": {"command": "ai-guardian"}}}),
+            encoding="utf-8",
+        )
+        monkeypatch.setenv("JUNIE_HOME", str(junie_home))
+
+        result = IDESetup().verify_ide_setup("junie")
+
+        assert result["mcp_installed"] is True
+        assert result["mcp_status"] == "healthy"
+        assert result["healthy"] is True
+
     def test_codex_mcp_remove_preserves_unrelated_toml(self, monkeypatch, tmp_path):
         """MCP removal deletes only AI Guardian from the global Codex table."""
         from ai_guardian.setup.mcp import _remove_mcp_config

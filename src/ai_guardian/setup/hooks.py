@@ -1268,7 +1268,7 @@ class IDESetup:
         verification = self.verify_hooks_for_ide(
             ide_type, scope=scope, project_dir=project_dir
         )
-        if not isinstance(verification, dict) or ide_type not in ("codex", "cursor"):
+        if not isinstance(verification, dict):
             return verification
 
         if ide_type == "cursor":
@@ -1297,20 +1297,45 @@ class IDESetup:
                 )
             return combined
 
-        from ai_guardian.setup.mcp import (
-            get_codex_mcp_config_path,
-            is_codex_mcp_configured,
-        )
+        if ide_type == "codex":
+            from ai_guardian.setup.mcp import (
+                get_codex_mcp_config_path,
+                is_codex_mcp_configured,
+            )
 
-        hooks_healthy = verification.get("healthy") is True
-        mcp_config_path = get_codex_mcp_config_path()
-        mcp_installed = is_codex_mcp_configured(mcp_config_path)
+            hooks_healthy = verification.get("healthy") is True
+            mcp_config_path = get_codex_mcp_config_path()
+            mcp_installed = is_codex_mcp_configured(mcp_config_path)
+            combined = dict(verification)
+            combined["hooks_healthy"] = hooks_healthy
+            combined["mcp_config_path"] = str(mcp_config_path)
+            combined["mcp_installed"] = mcp_installed
+            combined["mcp_status"] = "healthy" if mcp_installed else "missing"
+            combined["healthy"] = hooks_healthy and mcp_installed
+            return combined
+
+        from ai_guardian.ide_registry import get_ide_integration
+
+        integration = get_ide_integration(ide_type)
+        if integration is None or not integration.supports_mcp:
+            return verification
+
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        mcp = verify_mcp_config(ide_type, scope=scope, project_dir=project_dir)
         combined = dict(verification)
-        combined["hooks_healthy"] = hooks_healthy
-        combined["mcp_config_path"] = str(mcp_config_path)
-        combined["mcp_installed"] = mcp_installed
-        combined["mcp_status"] = "healthy" if mcp_installed else "missing"
-        combined["healthy"] = hooks_healthy and mcp_installed
+        combined["hooks_healthy"] = verification.get("healthy") is True
+        combined.update(
+            {
+                "mcp_config_path": mcp.get("mcp_config_path"),
+                "mcp_installed": mcp.get("mcp_installed", False),
+                "mcp_status": mcp.get("mcp_status", "missing"),
+                "mcp_registration": mcp.get("mcp_registration", "local"),
+            }
+        )
+        combined["healthy"] = (
+            combined["hooks_healthy"] and combined["mcp_installed"] is True
+        )
         return combined
 
     def _remove_obsolete_owned_hooks(

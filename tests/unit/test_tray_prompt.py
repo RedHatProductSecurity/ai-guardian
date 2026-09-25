@@ -4,6 +4,8 @@ import os
 import tempfile
 from unittest import mock
 
+import pytest
+
 
 class TestHandleTrayPrompt:
     """Tests for _handle_prompt_params CLI handler."""
@@ -288,6 +290,12 @@ class TestTrayPromptAppCreation:
 
 class TestTrayPromptFallback:
     """Tests for tkinter → NiceGUI → Textual cascade selection."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_ui_cascade(self, monkeypatch):
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
 
     def test_needs_terminal_false_when_tkinter_available(self):
         from ai_guardian.tui.tray_prompt import TrayPromptApp

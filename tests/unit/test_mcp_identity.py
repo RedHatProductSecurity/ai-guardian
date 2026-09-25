@@ -6,7 +6,15 @@ from unittest.mock import patch
 
 import pytest
 
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
 from ai_guardian.mcp import identity
+from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
+
+LOCAL_MCP_IDES = tuple(
+    integration.key
+    for integration in SUPPORTED_IDE_REGISTRY
+    if integration.mcp_registration == "local"
+)
 
 
 def _module_command() -> str:
@@ -52,6 +60,21 @@ def test_missing_identity_is_migrated_on_startup(tmp_path, monkeypatch):
 
     assert identity.ensure_mcp_identity() is True
     assert identity._load_verified_manifest() is not None
+
+    try:
+        assert identity.attest_mcp_server() is True
+    finally:
+        identity.revoke_active_attestation()
+
+
+@pytest.mark.parametrize("ide_type", LOCAL_MCP_IDES)
+def test_every_local_mcp_client_uses_startup_migration(ide_type, tmp_path, monkeypatch):
+    """Every supported local MCP client shares the migration gate."""
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / ide_type / "config"))
+    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / ide_type / "state"))
+
+    assert ide_type in _MCP_IDE_CONFIGS
+    assert identity.ensure_mcp_identity() is True
 
     try:
         assert identity.attest_mcp_server() is True

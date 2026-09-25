@@ -1021,6 +1021,12 @@ def show_dialog(title: str, message: str, *, screen_bounds=None) -> bool:
     """
     import subprocess
 
+    from ai_guardian.tui.display import get_preferred_ui
+
+    if get_preferred_ui() == "headless":
+        logger.debug("Skipping tray dialog in headless UI mode")
+        return False
+
     system = platform.system()
     try:
         if system == "Darwin":
@@ -1296,6 +1302,12 @@ def show_action_dialog(
     structured mapping as the other proactive-prompt UI implementations.
     Returns ``None`` when the native prompt could not be launched.
     """
+    from ai_guardian.tui.display import get_preferred_ui
+
+    if get_preferred_ui() == "headless":
+        logger.debug("Skipping tray action dialog in headless UI mode")
+        return None
+
     system = platform.system()
 
     ide_choices = tuple(

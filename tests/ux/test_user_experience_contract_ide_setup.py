@@ -56,6 +56,45 @@ def test_doctor_lists_complete_hook_inventory_without_false_failures():
     assert [item["ide"] for item in structured] == expected
 
 
+def test_doctor_reports_mcp_status_for_generic_local_clients(tmp_path):
+    """
+    USER EXPERIENCE: Generic local MCP client -> doctor shows registration state.
+
+    Claude Code and OpenCode use the same local MCP server lifecycle as Codex,
+    so their doctor output must distinguish configured hooks from missing MCP.
+    """
+    plugin_dir = tmp_path / "opencode" / "plugins"
+    plugin_dir.mkdir(parents=True)
+    verification = {
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_registration": "local",
+        "mcp_config_path": str(tmp_path / "opencode.json"),
+    }
+
+    with (
+        patch(
+            "ai_guardian.setup.IDESetup.list_detected_ides",
+            return_value=["opencode"],
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.get_config_path",
+            return_value=str(plugin_dir),
+        ),
+        patch(
+            "ai_guardian.setup.IDESetup.check_hooks_for_ide",
+            return_value=(True, "OpenCode: configured"),
+        ),
+        patch("ai_guardian.setup.mcp.verify_mcp_config", return_value=verification),
+    ):
+        result = Doctor().check_hooks()
+
+    assert result.status == CheckStatus.WARN
+    assert "OpenCode: configured; MCP: missing" in result.message
+    opencode = next(item for item in result.integrations if item["ide"] == "opencode")
+    assert opencode["status"] == CheckStatus.WARN.value
+
+
 def test_local_daemon_prompts_for_installed_unconfigured_ide():
     """
     USER EXPERIENCE: Installed local IDE without hooks -> offer setup choices.

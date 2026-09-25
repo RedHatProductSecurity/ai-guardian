@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **MCP health diagnostics (#2422)**: Report read-only MCP registration status
+  for every supported local client in combined setup verification and doctor
+  output, including Claude Code, OpenCode, MCP-only integrations, disabled
+  entries, and invalid configuration files.
+
+- **Headless UI isolation**: Honor the explicit headless UI preference in native
+  tray dialogs and keep automated tests from opening desktop or browser windows.
+
 - **KDE tray compatibility (#2416)**: Prefer the D-Bus AppIndicator backend on
   KDE Wayland sessions and preserve the white symbolic icon used by dark KDE
   panels.

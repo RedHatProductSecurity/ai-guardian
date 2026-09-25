@@ -104,6 +104,7 @@ from ai_guardian.setup.mcp import (
     _install_mcp_config,
     _remove_mcp_config,
     get_mcp_config_path,
+    verify_mcp_config,
 )
 from ai_guardian.setup.rules import (
     _RULES_IDE_CONFIGS,

@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
-from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
+from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY, get_ide_integration
 
 logger = logging.getLogger(__name__)
 
@@ -1076,15 +1076,31 @@ class Doctor:
                 continue
 
             configured, detail = setup.check_hooks_for_ide(ide_type)
+            mcp_verification = None
+            mcp_status = None
+            integration = get_ide_integration(ide_type)
+            if (
+                ide_type not in ("codex", "cursor")
+                and integration is not None
+                and integration.supports_mcp
+            ):
+                from ai_guardian.setup.mcp import verify_mcp_config
+
+                mcp_verification = verify_mcp_config(ide_type)
+                mcp_status = mcp_verification.get("mcp_status")
+            mcp_detail = f"; MCP: {mcp_status}" if mcp_status else ""
+            mcp_healthy = mcp_status in (None, "healthy", "external")
 
             if configured:
                 if ide_type == "claude":
                     hook_count = self._count_claude_hooks(config_path)
                     total = len(setup.expected_hook_manifest("claude"))
-                    message = f"{hook_count}/{total} hooks"
+                    message = f"{hook_count}/{total} hooks{mcp_detail}"
                     item_status = (
                         CheckStatus.PASS if hook_count >= total else CheckStatus.WARN
                     )
+                    if not mcp_healthy:
+                        item_status = CheckStatus.WARN
                     results.append(f"{ide_name}: {message}")
                     integration_results.append(
                         {
@@ -1096,7 +1112,9 @@ class Doctor:
                             "installed": True,
                         }
                     )
-                    if hook_count < total:
+                    if mcp_verification is not None:
+                        integration_results[-1]["verification"] = mcp_verification
+                    if hook_count < total or not mcp_healthy:
                         all_configured = False
                 elif ide_type == "codex":
                     hook_count = self._count_codex_hooks(config_path)
@@ -1120,21 +1138,31 @@ class Doctor:
                     if hook_count < total:
                         all_configured = False
                 else:
-                    message = self._hook_detail_without_name(detail, ide_name)
+                    message = (
+                        self._hook_detail_without_name(detail, ide_name) + mcp_detail
+                    )
                     results.append(f"{ide_name}: {message}")
                     integration_results.append(
                         {
                             "ide": ide_type,
                             "name": ide_name,
                             "display_name": ide_name,
-                            "status": CheckStatus.PASS.value,
+                            "status": (
+                                CheckStatus.PASS.value
+                                if mcp_healthy
+                                else CheckStatus.WARN.value
+                            ),
                             "message": message,
                             "installed": True,
                         }
                     )
+                    if mcp_verification is not None:
+                        integration_results[-1]["verification"] = mcp_verification
+                    if not mcp_healthy:
+                        all_configured = False
                 any_configured = True
             else:
-                message = self._hook_detail_without_name(detail, ide_name)
+                message = self._hook_detail_without_name(detail, ide_name) + mcp_detail
                 item_status = (
                     CheckStatus.WARN
                     if "needs attention" in detail
@@ -1151,6 +1179,8 @@ class Doctor:
                         "installed": True,
                     }
                 )
+                if mcp_verification is not None:
+                    integration_results[-1]["verification"] = mcp_verification
                 if "needs attention" in detail:
                     any_configured = True
                 all_configured = False
