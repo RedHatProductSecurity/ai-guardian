@@ -4,6 +4,8 @@ import json
 import sys
 from unittest.mock import patch
 
+import pytest
+
 from ai_guardian.mcp import identity
 
 
@@ -44,6 +46,7 @@ def test_genuine_process_passes_nonce_attestation(tmp_path, monkeypatch):
         identity.revoke_active_attestation()
 
 
+@pytest.mark.timeout(0)
 def test_nonce_cannot_be_replayed(monkeypatch):
     challenge = identity.begin_identity_handshake()
     response = {

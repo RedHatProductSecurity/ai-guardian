@@ -123,6 +123,7 @@ addopts = "-v --tb=short"
 markers = [
     "hermes: Hermes Security Framework validation tests",
     "benchmark: Performance benchmark tests",
+    "timeout: per-test timeout override used by pytest-timeout",
 ]
 
 [tool.coverage.run]
