@@ -44,17 +44,27 @@ def test_genuine_process_passes_nonce_attestation(tmp_path, monkeypatch):
         identity.revoke_active_attestation()
 
 
-def test_nonce_cannot_be_replayed(tmp_path, monkeypatch):
-    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
-    monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path / "state"))
-    assert identity.register_mcp_identity(_module_command()) is True
-
+def test_nonce_cannot_be_replayed(monkeypatch):
     challenge = identity.begin_identity_handshake()
     response = {
         "server_name": identity.MCP_SERVER_NAME,
         "nonce": challenge["nonce"],
         "pid": identity.os.getpid(),
     }
+    observed = {
+        "package_version": "1.0.0",
+        "package_sha256": "package-digest",
+        "runtime_executable": str(identity.Path(identity.sys.executable).resolve()),
+        "runtime_executable_sha256": "runtime-digest",
+        "entrypoint_sha256": None,
+    }
+    manifest = {
+        **observed,
+        "signature": "manifest-signature",
+    }
+    monkeypatch.setattr(identity, "_load_verified_manifest", lambda: manifest)
+    monkeypatch.setattr(identity, "_current_identity", lambda: observed)
+    monkeypatch.setattr(identity, "_process_executable", lambda pid: None)
     try:
         with patch.object(identity, "_write_json") as write_json:
             assert identity.complete_identity_handshake(challenge, response) is True
