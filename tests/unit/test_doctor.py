@@ -406,17 +406,24 @@ class TestCheckHooks:
             )
         )
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides", return_value=["claude"]
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 return_value=str(settings_path),
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
 
     def test_generic_integration_reports_mcp_status(
         self, _isolate_config_dir, tmp_path
@@ -650,17 +657,24 @@ class TestCheckHooks:
             )
         )
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides", return_value=["claude"]
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 return_value=str(settings_path),
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
 
     def test_codex_hooks_use_managed_event_count(self, _isolate_config_dir, tmp_path):
         """Doctor reports only the Codex hooks managed by AI Guardian."""
@@ -783,22 +797,28 @@ class TestCheckHooks:
                 return str(settings_path)
             return str(nonexistent)
 
-        with mock.patch(
-            "ai_guardian.setup.IDESetup.list_detected_ides",
-            return_value=["claude", "crush"],
-        ):
-            with mock.patch(
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude", "crush"],
+            ),
+            mock.patch(
                 "ai_guardian.setup.IDESetup.get_config_path",
                 side_effect=fake_config_path,
-            ):
-                doctor = Doctor()
-                result = doctor.check_hooks()
-                assert result.status == CheckStatus.PASS
-                assert "6/6" in result.message
-                assert "not installed" in result.message
-                statuses = {item["ide"]: item for item in result.integrations}
-                assert statuses["claude"]["status"] == CheckStatus.PASS.value
-                assert statuses["crush"]["message"] == "Not installed"
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "healthy"},
+            ),
+        ):
+            doctor = Doctor()
+            result = doctor.check_hooks()
+            assert result.status == CheckStatus.PASS
+            assert "6/6" in result.message
+            assert "not installed" in result.message
+            statuses = {item["ide"]: item for item in result.integrations}
+            assert statuses["claude"]["status"] == CheckStatus.PASS.value
+            assert statuses["crush"]["message"] == "Not installed"
 
 
 class TestCheckStateDir:
