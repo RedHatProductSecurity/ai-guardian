@@ -56,8 +56,10 @@ def test_nonce_cannot_be_replayed(tmp_path, monkeypatch):
         "pid": identity.os.getpid(),
     }
     try:
-        assert identity.complete_identity_handshake(challenge, response) is True
-        assert identity.complete_identity_handshake(challenge, response) is False
+        with patch.object(identity, "_write_json") as write_json:
+            assert identity.complete_identity_handshake(challenge, response) is True
+            assert identity.complete_identity_handshake(challenge, response) is False
+        write_json.assert_called_once()
     finally:
         identity.revoke_active_attestation()
 
