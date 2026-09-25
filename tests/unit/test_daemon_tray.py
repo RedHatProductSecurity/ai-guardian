@@ -2922,6 +2922,13 @@ class TestShellMenuItem:
 class TestPluginMenuItems:
     """Tests for tray plugin menu integration (issue #590)."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_provider_selection(self, monkeypatch):
+        """Allow provider-dispatch tests to exercise their mocked backends."""
+        monkeypatch.setenv("AI_GUARDIAN_PREFERRED_UI", "auto")
+        monkeypatch.delenv("AI_GUARDIAN_NO_TKINTER", raising=False)
+        monkeypatch.delenv("AI_GUARDIAN_NO_NICEGUI", raising=False)
+
     def _make_tray(self, targets=None, multi_client=None):
         tray = DaemonTray(
             get_stats_callback=lambda: {},

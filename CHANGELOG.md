@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **IDE detection isolation**: Require IDE-specific configuration files or
+  installation artifacts instead of treating empty project directories as an
+  installed integration. Cursor's `.cursor/rules/` metadata is no longer
+  mistaken for a Cursor installation, while hook and MCP verification still
+  determines whether AI Guardian is configured.
+
 - **MCP health diagnostics (#2422)**: Report read-only MCP registration status
   for every supported local client in combined setup verification and doctor
   output, including Claude Code, OpenCode, MCP-only integrations, disabled

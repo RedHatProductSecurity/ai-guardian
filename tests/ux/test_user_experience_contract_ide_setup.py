@@ -931,8 +931,8 @@ def test_local_daemon_ignores_project_root_only_ide(tmp_path, monkeypatch):
     """
     USER EXPERIENCE: Project-root config path only -> do not show a false popup.
 
-    A project-local path such as ``.crush.json`` has the current directory as
-    its parent, so it must not be treated as proof that the IDE is installed.
+    A project-local metadata directory such as ``.cursor/rules`` must not be
+    treated as proof that the IDE is installed.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
@@ -954,17 +954,18 @@ def test_local_daemon_ignores_project_root_only_ide(tmp_path, monkeypatch):
     setup.check_hooks_for_ide = MagicMock(return_value=(False, "IDE: not configured"))
 
     with patch("ai_guardian.setup.hooks.IDESetup", return_value=setup):
-        assert monitor._get_unconfigured_ides() == ["cursor"]
+        assert monitor._get_unconfigured_ides() == []
 
-    setup.check_hooks_for_ide.assert_called_once_with("cursor", integrity=True)
+    setup.check_hooks_for_ide.assert_not_called()
 
 
 def test_local_daemon_accepts_cursor_config_directory(tmp_path, monkeypatch):
     """
-    USER EXPERIENCE: Cursor config directory -> include Cursor in the check.
+    USER EXPERIENCE: Cursor config file -> include Cursor in the check.
 
     Cursor may be a desktop installation without a ``cursor`` executable on
-    PATH. Its canonical ``~/.cursor`` directory is the installation signal.
+    PATH. Its canonical hooks or MCP configuration file is the installation
+    signal.
     """
     tray = SimpleNamespace(_standalone=True, _targets=[])
     monitor = TrayHealthMonitor(tray)
