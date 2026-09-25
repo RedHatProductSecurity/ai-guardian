@@ -679,6 +679,10 @@ class TestSandboxTrayMenu:
             "port": "",
         }
         with (
+            mock.patch(
+                "ai_guardian.sandbox._load_snapshot_config",
+                return_value=(mock.sentinel.snapshot, {}),
+            ) as load_snapshot,
             mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
             mock.patch(
                 "ai_guardian.tray.menu_builder.tray_notifications.show_notification"
@@ -691,6 +695,7 @@ class TestSandboxTrayMenu:
             tray._menu._complete_sandbox_create_form(values)
 
         confirm_upload.assert_called_once()
+        load_snapshot.assert_called_once_with("ag-test", "latest", runtime="openshell")
         create.assert_called_once()
         args = create.call_args.args[0]
         assert args.runtime == "openshell"
@@ -711,6 +716,30 @@ class TestSandboxTrayMenu:
         assert args.port is None
         assert create.call_args.kwargs["interactive"] is False
         assert isinstance(create.call_args.kwargs["output"], list)
+
+    def test_create_form_rejects_missing_snapshot_before_runtime(self, tmp_path):
+        tray = _make_tray([])
+        values = {
+            "runtime": "container",
+            "name": "new-sandbox",
+            "cli": "codex",
+            "config_source": "Latest saved snapshot",
+        }
+
+        with (
+            mock.patch.dict(
+                os.environ,
+                {"AI_GUARDIAN_STATE_DIR": str(tmp_path / "state")},
+                clear=False,
+            ),
+            mock.patch.object(tray._menu, "_sandbox_error") as show_error,
+            mock.patch.object(tray._menu, "_run_sandbox_create") as run_create,
+        ):
+            tray._menu._complete_sandbox_create_form(values)
+
+        show_error.assert_called_once()
+        assert "no configuration snapshot found" in show_error.call_args.args[1]
+        run_create.assert_not_called()
 
     def test_create_form_shows_runtime_log_when_direct_create_fails(self):
         tray = _make_tray([])

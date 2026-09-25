@@ -30,25 +30,27 @@ budget_tokens: 1000
 
 ## 🚀 Next phase
 
-**Goal:** Verify PR `#2421` CI after pushing the Windows-safe MCP identity fix.
+**Goal:** Run `daf complete` to commit and submit issue `#2423` from branch `2423`.
 
 ### Acceptance criteria
-1. Windows Python 3.10, 3.13, and 3.14 CI jobs complete successfully or have a documented external failure.
-2. Test runs do not open desktop, browser, or Textual windows.
-3. MCP setup, diagnostics, and IDE detection remain regression-free.
+1. [x] First-time container creation uses generated configuration when no snapshot exists.
+2. [x] CLI rejects a missing saved snapshot before invoking the runtime.
+3. [x] Tray validates the same snapshot before preparation/runtime work.
+4. [x] Regression tests cover the CLI and tray paths.
 
-### Files to create / edit
+### Files changed
 | Type | File | Content |
 |---|---|---|
-| changed | `src/ai_guardian/mcp/identity.py` | Use the cross-platform process liveness helper |
-| changed | `tests/unit/test_mcp_identity.py` | Regression coverage for the Windows-safe process check |
+| changed | `src/ai_guardian/tray/menu_builder.py` | Preflight selected snapshots before tray sandbox creation |
+| changed | `tests/unit/test_sandbox_command.py` | CLI missing-snapshot and generated-config regressions |
+| changed | `tests/unit/test_sandbox_tray.py` | Tray missing-snapshot regression and valid snapshot setup |
 
 ### Closed decisions
-- Use headless mode for tests rather than auto-closing windows; this prevents blocking and works without a display.
-- Keep provider-specific tests explicit and mocked so they still verify backend command construction.
+- Reuse `_load_snapshot_config()` for tray validation so CLI and tray share the same runtime-scoped snapshot rules and error text.
+- Keep the CLI validation as a race-safe backstop after tray preflight.
 
 ### Open decisions
-- None for the Windows identity fix; verify remote CI before merging.
+- No implementation decisions remain; commits and PR creation are deferred to `daf complete`.
 
 ---
 
