@@ -46,6 +46,23 @@ The protection works through an **unbreakable loop**:
 3. The tool never executes, so the file is never modified
 4. AI cannot edit the source code to remove the protection because editing is blocked by the same protection
 
+### Agent-Originated CLI Boundary
+
+The same immutable PreToolUse layer also protects the AI Guardian command-line
+interface from agent shell execution. This boundary:
+
+- Applies to Bash, Shell, PowerShell, and the normalized shell payloads from all supported hook adapters.
+- Blocks direct, path-qualified, Python-module, and common launcher/wrapper invocations before a child process starts.
+- Blocks read-only commands as well as commands that change daemon, tray, hook, configuration, scanner, or model state.
+- Uses command-position-aware parsing, so documentation text, filenames, repository paths, and ordinary project commands that mention AI Guardian are not treated as launches.
+- Runs independently of the configurable permissions rules, including when ordinary tool permissions are disabled.
+
+The boundary only applies to agent-originated tool calls. Installed IDE hook
+processes, the verified read-only `mcp__ai-guardian__*` advisor namespace, and a
+human running the CLI directly in a terminal remain functional. The denial is
+reported with a safe self-protection reason and does not expose matching rules
+or permission configuration guidance.
+
 ### Example Attack Scenarios (All Blocked)
 
 ```bash

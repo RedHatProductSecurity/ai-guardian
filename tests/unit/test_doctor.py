@@ -48,6 +48,14 @@ class TestCheckResult:
         assert r.integrations is None
 
 
+class TestSelfProtection:
+    def test_self_protection_verifies_agent_cli_boundary(self):
+        result = Doctor().check_self_protection()
+
+        assert result.status == CheckStatus.PASS
+        assert "CLI execution" in result.message
+
+
 class TestDoctorReport:
     def test_exit_code_all_pass(self):
         report = DoctorReport(

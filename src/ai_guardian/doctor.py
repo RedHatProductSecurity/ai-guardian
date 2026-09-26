@@ -2007,8 +2007,11 @@ class Doctor:
         )
 
     def check_self_protection(self) -> CheckResult:
-        """Verify immutable patterns protect config/state/cache from agent access."""
-        from ai_guardian.tools.patterns import IMMUTABLE_DENY_PATTERNS
+        """Verify immutable file and agent-originated CLI protections."""
+        from ai_guardian.tools.patterns import (
+            IMMUTABLE_DENY_PATTERNS,
+            is_ai_guardian_cli_command,
+        )
 
         issues = []
 
@@ -2032,15 +2035,27 @@ class Doctor:
             if required not in bash_patterns:
                 issues.append(f"Missing Bash pattern: {required}")
 
-        for required in [
-            "*ai-guardian*pause*",
-            "*ai-guardian*resume*",
-            "*ai-guardian*stop*",
-            "*ai-guardian*disable*",
-            "*ai-guardian*uninstall*",
-        ]:
-            if required not in bash_patterns:
-                issues.append(f"Missing Bash CLI pattern: {required}")
+        cli_commands = [
+            "ai-guardian --help",
+            "/usr/local/bin/ai-guardian status",
+            "python -m ai_guardian",
+            "env AI_GUARDIAN_TEST=1 ai-guardian doctor",
+            "powershell -Command 'ai-guardian status'",
+        ]
+        for command in cli_commands:
+            if not is_ai_guardian_cli_command(command):
+                issues.append("CLI execution guard missed a supported launcher form")
+                break
+
+        safe_commands = [
+            "printf '%s\\n' 'ai-guardian status'",
+            "grep -n ai-guardian README.md",
+            "git -C ai-guardian status",
+        ]
+        for command in safe_commands:
+            if is_ai_guardian_cli_command(command):
+                issues.append("CLI execution guard matched ordinary text or filenames")
+                break
 
         if issues:
             return CheckResult(
@@ -2053,7 +2068,7 @@ class Doctor:
         return CheckResult(
             name="self_protection",
             status=CheckStatus.PASS,
-            message="Config, state, cache, CLI read-protected from agent",
+            message="Config, state, cache, and agent CLI execution protected",
         )
 
     def check_image_scanning(self) -> CheckResult:

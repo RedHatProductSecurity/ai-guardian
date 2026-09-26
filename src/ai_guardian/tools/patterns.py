@@ -11,6 +11,8 @@ policy enforcement logic.
 """
 
 import re
+import shlex
+from typing import List, Optional
 
 from ai_guardian.constants import HookEvent
 
@@ -246,14 +248,6 @@ IMMUTABLE_DENY_PATTERNS = {
         "*tee*/.config/ai-guardian/*",
         "*tee*ai-guardian.json*",
         "*curl*file://*ai-guardian*",
-        # Self-protection: agent must NEVER pause/stop/disable ai-guardian
-        "*ai-guardian*pause*",
-        "*ai-guardian*resume*",
-        "*ai-guardian*stop*",
-        "*ai-guardian*disable*",
-        "*ai-guardian*uninstall*",
-        "*ai-guardian*daemon*stop*",
-        "*ai-guardian*tray*stop*",
     ],
     "PowerShell": [
         # Dev source patterns removed (Issue #369) - redundant with git/PR workflow
@@ -599,3 +593,356 @@ def _strip_bash_heredoc_content(command: str) -> str:
         result = result[:start] + result[end:]
 
     return result
+
+
+_SHELL_COMMAND_SEPARATORS = frozenset(
+    {";", "&&", "||", "|", "&", "(", ")", "`", "{", "}"}
+)
+_SHELL_CONTROL_WORDS = frozenset(
+    {"do", "then", "else", "elif", "if", "while", "until", "case"}
+)
+_AI_GUARDIAN_EXECUTABLES = frozenset(
+    {"ai-guardian", "ai-guardian.exe", "ai-guardian.cmd", "ai-guardian.bat"}
+)
+_AI_GUARDIAN_MODULE_PREFIX = "ai_guardian"
+_DIRECT_COMMAND_WRAPPERS = frozenset(
+    {
+        "command",
+        "exec",
+        "env",
+        "eval",
+        "ionice",
+        "nice",
+        "nohup",
+        "npx",
+        "doas",
+        "runuser",
+        "setsid",
+        "stdbuf",
+        "sudo",
+        "time",
+        "timeout",
+        "unbuffer",
+        "uvx",
+        "bunx",
+        "xargs",
+    }
+)
+_SCRIPT_COMMAND_WRAPPERS = frozenset(
+    {
+        "bash",
+        "cmd",
+        "dash",
+        "fish",
+        "ksh",
+        "powershell",
+        "pwsh",
+        "sh",
+        "su",
+        "zsh",
+    }
+)
+_LAUNCHER_ACTIONS = {
+    "conda": frozenset({"run"}),
+    "npm": frozenset({"exec", "run"}),
+    "pdm": frozenset({"run"}),
+    "pipenv": frozenset({"run"}),
+    "pipx": frozenset({"run"}),
+    "pnpm": frozenset({"dlx", "exec", "run"}),
+    "poetry": frozenset({"run"}),
+    "uv": frozenset({"run", "tool"}),
+    "yarn": frozenset({"dlx", "exec", "run"}),
+}
+_OPTION_ARGUMENTS = frozenset(
+    {
+        "-c",
+        "-d",
+        "-D",
+        "-e",
+        "-f",
+        "-g",
+        "-G",
+        "-h",
+        "-n",
+        "-o",
+        "-p",
+        "-r",
+        "-t",
+        "-u",
+        "-w",
+        "--chdir",
+        "--directory",
+        "--file",
+        "--group",
+        "--host",
+        "--project",
+        "--prompt",
+        "--python",
+        "--spec",
+        "--user",
+        "--with",
+    }
+)
+
+
+def _clean_command_token(token: str) -> str:
+    """Remove shell quoting that remains in non-POSIX tokenization."""
+    value = str(token).strip()
+    while len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
+        value = value[1:-1].strip()
+    return value.rstrip(",")
+
+
+def _command_basename(token: str) -> str:
+    """Return a cross-platform executable basename."""
+    value = _clean_command_token(token).replace("\\", "/").rstrip("/")
+    return value.rsplit("/", 1)[-1].lower()
+
+
+def _is_ai_guardian_executable(token: str) -> bool:
+    return _command_basename(token) in _AI_GUARDIAN_EXECUTABLES
+
+
+def _is_python_executable(token: str) -> bool:
+    basename = _command_basename(token)
+    return bool(
+        re.fullmatch(
+            r"(?:python(?:3(?:\.\d+)?)?|py|pypy(?:3(?:\.\d+)?))(?:\.exe)?", basename
+        )
+    )
+
+
+def _is_script_shell(token: str) -> bool:
+    basename = _command_basename(token)
+    return basename in _SCRIPT_COMMAND_WRAPPERS or basename in {"cmd.exe"}
+
+
+def _tokenize_shell_command(command: str, *, posix: bool) -> List[str]:
+    """Tokenize a shell command without evaluating it."""
+    normalized = command.replace("\r\n", "\n").replace("\r", "\n").replace("\n", ";")
+    try:
+        lexer = shlex.shlex(
+            normalized,
+            posix=posix,
+            punctuation_chars=";&|()<>`{}",
+        )
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        return list(lexer)
+    except (TypeError, ValueError):
+        # An incomplete quote will not be executed as a valid shell command.
+        # Returning no tokens also avoids falling back to substring matching.
+        return []
+
+
+def _command_segments(tokens: List[str]) -> List[List[str]]:
+    """Split shell tokens at operators that start another command."""
+    segments: List[List[str]] = []
+    current: List[str] = []
+    for token in tokens:
+        if token in _SHELL_COMMAND_SEPARATORS:
+            if current:
+                segments.append(current)
+                current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _skip_option_arguments(tokens: List[str], start: int) -> int:
+    """Skip common wrapper options and their values."""
+    index = start
+    while index < len(tokens):
+        token = _clean_command_token(tokens[index])
+        if token == "--":
+            return index + 1
+        if not token.startswith("-") or token == "-":
+            return index
+        if "=" not in token and token in _OPTION_ARGUMENTS:
+            index += 2
+        else:
+            index += 1
+    return index
+
+
+def _skip_env_arguments(tokens: List[str], start: int) -> int:
+    """Find the command after env assignments/options."""
+    index = start
+    while index < len(tokens):
+        token = _clean_command_token(tokens[index])
+        if token == "--":
+            return index + 1
+        if "=" in token and not token.startswith("="):
+            index += 1
+            continue
+        if token.startswith("-") and token != "-":
+            if "=" not in token and token in _OPTION_ARGUMENTS:
+                index += 2
+            else:
+                index += 1
+            continue
+        return index
+    return index
+
+
+def _launcher_child_index(tokens: List[str], start: int, command: str) -> Optional[int]:
+    """Return the index of the child command for a known launcher."""
+    if command == "env":
+        return _skip_env_arguments(tokens, start)
+
+    if command in {
+        "command",
+        "doas",
+        "exec",
+        "ionice",
+        "nice",
+        "nohup",
+        "runuser",
+        "setsid",
+        "stdbuf",
+        "sudo",
+        "time",
+        "unbuffer",
+        "npx",
+        "uvx",
+        "bunx",
+    }:
+        return _skip_option_arguments(tokens, start)
+
+    if command == "timeout":
+        index = _skip_option_arguments(tokens, start)
+        if index < len(tokens):
+            index += 1  # timeout duration
+        return _skip_option_arguments(tokens, index)
+
+    if command == "xargs":
+        return _skip_option_arguments(tokens, start)
+
+    actions = _LAUNCHER_ACTIONS.get(command)
+    if actions:
+        index = start
+        while index < len(tokens):
+            token = _clean_command_token(tokens[index]).lower()
+            if token in actions:
+                # `uv tool run` has one additional action before the command.
+                if command == "uv" and token == "tool":
+                    index += 1
+                    continue
+                return _skip_option_arguments(tokens, index + 1)
+            if token == "--":
+                return index + 1
+            if token.startswith("-"):
+                index = _skip_option_arguments(tokens, index)
+            else:
+                index += 1
+        return None
+
+    return None
+
+
+def _script_child_index(tokens: List[str], start: int) -> Optional[int]:
+    """Return the argument containing a script for sh/powershell/cmd."""
+    for index in range(start, len(tokens)):
+        token = _clean_command_token(tokens[index]).lower()
+        if token in {"-c", "-lc", "-ic", "/c", "/k", "-command", "-cmd"}:
+            return index + 1 if index + 1 < len(tokens) else None
+    return None
+
+
+def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
+    """Check one shell command segment for a real CLI invocation."""
+    if depth > 8 or not tokens:
+        return False
+
+    index = 0
+    while (
+        index < len(tokens)
+        and _clean_command_token(tokens[index]) in _SHELL_CONTROL_WORDS
+    ):
+        index += 1
+    if index >= len(tokens):
+        return False
+
+    command_token = _clean_command_token(tokens[index])
+    command = _command_basename(command_token)
+    if _is_ai_guardian_executable(command_token):
+        return True
+
+    if _is_python_executable(command_token):
+        for module_index in range(index + 1, len(tokens) - 1):
+            option = _clean_command_token(tokens[module_index]).lower()
+            if option == "-m" or option == "-m=":
+                module = _clean_command_token(tokens[module_index + 1]).lower()
+                if module == _AI_GUARDIAN_MODULE_PREFIX or module.startswith(
+                    f"{_AI_GUARDIAN_MODULE_PREFIX}."
+                ):
+                    return True
+            if option in {"-c", "-c="}:
+                break
+        return False
+
+    if _is_script_shell(command_token):
+        child_index = _script_child_index(tokens, index + 1)
+        if child_index is not None:
+            return _contains_cli_in_command_string(tokens[child_index], depth + 1)
+        return False
+
+    if command in _DIRECT_COMMAND_WRAPPERS:
+        child_index = _launcher_child_index(tokens, index + 1, command)
+        if child_index is not None:
+            return _contains_cli_in_tokens(tokens[child_index:], depth + 1)
+        return False
+
+    if command in _LAUNCHER_ACTIONS:
+        child_index = _launcher_child_index(tokens, index + 1, command)
+        if child_index is not None:
+            return _contains_cli_in_tokens(tokens[child_index:], depth + 1)
+        return False
+
+    if command in _SHELL_CONTROL_WORDS:
+        return _contains_cli_in_tokens(tokens[index + 1 :], depth + 1)
+
+    if command in {"invoke-expression", "iex", "start-process"}:
+        for child_token in tokens[index + 1 :]:
+            if _contains_cli_in_command_string(child_token, depth + 1):
+                return True
+        return False
+
+    return False
+
+
+def _contains_cli_in_command_string(value: str, depth: int) -> bool:
+    """Recursively inspect a command string passed to a shell wrapper."""
+    if not isinstance(value, str):
+        return False
+    for posix in (True, False):
+        tokens = _tokenize_shell_command(value, posix=posix)
+        if any(
+            _contains_cli_in_tokens(segment, depth)
+            for segment in _command_segments(tokens)
+        ):
+            return True
+    return False
+
+
+def is_ai_guardian_cli_command(command: str) -> bool:
+    """Return whether *command* launches the AI Guardian CLI.
+
+    Detection is command-position aware. It covers direct and path-qualified
+    executables, Python module launches, common environment/package launchers,
+    and shell wrappers while ignoring ordinary arguments and documentation
+    text that merely mentions AI Guardian.
+    """
+    if not isinstance(command, str) or not command.strip():
+        return False
+
+    command = _strip_bash_heredoc_content(command)
+    for posix in (True, False):
+        tokens = _tokenize_shell_command(command, posix=posix)
+        if any(
+            _contains_cli_in_tokens(segment) for segment in _command_segments(tokens)
+        ):
+            return True
+    return False

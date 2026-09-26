@@ -8,7 +8,10 @@ Tests the IMMUTABLE_DENY_PATTERNS that protect:
 """
 
 import json
+from unittest.mock import patch
+
 import pytest
+
 from ai_guardian.tools.policy import ToolPolicyChecker
 
 
@@ -1078,12 +1081,150 @@ CLI_SELF_PROTECTION_BLOCKED_COMMANDS = [
     pytest.param("ai-guardian daemon stop", id="daemon-stop"),
     # tray stop
     pytest.param("ai-guardian tray stop", id="tray-stop"),
+    # Read-only and direct executable forms are protected as well.
+    pytest.param("ai-guardian status", id="status"),
+    pytest.param("ai-guardian --version", id="version"),
+    pytest.param("/usr/local/bin/ai-guardian doctor", id="path-qualified"),
+    pytest.param(
+        r"C:\Users\user\.venv\Scripts\ai-guardian.exe scan",
+        id="windows-path-qualified",
+    ),
+    pytest.param("python -m ai_guardian", id="python-module"),
+    pytest.param("python3 -m ai_guardian.cli doctor", id="python-cli-module"),
+    pytest.param("uv run ai-guardian check-update", id="uv-launcher"),
+    pytest.param("env AI_GUARDIAN_TEST=1 ai-guardian doctor", id="env-wrapper"),
+    pytest.param("sudo ai-guardian status", id="sudo-wrapper"),
+    pytest.param("bash -lc 'ai-guardian status'", id="shell-wrapper"),
+    pytest.param("powershell -Command 'ai-guardian status'", id="powershell-wrapper"),
+]
+
+
+CLI_SELF_PROTECTION_ALLOWED_MENTIONS = [
+    "printf '%s\\n' 'ai-guardian status'",
+    "grep -n ai-guardian README.md",
+    "git -C ai-guardian status",
+    "touch /tmp/ai-guardian-notes.txt",
+    "cat docs/ai-guardian-status.md",
+]
+
+
+CLI_ADAPTER_PAYLOADS = [
+    pytest.param(
+        {
+            "hook_event_name": "PreToolUse",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="claude-compatible",
+    ),
+    pytest.param(
+        {
+            "cursor_version": "1",
+            "hook_name": "beforeShellExecution",
+            "command": "ai-guardian status",
+        },
+        id="cursor",
+    ),
+    pytest.param(
+        {
+            "toolName": "Bash",
+            "toolArgs": json.dumps({"command": "ai-guardian status"}),
+        },
+        id="copilot",
+    ),
+    pytest.param(
+        {
+            "conversationId": "conversation",
+            "workspacePaths": ["/tmp/project"],
+            "toolCall": {
+                "name": "run_command",
+                "args": {"CommandLine": "ai-guardian status"},
+            },
+        },
+        id="antigravity",
+    ),
+    pytest.param(
+        {
+            "agent_action_name": "pre_run_command",
+            "tool_info": {"name": "Bash", "command": "ai-guardian status"},
+        },
+        id="windsurf",
+    ),
+    pytest.param(
+        {
+            "kiro_hook_type": "pre_tool_use",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ai-guardian status"},
+        },
+        id="kiro",
+    ),
+    pytest.param(
+        {
+            "clineVersion": "1",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ai-guardian status"},
+        },
+        id="cline",
+    ),
+    pytest.param(
+        {
+            "is_mcp_tool": False,
+            "tool_name": "launch-process",
+            "tool_input": {"command": "ai-guardian status"},
+        },
+        id="augment",
+    ),
+    pytest.param(
+        {
+            "opencode_version": "1",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="opencode",
+    ),
+    pytest.param(
+        {
+            "pi_version": "1",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="pi",
+    ),
+    pytest.param(
+        {
+            "event": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "ai-guardian status"},
+        },
+        id="crush",
+    ),
+    pytest.param(
+        {
+            "model": "codex",
+            "hook_event_name": "PreToolUse",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="codex",
+    ),
+    pytest.param(
+        {
+            "transcript_path": "/tmp/transcript.jsonl",
+            "hook_event_name": "BeforeTool",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="gemini",
+    ),
+    pytest.param(
+        {
+            "dummy_agent": True,
+            "hook_event_name": "PreToolUse",
+            "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+        },
+        id="dummy-agent",
+    ),
 ]
 
 
 @pytest.mark.parametrize("command", CLI_SELF_PROTECTION_BLOCKED_COMMANDS)
 def test_bash_blocks_ai_guardian_cli_self_protection(policy_checker, command):
-    """AI cannot run ai-guardian pause/resume/stop/disable/uninstall (Issue #1072)"""
+    """AI cannot launch any ai-guardian CLI command from Bash (Issue #2428)."""
     hook_data = {
         "hook_event_name": "PreToolUse",
         "tool_use": {"name": "Bash", "input": {"command": command}},
@@ -1092,6 +1233,67 @@ def test_bash_blocks_ai_guardian_cli_self_protection(policy_checker, command):
     is_allowed, error_msg, tool_name = policy_checker.check_tool_allowed(hook_data)
 
     assert not is_allowed, f"Bash command should be blocked: {command}"
+
+
+@pytest.mark.parametrize("command", CLI_SELF_PROTECTION_ALLOWED_MENTIONS)
+def test_bash_allows_non_invocation_mentions(policy_checker, command):
+    """Text, filenames, and repository paths mentioning the CLI remain usable."""
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": "Bash", "input": {"command": command}},
+    }
+
+    is_allowed, error_msg, tool_name = policy_checker.check_tool_allowed(hook_data)
+
+    assert is_allowed, f"Non-invocation should be allowed: {command}"
+    assert error_msg is None
+
+
+@pytest.mark.parametrize(
+    "tool_name",
+    ["Shell", "PowerShell"],
+)
+def test_shell_tools_share_immutable_cli_protection(policy_checker, tool_name):
+    """All supported shell tool names use the same immutable guard."""
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": tool_name, "input": {"command": "ai-guardian status"}},
+    }
+
+    is_allowed, error_msg, checked_tool_name = policy_checker.check_tool_allowed(
+        hook_data
+    )
+
+    assert not is_allowed
+    assert checked_tool_name == tool_name
+    assert "Pattern:" not in error_msg
+    assert "allow" not in error_msg.lower()
+    assert "immutable" in error_msg.lower()
+
+
+@patch("ai_guardian.violations.log_violation.log_violation")
+def test_cli_protection_logs_no_permission_allowlist_guidance(
+    mock_log_violation, policy_checker
+):
+    """The persisted CLI violation must not expose an agent bypass suggestion."""
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+    }
+
+    policy_checker.check_tool_allowed(hook_data)
+
+    assert mock_log_violation.call_args.kwargs["suggestion"] == {}
+
+
+@pytest.mark.parametrize("hook_data", CLI_ADAPTER_PAYLOADS)
+def test_supported_adapter_payloads_use_cli_protection(policy_checker, hook_data):
+    """Adapter-specific shell payloads cannot bypass the immutable guard."""
+    is_allowed, error_msg, tool_name = policy_checker.check_tool_allowed(hook_data)
+
+    assert not is_allowed, f"CLI invocation should be blocked: {hook_data}"
+    assert error_msg is not None
+    assert "agent-originated" in error_msg.lower()
 
 
 if __name__ == "__main__":
