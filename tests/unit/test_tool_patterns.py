@@ -11,6 +11,7 @@ from ai_guardian.tools.patterns import (
     HOOK_INDICATOR_KEYS,
     _HOOK_KEY_PATTERN,
     _strip_bash_heredoc_content,
+    is_ai_guardian_cli_command,
 )
 
 
@@ -41,9 +42,24 @@ class TestImmutableDenyPatterns:
         assert any("ai-guardian.json" in p for p in patterns)
 
     def test_bash_protects_self(self):
-        patterns = IMMUTABLE_DENY_PATTERNS["Bash"]
-        assert any("ai-guardian*pause" in p for p in patterns)
-        assert any("ai-guardian*stop" in p for p in patterns)
+        assert is_ai_guardian_cli_command("ai-guardian pause")
+        assert is_ai_guardian_cli_command("ai-guardian status")
+
+    def test_cli_detection_is_command_position_aware(self):
+        assert is_ai_guardian_cli_command("/usr/local/bin/ai-guardian --help")
+        assert is_ai_guardian_cli_command("python -m ai_guardian")
+        assert is_ai_guardian_cli_command("python -m ai_guardian.cli.main")
+        assert is_ai_guardian_cli_command("uv run ai-guardian doctor")
+        assert is_ai_guardian_cli_command("npx ai-guardian status")
+        assert is_ai_guardian_cli_command("su -c 'ai-guardian status'")
+        assert is_ai_guardian_cli_command("bash -lc 'ai-guardian status'")
+        assert not is_ai_guardian_cli_command("printf '%s\\n' 'ai-guardian status'")
+        assert not is_ai_guardian_cli_command("grep ai-guardian README.md")
+        assert not is_ai_guardian_cli_command("git -C ai-guardian status")
+
+    def test_cli_detection_ignores_heredoc_content(self):
+        command = "cat <<'EOF'\nai-guardian status\nEOF"
+        assert not is_ai_guardian_cli_command(command)
 
     def test_write_protects_hooks(self):
         patterns = IMMUTABLE_DENY_PATTERNS["Write"]

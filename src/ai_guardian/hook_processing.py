@@ -177,7 +177,11 @@ except ImportError:
     HAS_GITLEAKS_CONFIG = False
 
 try:
-    from ai_guardian.tools.policy import ToolPolicyChecker, is_ai_guardian_mcp_tool
+    from ai_guardian.tools.policy import (
+        ToolPolicyChecker,
+        is_ai_guardian_mcp_tool,
+        is_shell_tool_name,
+    )
 
     HAS_TOOL_POLICY = True
 except ImportError:
@@ -2134,11 +2138,26 @@ def _process_hook_data(hook_data, daemon_state=None):
                 identity_required = bool(
                     tool_name and is_ai_guardian_mcp_tool(tool_name)
                 )
-                if permissions_enabled or identity_required:
+                # Immutable shell self-protection remains active when users
+                # disable ordinary permission rules.
+                immutable_shell_check_required = bool(
+                    tool_name and is_shell_tool_name(tool_name)
+                )
+                if (
+                    permissions_enabled
+                    or identity_required
+                    or immutable_shell_check_required
+                ):
                     policy_checker = ToolPolicyChecker()
+                    # Policy evaluation keeps the original payload for audit
+                    # context, while these canonical fields ensure every
+                    # adapter's command shape reaches the immutable guard.
+                    policy_hook_data = dict(hook_data)
+                    policy_hook_data["tool_name"] = tool_name
+                    policy_hook_data["tool_input"] = tool_input
                     with _latency_timer.check("permissions"):
                         is_allowed, error_message, checked_tool_name = (
-                            policy_checker.check_tool_allowed(hook_data)
+                            policy_checker.check_tool_allowed(policy_hook_data)
                         )
 
                     if not is_allowed:
