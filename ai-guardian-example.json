@@ -1130,9 +1130,9 @@
     }
   },
 
-  "_comment_on_scan_error": "NEW in v1.7.0: Global behavior when a scanner encounters an error (Issue #461)",
-  "_comment_on_scan_error2": "'allow' (default): log warning, allow operation (fail-open, for developer productivity)",
-  "_comment_on_scan_error3": "'block': block operation if any scanner fails (fail-closed, for strict compliance)",
+  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error (Issues #461 and #2434)",
+  "_comment_on_scan_error2": "'allow' (default): log warning, allow operation when scanning or hook startup/processing fails (fail-open, for developer productivity)",
+  "_comment_on_scan_error3": "'block': block operation when scanning or hook startup/processing fails (fail-closed, for strict compliance)",
   "on_scan_error": "allow",
 
   "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",

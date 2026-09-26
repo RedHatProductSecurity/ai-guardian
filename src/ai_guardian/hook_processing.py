@@ -59,6 +59,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Set
 
+from ai_guardian_hook_runtime import (
+    build_failure_response,
+    ensure_hook_response,
+    get_on_scan_error_action,
+)
 from ai_guardian.violations.utils import is_temp_path
 from ai_guardian.config.utils import (
     format_config_paths,
@@ -153,6 +158,20 @@ def _load_exfil_detection_config():
 
 def _get_on_scan_error_action():
     return _loaders._get_on_scan_error_action()
+
+
+def _hook_failure_response(hook_data=None):
+    """Build a policy-aware response when the hook pipeline cannot continue."""
+    return build_failure_response(hook_data, _hook_failure_action())
+
+
+def _hook_failure_action():
+    """Resolve the policy without allowing config loading to mask a failure."""
+    try:
+        action = _get_on_scan_error_action()
+    except Exception:
+        action = get_on_scan_error_action()
+    return action if action in ("allow", "block") else "allow"
 
 
 from ai_guardian.constants import parse_ask_action
@@ -1869,6 +1888,8 @@ def _process_hook_data(hook_data, daemon_state=None):
     _latency_correlation_id = None
     _latency_agent = None
     _latency_repository = None
+    adapter = None
+    hook_event = None
     try:
         now = datetime.now(timezone.utc)
         violation_logger = ViolationLogger() if HAS_VIOLATION_LOGGER else None
@@ -2985,8 +3006,10 @@ def _process_hook_data(hook_data, daemon_state=None):
                 _advance_transcript_position(hook_data)
         except Exception:
             pass  # intentionally silent — best-effort operation
-        # Fail-open: allow operation on errors
-        return {"output": None, "exit_code": 0}
+        # Apply the same policy used by individual scanner failures.  The
+        # fallback contains only protocol-safe, generic information so a
+        # source/import error is never echoed to the agent.
+        return _hook_failure_response(hook_data)
     finally:
         logging.disable(logging.NOTSET)
         _finalize_latency(
@@ -3016,6 +3039,8 @@ def _ensure_codex_post_tool_use_json(hook_data, result):
     and other adapters, so only repair the response for Codex's PostToolUse
     protocol.
     """
+    if not isinstance(hook_data, dict) or not isinstance(result, dict):
+        return result
     if result.get("output"):
         return result
 
@@ -3039,8 +3064,17 @@ def _ensure_codex_post_tool_use_json(hook_data, result):
 
 def process_hook_data(hook_data, daemon_state=None):
     """Process one hook event and append it to the unified session trace."""
-    result = _process_hook_data(hook_data, daemon_state=daemon_state)
+    try:
+        result = _process_hook_data(hook_data, daemon_state=daemon_state)
+    except Exception as e:
+        logger.error("Unexpected error at hook processing boundary: %s", e)
+        result = _hook_failure_response(hook_data)
     result = _ensure_codex_post_tool_use_json(hook_data, result)
+    result = ensure_hook_response(
+        hook_data,
+        result,
+        action=_hook_failure_action(),
+    )
     if daemon_state is None:
         return result
     try:
@@ -3066,9 +3100,12 @@ def process_hook_input():
               - For Claude Code: output=None, exit_code=0 (allow) or 2 (block)
               - For Cursor: output=JSON string, exit_code=0
     """
+    hook_data = None
     try:
         stdin_content = sys.stdin.read()
         hook_data = json.loads(stdin_content)
+        if not isinstance(hook_data, dict):
+            raise ValueError("Hook input must be a JSON object")
         run_id = os.environ.get("AI_GUARDIAN_RUN_ID")
         if run_id:
             hook_data["_ai_guardian_run_id"] = run_id
@@ -3088,12 +3125,12 @@ def process_hook_input():
                 pass  # intentionally silent — session state best-effort
 
         return result
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, ValueError) as e:
         logger.error(f"Failed to parse hook input: {e}")
-        return {"output": None, "exit_code": 0}
+        return _hook_failure_response(hook_data)
     except Exception as e:
         logger.error(f"Unexpected error in hook: {e}")
         import traceback
 
         logger.error(traceback.format_exc())
-        return {"output": None, "exit_code": 0}
+        return _hook_failure_response(hook_data)

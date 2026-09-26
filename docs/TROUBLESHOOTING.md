@@ -554,6 +554,27 @@ If the daemon keeps failing, check:
 - Port conflicts (see above)
 - Config file errors: `ai-guardian setup --validate`
 
+### Hook Startup or Process Failure
+
+**Symptom:** A temporary syntax/import error in an editable checkout, or an
+uncaught hook error, causes the host agent to reject or block an operation.
+
+**Cause:** Older hook entry points imported the full scanner package before
+they could apply the configured failure policy. The current launcher reads the
+hook payload first and applies the global `on_scan_error` setting to startup,
+daemon/direct fallback, malformed-response, and uncaught processing failures.
+
+**Recovery:** Fix the source error and refresh the editable installation:
+
+```bash
+uv tool install --editable .
+```
+
+With `on_scan_error: "allow"` (the default), the host receives a valid no-op
+response while the package is unavailable. With `on_scan_error: "block"`, the
+host receives a protocol-specific denial where supported. No hook removal or
+security bypass is required for recovery.
+
 ### Port Already in Use
 
 **Symptom:** Daemon starts but the REST API is not available.

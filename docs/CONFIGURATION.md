@@ -52,6 +52,31 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`.
 
+### Hook Process Failure Policy
+
+The existing top-level `on_scan_error` setting controls both scanner failures
+and failures of the hook process itself. This includes daemon startup or
+response failures, direct fallback exceptions, package import or syntax errors
+in an editable checkout, and malformed hook responses.
+
+```json
+{
+  "on_scan_error": "allow"
+}
+```
+
+- `allow` (default) is fail-open. The launcher returns a valid host-specific
+  no-op response, including JSON for Cursor and Codex PostToolUse, so a
+  temporary development error does not strand the agent.
+- `block` is fail-closed. The launcher returns a host-specific denial or
+  blocking exit status where the host exposes one. Successful security
+  detections continue to use their normal scanner deny response in either mode.
+
+The bootstrap fallback reads this global setting before importing the scanner
+package. After fixing a source error in an editable install, reinstall the
+checkout with `uv tool install --editable .`; hooks do not need to be removed
+or disabled while recovering.
+
 **Immutable fields**: Add `immutable` to sections in the global config to lock fields from project override:
 
 ```json

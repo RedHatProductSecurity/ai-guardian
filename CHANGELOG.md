@@ -53,6 +53,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Hook process failure policy (#2434)**: Extend `on_scan_error` to cover
+  bootstrap/import failures, daemon/direct fallback failures, malformed hook
+  responses, and uncaught pipeline exceptions. Add a dependency-light launcher
+  that emits valid host-specific fail-open responses or preserves fail-closed
+  behavior without echoing startup errors into hook protocols.
+
 - **IDE detection isolation**: Require IDE-specific configuration files or
   installation artifacts instead of treating empty project directories as an
   installed integration. Cursor's `.cursor/rules/` metadata is no longer
