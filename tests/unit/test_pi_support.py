@@ -105,6 +105,7 @@ def test_pi_uses_shared_response_contract():
 def test_pi_extension_dir_uses_managed_default_path(tmp_path, monkeypatch):
     monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
 
     assert (
         get_pi_extension_dir()
@@ -138,6 +139,68 @@ def test_pi_setup_writes_extension_to_relocated_agent_home(tmp_path, monkeypatch
     assert 'AI_GUARDIAN_IDE_TYPE: "pi"' in content
     assert 'pi.on("tool_call"' in content
     assert 'pi.on("tool_result"' in content
+
+
+def test_pi_project_hook_status_uses_project_scope(tmp_path, monkeypatch):
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(tmp_path / "agent-home"))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
+    project = tmp_path / "project"
+    project.mkdir()
+    setup = IDESetup()
+
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
+    ):
+        assert setup.setup_ide_hooks(
+            "pi", scope="project", project_dir=str(project), force=True
+        )[0]
+
+    configured, detail = setup.check_hooks_for_ide(
+        "pi", scope="project", project_dir=str(project)
+    )
+    assert configured is True, detail
+
+
+def test_pi_setup_rejects_unmarked_legacy_extension(tmp_path, monkeypatch):
+    agent_home = tmp_path / "pi-agent"
+    extension_root = agent_home / "extensions"
+    extension_root.mkdir(parents=True)
+    legacy = extension_root / "ai-guardian.ts"
+    legacy.write_text("export default function userExtension() {}\n", encoding="utf-8")
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
+    setup = IDESetup()
+
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
+    ):
+        success, message = setup.setup_ide_hooks("pi")
+
+    assert success is False
+    assert "user-owned Pi extension" in message
+    assert legacy.is_file()
+    assert not (extension_root / "ai-guardian" / "index.ts").exists()
+
+
+def test_pi_setup_does_not_overwrite_unmarked_managed_path(tmp_path, monkeypatch):
+    agent_home = tmp_path / "pi-agent"
+    extension_dir = agent_home / "extensions" / "ai-guardian"
+    extension_dir.mkdir(parents=True)
+    extension = extension_dir / "index.ts"
+    original = "export default function userExtension() {}\n"
+    extension.write_text(original, encoding="utf-8")
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
+    setup = IDESetup()
+
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
+    ):
+        success, message = setup.setup_ide_hooks("pi")
+
+    assert success is False
+    assert "user-owned Pi extension" in message
+    assert extension.read_text(encoding="utf-8") == original
 
 
 def test_pi_project_setup_remains_project_local(tmp_path, monkeypatch):

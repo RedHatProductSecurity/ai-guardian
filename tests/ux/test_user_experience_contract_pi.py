@@ -58,7 +58,11 @@ def test_pi_setup_reports_managed_mcp_extension(tmp_path, monkeypatch, capsys):
         "npm install --ignore-scripts --no-audit --no-fund" in result["mcp_diagnostic"]
     )
     assert result["mcp_config_path"] is None
-    assert result["mcp_extension_path"].endswith("extensions/ai-guardian/index.ts")
+    assert (
+        result["mcp_extension_path"]
+        .replace("\\", "/")
+        .endswith("extensions/ai-guardian/index.ts")
+    )
     assert (agent_home / "extensions" / "ai-guardian" / "index.ts").is_file()
     assert not (agent_home / "extensions" / "ai-guardian.ts").exists()
 

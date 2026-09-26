@@ -825,7 +825,7 @@ class IDESetup:
         if ide_config.get("mcp_only"):
             return True, f"{ide_name}: MCP-only (no hooks needed)"
 
-        if ide_type == "cursor":
+        if ide_type in ("cursor", "pi"):
             config_path_str = self.get_config_path(
                 ide_type, scope=scope, project_dir=project_dir
             )
@@ -2589,6 +2589,27 @@ class IDESetup:
                 )
             return True, message
 
+        migrated_legacy = False
+        if legacy_path.is_file():
+            try:
+                legacy_source = legacy_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                return False, f"Unable to read legacy Pi extension {legacy_path}: {exc}"
+            if _TYPESCRIPT_VERSION_MARKER not in legacy_source:
+                return (
+                    False,
+                    f"Refusing to migrate user-owned Pi extension: {legacy_path}. "
+                    "Remove it manually before installing the managed extension.",
+                )
+            try:
+                legacy_path.unlink()
+                migrated_legacy = True
+            except OSError as exc:
+                return (
+                    False,
+                    f"Unable to remove legacy Pi extension {legacy_path}: {exc}",
+                )
+
         extension_dir.mkdir(parents=True, exist_ok=True)
         abs_path = _resolve_binary_path()
         extension_path.write_text(
@@ -2598,21 +2619,6 @@ class IDESetup:
             _PI_PACKAGE_JSON if enable_mcp else _PI_HOOKS_ONLY_PACKAGE_JSON,
             encoding="utf-8",
         )
-
-        migrated_legacy = False
-        if legacy_path.is_file():
-            try:
-                legacy_source = legacy_path.read_text(encoding="utf-8")
-            except OSError:
-                legacy_source = ""
-            if _TYPESCRIPT_VERSION_MARKER in legacy_source:
-                try:
-                    legacy_path.unlink()
-                    migrated_legacy = True
-                except OSError as exc:
-                    logger.warning(
-                        "Unable to remove legacy Pi extension %s: %s", legacy_path, exc
-                    )
 
         identity_registered = True
         if enable_mcp:
@@ -2835,6 +2841,19 @@ class IDESetup:
                     return False, codex_diagnostic
 
             if ide_type == "pi":
+                if not force:
+                    existing_index = config_path / "ai-guardian" / "index.ts"
+                    if existing_index.is_file():
+                        try:
+                            existing_source = existing_index.read_text(encoding="utf-8")
+                        except OSError:
+                            existing_source = ""
+                        if _TYPESCRIPT_VERSION_MARKER not in existing_source:
+                            return (
+                                False,
+                                f"Refusing to overwrite user-owned Pi extension: {existing_index}. "
+                                "Use --force to replace it.",
+                            )
                 return self._setup_pi_extension(
                     config_path, dry_run=dry_run, enable_mcp=enable_mcp
                 )
