@@ -32,24 +32,25 @@ budget_tokens: 1000
 
 ## 🚀 Next phase
 
-**Goal:** Push branch `2426` and submit issue `#2426` through the DAF workflow.
+**Goal:** Complete issue `#2436`: make Pi tray MCP health state-aware and actionable.
 
 ### Acceptance criteria
-1. [x] Pi hooks, scans, transcripts, and MCP tools share one managed extension.
-2. [x] User and project scopes, legacy migration, and idempotent setup repair are covered.
-3. [x] Canonical local `ai-guardian mcp-server` launch uses executable pinning and signed identity/nonce attestation.
-4. [x] Dependency, identity, executable, and native-MCP diagnostics are exposed without executing the server.
-5. [x] Targeted tests, runtime smoke checks, and required linters pass.
+1. [x] Pi verification reports a missing managed extension diagnostic with its repair path.
+2. [x] Tray health distinguishes missing extension, SDK dependencies, identity, disabled, and healthy states.
+3. [x] Setup and subsequent manual checks show the pinned SDK action and managed extension path instead of generic MCP missing.
+4. [x] Fresh, dependency-pending, healthy, and tray UX regression coverage passes.
+5. [x] Pi health verification remains read-only and does not launch the MCP server.
 
 ### Open decisions
-- No implementation decisions remain; push and PR submission are deferred to `daf complete`.
+- The pinned Pi SDK install remains an explicit user action; tray output now provides the command and managed extension directory.
+- Commit and PR submission are deferred to `daf complete`.
 
 ---
 
 ## 📁 Active architecture
 
 - **Stack:** Python 3.9-3.14, pytest, Textual/NiceGUI/Tkinter tray UI.
-- **Key modules:** `mcp/identity.py`, `mcp/server.py`, `setup/mcp.py`, `tray/plugins.py`.
+- **Key modules:** `mcp/identity.py`, `mcp/server.py`, `setup/mcp.py`, `tray/health.py`, `tray/plugins.py`.
 - **Patterns:** Shared MCP startup migration; fail-closed identity checks; test UI isolation through environment overrides.
 
 ---
@@ -57,15 +58,15 @@ budget_tokens: 1000
 ## ⚠️ External blockers (don't block coding)
 
 - The latest Windows jobs in run `36140124301` stalled after 5,703 passed tests; the next remote run must verify the Windows-safe identity fix.
-- Pi MCP bridge is implemented in the managed extension; npm SDK installation remains an explicit pinned setup step.
+- Pi MCP bridge is implemented in the managed extension; npm SDK installation remains an explicit pinned setup step surfaced by tray health.
 
 ---
 
 ## 🔧 Useful commands
 
 ```bash
-uv run --extra dev python -m pytest tests/unit/test_sandbox_tray.py -q
-uv run --extra dev python -m pytest tests/unit/test_mcp_identity.py tests/unit/test_mcp_server.py tests/unit/test_doctor.py -q
+  uv run --extra dev python -m pytest tests/unit/test_pi_support.py tests/unit/test_setup.py tests/unit/test_proactive_prompt.py -q
+  uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_pi.py tests/ux/test_user_experience_contract_ide_setup.py -q
 ```
 
 ---

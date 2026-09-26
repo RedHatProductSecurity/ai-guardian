@@ -288,6 +288,12 @@ def verify_pi_mcp_extension(
                 "legacy Pi extension found; rerun setup to migrate it to "
                 f"{extension_path}"
             )
+        else:
+            base["mcp_diagnostic"] = (
+                "Pi managed extension is missing; run ai-guardian setup --ide pi "
+                "to create "
+                f"{extension_path}"
+            )
         return base
 
     try:

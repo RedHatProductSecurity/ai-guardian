@@ -113,6 +113,18 @@ def test_pi_extension_dir_uses_managed_default_path(tmp_path, monkeypatch):
     )
 
 
+def test_pi_missing_managed_extension_reports_repair_path(tmp_path, monkeypatch):
+    agent_home = tmp_path / "pi-agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
+
+    verification = verify_mcp_config("pi")
+
+    assert verification["mcp_status"] == "missing"
+    assert "Pi managed extension is missing" in verification["mcp_diagnostic"]
+    assert verification["mcp_extension_path"] in verification["mcp_diagnostic"]
+
+
 def test_pi_setup_writes_extension_to_relocated_agent_home(tmp_path, monkeypatch):
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
