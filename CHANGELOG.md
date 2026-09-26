@@ -33,7 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Pi coding-agent support (#2325)**: Add a dedicated Pi extension adapter with
   global and project-local setup, six managed lifecycle events, Pi JSONL
-  transcript/session discovery, and explicit unsupported-MCP reporting.
+  transcript/session discovery, and managed MCP support.
+
+- **Managed Pi MCP bridge (#2426):** Add a versioned TypeScript extension
+  package that retains Pi hook/scan handling while discovering the canonical
+  local AI Guardian MCP server's tools. Preserve signed identity registration
+  and nonce attestation, pin the executable, migrate the legacy flat extension,
+  and fail closed when verification or dependencies are missing.
 
 - **Pi container support (#2326)**: Add the pinned MIT Pi coding agent to the
   normal and OpenShell images, selected-CLI setup, OpenShell policy coverage,

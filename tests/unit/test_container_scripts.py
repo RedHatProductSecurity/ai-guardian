@@ -221,7 +221,7 @@ class TestContainerLaunchers:
         assert "Build OpenShell support image" in workflow
         assert "ai-guardian-readiness" in workflow
         assert "ai-guardian-openshell-readiness" in workflow
-        assert "test -f /sandbox/.pi/agent/extensions/ai-guardian.ts" in workflow
+        assert "test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts" in workflow
 
     def test_openshell_image_uses_community_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")

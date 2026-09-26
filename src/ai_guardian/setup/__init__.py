@@ -27,22 +27,22 @@ def _supports_project_scope(ide_type: Optional[str]) -> bool:
     return ide_type in _PROJECT_SCOPED_IDES
 
 
-def _normalize_cursor_setup_target(
+def _normalize_project_setup_target(
     ide_type: Optional[str], scope: str, project_dir: Optional[str]
 ) -> tuple:
     """Validate and normalize the requested setup target.
 
-    Cursor's normal installation target is the local user configuration.  A
-    project target is deliberately opt-in so a cloud-agent setup can be
-    installed in a checked-out workspace without changing the desktop setup
-    policy for local Cursor sessions.
+    Cursor's normal installation target is the local user configuration. Pi
+    uses the same explicit user/project selector for its global or project
+    extension directory. Project targets are deliberately opt-in so setup does
+    not change an unrelated user installation.
     """
     if ide_type not in _PROJECT_SCOPED_IDES:
         if project_dir or scope != "user":
             return (
                 scope,
                 project_dir,
-                "Project-scoped setup is supported only for Cursor.",
+                "Project-scoped setup is supported only for Cursor and Pi.",
             )
         return "user", None, None
 
@@ -130,6 +130,8 @@ from ai_guardian.setup.hooks import (  # noqa: F811,F401
     _AI_GUARDIAN_BRIDGE_TS,
     _OPENCODE_PLUGIN_TS,
     _PI_EXTENSION_TS,
+    _PI_HOOKS_ONLY_PACKAGE_JSON,
+    _PI_PACKAGE_JSON,
     _OPENCLAW_PACKAGE_JSON,
     _OPENCLAW_PLUGIN_TS,
 )
@@ -181,9 +183,9 @@ def setup_hooks(
         save_profile: Optional name to save current config as a custom profile
         list_profiles: If True, list available security profiles
         no_mcp: If True, skip MCP server installation (MCP is installed by default)
-        scope: Cursor setup scope. Defaults to ``user``; use ``project`` only
-            for an explicitly selected Cursor Cloud project.
-        project_dir: Existing workspace directory for Cursor project setup.
+        scope: Cursor/Pi setup scope. Defaults to ``user``; use ``project``
+            only for an explicitly selected workspace.
+        project_dir: Existing workspace directory for project-scoped setup.
 
     Returns:
         bool: True if successful, False otherwise
@@ -427,7 +429,7 @@ def setup_hooks(
         print(f"Supported IDEs: {', '.join(setup.IDE_CONFIGS.keys())}", file=sys.stderr)
         return False
 
-    scope, project_dir, target_error = _normalize_cursor_setup_target(
+    scope, project_dir, target_error = _normalize_project_setup_target(
         ide_type, scope, project_dir
     )
     if target_error:
@@ -457,11 +459,13 @@ def setup_hooks(
 
     # Setup IDE hooks
     hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
+    if ide_type == "pi":
+        hook_kwargs["enable_mcp"] = not bool(no_mcp)
     if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
         hook_kwargs.update({"scope": scope, "project_dir": project_dir})
     success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
     mcp_repair = False
-    if not success and ide_type in ("codex", "cursor"):
+    if not success and ide_type in ("codex", "cursor", "pi"):
         try:
             hook_verification = setup.verify_hooks_for_ide(
                 ide_type,
@@ -599,7 +603,7 @@ def _setup_hooks_json_output(
         )
         return False
 
-    scope, project_dir, target_error = _normalize_cursor_setup_target(
+    scope, project_dir, target_error = _normalize_project_setup_target(
         ide_type, scope, project_dir
     )
     if target_error:
@@ -632,12 +636,14 @@ def _setup_hooks_json_output(
     _devnull = io.StringIO()
     with contextlib.redirect_stdout(_devnull), contextlib.redirect_stderr(_devnull):
         hook_kwargs: Dict[str, Any] = {"dry_run": dry_run, "force": force}
+        if ide_type == "pi":
+            hook_kwargs["enable_mcp"] = not bool(no_mcp)
         if _supports_project_scope(ide_type) and (scope != "user" or project_dir):
             hook_kwargs.update({"scope": scope, "project_dir": project_dir})
         success, message = setup.setup_ide_hooks(ide_type, **hook_kwargs)
 
     mcp_repair = False
-    if not success and ide_type in ("codex", "cursor"):
+    if not success and ide_type in ("codex", "cursor", "pi"):
         try:
             hook_verification = setup.verify_hooks_for_ide(
                 ide_type,
@@ -689,6 +695,17 @@ def _setup_hooks_json_output(
             result["mcp_config_path"] = None
             result["mcp_status"] = "external"
             result["mcp_registration"] = "cursor-cloud"
+        elif ide_type == "pi":
+            from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+            result.update(
+                verify_pi_mcp_extension(
+                    scope=scope if _supports_project_scope(ide_type) else "user",
+                    project_dir=(
+                        project_dir if _supports_project_scope(ide_type) else None
+                    ),
+                )
+            )
         else:
             mcp_path = get_mcp_config_path(
                 ide_type,
@@ -709,6 +726,16 @@ def _setup_hooks_json_output(
             else:
                 result["mcp_status"] = "unsupported"
                 result["mcp_registration"] = "none"
+
+    if setup_success and ide_type == "pi" and no_mcp:
+        from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+        result.update(
+            verify_pi_mcp_extension(
+                scope=scope if _supports_project_scope(ide_type) else "user",
+                project_dir=project_dir if _supports_project_scope(ide_type) else None,
+            )
+        )
 
     # Handle rules/guidelines file setup (Issue #637)
     if setup_success and rules:

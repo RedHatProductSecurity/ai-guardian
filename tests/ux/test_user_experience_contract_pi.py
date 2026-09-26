@@ -33,14 +33,14 @@ def test_pi_block_is_reported_as_a_host_action_block():
     assert body["systemMessage"] == "Operation blocked by ai-guardian"
 
 
-def test_pi_setup_reports_native_mcp_as_unsupported(tmp_path, monkeypatch, capsys):
+def test_pi_setup_reports_managed_mcp_extension(tmp_path, monkeypatch, capsys):
     """
-    USER EXPERIENCE: Pi setup -> extension is installed without fake MCP config.
+    USER EXPERIENCE: Pi setup -> hooks and MCP tools share one managed extension.
 
     Expected User Experience:
     - Setup writes the Pi extension in the configured agent directory.
-    - JSON setup output explicitly reports MCP as unsupported.
-    - AI Guardian does not create an invented Pi MCP configuration file.
+    - JSON setup reports an extension-backed MCP registration, not a fake MCP file.
+    - Missing npm dependencies are diagnosable and do not disable the hook bridge.
     """
     agent_home = tmp_path / "pi-agent"
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
@@ -51,7 +51,36 @@ def test_pi_setup_reports_native_mcp_as_unsupported(tmp_path, monkeypatch, capsy
 
     result = json.loads(capsys.readouterr().out)
     assert result["success"] is True
-    assert result["mcp_status"] == "unsupported"
-    assert result["mcp_registration"] == "none"
+    assert result["mcp_status"] == "missing_dependencies"
+    assert result["mcp_registration"] == "extension"
+    assert result["mcp_identity_registered"] is True
+    assert (
+        "npm install --ignore-scripts --no-audit --no-fund" in result["mcp_diagnostic"]
+    )
     assert result["mcp_config_path"] is None
-    assert (agent_home / "extensions" / "ai-guardian.ts").is_file()
+    assert result["mcp_extension_path"].endswith("extensions/ai-guardian/index.ts")
+    assert (agent_home / "extensions" / "ai-guardian" / "index.ts").is_file()
+    assert not (agent_home / "extensions" / "ai-guardian.ts").exists()
+
+
+def test_pi_setup_is_idempotent_before_npm_dependencies_are_installed(
+    tmp_path, monkeypatch, capsys
+):
+    """
+    USER EXPERIENCE: Re-running Pi setup -> existing hooks remain usable.
+
+    Missing SDK dependencies are reported as a repair diagnostic, not as a
+    reason to discard the hook bridge or report a false setup failure.
+    """
+    agent_home = tmp_path / "pi-agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
+
+    with patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")):
+        assert _setup_hooks_json_output("pi", force=True) is True
+    capsys.readouterr()
+
+    assert _setup_hooks_json_output("pi") is True
+    result = json.loads(capsys.readouterr().out)
+    assert result["success"] is True
+    assert result["mcp_status"] == "missing_dependencies"

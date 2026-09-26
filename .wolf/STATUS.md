@@ -6,7 +6,7 @@ budget_tokens: 1000
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-25
+> Last updated: 2026-09-26
 
 ---
 
@@ -25,32 +25,24 @@ budget_tokens: 1000
 - Full local suite: 12,422 passed, 4 skipped; Mypy, Pylint, Ruff, and Black passed.
 - Windows CI interruption diagnosed: MCP identity liveness used `os.kill(pid, 0)` after `test_genuine_process_passes_nonce_attestation`; all three Windows jobs stalled at the same point.
 - Reused `ai_guardian.daemon.is_pid_alive()` for Windows-safe `OpenProcess` checking and added regression coverage. Affected tests and all required linters pass.
+- Pi MCP bridge (#2426) is implemented on branch `2426`: managed global/project TypeScript extension, pinned SDK diagnostics, legacy migration, executable pinning, signed identity registration, nonce-attested canonical server launch, and fail-closed tool registration.
+- Pi validation: targeted setup/identity/TypeScript/UX/E2E tests pass; real Node runtime handshake/tool call and tampered-identity fail-closed smoke checks pass; Ruff, Black, Pylint, and Mypy pass.
 
 ---
 
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` to commit and submit issue `#2423` from branch `2423`.
+**Goal:** Push branch `2426` and submit issue `#2426` through the DAF workflow.
 
 ### Acceptance criteria
-1. [x] First-time container creation uses generated configuration when no snapshot exists.
-2. [x] CLI rejects a missing saved snapshot before invoking the runtime.
-3. [x] Tray validates the same snapshot before preparation/runtime work.
-4. [x] Regression tests cover the CLI and tray paths.
-
-### Files changed
-| Type | File | Content |
-|---|---|---|
-| changed | `src/ai_guardian/tray/menu_builder.py` | Preflight selected snapshots before tray sandbox creation |
-| changed | `tests/unit/test_sandbox_command.py` | CLI missing-snapshot and generated-config regressions |
-| changed | `tests/unit/test_sandbox_tray.py` | Tray missing-snapshot regression and valid snapshot setup |
-
-### Closed decisions
-- Reuse `_load_snapshot_config()` for tray validation so CLI and tray share the same runtime-scoped snapshot rules and error text.
-- Keep the CLI validation as a race-safe backstop after tray preflight.
+1. [x] Pi hooks, scans, transcripts, and MCP tools share one managed extension.
+2. [x] User and project scopes, legacy migration, and idempotent setup repair are covered.
+3. [x] Canonical local `ai-guardian mcp-server` launch uses executable pinning and signed identity/nonce attestation.
+4. [x] Dependency, identity, executable, and native-MCP diagnostics are exposed without executing the server.
+5. [x] Targeted tests, runtime smoke checks, and required linters pass.
 
 ### Open decisions
-- No implementation decisions remain; commits and PR creation are deferred to `daf complete`.
+- No implementation decisions remain; push and PR submission are deferred to `daf complete`.
 
 ---
 
@@ -65,7 +57,7 @@ budget_tokens: 1000
 ## ⚠️ External blockers (don't block coding)
 
 - The latest Windows jobs in run `36140124301` stalled after 5,703 passed tests; the next remote run must verify the Windows-safe identity fix.
-- Pi MCP remains intentionally unimplemented; issue `#2426` tracks a future managed TypeScript extension bridge.
+- Pi MCP bridge is implemented in the managed extension; npm SDK installation remains an explicit pinned setup step.
 
 ---
 

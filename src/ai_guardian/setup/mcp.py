@@ -5,7 +5,9 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from ai_guardian import __version__
 
 from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
 from ai_guardian.setup.utils import (
@@ -16,8 +18,12 @@ from ai_guardian.setup.utils import (
 
 logger = logging.getLogger(__name__)
 
+PI_EXTENSION_NAME = "ai-guardian"
+PI_MCP_SDK_VERSION = "1.30.1"
+PI_MCP_PACKAGE_NAME = "@modelcontextprotocol/sdk"
+
 # MCP config locations per IDE
-_MCP_IDE_CONFIGS = {
+_MCP_IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
     "claude": {
         "config_file": "~/.claude.json",
         "config_key": "mcpServers",
@@ -93,12 +99,13 @@ _MCP_IDE_CONFIGS = {
         "config_key": "mcp",
         "skill_dir": ".opencode/skills",
     },
-    # Pi does not expose a native MCP configuration surface.  Keep an explicit
-    # registry entry so setup/reporting can distinguish unsupported MCP from a
-    # missing integration, while get_mcp_config_path() returns None.
+    # Pi does not expose a native MCP configuration surface.  Its managed
+    # extension is the registration boundary instead of a fabricated MCP file.
     "pi": {
         "config_key": "mcpServers",
         "skill_dir": ".pi/skills",
+        "extension_based": True,
+        "mcp_client_name": "pi",
     },
     "crush": {
         "config_file": ".crush.json",
@@ -159,6 +166,234 @@ def _cursor_project_root(cwd: Optional[str] = None) -> Path:
         if (candidate / ".cursor").is_dir():
             return candidate
     return current
+
+
+def get_pi_extension_dir(
+    scope: str = "user", project_dir: Optional[str] = None
+) -> Path:
+    """Return Pi's managed AI Guardian extension directory.
+
+    Pi discovers extensions from ``<agent-home>/extensions`` and
+    ``<project>/.pi/extensions``.  The extension directory is deliberately
+    separate from Pi's native configuration because Pi has no MCP config file.
+    """
+    if scope == "project":
+        if not project_dir:
+            raise ValueError("Pi project extension setup requires a project directory")
+        return (
+            Path(project_dir).expanduser().resolve()
+            / ".pi"
+            / "extensions"
+            / PI_EXTENSION_NAME
+        )
+    if scope not in ("user", "auto"):
+        raise ValueError("Pi scope must be 'user', 'project', or 'auto'")
+    path = resolve_ide_config_path(
+        "pi",
+        "~/.pi/agent",
+        env_subdir=("extensions", PI_EXTENSION_NAME),
+    )
+    return Path(path or "~/.pi/agent/extensions/ai-guardian").expanduser()
+
+
+def get_pi_legacy_extension_path(
+    scope: str = "user", project_dir: Optional[str] = None
+) -> Path:
+    """Return the pre-managed flat Pi extension path."""
+    return get_pi_extension_dir(scope=scope, project_dir=project_dir).parent / (
+        f"{PI_EXTENSION_NAME}.ts"
+    )
+
+
+def _pi_source_version(source: str) -> Optional[str]:
+    """Read the generated package version from a Pi extension source file."""
+    marker = "// ai-guardian-generated-version:"
+    for line in source.splitlines()[:5]:
+        if line.startswith(marker):
+            return line.split(":", 1)[1].strip()
+    return None
+
+
+def _pi_expected_binary() -> Tuple[str, List[str]]:
+    """Return the pinned executable and arguments embedded in Pi's extension."""
+    command = _resolve_binary_path()
+    suffix = " -m ai_guardian"
+    if command.endswith(suffix):
+        return command[: -len(suffix)], ["-m", "ai_guardian"]
+    return command, []
+
+
+def _pi_package_status(extension_dir: Path) -> Tuple[str, bool, Optional[str]]:
+    """Validate Pi's pinned SDK manifest and local installation."""
+    package_path = extension_dir / "package.json"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return "missing", False, None
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        return "invalid", False, None
+
+    dependencies = package.get("dependencies") if isinstance(package, dict) else None
+    declared = (
+        isinstance(dependencies, dict)
+        and dependencies.get(PI_MCP_PACKAGE_NAME) == PI_MCP_SDK_VERSION
+    )
+    if not declared:
+        return "invalid", False, None
+
+    sdk_package = (
+        extension_dir
+        / "node_modules"
+        / "@modelcontextprotocol"
+        / "sdk"
+        / "package.json"
+    )
+    try:
+        sdk = json.loads(sdk_package.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, TypeError, ValueError, json.JSONDecodeError):
+        return "missing_dependencies", False, str(package_path)
+    if not isinstance(sdk, dict) or sdk.get("version") != PI_MCP_SDK_VERSION:
+        return "invalid_dependencies", False, str(package_path)
+    return "healthy", True, str(package_path)
+
+
+def verify_pi_mcp_extension(
+    scope: str = "user", project_dir: Optional[str] = None
+) -> Dict:
+    """Return read-only health for Pi's managed MCP extension bridge.
+
+    The verifier never launches the configured executable.  Runtime identity
+    registration and nonce attestation remain enforced by the canonical
+    ``ai-guardian mcp-server`` process itself.
+    """
+    extension_dir = get_pi_extension_dir(scope=scope, project_dir=project_dir)
+    extension_path = extension_dir / "index.ts"
+    legacy_path = get_pi_legacy_extension_path(scope=scope, project_dir=project_dir)
+    base: Dict[str, object] = {
+        "mcp_installed": False,
+        "mcp_status": "missing",
+        "mcp_registration": "extension",
+        "mcp_config_path": None,
+        "mcp_extension_path": str(extension_path),
+        "mcp_package_path": str(extension_dir / "package.json"),
+        "mcp_scope": scope,
+        "mcp_legacy_path": str(legacy_path),
+        "mcp_identity_registered": False,
+    }
+
+    if not extension_path.is_file():
+        if legacy_path.is_file():
+            base["mcp_status"] = "migration_required"
+            base["mcp_diagnostic"] = (
+                "legacy Pi extension found; rerun setup to migrate it to "
+                f"{extension_path}"
+            )
+        return base
+
+    try:
+        source = extension_path.read_text(encoding="utf-8")
+    except OSError:
+        base["mcp_status"] = "invalid"
+        return base
+
+    source_version = _pi_source_version(source)
+    if source_version != __version__:
+        base["mcp_status"] = "stale"
+        base["mcp_source_version"] = source_version
+        base["mcp_diagnostic"] = (
+            "Pi extension was generated by a different AI Guardian version; "
+            "rerun setup to refresh it"
+        )
+        return base
+    if "const PI_MCP_ENABLED = false;" in source:
+        base["mcp_status"] = "disabled"
+        base["mcp_disabled"] = True
+        base["mcp_installed"] = False
+        base["mcp_diagnostic"] = (
+            "Pi MCP bridge is disabled; hook protection remains installed"
+        )
+        return base
+    if "const PI_MCP_ENABLED = true;" not in source:
+        base["mcp_status"] = "invalid"
+        return base
+    required_markers = (
+        "@modelcontextprotocol/sdk/client/index.js",
+        "@modelcontextprotocol/sdk/client/stdio.js",
+        "StdioClientTransport",
+        "listTools",
+        "callTool",
+        "mcp-server",
+        "mcp__ai-guardian__",
+    )
+    if any(marker not in source for marker in required_markers):
+        base["mcp_status"] = "invalid"
+        return base
+
+    expected_binary, expected_args = _pi_expected_binary()
+    try:
+        binary_match = re.search(r'const GUARDIAN_BINARY = ("[^"]*");', source)
+        args_match = re.search(
+            r"const GUARDIAN_BINARY_ARGS: string\[\] = (\[[^;]*\]);", source
+        )
+        rendered_binary = json.loads(binary_match.group(1)) if binary_match else None
+        rendered_args = json.loads(args_match.group(1)) if args_match else None
+    except (TypeError, ValueError, json.JSONDecodeError):
+        rendered_binary = None
+        rendered_args = None
+    if rendered_binary != expected_binary or rendered_args != expected_args:
+        base["mcp_status"] = "executable_changed"
+        base["mcp_diagnostic"] = "Pi extension executable pin does not match setup"
+        return base
+
+    try:
+        from ai_guardian.mcp.identity import (
+            _load_verified_manifest,
+            get_identity_manifest_path,
+        )
+
+        identity_path = get_identity_manifest_path()
+        identity_registered = identity_path.is_file()
+        identity_valid = identity_registered and _load_verified_manifest() is not None
+    except OSError:
+        identity_registered = False
+        identity_valid = False
+    base["mcp_identity_registered"] = identity_registered
+    if not identity_registered:
+        base["mcp_identity_diagnostic"] = (
+            "AI Guardian MCP identity registration is missing"
+        )
+    elif not identity_valid:
+        base["mcp_identity_diagnostic"] = (
+            "AI Guardian MCP identity manifest failed verification"
+        )
+
+    package_status, package_ok, package_path = _pi_package_status(extension_dir)
+    base["mcp_package_path"] = package_path or str(extension_dir / "package.json")
+    if not package_ok:
+        base["mcp_status"] = package_status
+        if package_status == "missing_dependencies":
+            base["mcp_diagnostic"] = (
+                "Install the pinned Pi MCP SDK with "
+                "npm install --ignore-scripts --no-audit --no-fund"
+            )
+        elif package_status == "invalid_dependencies":
+            base["mcp_diagnostic"] = (
+                "Pi MCP SDK version does not match the pinned 1.30.1 dependency"
+            )
+        return base
+
+    if not identity_registered:
+        base["mcp_status"] = "identity_missing"
+        base["mcp_diagnostic"] = "AI Guardian MCP identity registration is missing"
+        return base
+    if not identity_valid:
+        base["mcp_status"] = "identity_invalid"
+        base["mcp_diagnostic"] = "AI Guardian MCP identity manifest failed verification"
+        return base
+
+    base["mcp_installed"] = True
+    base["mcp_status"] = "healthy"
+    return base
 
 
 def get_mcp_config_path(
@@ -314,6 +549,9 @@ def verify_mcp_config(
     the configured command, create an identity manifest, or create a runtime
     attestation; those actions belong to MCP server startup.
     """
+    if ide_type == "pi":
+        return verify_pi_mcp_extension(scope=scope, project_dir=project_dir)
+
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
         return {
@@ -562,6 +800,19 @@ def _install_mcp_config(
     if not mcp_ide:
         return
 
+    if ide_type == "pi":
+        if dry_run:
+            print(
+                "  MCP: Pi uses the managed ai-guardian extension; "
+                "no native MCP file would be created"
+            )
+        else:
+            print(
+                "  MCP: Pi MCP tools are provided by the managed ai-guardian extension"
+            )
+            _register_mcp_identity(_resolve_binary_path())
+        return
+
     if ide_type == "cursor":
         if project_dir and scope == "user":
             scope = "project"
@@ -738,6 +989,19 @@ def _remove_mcp_config(
     """Remove MCP server entry from IDE config."""
     mcp_ide = _MCP_IDE_CONFIGS.get(ide_type)
     if not mcp_ide:
+        return
+
+    if ide_type == "pi":
+        if dry_run:
+            print(
+                "  MCP: Would leave Pi's managed extension in place; "
+                "no native MCP file exists"
+            )
+        else:
+            print(
+                "  MCP: Pi has no native MCP file; the managed extension remains "
+                "for hook protection"
+            )
         return
 
     if ide_type == "cursor":

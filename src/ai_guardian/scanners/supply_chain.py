@@ -47,18 +47,21 @@ AGENT_CONFIG_PATHS_PROJECT = [
     ".cursor/hooks.json",
     ".github/hooks/hooks.json",
     ".pi/extensions/*.ts",
+    ".pi/extensions/*/index.ts",
 ]
 
 PLUGIN_PATHS_HOME = [
     ".config/opencode/plugins/*.ts",
     ".aider-desk/extensions/*/index.ts",
     ".pi/agent/extensions/*.ts",
+    ".pi/agent/extensions/*/index.ts",
 ]
 
 SELF_ALLOWLIST = [
     "ai-guardian.ts",
     "ai-guardian-bridge.ts",
     "ai-guardian/index.ts",
+    "ai-guardian/package.json",
 ]
 
 
@@ -106,7 +109,7 @@ def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
             ("opencode", "~/.config/opencode/plugins", "*.ts", ("plugins",)),
             ("aiderdesk", "~/.aider-desk/extensions", "*/index.ts", ("extensions",)),
             ("openclaw", "~/.openclaw/plugins", "*/index.ts", ("plugins",)),
-            ("pi", "~/.pi/agent/extensions", "*.ts", ("extensions",)),
+            ("pi", "~/.pi/agent/extensions", "*/index.ts", ("extensions",)),
         )
         for ide_type, default_path, filename, env_subdir in plugin_specs:
             add(
