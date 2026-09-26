@@ -56,10 +56,33 @@ from ai_guardian.tools.patterns import (
     MIXED_SETTINGS_PATTERNS,
     HOOK_INDICATOR_KEYS,
     _HOOK_KEY_PATTERN,
+    is_ai_guardian_cli_command,
     _strip_bash_heredoc_content,
 )
 
 logger = logging.getLogger(__name__)
+
+_SHELL_TOOL_NAMES = frozenset(
+    {
+        "bash",
+        "shell",
+        "powershell",
+        "pwsh",
+        "run_command",
+        "shell_exec",
+        "send_command_input",
+        "launch-process",
+        "execute_command",
+        "terminal",
+    }
+)
+_IMMUTABLE_CLI_REASON = "agent-originated AI Guardian CLI execution"
+
+
+def is_shell_tool_name(tool_name: Optional[str]) -> bool:
+    """Return whether a canonical or adapter-specific tool runs shell code."""
+    return isinstance(tool_name, str) and tool_name.lower() in _SHELL_TOOL_NAMES
+
 
 # Import violation logger
 try:
@@ -302,6 +325,108 @@ class ToolPolicyChecker:
         msg += "\n⚠️ This protection is immutable and cannot be disabled via configuration.\n"
         return msg
 
+    @staticmethod
+    def _extract_shell_command(tool_input: Dict, hook_data: Dict) -> Optional[str]:
+        """Extract a shell command from supported adapter payload shapes."""
+        command_keys = (
+            "command",
+            "commandLine",
+            "CommandLine",
+            "commandline",
+            "command_line",
+            "shellCommand",
+            "shell_command",
+            "cmd",
+            "script",
+        )
+
+        def decode_mapping(value: Any) -> Optional[Dict]:
+            if isinstance(value, dict):
+                return value
+            if isinstance(value, str):
+                try:
+                    decoded = json.loads(value)
+                except (TypeError, json.JSONDecodeError):
+                    return None
+                return decoded if isinstance(decoded, dict) else None
+            return None
+
+        mappings = []
+        for value in (tool_input, hook_data):
+            mapping = decode_mapping(value)
+            if mapping is not None:
+                mappings.append(mapping)
+
+        if isinstance(hook_data, dict):
+            for key in ("tool_use", "tool_input", "tool_info", "parameters"):
+                mapping = decode_mapping(hook_data.get(key))
+                if mapping is not None:
+                    mappings.append(mapping)
+
+            tool_call = hook_data.get("toolCall")
+            if isinstance(tool_call, dict):
+                args = decode_mapping(tool_call.get("args"))
+                if args is not None:
+                    mappings.append(args)
+
+            tool_args = decode_mapping(hook_data.get("toolArgs"))
+            if tool_args is not None:
+                mappings.append(tool_args)
+
+        for mapping in mappings:
+            for key in command_keys:
+                command = mapping.get(key)
+                if isinstance(command, str) and command.strip():
+                    return command
+
+            for nested_key in ("input", "parameters", "args"):
+                nested = decode_mapping(mapping.get(nested_key))
+                if nested is None:
+                    continue
+                for key in command_keys:
+                    command = nested.get(key)
+                    if isinstance(command, str) and command.strip():
+                        return command
+
+        return None
+
+    def _check_immutable_cli_protection(
+        self, hook_data: Dict, tool_name: str, tool_input: Dict
+    ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
+        """Block agent shell attempts to launch the AI Guardian CLI."""
+        if not is_shell_tool_name(tool_name):
+            return None
+
+        command = self._extract_shell_command(tool_input, hook_data)
+        if not command or not is_ai_guardian_cli_command(command):
+            return None
+
+        reason = _IMMUTABLE_CLI_REASON
+        error_message = (
+            "AI Guardian Self-Protection\n\n"
+            "Protection: Agent-originated AI Guardian CLI execution\n"
+            f"Tool: {tool_name}\n"
+            "Reason: Shell tool calls from an AI agent may not launch the AI Guardian "
+            "command-line interface.\n\n"
+            "This operation was blocked before the child process started.\n"
+            "This protection is immutable and cannot be changed through agent permissions."
+        )
+        self.last_deny_action = "block"
+        self.last_deny_matched_pattern = reason
+        self.last_deny_check_value = "<agent-originated CLI invocation>"
+        self._log_violation(
+            tool_name=tool_name,
+            check_value="<agent-originated CLI invocation>",
+            reason=reason,
+            matcher=tool_name,
+            hook_data=hook_data,
+            violation_type=ViolationType.TOOL_PERMISSION,
+        )
+        logger.error(
+            "Blocked agent-originated AI Guardian CLI execution via %s", tool_name
+        )
+        return False, error_message, tool_name
+
     def check_tool_allowed(
         self, hook_data: Dict
     ) -> Tuple[bool, Optional[str], Optional[str]]:
@@ -323,6 +448,14 @@ class ToolPolicyChecker:
                 return False, "Policy check error: unable to determine tool name", None
 
             logger.info(f"Checking if tool '{tool_name}' is allowed...")
+
+            # This boundary is immutable and must run even when ordinary
+            # permissions are disabled or overridden by a configured rule.
+            cli_protection = self._check_immutable_cli_protection(
+                hook_data, tool_name, tool_input
+            )
+            if cli_protection is not None:
+                return cli_protection
 
             # PRIORITY 0: Check SSRF protection (before all other checks)
             # Prevents accessing private networks, metadata endpoints, and dangerous URL schemes
@@ -802,6 +935,11 @@ class ToolPolicyChecker:
                     if isinstance(_value, str) and _value:
                         tool_input.setdefault("file_path", _value)
                         break
+            # Windsurf provides the tool name and command in tool_info.
+            elif isinstance(hook_data.get("tool_info"), dict):
+                tool_info = hook_data["tool_info"]
+                tool_name = tool_info.get("name") or hook_data.get("tool_name")
+                tool_input = tool_info
             # Alternative: direct tool_name field
             elif "tool_name" in hook_data:
                 tool_name = hook_data["tool_name"]
@@ -830,8 +968,13 @@ class ToolPolicyChecker:
 
             # Cursor/Windsurf: synthesize from event-based hook names
             if not tool_name:
-                event_name = hook_data.get("hook_event_name", "").lower()
-                hook_name_val = hook_data.get("hook_name", "").lower()
+                event_name = str(
+                    hook_data.get("hook_event_name")
+                    or hook_data.get("event")
+                    or hook_data.get("agent_action_name")
+                    or ""
+                ).lower()
+                hook_name_val = str(hook_data.get("hook_name", "")).lower()
                 effective_event = event_name or hook_name_val
                 if effective_event in ("beforereadfile", "pre_read_code"):
                     tool_name = "Read"
@@ -840,8 +983,24 @@ class ToolPolicyChecker:
                         tool_input = {"file_path": file_path}
                 elif effective_event in ("beforeshellexecution",):
                     tool_name = "Bash"
-                    if not tool_input and hook_data.get("command"):
-                        tool_input = {"command": hook_data["command"]}
+                    if not tool_input:
+                        command = (
+                            hook_data.get("command")
+                            or hook_data.get("commandLine")
+                            or hook_data.get("CommandLine")
+                        )
+                        if command:
+                            tool_input = {"command": command}
+                elif effective_event in ("pre_run_command",):
+                    tool_name = "Bash"
+                    if not tool_input:
+                        command = (
+                            hook_data.get("command")
+                            or hook_data.get("commandLine")
+                            or hook_data.get("CommandLine")
+                        )
+                        if command:
+                            tool_input = {"command": command}
                 elif effective_event in ("beforetabfileread",):
                     tool_name = "Read"
                     file_path = hook_data.get("file_path", "")
@@ -1593,8 +1752,22 @@ class ToolPolicyChecker:
 
         file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
         file_path = check_value if tool_name in file_path_tools else None
-        suggested_matcher, suggested_patterns = self._suggest_permission_rule(tool_name)
-        all_paths = get_all_config_paths()
+        suggestion = {}
+        if reason != _IMMUTABLE_CLI_REASON:
+            suggested_matcher, suggested_patterns = self._suggest_permission_rule(
+                tool_name
+            )
+            all_paths = get_all_config_paths()
+            suggestion = {
+                "action": "add_allow_pattern",
+                "config_path": str(all_paths["global"]),
+                "config_paths": {k: str(v) for k, v in all_paths.items()},
+                "rule": {
+                    "matcher": suggested_matcher,
+                    "mode": "allow",
+                    "patterns": [p["pattern"] for p in suggested_patterns],
+                },
+            }
 
         result = ScanResult(
             detected=True,
@@ -1618,16 +1791,7 @@ class ToolPolicyChecker:
                 "tool_value": check_value,
                 "matcher": matcher,
             },
-            suggestion={
-                "action": "add_allow_pattern",
-                "config_path": str(all_paths["global"]),
-                "config_paths": {k: str(v) for k, v in all_paths.items()},
-                "rule": {
-                    "matcher": suggested_matcher,
-                    "mode": "allow",
-                    "patterns": [p["pattern"] for p in suggested_patterns],
-                },
-            },
+            suggestion=suggestion,
         )
 
     def _detect_ide_type(self, hook_data: Dict) -> str:
