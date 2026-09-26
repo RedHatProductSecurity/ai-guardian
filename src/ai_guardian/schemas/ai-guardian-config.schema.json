@@ -2390,7 +2390,7 @@
         "allow",
         "block"
       ],
-      "description": "Global behavior when a scanner encounters an error (exception, unavailable, network issue). 'allow' (default): log warning, allow operation to proceed (fail-open). 'block': block the operation if any scanner fails (fail-closed, for strict compliance). NEW in v1.7.0.",
+      "description": "Global behavior when a scanner or hook process encounters an error (exception, unavailable, network issue, import/startup failure, or malformed response). 'allow' (default): log warning, allow operation to proceed (fail-open). 'block': block the operation if scanning or hook processing fails (fail-closed, for strict compliance). NEW in v1.7.0; process failures in #2434.",
       "default": "allow"
     },
     "security_instructions": {

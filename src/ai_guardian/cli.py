@@ -11,6 +11,11 @@ import os
 import sys
 from pathlib import Path
 
+from ai_guardian_hook_runtime import (
+    build_failure_response,
+    ensure_hook_response,
+    get_on_scan_error_action,
+)
 from ai_guardian import __version__
 from ai_guardian.constants import ViolationType
 from ai_guardian.ide_registry import SUPPORTED_IDE_TYPES
@@ -2792,6 +2797,11 @@ def main():
                 timeout = max(timeout, 310.0)
             response = send_hook_request(hook_data, timeout=timeout)
             if response is not None:
+                response = ensure_hook_response(
+                    hook_data,
+                    response,
+                    action=get_on_scan_error_action(_hook_config),
+                )
                 logger.info("Daemon processed hook request")
             else:
                 logger.warning("Daemon returned no response, falling back to direct")
@@ -2799,25 +2809,49 @@ def main():
             logger.info("Daemon unavailable, falling back to direct")
     except Exception as e:
         logger.info(f"Daemon client error, falling back to direct: {e}")
+        if stdin_consumed and not isinstance(hook_data, dict):
+            response = build_failure_response(
+                hook_data if isinstance(hook_data, dict) else None,
+                get_on_scan_error_action(_hook_config),
+            )
 
     if response is None:
-        # Check persisted pause state before direct-mode fallback (#1319)
-        from ai_guardian.daemon.state import DaemonState
+        try:
+            # Check persisted pause state before direct-mode fallback (#1319)
+            from ai_guardian.daemon.state import DaemonState
 
-        if DaemonState.is_paused_on_disk(cwd=os.getcwd()):
-            logger.info("Scanning paused (persisted state), skipping direct fallback")
-            response = {"output": "{}", "exit_code": 0}
-        elif hook_data is not None:
-            response = process_hook_data(hook_data)
-        elif stdin_consumed:
-            response = {"output": None, "exit_code": 0}
-        else:
-            response = process_hook_input()
+            if DaemonState.is_paused_on_disk(cwd=os.getcwd()):
+                logger.info(
+                    "Scanning paused (persisted state), skipping direct fallback"
+                )
+                response = {"output": "{}", "exit_code": 0}
+            elif hook_data is not None:
+                response = process_hook_data(hook_data)
+            elif stdin_consumed:
+                response = build_failure_response(
+                    None, get_on_scan_error_action(_hook_config)
+                )
+            else:
+                response = process_hook_input()
+        except Exception as e:
+            logger.error("Hook fallback failed: %s", e)
+            response = build_failure_response(
+                hook_data if isinstance(hook_data, dict) else None,
+                get_on_scan_error_action(_hook_config),
+            )
+
+    response = ensure_hook_response(
+        hook_data if isinstance(hook_data, dict) else None,
+        response,
+        action=get_on_scan_error_action(_hook_config),
+    )
 
     # Output JSON to stdout if needed (for Cursor). Codex requires a JSON
     # object for PostToolUse even when processing fails open; normalize at
     # this boundary because daemon responses may come from older versions.
     output = _normalize_codex_post_tool_use_output(hook_data, response.get("output"))
+    if response.get("_failure_message"):
+        print(response["_failure_message"], file=sys.stderr)
     if output:
         print(output, flush=True)  # Force flush for Cursor
         sys.stdout.flush()  # Explicit flush for compatibility

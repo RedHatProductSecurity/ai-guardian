@@ -293,17 +293,17 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         ),
         "catches": [
             "All active scanners and their current status",
-            "on_scan_error — what happens when a scanner itself crashes",
+            "on_scan_error — what happens when a scanner or hook process fails",
         ],
         "does_not_catch": [],
         "config_summary": (
             "on_scan_error:\n"
             "  allow (default) — fail-open: log warning, let operation through\n"
-            "  block           — fail-closed: block operation if any scanner fails\n\n"
+            "  block           — fail-closed: block operation if scanning or hook processing fails\n\n"
             "Security tradeoff:\n"
             "  'block' is safer but a scanner bug = blocked workflow.\n"
             "  Recommend: 'allow' for dev, 'block' for production/compliance environments.\n"
-            "  Applies to ALL scanners: secret, PII, prompt injection, code security, canary, etc."
+            "  Applies to ALL scanners and hook process failures: startup, daemon/direct fallback, and malformed responses."
         ),
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },

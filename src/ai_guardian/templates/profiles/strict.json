@@ -233,7 +233,7 @@
       "enabled": true
     }
   },
-  "_comment_on_scan_error": "Global behavior when a scanner encounters an error. Strict profile: fail-closed (block on error).",
+  "_comment_on_scan_error": "Global behavior when a scanner or hook process encounters an error. Strict profile: fail-closed (block on error).",
   "on_scan_error": "block",
   "_comment_security_instructions": "Security rule injection into AI context via systemMessage. Injected on first UserPromptSubmit per session and re-injected after blocks. Customize with custom_rules or replace_defaults. Disable only for ai-guardian development. (v1.7.0 #580, v1.8.0 #584, v1.13.0 #1460)",
   "security_instructions": {
