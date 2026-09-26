@@ -2155,9 +2155,16 @@ def _process_hook_data(hook_data, daemon_state=None):
                     policy_hook_data = dict(hook_data)
                     policy_hook_data["tool_name"] = tool_name
                     policy_hook_data["tool_input"] = tool_input
+                    immutable_only = bool(
+                        immutable_shell_check_required
+                        and not permissions_enabled
+                        and not identity_required
+                    )
                     with _latency_timer.check("permissions"):
                         is_allowed, error_message, checked_tool_name = (
-                            policy_checker.check_tool_allowed(policy_hook_data)
+                            policy_checker.check_tool_allowed(
+                                policy_hook_data, immutable_only=immutable_only
+                            )
                         )
 
                     if not is_allowed:

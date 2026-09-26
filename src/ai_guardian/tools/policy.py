@@ -428,13 +428,15 @@ class ToolPolicyChecker:
         return False, error_message, tool_name
 
     def check_tool_allowed(
-        self, hook_data: Dict
+        self, hook_data: Dict, *, immutable_only: bool = False
     ) -> Tuple[bool, Optional[str], Optional[str]]:
         """
         Check if a tool invocation is allowed.
 
         Args:
             hook_data: Hook data from PreToolUse event
+            immutable_only: Run only immutable protections. Used when ordinary
+                permission enforcement is disabled for shell tools.
 
         Returns:
             tuple: (is_allowed: bool, error_message: str or None, tool_name: str or None)
@@ -456,6 +458,8 @@ class ToolPolicyChecker:
             )
             if cli_protection is not None:
                 return cli_protection
+            if immutable_only:
+                return True, None, tool_name
 
             # PRIORITY 0: Check SSRF protection (before all other checks)
             # Prevents accessing private networks, metadata endpoints, and dangerous URL schemes

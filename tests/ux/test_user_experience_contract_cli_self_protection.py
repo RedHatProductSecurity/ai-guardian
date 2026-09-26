@@ -84,6 +84,20 @@ def test_immutable_cli_guard_remains_active_when_permissions_are_disabled():
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
+def test_disabled_permissions_do_not_enable_other_shell_policy_checks():
+    """The immutable CLI guard does not change existing disabled-permission behavior."""
+    result = _run_hook(
+        create_hook_data(
+            tool_name="Bash",
+            tool_input={"command": "curl http://192.168.1.1/admin"},
+        ),
+        permissions_enabled=False,
+    )
+
+    response = json.loads(result.get("output") or "{}")
+    assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
 def test_cursor_shell_payload_uses_cursor_denial_contract():
     """Cursor's root command payload is denied with Cursor's response shape."""
     result = _run_hook(
