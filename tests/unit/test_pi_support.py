@@ -18,7 +18,7 @@ from ai_guardian.setup.hooks import (
     _PI_EXTENSION_TS,
     _PI_PACKAGE_JSON,
 )
-from ai_guardian.setup.mcp import verify_mcp_config
+from ai_guardian.setup.mcp import get_pi_extension_dir, verify_mcp_config
 
 
 def test_pi_detection_and_identity():
@@ -100,6 +100,16 @@ def test_pi_uses_shared_response_contract():
         "stderr": "",
         "interrupted": False,
     }
+
+
+def test_pi_extension_dir_uses_managed_default_path(tmp_path, monkeypatch):
+    monkeypatch.delenv("PI_CODING_AGENT_DIR", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+
+    assert (
+        get_pi_extension_dir()
+        == tmp_path / ".pi" / "agent" / "extensions" / "ai-guardian"
+    )
 
 
 def test_pi_setup_writes_extension_to_relocated_agent_home(tmp_path, monkeypatch):
@@ -238,6 +248,32 @@ def test_pi_no_mcp_setup_migrates_legacy_extension_to_hook_only_mode(
     )
     package = json.loads((extension_dir / "package.json").read_text(encoding="utf-8"))
     assert "dependencies" not in package
+
+
+def test_pi_upgrade_preserves_disabled_mcp_mode(tmp_path, monkeypatch):
+    agent_home = tmp_path / "pi-agent"
+    monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
+    monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "guardian-config"))
+    setup = IDESetup()
+
+    with mock.patch.object(
+        setup, "verify_gitleaks_installed", return_value=(True, "ok")
+    ):
+        assert setup.setup_ide_hooks("pi", enable_mcp=False, force=True)[0] is True
+
+        extension = agent_home / "extensions" / "ai-guardian" / "index.ts"
+        source = extension.read_text(encoding="utf-8")
+        extension.write_text(
+            source.replace(
+                "// ai-guardian-generated-version: ",
+                "// ai-guardian-generated-version: stale-",
+            ),
+            encoding="utf-8",
+        )
+        results = setup.upgrade_typescript_integrations()
+
+    assert any(result["ide"] == "pi" and result["success"] for result in results)
+    assert "const PI_MCP_ENABLED = false;" in extension.read_text(encoding="utf-8")
 
 
 def test_pi_executable_pin_drift_is_reported_without_launching_it(

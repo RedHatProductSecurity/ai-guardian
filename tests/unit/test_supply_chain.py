@@ -88,7 +88,10 @@ class TestSelfAllowlist:
         scanner = SupplyChainScanner()
         home = os.path.expanduser("~")
         path = f"{home}/.config/opencode/plugins/ai-guardian.ts"
-        content = 'import { execSync } from "child_process";'
+        content = (
+            "// ai-guardian-generated-version: test\n"
+            'import { execSync } from "child_process";'
+        )
         result = scanner.scan(path, content)
         assert result == (False, None, None)
 
@@ -96,7 +99,10 @@ class TestSelfAllowlist:
         scanner = SupplyChainScanner()
         home = os.path.expanduser("~")
         path = f"{home}/.aider-desk/extensions/ai-guardian/index.ts"
-        content = 'const cp = require("child_process");'
+        content = (
+            "// ai-guardian-generated-version: test\n"
+            'const cp = require("child_process");'
+        )
         result = scanner.scan(path, content)
         assert result == (False, None, None)
 
@@ -104,9 +110,18 @@ class TestSelfAllowlist:
         scanner = SupplyChainScanner()
         home = os.path.expanduser("~")
         path = f"{home}/.config/opencode/plugins/ai-guardian-bridge.ts"
-        content = "import { execFileSync } from 'child_process';"
+        content = (
+            "// ai-guardian-generated-version: test\n"
+            "import { execFileSync } from 'child_process';"
+        )
         result = scanner.scan(path, content)
         assert result == (False, None, None)
+
+    def test_matching_suffix_without_generated_marker_is_scanned(self):
+        scanner = SupplyChainScanner()
+        path = "/tmp/untrusted/.aider-desk/extensions/ai-guardian/index.ts"
+        result = scanner.scan(path, "const cp = require('child_process');")
+        assert result[0] is True
 
 
 class TestUserAllowlist:

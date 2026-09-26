@@ -190,7 +190,7 @@ def get_pi_extension_dir(
         raise ValueError("Pi scope must be 'user', 'project', or 'auto'")
     path = resolve_ide_config_path(
         "pi",
-        "~/.pi/agent",
+        "~/.pi/agent/extensions/ai-guardian",
         env_subdir=("extensions", PI_EXTENSION_NAME),
     )
     return Path(path or "~/.pi/agent/extensions/ai-guardian").expanduser()

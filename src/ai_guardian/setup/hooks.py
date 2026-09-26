@@ -1392,9 +1392,7 @@ class IDESetup:
                 "mcp_registration": mcp.get("mcp_registration", "local"),
             }
         )
-        mcp_optional = (
-            ide_type == "pi" and combined.get("mcp_status") == "disabled"
-        )
+        mcp_optional = ide_type == "pi" and combined.get("mcp_status") == "disabled"
         combined["healthy"] = combined["hooks_healthy"] and (
             mcp_optional or combined["mcp_installed"] is True
         )
@@ -1543,7 +1541,26 @@ class IDESetup:
             try:
                 if not self._typescript_integration_needs_upgrade(ide_type):
                     continue
-                success, message = self.setup_ide_hooks(ide_type, force=True)
+                setup_kwargs: Dict[str, Any] = {"force": True}
+                if ide_type == "pi":
+                    raw_path = self.get_config_path(ide_type)
+                    current_path = (
+                        Path(raw_path).expanduser() / "ai-guardian" / "index.ts"
+                        if raw_path
+                        else None
+                    )
+                    try:
+                        current_source = (
+                            current_path.read_text(encoding="utf-8")
+                            if current_path is not None
+                            else ""
+                        )
+                    except OSError:
+                        current_source = ""
+                    setup_kwargs["enable_mcp"] = (
+                        "const PI_MCP_ENABLED = false;" not in current_source
+                    )
+                success, message = self.setup_ide_hooks(ide_type, **setup_kwargs)
                 result = {
                     "ide": ide_type,
                     "success": bool(success),
