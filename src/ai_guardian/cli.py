@@ -140,6 +140,23 @@ def _ensure_daemon_started():
         pass  # intentionally silent — best-effort operation
 
 
+_MAX_PAUSE_MINUTES = 24 * 60
+
+
+def _parse_pause_minutes(value):
+    """Parse and validate a top-level pause duration in minutes."""
+    try:
+        minutes = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError("pause duration must be an integer")
+
+    if minutes < 0 or minutes > _MAX_PAUSE_MINUTES:
+        raise argparse.ArgumentTypeError(
+            f"pause duration must be between 0 and {_MAX_PAUSE_MINUTES} minutes"
+        )
+    return minutes
+
+
 def _handle_ml_command(args, ml_parser):
     """Handle ML model management subcommands."""
     cmd = getattr(args, "ml_command", None)
@@ -1360,6 +1377,25 @@ def main():
             "--json", action="store_true", dest="json_output", help="Output JSON"
         )
 
+        # Tray-independent global pause/resume commands (#2427)
+        pause_parser = subparsers.add_parser(
+            "pause", help="Pause global scanning without starting the daemon"
+        )
+        pause_parser.add_argument(
+            "minutes",
+            nargs="?",
+            default=0,
+            type=_parse_pause_minutes,
+            metavar="MINUTES",
+            help=(
+                "Pause duration in minutes (0 or omitted: indefinite; "
+                f"maximum: {_MAX_PAUSE_MINUTES})"
+            ),
+        )
+        subparsers.add_parser(
+            "resume", help="Resume global scanning without starting the daemon"
+        )
+
         # Daemon subcommand
         daemon_parser = subparsers.add_parser(
             "daemon", help="Manage the background daemon service"
@@ -1835,6 +1871,8 @@ def main():
         # Auto-start daemon for CLI commands (Issue #680)
         _no_autostart = {
             "daemon",
+            "pause",
+            "resume",
             "mcp-server",
             "tray",
             "sandbox",
@@ -2476,6 +2514,11 @@ def main():
         # Handle sandbox lifecycle commands (Issue #2302)
         if args.command == "sandbox":
             return handle_sandbox_command(args)
+
+        if args.command in ("pause", "resume"):
+            # Reuse the daemon socket implementation without auto-starting it.
+            args.daemon_command = args.command
+            return _handle_daemon_command(args)
 
         if args.command == "daemon":
             return _handle_daemon_command(args)

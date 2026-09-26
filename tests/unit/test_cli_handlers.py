@@ -129,6 +129,150 @@ class TestDaemonReloadCommand:
         assert "Failed" in capsys.readouterr().err
 
 
+class TestGlobalPauseResumeCommands:
+    @staticmethod
+    def _args(command, minutes=0, directory=None):
+        args = mock.MagicMock()
+        args.daemon_command = command
+        args.minutes = minutes
+        args.dir = directory
+        return args
+
+    def test_pause_indefinitely(self, capsys):
+        args = self._args("pause")
+        sock = mock.MagicMock()
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch("ai_guardian.daemon.client._connect", return_value=sock),
+            mock.patch(
+                "ai_guardian.daemon.protocol.encode_message", return_value=b"request"
+            ) as encode_message,
+            mock.patch(
+                "ai_guardian.daemon.protocol.decode_message",
+                return_value={"type": "response", "data": {"status": "paused"}},
+            ),
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        assert "scanning paused indefinitely" in capsys.readouterr().out
+        request = encode_message.call_args.args[0]
+        assert request["type"] == "pause"
+        assert request["data"] == {"minutes": 0}
+        sock.close.assert_called_once_with()
+
+    def test_pause_for_requested_duration(self, capsys):
+        args = self._args("pause", minutes=15)
+        sock = mock.MagicMock()
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch("ai_guardian.daemon.client._connect", return_value=sock),
+            mock.patch(
+                "ai_guardian.daemon.protocol.encode_message", return_value=b"request"
+            ) as encode_message,
+            mock.patch(
+                "ai_guardian.daemon.protocol.decode_message",
+                return_value={"type": "response", "data": {"status": "paused"}},
+            ),
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        assert "scanning paused for 15 minutes" in capsys.readouterr().out
+        request = encode_message.call_args.args[0]
+        assert request["data"] == {"minutes": 15}
+
+    def test_resume(self, capsys):
+        args = self._args("resume")
+        sock = mock.MagicMock()
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch("ai_guardian.daemon.client._connect", return_value=sock),
+            mock.patch(
+                "ai_guardian.daemon.protocol.encode_message", return_value=b"request"
+            ) as encode_message,
+            mock.patch(
+                "ai_guardian.daemon.protocol.decode_message",
+                return_value={"type": "response", "data": {"status": "resumed"}},
+            ),
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        assert "scanning resumed" in capsys.readouterr().out
+        assert encode_message.call_args.args[0]["type"] == "resume"
+        sock.close.assert_called_once_with()
+
+    def test_unreachable_daemon_reports_failure(self, capsys):
+        args = self._args("pause")
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=False
+            ),
+            mock.patch("ai_guardian.daemon.client._connect") as connect,
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 1
+        assert "ai-guardian daemon is not running" in capsys.readouterr().err
+        connect.assert_not_called()
+
+    def test_connection_failure_reports_failure(self, capsys):
+        args = self._args("resume")
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch("ai_guardian.daemon.client._connect", return_value=None),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 1
+        assert "Failed to connect to daemon" in capsys.readouterr().err
+
+    def test_nested_per_directory_pause_remains_supported(self, tmp_path, capsys):
+        directory = str(tmp_path)
+        args = self._args("pause", minutes=5, directory=directory)
+
+        with (
+            mock.patch(
+                "ai_guardian.daemon.client.is_daemon_running", return_value=True
+            ),
+            mock.patch(
+                "ai_guardian.daemon.client.send_pause_dir",
+                return_value={"status": "dir_paused"},
+            ) as send_pause_dir,
+            mock.patch(
+                "ai_guardian.cli_handlers._get_client_timeout", return_value=2.0
+            ),
+        ):
+            result = _handle_daemon_command(args)
+
+        assert result == 0
+        send_pause_dir.assert_called_once_with(directory, 5, timeout=2.0)
+        assert directory in capsys.readouterr().out
+
+
 class TestDaemonStatusCommand:
     def test_status_not_running(self, tmp_path, monkeypatch, capsys):
         monkeypatch.setenv("AI_GUARDIAN_STATE_DIR", str(tmp_path))
