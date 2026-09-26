@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Top-level daemon pause/resume commands (#2427):** Add tray-independent
+  `ai-guardian pause [MINUTES]` and `ai-guardian resume` commands that control
+  an existing daemon without auto-starting it, with duration validation and
+  clear unreachable-daemon errors. The nested `daemon pause/resume` commands
+  remain unchanged.
+
 - **Verified MCP server identity attestation (#2416)**: Register the canonical
   AI Guardian executable and package identity during setup, require a
   nonce-based process attestation before auto-allowing built-in MCP tools, and

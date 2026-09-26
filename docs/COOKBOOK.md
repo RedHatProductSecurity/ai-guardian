@@ -1071,12 +1071,22 @@ Default is `30` minutes. The daemon shuts down after this idle period and auto-s
 # Reload config without restart
 ai-guardian daemon reload
 
+# Pause/resume the existing daemon without the system tray
+ai-guardian pause             # Pause indefinitely
+ai-guardian pause 15          # Pause for 15 minutes (maximum: 1440)
+ai-guardian resume
+
 # Stop and let it auto-start on next command
 ai-guardian daemon stop
 
 # Check daemon status
 ai-guardian daemon status
 ```
+
+The top-level `pause` and `resume` commands never auto-start a daemon. They
+control the existing local daemon through its socket and report an error when
+it is stopped or unreachable. The older `ai-guardian daemon pause/resume`
+commands remain available, including their `--dir` and `--minutes` options.
 
 ### Daemon start times out or says "Another daemon is starting"
 

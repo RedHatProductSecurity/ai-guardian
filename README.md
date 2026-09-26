@@ -444,6 +444,8 @@ The daemon provides faster hook processing. The tray discovers and manages daemo
 ```bash
 ai-guardian daemon start -b       # Start headless daemon (background: -b)
 ai-guardian tray start -b         # Start system tray in background
+ai-guardian pause [MINUTES]      # Pause global scanning (0/omitted: indefinite)
+ai-guardian resume                # Resume global scanning
 ai-guardian tray stop             # Stop the tray
 ai-guardian tray --install --autostart  # Add desktop shortcut + launch on login
 ```

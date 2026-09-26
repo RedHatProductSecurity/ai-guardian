@@ -378,6 +378,13 @@ jobs:
       - name: Verify daemon reload
         run: ai-guardian daemon reload
 
+      - name: Verify top-level pause and resume
+        run: |
+          ai-guardian pause 1
+          ai-guardian resume
+          ai-guardian pause
+          ai-guardian resume
+
       - name: Test REST API
         run: |
           # Read REST port from PID file
