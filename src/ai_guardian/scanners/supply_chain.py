@@ -14,6 +14,7 @@ Design:
 """
 
 import fnmatch
+import json
 import logging
 import os
 import re
@@ -47,18 +48,21 @@ AGENT_CONFIG_PATHS_PROJECT = [
     ".cursor/hooks.json",
     ".github/hooks/hooks.json",
     ".pi/extensions/*.ts",
+    ".pi/extensions/*/index.ts",
 ]
 
 PLUGIN_PATHS_HOME = [
     ".config/opencode/plugins/*.ts",
     ".aider-desk/extensions/*/index.ts",
     ".pi/agent/extensions/*.ts",
+    ".pi/agent/extensions/*/index.ts",
 ]
 
 SELF_ALLOWLIST = [
     "ai-guardian.ts",
     "ai-guardian-bridge.ts",
     "ai-guardian/index.ts",
+    "ai-guardian/package.json",
 ]
 
 
@@ -106,7 +110,7 @@ def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
             ("opencode", "~/.config/opencode/plugins", "*.ts", ("plugins",)),
             ("aiderdesk", "~/.aider-desk/extensions", "*/index.ts", ("extensions",)),
             ("openclaw", "~/.openclaw/plugins", "*/index.ts", ("plugins",)),
-            ("pi", "~/.pi/agent/extensions", "*.ts", ("extensions",)),
+            ("pi", "~/.pi/agent/extensions", "*/index.ts", ("extensions",)),
         )
         for ide_type, default_path, filename, env_subdir in plugin_specs:
             add(
@@ -260,12 +264,22 @@ def _is_plugin_file(file_path: str) -> bool:
     return lower.endswith((".ts", ".js"))
 
 
-def _is_self_allowlisted(file_path: str) -> bool:
+def _is_self_allowlisted(file_path: str, content: str = "") -> bool:
+    """Skip only generated AI Guardian artifacts, not matching user files."""
     normalized = file_path.replace("\\", "/")
-    for pattern in SELF_ALLOWLIST:
-        if normalized.endswith(pattern):
-            return True
-    return False
+    matched_pattern = next(
+        (pattern for pattern in SELF_ALLOWLIST if normalized.endswith(pattern)), None
+    )
+    if matched_pattern is None:
+        return False
+
+    if matched_pattern.endswith("package.json"):
+        try:
+            return json.loads(content).get("name") == "ai-guardian-pi-extension"
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return False
+
+    return "// ai-guardian-generated-version:" in content
 
 
 def _matches_path_pattern(file_path: str, pattern: str) -> bool:
@@ -389,7 +403,7 @@ class SupplyChainScanner:
         if not self.is_agent_config(file_path):
             return False, None, None
 
-        if _is_self_allowlisted(file_path):
+        if _is_self_allowlisted(file_path, content):
             return False, None, None
 
         if self._is_allowlisted(file_path):

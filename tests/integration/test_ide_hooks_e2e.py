@@ -167,7 +167,13 @@ def _install_and_verify(ide_type: str) -> Tuple[IDESetup, Dict[str, Any]]:
     assert verification["healthy"], (
         f"{ide_type}/verification: " f"{json.dumps(verification, sort_keys=True)}"
     )
-    configured, detail = setup.check_hooks_for_ide(ide_type, integrity=True)
+    if ide_type == "pi" and verification.get("mcp_status") == "missing_dependencies":
+        # The generated extension remains a healthy hook bridge before the
+        # user installs its pinned SDK dependency. Combined integrity reports
+        # the missing dependency separately.
+        configured, detail = setup.check_hooks_for_ide(ide_type, integrity=False)
+    else:
+        configured, detail = setup.check_hooks_for_ide(ide_type, integrity=True)
     assert configured, f"{ide_type}/integrity: {detail}"
     return setup, verification
 
@@ -188,9 +194,17 @@ def _assert_mcp_registration(ide_type: str) -> None:
     spec = _MCP_IDE_CONFIGS[ide_type]
     path = _mcp_config_path(ide_type)
     if path is None:
-        # Copilot and Pi have no local MCP config target in the current setup
-        # contract; their hook/extension integrations are still verified below.
-        assert ide_type in {"copilot", "pi"}
+        if ide_type == "pi":
+            from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+            status = verify_pi_mcp_extension()
+            assert status["mcp_registration"] == "extension"
+            assert Path(status["mcp_extension_path"]).is_file()
+            assert status["mcp_status"] in {"healthy", "missing_dependencies"}
+            return
+        # Copilot has no local MCP config target; its hook integration is
+        # verified below.
+        assert ide_type == "copilot"
         return
 
     assert path.is_file(), f"{ide_type}/mcp-config: {path} was not created"
@@ -517,6 +531,8 @@ def _assert_runtime_case(
 def _assert_plugin_or_extension_bridge(setup: IDESetup, ide_type: str) -> None:
     config = setup.IDE_CONFIGS[ide_type]
     root = Path(setup.get_config_path(ide_type)).expanduser()
+    if ide_type == "pi":
+        root = root / "ai-guardian"
     if config.get("extension_file"):
         source_path = root / config["extension_file"]
     else:

@@ -1,6 +1,7 @@
 """IDE hook setup and pre-commit hook management for ai-guardian."""
 
 import json
+import logging
 import os
 import platform
 import shutil
@@ -63,6 +64,9 @@ def _tag_antigravity_events(template_hooks: Dict) -> Dict:
 ANTIGRAVITY_HOOK_NAME = "ai-guardian"
 _TYPESCRIPT_VERSION_TOKEN = "__AI_GUARDIAN_VERSION__"
 _TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
+_PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
+
+logger = logging.getLogger(__name__)
 
 
 def _render_typescript_source(source: str) -> str:
@@ -90,6 +94,14 @@ def _render_guardian_command(source: str, binary_path: str) -> str:
         "const GUARDIAN_BINARY_ARGS: string[] = [];",
         f"const GUARDIAN_BINARY_ARGS: string[] = {json.dumps(args)};",
     )
+
+
+def _render_pi_extension_source(enable_mcp: bool, binary_path: str) -> str:
+    """Render the managed Pi extension with a pinned local server command."""
+    source = _render_typescript_source(_PI_EXTENSION_TS).replace(
+        _PI_MCP_ENABLED_TOKEN, "true" if enable_mcp else "false"
+    )
+    return _render_guardian_command(source, binary_path)
 
 
 def _typescript_source_version(source: str) -> Optional[str]:
@@ -431,11 +443,12 @@ class IDESetup:
         },
         "pi": {
             "name": "Pi",
+            "mcp_client_name": "pi",
             "config_path": "~/.pi/agent/extensions",
             "config_dir_env_var": "PI_CODING_AGENT_DIR",
             "config_filename": None,
             "extension_based": True,
-            "extension_file": "ai-guardian.ts",
+            "managed_extension": True,
         },
         "augment": {
             "name": "Augment Code",
@@ -812,7 +825,7 @@ class IDESetup:
         if ide_config.get("mcp_only"):
             return True, f"{ide_name}: MCP-only (no hooks needed)"
 
-        if ide_type == "cursor":
+        if ide_type in ("cursor", "pi"):
             config_path_str = self.get_config_path(
                 ide_type, scope=scope, project_dir=project_dir
             )
@@ -1025,6 +1038,31 @@ class IDESetup:
                     "inline hooks are active in the target Codex user layer"
                 )
         if config.get("mcp_only"):
+            return result
+
+        if ide_type == "pi":
+            from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+            mcp = verify_pi_mcp_extension(scope=scope, project_dir=project_dir)
+            mcp_status = str(mcp.get("mcp_status", "missing"))
+            healthy_hook_statuses = {
+                "healthy",
+                "missing_dependencies",
+                "invalid_dependencies",
+                "identity_missing",
+                "identity_invalid",
+                "disabled",
+            }
+            if mcp_status in healthy_hook_statuses:
+                event_status = "healthy"
+            elif mcp_status in {"missing", "migration_required"}:
+                event_status = "missing"
+            else:
+                event_status = "changed"
+            result["events"]["extension"] = event_status
+            result["healthy"] = event_status == "healthy"
+            result["hooks_healthy"] = result["healthy"]
+            result.update(mcp)
             return result
 
         path_value = self.get_config_path(
@@ -1354,8 +1392,9 @@ class IDESetup:
                 "mcp_registration": mcp.get("mcp_registration", "local"),
             }
         )
-        combined["healthy"] = (
-            combined["hooks_healthy"] and combined["mcp_installed"] is True
+        mcp_optional = ide_type == "pi" and combined.get("mcp_status") == "disabled"
+        combined["healthy"] = combined["hooks_healthy"] and (
+            mcp_optional or combined["mcp_installed"] is True
         )
         return combined
 
@@ -1410,7 +1449,9 @@ class IDESetup:
     ) -> List[Path]:
         """Return generated TypeScript files owned by an IDE integration."""
         config = self.IDE_CONFIGS.get(ide_type, {})
-        if config.get("plugin_file"):
+        if ide_type == "pi":
+            paths = [config_path / "ai-guardian" / "index.ts"]
+        elif config.get("plugin_file"):
             paths = [config_path / "ai-guardian.ts"]
         elif config.get("extension_file"):
             paths = [config_path / config["extension_file"]]
@@ -1442,6 +1483,27 @@ class IDESetup:
         # Only repair an integration that the user previously installed. OpenCode
         # V1 auto-discovers local plugin files without requiring a JSON entry, so
         # a generated host file is sufficient evidence for that integration.
+        if ide_type == "pi":
+            current_path = config_path / "ai-guardian" / "index.ts"
+            legacy_path = config_path / "ai-guardian.ts"
+            if not current_path.is_file():
+                return legacy_path.is_file()
+            try:
+                current_source = current_path.read_text(encoding="utf-8")
+            except OSError:
+                return True
+            from ai_guardian import __version__
+
+            if (
+                legacy_path.is_file()
+                or _typescript_source_version(current_source) != __version__
+                or not (config_path / "ai-guardian" / "package.json").is_file()
+            ):
+                return True
+            from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+            mcp_status = verify_pi_mcp_extension().get("mcp_status")
+            return mcp_status in {"invalid", "executable_changed", "identity_invalid"}
         if ide_type == "opencode":
             plugin_path = config_path / "ai-guardian.ts"
             try:
@@ -1479,7 +1541,26 @@ class IDESetup:
             try:
                 if not self._typescript_integration_needs_upgrade(ide_type):
                     continue
-                success, message = self.setup_ide_hooks(ide_type, force=True)
+                setup_kwargs: Dict[str, Any] = {"force": True}
+                if ide_type == "pi":
+                    raw_path = self.get_config_path(ide_type)
+                    current_path = (
+                        Path(raw_path).expanduser() / "ai-guardian" / "index.ts"
+                        if raw_path
+                        else None
+                    )
+                    try:
+                        current_source = (
+                            current_path.read_text(encoding="utf-8")
+                            if current_path is not None
+                            else ""
+                        )
+                    except OSError:
+                        current_source = ""
+                    setup_kwargs["enable_mcp"] = (
+                        "const PI_MCP_ENABLED = false;" not in current_source
+                    )
+                success, message = self.setup_ide_hooks(ide_type, **setup_kwargs)
                 result = {
                     "ide": ide_type,
                     "success": bool(success),
@@ -1617,6 +1698,11 @@ class IDESetup:
         # the file itself is valid evidence.
         if ide_type == "crush":
             return config_path.is_file()
+
+        if ide_type == "pi":
+            return (config_path / "ai-guardian" / "index.ts").is_file() or (
+                config_path / "ai-guardian.ts"
+            ).is_file()
 
         executable = self.IDE_CONFIGS.get(ide_type, {}).get("executable")
         if executable:
@@ -2081,6 +2167,25 @@ class IDESetup:
 
             ide_config = self.IDE_CONFIGS.get(ide_type, {})
 
+            # Pi's managed extension owns a subdirectory under the host
+            # discovery path.  Keep legacy flat artifacts recognizable so a
+            # normal setup run can migrate them without overwriting them as if
+            # they were current.
+            if ide_type == "pi":
+                extension_dir = config_path / "ai-guardian"
+                index_path = extension_dir / "index.ts"
+                if not index_path.is_file():
+                    return False
+                try:
+                    content = index_path.read_text(encoding="utf-8")
+                except OSError:
+                    return False
+                return (
+                    "ai-guardian" in content
+                    and "PI_MCP_ENABLED" in content
+                    and (extension_dir / "package.json").is_file()
+                )
+
             # Plugin-file hooks (OpenCode): check for ai-guardian.ts AND registration
             if ide_config.get("plugin_file"):
                 plugin_file = config_path / "ai-guardian.ts"
@@ -2461,6 +2566,98 @@ class IDESetup:
 
         return True, message
 
+    def _setup_pi_extension(
+        self,
+        ext_dir: Path,
+        dry_run: bool = False,
+        enable_mcp: bool = True,
+    ) -> Tuple[bool, str]:
+        """Install Pi hooks and the managed MCP bridge in one extension."""
+        extension_dir = ext_dir / "ai-guardian"
+        extension_path = extension_dir / "index.ts"
+        package_path = extension_dir / "package.json"
+        legacy_path = ext_dir / "ai-guardian.ts"
+
+        if dry_run:
+            message = "[DRY RUN] Would configure Pi managed extension:\n"
+            message += f"  Create: {extension_path}\n"
+            if enable_mcp:
+                message += f"  Create: {package_path}\n"
+            if legacy_path.is_file():
+                message += (
+                    f"  Migrate/remove generated legacy extension: {legacy_path}\n"
+                )
+            return True, message
+
+        migrated_legacy = False
+        if legacy_path.is_file():
+            try:
+                legacy_source = legacy_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                return False, f"Unable to read legacy Pi extension {legacy_path}: {exc}"
+            if _TYPESCRIPT_VERSION_MARKER not in legacy_source:
+                return (
+                    False,
+                    f"Refusing to migrate user-owned Pi extension: {legacy_path}. "
+                    "Remove it manually before installing the managed extension.",
+                )
+            try:
+                legacy_path.unlink()
+                migrated_legacy = True
+            except OSError as exc:
+                return (
+                    False,
+                    f"Unable to remove legacy Pi extension {legacy_path}: {exc}",
+                )
+
+        extension_dir.mkdir(parents=True, exist_ok=True)
+        abs_path = _resolve_binary_path()
+        extension_path.write_text(
+            _render_pi_extension_source(enable_mcp, abs_path), encoding="utf-8"
+        )
+        package_path.write_text(
+            _PI_PACKAGE_JSON if enable_mcp else _PI_HOOKS_ONLY_PACKAGE_JSON,
+            encoding="utf-8",
+        )
+
+        identity_registered = True
+        if enable_mcp:
+            from ai_guardian.setup.mcp import _register_mcp_identity
+
+            identity_registered = _register_mcp_identity(abs_path)
+
+        gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
+        message = f"✓ Successfully configured Pi managed extension at {extension_dir}\n"
+        message += "  Created: index.ts and package.json\n"
+        if migrated_legacy:
+            message += f"  Migrated legacy extension: {legacy_path}\n"
+        if enable_mcp:
+            message += f"  MCP server: pinned to {abs_path} mcp-server\n"
+            if not identity_registered:
+                message += (
+                    "  ⚠️  WARNING: MCP identity registration failed; MCP tools "
+                    "will fail closed until setup succeeds.\n"
+                )
+        message += f"\n  {gitleaks_message}\n"
+        if not gitleaks_installed:
+            message += (
+                "\n  ⚠️  WARNING: Secret scanning will be disabled without Gitleaks!\n"
+                "      AI Guardian requires Gitleaks for secret detection.\n"
+            )
+        message += "\n  Next steps:\n"
+        step = 1
+        if enable_mcp:
+            message += (
+                f"  {step}. Run: cd {extension_dir} && "
+                "npm install --ignore-scripts --no-audit --no-fund\n"
+            )
+            step += 1
+        if not gitleaks_installed:
+            message += f"  {step}. Install Gitleaks (see above)\n"
+            step += 1
+        message += f"  {step}. Restart Pi for the extension to load\n"
+        return True, message
+
     def _setup_single_file_extension(
         self,
         ide_type: str,
@@ -2505,6 +2702,7 @@ class IDESetup:
         force: bool = False,
         scope: str = "user",
         project_dir: Optional[str] = None,
+        enable_mcp: bool = True,
     ) -> Tuple[bool, str]:
         """
         Setup IDE hooks for the specified IDE.
@@ -2513,9 +2711,11 @@ class IDESetup:
             ide_type: IDE type ('claude' or 'cursor')
             dry_run: If True, show what would be changed without applying
             force: If True, overwrite existing hooks
-            scope: Cursor setup scope. Defaults to ``user``; ``project`` is
-                used only for an explicitly selected Cursor Cloud workspace.
-            project_dir: Existing workspace directory for Cursor project setup.
+            scope: Cursor/Pi setup scope. Defaults to ``user``; ``project`` is
+                used only for an explicitly selected workspace.
+            project_dir: Existing workspace directory for Cursor/Pi project setup.
+            enable_mcp: Whether Pi's managed extension should bridge the local
+                MCP server. Other integrations ignore this option.
 
         Returns:
             tuple: (success: bool, message: str)
@@ -2603,6 +2803,32 @@ class IDESetup:
                     )
             else:
                 already_configured = False
+            if already_configured and ide_type == "pi":
+                pi_index = config_path / "ai-guardian" / "index.ts"
+                pi_legacy = config_path / "ai-guardian.ts"
+                if pi_legacy.is_file() or not pi_index.is_file():
+                    already_configured = False
+                if already_configured:
+                    try:
+                        pi_source = pi_index.read_text(encoding="utf-8")
+                    except OSError:
+                        pi_source = ""
+                    current_mcp_mode = "const PI_MCP_ENABLED = true;" in pi_source
+                    if current_mcp_mode != enable_mcp:
+                        already_configured = False
+                    else:
+                        from ai_guardian.setup.mcp import verify_pi_mcp_extension
+
+                        mcp_status = verify_pi_mcp_extension(
+                            scope=scope, project_dir=project_dir
+                        ).get("mcp_status")
+                        if mcp_status in {
+                            "stale",
+                            "invalid",
+                            "executable_changed",
+                            "identity_invalid",
+                        }:
+                            already_configured = False
             if already_configured:
                 return (
                     False,
@@ -2613,6 +2839,24 @@ class IDESetup:
                 codex_diagnostic = self._codex_setup_diagnostic()
                 if codex_diagnostic:
                     return False, codex_diagnostic
+
+            if ide_type == "pi":
+                if not force:
+                    existing_index = config_path / "ai-guardian" / "index.ts"
+                    if existing_index.is_file():
+                        try:
+                            existing_source = existing_index.read_text(encoding="utf-8")
+                        except OSError:
+                            existing_source = ""
+                        if _TYPESCRIPT_VERSION_MARKER not in existing_source:
+                            return (
+                                False,
+                                f"Refusing to overwrite user-owned Pi extension: {existing_index}. "
+                                "Use --force to replace it.",
+                            )
+                return self._setup_pi_extension(
+                    config_path, dry_run=dry_run, enable_mcp=enable_mcp
+                )
 
             # Plugin-file IDEs (OpenCode): drop a single .ts file in plugins dir
             if ide_config.get("plugin_file"):
@@ -3675,6 +3919,9 @@ import { execFileSync } from "node:child_process";
 
 const GUARDIAN_BINARY = "ai-guardian";
 const GUARDIAN_BINARY_ARGS: string[] = [];
+const PI_MCP_ENABLED = __AI_GUARDIAN_PI_MCP_ENABLED__;
+const MCP_TOOL_PREFIX = "mcp__ai-guardian__";
+const MCP_FAILURE_TEXT = "AI Guardian MCP tools are unavailable.";
 
 interface GuardianResult {
   blocked: boolean;
@@ -3849,6 +4096,124 @@ function restoreProviderCredentials(original: unknown, candidate: unknown): unkn
   return candidate;
 }
 
+type McpClient = {
+  connect(transport: unknown): Promise<void>;
+  listTools(): Promise<{ tools?: Array<Record<string, any>> }>;
+  callTool(request: Record<string, unknown>): Promise<Record<string, any>>;
+  getServerVersion?(): { name?: string; version?: string } | undefined;
+  close?(): Promise<void>;
+};
+
+type McpTransport = { close(): Promise<void> };
+
+let mcpClient: McpClient | undefined;
+let mcpTransport: McpTransport | undefined;
+let mcpInitAttempted = false;
+
+function mcpToolResult(result: Record<string, any>): Record<string, unknown> {
+  const content = Array.isArray(result.content)
+    ? result.content
+    : [{ type: "text", text: MCP_FAILURE_TEXT }];
+  return {
+    content,
+    details: {},
+    isError: result.isError === true,
+  };
+}
+
+async function closeMcp(): Promise<void> {
+  const client = mcpClient;
+  const transport = mcpTransport;
+  mcpClient = undefined;
+  mcpTransport = undefined;
+  try {
+    await client?.close?.();
+  } catch {
+    // The Pi process is already shutting down or the child has exited.
+  }
+  try {
+    await transport?.close?.();
+  } catch {
+    // The Pi process is already shutting down or the child has exited.
+  }
+}
+
+async function registerMcpTools(pi: ExtensionAPI, ctx: any): Promise<void> {
+  if (!PI_MCP_ENABLED || mcpInitAttempted) return;
+  mcpInitAttempted = true;
+
+  let client: McpClient | undefined;
+  let transport: McpTransport | undefined;
+  try {
+    const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
+    const { StdioClientTransport } = await import(
+      "@modelcontextprotocol/sdk/client/stdio.js"
+    );
+    const env = Object.fromEntries(
+      Object.entries(process.env).filter((entry): entry is [string, string] =>
+        typeof entry[1] === "string",
+      ),
+    );
+    transport = new StdioClientTransport({
+      command: GUARDIAN_BINARY,
+      args: [...GUARDIAN_BINARY_ARGS, "mcp-server"],
+      env,
+    }) as McpTransport;
+    client = new Client({ name: "ai-guardian-pi", version: "1.0.0" }) as McpClient;
+    await client.connect(transport);
+    const server = client.getServerVersion?.();
+    if (!server || server.name !== "ai-guardian") {
+      throw new Error("unexpected MCP server identity");
+    }
+
+    const listed = await client.listTools();
+    for (const tool of listed.tools || []) {
+      if (!tool || typeof tool.name !== "string" || !tool.name) continue;
+      const name = `${MCP_TOOL_PREFIX}${tool.name}`;
+      const activeClient = client;
+      pi.registerTool({
+        name,
+        label: `AI Guardian: ${tool.name}`,
+        description: typeof tool.description === "string"
+          ? tool.description
+          : "AI Guardian security advisor",
+        parameters: (tool.inputSchema || {
+          type: "object",
+          properties: {},
+        }) as any,
+        async execute(_toolCallId: string, params: Record<string, unknown>) {
+          try {
+            return mcpToolResult(await activeClient.callTool({
+              name: tool.name,
+              arguments: params || {},
+            }));
+          } catch {
+            return {
+              content: [{ type: "text", text: MCP_FAILURE_TEXT }],
+              details: {},
+              isError: true,
+            };
+          }
+        },
+      });
+    }
+    mcpClient = client;
+    mcpTransport = transport;
+  } catch {
+    try {
+      await client?.close?.();
+    } catch {
+      // The child may have failed closed before the client connected.
+    }
+    try {
+      await transport?.close?.();
+    } catch {
+      // The child may have failed closed before the client connected.
+    }
+    ctx?.ui?.notify?.(MCP_FAILURE_TEXT, "error");
+  }
+}
+
 export default function (pi: ExtensionAPI) {
   pi.on("input", async (event, ctx) => {
     const result = runGuardian(hookData(ctx, "UserPromptSubmit", {
@@ -3958,6 +4323,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    await registerMcpTools(pi, ctx);
     const result = runGuardian(hookData(ctx, "SessionStart"));
     if (result.blocked) {
       ctx.ui.notify(result.error || "Session blocked by ai-guardian", "error");
@@ -3965,8 +4331,32 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("session_shutdown", async (_event, ctx) => {
+    await closeMcp();
     runGuardian(hookData(ctx, "SessionEnd"));
   });
+}
+"""
+
+_PI_PACKAGE_JSON = """\
+{
+  "name": "ai-guardian-pi-extension",
+  "private": true,
+  "type": "module",
+  "description": "Managed AI Guardian extension for Pi",
+  "main": "index.ts",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.1"
+  }
+}
+"""
+
+_PI_HOOKS_ONLY_PACKAGE_JSON = """\
+{
+  "name": "ai-guardian-pi-extension",
+  "private": true,
+  "type": "module",
+  "description": "Managed AI Guardian extension for Pi",
+  "main": "index.ts"
 }
 """
 

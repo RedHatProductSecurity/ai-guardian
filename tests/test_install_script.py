@@ -213,7 +213,12 @@ class TestInstallScriptAgentDetection:
         """Fresh IDE directories are detected before they contain our hooks."""
         home = tmp_path / "home"
         (home / ".cursor").mkdir(parents=True)
-        env = dict(os.environ, HOME=str(home), CLAUDE_CONFIG_DIR="")
+        env = dict(
+            os.environ,
+            HOME=str(home),
+            CLAUDE_CONFIG_DIR="",
+            PI_CODING_AGENT_DIR="",
+        )
 
         result = subprocess.run(
             [

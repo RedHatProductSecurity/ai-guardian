@@ -13,7 +13,7 @@ from ai_guardian.setup.mcp import _MCP_IDE_CONFIGS
 LOCAL_MCP_IDES = tuple(
     integration.key
     for integration in SUPPORTED_IDE_REGISTRY
-    if integration.mcp_registration == "local"
+    if integration.mcp_registration in {"local", "local-extension"}
 )
 
 

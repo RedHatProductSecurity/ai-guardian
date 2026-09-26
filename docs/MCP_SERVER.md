@@ -17,6 +17,7 @@ AI Guardian includes an MCP (Model Context Protocol) server that exposes read-on
 ```bash
 ai-guardian setup --ide claude
 ai-guardian setup --ide cursor
+ai-guardian setup --ide pi
 ```
 
 The MCP server is installed by default during setup. Use `--no-mcp` to skip.
@@ -36,6 +37,16 @@ The tray exposes the same operation as **Cursor Cloud (project setup)...**;
 it does not modify the project's `.cursor/mcp.json`. Without `--project`, setup
 remains user/desktop-scoped.
 
+Pi has no native MCP configuration file. Pi setup creates the managed extension
+at `~/.pi/agent/extensions/ai-guardian/` (or the project
+`.pi/extensions/ai-guardian/`) with a pinned
+`@modelcontextprotocol/sdk` dependency. Install that dependency in the managed
+directory with `npm install --ignore-scripts --no-audit --no-fund`. The extension
+launches the resolved local `ai-guardian mcp-server`, verifies the server identity
+before registering tools, and preserves the existing signed identity/nonce
+attestation. A failed attestation exposes no MCP tools. `--no-mcp` installs the
+hook-only variant without the bridge.
+
 ### Manual setup
 
 Existing manual registrations are migrated automatically the first time the
@@ -45,7 +56,8 @@ refresh a valid identity record, so setup does not need to be rerun.
 `ai-guardian doctor` and IDE setup health checks report the local MCP
 registration state for supported clients without starting the server. A
 `healthy` registration means the client config contains an enabled
-`ai-guardian` entry; `missing`, `disabled`, and `invalid` states identify
+`ai-guardian` entry, or (for Pi) the managed extension, pinned SDK, and identity
+registration are present; `missing`, `disabled`, and `invalid` states identify
 configuration problems separately from runtime identity failures.
 
 Add to `~/.claude.json` (or `~/.claude/settings.json`):
@@ -103,6 +115,7 @@ The MCP server is controlled by IDE config. Install/uninstall via:
 ```bash
 ai-guardian setup --ide claude             # Install (default)
 ai-guardian setup --ide claude --no-mcp   # Uninstall
+ai-guardian setup --ide pi --no-mcp       # Keep Pi hooks, omit MCP bridge
 ```
 
 ## Proactive Level

@@ -504,7 +504,7 @@ jobs:
             -e AI_GUARDIAN_SETUP_SCOPE=selected \
             -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
             ai-guardian-readiness \
-            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
+            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
       - name: Build OpenShell support image
         env:
@@ -529,7 +529,7 @@ jobs:
             -e AI_GUARDIAN_SETUP_SCOPE=selected \
             -e AI_GUARDIAN_HOST_CONFIG_MOUNTED=false \
             ai-guardian-openshell-readiness \
-            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian.ts'
+            /bin/bash -lc 'test -x "$(command -v pi)" && test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts'
 
       - name: Verify OpenShell compatibility metadata
         run: |

@@ -296,7 +296,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "PiAdapter",
         ("pi",),
         "extension",
-        "none",
+        "local-extension",
         ("Pi JSONL",),
         "browser",
         (
@@ -308,7 +308,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("session_shutdown", ("allow",)),
         ),
         project_scope=True,
-        platform_contract="global and project-local Pi extensions; MCP is not a native Pi surface",
+        platform_contract="global and project-local managed Pi extensions; native MCP config is unavailable",
         cli_capable=True,
     ),
     IDEIntegration(

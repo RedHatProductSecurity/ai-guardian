@@ -124,7 +124,7 @@ ai-guardian sandbox delete guardian-codex
 
 For Pi, select the CLI explicitly. The OpenShell image installs the pinned Pi
 package and the entrypoint registers the AI Guardian extension under
-`/sandbox/.pi/agent/extensions/ai-guardian.ts`:
+`/sandbox/.pi/agent/extensions/ai-guardian/index.ts` (with its managed package manifest):
 
 ```bash
 ai-guardian sandbox create --runtime openshell \
