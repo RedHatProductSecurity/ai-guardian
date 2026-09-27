@@ -487,11 +487,12 @@ The global generated extension is version-stamped and refreshed by the daemon
 after an AI Guardian upgrade; project-local extensions remain explicit project
 setup targets. The extension launches the resolved local `ai-guardian mcp-server`
 executable, discovers its tools with `listTools()`, and registers them under the
-`mcp__ai-guardian__*` namespace. Setup registers the existing signed identity
-manifest; server startup still performs the existing nonce attestation, and a
-failed attestation registers no MCP tools. Run
-`npm install --ignore-scripts --no-audit --no-fund` in the managed extension
-directory to install the pinned MIT-licensed MCP SDK.
+`mcp__ai-guardian__*` namespace. Setup installs the pinned MIT-licensed MCP SDK
+with `npm install --ignore-scripts --no-audit --no-fund` when npm is available and
+registers the existing signed identity manifest; server startup still performs
+the existing nonce attestation, and a failed attestation registers no MCP tools.
+If npm is unavailable or the install fails, setup leaves the extension in place
+and reports the retry command.
 
 This is agent-level protection for activity routed through a user-controlled Pi
 process. It does not enforce policy on activity outside that process; OpenShell

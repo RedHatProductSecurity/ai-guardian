@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Pi setup now automatically installs the pinned MCP SDK with npm when available; failed installs leave an actionable retry diagnostic.
+
 ### Added
 
 - **Top-level daemon pause/resume commands (#2427):** Add tray-independent

@@ -30,9 +30,19 @@ budget_tokens: 1000
 
 ---
 
+## ✅ Issue #2436 Complete
+
+- Pi tray MCP health is state-aware and actionable for missing extensions, SDK dependencies, identity, disabled, stale, executable, and invalid states.
+- Commit `b62884bc` is pushed on branch `2436`; PR `#2438` is open.
+- Local validation passed: 430 affected tests; Black, Ruff, Pylint, and Mypy passed.
+- Initial CI run `36276801561` canceled Python 3.9 and 3.12 during full-suite pytest timeout handling; rerunning the failed jobs passed both, and all PR checks are green.
+- Pi setup now attempts automatic pinned SDK installation when npm is available and leaves an actionable retry diagnostic when it is not; 451 related tests pass with all required static checks.
+
+---
+
 ## 🚀 Next phase
 
-**Goal:** Complete issue `#2436`: make Pi tray MCP health state-aware and actionable.
+**Goal:** Finish and validate the Pi SDK auto-install follow-up, then update PR `#2438`.
 
 ### Acceptance criteria
 1. [x] Pi verification reports a missing managed extension diagnostic with its repair path.
@@ -40,10 +50,12 @@ budget_tokens: 1000
 3. [x] Setup and subsequent manual checks show the pinned SDK action and managed extension path instead of generic MCP missing.
 4. [x] Fresh, dependency-pending, healthy, and tray UX regression coverage passes.
 5. [x] Pi health verification remains read-only and does not launch the MCP server.
+6. [x] Pi setup automatically attempts the pinned SDK install and retries pending dependency states without `--force`.
 
 ### Open decisions
-- The pinned Pi SDK install remains an explicit user action; tray output now provides the command and managed extension directory.
-- Commit and PR submission are deferred to `daf complete`.
+- Automatic installation uses `npm install --ignore-scripts --no-audit --no-fund` when npm is available.
+- If npm is unavailable or installation fails, hooks remain installed and setup/check output provides the retry command.
+- The auto-install follow-up is currently uncommitted on branch `2436`; commit `b62884bc` and PR `#2438` remain the base.
 
 ---
 
@@ -57,8 +69,7 @@ budget_tokens: 1000
 
 ## ⚠️ External blockers (don't block coding)
 
-- The latest Windows jobs in run `36140124301` stalled after 5,703 passed tests; the next remote run must verify the Windows-safe identity fix.
-- Pi MCP bridge is implemented in the managed extension; npm SDK installation remains an explicit pinned setup step surfaced by tray health.
+- No active blockers. The remaining workflow step is review/commit of the uncommitted auto-install follow-up.
 
 ---
 
