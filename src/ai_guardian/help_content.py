@@ -295,7 +295,8 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         "catches": [
             "All active scanners and their current status",
             "on_scan_error — what happens when a scanner or hook process fails",
-            "Configuration & CLI Protection — global-only developer session access",
+            "Configuration & CLI Protection — global-only developer session access and "
+            "supported agent configuration protection",
         ],
         "does_not_catch": [],
         "config_summary": (
@@ -307,7 +308,8 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
             "  Recommend: 'allow' for dev, 'block' for production/compliance environments.\n"
             "  Applies to ALL scanners and hook process failures: startup, daemon/direct fallback, and malformed responses.\n\n"
             "Configuration & CLI Protection:\n"
-            "  Developer Session CLI Access is global-only and requires a daemon/session restart after changes."
+            "  Developer Session CLI Access is global-only and requires a daemon/session restart after changes.\n"
+            "  Agent Configuration Protection is enabled by default and blocks agent-originated mutations of supported CLI/IDE configuration."
         ),
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },
@@ -637,6 +639,11 @@ _FIELD_HELP_SUPPLEMENT: dict = {
     "permissions.enabled": (
         "Enable tool permission enforcement. "
         "When enabled, the rules[] list controls which tools the AI can use."
+    ),
+    "agent_config_protection.enabled": (
+        "Protect supported CLI/IDE settings, hooks, MCP registrations, plugins, "
+        "extensions, and active project artifacts from agent-originated mutations. "
+        "Defaults to enabled and can only be explicitly disabled in global scope."
     ),
     # ── violation_logging sub-fields ────────────────────────────────────────
     "violation_logging.log_file": (

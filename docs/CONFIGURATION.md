@@ -50,7 +50,7 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`.
 
 ### Hook Process Failure Policy
 
@@ -112,6 +112,21 @@ The TUI and Web Console expose this setting under **Configuration & CLI
 Protection** in Global Settings. It is displayed but not editable while the
 project configuration scope is selected. Restart the daemon/session after
 changing it.
+
+### Supported Agent Configuration Protection
+
+`agent_config_protection.enabled` is a global-only boolean that defaults to
+`true`. It blocks agent-originated writes, edits, notebook edits, shell
+mutations, deletion, and rename/move operations targeting supported CLI/IDE
+configuration at user or active project/workspace scope. The inventory includes
+native settings, hooks, MCP registrations, plugins, extensions, generated
+bridges, and documented relocated or explicitly selected configuration paths.
+
+Missing or malformed values remain enabled. An explicit global `false` opts out
+of this new broad protection only; immutable AI Guardian configuration, cache,
+package, hook, MCP identity, and agent-originated CLI protections remain active.
+Project overlays cannot weaken a globally enabled value, and the TUI and Web
+Console display the project-scope value as inherited/read-only.
 
 ### 3. Legacy Local Configuration
 

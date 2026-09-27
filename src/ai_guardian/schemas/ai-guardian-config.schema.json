@@ -18,6 +18,18 @@
       },
       "additionalProperties": false
     },
+    "agent_config_protection": {
+      "type": "object",
+      "description": "Global-only protection for supported CLI/IDE configuration and managed integration artifacts. Agent-originated mutations are denied by default at user and project/workspace scope. Only an explicit global boolean false opts out of this new protection; immutable AI Guardian protections remain active.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Protect supported agent configuration from agent-originated mutations. Default: true."
+        }
+      },
+      "additionalProperties": false
+    },
     "permissions": {
       "type": "object",
       "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",

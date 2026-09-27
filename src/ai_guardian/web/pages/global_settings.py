@@ -14,6 +14,7 @@ from ai_guardian.web.config_helpers import (
     get_web_config_provenance,
     get_web_config_scope_label,
 )
+from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
 
 FEATURE_GROUPS = [
     (
@@ -290,6 +291,21 @@ def _set_developer_session_enabled(config, value):
     return config
 
 
+def _get_agent_config_protection_enabled(config):
+    """Read the global-only supported-agent protection setting."""
+    return is_agent_config_protection_enabled(config)
+
+
+def _set_agent_config_protection_enabled(config, value):
+    """Update supported-agent protection without changing other settings."""
+    section = config.get("agent_config_protection", {})
+    if not isinstance(section, dict):
+        section = {}
+    section["enabled"] = bool(value)
+    config["agent_config_protection"] = section
+    return config
+
+
 def _format_remaining(dt):
     remaining = dt - datetime.now(timezone.utc)
     total = max(0, int(remaining.total_seconds()))
@@ -385,6 +401,43 @@ def create_global_settings_page(service, daemon_name: str):
                         "Controls protections for agent-originated CLI execution and "
                         "protected AI Guardian and IDE configuration."
                     ).classes("text-xs text-grey-6")
+                    ui.separator().classes("my-1")
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        agent_config_switch = ui.switch(
+                            "Agent Configuration Protection",
+                            value=_get_agent_config_protection_enabled(global_config),
+                        ).classes("flex-grow")
+                        if scope_label != "Global":
+                            agent_config_switch.disable()
+                            ui.badge("Inherited from global", color="blue").props(
+                                "dense"
+                            )
+                    ui.label(
+                        "Blocks agent-originated changes to supported CLI/IDE settings, "
+                        "hooks, MCP registrations, plugins, extensions, and project "
+                        "artifacts. Disabling this is a global security choice."
+                    ).classes("text-xs text-grey-6 ml-8")
+
+                    async def save_agent_config_protection(event):
+                        current_global = await run.io_bound(load_web_config_global)
+                        updated_global = _set_agent_config_protection_enabled(
+                            current_global, event.value
+                        )
+                        saved = await run.io_bound(
+                            save_web_config, updated_global, scope="global"
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
+                        ui.notify(
+                            "Agent Configuration Protection saved; restart the daemon/session to apply",
+                            type="warning" if not event.value else "positive",
+                        )
+
+                    agent_config_switch.on_value_change(save_agent_config_protection)
                     ui.separator().classes("my-1")
                     with ui.row().classes("items-center gap-2 w-full"):
                         developer_switch = ui.switch(

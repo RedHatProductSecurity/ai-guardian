@@ -47,6 +47,11 @@ from ai_guardian.config.utils import (
 )
 from ai_guardian.config.loaders import _load_json_config
 from ai_guardian.constants import ViolationType
+from ai_guardian.agent_config_protection import (
+    build_agent_config_inventory,
+    is_agent_config_mutation_tool,
+    is_agent_config_protection_enabled,
+)
 from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.mcp.identity import (
     is_ai_guardian_mcp_tool,
@@ -78,6 +83,7 @@ _SHELL_TOOL_NAMES = frozenset(
     }
 )
 _IMMUTABLE_CLI_REASON = "agent-originated AI Guardian CLI execution"
+_AGENT_CONFIG_PROTECTION_REASON = "supported agent configuration protection"
 
 
 def is_shell_tool_name(tool_name: Optional[str]) -> bool:
@@ -449,6 +455,47 @@ class ToolPolicyChecker:
         )
         return False, error_message, tool_name
 
+    def _check_agent_config_protection(
+        self, hook_data: Dict, tool_name: str, tool_input: Dict
+    ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
+        """Block agent-originated mutations of supported agent configuration."""
+        if not is_agent_config_protection_enabled(self.config):
+            return None
+        if not is_agent_config_mutation_tool(tool_name):
+            return None
+
+        inventory = build_agent_config_inventory()
+        protected_target = inventory.match_mutation(tool_name, tool_input, hook_data)
+        if protected_target is None:
+            return None
+
+        self.last_deny_action = "block"
+        self.last_deny_matched_pattern = _AGENT_CONFIG_PROTECTION_REASON
+        self.last_deny_check_value = "<supported agent configuration>"
+        self._log_violation(
+            tool_name=tool_name,
+            check_value=protected_target.path,
+            reason=_AGENT_CONFIG_PROTECTION_REASON,
+            matcher=tool_name,
+            hook_data=hook_data,
+        )
+        logger.error(
+            "Blocked agent-originated mutation of %s configuration via %s",
+            protected_target.integration,
+            tool_name,
+        )
+        error_message = (
+            "AI Agent Configuration Protection\n\n"
+            "Protection: Supported CLI/IDE configuration\n"
+            f"Tool: {tool_name}\n"
+            "Reason: This operation would modify configuration or a managed "
+            "integration artifact used by a supported AI coding agent.\n\n"
+            "This operation has been blocked for security.\n"
+            "The protected configuration must be managed outside agent-originated "
+            "tool calls."
+        )
+        return False, error_message, tool_name
+
     def check_tool_allowed(
         self, hook_data: Dict, *, immutable_only: bool = False
     ) -> Tuple[bool, Optional[str], Optional[str]]:
@@ -480,6 +527,14 @@ class ToolPolicyChecker:
             )
             if cli_protection is not None:
                 return cli_protection
+
+            # Supported agent configuration is protected independently of
+            # ordinary permissions, including when permissions are disabled.
+            agent_config_protection = self._check_agent_config_protection(
+                hook_data, tool_name, tool_input
+            )
+            if agent_config_protection is not None:
+                return agent_config_protection
             if immutable_only and not self._developer_session_enabled:
                 return True, None, tool_name
 
@@ -1788,7 +1843,10 @@ class ToolPolicyChecker:
         file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
         file_path = check_value if tool_name in file_path_tools else None
         suggestion = {}
-        if reason != _IMMUTABLE_CLI_REASON:
+        if reason not in {
+            _IMMUTABLE_CLI_REASON,
+            _AGENT_CONFIG_PROTECTION_REASON,
+        }:
             suggested_matcher, suggested_patterns = self._suggest_permission_rule(
                 tool_name
             )
@@ -1879,6 +1937,11 @@ class ToolPolicyChecker:
 
         # Merge project local config (with immutability filtering)
         if local_config:
+            local_config = {
+                key: value
+                for key, value in local_config.items()
+                if key != "agent_config_protection"
+            }
             config = self._merge_configs(
                 config, local_config, immutable_matchers, immutable_sections
             )
@@ -1976,6 +2039,7 @@ class ToolPolicyChecker:
     def _get_defaults(self) -> Dict:
         """Get default empty configuration."""
         return {
+            "agent_config_protection": {"enabled": True},
             "permissions": {"enabled": True, "immutable": False, "rules": []},
             "permissions_directories": {"deny": [], "allow": []},
             "remote_configs": [],
@@ -2418,6 +2482,7 @@ class ToolPolicyChecker:
                     ("secret_scanning", "enabled"),
                     ("prompt_injection", "enabled"),
                     ("permissions", "enabled"),
+                    ("agent_config_protection", "enabled"),
                 ]
 
                 for key_path in security_critical_keys:

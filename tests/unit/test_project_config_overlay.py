@@ -108,6 +108,15 @@ class TestDeepMerge:
             assert section not in result
         assert result["prompt_injection"]["enabled"] is False
 
+    def test_agent_config_protection_cannot_be_weakened_by_project(self):
+        base = {"agent_config_protection": {"enabled": True}}
+        override = {"agent_config_protection": {"enabled": False}}
+
+        result = deep_merge(base, override)
+
+        assert result["agent_config_protection"]["enabled"] is True
+        assert "agent_config_protection" not in deep_merge({}, override)
+
     def test_immutable_fields_enforced(self):
         base = {
             "ssrf_protection": {
@@ -459,6 +468,26 @@ class TestLoadConfigFileMerge:
             assert error is None
             assert config["daemon"]["host"] == "localhost"
 
+    def test_agent_config_protection_cannot_be_disabled_by_project(
+        self, _isolate_config_dir, tmp_path
+    ):
+        global_config = {"agent_config_protection": {"enabled": True}}
+        project_config = {"agent_config_protection": {"enabled": False}}
+
+        (_isolate_config_dir / "ai-guardian.json").write_text(json.dumps(global_config))
+        project_path = tmp_path / "project_config.json"
+        project_path.write_text(json.dumps(project_config))
+
+        with mock.patch.dict(
+            os.environ,
+            {"AI_GUARDIAN_PROJECT_CONFIG": str(project_path)},
+        ):
+            _clear_config_cache()
+            config, error = _load_config_file()
+
+        assert error is None
+        assert config["agent_config_protection"]["enabled"] is True
+
     def test_no_project_config_backward_compat(self, _isolate_config_dir):
         config_path = _isolate_config_dir / "ai-guardian.json"
         config_path.write_text(json.dumps({"prompt_injection": {"enabled": True}}))
@@ -567,6 +596,7 @@ class TestGlobalOnlySections:
             "remote_configs",
             "update_checking",
             "developer_session",
+            "agent_config_protection",
         }
         assert GLOBAL_ONLY_SECTIONS == expected
 

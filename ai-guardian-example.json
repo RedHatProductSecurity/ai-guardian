@@ -30,10 +30,14 @@
   "_comment27": "  Place .ai-guardian/ai-guardian.json at repo root to override per-project.",
   "_comment28": "  Project config merges on top of this global config.",
   "_comment29": "  Use immutable arrays in sections to prevent project override.",
-  "_comment30": "  Global-only sections (daemon, mcp_server, support, developer_session, etc.) cannot be overridden.",
+  "_comment30": "  Global-only sections (daemon, mcp_server, support, developer_session, agent_config_protection, etc.) cannot be overridden.",
   "_comment31": "Agent-originated AI Guardian CLI execution is denied by default. Enable developer_session.enabled only in this protected global config before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
   "developer_session": {
     "enabled": false
+  },
+  "_comment32": "Protect supported CLI/IDE configuration, hooks, MCP registrations, plugins, extensions, and project/workspace artifacts from agent-originated mutations. Missing or invalid values remain enabled; disable only as an explicit global user choice.",
+  "agent_config_protection": {
+    "enabled": true
   },
 
   "permissions": {

@@ -5,7 +5,9 @@ import pytest
 pytest.importorskip("nicegui", reason="NiceGUI requires Python >= 3.10")
 
 from ai_guardian.web.pages.global_settings import (
+    _get_agent_config_protection_enabled,
     _get_developer_session_enabled,
+    _set_agent_config_protection_enabled,
     _set_developer_session_enabled,
 )
 
@@ -40,3 +42,29 @@ def test_developer_session_save_coerces_switch_value():
     _set_developer_session_enabled(config, 0)
 
     assert config["developer_session"]["enabled"] is False
+
+
+def test_agent_config_protection_defaults_enabled_and_requires_boolean_false():
+    assert _get_agent_config_protection_enabled({}) is True
+    assert (
+        _get_agent_config_protection_enabled(
+            {"agent_config_protection": {"enabled": "false"}}
+        )
+        is True
+    )
+    assert (
+        _get_agent_config_protection_enabled(
+            {"agent_config_protection": {"enabled": False}}
+        )
+        is False
+    )
+
+
+def test_agent_config_protection_save_preserves_other_config():
+    config = {"permissions": {"enabled": False}}
+
+    updated = _set_agent_config_protection_enabled(config, False)
+
+    assert updated is config
+    assert updated["permissions"] == {"enabled": False}
+    assert updated["agent_config_protection"] == {"enabled": False}

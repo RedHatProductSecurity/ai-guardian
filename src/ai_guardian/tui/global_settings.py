@@ -20,6 +20,7 @@ from ai_guardian.config.utils import (
     get_project_config_path,
     GLOBAL_ONLY_SECTIONS,
 )
+from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
 from ai_guardian.tui.schema_defaults import (
     ConfigSaveMixin,
     SchemaDefaultsMixin,
@@ -188,7 +189,7 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
     """Content widget for Global Settings tab."""
 
     SCHEMA_SECTION = ""
-    SCHEMA_FIELDS = []
+    SCHEMA_FIELDS: list[Any] = []
 
     CSS = """
     GlobalSettingsContent {
@@ -263,6 +264,15 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                 with Horizontal(classes="gs-protection-row"):
                     yield Label("Developer Session CLI Access")
                     yield Switch(value=False, id="developer_session_toggle")
+                with Horizontal(classes="gs-protection-row"):
+                    yield Label("Agent Configuration Protection")
+                    yield Switch(value=True, id="agent_config_protection_toggle")
+                yield Static(
+                    "Protects supported CLI/IDE settings, hooks, MCP registrations, "
+                    "plugins, extensions, and project artifacts from agent-originated "
+                    "mutations. Disabling is a global security choice.",
+                    id="agent-config-protection-status",
+                )
 
             with Container(classes="gs-action-section"):
                 with Horizontal(classes="gs-action-row"):
@@ -420,6 +430,26 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             except Exception:
                 pass
 
+            agent_protection_enabled = is_agent_config_protection_enabled(
+                developer_config
+            )
+            try:
+                agent_protection_toggle = self.query_one(
+                    "#agent_config_protection_toggle", Switch
+                )
+                agent_protection_toggle.value = agent_protection_enabled
+                agent_protection_toggle.disabled = self._is_project_scope
+                status = (
+                    "Enabled: supported agent configuration mutations are blocked."
+                    if agent_protection_enabled
+                    else "Warning: supported agent configuration protection is disabled."
+                )
+                if self._is_project_scope:
+                    status += " Inherited from global configuration."
+                self.query_one("#agent-config-protection-status", Static).update(status)
+            except Exception:
+                pass
+
             immutables = (
                 self._load_global_immutable_fields() if self._is_project_scope else {}
             )
@@ -557,10 +587,13 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                 return
 
     def on_switch_changed(self, event) -> None:
-        """Handle the global-only developer-session toggle."""
-        if self._loading or event.switch.id != "developer_session_toggle":
+        """Handle global-only protection toggles."""
+        if self._loading:
             return
-        self._save_developer_session(event.value)
+        if event.switch.id == "developer_session_toggle":
+            self._save_developer_session(event.value)
+        elif event.switch.id == "agent_config_protection_toggle":
+            self._save_agent_config_protection(event.value)
 
     def _save_developer_session(self, value: bool) -> None:
         """Save developer-session access to the global config only."""
@@ -579,6 +612,28 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         else:
             self.app.notify(
                 "Error saving Developer Session CLI Access", severity="error"
+            )
+
+    def _save_agent_config_protection(self, value: bool) -> None:
+        """Save supported-agent configuration protection to global config only."""
+        if self._is_project_scope:
+            self.app.notify(
+                "Agent Configuration Protection is global-only; select Global scope first",
+                severity="error",
+            )
+            return
+        if self._save_config_field(
+            "enabled", bool(value), section="agent_config_protection"
+        ):
+            status = "enabled" if value else "DISABLED"
+            severity = "success" if value else "warning"
+            self.app.notify(
+                f"Agent Configuration Protection: {status}; restart the daemon/session to apply",
+                severity=severity,
+            )
+        else:
+            self.app.notify(
+                "Error saving Agent Configuration Protection", severity="error"
             )
 
     def _save_on_scan_error(self, value: str) -> None:

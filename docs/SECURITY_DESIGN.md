@@ -70,6 +70,27 @@ The developer-session marker is a global-only configuration setting, not a
 project permission, hook payload field, SDK overlay, or AI Guardian command-line
 option. The normal generated configuration leaves the secure default unchanged.
 
+### Supported Agent Configuration Protection
+
+The PreToolUse policy also protects the configuration that controls supported
+CLI/IDE agents. A canonical inventory is built from the supported-agent
+registry, setup metadata, MCP/path resolvers, documented environment-variable
+relocations, explicit config-file selections, and the active workspace. It
+covers user/global and project/workspace settings, hooks, MCP registrations,
+plugins, extensions, generated bridges, and managed artifacts.
+
+This check runs before ordinary permissions and remains active when permissions
+are disabled or a permissive, warning, or log-only rule matches. It covers
+normalized file mutation tools and shell mutation forms such as redirection,
+in-place editing, deletion, and rename/move. Ordinary project files outside the
+inventory remain editable.
+
+`agent_config_protection.enabled` is global-only and defaults to enabled when
+missing or malformed. An explicit global disable does not affect immutable AI
+Guardian configuration, cache, package, hook, MCP identity, or CLI protections.
+Denials report only a safe supported-agent configuration reason; they do not
+expose matching patterns or permission guidance to the agent.
+
 ### Example Attack Scenarios (All Blocked)
 
 ```bash

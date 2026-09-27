@@ -2013,6 +2013,10 @@ class Doctor:
             is_ai_guardian_cli_command,
         )
         from ai_guardian.developer_session import _is_developer_session_enabled
+        from ai_guardian.agent_config_protection import (
+            build_agent_config_inventory,
+            is_agent_config_protection_enabled,
+        )
 
         issues = []
 
@@ -2063,6 +2067,15 @@ class Doctor:
         if _is_developer_session_enabled({"developer_session": {"enabled": "yes"}}):
             issues.append("Malformed developer-session values do not fail closed")
 
+        agent_config_enabled = is_agent_config_protection_enabled(self._config or {})
+        try:
+            protected_path_count = len(build_agent_config_inventory().paths)
+        except (OSError, ValueError) as exc:
+            issues.append(
+                f"Unable to resolve supported agent configuration paths: {exc}"
+            )
+            protected_path_count = 0
+
         if issues:
             return CheckResult(
                 name="self_protection",
@@ -2071,12 +2084,30 @@ class Doctor:
                 detail="\n".join(f"  - {i}" for i in issues),
             )
 
+        if not agent_config_enabled:
+            return CheckResult(
+                name="self_protection",
+                status=CheckStatus.WARN,
+                message="Supported agent configuration protection is disabled",
+                detail=(
+                    "The explicit global opt-out leaves immutable AI Guardian "
+                    "configuration, cache, package, hook, and CLI protections active."
+                ),
+                fix_hint="Enable agent_config_protection.enabled in the global configuration.",
+            )
+
         return CheckResult(
             name="self_protection",
             status=CheckStatus.PASS,
             message=(
-                "Config, state, cache, and agent CLI execution protected by default; "
+                "Config, state, cache, supported agent configuration, and agent CLI "
+                f"execution protected by default ({protected_path_count} paths); "
                 "developer access is trusted-session-only"
+            ),
+            detail=(
+                "Protected scope: supported agent user/global configuration and the "
+                "active project/workspace configuration, including hooks, MCP, "
+                "plugins, extensions, and managed bridges."
             ),
         )
 

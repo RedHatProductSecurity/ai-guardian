@@ -294,6 +294,10 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
         "developer_session": {
             "enabled": False,
         },
+        "_comment_agent_config_protection": "Protect supported CLI/IDE configuration, hooks, MCP registrations, plugins, extensions, and project/workspace artifacts from agent-originated mutations. Missing or invalid values remain enabled; disable only as an explicit global user choice.",
+        "agent_config_protection": {
+            "enabled": True,
+        },
         "_comment_permissions": "Control which tools (Skills, MCP servers, Bash, etc.) are allowed to run. Rules evaluated in order, last match wins.",
         "permissions": {
             "enabled": not permissive,
