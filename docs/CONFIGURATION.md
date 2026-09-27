@@ -97,12 +97,14 @@ Projects cannot override `enabled` but can change `action`.
 
 Agent-originated `ai-guardian` CLI execution is denied by default, including
 read-only commands. For AI Guardian development only, set
-`AI_GUARDIAN_DEVELOPER_SESSION=1` in the trusted runtime environment before the
-daemon/session starts. The daemon captures this value at startup; a missing or
-malformed value denies access.
+`developer_session.enabled` to `true` in the protected global
+`~/.config/ai-guardian/ai-guardian.json` before the daemon/session starts. The
+daemon captures this value at startup; a missing or malformed value denies
+access.
 
-This is a runtime/session parameter, not a JSON permission. It is not read from
-hook payloads, project configuration, or AI Guardian command-line arguments.
+This is a global-only session setting, not a project permission. It is not read
+from project configuration, SDK overlays, hook payloads, or AI Guardian
+command-line arguments.
 The opt-in is limited to the CLI boundary and does not disable protected-file,
 hook, cache, MCP identity, or other immutable protections.
 

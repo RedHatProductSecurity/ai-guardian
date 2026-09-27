@@ -290,7 +290,10 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "action": "block",
             "allowlist_patterns": [],
         },
-        "_comment_developer_session": "Agent-originated AI Guardian CLI execution is denied by default. Developer access is runtime-only: set AI_GUARDIAN_DEVELOPER_SESSION=1 before starting a trusted development session. This is not a permission rule and cannot be enabled by hook payloads or command arguments.",
+        "_comment_developer_session": "Agent-originated AI Guardian CLI execution is denied by default. Enable developer_session.enabled only in this protected global config before starting a trusted development session. Project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+        "developer_session": {
+            "enabled": False,
+        },
         "_comment_permissions": "Control which tools (Skills, MCP servers, Bash, etc.) are allowed to run. Rules evaluated in order, last match wins.",
         "permissions": {
             "enabled": not permissive,

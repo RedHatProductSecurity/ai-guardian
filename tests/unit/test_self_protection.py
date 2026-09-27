@@ -1094,7 +1094,7 @@ CLI_SELF_PROTECTION_BLOCKED_COMMANDS = [
     pytest.param("uv run ai-guardian check-update", id="uv-launcher"),
     pytest.param("env AI_GUARDIAN_TEST=1 ai-guardian doctor", id="env-wrapper"),
     pytest.param(
-        "AI_GUARDIAN_DEVELOPER_SESSION=1 ai-guardian status",
+        "DEV_SESSION=1 ai-guardian status",
         id="inline-developer-session-assignment",
     ),
     pytest.param("sudo ai-guardian status", id="sudo-wrapper"),
@@ -1337,10 +1337,15 @@ def test_agent_payload_and_config_cannot_enable_developer_session():
 
 
 @pytest.mark.parametrize("value", ["", "0", "yes", "maybe", "true-ish"])
-def test_malformed_developer_session_values_fail_closed(monkeypatch, value):
-    """Unexpected environment values preserve the default deny behavior."""
-    monkeypatch.setenv("AI_GUARDIAN_DEVELOPER_SESSION", value)
-    checker = ToolPolicyChecker(config={"permissions": {"enabled": False}})
+def test_malformed_developer_session_values_fail_closed(value):
+    """Unexpected config values preserve the default deny behavior."""
+    checker = ToolPolicyChecker(
+        config={
+            "developer_session": {"enabled": value},
+            "permissions": {"enabled": False},
+        },
+        developer_session=False,
+    )
     hook_data = {
         "hook_event_name": "PreToolUse",
         "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},

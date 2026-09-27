@@ -144,15 +144,18 @@ class ToolPolicyChecker:
         Args:
             config: Optional configuration dict. If None, loads from disk.
             developer_session: Trusted startup snapshot. When omitted, read the
-                process environment; only an exact trusted value enables it.
+                protected global configuration only when the checker also loads
+                its config from disk; an explicitly supplied config defaults to
+                the secure deny state unless this trusted snapshot is supplied.
         """
         self._config_warnings: List[str] = []
         self.config = config or self._load_config()
-        self._developer_session_enabled = (
-            is_trusted_developer_session()
-            if developer_session is None
-            else developer_session is True
-        )
+        if developer_session is None:
+            self._developer_session_enabled = (
+                is_trusted_developer_session() if config is None else False
+            )
+        else:
+            self._developer_session_enabled = developer_session is True
         self.last_deny_action: Optional[str] = None
         self.last_deny_matched_pattern: Optional[str] = None
         self.last_deny_check_value: Optional[str] = None

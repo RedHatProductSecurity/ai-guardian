@@ -14,10 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **Trusted developer-session CLI access (#2441):** Add the explicit,
-  fail-closed `AI_GUARDIAN_DEVELOPER_SESSION=1` runtime parameter for AI
-  Guardian development sessions. Hook payloads, configuration permissions, and
-  command arguments cannot enable it, and other immutable protections remain
-  enforced.
+  fail-closed `developer_session.enabled` setting in the protected global
+  configuration for AI Guardian development sessions. Hook payloads, project
+  configs, overlays, and command arguments cannot enable it, and other
+  immutable protections remain enforced.
 
 - **Top-level daemon pause/resume commands (#2427):** Add tray-independent
   `ai-guardian pause [MINUTES]` and `ai-guardian resume` commands that control

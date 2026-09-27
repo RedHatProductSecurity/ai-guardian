@@ -1,12 +1,10 @@
 """UX contracts for immutable agent-originated AI Guardian CLI protection (#2428)."""
 
 import json
-import os
 from io import StringIO
 from unittest.mock import patch
 
 import ai_guardian
-from ai_guardian.developer_session import DEVELOPER_SESSION_ENV
 from ai_guardian.tools.policy import ToolPolicyChecker
 from tests.fixtures.mock_mcp_server import create_hook_data
 
@@ -21,9 +19,9 @@ def _run_hook(
         }
     }
     with (
-        patch.dict(
-            os.environ,
-            {DEVELOPER_SESSION_ENV: "1" if developer_session else "0"},
+        patch(
+            "ai_guardian.hook_processing.is_trusted_developer_session",
+            return_value=developer_session,
         ),
         patch(
             "ai_guardian.hook_processing.ToolPolicyChecker",
@@ -98,8 +96,8 @@ def test_trusted_developer_session_allows_cli_without_changing_user_experience()
     """
     USER EXPERIENCE: Explicit developer session -> CLI shell access is allowed.
 
-    The opt-in is supplied by the trusted process environment before the
-    session starts; hook payload fields and permission rules are not involved.
+    The opt-in is supplied by protected global configuration before the session
+    starts; hook payload fields and permission rules are not involved.
     """
     result = _run_hook(
         create_hook_data(
