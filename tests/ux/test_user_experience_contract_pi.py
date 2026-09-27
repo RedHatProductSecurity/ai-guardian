@@ -46,7 +46,13 @@ def test_pi_setup_reports_managed_mcp_extension(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
 
-    with patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")):
+    with (
+        patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")),
+        patch(
+            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
+            return_value=(True, "installed the pinned Pi MCP SDK"),
+        ),
+    ):
         assert _setup_hooks_json_output("pi", force=True) is True
 
     result = json.loads(capsys.readouterr().out)
@@ -80,11 +86,17 @@ def test_pi_setup_is_idempotent_before_npm_dependencies_are_installed(
     monkeypatch.setenv("PI_CODING_AGENT_DIR", str(agent_home))
     monkeypatch.setenv("AI_GUARDIAN_CONFIG_DIR", str(tmp_path / "config"))
 
-    with patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")):
+    with (
+        patch.object(IDESetup, "verify_gitleaks_installed", return_value=(True, "ok")),
+        patch(
+            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
+            return_value=(False, "npm was not found"),
+        ),
+    ):
         assert _setup_hooks_json_output("pi", force=True) is True
-    capsys.readouterr()
+        capsys.readouterr()
 
-    assert _setup_hooks_json_output("pi") is True
-    result = json.loads(capsys.readouterr().out)
+        assert _setup_hooks_json_output("pi") is True
+        result = json.loads(capsys.readouterr().out)
     assert result["success"] is True
     assert result["mcp_status"] == "missing_dependencies"

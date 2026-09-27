@@ -39,6 +39,10 @@
 
 - **Pi tray health must preserve structured MCP states:** Pi's managed extension verifier returns `mcp_registration="extension"` plus distinct states such as `missing_dependencies`, `identity_missing`, and `disabled`. Tray notifications should use that marker to retain the state-specific diagnostic and managed extension path instead of collapsing every `mcp_installed=false` result into generic MCP missing.
 
+- **Pi SDK setup policy:** The managed extension should automatically run `npm install --ignore-scripts --no-audit --no-fund` when npm is available. If npm is unavailable or the install fails, preserve hook protection and expose the retry command; a later setup without `--force` must retry pending SDK states. Setup and check commands may resolve different `ai-guardian` executables, so executable-pin diagnostics must remain distinct from missing SDK dependencies.
+
+- **Full-suite CI timeout triage:** When a CI run times out at an existing test and the current diff creates no threads or processes, compare with the preceding passing PR and rerun the canceled jobs before changing production code. The Python 3.9/3.12 timeout on PR #2438 passed on rerun with no source changes.
+
 ## Do-Not-Repeat
 
 - [2026-06-30] DO NOT call `_show_via_subprocess` from the tray's `_handle_remote_prompt` without first trying NiceGUI in-process. On macOS Sonoma+ (14+), `activateIgnoringOtherApps_` is deprecated so tkinter subprocess windows spawn invisible behind other apps — dialog blocks for 300s then auto-dismisses, making the tray appear stuck. Fix: in `_show_and_respond`, call `_NiceGuiAskDialog(violation, timeout).run()` first if NiceGUI is available; it opens a browser tab which is always visible. Only fall back to `_show_via_subprocess` if NiceGUI is unavailable.

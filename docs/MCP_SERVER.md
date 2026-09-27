@@ -40,12 +40,14 @@ remains user/desktop-scoped.
 Pi has no native MCP configuration file. Pi setup creates the managed extension
 at `~/.pi/agent/extensions/ai-guardian/` (or the project
 `.pi/extensions/ai-guardian/`) with a pinned
-`@modelcontextprotocol/sdk` dependency. Install that dependency in the managed
-directory with `npm install --ignore-scripts --no-audit --no-fund`. The extension
-launches the resolved local `ai-guardian mcp-server`, verifies the server identity
-before registering tools, and preserves the existing signed identity/nonce
-attestation. A failed attestation exposes no MCP tools. `--no-mcp` installs the
-hook-only variant without the bridge.
+`@modelcontextprotocol/sdk` dependency. Setup installs that dependency in the
+managed directory with `npm install --ignore-scripts --no-audit --no-fund` when
+Node.js/npm is available. If installation fails, setup leaves the hook bridge in
+place and reports the retry command; `--no-mcp` installs the hook-only variant
+without the bridge. The extension launches the resolved local `ai-guardian
+mcp-server`, verifies the server identity before registering tools, and preserves
+the existing signed identity/nonce attestation. A failed attestation exposes no
+MCP tools.
 
 ### Manual setup
 

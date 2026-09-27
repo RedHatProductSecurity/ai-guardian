@@ -104,6 +104,43 @@ def _render_pi_extension_source(enable_mcp: bool, binary_path: str) -> str:
     return _render_guardian_command(source, binary_path)
 
 
+def _install_pi_mcp_sdk(extension_dir: Path) -> Tuple[bool, str]:
+    """Install Pi's pinned MCP SDK without executing package scripts."""
+    npm = shutil.which("npm") or shutil.which("npm.cmd")
+    if not npm:
+        message = "npm was not found; install Node.js/npm before retrying Pi setup"
+        logger.warning("Unable to install the Pi MCP SDK: %s", message)
+        return False, message
+
+    try:
+        result = subprocess.run(
+            [npm, "install", "--ignore-scripts", "--no-audit", "--no-fund"],
+            cwd=str(extension_dir),
+            capture_output=True,
+            check=False,
+            text=True,
+            timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        message = "npm install timed out after 120 seconds"
+        logger.warning("Unable to install the Pi MCP SDK: %s", message)
+        return False, message
+    except OSError as exc:
+        logger.warning("Unable to run npm install for the Pi MCP SDK: %s", exc)
+        return False, "Unable to run npm install for the Pi MCP SDK"
+
+    if result.returncode != 0:
+        logger.warning(
+            "Pi MCP SDK installation failed with exit code %s: %s",
+            result.returncode,
+            (result.stderr or "").strip().splitlines()[-1:]
+            or (result.stdout or "").strip().splitlines()[-1:],
+        )
+        return False, f"npm install failed with exit code {result.returncode}"
+
+    return True, "installed the pinned Pi MCP SDK"
+
+
 def _typescript_source_version(source: str) -> Optional[str]:
     """Read the generated package version from a TypeScript artifact."""
     for line in source.splitlines()[:5]:
@@ -2621,10 +2658,15 @@ class IDESetup:
         )
 
         identity_registered = True
+        mcp_install_success = None
+        mcp_install_message = None
         if enable_mcp:
             from ai_guardian.setup.mcp import _register_mcp_identity
 
             identity_registered = _register_mcp_identity(abs_path)
+            mcp_install_success, mcp_install_message = _install_pi_mcp_sdk(
+                extension_dir
+            )
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
         message = f"✓ Successfully configured Pi managed extension at {extension_dir}\n"
@@ -2638,6 +2680,13 @@ class IDESetup:
                     "  ⚠️  WARNING: MCP identity registration failed; MCP tools "
                     "will fail closed until setup succeeds.\n"
                 )
+            if mcp_install_success:
+                message += f"  MCP SDK: {mcp_install_message}\n"
+            else:
+                message += (
+                    "  ⚠️  WARNING: "
+                    f"{mcp_install_message}; MCP tools remain unavailable.\n"
+                )
         message += f"\n  {gitleaks_message}\n"
         if not gitleaks_installed:
             message += (
@@ -2646,7 +2695,7 @@ class IDESetup:
             )
         message += "\n  Next steps:\n"
         step = 1
-        if enable_mcp:
+        if enable_mcp and not mcp_install_success:
             message += (
                 f"  {step}. Run: cd {extension_dir} && "
                 "npm install --ignore-scripts --no-audit --no-fund\n"
@@ -2823,6 +2872,9 @@ class IDESetup:
                             scope=scope, project_dir=project_dir
                         ).get("mcp_status")
                         if mcp_status in {
+                            "missing_dependencies",
+                            "invalid_dependencies",
+                            "identity_missing",
                             "stale",
                             "invalid",
                             "executable_changed",

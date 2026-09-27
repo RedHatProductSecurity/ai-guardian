@@ -21,6 +21,7 @@ import shlex
 import subprocess
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from unittest.mock import patch
 
 import pytest
 
@@ -153,11 +154,20 @@ def isolated_ide_environment(tmp_path, monkeypatch):
 
 def _install_and_verify(ide_type: str) -> Tuple[IDESetup, Dict[str, Any]]:
     setup = IDESetup()
+    pi_install = (
+        patch(
+            "ai_guardian.setup.hooks._install_pi_mcp_sdk",
+            return_value=(True, "installed the pinned Pi MCP SDK"),
+        )
+        if ide_type == "pi"
+        else contextlib.nullcontext()
+    )
     # Setup and MCP helpers print human-facing status text. Keep the matrix
     # output focused on assertion failures, which include IDE/event names.
     with (
         contextlib.redirect_stdout(io.StringIO()),
         contextlib.redirect_stderr(io.StringIO()),
+        pi_install,
     ):
         success, message = setup.setup_ide_hooks(ide_type, force=True)
         assert success, f"{ide_type}/setup: {message}"
