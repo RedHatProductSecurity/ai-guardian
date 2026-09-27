@@ -9,18 +9,26 @@ from ai_guardian.tools.policy import ToolPolicyChecker
 from tests.fixtures.mock_mcp_server import create_hook_data
 
 
-def _run_hook(hook_data, *, permissions_enabled=True, rules=None):
+def _run_hook(
+    hook_data, *, permissions_enabled=True, rules=None, developer_session=False
+):
     config = {
         "permissions": {
             "enabled": permissions_enabled,
             "rules": rules or [],
         }
     }
-    checker = ToolPolicyChecker(config=config)
     with (
         patch(
+            "ai_guardian.hook_processing.is_trusted_developer_session",
+            return_value=developer_session,
+        ),
+        patch(
             "ai_guardian.hook_processing.ToolPolicyChecker",
-            return_value=checker,
+            side_effect=lambda **kwargs: ToolPolicyChecker(
+                config=config,
+                **kwargs,
+            ),
         ),
         patch(
             "ai_guardian.hook_processing._load_permissions_config",
@@ -79,6 +87,40 @@ def test_immutable_cli_guard_remains_active_when_permissions_are_disabled():
         ),
         permissions_enabled=False,
     )
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_trusted_developer_session_allows_cli_without_changing_user_experience():
+    """
+    USER EXPERIENCE: Explicit developer session -> CLI shell access is allowed.
+
+    The opt-in is supplied by protected global configuration before the session
+    starts; hook payload fields and permission rules are not involved.
+    """
+    result = _run_hook(
+        create_hook_data(
+            tool_name="Bash",
+            tool_input={"command": "ai-guardian status"},
+        ),
+        developer_session=True,
+    )
+
+    response = json.loads(result.get("output") or "{}")
+    assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+
+def test_hook_payload_cannot_enable_developer_session():
+    """An agent-supplied session flag does not change the default deny boundary."""
+    hook_data = create_hook_data(
+        tool_name="Bash",
+        tool_input={"command": "ai-guardian status"},
+    )
+    hook_data["_developer_session"] = True
+    hook_data["_ai_guardian_developer_session"] = True
+
+    result = _run_hook(hook_data)
 
     response = json.loads(result["output"])
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"

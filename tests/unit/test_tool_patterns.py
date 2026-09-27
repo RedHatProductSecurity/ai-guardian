@@ -53,6 +53,7 @@ class TestImmutableDenyPatterns:
         assert is_ai_guardian_cli_command("npx ai-guardian status")
         assert is_ai_guardian_cli_command("su -c 'ai-guardian status'")
         assert is_ai_guardian_cli_command("bash -lc 'ai-guardian status'")
+        assert is_ai_guardian_cli_command("DEV_SESSION=1 ai-guardian status")
         assert not is_ai_guardian_cli_command("printf '%s\\n' 'ai-guardian status'")
         assert not is_ai_guardian_cli_command("grep ai-guardian README.md")
         assert not is_ai_guardian_cli_command("git -C ai-guardian status")

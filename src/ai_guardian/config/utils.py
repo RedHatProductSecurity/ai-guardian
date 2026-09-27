@@ -88,6 +88,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "on_scan_error",
         "remote_configs",
         "update_checking",
+        "developer_session",
     }
 )
 

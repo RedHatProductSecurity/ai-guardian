@@ -13,7 +13,7 @@ from typing import Any, TypedDict
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
-from textual.widgets import Static, Label, Select
+from textual.widgets import Label, Select, Static, Switch
 
 from ai_guardian.config.utils import (
     get_config_dir,
@@ -228,6 +228,23 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         margin: 0 0 1 0;
         padding: 0 1;
     }
+
+    #config-cli-protection-section {
+        margin: 0 0 1 0;
+        padding: 1;
+        background: $panel;
+        border: solid $warning;
+        height: auto;
+    }
+
+    #config-cli-protection-description {
+        margin: 1 0;
+    }
+
+    .gs-protection-row {
+        height: auto;
+        margin: 1 0 0 0;
+    }
     """
 
     def compose(self) -> ComposeResult:
@@ -235,6 +252,17 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
 
         with VerticalScroll():
             yield Static("", id="scope-notice")
+
+            with Container(id="config-cli-protection-section"):
+                yield Label("Configuration & CLI Protection")
+                yield Static(
+                    "Controls protections for agent-originated CLI execution and "
+                    "protected AI Guardian and IDE configuration.",
+                    id="config-cli-protection-description",
+                )
+                with Horizontal(classes="gs-protection-row"):
+                    yield Label("Developer Session CLI Access")
+                    yield Switch(value=False, id="developer_session_toggle")
 
             with Container(classes="gs-action-section"):
                 with Horizontal(classes="gs-action-row"):
@@ -375,6 +403,23 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             if not self._is_project_scope:
                 self._global_config = config
 
+            developer_config = config
+            if self._is_project_scope:
+                developer_config = self._load_full_config(
+                    config_path=get_config_dir() / "ai-guardian.json"
+                )
+            developer_section = developer_config.get("developer_session", {})
+            developer_enabled = (
+                isinstance(developer_section, dict)
+                and developer_section.get("enabled") is True
+            )
+            try:
+                developer_toggle = self.query_one("#developer_session_toggle", Switch)
+                developer_toggle.value = developer_enabled
+                developer_toggle.disabled = self._is_project_scope
+            except Exception:
+                pass
+
             immutables = (
                 self._load_global_immutable_fields() if self._is_project_scope else {}
             )
@@ -510,6 +555,31 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             if select_id == f"{config_key}_action" and section in FEATURE_ACTIONS:
                 self._save_action(section, event.value, title)
                 return
+
+    def on_switch_changed(self, event) -> None:
+        """Handle the global-only developer-session toggle."""
+        if self._loading or event.switch.id != "developer_session_toggle":
+            return
+        self._save_developer_session(event.value)
+
+    def _save_developer_session(self, value: bool) -> None:
+        """Save developer-session access to the global config only."""
+        if self._is_project_scope:
+            self.app.notify(
+                "Developer Session CLI Access is global-only; select Global scope first",
+                severity="error",
+            )
+            return
+        if self._save_config_field("enabled", bool(value), section="developer_session"):
+            status = "enabled" if value else "disabled"
+            self.app.notify(
+                f"✓ Developer Session CLI Access: {status}; restart the daemon/session to apply",
+                severity="warning",
+            )
+        else:
+            self.app.notify(
+                "Error saving Developer Session CLI Access", severity="error"
+            )
 
     def _save_on_scan_error(self, value: str) -> None:
         """Save the global on_scan_error setting."""

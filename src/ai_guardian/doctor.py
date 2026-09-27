@@ -2012,6 +2012,7 @@ class Doctor:
             IMMUTABLE_DENY_PATTERNS,
             is_ai_guardian_cli_command,
         )
+        from ai_guardian.developer_session import _is_developer_session_enabled
 
         issues = []
 
@@ -2057,6 +2058,11 @@ class Doctor:
                 issues.append("CLI execution guard matched ordinary text or filenames")
                 break
 
+        if not _is_developer_session_enabled({"developer_session": {"enabled": True}}):
+            issues.append("Developer-session opt-in is not recognized")
+        if _is_developer_session_enabled({"developer_session": {"enabled": "yes"}}):
+            issues.append("Malformed developer-session values do not fail closed")
+
         if issues:
             return CheckResult(
                 name="self_protection",
@@ -2068,7 +2074,10 @@ class Doctor:
         return CheckResult(
             name="self_protection",
             status=CheckStatus.PASS,
-            message="Config, state, cache, and agent CLI execution protected",
+            message=(
+                "Config, state, cache, and agent CLI execution protected by default; "
+                "developer access is trusted-session-only"
+            ),
         )
 
     def check_image_scanning(self) -> CheckResult:

@@ -566,6 +566,7 @@ class TestGlobalOnlySections:
             "on_scan_error",
             "remote_configs",
             "update_checking",
+            "developer_session",
         }
         assert GLOBAL_ONLY_SECTIONS == expected
 

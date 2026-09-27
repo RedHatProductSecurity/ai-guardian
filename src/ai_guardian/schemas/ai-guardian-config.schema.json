@@ -6,6 +6,18 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "developer_session": {
+      "type": "object",
+      "description": "Global-only developer-session access. Agent-originated AI Guardian CLI execution is denied by default. Enable this only in the protected global configuration before starting a trusted development session; project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Allow agent-originated AI Guardian CLI execution for this trusted developer session. Default: false."
+        }
+      },
+      "additionalProperties": false
+    },
     "permissions": {
       "type": "object",
       "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",

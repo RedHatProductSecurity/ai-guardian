@@ -6,7 +6,7 @@ budget_tokens: 1000
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-26
+> Last updated: 2026-09-27
 
 ---
 
@@ -46,10 +46,19 @@ budget_tokens: 1000
 - Added a Pi bridge UX regression using the generated `tool_call` payload shape and a deny-all MCP policy.
 - Updated MCP security documentation and the unreleased changelog.
 - Focused validation: 180 tests passed; Black, Ruff, Pylint, and Mypy passed.
+- CI rerun passed across the compatibility matrix and multi-architecture container job; the first Ubuntu 26.04/Python 3.14 cancellation was transient. CodeRabbit review remains pending.
+
+## 🚧 Issue #2441 In Progress
+
+- Protected global developer-session configuration and immutable CLI enforcement are implemented.
+- Added TUI and Web Console **Configuration & CLI Protection** sections with a global-only Developer Session CLI Access control.
+- Project scope displays the global value but cannot edit it; Web saves explicitly target the global config.
+- UI/config validation: 111 UI/config tests and 595 self-protection tests pass; Black, Ruff, Pylint, and Mypy pass.
+- UI changes are uncommitted; no commit or pull request was created.
 
 ## 🚀 Next phase
 
-**Goal:** Review and complete issue `#2440` through DevAIFlow.
+**Goal:** Review and complete issue `#2441` through DevAIFlow.
 
 ### Open decisions
 - The required JIRA ticket lookup remains unavailable because `JIRA_API_TOKEN` is not set in the session environment.

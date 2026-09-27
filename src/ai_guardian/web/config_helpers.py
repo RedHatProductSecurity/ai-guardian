@@ -271,13 +271,13 @@ def load_web_config_global() -> dict:
     return {}
 
 
-def save_web_config(config: dict) -> bool:
+def save_web_config(config: dict, *, scope: Optional[str] = None) -> bool:
     """Write config dict to ai-guardian.json for the current scope.
 
     Routes through DaemonService for both local and remote targets.
     Uses the current scope and project directory selection to determine
-    where the config is written. Falls back to direct filesystem write
-    when no daemon target is available.
+    where the config is written unless ``scope`` is explicitly provided.
+    Falls back to direct filesystem write when no daemon target is available.
     """
     if is_web_config_read_only():
         logger.warning(
@@ -287,17 +287,17 @@ def save_web_config(config: dict) -> bool:
 
     target = _get_current_target()
     if target is not None and _daemon_service is not None:
-        scope = _get_current_scope()
-        project_dir = _get_remote_project_dir()
-        if scope == "project" and project_dir:
+        target_scope = scope or _get_current_scope()
+        project_dir = _get_remote_project_dir() if target_scope == "project" else None
+        if target_scope == "project" and project_dir:
             result = _daemon_service.write_config_bulk(
-                target, "project", config, project_dir=project_dir
+                target, target_scope, config, project_dir=project_dir
             )
         else:
             result = _daemon_service.write_config_bulk(target, "global", config)
         if result is None or result.get("status") == "error":
             return False
-        _invalidate_config_cache_after_save(scope, project_dir)
+        _invalidate_config_cache_after_save(target_scope, project_dir)
         return True
 
     if _is_target_expected():
@@ -306,8 +306,8 @@ def save_web_config(config: dict) -> bool:
         )
         return False
 
-    scope = _get_current_scope()
-    project_dir = _get_project_dir()
+    target_scope = scope or _get_current_scope()
+    project_dir = _get_project_dir() if target_scope == "project" else None
 
     try:
         from ai_guardian.config.writer import (
@@ -315,16 +315,16 @@ def save_web_config(config: dict) -> bool:
             _atomic_config_update,
         )
 
-        config_path = _resolve_config_path(scope, project_dir)
+        config_path = _resolve_config_path(target_scope, project_dir)
 
         def updater(existing_config):
             existing_config.clear()
             existing_config.update(config)
-            return False, f"Saved web config [{scope}]"
+            return False, f"Saved web config [{target_scope}]"
 
         if not _atomic_config_update(config_path, updater):
             return False
-        _invalidate_config_cache_after_save(scope, project_dir)
+        _invalidate_config_cache_after_save(target_scope, project_dir)
         return True
     except Exception:
         pass  # intentionally silent — optional dependency

@@ -13,6 +13,30 @@ import pytest
 from ai_guardian.daemon.state import DaemonState
 
 
+class TestDeveloperSessionState:
+    def test_daemon_captures_trusted_developer_session(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "ai_guardian.developer_session.get_config_dir", lambda: tmp_path
+        )
+        (tmp_path / "ai-guardian.json").write_text(
+            json.dumps({"developer_session": {"enabled": True}}),
+            encoding="utf-8",
+        )
+
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+
+        assert state.developer_session_enabled is True
+
+    def test_daemon_defaults_to_deny(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            "ai_guardian.developer_session.get_config_dir", lambda: tmp_path
+        )
+
+        state = DaemonState(config_path=tmp_path / "nonexistent.json")
+
+        assert state.developer_session_enabled is False
+
+
 class TestCrossHookCorrelation:
     def test_store_and_retrieve_context(self, tmp_path):
         state = DaemonState(config_path=tmp_path / "nonexistent.json")

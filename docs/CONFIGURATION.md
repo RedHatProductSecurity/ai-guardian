@@ -50,7 +50,7 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`.
 
 ### Hook Process Failure Policy
 
@@ -92,6 +92,26 @@ or disabled while recovering.
 Projects cannot override `enabled` but can change `action`.
 
 **Self-protection**: The agent is blocked from reading this file (same protection as the global config).
+
+### Trusted Developer Sessions
+
+Agent-originated `ai-guardian` CLI execution is denied by default, including
+read-only commands. For AI Guardian development only, set
+`developer_session.enabled` to `true` in the protected global
+`~/.config/ai-guardian/ai-guardian.json` before the daemon/session starts. The
+daemon captures this value at startup; a missing or malformed value denies
+access.
+
+This is a global-only session setting, not a project permission. It is not read
+from project configuration, SDK overlays, hook payloads, or AI Guardian
+command-line arguments.
+The opt-in is limited to the CLI boundary and does not disable protected-file,
+hook, cache, MCP identity, or other immutable protections.
+
+The TUI and Web Console expose this setting under **Configuration & CLI
+Protection** in Global Settings. It is displayed but not editable while the
+project configuration scope is selected. Restart the daemon/session after
+changing it.
 
 ### 3. Legacy Local Configuration
 

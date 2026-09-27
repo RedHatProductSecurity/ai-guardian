@@ -79,6 +79,7 @@ from ai_guardian.constants import (
     HookEvent,
     ViolationType,
 )
+from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
 
@@ -2169,7 +2170,19 @@ def _process_hook_data(hook_data, daemon_state=None):
                     or identity_required
                     or immutable_shell_check_required
                 ):
-                    policy_checker = ToolPolicyChecker()
+                    trusted_developer_session = (
+                        getattr(daemon_state, "developer_session_enabled", None)
+                        if daemon_state is not None
+                        else None
+                    )
+                    if trusted_developer_session is None:
+                        trusted_developer_session = is_trusted_developer_session()
+                    else:
+                        # Only the daemon's startup snapshot is trusted here.
+                        trusted_developer_session = trusted_developer_session is True
+                    policy_checker = ToolPolicyChecker(
+                        developer_session=trusted_developer_session
+                    )
                     # Policy evaluation keeps the original payload for audit
                     # context, while these canonical fields ensure every
                     # adapter's command shape reaches the immutable guard.

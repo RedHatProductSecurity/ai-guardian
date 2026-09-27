@@ -56,12 +56,19 @@ interface from agent shell execution. This boundary:
 - Blocks read-only commands as well as commands that change daemon, tray, hook, configuration, scanner, or model state.
 - Uses command-position-aware parsing, so documentation text, filenames, repository paths, and ordinary project commands that mention AI Guardian are not treated as launches.
 - Runs independently of the configurable permissions rules, including when ordinary tool permissions are disabled.
+- Defaults to deny. A developer may explicitly set `developer_session.enabled` to `true` in the protected global configuration before starting the trusted development runtime. Missing, malformed, project-level, overlay, or later agent-supplied values remain denied.
+- The setting is captured when the daemon starts; if a daemon is already running, start the development session with a newly started daemon so a normal-session setting cannot be upgraded in place.
+- The opt-in affects only agent-originated AI Guardian CLI execution. Protected files, hooks, caches, MCP identity checks, and other immutable protections remain enforced.
 
 The boundary only applies to agent-originated tool calls. Installed IDE hook
 processes, the verified read-only `mcp__ai-guardian__*` advisor namespace, and a
 human running the CLI directly in a terminal remain functional. The denial is
 reported with a safe self-protection reason and does not expose matching rules
 or permission configuration guidance.
+
+The developer-session marker is a global-only configuration setting, not a
+project permission, hook payload field, SDK overlay, or AI Guardian command-line
+option. The normal generated configuration leaves the secure default unchanged.
 
 ### Example Attack Scenarios (All Blocked)
 

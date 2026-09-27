@@ -99,6 +99,46 @@ class TestSaveLogic:
         assert result["secret_scanning"]["enabled"] is False
         assert result["secret_scanning"]["engine"] == "gitleaks"
 
+    def test_save_developer_session(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "ai-guardian.json"
+            content = GlobalSettingsContent()
+            content._loading = False
+
+            with (
+                patch.object(content, "_get_config_path", return_value=config_path),
+                patch.object(
+                    type(content),
+                    "app",
+                    new_callable=lambda: property(lambda self: MagicMock()),
+                ),
+            ):
+                content._save_developer_session(True)
+
+            result = json.loads(config_path.read_text())
+            assert result["developer_session"]["enabled"] is True
+
+    def test_project_scope_cannot_save_developer_session(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "ai-guardian.json"
+            content = GlobalSettingsContent()
+            content._loading = False
+            app = MagicMock()
+            app.config_scope = "project"
+
+            with (
+                patch.object(content, "_get_config_path", return_value=config_path),
+                patch.object(
+                    type(content),
+                    "app",
+                    new_callable=lambda: property(lambda self: app),
+                ),
+            ):
+                content._save_developer_session(True)
+
+            assert not config_path.exists()
+            app.notify.assert_called_once()
+
     def test_save_all_sections(self):
         for section, _, _ in FEATURES:
             result = self._do_save(section, True)
