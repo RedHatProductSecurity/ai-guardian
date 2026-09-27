@@ -14,6 +14,7 @@ from unittest.mock import patch
 import pytest
 
 import ai_guardian
+from ai_guardian.hook_processing import extract_tool_result
 from tests.fixtures.mock_mcp_server import create_tool_response
 from tests.fixtures import attack_constants
 
@@ -310,20 +311,33 @@ if __name__ == "__main__":
 class PostToolUseMCPToolTests(TestCase):
     """Test PostToolUse with MCP tool responses"""
 
+    def test_extract_structured_mcp_tools_call_result(self):
+        """Structured MCP results are serialized so nested content is scannable."""
+        output, tool_name = extract_tool_result(
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": attack_constants.MCP_TOOL_NOTEBOOKLM_QUERY,
+                "tool_response": {
+                    "content": [{"type": "text", "text": "A public answer"}],
+                    "isError": False,
+                },
+            }
+        )
+
+        assert tool_name == attack_constants.MCP_TOOL_NOTEBOOKLM_QUERY
+        assert '"text": "A public answer"' in output
+
     @patch("ai_guardian.config.loaders._load_secret_redaction_config")
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
-    def test_mcp_response_with_secret_allowed_by_default(
+    def test_mcp_response_with_secret_redacted(
         self, mock_pattern_config, mock_redaction_config
     ):
         """
-        Verify MCP tool responses are scanned if output is extracted.
+        Verify secrets in structured MCP tool responses are redacted.
 
         Scenario: MCP notebook_query returns answer
         Action: PostToolUse with MCP response
-        Expected: Depends on whether MCP responses are extracted for scanning
-
-        Note: Currently MCP tools may not have their responses extracted/scanned
-        the same way as Bash/Read tools. This test documents current behavior.
+        Expected: Secret is removed from the structured result before it reaches the AI.
         """
         # Disable pattern server and redaction
         mock_pattern_config.return_value = None

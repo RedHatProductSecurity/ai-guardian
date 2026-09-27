@@ -1045,7 +1045,17 @@ def extract_tool_result(hook_data):
         # Claude Code format: tool_response field
         if "tool_response" in hook_data:
             tool_response = hook_data["tool_response"]
+            # MCP tools return the structured result from `tools/call`, commonly
+            # {content: [...], isError: false}. Serialize the complete result so
+            # nested text is scanned and redacted.
+            if str(tool_name).startswith("mcp__") and isinstance(
+                tool_response, (dict, list)
+            ):
+                output = json.dumps(tool_response, ensure_ascii=False)
+                return output, tool_name
+
             if isinstance(tool_response, dict):
+
                 # Try common output field names
                 output = (
                     tool_response.get("output")
