@@ -481,3 +481,43 @@ class TestScriptMode:
         from ai_guardian.config.utils import get_project_dir
 
         assert get_project_dir() == os.getcwd()
+
+    def test_mcp_scenario_preserves_structured_tool_response(self, tmp_path):
+        """MCP tools/call results must reach both tool hooks as structured data."""
+        yaml_content = textwrap.dedent("""\
+            events:
+              - label: structured MCP result
+                prompt: "search public documentation"
+                tools:
+                  - name: mcp__demo__search
+                    input: {query: "public documentation"}
+                    fake_output:
+                      content:
+                        - type: text
+                          text: "A public result"
+                      isError: false
+                expect: allow
+            """)
+        path = tmp_path / "mcp.yaml"
+        path.write_text(yaml_content)
+
+        allow_response = {"output": "{}", "exit_code": 0, "_blocked": False}
+        captured = []
+
+        def fake_process(payload, daemon_state=None):
+            captured.append(payload)
+            return allow_response
+
+        with patch(
+            "ai_guardian.dummy_agent.process_hook_data", side_effect=fake_process
+        ):
+            from ai_guardian.dummy_agent import run_script
+
+            exit_code = run_script(str(path), colors=False)
+
+        assert exit_code == 0
+        pre_tool = next(p for p in captured if p["hook_event_name"] == "PreToolUse")
+        post_tool = next(p for p in captured if p["hook_event_name"] == "PostToolUse")
+        assert pre_tool["tool_name"] == "mcp__demo__search"
+        assert pre_tool["tool_input"] == {"query": "public documentation"}
+        assert post_tool["tool_response"]["content"][0]["text"] == "A public result"

@@ -102,30 +102,19 @@ class MCPUserExperienceContractTests(TestCase):
         self, mock_pattern_config, mock_redaction_config, mock_scan_config
     ):
         """
-        USER EXPERIENCE: Secret in MCP output → Currently NOT scanned by default.
+        USER EXPERIENCE: Secret in structured MCP output → REDACTED before the AI sees it.
 
         Scenario:
         1. User asks Claude: "Query my notebook about API keys"
         2. Claude calls mcp__notebooklm-mcp__notebook_query
         3. Tool executes and returns response containing Slack token
         4. ai-guardian PostToolUse hook runs
-        5. MCP tool output currently NOT scanned for secrets
+        5. ai-guardian extracts the structured MCP result and scans it
 
-        Current Behavior (as of this test):
-        ⚠️ MCP tool responses are NOT extracted/scanned by default
-        ✅ PostToolUse returns exit 0 with empty response
-        ❌ Secret passes through to AI (not ideal)
-
-        Expected Future Behavior:
+        Expected User Experience:
         🛡️ Secret should be REDACTED from output
         ⚠️ User should see warning: "Redacted secrets from tool output"
         ✅ AI should receive redacted version (secrets removed)
-
-        Note: This test documents current behavior. MCP tool response extraction
-        needs to be implemented in extract_tool_result() function to enable
-        secret scanning for MCP outputs.
-
-        Reference: tests/unit/test_posttooluse_mcp.py::test_mcp_response_with_secret_allowed_by_default
         """
         # Configure mocks to avoid loading user's config file
         mock_pattern_config.return_value = None
@@ -152,24 +141,17 @@ class MCPUserExperienceContractTests(TestCase):
         with patch("sys.stdin", StringIO(json.dumps(hook_data))):
             result = ai_guardian.process_hook_input()
 
-        # Verify ai-guardian's current response (empty because MCP not scanned)
+        # Verify ai-guardian redacts the structured MCP response.
         assert result["exit_code"] == 0, "PostToolUse always returns exit 0"
 
         response = json.loads(result["output"])
-
-        # CURRENT BEHAVIOR: Empty response because MCP outputs not scanned
-        # If extract_tool_result() doesn't handle this MCP tool specifically,
-        # it returns None and scanning is skipped
+        assert "Redacted" in response.get(
+            "systemMessage", ""
+        ), "User should be told that MCP output was redacted"
+        output_text = json.dumps(response)
         assert (
-            response == {}
-        ), "Current behavior: MCP tool outputs not scanned, returns empty response"
-
-        # USER SEES: No warning (current behavior)
-        # AI RECEIVES: Original output with secret (current behavior - not ideal)
-        # OPERATION: Already executed on MCP server
-        #
-        # FUTURE IMPROVEMENT: Implement MCP output extraction in extract_tool_result()
-        # to enable secret scanning and redaction for MCP tool responses
+            attack_constants.SECRET_SLACK_TOKEN not in output_text
+        ), "Secret must not be returned in the MCP hook response"
 
     @patch("ai_guardian.hook_processing._load_pattern_server_config")
     def test_user_experience_ssrf_in_mcp_parameter(self, mock_pattern_config):

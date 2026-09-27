@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../../src/ai_guardian/schemas/scenario.schema.json
+# MCP protocol scenarios - moderator profile
+# In headless CI, the ask fallback allows the unallowlisted MCP call.
+events:
+  - label: "Unallowlisted MCP tool asks for review"
+    prompt: "search public documentation"
+    tools:
+      - name: mcp__demo__search
+        input: {query: "public documentation"}
+        fake_output:
+          content:
+            - type: text
+              text: "A public result"
+          isError: false
+    expect: allow

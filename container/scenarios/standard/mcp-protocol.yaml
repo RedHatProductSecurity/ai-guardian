@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=../../../src/ai_guardian/schemas/scenario.schema.json
+# MCP protocol scenarios - standard profile
+# MCP tools use mcp__<server>__<tool> names and structured tools/call results.
+# Standard profile warns on unknown MCP servers but allows the call.
+events:
+  - label: "Structured MCP tools/call result"
+    prompt: "search public documentation"
+    tools:
+      - name: mcp__demo__search
+        input: {query: "public documentation"}
+        fake_output:
+          content:
+            - type: text
+              text: "A public result"
+          isError: false
+    expect: allow

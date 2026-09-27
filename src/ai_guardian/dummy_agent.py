@@ -426,7 +426,7 @@ def _run_scenario_event(
     session_id: str,
     cwd: str,
     colors: bool,
-    fake_output: str = "<simulated output>",
+    fake_output: Any = "<simulated output>",
     daemon_state=None,
     workspace_files: Optional[List[Dict]] = None,
 ) -> bool:
@@ -524,9 +524,14 @@ def _run_scenario_event(
             else:
                 print(f"  {_color('✅ Allowed', _GREEN, colors)}")
 
+            display_output = (
+                json.dumps(tool_fake_out, ensure_ascii=False)
+                if isinstance(tool_fake_out, (dict, list))
+                else str(tool_fake_out)
+            )
             print(
                 f"→ {_color('PostToolUse', _CYAN, colors)} fired"
-                f" ({tool_name}, response={repr(str(tool_fake_out)[:60])})"
+                f" ({tool_name}, response={repr(display_output[:60])})"
             )
             result = _run_hook(
                 _make_hook_payload(

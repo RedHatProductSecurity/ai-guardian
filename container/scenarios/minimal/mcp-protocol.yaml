@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../../src/ai_guardian/schemas/scenario.schema.json
+# MCP protocol scenarios - minimal profile
+# Minimal profile disables ordinary permission enforcement, so the MCP call runs.
+events:
+  - label: "Structured MCP tools/call result"
+    prompt: "search public documentation"
+    tools:
+      - name: mcp__demo__search
+        input: {query: "public documentation"}
+        fake_output:
+          content:
+            - type: text
+              text: "A public result"
+          isError: false
+    expect: allow

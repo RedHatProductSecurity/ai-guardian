@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../../src/ai_guardian/schemas/scenario.schema.json
+# MCP protocol scenarios - strict profile
+# Strict profile requires an explicit allow rule for every MCP server.
+events:
+  - label: "Unallowlisted MCP tool is blocked"
+    prompt: "search public documentation"
+    tools:
+      - name: mcp__demo__search
+        input: {query: "public documentation"}
+        fake_output:
+          content:
+            - type: text
+              text: "This result must not reach the AI"
+          isError: false
+    expect: block
