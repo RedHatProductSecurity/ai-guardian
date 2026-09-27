@@ -857,6 +857,12 @@ def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
         return False
 
     index = 0
+    while index < len(tokens) and re.fullmatch(
+        r"[A-Za-z_][A-Za-z0-9_]*=.*", _clean_command_token(tokens[index])
+    ):
+        # Shell assignments before a command affect the child environment but
+        # do not change the trusted environment seen by the hook process.
+        index += 1
     while (
         index < len(tokens)
         and _clean_command_token(tokens[index]) in _SHELL_CONTROL_WORDS

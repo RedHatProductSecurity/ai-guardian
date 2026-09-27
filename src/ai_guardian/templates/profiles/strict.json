@@ -144,6 +144,7 @@
     "action": "block",
     "tokens": []
   },
+  "_comment_developer_session": "Agent-originated AI Guardian CLI execution is denied by default. Developer access is runtime-only: set AI_GUARDIAN_DEVELOPER_SESSION=1 before starting a trusted development session. This is not a permission rule and cannot be enabled by hook payloads or command arguments.",
   "_comment_permissions": "Control which tools (Skills, MCP servers, Bash, etc.) are allowed to run. Rules evaluated in order, last match wins. Strict: no catch-all allow, explicit allow required for each tool.",
   "permissions": {
     "enabled": true,

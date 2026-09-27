@@ -20,6 +20,7 @@ from typing import Optional
 
 from ai_guardian.config.loaders import _clear_config_cache
 from ai_guardian.config.utils import get_config_dir, get_state_dir, _find_config_in_dir
+from ai_guardian.developer_session import is_trusted_developer_session
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,10 @@ class DaemonState:
         pause_file=None,
     ):
         self._lock = threading.Lock()
+
+        # Capture the trusted session setting once when the daemon starts.
+        # Hook payloads and later agent commands cannot change this value.
+        self.developer_session_enabled = is_trusted_developer_session()
 
         # Source file mtime tracking for dev-mode auto-restart (#1223)
         self._source_mtime = 0.0

@@ -6,6 +6,10 @@
   "type": "object",
   "additionalProperties": true,
   "properties": {
+    "_comment_developer_session": {
+      "type": "string",
+      "description": "Documentation only: agent-originated AI Guardian CLI execution is denied by default. Developer access is supplied at trusted process/session startup through AI_GUARDIAN_DEVELOPER_SESSION=1; configuration files, hook payloads, and command arguments cannot enable it."
+    },
     "permissions": {
       "type": "object",
       "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",

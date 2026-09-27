@@ -31,6 +31,7 @@
   "_comment28": "  Project config merges on top of this global config.",
   "_comment29": "  Use immutable arrays in sections to prevent project override.",
   "_comment30": "  Global-only sections (daemon, mcp_server, support, etc.) cannot be overridden.",
+  "_comment31": "Agent-originated AI Guardian CLI execution is denied by default. Developer access is runtime-only: set AI_GUARDIAN_DEVELOPER_SESSION=1 before starting a trusted development session; this is not a permission rule.",
 
   "permissions": {
     "_comment": "Tool permission enforcement - WHERE THE RULES LIVE",

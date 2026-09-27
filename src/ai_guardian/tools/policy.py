@@ -47,6 +47,7 @@ from ai_guardian.config.utils import (
 )
 from ai_guardian.config.loaders import _load_json_config
 from ai_guardian.constants import ViolationType
+from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.mcp.identity import (
     is_ai_guardian_mcp_tool,
     verify_active_attestation,
@@ -131,15 +132,27 @@ class ToolPolicyChecker:
     # Class-level schema validator (loaded once and cached)
     _schema_validator = None
 
-    def __init__(self, config: Optional[Dict] = None):
+    def __init__(
+        self,
+        config: Optional[Dict] = None,
+        *,
+        developer_session: Optional[bool] = None,
+    ):
         """
         Initialize policy checker.
 
         Args:
             config: Optional configuration dict. If None, loads from disk.
+            developer_session: Trusted startup snapshot. When omitted, read the
+                process environment; only an exact trusted value enables it.
         """
         self._config_warnings: List[str] = []
         self.config = config or self._load_config()
+        self._developer_session_enabled = (
+            is_trusted_developer_session()
+            if developer_session is None
+            else developer_session is True
+        )
         self.last_deny_action: Optional[str] = None
         self.last_deny_matched_pattern: Optional[str] = None
         self.last_deny_check_value: Optional[str] = None
@@ -393,12 +406,18 @@ class ToolPolicyChecker:
     def _check_immutable_cli_protection(
         self, hook_data: Dict, tool_name: str, tool_input: Dict
     ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
-        """Block agent shell attempts to launch the AI Guardian CLI."""
+        """Enforce the agent shell boundary for the AI Guardian CLI."""
         if not is_shell_tool_name(tool_name):
             return None
 
         command = self._extract_shell_command(tool_input, hook_data)
         if not command or not is_ai_guardian_cli_command(command):
+            return None
+
+        if self._developer_session_enabled:
+            logger.info(
+                "Trusted developer session: allowing agent-originated AI Guardian CLI"
+            )
             return None
 
         reason = _IMMUTABLE_CLI_REASON
@@ -458,7 +477,7 @@ class ToolPolicyChecker:
             )
             if cli_protection is not None:
                 return cli_protection
-            if immutable_only:
+            if immutable_only and not self._developer_session_enabled:
                 return True, None, tool_name
 
             # PRIORITY 0: Check SSRF protection (before all other checks)

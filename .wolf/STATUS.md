@@ -46,6 +46,7 @@ budget_tokens: 1000
 - Added a Pi bridge UX regression using the generated `tool_call` payload shape and a deny-all MCP policy.
 - Updated MCP security documentation and the unreleased changelog.
 - Focused validation: 180 tests passed; Black, Ruff, Pylint, and Mypy passed.
+- CI rerun passed across the compatibility matrix and multi-architecture container job; the first Ubuntu 26.04/Python 3.14 cancellation was transient. CodeRabbit review remains pending.
 
 ## 🚀 Next phase
 

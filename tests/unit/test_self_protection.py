@@ -1093,6 +1093,10 @@ CLI_SELF_PROTECTION_BLOCKED_COMMANDS = [
     pytest.param("python3 -m ai_guardian.cli doctor", id="python-cli-module"),
     pytest.param("uv run ai-guardian check-update", id="uv-launcher"),
     pytest.param("env AI_GUARDIAN_TEST=1 ai-guardian doctor", id="env-wrapper"),
+    pytest.param(
+        "AI_GUARDIAN_DEVELOPER_SESSION=1 ai-guardian status",
+        id="inline-developer-session-assignment",
+    ),
     pytest.param("sudo ai-guardian status", id="sudo-wrapper"),
     pytest.param("bash -lc 'ai-guardian status'", id="shell-wrapper"),
     pytest.param("powershell -Command 'ai-guardian status'", id="powershell-wrapper"),
@@ -1294,6 +1298,105 @@ def test_supported_adapter_payloads_use_cli_protection(policy_checker, hook_data
     assert not is_allowed, f"CLI invocation should be blocked: {hook_data}"
     assert error_msg is not None
     assert "agent-originated" in error_msg.lower()
+
+
+@pytest.mark.parametrize("hook_data", CLI_ADAPTER_PAYLOADS)
+def test_trusted_developer_session_allows_supported_adapter_payloads(hook_data):
+    """The explicit opt-in works through every normalized shell payload shape."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=True,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
+
+    assert is_allowed, f"Trusted developer session should allow: {hook_data}"
+    assert error_msg is None
+
+
+def test_agent_payload_and_config_cannot_enable_developer_session():
+    """Only the trusted constructor/runtime value can enable the exception."""
+    checker = ToolPolicyChecker(
+        config={
+            "developer_session": {"enabled": True},
+            "permissions": {"enabled": False, "rules": []},
+        },
+        developer_session=False,
+    )
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "_developer_session": True,
+        "_ai_guardian_developer_session": True,
+        "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+    }
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+@pytest.mark.parametrize("value", ["", "0", "yes", "maybe", "true-ish"])
+def test_malformed_developer_session_values_fail_closed(monkeypatch, value):
+    """Unexpected environment values preserve the default deny behavior."""
+    monkeypatch.setenv("AI_GUARDIAN_DEVELOPER_SESSION", value)
+    checker = ToolPolicyChecker(config={"permissions": {"enabled": False}})
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": "Bash", "input": {"command": "ai-guardian status"}},
+    }
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+@pytest.mark.parametrize("tool_name", ["Bash", "Shell", "PowerShell"])
+def test_trusted_developer_session_allows_cli_only(tool_name):
+    """Explicit trusted opt-in allows the CLI without changing other protections."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=True,
+    )
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": tool_name, "input": {"command": "ai-guardian status"}},
+    }
+
+    is_allowed, error_msg, checked_tool_name = checker.check_tool_allowed(hook_data)
+
+    assert is_allowed
+    assert error_msg is None
+    assert checked_tool_name == tool_name
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm ~/.config/ai-guardian/ai-guardian.json",
+        "rm ~/.cursor/hooks.json",
+        "rm ~/.cache/ai-guardian/patterns.json",
+    ],
+)
+def test_trusted_developer_session_does_not_bypass_immutable_shell_paths(command):
+    """Developer CLI access does not disable existing shell self-protection."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=True,
+    )
+    hook_data = {
+        "hook_event_name": "PreToolUse",
+        "tool_use": {
+            "name": "Bash",
+            "input": {"command": command},
+        },
+    }
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
+
+    assert not is_allowed
+    assert error_msg is not None
 
 
 if __name__ == "__main__":
