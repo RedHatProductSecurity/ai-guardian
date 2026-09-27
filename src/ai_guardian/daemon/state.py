@@ -1265,6 +1265,8 @@ class DaemonState:
                 "last_project_config_reload_seconds_ago": last_project_reload_seconds_ago,
                 "project_configs_tracked": len(self._project_config_mtimes),
                 "config_error": self._config_error,
+                "agent_config_protection_enabled": self._agent_config_protection_enabled(),
+                "agent_config_protection_scope": "global and active project/workspace",
                 "mcp_installed": self._mcp_installed,
                 "paused_dirs": self._get_paused_dirs_locked(),
                 "active_project_dirs": sorted(
@@ -1285,6 +1287,14 @@ class DaemonState:
                 "ask_dialog_count": self._ask_dialog_count,
                 "ask_dialog_total_ms": round(self._ask_dialog_total_ms, 1),
             }
+
+    def _agent_config_protection_enabled(self) -> bool:
+        """Return the effective global-only agent configuration setting."""
+        from ai_guardian.agent_config_protection import (
+            is_agent_config_protection_enabled,
+        )
+
+        return is_agent_config_protection_enabled(self._config or {})
 
     def get_project_cache_status(self):
         """Get per-project config cache details for diagnostics.

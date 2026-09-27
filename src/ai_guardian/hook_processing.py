@@ -79,6 +79,10 @@ from ai_guardian.constants import (
     HookEvent,
     ViolationType,
 )
+from ai_guardian.agent_config_protection import (
+    is_agent_config_mutation_tool,
+    is_agent_config_protection_enabled,
+)
 from ai_guardian.developer_session import is_trusted_developer_session
 from ai_guardian.scanners.scan_result import ScanResult
 from ai_guardian.utils.path_matching import match_leading_doublestar_pattern
@@ -103,6 +107,14 @@ def _load_config_scanner_config():
 
 def _load_permissions_config():
     return _loaders._load_permissions_config()
+
+
+def _load_agent_config_protection_config():
+    """Load the global-only supported-agent configuration protection setting."""
+    config, error_msg = _loaders._load_config_file()
+    if error_msg:
+        return None, error_msg
+    return (config or {}).get("agent_config_protection"), None
 
 
 def _load_secret_scanning_config():
@@ -2149,11 +2161,25 @@ def _process_hook_data(hook_data, daemon_state=None):
                 if config_error:
                     warning_messages.append(config_error)
 
+                agent_config_section, agent_config_error = (
+                    _load_agent_config_protection_config()
+                )
+                if agent_config_error:
+                    warning_messages.append(agent_config_error)
+
                 # Check if permissions enforcement is enabled (supports time-based disabling)
                 permissions_enabled = is_feature_enabled(
                     permissions_config.get("enabled") if permissions_config else None,
                     now,
                     default=True,
+                )
+                agent_config_protection_enabled = is_agent_config_protection_enabled(
+                    {"agent_config_protection": agent_config_section}
+                )
+                agent_config_check_required = bool(
+                    agent_config_protection_enabled
+                    and tool_name
+                    and is_agent_config_mutation_tool(tool_name)
                 )
                 # Identity verification remains mandatory even when the user
                 # disables ordinary permission rules.
@@ -2169,6 +2195,7 @@ def _process_hook_data(hook_data, daemon_state=None):
                     permissions_enabled
                     or identity_required
                     or immutable_shell_check_required
+                    or agent_config_check_required
                 ):
                     trusted_developer_session = (
                         getattr(daemon_state, "developer_session_enabled", None)

@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Supported agent configuration protection (#2443):** Add a secure,
+  global-only `agent_config_protection.enabled` setting and a canonical
+  inventory for supported CLI/IDE settings, hooks, MCP registrations, plugins,
+  extensions, bridges, relocated user paths, and active project/workspace
+  artifacts. Agent-originated file and shell mutations are denied before
+  ordinary permissions, including when permissions are disabled.
+
 - **Trusted developer-session CLI access (#2441):** Add the explicit,
   fail-closed `developer_session.enabled` setting in the protected global
   configuration for AI Guardian development sessions. Hook payloads, project

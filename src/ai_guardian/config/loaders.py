@@ -23,6 +23,7 @@ from ai_guardian.config.utils import (
     _clear_project_config_cache,
     _dedup_list,
     deep_merge,
+    GLOBAL_ONLY_SECTIONS,
     is_feature_enabled,
 )
 
@@ -339,6 +340,15 @@ def _load_config_file():
         # Normalize permissions format before merge (list → dict)
         global_config = _normalize_permissions(global_config)
         project_config = _normalize_permissions(project_config)
+
+        # Global-only security sections must not become effective merely
+        # because a project is the only config file present.
+        if isinstance(project_config, dict):
+            project_config = {
+                key: value
+                for key, value in project_config.items()
+                if key not in GLOBAL_ONLY_SECTIONS
+            }
 
         # Warn about deprecated action on allow rules
         _warn_deprecated_action_on_allow(global_config)
