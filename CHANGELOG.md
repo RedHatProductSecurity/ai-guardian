@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deterministic local compaction for OpenAI Chat Completions, Gemini,
   OpenAI-compatible providers, unsupported models, or failed native requests.
 
+- **Structured MCP hook coverage (#2429):** Extend dummy-agent scenarios to
+  model MCP `tools/call` results and scan structured MCP output during
+  PostToolUse so secrets are redacted before reaching the agent.
+
 - **Supported agent configuration protection (#2443):** Add a secure,
   global-only `agent_config_protection.enabled` setting and a canonical
   inventory for supported CLI/IDE settings, hooks, MCP registrations, plugins,

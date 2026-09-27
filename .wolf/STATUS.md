@@ -48,6 +48,22 @@ budget_tokens: 1000
 - Focused validation: 180 tests passed; Black, Ruff, Pylint, and Mypy passed.
 - CI rerun passed across the compatibility matrix and multi-architecture container job; the first Ubuntu 26.04/Python 3.14 cancellation was transient. CodeRabbit review remains pending.
 
+## ✅ Issue #2429 Complete
+
+- Dummy-agent scenarios now cover structured MCP `tools/call` results for standard, strict, minimal, and moderator profiles.
+- Scenario schema and runner preserve structured MCP output; PostToolUse serializes MCP results for secret scanning and redaction.
+- Focused unit and MCP UX contract tests pass: 57 passed, 1 skipped; related hook tests pass: 176 passed, 1 skipped.
+- Scenario schema validation, Black, Ruff, Pylint, and Mypy pass.
+- No commit or pull request was created; `daf complete` owns those actions.
+
+## 🚧 Issue #2441 In Progress
+
+- Protected global developer-session configuration and immutable CLI enforcement are implemented.
+- Added TUI and Web Console **Configuration & CLI Protection** sections with a global-only Developer Session CLI Access control.
+- Project scope displays the global value but cannot edit it; Web saves explicitly target the global config.
+- UI/config validation: 111 UI/config tests and 595 self-protection tests pass; Black, Ruff, Pylint, and Mypy pass.
+- UI changes are uncommitted; no commit or pull request was created.
+
 ## 🚧 Issue #2432 In Progress
 
 - Evaluated provider-native compaction: Anthropic on-demand compaction is usable through the Messages beta API; OpenAI compaction is Responses-API-only while this SDK uses Chat Completions; Gemini and OpenAI-compatible routes retain local compaction.

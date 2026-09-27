@@ -87,8 +87,18 @@
                   "description": "Tool input parameters (e.g. {command: '...'} for Bash, {file_path: '...'} for Read)."
                 },
                 "fake_output": {
-                  "type": "string",
-                  "description": "Simulated tool output injected into the PostToolUse hook."
+                  "description": "Simulated tool output injected into the PostToolUse hook. Strings model ordinary tools; objects and arrays model structured MCP tools/call results.",
+                  "oneOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "object"
+                    },
+                    {
+                      "type": "array"
+                    }
+                  ]
                 }
               }
             }
