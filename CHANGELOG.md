@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Provider-aware SDK compaction (#2432):** Use Anthropic's native signed
+  compaction blocks when the Messages API and model support them, preserve
+  configured initial/recent turns, scan provider summaries, and fall back to
+  deterministic local compaction for OpenAI Chat Completions, Gemini,
+  OpenAI-compatible providers, unsupported models, or failed native requests.
+
 - **Supported agent configuration protection (#2443):** Add a secure,
   global-only `agent_config_protection.enabled` setting and a canonical
   inventory for supported CLI/IDE settings, hooks, MCP registrations, plugins,
