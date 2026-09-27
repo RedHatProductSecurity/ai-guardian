@@ -50,7 +50,7 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`.
 
 ### Hook Process Failure Policy
 
@@ -107,6 +107,11 @@ from project configuration, SDK overlays, hook payloads, or AI Guardian
 command-line arguments.
 The opt-in is limited to the CLI boundary and does not disable protected-file,
 hook, cache, MCP identity, or other immutable protections.
+
+The TUI and Web Console expose this setting under **Configuration & CLI
+Protection** in Global Settings. It is displayed but not editable while the
+project configuration scope is selected. Restart the daemon/session after
+changing it.
 
 ### 3. Legacy Local Configuration
 

@@ -9,6 +9,7 @@ from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.help_panel import add_help_button, field_help_icon
 from ai_guardian.web.config_helpers import (
     load_web_config,
+    load_web_config_global,
     save_web_config,
     get_web_config_provenance,
     get_web_config_scope_label,
@@ -273,6 +274,22 @@ def _get_action(config, section):
     return ACTION_DEFAULTS.get(section, "block")
 
 
+def _get_developer_session_enabled(config):
+    """Read the global-only developer-session setting for display."""
+    section = config.get("developer_session", {})
+    return isinstance(section, dict) and section.get("enabled") is True
+
+
+def _set_developer_session_enabled(config, value):
+    """Update developer-session access without changing other global settings."""
+    section = config.get("developer_session", {})
+    if not isinstance(section, dict):
+        section = {}
+    section["enabled"] = bool(value)
+    config["developer_session"] = section
+    return config
+
+
 def _format_remaining(dt):
     remaining = dt - datetime.now(timezone.utc)
     total = max(0, int(remaining.total_seconds()))
@@ -334,6 +351,7 @@ def create_global_settings_page(service, daemon_name: str):
         async def refresh():
             content.clear()
             config = await run.io_bound(load_web_config)
+            global_config = await run.io_bound(load_web_config_global)
 
             provenance = await run.io_bound(get_web_config_provenance)
             scope_label = get_web_config_scope_label()
@@ -357,6 +375,50 @@ def create_global_settings_page(service, daemon_name: str):
                         scope_label,
                         color="green" if scope_label == "Global" else "blue",
                     ).classes("text-xs")
+
+                # --- Configuration & CLI Protection ---
+                with ui.card().classes("w-full"):
+                    ui.label("Configuration & CLI Protection").classes(
+                        "text-lg font-bold"
+                    )
+                    ui.label(
+                        "Controls protections for agent-originated CLI execution and "
+                        "protected AI Guardian and IDE configuration."
+                    ).classes("text-xs text-grey-6")
+                    ui.separator().classes("my-1")
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        developer_switch = ui.switch(
+                            "Developer Session CLI Access",
+                            value=_get_developer_session_enabled(global_config),
+                        ).classes("flex-grow")
+                        if scope_label != "Global":
+                            developer_switch.disable()
+                            ui.badge("Global only", color="blue").props("dense")
+                    ui.label(
+                        "Allows agent-originated AI Guardian CLI commands for a trusted "
+                        "development session. Restart the daemon/session after changing it."
+                    ).classes("text-xs text-grey-6 ml-8")
+
+                    async def save_developer_session(event):
+                        current_global = await run.io_bound(load_web_config_global)
+                        updated_global = _set_developer_session_enabled(
+                            current_global, event.value
+                        )
+                        saved = await run.io_bound(
+                            save_web_config, updated_global, scope="global"
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
+                        ui.notify(
+                            "Developer Session CLI Access saved; restart the daemon/session to apply",
+                            type="warning",
+                        )
+
+                    developer_switch.on_value_change(save_developer_session)
 
                 # --- On Scan Error ---
                 with ui.card().classes("w-full"):

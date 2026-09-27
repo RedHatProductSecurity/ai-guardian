@@ -289,11 +289,13 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
         "title": "Global Settings",
         "summary": (
             "Master control panel for all AI Guardian security features. "
-            "Toggle features on/off, set actions, and configure fail-open vs fail-closed behavior."
+            "Toggle features on/off, set actions, configure fail-open vs fail-closed behavior, "
+            "and manage configuration and CLI protection."
         ),
         "catches": [
             "All active scanners and their current status",
             "on_scan_error — what happens when a scanner or hook process fails",
+            "Configuration & CLI Protection — global-only developer session access",
         ],
         "does_not_catch": [],
         "config_summary": (
@@ -303,7 +305,9 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
             "Security tradeoff:\n"
             "  'block' is safer but a scanner bug = blocked workflow.\n"
             "  Recommend: 'allow' for dev, 'block' for production/compliance environments.\n"
-            "  Applies to ALL scanners and hook process failures: startup, daemon/direct fallback, and malformed responses."
+            "  Applies to ALL scanners and hook process failures: startup, daemon/direct fallback, and malformed responses.\n\n"
+            "Configuration & CLI Protection:\n"
+            "  Developer Session CLI Access is global-only and requires a daemon/session restart after changes."
         ),
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },

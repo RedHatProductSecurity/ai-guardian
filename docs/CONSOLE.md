@@ -247,6 +247,14 @@ Some actions open modal windows (e.g., viewing violation details, adding new rul
 
 Manage global security feature toggles with time-based controls.
 
+#### Configuration & CLI Protection
+
+The **Configuration & CLI Protection** section contains global-only controls for
+agent-originated CLI execution and protected AI Guardian/IDE configuration.
+Developer Session CLI Access is shown from the global configuration and cannot
+be edited while the project scope is selected. Restart the daemon/session after
+changing it.
+
 #### Features
 
 **Tool Permissions Enforcement** (`permissions.enabled`)

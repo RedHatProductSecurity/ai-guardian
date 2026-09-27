@@ -346,6 +346,17 @@ class TestRemoteProjectScope:
             "/projects/a",
         ) in self._svc.calls
 
+    def test_save_can_force_global_scope_when_project_selected(self):
+        set_current_project_dir("/projects/a")
+        config = {"developer_session": {"enabled": True}}
+        save_web_config(config, scope="global")
+        assert (
+            "write_config_bulk",
+            "global",
+            config,
+            None,
+        ) in self._svc.calls
+
     def test_save_global_when_no_project(self):
         set_current_project_dir("")
         config = {"test": True}
