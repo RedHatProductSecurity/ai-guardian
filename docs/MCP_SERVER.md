@@ -202,10 +202,13 @@ The MCP server is a **security advisor, not a security map**. It answers yes/no 
   `uvx` registrations create or migrate that record automatically at startup.
 - Each AI Guardian MCP process performs a nonce-based attestation and receives a
   short-lived process-bound session. Hook policy checks require a live verified
-  session before allowing built-in MCP tools.
+  session before allowing built-in MCP tools. Once verified, the built-in
+  security advisor is allowed independently of ordinary host MCP permission
+  rules, including when Pi routes a bridge call through its tool hook.
 - Tampered, invalid, expired, or orphaned identity data fails closed with an
   MCP identity verification error. Missing records and valid stale records are
-  migrated automatically; permission rules cannot override this gate.
+  migrated automatically; permission rules cannot override this gate or block a
+  successfully verified built-in server.
 - All other MCP servers require explicit allow rules in the permissions config
 - The MCP server process runs separately from the daemon — if the daemon is unavailable, MCP tools still work
 

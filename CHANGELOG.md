@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Pi setup now automatically installs the pinned MCP SDK with npm when available; failed installs leave an actionable retry diagnostic.
+- Verified AI Guardian MCP tools now bypass ordinary host MCP permission rules after identity attestation, including calls routed through the Pi bridge.
 
 ### Added
 
