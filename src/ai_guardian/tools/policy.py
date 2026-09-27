@@ -649,25 +649,34 @@ class ToolPolicyChecker:
                         )
                         return False, error_msg, tool_name
 
-            # The built-in namespace is not an identity proof.  Require a
-            # process-bound attestation before any permission rule can allow it.
-            if is_ai_guardian_mcp_tool(tool_name) and not verify_active_attestation(
-                "ai-guardian"
-            ):
-                error_msg = self._format_mcp_identity_deny_message(tool_name)
-                self.last_deny_action = "block"
-                self.last_deny_matched_pattern = "unverified MCP identity"
-                self.last_deny_check_value = tool_name
-                self._log_violation(
-                    tool_name=tool_name,
-                    check_value=tool_name,
-                    reason="MCP server identity verification failed",
-                    matcher="mcp__ai-guardian__*",
-                    hook_data=hook_data,
-                    violation_type=ViolationType.TOOL_PERMISSION,
+            # The built-in namespace is not an identity proof. Require a
+            # process-bound attestation before allowing it, then bypass ordinary
+            # MCP permission rules so a verified security advisor cannot block
+            # itself through the host's user-configured policy.
+            if is_ai_guardian_mcp_tool(tool_name):
+                if not verify_active_attestation("ai-guardian"):
+                    error_msg = self._format_mcp_identity_deny_message(tool_name)
+                    self.last_deny_action = "block"
+                    self.last_deny_matched_pattern = "unverified MCP identity"
+                    self.last_deny_check_value = tool_name
+                    self._log_violation(
+                        tool_name=tool_name,
+                        check_value=tool_name,
+                        reason="MCP server identity verification failed",
+                        matcher="mcp__ai-guardian__*",
+                        hook_data=hook_data,
+                        violation_type=ViolationType.TOOL_PERMISSION,
+                    )
+                    logger.error(
+                        "Blocked unverified AI Guardian MCP tool: %s", tool_name
+                    )
+                    return False, error_msg, tool_name
+
+                logger.info(
+                    "Tool '%s' allowed by verified AI Guardian MCP identity",
+                    tool_name,
                 )
-                logger.error("Blocked unverified AI Guardian MCP tool: %s", tool_name)
-                return False, error_msg, tool_name
+                return True, None, tool_name
 
             # PRIORITY 2: Check user-configured permissions
             # Skip if permissions are disabled

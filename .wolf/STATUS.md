@@ -40,22 +40,20 @@ budget_tokens: 1000
 
 ---
 
+## ✅ Issue #2440 Complete
+
+- Verified AI Guardian MCP tools now pass after live identity attestation without ordinary host MCP permission rules blocking them.
+- Added a Pi bridge UX regression using the generated `tool_call` payload shape and a deny-all MCP policy.
+- Updated MCP security documentation and the unreleased changelog.
+- Focused validation: 180 tests passed; Black, Ruff, Pylint, and Mypy passed.
+
 ## 🚀 Next phase
 
-**Goal:** Finish and validate the Pi SDK auto-install follow-up, then update PR `#2438`.
-
-### Acceptance criteria
-1. [x] Pi verification reports a missing managed extension diagnostic with its repair path.
-2. [x] Tray health distinguishes missing extension, SDK dependencies, identity, disabled, and healthy states.
-3. [x] Setup and subsequent manual checks show the pinned SDK action and managed extension path instead of generic MCP missing.
-4. [x] Fresh, dependency-pending, healthy, and tray UX regression coverage passes.
-5. [x] Pi health verification remains read-only and does not launch the MCP server.
-6. [x] Pi setup automatically attempts the pinned SDK install and retries pending dependency states without `--force`.
+**Goal:** Review and complete issue `#2440` through DevAIFlow.
 
 ### Open decisions
-- Automatic installation uses `npm install --ignore-scripts --no-audit --no-fund` when npm is available.
-- If npm is unavailable or installation fails, hooks remain installed and setup/check output provides the retry command.
-- The auto-install follow-up is currently uncommitted on branch `2436`; commit `b62884bc` and PR `#2438` remain the base.
+- The required JIRA ticket lookup remains unavailable because `JIRA_API_TOKEN` is not set in the session environment.
+- No commit or pull request was created; `daf complete` owns those actions.
 
 ---
 

@@ -349,13 +349,14 @@ When no permission rule matches a tool, the decision depends on the tool type:
 | Built-in (Bash, Read, Write, Edit, WebFetch, Agent) | **Allowed** | Hooks scan input/output for secrets, PII, SSRF, prompt injection |
 | MCP server tools (`mcp__*`) | **Denied** | Third-party code that bypasses hook scanning; requires explicit allow |
 | Skills | **Denied** | Can override AI behavior and instructions; requires explicit allow |
-| ai-guardian MCP tools (`mcp__ai-guardian__*`) | **Allowed after identity verification** | Built-in namespace plus a live verified AI Guardian MCP process |
+| ai-guardian MCP tools (`mcp__ai-guardian__*`) | **Allowed after identity verification** | Built-in namespace plus a live verified AI Guardian MCP process; ordinary MCP permission rules do not block it |
 
 This means:
 - You only need allow rules for MCP servers and Skills you want to use
 - Built-in tools work without any rules (unless you want to restrict them with deny rules)
 - Forgetting to add an allow rule for an MCP server results in a "no permission rule" denial
 - A permission rule for `mcp__ai-guardian__*` does not authenticate a server. The identity gate runs first and blocks unverified registrations even when permissions are disabled or an allow rule matches.
+- After the identity gate succeeds, the verified AI Guardian server is allowed without an explicit MCP permission rule. This keeps the security advisor available when Pi routes its bridge calls through the normal tool policy hook.
 
 ### Config Merge Behavior
 

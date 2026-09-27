@@ -40,6 +40,7 @@
 - **Pi tray health must preserve structured MCP states:** Pi's managed extension verifier returns `mcp_registration="extension"` plus distinct states such as `missing_dependencies`, `identity_missing`, and `disabled`. Tray notifications should use that marker to retain the state-specific diagnostic and managed extension path instead of collapsing every `mcp_installed=false` result into generic MCP missing.
 
 - **Pi SDK setup policy:** The managed extension should automatically run `npm install --ignore-scripts --no-audit --no-fund` when npm is available. If npm is unavailable or the install fails, preserve hook protection and expose the retry command; a later setup without `--force` must retry pending SDK states. Setup and check commands may resolve different `ai-guardian` executables, so executable-pin diagnostics must remain distinct from missing SDK dependencies.
+- **Pi MCP bridge policy boundary (#2440):** Pi registers the managed server's tools as `mcp__ai-guardian__*` and sends them through its normal `tool_call` hook. A live identity attestation is the authorization boundary: scanners and immutable protections still run, but ordinary host MCP permission rules must not block the verified security advisor.
 
 - **Full-suite CI timeout triage:** When a CI run times out at an existing test and the current diff creates no threads or processes, compare with the preceding passing PR and rerun the canceled jobs before changing production code. The Python 3.9/3.12 timeout on PR #2438 passed on rerun with no source changes.
 

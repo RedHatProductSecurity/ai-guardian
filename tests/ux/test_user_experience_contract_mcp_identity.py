@@ -65,6 +65,48 @@ class TestMCPIdentityUX:
         assert allowed is True
         assert message is None
 
+    @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
+    def test_verified_pi_bridge_is_allowed_before_user_mcp_permissions(
+        self, mock_verify
+    ):
+        """
+        USER EXPERIENCE: Verified Pi MCP bridge -> always available.
+
+        Pi routes the managed bridge through its normal ``tool_call`` hook. The
+        host's ordinary MCP deny rules must not block the verified security
+        advisor, while the identity gate remains mandatory.
+        """
+        checker = ToolPolicyChecker(
+            config={
+                "permissions": {
+                    "enabled": True,
+                    "rules": [
+                        {
+                            "matcher": "mcp__*",
+                            "mode": "deny",
+                            "patterns": ["*"],
+                        }
+                    ],
+                }
+            }
+        )
+        allowed, message, _ = checker.check_tool_allowed(
+            {
+                "hook_event_name": "PreToolUse",
+                "pi_version": "1.0.0",
+                "hook_source": "pi",
+                "tool_name": "mcp__ai-guardian__get_config",
+                "tool_use": {
+                    "name": "mcp__ai-guardian__get_config",
+                    "input": {},
+                },
+            }
+        )
+
+        mock_verify.assert_called_once_with("ai-guardian")
+        assert allowed is True
+        assert message is None
+
     @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=False)
     def test_identity_gate_remains_active_when_permissions_are_disabled(
         self, mock_verify
