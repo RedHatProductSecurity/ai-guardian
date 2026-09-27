@@ -9,6 +9,7 @@ upgrade, and notification state. It receives a back-reference to DaemonTray.
 import logging
 import threading
 import time
+from pathlib import Path
 
 from ai_guardian.constants import CODEX_COVERAGE_NOTE
 from ai_guardian.tray import notifications as tray_notifications
@@ -436,6 +437,44 @@ class TrayHealthMonitor:
         return isinstance(verification, dict) and verification.get("healthy") is True
 
     @staticmethod
+    def _pi_mcp_attention(verification):
+        """Return actionable tray text for a Pi MCP health state."""
+        if not isinstance(verification, dict):
+            return None
+        if verification.get("mcp_registration") != "extension":
+            return None
+
+        status = verification.get("mcp_status")
+        if not status or status == "healthy":
+            return None
+
+        labels = {
+            "missing": "MCP managed extension missing",
+            "migration_required": "MCP managed extension migration required",
+            "missing_dependencies": "MCP SDK dependencies missing",
+            "invalid_dependencies": "MCP SDK dependencies invalid",
+            "identity_missing": "MCP identity missing",
+            "identity_invalid": "MCP identity invalid",
+            "disabled": "MCP disabled",
+            "stale": "MCP managed extension stale",
+            "executable_changed": "MCP executable pin changed",
+            "invalid": "MCP managed extension invalid",
+        }
+        detail = labels.get(status, f"MCP status: {status}")
+        diagnostic = verification.get("mcp_diagnostic")
+        if diagnostic:
+            detail += f"; {diagnostic}"
+
+        managed_path = verification.get("mcp_extension_path")
+        if status in {"missing_dependencies", "invalid_dependencies"}:
+            package_path = verification.get("mcp_package_path")
+            if package_path:
+                managed_path = str(Path(package_path).parent)
+        if managed_path and str(managed_path) not in str(diagnostic or ""):
+            detail += f"; managed extension: {managed_path}"
+        return detail
+
+    @staticmethod
     def _verification_attention(verification):
         """Return actionable, user-facing details for an unhealthy result."""
         if not isinstance(verification, dict):
@@ -458,7 +497,10 @@ class TrayHealthMonitor:
         if isinstance(diagnostics, (list, tuple, set)):
             attention.extend(str(diagnostic) for diagnostic in diagnostics)
 
-        if verification.get("mcp_installed") is False:
+        pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(verification)
+        if pi_mcp_attention:
+            attention.append(pi_mcp_attention)
+        elif verification.get("mcp_installed") is False:
             attention.append("MCP server (missing)")
 
         error = verification.get("error")
@@ -660,9 +702,13 @@ class TrayHealthMonitor:
                     details.append(f"scope: {scope_detail}")
                 elif effective_scope and effective_scope != "none":
                     details.append(f"scope: {effective_scope}")
-                mcp_status = status.get("mcp_status")
-                if mcp_status and mcp_status != "healthy":
-                    details.append(f"MCP: {mcp_status}")
+                pi_mcp_attention = TrayHealthMonitor._pi_mcp_attention(status)
+                if pi_mcp_attention:
+                    details.append(pi_mcp_attention)
+                else:
+                    mcp_status = status.get("mcp_status")
+                    if mcp_status and mcp_status != "healthy":
+                        details.append(f"MCP: {mcp_status}")
             return f"{name} ({'; '.join(details)})" if details else name
 
         if unconfigured:
