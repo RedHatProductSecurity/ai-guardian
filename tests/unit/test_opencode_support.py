@@ -99,6 +99,39 @@ class TestOpenCodeNormalization:
         n = OpenCodeAdapter().normalize_input(data)
         assert n.file_path == "/tmp/secret.py"
 
+    @pytest.mark.parametrize(
+        "native_name,canonical_name,tool_input,canonical_key",
+        [
+            ("read", "Read", {"filePath": "/tmp/secret.py"}, "file_path"),
+            ("write", "Write", {"filePath": "/tmp/secret.py"}, "file_path"),
+            (
+                "edit",
+                "Edit",
+                {
+                    "filePath": "/tmp/secret.py",
+                    "oldString": "old",
+                    "newString": "new",
+                },
+                "file_path",
+            ),
+            ("bash", "Bash", {"command": "printf safe"}, "command"),
+        ],
+    )
+    def test_native_tools_are_canonicalized(
+        self, native_name, canonical_name, tool_input, canonical_key
+    ):
+        data = {
+            "hook_event_name": "tool.execute.before",
+            "opencode_version": "1.0.0",
+            "tool_use": {"name": native_name, "input": tool_input},
+        }
+
+        normalized = OpenCodeAdapter().normalize_input(data)
+
+        assert normalized.tool_name == canonical_name
+        expected_value = tool_input.get(canonical_key, tool_input.get("filePath"))
+        assert normalized.tool_input[canonical_key] == expected_value
+
 
 class TestOpenCodeResponseFormatting:
     """Test OpenCode response formatting (inherits BaseAgentAdapter format)."""

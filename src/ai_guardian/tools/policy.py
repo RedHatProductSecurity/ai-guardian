@@ -25,6 +25,8 @@ from ai_guardian.constants import (
     AUGMENT_TOOL_MAP,
     canonical_ide,
     HookEvent,
+    OPENCODE_TOOL_INPUT_MAP,
+    OPENCODE_TOOL_MAP,
     antigravity_tool_name,
 )
 
@@ -1122,6 +1124,23 @@ class ToolPolicyChecker:
                     )
                     raise ValueError("tool_input must decode to an object")
                 tool_input = decoded_input
+
+            # OpenCode's native payload uses lowercase tool names and camelCase
+            # arguments. Normalize raw policy callers as well as hook adapters.
+            is_opencode = (
+                hook_data.get("opencode_version")
+                or hook_data.get("hook_source") == "opencode"
+                or str(hook_data.get("_ide_type", "")).lower() == "opencode"
+                or os.environ.get("AI_GUARDIAN_IDE_TYPE", "").lower() == "opencode"
+            )
+            if is_opencode:
+                if isinstance(tool_name, str):
+                    tool_name = OPENCODE_TOOL_MAP.get(tool_name.casefold(), tool_name)
+                if isinstance(tool_input, dict):
+                    tool_input = dict(tool_input)
+                    for native_key, canonical_key in OPENCODE_TOOL_INPUT_MAP.items():
+                        if canonical_key not in tool_input and native_key in tool_input:
+                            tool_input[canonical_key] = tool_input[native_key]
 
             # Cursor/Windsurf: synthesize from event-based hook names
             if not tool_name:
