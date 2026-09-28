@@ -2,6 +2,9 @@
 
 from nicegui import run, ui
 
+from ai_guardian.web.components.config_notice import (
+    create_effective_config_scope_banner,
+)
 from ai_guardian.web.components.header import create_header, create_sidebar
 
 
@@ -227,11 +230,13 @@ def create_config_effective_page(service, daemon_name: str):
     with ui.column().classes("flex-grow p-6 gap-4"):
         ui.label("Effective Configuration").classes("text-2xl font-bold")
         ui.label(
-            "Merged configuration from all sources "
-            "(global + project) with per-key provenance."
+            "Select a project in the header to include project-local overrides; "
+            "provenance badges identify each source."
         ).classes("text-xs text-grey-6")
 
         from ai_guardian.web.config_helpers import _get_remote_project_dir
+
+        create_effective_config_scope_banner(_get_remote_project_dir())
 
         with ui.row().classes("items-center gap-4"):
             view_toggle = ui.toggle(
