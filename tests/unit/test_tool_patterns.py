@@ -12,6 +12,7 @@ from ai_guardian.tools.patterns import (
     _HOOK_KEY_PATTERN,
     _strip_bash_heredoc_content,
     is_ai_guardian_cli_command,
+    is_host_agent_cli_command,
 )
 
 
@@ -61,6 +62,36 @@ class TestImmutableDenyPatterns:
     def test_cli_detection_ignores_heredoc_content(self):
         command = "cat <<'EOF'\nai-guardian status\nEOF"
         assert not is_ai_guardian_cli_command(command)
+
+    def test_host_cli_detection_covers_wrappers_and_paths(self):
+        blocked = [
+            "opencode --help",
+            "/usr/local/bin/opencode run",
+            "opencode.cmd --help",
+            "npx opencode --help",
+            "uvx opencode",
+            "npm exec -- opencode",
+            "env HOST=1 opencode",
+            "bash -lc 'opencode --help'",
+            "powershell -Command 'opencode --help'",
+        ]
+        for command in blocked:
+            assert is_host_agent_cli_command(command, ("opencode",)), command
+
+    def test_host_cli_detection_ignores_mentions_and_paths(self):
+        allowed = [
+            "printf '%s\\n' 'opencode status'",
+            "grep -n opencode README.md",
+            "git -C opencode status",
+            "touch /tmp/opencode-notes.txt",
+            "cat docs/opencode.md",
+        ]
+        for command in allowed:
+            assert not is_host_agent_cli_command(command, ("opencode",)), command
+
+    def test_host_cli_detection_supports_alias_executables(self):
+        assert is_host_agent_cli_command("agy --help", ("agy", "antigravity"))
+        assert is_host_agent_cli_command("kiro-cli chat", ("kiro-cli", "kiro"))
 
     def test_write_protects_hooks(self):
         patterns = IMMUTABLE_DENY_PATTERNS["Write"]

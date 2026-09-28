@@ -613,7 +613,13 @@ class _RestHandler(BaseHTTPRequestHandler):
             from ai_guardian.config.writer import (
                 _resolve_config_path,
                 _atomic_config_update,
+                validate_scoped_config,
             )
+
+            valid, validation_message = validate_scoped_config(scope, config)
+            if not valid:
+                self._send_error(400, validation_message)
+                return
 
             config_path = _resolve_config_path(scope, project_dir)
 

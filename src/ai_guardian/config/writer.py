@@ -463,6 +463,20 @@ def write_scoped_config(
     return False, f"Failed to write {section}.{key} to {scope} config"
 
 
+def validate_scoped_config(scope: str, config: dict) -> Tuple[bool, str]:
+    """Reject global-only sections in whole project-config writes."""
+    if scope != "project":
+        return True, ""
+    blocked = sorted(set(config).intersection(GLOBAL_ONLY_SECTIONS))
+    if blocked:
+        return (
+            False,
+            "Global-only sections cannot be written to project config: "
+            + ", ".join(blocked),
+        )
+    return True, ""
+
+
 def delete_project_override(
     section: str,
     key: Optional[str] = None,

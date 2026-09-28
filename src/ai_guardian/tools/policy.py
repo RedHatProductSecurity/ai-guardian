@@ -53,6 +53,8 @@ from ai_guardian.agent_config_protection import (
     is_agent_config_protection_enabled,
 )
 from ai_guardian.developer_session import is_trusted_developer_session
+from ai_guardian.ide_registry import get_cli_executables_for_agent_type
+from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 from ai_guardian.mcp.identity import (
     is_ai_guardian_mcp_tool,
     verify_active_attestation,
@@ -63,6 +65,7 @@ from ai_guardian.tools.patterns import (
     HOOK_INDICATOR_KEYS,
     _HOOK_KEY_PATTERN,
     is_ai_guardian_cli_command,
+    is_host_agent_cli_command,
     _strip_bash_heredoc_content,
 )
 
@@ -83,6 +86,7 @@ _SHELL_TOOL_NAMES = frozenset(
     }
 )
 _IMMUTABLE_CLI_REASON = "agent-originated AI Guardian CLI execution"
+_HOST_AGENT_CLI_REASON = "agent-originated host CLI execution"
 _AGENT_CONFIG_PROTECTION_REASON = "supported agent configuration protection"
 
 
@@ -455,6 +459,51 @@ class ToolPolicyChecker:
         )
         return False, error_message, tool_name
 
+    def _check_host_agent_cli_protection(
+        self, hook_data: Dict, tool_name: str, tool_input: Dict
+    ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
+        """Block agent-originated launches of the active host CLI."""
+        if not is_host_agent_cli_protection_enabled(self.config):
+            return None
+        if not is_shell_tool_name(tool_name):
+            return None
+
+        command = self._extract_shell_command(tool_input, hook_data)
+        if not command:
+            return None
+
+        agent_type = self._detect_ide_type(hook_data)
+        executables = get_cli_executables_for_agent_type(agent_type)
+        if not executables or not is_host_agent_cli_command(command, executables):
+            return None
+
+        self.last_deny_action = "block"
+        self.last_deny_matched_pattern = _HOST_AGENT_CLI_REASON
+        self.last_deny_check_value = "<agent-originated host CLI invocation>"
+        self._log_violation(
+            tool_name=tool_name,
+            check_value="<agent-originated host CLI invocation>",
+            reason=_HOST_AGENT_CLI_REASON,
+            matcher=tool_name,
+            hook_data=hook_data,
+            violation_type=ViolationType.TOOL_PERMISSION,
+        )
+        logger.error(
+            "Blocked agent-originated host CLI execution for %s via %s",
+            agent_type,
+            tool_name,
+        )
+        error_message = (
+            "AI Guardian Self-Protection\n\n"
+            "Protection: Agent-originated host CLI execution\n"
+            f"Tool: {tool_name}\n"
+            "Reason: Shell tool calls from an AI agent may not launch the active "
+            "host command-line interface.\n\n"
+            "This operation was blocked before the child process started.\n"
+            "This protection is independent of ordinary tool permissions."
+        )
+        return False, error_message, tool_name
+
     def _check_agent_config_protection(
         self, hook_data: Dict, tool_name: str, tool_input: Dict
     ) -> Optional[Tuple[bool, Optional[str], Optional[str]]]:
@@ -527,6 +576,12 @@ class ToolPolicyChecker:
             )
             if cli_protection is not None:
                 return cli_protection
+
+            host_cli_protection = self._check_host_agent_cli_protection(
+                hook_data, tool_name, tool_input
+            )
+            if host_cli_protection is not None:
+                return host_cli_protection
 
             # Supported agent configuration is protected independently of
             # ordinary permissions, including when permissions are disabled.
@@ -1845,6 +1900,7 @@ class ToolPolicyChecker:
         suggestion = {}
         if reason not in {
             _IMMUTABLE_CLI_REASON,
+            _HOST_AGENT_CLI_REASON,
             _AGENT_CONFIG_PROTECTION_REASON,
         }:
             suggested_matcher, suggested_patterns = self._suggest_permission_rule(
@@ -1940,7 +1996,7 @@ class ToolPolicyChecker:
             local_config = {
                 key: value
                 for key, value in local_config.items()
-                if key != "agent_config_protection"
+                if key not in {"agent_config_protection", "self_protection"}
             }
             config = self._merge_configs(
                 config, local_config, immutable_matchers, immutable_sections
@@ -2023,6 +2079,7 @@ class ToolPolicyChecker:
             "secret_scanning",
             "directory_exclusions",
             "permissions",
+            "self_protection",
         ]
 
         for remote_config in remote_configs:
@@ -2040,6 +2097,7 @@ class ToolPolicyChecker:
         """Get default empty configuration."""
         return {
             "agent_config_protection": {"enabled": True},
+            "self_protection": {"block_host_agent_cli": True},
             "permissions": {"enabled": True, "immutable": False, "rules": []},
             "permissions_directories": {"deny": [], "allow": []},
             "remote_configs": [],
@@ -2483,6 +2541,7 @@ class ToolPolicyChecker:
                     ("prompt_injection", "enabled"),
                     ("permissions", "enabled"),
                     ("agent_config_protection", "enabled"),
+                    ("self_protection", "block_host_agent_cli"),
                 ]
 
                 for key_path in security_critical_keys:

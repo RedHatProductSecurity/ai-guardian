@@ -50,7 +50,7 @@ A project-level config that merges on top of the global config. Discovered via g
 
 **What can be overridden**: Prompt injection, secret scanning, PII, SSRF, permissions, directory rules, annotations, and more.
 
-**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`.
+**Global-only sections** (cannot be overridden): `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
 
 ### Hook Process Failure Policy
 
@@ -112,6 +112,27 @@ The TUI and Web Console expose this setting under **Configuration & CLI
 Protection** in Global Settings. It is displayed but not editable while the
 project configuration scope is selected. Restart the daemon/session after
 changing it.
+
+### Host CLI Self-Protection
+
+`self_protection.block_host_agent_cli` is a global-only boolean that defaults to
+`true`. It blocks agent-originated attempts to launch the active supported host
+CLI before a child process starts. The active CLI is resolved from the detected
+adapter/session identity and the canonical supported-integration registry.
+
+The guard covers direct, path-qualified, package-launcher, and supported
+shell-wrapper forms while allowing ordinary documentation text, filenames,
+repository paths, unrelated commands, parent host startup, trusted hook/daemon
+operations, verified AI Guardian MCP operations, and human terminal use.
+
+Missing or malformed values remain enabled. Only an explicit global boolean
+`false` disables this dedicated host-CLI guard; ordinary permission rules,
+project overlays, SDK overlays, hook payloads, and command arguments cannot
+weaken it. Disabling host-CLI protection does not disable the existing
+agent-originated `ai-guardian` CLI guard or other immutable protections.
+
+The TUI and Web Console expose this setting under **Configuration & CLI
+Protection**. It is inherited and read-only while project scope is selected.
 
 ### Supported Agent Configuration Protection
 

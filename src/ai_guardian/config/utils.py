@@ -90,6 +90,7 @@ GLOBAL_ONLY_SECTIONS: FrozenSet[str] = frozenset(
         "update_checking",
         "developer_session",
         "agent_config_protection",
+        "self_protection",
     }
 )
 

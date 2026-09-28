@@ -43,6 +43,8 @@ class IDEIntegration:
     platform_contract: str = "all supported platforms"
     external: bool = True
     cli_capable: bool = False
+    cli_executables: Tuple[str, ...] = ()
+    agent_type_aliases: Tuple[str, ...] = ()
 
     @property
     def managed_hook_events(self) -> Tuple[str, ...]:
@@ -93,6 +95,8 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("PostCompact", ("allow",)),
         ),
         cli_capable=True,
+        cli_executables=("claude",),
+        agent_type_aliases=("claude_code",),
     ),
     IDEIntegration(
         "cursor",
@@ -132,6 +136,8 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("preToolUse", ("allow", "block")),
         ),
         cli_capable=True,
+        cli_executables=("copilot",),
+        agent_type_aliases=("github_copilot",),
     ),
     IDEIntegration(
         "codex",
@@ -151,6 +157,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ),
         platform_contract="Codex CLI and desktop Codex mode; not regular ChatGPT mode",
         cli_capable=True,
+        cli_executables=("codex",),
     ),
     IDEIntegration(
         "windsurf",
@@ -189,6 +196,8 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("AfterTool", ("post",)),
         ),
         cli_capable=True,
+        cli_executables=("gemini",),
+        agent_type_aliases=("gemini_cli",),
     ),
     IDEIntegration(
         "antigravity",
@@ -210,6 +219,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         post_output_transform=False,
         platform_contract="Antigravity CLI; PostToolUse has no output transform surface",
         cli_capable=True,
+        cli_executables=("agy", "antigravity"),
     ),
     IDEIntegration(
         "cline",
@@ -256,6 +266,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
             ("PromptSubmit", ("allow",)),
         ),
         cli_capable=True,
+        cli_executables=("kiro-cli", "kiro"),
     ),
     IDEIntegration(
         "aiderdesk",
@@ -278,6 +289,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         "none",
         rules_supported=True,
         cli_capable=True,
+        cli_executables=("openclaw",),
     ),
     IDEIntegration(
         "opencode",
@@ -289,6 +301,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         ("OpenCode SQLite",),
         "browser",
         cli_capable=True,
+        cli_executables=("opencode",),
     ),
     IDEIntegration(
         "pi",
@@ -310,6 +323,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         project_scope=True,
         platform_contract="global and project-local managed Pi extensions; native MCP config is unavailable",
         cli_capable=True,
+        cli_executables=("pi",),
     ),
     IDEIntegration(
         "augment",
@@ -338,6 +352,7 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         (("PreToolUse", ("allow", "block")),),
         platform_contract="PreToolUse only; generated project hook is structurally checked on Windows",
         cli_capable=True,
+        cli_executables=("crush",),
     ),
     IDEIntegration(
         "junie",
@@ -412,6 +427,29 @@ def get_ide_integration(ide_type: str) -> Optional[IDEIntegration]:
     return _REGISTRY_BY_KEY.get(ide_type)
 
 
+def get_ide_integration_for_agent_type(
+    agent_type: str,
+) -> Optional[IDEIntegration]:
+    """Resolve an adapter identity to its canonical integration metadata."""
+    normalized = (agent_type or "").lower()
+    for integration in SUPPORTED_IDE_REGISTRY:
+        if normalized in {
+            integration.key,
+            *integration.adapter_aliases,
+            *integration.agent_type_aliases,
+        }:
+            return integration
+    return None
+
+
+def get_cli_executables_for_agent_type(agent_type: str) -> Tuple[str, ...]:
+    """Return known host CLI executable names for an adapter identity."""
+    integration = get_ide_integration_for_agent_type(agent_type)
+    if integration is None or not integration.cli_capable:
+        return ()
+    return integration.cli_executables
+
+
 def iter_supported_ide_integrations(
     include_internal: bool = False,
 ) -> Iterable[IDEIntegration]:
@@ -439,5 +477,7 @@ __all__ = [
     "SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME",
     "get_e2e_event_cases",
     "get_ide_integration",
+    "get_ide_integration_for_agent_type",
+    "get_cli_executables_for_agent_type",
     "iter_supported_ide_integrations",
 ]

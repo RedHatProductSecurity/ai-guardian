@@ -21,6 +21,7 @@ from ai_guardian.config.utils import (
     GLOBAL_ONLY_SECTIONS,
 )
 from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
+from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 from ai_guardian.tui.schema_defaults import (
     ConfigSaveMixin,
     SchemaDefaultsMixin,
@@ -273,6 +274,14 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                     "mutations. Disabling is a global security choice.",
                     id="agent-config-protection-status",
                 )
+                with Horizontal(classes="gs-protection-row"):
+                    yield Label("Host CLI Execution Protection")
+                    yield Switch(value=True, id="host_agent_cli_toggle")
+                yield Static(
+                    "Blocks agent-originated attempts to launch the active supported "
+                    "host CLI before a child process starts.",
+                    id="host-agent-cli-status",
+                )
 
             with Container(classes="gs-action-section"):
                 with Horizontal(classes="gs-action-row"):
@@ -450,6 +459,24 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             except Exception:
                 pass
 
+            host_cli_protection_enabled = is_host_agent_cli_protection_enabled(
+                developer_config
+            )
+            try:
+                host_cli_toggle = self.query_one("#host_agent_cli_toggle", Switch)
+                host_cli_toggle.value = host_cli_protection_enabled
+                host_cli_toggle.disabled = self._is_project_scope
+                status = (
+                    "Enabled: active host CLI self-invocation is blocked."
+                    if host_cli_protection_enabled
+                    else "Warning: host CLI self-invocation protection is disabled."
+                )
+                if self._is_project_scope:
+                    status += " Inherited from global configuration."
+                self.query_one("#host-agent-cli-status", Static).update(status)
+            except Exception:
+                pass
+
             immutables = (
                 self._load_global_immutable_fields() if self._is_project_scope else {}
             )
@@ -594,6 +621,8 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             self._save_developer_session(event.value)
         elif event.switch.id == "agent_config_protection_toggle":
             self._save_agent_config_protection(event.value)
+        elif event.switch.id == "host_agent_cli_toggle":
+            self._save_host_agent_cli_protection(event.value)
 
     def _save_developer_session(self, value: bool) -> None:
         """Save developer-session access to the global config only."""
@@ -634,6 +663,28 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         else:
             self.app.notify(
                 "Error saving Agent Configuration Protection", severity="error"
+            )
+
+    def _save_host_agent_cli_protection(self, value: bool) -> None:
+        """Save host CLI execution protection to global config only."""
+        if self._is_project_scope:
+            self.app.notify(
+                "Host CLI Execution Protection is global-only; select Global scope first",
+                severity="error",
+            )
+            return
+        if self._save_config_field(
+            "block_host_agent_cli", bool(value), section="self_protection"
+        ):
+            status = "enabled" if value else "DISABLED"
+            severity = "success" if value else "warning"
+            self.app.notify(
+                f"Host CLI Execution Protection: {status}; applies to subsequent hook evaluations",
+                severity=severity,
+            )
+        else:
+            self.app.notify(
+                "Error saving Host CLI Execution Protection", severity="error"
             )
 
     def _save_on_scan_error(self, value: str) -> None:

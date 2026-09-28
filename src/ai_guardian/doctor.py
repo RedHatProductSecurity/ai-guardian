@@ -2011,12 +2011,15 @@ class Doctor:
         from ai_guardian.tools.patterns import (
             IMMUTABLE_DENY_PATTERNS,
             is_ai_guardian_cli_command,
+            is_host_agent_cli_command,
         )
         from ai_guardian.developer_session import _is_developer_session_enabled
         from ai_guardian.agent_config_protection import (
             build_agent_config_inventory,
             is_agent_config_protection_enabled,
         )
+        from ai_guardian.ide_registry import SUPPORTED_IDE_REGISTRY
+        from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 
         issues = []
 
@@ -2052,6 +2055,21 @@ class Doctor:
                 issues.append("CLI execution guard missed a supported launcher form")
                 break
 
+        for integration in SUPPORTED_IDE_REGISTRY:
+            if not integration.cli_capable:
+                continue
+            if not integration.cli_executables:
+                issues.append(
+                    f"CLI-capable integration has no executable metadata: {integration.key}"
+                )
+                continue
+            for executable in integration.cli_executables:
+                if not is_host_agent_cli_command(
+                    f"{executable} --help", integration.cli_executables
+                ):
+                    issues.append(f"Host CLI guard missed {integration.key} executable")
+                    break
+
         safe_commands = [
             "printf '%s\\n' 'ai-guardian status'",
             "grep -n ai-guardian README.md",
@@ -2067,7 +2085,17 @@ class Doctor:
         if _is_developer_session_enabled({"developer_session": {"enabled": "yes"}}):
             issues.append("Malformed developer-session values do not fail closed")
 
+        if not is_host_agent_cli_protection_enabled(
+            {"self_protection": {"block_host_agent_cli": True}}
+        ):
+            issues.append("Host CLI protection cannot be enabled")
+        if not is_host_agent_cli_protection_enabled(
+            {"self_protection": {"block_host_agent_cli": "yes"}}
+        ):
+            issues.append("Malformed host CLI protection values do not fail closed")
+
         agent_config_enabled = is_agent_config_protection_enabled(self._config or {})
+        host_cli_enabled = is_host_agent_cli_protection_enabled(self._config or {})
         try:
             protected_path_count = len(build_agent_config_inventory().paths)
         except (OSError, ValueError) as exc:
@@ -2084,16 +2112,25 @@ class Doctor:
                 detail="\n".join(f"  - {i}" for i in issues),
             )
 
-        if not agent_config_enabled:
+        if not agent_config_enabled or not host_cli_enabled:
+            disabled = []
+            if not agent_config_enabled:
+                disabled.append("supported agent configuration")
+            if not host_cli_enabled:
+                disabled.append("host CLI execution")
             return CheckResult(
                 name="self_protection",
                 status=CheckStatus.WARN,
-                message="Supported agent configuration protection is disabled",
+                message=f"{', '.join(disabled).capitalize()} protection is disabled",
                 detail=(
                     "The explicit global opt-out leaves immutable AI Guardian "
-                    "configuration, cache, package, hook, and CLI protections active."
+                    "configuration, cache, package, hook, MCP identity, and other "
+                    "immutable protections active."
                 ),
-                fix_hint="Enable agent_config_protection.enabled in the global configuration.",
+                fix_hint=(
+                    "Enable the disabled self-protection setting(s) in the global "
+                    "configuration."
+                ),
             )
 
         return CheckResult(

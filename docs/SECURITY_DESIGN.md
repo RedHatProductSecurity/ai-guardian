@@ -70,6 +70,33 @@ The developer-session marker is a global-only configuration setting, not a
 project permission, hook payload field, SDK overlay, or AI Guardian command-line
 option. The normal generated configuration leaves the secure default unchanged.
 
+### Agent-Originated Host CLI Boundary
+
+The immutable PreToolUse layer also protects the active supported host CLI from
+agent-originated self-invocation. `self_protection.block_host_agent_cli` is a
+global-only setting that defaults to enabled and is evaluated independently of
+ordinary tool permissions.
+
+The boundary:
+
+- Resolves the active CLI from the detected adapter/session identity and the
+  canonical supported-integration registry, including executable aliases such
+  as `agy` and `kiro-cli`.
+- Blocks direct, path-qualified, package-launcher, and supported shell-wrapper
+  forms before a child process starts.
+- Keeps command-position awareness so documentation text, filenames,
+  repository paths, unrelated commands, and human terminal use remain allowed.
+- Does not block the parent host process, normal plugin/bridge startup, trusted
+  hook/daemon operations, or the verified read-only AI Guardian MCP namespace.
+- Remains active when ordinary permissions are disabled and cannot be overridden
+  by ordinary permission rules, project configuration, hook payloads, or command
+  arguments.
+
+Missing or malformed values remain enabled. An explicit global `false` disables
+only this dedicated host-CLI guard; the existing agent-originated `ai-guardian`
+CLI guard, protected configuration, hooks, cache, package, and MCP identity
+protections remain active.
+
 ### Supported Agent Configuration Protection
 
 The PreToolUse policy also protects the configuration that controls supported

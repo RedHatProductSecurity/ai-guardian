@@ -329,7 +329,12 @@ def save_web_config(config: dict, *, scope: Optional[str] = None) -> bool:
         from ai_guardian.config.writer import (
             _resolve_config_path,
             _atomic_config_update,
+            validate_scoped_config,
         )
+
+        valid, _ = validate_scoped_config(target_scope, config)
+        if not valid:
+            return False
 
         config_path = _resolve_config_path(target_scope, project_dir)
 

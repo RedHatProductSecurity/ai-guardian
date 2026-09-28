@@ -9,6 +9,8 @@ from ai_guardian.web.pages.global_settings import (
     _get_developer_session_enabled,
     _set_agent_config_protection_enabled,
     _set_developer_session_enabled,
+    _get_host_agent_cli_protection_enabled,
+    _set_host_agent_cli_protection_enabled,
 )
 
 
@@ -68,3 +70,29 @@ def test_agent_config_protection_save_preserves_other_config():
     assert updated is config
     assert updated["permissions"] == {"enabled": False}
     assert updated["agent_config_protection"] == {"enabled": False}
+
+
+def test_host_agent_cli_protection_defaults_enabled_and_requires_boolean_false():
+    assert _get_host_agent_cli_protection_enabled({}) is True
+    assert (
+        _get_host_agent_cli_protection_enabled(
+            {"self_protection": {"block_host_agent_cli": "false"}}
+        )
+        is True
+    )
+    assert (
+        _get_host_agent_cli_protection_enabled(
+            {"self_protection": {"block_host_agent_cli": False}}
+        )
+        is False
+    )
+
+
+def test_host_agent_cli_protection_save_preserves_other_config():
+    config = {"permissions": {"enabled": False}}
+
+    updated = _set_host_agent_cli_protection_enabled(config, False)
+
+    assert updated is config
+    assert updated["permissions"] == {"enabled": False}
+    assert updated["self_protection"] == {"block_host_agent_cli": False}

@@ -1267,6 +1267,8 @@ class DaemonState:
                 "config_error": self._config_error,
                 "agent_config_protection_enabled": self._agent_config_protection_enabled(),
                 "agent_config_protection_scope": "global and active project/workspace",
+                "host_agent_cli_protection_enabled": self._host_agent_cli_protection_enabled(),
+                "host_agent_cli_protection_scope": "global-only",
                 "mcp_installed": self._mcp_installed,
                 "paused_dirs": self._get_paused_dirs_locked(),
                 "active_project_dirs": sorted(
@@ -1295,6 +1297,12 @@ class DaemonState:
         )
 
         return is_agent_config_protection_enabled(self._config or {})
+
+    def _host_agent_cli_protection_enabled(self) -> bool:
+        """Return the effective global-only host CLI protection setting."""
+        from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
+
+        return is_host_agent_cli_protection_enabled(self._config or {})
 
     def get_project_cache_status(self):
         """Get per-project config cache details for diagnostics.

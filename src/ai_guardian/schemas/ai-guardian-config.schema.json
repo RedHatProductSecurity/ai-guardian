@@ -30,6 +30,21 @@
       },
       "additionalProperties": false
     },
+    "self_protection": {
+      "type": "object",
+      "description": "Global-only host CLI self-protection. Agent-originated attempts to launch the active supported host CLI are denied before a child process starts. Missing or malformed values remain enabled; only an explicit global boolean false opts out.",
+      "properties": {
+        "block_host_agent_cli": {
+          "type": "boolean",
+          "default": true,
+          "description": "Block agent-originated invocation of the active supported host CLI. Default: true."
+        },
+        "immutable": {
+          "$ref": "#/definitions/immutable_fields"
+        }
+      },
+      "additionalProperties": false
+    },
     "permissions": {
       "type": "object",
       "description": "Tool permissions configuration - WHERE THE RULES LIVE. Controls whether AI Guardian enforces tool permission rules and defines the permission rules for tools (Skills, MCP servers, built-in tools like Bash/Write/Read). Works with permissions_directories (auto-discovery feeds INTO this section). Default: Built-in tools ALLOW, Skills and MCP servers BLOCK unless explicitly allowed. NEW unified structure in v1.4.0.",

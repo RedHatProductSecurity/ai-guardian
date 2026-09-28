@@ -71,6 +71,16 @@ class TestWriteScopedConfig:
         assert not success
         assert "global-only" in msg
 
+    def test_rejects_self_protection_in_bulk_project_config(self):
+        from ai_guardian.config.writer import validate_scoped_config
+
+        success, msg = validate_scoped_config(
+            "project", {"self_protection": {"block_host_agent_cli": False}}
+        )
+
+        assert not success
+        assert "self_protection" in msg
+
     def test_auto_creates_project_dir(self, tmp_path):
         project_dir = tmp_path / "project"
         project_dir.mkdir()

@@ -6,7 +6,7 @@ budget_tokens: 1000
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-27
+> Last updated: 2026-09-28
 
 ---
 
@@ -93,9 +93,17 @@ budget_tokens: 1000
 - Focused validation: 234 affected tests and 152 violation/MCP regression tests passed; Ruff, Black, Pylint, and Mypy passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## 🚧 Issue #2444 In Progress
+
+- Agent-originated host CLI self-protection is implemented across supported CLI-capable integrations.
+- Added the global-only `self_protection.block_host_agent_cli` setting, secure defaults, profile/schema/example coverage, TUI/Web controls, and global-only scope validation.
+- Host CLI detection is adapter-aware and command-position-aware; the existing AI Guardian CLI guard remains independent.
+- Focused validation: 1,229 tests passed; Black, Ruff, Pylint, Mypy, JSON validation, and `git diff --check` passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` for issue `#2448` after review.
+**Goal:** Run `daf complete` for issue `#2444` after review.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

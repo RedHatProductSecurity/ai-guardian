@@ -163,6 +163,10 @@ class TestSchemaDefaults(unittest.TestCase):
         assert sd.get_default("remote_configs.refresh_interval_hours") == 12
         assert sd.get_default("remote_configs.expire_after_hours") == 168
 
+    def test_host_cli_self_protection_default(self):
+        sd = SchemaDefaults.get()
+        assert sd.get_default("self_protection.block_host_agent_cli") is True
+
     def test_secret_scanning_engines_default(self):
         sd = SchemaDefaults.get()
         assert sd.get_default("secret_scanning.engines") == ["gitleaks"]

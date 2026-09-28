@@ -8,11 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- CLI/agent onboarding checklists now require explicit evidence for supported
+  CLI configuration protection and agent-originated host CLI execution
+  restrictions, including scope, wrapper, permissions-disabled, and trusted
+  boundary cases.
 - Pi setup now automatically installs the pinned MCP SDK with npm when available; failed installs leave an actionable retry diagnostic.
 - Verified AI Guardian MCP tools now bypass ordinary host MCP permission rules after identity attestation, including calls routed through the Pi bridge.
 - The Web Console Effective Configuration page now clearly warns when the Project selector is set to Global only, so project-local overrides are not mistaken as missing.
 
 ### Added
+
+- **Host CLI self-invocation protection (#2444):** Add the global-only
+  `self_protection.block_host_agent_cli` guard with canonical executable and
+  adapter identity resolution across supported CLI integrations. Direct,
+  path-qualified, package-launcher, and shell-wrapper launches are denied
+  before child-process execution while the existing AI Guardian CLI guard and
+  trusted host boundaries remain unchanged.
 
 - **Provider-aware SDK compaction (#2432):** Use Anthropic's native signed
   compaction blocks when the Messages API and model support them, preserve

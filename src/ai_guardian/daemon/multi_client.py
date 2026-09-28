@@ -721,7 +721,12 @@ class MultiDaemonClient:
             from ai_guardian.config.writer import (
                 _resolve_config_path,
                 _atomic_config_update,
+                validate_scoped_config,
             )
+
+            valid, validation_message = validate_scoped_config(scope, config)
+            if not valid:
+                return {"status": "error", "message": validation_message}
 
             config_path = _resolve_config_path(scope, project_dir)
 
