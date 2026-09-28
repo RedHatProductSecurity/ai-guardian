@@ -290,6 +290,10 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "action": "block",
             "allowlist_patterns": [],
         },
+        "_comment_self_protection": "Agent-originated host CLI execution is denied by default for the active supported integration. Only an explicit global boolean false disables this guard; project configs, SDK overlays, hook payloads, and command arguments cannot weaken it.",
+        "self_protection": {
+            "block_host_agent_cli": True,
+        },
         "_comment_developer_session": "Agent-originated AI Guardian CLI execution is denied by default. Enable developer_session.enabled only in this protected global config before starting a trusted development session. Project configs, SDK overlays, hook payloads, and command arguments cannot enable it.",
         "developer_session": {
             "enabled": False,

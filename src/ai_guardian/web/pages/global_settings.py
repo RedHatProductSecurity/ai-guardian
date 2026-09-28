@@ -15,6 +15,7 @@ from ai_guardian.web.config_helpers import (
     get_web_config_scope_label,
 )
 from ai_guardian.agent_config_protection import is_agent_config_protection_enabled
+from ai_guardian.self_protection import is_host_agent_cli_protection_enabled
 
 FEATURE_GROUPS = [
     (
@@ -306,6 +307,21 @@ def _set_agent_config_protection_enabled(config, value):
     return config
 
 
+def _get_host_agent_cli_protection_enabled(config):
+    """Read the global-only host CLI self-protection setting."""
+    return is_host_agent_cli_protection_enabled(config)
+
+
+def _set_host_agent_cli_protection_enabled(config, value):
+    """Update host CLI self-protection without changing other settings."""
+    section = config.get("self_protection", {})
+    if not isinstance(section, dict):
+        section = {}
+    section["block_host_agent_cli"] = bool(value)
+    config["self_protection"] = section
+    return config
+
+
 def _format_remaining(dt):
     remaining = dt - datetime.now(timezone.utc)
     total = max(0, int(remaining.total_seconds()))
@@ -438,6 +454,41 @@ def create_global_settings_page(service, daemon_name: str):
                         )
 
                     agent_config_switch.on_value_change(save_agent_config_protection)
+                    ui.separator().classes("my-1")
+                    with ui.row().classes("items-center gap-2 w-full"):
+                        host_cli_switch = ui.switch(
+                            "Host CLI Execution Protection",
+                            value=_get_host_agent_cli_protection_enabled(global_config),
+                        ).classes("flex-grow")
+                        if scope_label != "Global":
+                            host_cli_switch.disable()
+                            ui.badge("Global only", color="blue").props("dense")
+                    ui.label(
+                        "Blocks agent-originated attempts to launch the active supported "
+                        "host CLI before a child process starts. Disabling this reduces "
+                        "self-protection and does not disable other scanners."
+                    ).classes("text-xs text-grey-6 ml-8")
+
+                    async def save_host_cli_protection(event):
+                        current_global = await run.io_bound(load_web_config_global)
+                        updated_global = _set_host_agent_cli_protection_enabled(
+                            current_global, event.value
+                        )
+                        saved = await run.io_bound(
+                            save_web_config, updated_global, scope="global"
+                        )
+                        if not saved:
+                            ui.notify(
+                                "Save failed: configuration is read-only or unavailable",
+                                type="negative",
+                            )
+                            return
+                        ui.notify(
+                            "Host CLI Execution Protection saved; applies to subsequent hook evaluations",
+                            type="warning" if not event.value else "positive",
+                        )
+
+                    host_cli_switch.on_value_change(save_host_cli_protection)
                     ui.separator().classes("my-1")
                     with ui.row().classes("items-center gap-2 w-full"):
                         developer_switch = ui.switch(

@@ -296,7 +296,7 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
             "All active scanners and their current status",
             "on_scan_error — what happens when a scanner or hook process fails",
             "Configuration & CLI Protection — global-only developer session access and "
-            "supported agent configuration protection",
+            "supported agent configuration and host CLI execution protection",
         ],
         "does_not_catch": [],
         "config_summary": (
@@ -309,7 +309,8 @@ SCANNER_HELP: Dict[str, Dict[str, Any]] = {
             "  Applies to ALL scanners and hook process failures: startup, daemon/direct fallback, and malformed responses.\n\n"
             "Configuration & CLI Protection:\n"
             "  Developer Session CLI Access is global-only and requires a daemon/session restart after changes.\n"
-            "  Agent Configuration Protection is enabled by default and blocks agent-originated mutations of supported CLI/IDE configuration."
+            "  Agent Configuration Protection is enabled by default and blocks agent-originated mutations of supported CLI/IDE configuration.\n"
+            "  Host CLI Execution Protection is enabled by default and blocks agent-originated launches of the active host CLI."
         ),
         "doc_url": f"{_GITHUB_DOCS}/CONFIGURATION.md",
     },
@@ -644,6 +645,11 @@ _FIELD_HELP_SUPPLEMENT: dict = {
         "Protect supported CLI/IDE settings, hooks, MCP registrations, plugins, "
         "extensions, and active project artifacts from agent-originated mutations. "
         "Defaults to enabled and can only be explicitly disabled in global scope."
+    ),
+    "self_protection.block_host_agent_cli": (
+        "Block agent-originated attempts to launch the active supported host CLI "
+        "before a child process starts. Defaults to enabled and can only be "
+        "explicitly disabled in global scope."
     ),
     # ── violation_logging sub-fields ────────────────────────────────────────
     "violation_logging.log_file": (

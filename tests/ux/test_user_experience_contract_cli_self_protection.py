@@ -10,13 +10,19 @@ from tests.fixtures.mock_mcp_server import create_hook_data
 
 
 def _run_hook(
-    hook_data, *, permissions_enabled=True, rules=None, developer_session=False
+    hook_data,
+    *,
+    permissions_enabled=True,
+    rules=None,
+    developer_session=False,
+    host_cli_protection=True,
 ):
     config = {
+        "self_protection": {"block_host_agent_cli": host_cli_protection},
         "permissions": {
             "enabled": permissions_enabled,
             "rules": rules or [],
-        }
+        },
     }
     with (
         patch(
@@ -153,6 +159,72 @@ def test_cursor_shell_payload_uses_cursor_denial_contract():
     response = json.loads(result["output"])
     assert response["permission"] == "deny"
     assert "pattern" not in response.get("user_message", "").lower()
+
+
+def test_active_opencode_cli_invocation_is_denied_before_execution():
+    """
+    USER EXPERIENCE: Active host CLI invocation -> denied before child start.
+
+    OpenCode is an explicit regression case for the supported host CLI boundary.
+    """
+    result = _run_hook(
+        {
+            "_ide_type": "opencode",
+            "opencode_version": "1",
+            "tool_use": {"name": "Bash", "input": {"command": "opencode --help"}},
+        }
+    )
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+    message = response["systemMessage"]
+    assert "host cli" in message.lower()
+    assert "before the child process started" in message.lower()
+    assert "pattern" not in message.lower()
+    assert "allowlist" not in message.lower()
+    assert "bypass" not in message.lower()
+
+
+def test_host_cli_protection_is_independent_of_ordinary_permissions():
+    result = _run_hook(
+        {
+            "_ide_type": "opencode",
+            "opencode_version": "1",
+            "tool_use": {"name": "Bash", "input": {"command": "opencode --help"}},
+        },
+        permissions_enabled=False,
+    )
+
+    response = json.loads(result["output"])
+    assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_explicit_host_cli_opt_out_does_not_disable_ai_guardian_cli_guard():
+    result = _run_hook(
+        {
+            "_ide_type": "opencode",
+            "opencode_version": "1",
+            "tool_use": {"name": "Bash", "input": {"command": "opencode --help"}},
+        },
+        host_cli_protection=False,
+    )
+
+    response = json.loads(result.get("output") or "{}")
+    assert response.get("hookSpecificOutput", {}).get("permissionDecision") != "deny"
+
+    guardian_result = _run_hook(
+        {
+            "_ide_type": "opencode",
+            "opencode_version": "1",
+            "tool_use": {
+                "name": "Bash",
+                "input": {"command": "ai-guardian status"},
+            },
+        },
+        host_cli_protection=False,
+    )
+    guardian_response = json.loads(guardian_result["output"])
+    assert guardian_response["hookSpecificOutput"]["permissionDecision"] == "deny"
 
 
 @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)

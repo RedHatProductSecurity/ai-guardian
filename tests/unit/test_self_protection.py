@@ -1404,5 +1404,153 @@ def test_trusted_developer_session_does_not_bypass_immutable_shell_paths(command
     assert error_msg is not None
 
 
+HOST_CLI_CASES = [
+    pytest.param("claude", "claude --help", id="claude"),
+    pytest.param("copilot", "copilot --help", id="copilot"),
+    pytest.param("codex", "codex --help", id="codex"),
+    pytest.param("gemini", "gemini --help", id="gemini"),
+    pytest.param("antigravity", "agy --help", id="antigravity-alias"),
+    pytest.param("kiro", "kiro-cli --help", id="kiro-executable"),
+    pytest.param("openclaw", "openclaw --help", id="openclaw"),
+    pytest.param("opencode", "opencode --help", id="opencode"),
+    pytest.param("pi", "pi --help", id="pi"),
+    pytest.param("crush", "crush --help", id="crush"),
+]
+
+
+def _host_cli_hook(ide_type, command):
+    return {
+        "_ide_type": ide_type,
+        "hook_event_name": "PreToolUse",
+        "tool_use": {"name": "Bash", "input": {"command": command}},
+    }
+
+
+@pytest.mark.parametrize("ide_type,command", HOST_CLI_CASES)
+def test_active_host_cli_invocation_is_denied(ide_type, command):
+    """Every CLI-capable registry entry uses the host CLI guard."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, tool_name = checker.check_tool_allowed(
+        _host_cli_hook(ide_type, command)
+    )
+
+    assert not is_allowed
+    assert tool_name == "Bash"
+    assert "host CLI" in error_msg
+    assert "before the child process started" in error_msg
+    assert "allow" not in error_msg.lower()
+    assert "pattern" not in error_msg.lower()
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "opencode --help",
+        "/usr/local/bin/opencode run",
+        "npx opencode --help",
+        "uvx opencode",
+        "bash -lc 'opencode --help'",
+    ],
+)
+def test_host_cli_wrappers_are_denied(command):
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        _host_cli_hook("opencode", command)
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+def test_host_cli_guard_can_be_disabled_without_disabling_ai_guardian_guard():
+    checker = ToolPolicyChecker(
+        config={
+            "self_protection": {"block_host_agent_cli": False},
+            "permissions": {"enabled": False, "rules": []},
+        },
+        developer_session=False,
+    )
+
+    host_allowed, host_error, _ = checker.check_tool_allowed(
+        _host_cli_hook("opencode", "opencode --help")
+    )
+    guardian_allowed, guardian_error, _ = checker.check_tool_allowed(
+        _host_cli_hook("opencode", "ai-guardian status")
+    )
+
+    assert host_allowed
+    assert host_error is None
+    assert not guardian_allowed
+    assert guardian_error is not None
+
+
+def test_host_cli_opt_out_does_not_bypass_ordinary_permissions():
+    checker = ToolPolicyChecker(
+        config={
+            "self_protection": {"block_host_agent_cli": False},
+            "permissions": {
+                "enabled": True,
+                "rules": [
+                    {
+                        "matcher": "Bash",
+                        "mode": "deny",
+                        "patterns": ["*opencode*"],
+                    }
+                ],
+            },
+        },
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        _host_cli_hook("opencode", "opencode --help")
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+    assert "host CLI" not in error_msg
+
+
+@pytest.mark.parametrize("value", [None, "false", 0, {"value": False}])
+def test_host_cli_guard_fails_closed_for_missing_or_invalid_values(value):
+    section = {} if value is None else {"block_host_agent_cli": value}
+    checker = ToolPolicyChecker(
+        config={
+            "self_protection": section,
+            "permissions": {"enabled": False, "rules": []},
+        },
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        _host_cli_hook("opencode", "opencode --help")
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+def test_non_cli_integration_is_not_misclassified_as_host_cli():
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        _host_cli_hook("cursor", "opencode --help")
+    )
+
+    assert is_allowed
+    assert error_msg is None
+
+
 if __name__ == "__main__":
     pytest.main([__file__])

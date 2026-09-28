@@ -186,6 +186,45 @@ automatically make the CLI usable, and a policy does not provide credentials.
 - [ ] Document optional overlays separately from the default policy. In
   particular, GitHub read-only/read-write access must be explicit.
 
+### CLI self-protection gates
+
+Configuration protection and CLI execution protection are independent runtime
+requirements. Complete these checks for every CLI selected for the normal
+container, OpenShell, or sandbox runtime, and record unsupported cases rather
+than leaving them implicit.
+
+- [ ] Inventory the selected CLI's user/global and project/workspace
+  configuration, hooks, MCP registrations, plugins/extensions, bridges, and
+  generated artifacts for each runtime. Verify that the inventory is used by
+  `agent_config_protection` and that mutations are denied before the file or
+  process mutation, including shell redirection, in-place editing, deletion,
+  and rename/move forms.
+- [ ] Verify `agent_config_protection.enabled` defaults to `true` when missing
+  or malformed, is global-only, cannot be weakened by project configuration,
+  overlays, hook payloads, or ordinary permission rules, and remains effective
+  when ordinary permissions are disabled.
+- [ ] Verify an explicit global disable of configuration protection removes
+  only that configurable guard; immutable AI Guardian configuration, hooks,
+  cache, package, MCP identity, and CLI protections remain active.
+- [ ] Record the canonical executable, aliases, path-qualified forms, package
+  launchers, and supported shell wrappers for the selected CLI. Verify
+  `self_protection.block_host_agent_cli` defaults to `true` and denies
+  agent-originated invocation of the active host CLI before a child process
+  starts, including an explicit OpenCode case.
+- [ ] Test direct, path-qualified, package-launcher, and shell-wrapper forms
+  without blocking documentation text, filenames, repository paths, unrelated
+  commands, or human terminal use. Parent host startup, plugin/bridge startup,
+  trusted hook/daemon operations, and verified AI Guardian MCP operations must
+  remain functional.
+- [ ] Preserve the existing agent-originated `ai-guardian` CLI restriction.
+  Verify its global-only `developer_session.enabled` opt-in, fail-closed
+  missing/invalid behavior, startup snapshot/restart requirement, and
+  independence from ordinary permissions and runtime policy overlays.
+- [ ] Add unit, UX contract, container, sandbox, and isolated integration
+  evidence for enabled, disabled, invalid, permissions-disabled, scope/lock,
+  adapter-specific, wrapper-form, and false-positive cases. Record every
+  unsupported executable or launcher with a tested exclusion.
+
 ## 7. Tests and evidence
 
 - [ ] Add focused unit tests for parser defaults, invalid combinations,

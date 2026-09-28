@@ -710,6 +710,32 @@ AI Guardian's own MCP server tools (`mcp__ai-guardian__*`) are allowed only afte
 
 ---
 
+### CLI Self-Protection Boundaries
+
+Tool Policy evaluates two separate agent-originated CLI boundaries before
+ordinary permission rules:
+
+- The AI Guardian CLI guard denies launches of `ai-guardian` by default. Its
+  trusted developer-session opt-in is global-only and does not disable other
+  immutable protections.
+- The host CLI guard denies launches of the active supported agent CLI when
+  `self_protection.block_host_agent_cli` is enabled. It resolves the executable
+  from the active adapter/session identity and the canonical integration
+  registry.
+
+Both guards run before child-process execution and remain active when ordinary
+permissions are disabled. The host guard recognizes direct, path-qualified,
+package-launcher, and supported shell-wrapper forms without treating mentions
+in documentation, filenames, repository paths, or unrelated commands as
+launches. An explicit global `false` disables only the host guard; it does not
+alter the AI Guardian CLI guard, configuration protection, scanners, or other
+immutable boundaries.
+
+Denied self-protection records use safe reasons and do not provide matching
+patterns, permission-rule suggestions, or bypass guidance.
+
+---
+
 ## Best Practices
 
 ### For Developers

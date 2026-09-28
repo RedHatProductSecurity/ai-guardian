@@ -984,7 +984,7 @@ This merges on top of the global config (`~/.config/ai-guardian/ai-guardian.json
 
 Project config can override: `prompt_injection`, `secret_scanning`, `scan_pii`, `ssrf_protection`, `permissions`, `directory_rules`, `annotations`, `image_scanning`, `config_file_scanning`, `transcript_scanning`.
 
-Project config **cannot** override: `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`.
+Project config **cannot** override: `daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`.
 
 ### How do I prevent projects from disabling a security feature?
 
@@ -1010,7 +1010,7 @@ Configurations are merged in this order (later overrides earlier):
 3. **User global config** (`~/.config/ai-guardian/ai-guardian.json`)
 4. **Remote configs** (enterprise policies, highest priority)
 
-Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`) cannot be overridden by project config.
+Exception: fields marked `"immutable": true` in remote configs cannot be overridden by any lower-priority source. Global-only sections (`daemon`, `mcp_server`, `support`, `security_instructions`, `on_scan_error`, `remote_configs`, `developer_session`, `agent_config_protection`, `self_protection`) cannot be overridden by project config.
 
 ### How do I use .aiguardignore.toml for project-level ignores?
 

@@ -251,9 +251,12 @@ Manage global security feature toggles with time-based controls.
 
 The **Configuration & CLI Protection** section contains global-only controls for
 agent-originated CLI execution and protected AI Guardian/IDE configuration.
-Developer Session CLI Access is shown from the global configuration and cannot
-be edited while the project scope is selected. Restart the daemon/session after
-changing it.
+Host CLI Execution Protection and Agent Configuration Protection are enabled by
+default and cannot be edited while the project scope is selected. Developer
+Session CLI Access is also global-only and requires a daemon/session restart
+after changing it. Disabling either protection is an explicit reduced-security
+choice; the existing immutable AI Guardian CLI and core protections remain
+active.
 
 #### Features
 

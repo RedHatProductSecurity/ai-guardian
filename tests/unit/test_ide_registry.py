@@ -18,6 +18,7 @@ from ai_guardian.ide_registry import (
     SUPPORTED_IDE_REGISTRY,
     SUPPORTED_OPENSHELL_CLI_IDE_TYPES,
     SUPPORTED_IDE_TYPES,
+    get_cli_executables_for_agent_type,
 )
 from ai_guardian.scanners.transcript import TRANSCRIPT_ADAPTERS
 from ai_guardian.sessions.adapters import SESSION_ADAPTERS
@@ -65,6 +66,20 @@ def test_openshell_cli_registry_matches_the_published_image_scope():
         "pi",
     )
     assert set(SUPPORTED_OPENSHELL_CLI_IDE_TYPES).issubset(set(SUPPORTED_CLI_IDE_TYPES))
+
+
+def test_cli_capable_integrations_have_executable_and_identity_metadata():
+    for integration in SUPPORTED_IDE_REGISTRY:
+        if not integration.cli_capable:
+            continue
+        assert integration.cli_executables, integration.key
+        assert get_cli_executables_for_agent_type(integration.key) == (
+            integration.cli_executables
+        )
+
+    assert get_cli_executables_for_agent_type("claude_code") == ("claude",)
+    assert get_cli_executables_for_agent_type("github_copilot") == ("copilot",)
+    assert get_cli_executables_for_agent_type("gemini_cli") == ("gemini",)
 
 
 def test_setup_registry_matches_canonical_registry():

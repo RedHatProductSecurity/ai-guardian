@@ -98,6 +98,45 @@ support separately for Docker/Podman and OpenShell, including explicit
 unsupported or runtime-only decisions. Keep the host hook, plugin, MCP,
 transcript, and IDE setup coverage in this checklist.
 
+### CLI self-protection and configuration onboarding
+
+For every CLI-capable integration, treat configuration mutation protection and
+CLI execution protection as separate gates. These checks apply to host CLIs
+even when the integration also has GUI, plugin, or MCP surfaces.
+
+- [ ] Record canonical executable names, aliases, path-qualified forms,
+  package launchers, and supported shell wrappers in the integration registry;
+  identify the active adapter/session identity used to select the protected
+  host CLI.
+- [ ] Inventory user/global and project/workspace CLI configuration, hooks, MCP
+  registrations, plugins/extensions, bridges, and generated artifacts. Verify
+  `agent_config_protection.enabled` defaults to `true` when missing or
+  malformed, is global-only, and cannot be weakened by project config,
+  overlays, hook payloads, or ordinary permission rules.
+- [ ] Verify agent-originated mutations of those artifacts are denied before
+  the file or process mutation, including normalized file tools and shell
+  redirection/edit/delete/move forms, when ordinary permissions are disabled.
+- [ ] Verify an explicit global disable of configuration protection does not
+  disable immutable AI Guardian configuration, hook, cache, MCP identity, or
+  CLI protections.
+- [ ] Verify `self_protection.block_host_agent_cli` defaults to `true` and
+  denies direct, path-qualified, package-launcher, and supported shell-wrapper
+  invocations of the active host CLI before a child process starts. Include
+  OpenCode as an explicit regression case.
+- [ ] Verify documentation text, filenames, repository paths, unrelated CLI
+  names, and human terminal invocations remain allowed. Parent host startup,
+  plugin/bridge startup, trusted hook/daemon operations, and verified AI
+  Guardian MCP operations must remain functional.
+- [ ] Verify the existing agent-originated `ai-guardian` CLI guard remains
+  active and independent of ordinary permissions. Test its global-only
+  `developer_session.enabled` opt-in, fail-closed missing/invalid behavior,
+  and daemon/session restart requirement without allowing project or payload
+  values to enable it.
+- [ ] Add unit, UX contract, and isolated integration evidence for default,
+  disabled, invalid, permissions-disabled, adapter-specific, wrapper-form,
+  scope/lock, and false-positive cases. Record any unsupported executable or
+  launcher with a tested exclusion.
+
 ## 1. Scope and capability record
 
 - [ ] Choose a stable CLI key and display name. Keep aliases consistent with

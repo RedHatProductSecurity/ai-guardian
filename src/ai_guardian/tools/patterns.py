@@ -12,7 +12,7 @@ policy enforcement logic.
 
 import re
 import shlex
-from typing import List, Optional
+from typing import FrozenSet, Iterable, List, Optional
 
 from ai_guardian.constants import HookEvent
 
@@ -699,10 +699,6 @@ def _command_basename(token: str) -> str:
     return value.rsplit("/", 1)[-1].lower()
 
 
-def _is_ai_guardian_executable(token: str) -> bool:
-    return _command_basename(token) in _AI_GUARDIAN_EXECUTABLES
-
-
 def _is_python_executable(token: str) -> bool:
     basename = _command_basename(token)
     return bool(
@@ -851,8 +847,13 @@ def _script_child_index(tokens: List[str], start: int) -> Optional[int]:
     return None
 
 
-def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
-    """Check one shell command segment for a real CLI invocation."""
+def _contains_target_cli_in_tokens(
+    tokens: List[str],
+    target_executables: FrozenSet[str],
+    module_prefixes: FrozenSet[str],
+    depth: int = 0,
+) -> bool:
+    """Check one shell command segment for a real target CLI invocation."""
     if depth > 8 or not tokens:
         return False
 
@@ -873,7 +874,7 @@ def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
 
     command_token = _clean_command_token(tokens[index])
     command = _command_basename(command_token)
-    if _is_ai_guardian_executable(command_token):
+    if command in target_executables:
         return True
 
     if _is_python_executable(command_token):
@@ -881,8 +882,9 @@ def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
             option = _clean_command_token(tokens[module_index]).lower()
             if option == "-m" or option == "-m=":
                 module = _clean_command_token(tokens[module_index + 1]).lower()
-                if module == _AI_GUARDIAN_MODULE_PREFIX or module.startswith(
-                    f"{_AI_GUARDIAN_MODULE_PREFIX}."
+                if any(
+                    module == prefix or module.startswith(f"{prefix}.")
+                    for prefix in module_prefixes
                 ):
                     return True
             if option in {"-c", "-c="}:
@@ -892,41 +894,100 @@ def _contains_cli_in_tokens(tokens: List[str], depth: int = 0) -> bool:
     if _is_script_shell(command_token):
         child_index = _script_child_index(tokens, index + 1)
         if child_index is not None:
-            return _contains_cli_in_command_string(tokens[child_index], depth + 1)
+            return _contains_target_cli_in_command_string(
+                tokens[child_index], target_executables, module_prefixes, depth + 1
+            )
         return False
 
     if command in _DIRECT_COMMAND_WRAPPERS:
         child_index = _launcher_child_index(tokens, index + 1, command)
         if child_index is not None:
-            return _contains_cli_in_tokens(tokens[child_index:], depth + 1)
+            return _contains_target_cli_in_tokens(
+                tokens[child_index:], target_executables, module_prefixes, depth + 1
+            )
         return False
 
     if command in _LAUNCHER_ACTIONS:
         child_index = _launcher_child_index(tokens, index + 1, command)
         if child_index is not None:
-            return _contains_cli_in_tokens(tokens[child_index:], depth + 1)
+            return _contains_target_cli_in_tokens(
+                tokens[child_index:], target_executables, module_prefixes, depth + 1
+            )
         return False
 
     if command in _SHELL_CONTROL_WORDS:
-        return _contains_cli_in_tokens(tokens[index + 1 :], depth + 1)
+        return _contains_target_cli_in_tokens(
+            tokens[index + 1 :], target_executables, module_prefixes, depth + 1
+        )
 
     if command in {"invoke-expression", "iex", "start-process"}:
         for child_token in tokens[index + 1 :]:
-            if _contains_cli_in_command_string(child_token, depth + 1):
+            if _contains_target_cli_in_command_string(
+                child_token, target_executables, module_prefixes, depth + 1
+            ):
                 return True
         return False
 
     return False
 
 
-def _contains_cli_in_command_string(value: str, depth: int) -> bool:
+def _contains_target_cli_in_command_string(
+    value: str,
+    target_executables: FrozenSet[str],
+    module_prefixes: FrozenSet[str],
+    depth: int,
+) -> bool:
     """Recursively inspect a command string passed to a shell wrapper."""
     if not isinstance(value, str):
         return False
     for posix in (True, False):
         tokens = _tokenize_shell_command(value, posix=posix)
         if any(
-            _contains_cli_in_tokens(segment, depth)
+            _contains_target_cli_in_tokens(
+                segment, target_executables, module_prefixes, depth
+            )
+            for segment in _command_segments(tokens)
+        ):
+            return True
+    return False
+
+
+def _normalized_cli_executables(executables: Iterable[str]) -> FrozenSet[str]:
+    """Return executable basenames, including common Windows suffixes."""
+    normalized = set()
+    for executable in executables:
+        if not isinstance(executable, str) or not executable.strip():
+            continue
+        basename = _command_basename(executable)
+        normalized.add(basename)
+        stem = re.sub(r"\.(?:bat|cmd|exe)$", "", basename)
+        normalized.update({f"{stem}.bat", f"{stem}.cmd", f"{stem}.exe"})
+    return frozenset(normalized)
+
+
+def _is_target_cli_command(
+    command: str,
+    executables: Iterable[str],
+    *,
+    module_prefixes: Iterable[str] = (),
+) -> bool:
+    """Return whether *command* launches one of the target executables."""
+    if not isinstance(command, str) or not command.strip():
+        return False
+
+    target_executables = _normalized_cli_executables(executables)
+    if not target_executables:
+        return False
+    target_modules = frozenset(
+        module.lower()
+        for module in module_prefixes
+        if isinstance(module, str) and module.strip()
+    )
+    command = _strip_bash_heredoc_content(command)
+    for posix in (True, False):
+        tokens = _tokenize_shell_command(command, posix=posix)
+        if any(
+            _contains_target_cli_in_tokens(segment, target_executables, target_modules)
             for segment in _command_segments(tokens)
         ):
             return True
@@ -941,14 +1002,13 @@ def is_ai_guardian_cli_command(command: str) -> bool:
     and shell wrappers while ignoring ordinary arguments and documentation
     text that merely mentions AI Guardian.
     """
-    if not isinstance(command, str) or not command.strip():
-        return False
+    return _is_target_cli_command(
+        command,
+        _AI_GUARDIAN_EXECUTABLES,
+        module_prefixes=(_AI_GUARDIAN_MODULE_PREFIX,),
+    )
 
-    command = _strip_bash_heredoc_content(command)
-    for posix in (True, False):
-        tokens = _tokenize_shell_command(command, posix=posix)
-        if any(
-            _contains_cli_in_tokens(segment) for segment in _command_segments(tokens)
-        ):
-            return True
-    return False
+
+def is_host_agent_cli_command(command: str, executables: Iterable[str]) -> bool:
+    """Return whether *command* launches a supported host agent CLI."""
+    return _is_target_cli_command(command, executables)

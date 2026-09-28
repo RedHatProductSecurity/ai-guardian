@@ -121,6 +121,12 @@ def _save_config_with_backup(content_str, path_str):
 
     if not path_str:
         return "No config path available"
+    from ai_guardian.config.writer import validate_scoped_config
+    from ai_guardian.web.config_helpers import _get_current_scope
+
+    valid, validation_message = validate_scoped_config(_get_current_scope(), parsed)
+    if not valid:
+        return validation_message
     path = Path(path_str)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
