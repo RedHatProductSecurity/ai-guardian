@@ -52,6 +52,11 @@
   native tool name such as Grok's `run_terminal_command` can bypass immutable
   host CLI/configuration checks.
 
+- **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
+  compatibility workflow exports normal and OpenShell images as large OCI
+  tarballs on the same runner. Remove the first artifact before exporting the
+  second, especially when a new normal-container-only CLI increases image size.
+
 - **Full-suite CI timeout triage:** When a CI run times out at an existing test and the current diff creates no threads or processes, compare with the preceding passing PR and rerun the canceled jobs before changing production code. The Python 3.9/3.12 timeout on PR #2438 passed on rerun with no source changes.
 
 ## Do-Not-Repeat

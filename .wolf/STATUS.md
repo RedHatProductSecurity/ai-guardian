@@ -114,6 +114,10 @@ budget_tokens: 1000
 - Follow-up audit confirmed Grok host CLI and configuration protection, fixed
   policy precedence for adapter-normalized tool fields, and added explicit
   Grok direct/wrapper/config/UX regression coverage plus the onboarding gate.
+- Diagnosed the Ubuntu 26.04 compatibility failure as runner disk quota
+  exhaustion while exporting the OpenShell OCI tarball; the workflow now
+  removes the unused normal OCI artifact before that export. YAML parsing and
+  `git diff --check` pass.
 - Validation passed: 814 focused unit/installer tests, 238 container/sandbox
   tests, 24 Grok/E2E tests, 314 focused protection/Grok tests, 103 related
   policy/hook tests, plus Ruff, Black, Pylint, Mypy, YAML parsing,
