@@ -46,6 +46,15 @@ The protection works through an **unbreakable loop**:
 3. The tool never executes, so the file is never modified
 4. AI cannot edit the source code to remove the protection because editing is blocked by the same protection
 
+### OpenCode Tool Payloads
+
+OpenCode's plugin API reports built-in tools with lowercase names and camelCase
+arguments, such as `read` with `filePath`. The OpenCode adapter canonicalizes
+these fields before the shared PreToolUse policy runs, and direct policy callers
+apply the same normalization. This keeps global and project AI Guardian
+configuration reads and mutations under the same immutable protection as other
+supported agents while leaving ordinary project file operations available.
+
 ### Agent-Originated CLI Boundary
 
 The same immutable PreToolUse layer also protects the AI Guardian command-line

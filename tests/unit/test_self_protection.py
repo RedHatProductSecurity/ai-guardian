@@ -1300,6 +1300,49 @@ def test_supported_adapter_payloads_use_cli_protection(policy_checker, hook_data
     assert "agent-originated" in error_msg.lower()
 
 
+@pytest.mark.parametrize(
+    "tool_name,tool_input",
+    [
+        (
+            "read",
+            {"filePath": "/home/user/.config/ai-guardian/ai-guardian.json"},
+        ),
+        (
+            "write",
+            {
+                "filePath": "/home/user/project/.ai-guardian.json",
+                "content": "{}",
+            },
+        ),
+        (
+            "edit",
+            {
+                "filePath": "/home/user/project/.ai-guardian.json",
+                "oldString": "{}",
+                "newString": '{"changed": true}',
+            },
+        ),
+    ],
+)
+def test_opencode_native_file_tools_block_protected_paths(
+    policy_checker, tool_name, tool_input
+):
+    """Native OpenCode file tools cannot bypass immutable path protection."""
+    hook_data = {
+        "opencode_version": "1",
+        "hook_event_name": "tool.execute.before",
+        "tool_use": {"name": tool_name, "input": tool_input},
+    }
+
+    is_allowed, error_msg, checked_tool_name = policy_checker.check_tool_allowed(
+        hook_data
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+    assert checked_tool_name in {"Read", "Write", "Edit"}
+
+
 @pytest.mark.parametrize("hook_data", CLI_ADAPTER_PAYLOADS)
 def test_trusted_developer_session_allows_supported_adapter_payloads(hook_data):
     """The explicit opt-in works through every normalized shell payload shape."""

@@ -124,9 +124,17 @@ budget_tokens: 1000
   `git diff --check`, and annotation checks.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2425 Complete
+
+- OpenCode native lowercase tool names and camelCase file arguments are canonicalized before shared immutable policy checks.
+- Protected global and project AI Guardian configuration reads and mutations are denied; safe OpenCode file reads remain allowed.
+- Added unit and UX contract regression coverage, plus OpenCode E2E validation.
+- Focused validation: 638 tests passed; Black, Ruff, Pylint, Mypy, annotation checks, and `git diff --check` passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` for issue `#2446` after review.
+**Goal:** Run `daf complete` for issue `#2425` after review.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

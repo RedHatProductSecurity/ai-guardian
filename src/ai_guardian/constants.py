@@ -249,6 +249,23 @@ AUGMENT_TOOL_MAP = {
     "remove-files": "Delete",
 }
 
+# OpenCode's built-in tools use lowercase names and camelCase argument keys.
+# Normalize the security-relevant tools so shared policy checks see the same
+# canonical representation as Claude-compatible integrations.
+OPENCODE_TOOL_MAP = {
+    "bash": "Bash",
+    "read": "Read",
+    "write": "Write",
+    "edit": "Edit",
+}
+
+OPENCODE_TOOL_INPUT_MAP = {
+    "filePath": "file_path",
+    "oldString": "old_string",
+    "newString": "new_string",
+    "replaceAll": "replace_all",
+}
+
 # AI Guardian's required hook manifest is the single source of truth used by
 # setup, verification, doctor, tray health, and integration tests.  These are
 # the events AI Guardian installs for each command-hook adapter; host events
