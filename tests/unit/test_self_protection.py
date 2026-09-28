@@ -1413,6 +1413,7 @@ HOST_CLI_CASES = [
     pytest.param("kiro", "kiro-cli --help", id="kiro-executable"),
     pytest.param("openclaw", "openclaw --help", id="openclaw"),
     pytest.param("opencode", "opencode --help", id="opencode"),
+    pytest.param("grok", "grok --help", id="grok"),
     pytest.param("pi", "pi --help", id="pi"),
     pytest.param("crush", "crush --help", id="crush"),
 ]
@@ -1464,6 +1465,51 @@ def test_host_cli_wrappers_are_denied(command):
 
     is_allowed, error_msg, _ = checker.check_tool_allowed(
         _host_cli_hook("opencode", command)
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "grok --help",
+        "/usr/local/bin/grok run",
+        "npx grok --help",
+        "uvx grok",
+        "bash -lc 'grok --help'",
+    ],
+)
+def test_grok_host_cli_wrappers_are_denied(command):
+    """Grok uses the same direct, path-qualified, and wrapper guard as other CLIs."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        _host_cli_hook("grok", command)
+    )
+
+    assert not is_allowed
+    assert error_msg is not None
+
+
+def test_grok_native_shell_payload_is_denied_before_adapter_normalization():
+    """Direct policy callers cannot bypass Grok's native shell tool name."""
+    checker = ToolPolicyChecker(
+        config={"permissions": {"enabled": False, "rules": []}},
+        developer_session=False,
+    )
+
+    is_allowed, error_msg, _ = checker.check_tool_allowed(
+        {
+            "_ide_type": "grok",
+            "hookEventName": "PreToolUse",
+            "toolName": "run_terminal_command",
+            "toolInput": {"command": "grok --help"},
+        }
     )
 
     assert not is_allowed

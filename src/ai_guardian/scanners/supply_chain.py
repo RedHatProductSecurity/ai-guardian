@@ -35,6 +35,7 @@ AGENT_CONFIG_PATHS_HOME = [
     ".claude/settings.local.json",
     ".cursor/hooks.json",
     ".github/hooks/hooks.json",
+    ".grok/hooks/*.json",
     ".codex/hooks.json",
     ".codeium/windsurf/hooks.json",
     ".gemini/settings.json",
@@ -47,6 +48,7 @@ AGENT_CONFIG_PATHS_PROJECT = [
     ".claude/commands/*.md",
     ".cursor/hooks.json",
     ".github/hooks/hooks.json",
+    ".grok/hooks/*.json",
     ".pi/extensions/*.ts",
     ".pi/extensions/*/index.ts",
 ]
@@ -92,6 +94,7 @@ def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
         ("claude", "~/.claude/settings.local.json", "settings.local.json", ()),
         ("cursor", "~/.cursor/hooks.json", "hooks.json", ()),
         ("copilot", "~/.github/hooks/hooks.json", "hooks.json", ("hooks",)),
+        ("grok", "~/.grok/hooks/ai-guardian.json", "ai-guardian.json", ("hooks",)),
         ("codex", "~/.codex/hooks.json", "hooks.json", ()),
         ("gemini", "~/.gemini/settings.json", "settings.json", ()),
     )
@@ -135,6 +138,7 @@ def get_agent_config_paths(include_plugins: bool = True) -> List[str]:
         ("junie", "~/.junie/mcp.json"),
         ("aiderdesk", "~/.aider-desk/settings.json"),
         ("openclaw", "~/.openclaw/settings.json"),
+        ("grok", "~/.grok/config.toml"),
     )
     for ide_type, default_path in mcp_specs:
         add(str(resolve_ide_mcp_path(ide_type, default_path) or ""))

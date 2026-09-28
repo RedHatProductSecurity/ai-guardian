@@ -38,6 +38,7 @@ upstream distinction.
 | Claude Code | `--ide claude` | Full | Full | **Complete** |
 | Cursor desktop / local CLI | `--ide cursor` | 6 managed events (21 recognized) | User-level `~/.cursor/mcp.json` (`stdio`); Cloud Agents use dashboard/API MCP | **Complete locally; project hooks available for cloud workspaces** |
 | GitHub Copilot | `--ide copilot` | Full | N/A | **Complete** |
+| Grok Build | `--ide grok` | 6 managed events; only `PreToolUse` blocks | Local TOML `config.toml` | **Complete for documented hooks; passive output is observation-only** |
 | OpenAI Codex (CLI + Desktop) | `--ide codex` | 5 managed events (12 recognized) | Global `config.toml` | **Complete for Codex CLI and desktop Codex mode** |
 | Windsurf | `--ide windsurf` | Full | N/A | **Complete** |
 | Gemini CLI | `--ide gemini` | Full | N/A | **Complete** |
@@ -67,6 +68,7 @@ home. With no variables set, the existing defaults below are unchanged.
 | OpenAI Codex | `CODEX_HOME` | Hooks: `<dir>/hooks.json`; MCP: `<dir>/config.toml`; sessions: `<dir>/sessions` | Project `.codex/` layers remain project-local |
 | Cursor | `CURSOR_CONFIG_DIR` | User hooks: `<dir>/hooks.json`; user MCP: `<dir>/mcp.json` | Project hooks/MCP remain under the selected project `.cursor/` directory |
 | GitHub Copilot CLI | `COPILOT_HOME` | Hooks: `<dir>/hooks/hooks.json`; optional MCP: `<dir>/mcp-config.json`; CLI transcript: `<dir>/session-state/events.jsonl` | Project files are not redirected; without the variable the hook default remains `~/.github/hooks/hooks.json` |
+| Grok Build | `GROK_HOME` | Hooks: `<dir>/hooks/ai-guardian.json`; MCP: `<dir>/config.toml` | Project hooks/MCP remain under the selected project `.grok/` directory; no local transcript adapter |
 | Gemini CLI | `GEMINI_CLI_HOME` | The effective `.gemini` home is `<dir>/.gemini`; hooks/settings: `<dir>/.gemini/settings.json`; sessions: `<dir>/.gemini/tmp` | Project `.gemini/` paths are not redirected |
 | Cline / ZooCode | `CLINE_DATA_DIR` for user MCP; `CLINE_STORAGE_DIR` remains a transcript/storage alias | MCP: `<dir>/mcp_settings.json` | Hook setup remains project-local at `.clinerules/hooks` |
 | Kiro | `KIRO_HOME` | MCP: `<dir>/settings/mcp.json`; CLI sessions: `<dir>/sessions/cli` | Hook setup remains project-local at `.kiro/hooks`; the historical no-env MCP default is retained |
@@ -111,6 +113,7 @@ bridge contracts because their host SDKs are not repository dependencies.
 | `claude` | Shared adapter, setup merge/reconciliation, hook pipeline, UX setup contracts | JSONL path supplied by hook; browser session adapter | Isolated all-managed-event matrix; user scope and doctor/tray health |
 | `cursor` | Dedicated adapter, six managed events, fail-closed decision hooks, project/cloud setup | Cursor SQLite; browser session adapter | Isolated event matrix plus recognized-event/failure checks; user vs project/cloud MCP scope |
 | `copilot` | Dedicated adapter, prompt/pre-tool response contract and no-local-MCP boundary | Copilot CLI JSONL and VS Code delta journal; browser session adapter | Isolated managed-event matrix; command-hook health |
+| `grok` | Dedicated camelCase adapter, six managed events, project hook/MCP setup | No local transcript/session adapter | Isolated managed-event matrix; PreToolUse deny contract and passive-event limitation |
 | `codex` | Dedicated adapter, five managed events, layered config/MCP reconciliation, Codex UX contracts | Codex JSONL default-path discovery; browser session adapter | Isolated event matrix; CLI/desktop Codex-mode scope explicitly separated from regular ChatGPT |
 | `windsurf` | Dedicated adapter and nine managed command-hook events | Windsurf JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook process I/O |
 | `gemini` | Dedicated adapter, SessionStart/BeforeAgent/BeforeTool/AfterTool mapping | Explicit-path JSONL; browser session adapter | Isolated all-managed-event matrix; command-hook health |
@@ -140,6 +143,7 @@ future integrations. For this repository, the main evidence paths are
 | Claude Code | Yes | Yes | Yes | Yes | N/A | Yes | Yes |
 | Cursor | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | GitHub Copilot | N/A | Yes | Yes | N/A | N/A | N/A | N/A |
+| Grok Build | Yes | Yes | Yes | Yes (observation) | N/A | Yes | Yes |
 | OpenAI Codex (CLI + Desktop) | N/A | Yes | Yes | Yes | N/A | Yes | Yes |
 | Windsurf | N/A | Yes | Yes | Yes | Yes | N/A | N/A |
 | Gemini CLI | Yes | Yes (BeforeAgent) | Yes | Yes | N/A | N/A | N/A |
@@ -170,6 +174,7 @@ integration guides.
 | Claude Code | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported |
 | Cursor desktop / local CLI | Command hooks | 6 managed Cursor events; other upstream events are normalized when explicitly configured | Supported |
 | GitHub Copilot | Command hooks | UserPromptSubmit, PreToolUse | Supported |
+| Grok Build | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported; only PreToolUse can block |
 | OpenAI Codex (CLI + Desktop) | Command hooks | UserPromptSubmit, PreToolUse, PostToolUse, PostCompact, SessionEnd | Supported (five managed events) |
 | Windsurf | Command hooks | UserPromptSubmit, BeforeReadFile, PreToolUse, PostToolUse | Supported |
 | Gemini CLI | Command hooks | SessionStart, UserPromptSubmit, PreToolUse, PostToolUse | Supported |
@@ -210,7 +215,7 @@ Coverage per agent depends on which hooks are available. This table shows repres
 
 Antigravity's PostToolUse fires but carries no tool output, so post-tool redaction (`secret_redaction`) is not available there; pre-tool enforcement is unaffected.
 
-Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
+Agents with full hook support not shown individually (Windsurf, Gemini CLI, Cline, Kiro, OpenCode) have the same coverage as Claude Code, minus MCP and minus UserPromptSubmit where applicable — see the [Hook Capability Matrix](#hook-capability-matrix) above. Grok Build has prompt, pre-tool, and post-tool observation hooks, but only PreToolUse can enforce and passive output cannot redact tool results. Copilot CLI and Codex support transcript scanning via adapter-resolved default paths (Issue #935).
 
 | Violation Type | Requires | Claude Code | Cursor | Copilot | Antigravity | Junie (MCP) |
 |---|---|---|---|---|---|---|
@@ -283,7 +288,7 @@ Claude Code binary file reads bypass hooks — image content may not pass throug
 
 ### Transcript scanning availability
 
-Claude Code exposes the conversation transcript to hooks via `UserPromptSubmit` (JSONL file). OpenCode and Cursor store sessions in SQLite databases; Cline stores conversations as JSON arrays in per-task directories; Windsurf stores Cascade transcripts as JSONL step files; ai-guardian reads them directly to scan for secrets and PII. Copilot CLI and Codex store JSONL transcripts at known default locations; ai-guardian discovers these paths via the adapter when the IDE does not provide a `transcript_path` in hook data. Copilot Chat for VS Code stores sessions as JSONL delta journal files in VS Code's `workspaceStorage/*/chatSessions/` directories. AiderDesk stores Markdown chat history at `.aider.chat.history.md` in the project root. OpenClaw stores JSONL transcripts at `~/.openclaw/transcripts/`.
+Claude Code exposes the conversation transcript to hooks via `UserPromptSubmit` (JSONL file). OpenCode and Cursor store sessions in SQLite databases; Cline stores conversations as JSON arrays in per-task directories; Windsurf stores Cascade transcripts as JSONL step files; ai-guardian reads them directly to scan for secrets and PII. Copilot CLI and Codex store JSONL transcripts at known default locations; ai-guardian discovers these paths via the adapter when the IDE does not provide a `transcript_path` in hook data. Copilot Chat for VS Code stores sessions as JSONL delta journal files in VS Code's `workspaceStorage/*/chatSessions/` directories. AiderDesk stores Markdown chat history at `.aider.chat.history.md` in the project root. OpenClaw stores JSONL transcripts at `~/.openclaw/transcripts/`. Grok Build does not expose a supported local transcript path.
 
 Transcript scanning uses a polymorphic `TranscriptAdapter` interface (`scanners/transcript/base.py`). Each IDE format has its own adapter that implements `can_scan()` and `scan_incremental()`.
 
@@ -536,6 +541,7 @@ Testing depth varies by agent. Confidence reflects how thoroughly the hook adapt
 | Claude Code | High | Extensively tested in production |
 | Cursor desktop / local CLI | Medium | Desktop behavior retained; managed local CLI/agent events, MCP, failure handling, and setup health are covered by focused tests |
 | Copilot | Medium | Tested but limited UserPromptSubmit |
+| Grok Build | Low | Hook contract and isolated tests are covered; real host and passive-event behavior remain limited |
 | Gemini CLI | Low | Hook format implemented but limited testing |
 | Antigravity CLI | Low | Hook adapter implemented based on documentation; limited real-world testing |
 | Codex | Medium | Five managed hooks are set up and health-checked; the adapter also recognizes the remaining documented lifecycle events when configured by the user |
@@ -575,6 +581,11 @@ Each agent uses different event names. The adapter layer normalizes these.
 | After edit | N/A | N/A | `afterFileEdit`, `afterTabFileEdit` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | Lifecycle / observation | `SessionStart`, `SessionEnd`, `Stop`, `SubagentStop` | N/A | `sessionStart`, `sessionEnd`, `subagentStop`, `preCompact`, `stop`, `afterAgentResponse`, `afterAgentThought`, `workspaceOpen` | N/A | N/A | N/A | N/A | N/A | N/A | N/A | `session_start`, `session_shutdown` |
 
+Grok Build maps `SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`,
+`PostCompact`, and `SessionEnd` directly from its `hookEventName` field. Its
+payload uses camelCase fields including `toolName`, `toolInput`, `toolOutput`,
+`sessionId`, `toolUseId`, and `workspaceRoot`.
+
 Cursor's default managed user-level setup installs these six events:
 `beforeSubmitPrompt`, `beforeReadFile`, `beforeShellExecution`, `preToolUse`,
 `afterShellExecution`, and `postToolUse`. The adapter recognizes additional
@@ -592,6 +603,7 @@ JSON object so error payloads are not echoed.
 | Claude Code | JSON `hookSpecificOutput.permissionDecision` | `{"hookSpecificOutput": {"permissionDecision": "deny"}}` |
 | Cursor desktop / CLI | JSON `permission` field for decision hooks; JSON transform field for MCP post-hooks | `{"permission": "deny", "user_message": "...", "agent_message": "..."}`; MCP output uses `updated_mcp_tool_output` |
 | GitHub Copilot | JSON (PreToolUse) or exit code 2 | `{"permissionDecision": "deny"}` |
+| Grok Build | JSON decision on PreToolUse | `{"decision": "deny", "reason": "..."}` |
 | Gemini CLI | JSON `decision` field | `{"decision": "deny", "reason": "..."}` |
 | Cline | JSON `cancel` field | `{"cancel": true, "reason": "..."}` |
 | Kiro | Exit code 2 (PreToolUse) or 1 (other) + stderr | stderr = error message |
@@ -620,6 +632,7 @@ When ai-guardian detects a non-blocking issue (warn/log mode) or injects securit
 | Cline | `errorMessage` (block) | `contextModification` | All (incl. block) | Confirmed |
 | Kiro | stderr (errors) | stdout | Prompt, PreToolUse | Confirmed (process I/O) |
 | Copilot | `permissionDecisionReason` (deny) | `additionalContext` | PreToolUse (incl. deny), PostToolUse | Best-effort (see bugs) |
+| Grok Build | `reason` (deny) | `reason` (deny) | PreToolUse only | Limited; passive hook stdout is ignored |
 | Windsurf | stderr (exit 2) | stdout (exit 0) | PreToolUse (block) | Limited |
 
 **Confirmed** — documented in the agent's hook protocol and verified to reach the AI model. **Best-effort** — field exists in spec but has known implementation bugs. **Limited** — only blocking responses have a confirmed agent channel.
@@ -644,6 +657,7 @@ hook_adapters/
 ├── claude_code.py       # Claude Code (default fallback)
 ├── cursor.py            # Cursor IDE
 ├── copilot.py           # GitHub Copilot
+├── grok.py              # Grok Build
 ├── codex.py             # OpenAI Codex (CLI + Desktop) (extends ClaudeCodeAdapter)
 ├── windsurf.py          # Windsurf (extends ClaudeCodeAdapter)
 ├── gemini.py            # Google Gemini CLI
@@ -669,6 +683,7 @@ Detection priority checks unique fields:
 - `transcript_path` → Gemini CLI
 - `agent_action_name` → Windsurf
 - `toolName` → GitHub Copilot
+- `hookEventName` plus Grok camelCase fields → Grok Build
 - `cursor_version` → Cursor
 - `kiro_hook_type` → Kiro
 - `is_mcp_tool` → Augment Code
@@ -702,7 +717,7 @@ Install hooks for any supported agent:
 ai-guardian setup --ide <agent-name>
 ```
 
-Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `pi`, `augment`, `crush`, `junie`
+Agent names: `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`, `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`, `pi`, `augment`, `crush`, `junie`
 
 ### Config File Locations
 
@@ -714,6 +729,7 @@ Agent names: `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`, `anti
 | Cursor desktop / local CLI MCP | `~/.cursor/mcp.json` (AI Guardian install target) |
 | Cursor local project MCP (managed by Cursor, not Cloud setup) | `<project>/.cursor/mcp.json` |
 | GitHub Copilot | `~/.github/hooks/hooks.json` |
+| Grok Build | `~/.grok/hooks/ai-guardian.json`; MCP: `~/.grok/config.toml` |
 | OpenAI Codex (CLI + Desktop) | `~/.codex/hooks.json` |
 | Windsurf | `~/.codeium/windsurf/hooks.json` |
 | Gemini CLI | `~/.gemini/settings.json` |

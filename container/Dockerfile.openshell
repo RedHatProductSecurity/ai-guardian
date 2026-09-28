@@ -148,6 +148,7 @@ RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 ARG AI_GUARDIAN_REST_PORT=63152
 ENV AI_GUARDIAN_REST_PORT=${AI_GUARDIAN_REST_PORT} \
+    AI_GUARDIAN_RUNTIME=openshell \
     AI_GUARDIAN_HOME=/sandbox/.config/ai-guardian \
     HOME=/sandbox \
     PI_CODING_AGENT_DIR=/sandbox/.pi/agent \

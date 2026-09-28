@@ -12,7 +12,7 @@
 .PARAMETER IDE
     Setup hooks for a specific IDE. When omitted, installed IDEs are detected
     and their hooks are set up automatically.
-    Choices: claude, cursor, copilot, codex, windsurf, gemini, cline,
+    Choices: claude, cursor, copilot, grok, codex, windsurf, gemini, cline,
               antigravity, zoocode, kiro, aiderdesk, openclaw, opencode, pi, augment, crush, junie
 
 .PARAMETER Profile
@@ -151,6 +151,9 @@ function Detect-InstalledAgents {
 
     $copilotDir = if ($env:COPILOT_HOME) { $env:COPILOT_HOME } else { Join-Path $HOME ".github\hooks" }
     if (Test-Path $copilotDir -PathType Container) { $agents += "copilot" }
+
+    $grokDir = if ($env:GROK_HOME) { $env:GROK_HOME } else { Join-Path $HOME ".grok" }
+    if ((Test-Path $grokDir -PathType Container) -or (Get-Command grok -ErrorAction SilentlyContinue)) { $agents += "grok" }
 
     $codexDir = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
     if (Test-Path $codexDir -PathType Container) { $agents += "codex" }

@@ -167,6 +167,8 @@ def handle_post_tool_use(ctx=None, **kwargs):
         tool_input = hook_data["tool_use"].get("input", {})
     elif "tool_input" in hook_data and isinstance(hook_data["tool_input"], dict):
         tool_input = hook_data["tool_input"]
+    elif "toolInput" in hook_data and isinstance(hook_data["toolInput"], dict):
+        tool_input = hook_data["toolInput"]
 
     if tool_name == "Skill" and tool_input.get("skill"):
         tool_identifier = f"Skill:{tool_input['skill']}"

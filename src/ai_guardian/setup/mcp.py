@@ -38,6 +38,12 @@ _MCP_IDE_CONFIGS: Dict[str, Dict[str, Any]] = {
         "config_key": "mcpServers",
         "skill_dir": ".github/skills",
     },
+    "grok": {
+        "config_file": "~/.grok/config.toml",
+        "config_key": "mcp_servers",
+        "config_format": "toml",
+        "skill_dir": ".grok/skills",
+    },
     "codex": {
         "config_file": "~/.codex/config.toml",
         "config_key": "mcp_servers",
@@ -438,6 +444,9 @@ def get_mcp_config_path(
             return project_root / ".cursor" / "mcp.json"
         if scope not in ("user", "auto"):
             raise ValueError("Cursor scope must be 'user', 'project', or 'auto'")
+    if ide_type == "grok" and scope == "project":
+        project_root = Path(project_dir).expanduser() if project_dir else Path.cwd()
+        return project_root / ".grok" / "config.toml"
     if ide_type == "opencode":
         return _resolve_opencode_config()
     return resolve_ide_mcp_path(ide_type, config_file)
@@ -585,9 +594,9 @@ def verify_mcp_config(
         raw = config_path.read_text(encoding="utf-8")
         if ide_type != "codex" and config_path.suffix == ".jsonc":
             raw = _strip_jsonc_comments(raw)
-        if ide_type == "codex":
+        if ide_type == "codex" or mcp_ide.get("config_format") == "toml":
             config = _load_toml_text(raw)
-            servers = config.get("mcp_servers", {})
+            servers = config.get(mcp_ide["config_key"], {})
         else:
             config = json.loads(raw) if raw.strip() else {}
             if not isinstance(config, dict):
@@ -854,6 +863,9 @@ def _install_mcp_config(
     if ide_type == "codex":
         _install_codex_mcp_config(config_path, dry_run=dry_run)
         return
+    if mcp_ide.get("config_format") == "toml":
+        _install_toml_mcp_config(config_path, mcp_ide["config_key"], dry_run=dry_run)
+        return
 
     if dry_run:
         print(f"  MCP: Would add ai-guardian MCP server to {config_path}")
@@ -985,6 +997,51 @@ def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
     _clean_legacy_codex_mcp_entry(target_path=config_path)
 
 
+def _install_toml_mcp_config(
+    config_path: Path, config_key: str, dry_run: bool = False
+) -> None:
+    """Register AI Guardian in a native TOML MCP configuration."""
+    if dry_run:
+        print(f"  MCP: Would add ai-guardian MCP server to {config_path}")
+        return
+
+    raw = ""
+    if config_path.exists():
+        try:
+            raw = config_path.read_text(encoding="utf-8")
+            data = _load_toml_text(raw) if raw.strip() else {}
+        except (OSError, ValueError) as exc:
+            logger.warning("Failed to read MCP config %s: %s", config_path, exc)
+            return
+    else:
+        data = {}
+
+    servers = data.get(config_key)
+    if servers is not None and not isinstance(servers, dict):
+        logger.warning(
+            "Cannot add AI Guardian to %s: %s is not a table", config_path, config_key
+        )
+        return
+
+    updated_servers = dict(servers or {})
+    updated_servers["ai-guardian"] = {
+        "command": _resolve_binary_path(),
+        "args": ["mcp-server"],
+    }
+    updated_data = dict(data)
+    updated_data[config_key] = updated_servers
+    try:
+        updated = _dump_toml(updated_data)
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        config_path.write_text(updated, encoding="utf-8")
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        logger.warning("Failed to write MCP config %s: %s", config_path, exc)
+        return
+
+    print(f"  MCP: Added ai-guardian MCP server to {config_path}")
+    _register_mcp_identity(_resolve_binary_path())
+
+
 def _remove_mcp_config(
     setup,
     ide_type: str,
@@ -1026,6 +1083,9 @@ def _remove_mcp_config(
 
     if ide_type == "codex":
         _remove_codex_mcp_config(config_path, dry_run=dry_run)
+        return
+    if mcp_ide.get("config_format") == "toml":
+        _remove_toml_mcp_config(config_path, mcp_ide["config_key"], dry_run=dry_run)
         return
 
     if dry_run:
@@ -1114,3 +1174,41 @@ def _remove_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
         print("  MCP: ai-guardian MCP server not found in config")
 
     _clean_legacy_codex_mcp_entry()
+
+
+def _remove_toml_mcp_config(
+    config_path: Path, config_key: str, dry_run: bool = False
+) -> None:
+    """Remove AI Guardian from a native TOML MCP configuration."""
+    if dry_run:
+        print(f"  MCP: Would remove ai-guardian MCP server from {config_path}")
+        return
+    if not config_path.exists():
+        print("  MCP: No config file found, nothing to remove")
+        return
+
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+        data = _load_toml_text(raw) if raw.strip() else {}
+    except (OSError, ValueError) as exc:
+        logger.warning("Failed to read MCP config %s: %s", config_path, exc)
+        return
+
+    servers = data.get(config_key)
+    if not isinstance(servers, dict) or "ai-guardian" not in servers:
+        print("  MCP: ai-guardian MCP server not found in config")
+        return
+
+    updated_data = dict(data)
+    updated_servers = dict(servers)
+    del updated_servers["ai-guardian"]
+    if updated_servers:
+        updated_data[config_key] = updated_servers
+    else:
+        updated_data.pop(config_key, None)
+    try:
+        config_path.write_text(_dump_toml(updated_data), encoding="utf-8")
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        logger.warning("Failed to write MCP config %s: %s", config_path, exc)
+        return
+    print(f"  MCP: Removed ai-guardian MCP server from {config_path}")

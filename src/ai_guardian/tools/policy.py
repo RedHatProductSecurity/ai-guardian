@@ -83,6 +83,9 @@ _SHELL_TOOL_NAMES = frozenset(
         "launch-process",
         "execute_command",
         "terminal",
+        # Grok's native shell tool name reaches direct policy callers before
+        # the adapter-normalized "Bash" name is available.
+        "run_terminal_command",
     }
 )
 _IMMUTABLE_CLI_REASON = "agent-originated AI Guardian CLI execution"
@@ -1037,8 +1040,15 @@ class ToolPolicyChecker:
             tool_input = hook_data.get("tool_input", {})
             is_antigravity = False
 
+            # Hook processing supplies canonical fields alongside the native
+            # payload. Prefer those fields so adapter-specific names cannot
+            # bypass immutable policy checks.
+            canonical_name = hook_data.get("tool_name")
+            if isinstance(canonical_name, str) and canonical_name:
+                tool_name = canonical_name
+                tool_input = hook_data.get("tool_input", {})
             # Claude Code format: tool_use.name + tool_use.input or tool_use.parameters
-            if "tool_use" in hook_data and isinstance(hook_data["tool_use"], dict):
+            elif "tool_use" in hook_data and isinstance(hook_data["tool_use"], dict):
                 tool_name = hook_data["tool_use"].get("name")
                 # Try both "input" (PostToolUse) and "parameters" (PreToolUse)
                 tool_input = hook_data["tool_use"].get("input") or hook_data[
@@ -1057,6 +1067,8 @@ class ToolPolicyChecker:
                         tool_input = json.loads(hook_data["toolArgs"])
                     except (json.JSONDecodeError, TypeError):
                         tool_input = {}
+                elif "toolInput" in hook_data:
+                    tool_input = hook_data.get("toolInput", {})
             # Antigravity: toolCall.name + toolCall.args (PascalCase arg keys)
             elif (
                 isinstance(hook_data.get("toolCall"), dict)

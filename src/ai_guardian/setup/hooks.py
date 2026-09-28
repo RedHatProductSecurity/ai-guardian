@@ -258,6 +258,40 @@ class IDESetup:
                 "preToolUse": [{"command": "ai-guardian"}],
             },
         },
+        "grok": {
+            "name": "Grok Build",
+            "mcp_client_name": "grok",
+            "executable": "grok",
+            "config_path": "~/.grok/hooks/ai-guardian.json",
+            "config_dir_env_var": "GROK_HOME",
+            "config_filename": "ai-guardian.json",
+            "hooks": {
+                HookEvent.SESSION_START.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+                HookEvent.PROMPT.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+                HookEvent.PRE_TOOL_USE.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [{"type": "command", "command": "ai-guardian"}],
+                    }
+                ],
+                HookEvent.POST_TOOL_USE.display_name: [
+                    {
+                        "matcher": ".*",
+                        "hooks": [{"type": "command", "command": "ai-guardian"}],
+                    }
+                ],
+                HookEvent.SESSION_END.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+                HookEvent.POST_COMPACT.display_name: [
+                    {"hooks": [{"type": "command", "command": "ai-guardian"}]}
+                ],
+            },
+        },
         "codex": {
             "name": CODEX_DISPLAY_NAME,
             "mcp_client_name": "codex-cli",
@@ -662,6 +696,13 @@ class IDESetup:
                 else self._cursor_project_root()
             )
             return str(project_root / ".cursor" / "hooks.json")
+        if ide_type == "grok" and scope == "project":
+            project_root = (
+                Path(project_dir).expanduser().resolve()
+                if project_dir
+                else Path.cwd().resolve()
+            )
+            return str(project_root / ".grok" / "hooks" / "ai-guardian.json")
         if ide_type == "pi" and scope == "project":
             if not project_dir:
                 return str(Path(".pi") / "extensions")
@@ -704,7 +745,7 @@ class IDESetup:
                 base_config_path,
                 env_subdir=("extensions",),
             )
-        if ide_type == "copilot":
+        if ide_type in ("copilot", "grok"):
             return resolve_ide_config_path(
                 ide_type,
                 base_config_path,
@@ -1940,6 +1981,31 @@ class IDESetup:
 
             return existing_config, warnings
 
+        elif ide_type == "grok":
+            if not isinstance(existing_config.get("hooks"), dict):
+                existing_config["hooks"] = {}
+
+            for hook_name in self.expected_hook_manifest("grok"):
+                template_entries = ai_guardian_hooks.get(hook_name, [])
+                if not isinstance(template_entries, list):
+                    continue
+                current_entries = existing_config["hooks"].get(hook_name, [])
+                if not isinstance(current_entries, list):
+                    current_entries = []
+                other_hooks = [
+                    entry
+                    for entry in current_entries
+                    if not self._contains_owned_command(entry)
+                ]
+                if other_hooks:
+                    warnings.append(
+                        f"⚠️  {hook_name}: Found other hooks. ai-guardian has been "
+                        "placed first."
+                    )
+                existing_config["hooks"][hook_name] = template_entries + other_hooks
+
+            return existing_config, warnings
+
         elif ide_type == "codex":
             # Codex: same nested structure as Claude Code (hooks.json). Keep
             # every existing matcher group because Codex loads all matching
@@ -2970,6 +3036,10 @@ class IDESetup:
                 for event_name in self.expected_hook_manifest("copilot"):
                     merged_config[event_name] = resolved_hooks[event_name]
                 # Fall through to common config-write path (don't return early)
+            elif ide_type == "grok":
+                merged_config, hook_warnings = self.merge_hooks(
+                    existing_config, resolved_hooks, ide_type
+                )
             elif ide_type == "codex":
                 merged_config, hook_warnings = self.merge_hooks(
                     existing_config, resolved_hooks, ide_type

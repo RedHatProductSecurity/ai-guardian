@@ -9,14 +9,16 @@ from ai_guardian.tools.policy import ToolPolicyChecker
 from tests.fixtures.mock_mcp_server import create_hook_data
 
 
-def _run_hook(*, enabled=True, permissions_enabled=False):
+def _run_hook(
+    *, enabled=True, permissions_enabled=False, hook_data=None, tool_input=None
+):
     config = {
         "agent_config_protection": {"enabled": enabled},
         "permissions": {"enabled": permissions_enabled, "rules": []},
     }
-    hook_data = create_hook_data(
+    hook_data = hook_data or create_hook_data(
         tool_name="Write",
-        tool_input={"file_path": ".cursor/settings.json"},
+        tool_input=tool_input or {"file_path": ".cursor/settings.json"},
     )
     with (
         patch(
@@ -64,6 +66,25 @@ def test_agent_configuration_protection_stays_active_when_permissions_are_disabl
     response = json.loads(_run_hook(permissions_enabled=False)["output"])
 
     assert response["hookSpecificOutput"]["permissionDecision"] == "deny"
+
+
+def test_grok_project_configuration_mutation_is_denied_before_tool_execution():
+    response = json.loads(
+        _run_hook(
+            permissions_enabled=False,
+            hook_data={
+                "_ide_type": "grok",
+                "hookEventName": "PreToolUse",
+                "toolName": "write_file",
+                "toolInput": {"path": ".grok/config.toml"},
+            },
+        )["output"]
+    )
+
+    assert response["decision"] == "deny"
+    assert "AI Agent Configuration Protection" in response["reason"]
+    assert "allowlist" not in response["reason"].lower()
+    assert "bypass" not in response["reason"].lower()
 
 
 def test_explicit_global_opt_out_allows_new_protection_scope():

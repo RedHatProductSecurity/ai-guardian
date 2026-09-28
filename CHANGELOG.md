@@ -12,11 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI configuration protection and agent-originated host CLI execution
   restrictions, including scope, wrapper, permissions-disabled, and trusted
   boundary cases.
+- Immutable policy checks now prefer adapter-normalized tool fields and cover
+  Grok's native shell and file-mutation tool names before normalization.
 - Pi setup now automatically installs the pinned MCP SDK with npm when available; failed installs leave an actionable retry diagnostic.
 - Verified AI Guardian MCP tools now bypass ordinary host MCP permission rules after identity attestation, including calls routed through the Pi bridge.
 - The Web Console Effective Configuration page now clearly warns when the Project selector is set to Global only, so project-local overrides are not mistaken as missing.
 
 ### Added
+
+- **Grok Build integration (#2446):** Add the dedicated camelCase hook adapter,
+  six managed lifecycle events, PreToolUse deny responses, user/project hook
+  setup, TOML MCP registration, config-artifact protection, installer and
+  release-readiness parity, and pinned normal-container support for the
+  Apache-2.0 `@xai-official/grok` package. OpenShell remains explicitly
+  unsupported pending image, policy, and authentication validation.
 
 - **Host CLI self-invocation protection (#2444):** Add the global-only
   `self_protection.block_host_agent_cli` guard with canonical executable and

@@ -68,6 +68,31 @@ def test_protected_notebook_edit_and_shell_mutation_are_denied(tmp_path):
     assert shell[0] is False
 
 
+def test_grok_global_and_project_mutations_are_denied_when_permissions_disabled(
+    monkeypatch, tmp_path
+):
+    grok_home = tmp_path / "grok-home"
+    monkeypatch.setenv("GROK_HOME", str(grok_home))
+
+    project_write = _check(
+        tmp_path,
+        "Write",
+        {"file_path": str(tmp_path / ".grok" / "config.toml")},
+        permissions=False,
+    )
+    global_shell = _check(
+        tmp_path,
+        "Bash",
+        {"command": "printf '%s' value > \"$GROK_HOME/config.toml\""},
+        permissions=False,
+    )
+
+    assert project_write[0] is False
+    assert global_shell[0] is False
+    assert "AI Agent Configuration Protection" in project_write[1]
+    assert "AI Agent Configuration Protection" in global_shell[1]
+
+
 @pytest.mark.parametrize("action", ["warn", "log-only"])
 def test_protected_mutation_ignores_permission_action_modes(tmp_path, action):
     config = {

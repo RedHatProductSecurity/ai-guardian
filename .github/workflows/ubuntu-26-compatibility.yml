@@ -155,6 +155,9 @@ jobs:
             --output type=oci,dest=/tmp/ai-guardian.tar \
             container/
 
+      - name: Remove normal OCI artifact before OpenShell build
+        run: rm -f /tmp/ai-guardian.tar
+
       - name: Build OpenShell image for both architectures
         env:
           GITHUB_TOKEN: ${{ github.token }}

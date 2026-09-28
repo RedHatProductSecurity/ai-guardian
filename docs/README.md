@@ -73,7 +73,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | Document | Description |
 |----------|-------------|
 | [IDE/Agent Integration Checklist](IDE_INTEGRATION_CHECKLIST.md) | Implementation, testing, documentation, and release checklist for integrations |
-| [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture |
+| [Agent Support](AGENT_SUPPORT.md) | Multi-agent hook adapters — capability matrix, setup, and architecture, including Grok Build |
 | [Pre-commit Hook](PRE_COMMIT.md) | Scan staged files for secrets before commit |
 | [GitHub Copilot Setup](GITHUB_COPILOT.md) | Setup guide for GitHub Copilot |
 | [Aider Setup](AIDER.md) | Git hook integration for Aider |

@@ -101,9 +101,32 @@ budget_tokens: 1000
 - Focused validation: 1,229 tests passed; Black, Ruff, Pylint, Mypy, JSON validation, and `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2446 Complete
+
+- Added Grok Build host hooks, camelCase normalization, native PreToolUse deny
+  responses, user/project setup, TOML MCP registration, config protection, and
+  supply-chain path coverage.
+- Added normal Docker/Podman support with pinned `@xai-official/grok` version
+  `1.0.41`; OpenShell remains explicitly unsupported with a runtime-specific
+  entrypoint boundary.
+- Updated installers, release-readiness matrices, container/runtime docs,
+  support matrices, and the Unreleased changelog.
+- Follow-up audit confirmed Grok host CLI and configuration protection, fixed
+  policy precedence for adapter-normalized tool fields, and added explicit
+  Grok direct/wrapper/config/UX regression coverage plus the onboarding gate.
+- Diagnosed the Ubuntu 26.04 compatibility failure as runner disk quota
+  exhaustion while exporting the OpenShell OCI tarball; the workflow now
+  removes the unused normal OCI artifact before that export. YAML parsing and
+  `git diff --check` pass.
+- Validation passed: 814 focused unit/installer tests, 238 container/sandbox
+  tests, 24 Grok/E2E tests, 314 focused protection/Grok tests, 103 related
+  policy/hook tests, plus Ruff, Black, Pylint, Mypy, YAML parsing,
+  `git diff --check`, and annotation checks.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` for issue `#2444` after review.
+**Goal:** Run `daf complete` for issue `#2446` after review.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.
@@ -113,22 +136,22 @@ budget_tokens: 1000
 ## 📁 Active architecture
 
 - **Stack:** Python 3.9-3.14, pytest, Textual/NiceGUI/Tkinter tray UI.
-- **Key modules:** `integrations/anthropic/agent.py`, `integrations/base.py`, `integrations/compaction.py`, `tests/unit/test_compaction.py`, `tests/unit/test_integrations.py`.
+- **Key modules:** `hook_adapters/grok.py`, `setup/hooks.py`, `setup/mcp.py`, `ide_registry.py`, `container/entrypoint.sh`, `tests/unit/test_grok_support.py`, `tests/integration/test_ide_hooks_e2e.py`.
 - **Patterns:** Shared MCP startup migration; fail-closed identity checks; test UI isolation through environment overrides.
 
 ---
 
 ## ⚠️ External blockers (don't block coding)
 
-- No active blockers. The remaining workflow step is review/commit of the uncommitted auto-install follow-up.
+- No active blockers. The remaining workflow step is review/commit of the uncommitted #2446 implementation.
 
 ---
 
 ## 🔧 Useful commands
 
 ```bash
-  uv run --extra dev python -m pytest tests/unit/test_pi_support.py tests/unit/test_setup.py tests/unit/test_proactive_prompt.py -q
-  uv run --extra dev python -m pytest tests/ux/test_user_experience_contract_pi.py tests/ux/test_user_experience_contract_ide_setup.py -q
+  uv run --extra dev python -m pytest tests/unit/test_grok_support.py tests/unit/test_ide_registry.py tests/unit/test_container_scripts.py -q
+  uv run --extra dev python -m pytest tests/integration/test_ide_hooks_e2e.py -q
 ```
 
 ---

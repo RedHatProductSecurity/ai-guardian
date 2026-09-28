@@ -185,6 +185,31 @@ def test_active_opencode_cli_invocation_is_denied_before_execution():
     assert "bypass" not in message.lower()
 
 
+def test_active_grok_cli_invocation_is_denied_before_execution():
+    """
+    USER EXPERIENCE: Grok agent shell invocation -> native deny before execution.
+
+    Grok is a CLI-capable integration, so its active host executable must use
+    the same immutable self-protection boundary as the other supported CLIs.
+    """
+    result = _run_hook(
+        {
+            "_ide_type": "grok",
+            "hookEventName": "PreToolUse",
+            "toolName": "run_terminal_command",
+            "toolInput": {"command": "grok --help"},
+        }
+    )
+
+    response = json.loads(result["output"])
+    assert response["decision"] == "deny"
+    assert "host CLI" in response["reason"]
+    assert "before the child process started" in response["reason"]
+    assert "pattern" not in response["reason"].lower()
+    assert "allowlist" not in response["reason"].lower()
+    assert "bypass" not in response["reason"].lower()
+
+
 def test_host_cli_protection_is_independent_of_ordinary_permissions():
     result = _run_hook(
         {

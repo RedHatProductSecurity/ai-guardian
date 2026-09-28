@@ -323,6 +323,11 @@ def _payload(
         payload.update({"codex_version": "synthetic", "model": "synthetic-model"})
     elif ide_type == "augment":
         payload["is_mcp_tool"] = False
+    elif ide_type == "grok":
+        payload = {
+            "workspaceRoot": str(project),
+            "sessionId": "isolated-ide-e2e",
+        }
 
     payload_event_name = event_name
     if ide_type == "kiro":
@@ -332,7 +337,9 @@ def _payload(
             "PostToolUse": "post_tool_use",
         }.get(event_name, event_name)
 
-    if ide_type == "crush":
+    if ide_type == "grok":
+        payload["hookEventName"] = payload_event_name
+    elif ide_type == "crush":
         payload["event"] = payload_event_name
     elif ide_type == "antigravity":
         # The event is declared by --hook-event, never named in the payload.
@@ -352,6 +359,8 @@ def _payload(
             )
         elif ide_type == "antigravity":
             payload["invocationNum"] = 1
+        elif ide_type == "grok":
+            payload["userPrompt"] = "List the files in this synthetic project."
         else:
             payload["prompt"] = "List the files in this synthetic project."
         return payload
@@ -379,6 +388,13 @@ def _payload(
                 {
                     "toolName": "Read",
                     "toolArgs": json.dumps({"file_path": str(blocked_file)}),
+                }
+            )
+        elif ide_type == "grok":
+            payload.update(
+                {
+                    "toolName": "read_file",
+                    "toolInput": {"path": str(blocked_file)},
                 }
             )
         elif ide_type == "windsurf":
@@ -425,13 +441,21 @@ def _payload(
                 }
             )
             return payload
-        tool_name = "launch-process" if ide_type == "augment" else "Bash"
-        payload.update(
-            {
-                "tool_name": tool_name,
-                "tool_response": {"output": POST_OUTPUT_MARKER},
-            }
-        )
+        if ide_type == "grok":
+            payload.update(
+                {
+                    "toolName": "run_terminal_command",
+                    "toolOutput": {"output": POST_OUTPUT_MARKER},
+                }
+            )
+        else:
+            tool_name = "launch-process" if ide_type == "augment" else "Bash"
+            payload.update(
+                {
+                    "tool_name": tool_name,
+                    "tool_response": {"output": POST_OUTPUT_MARKER},
+                }
+            )
         if ide_type == "windsurf":
             payload["tool_info"] = {"name": "Bash"}
         return payload

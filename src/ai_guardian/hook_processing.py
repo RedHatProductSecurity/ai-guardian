@@ -503,6 +503,15 @@ FILE_READING_TOOLS = frozenset(
 # Augment Code tool name mapping imported from constants (single source of truth).
 _AUGMENT_TOOL_MAP = AUGMENT_TOOL_MAP
 
+_GROK_TOOL_MAP = {
+    "run_terminal_command": "Bash",
+    "read_file": "Read",
+    "search_replace": "Edit",
+    "write_file": "Write",
+    "list_directory": "LS",
+    "search_files": "Grep",
+}
+
 
 def _is_path_excluded(file_path, config):
     """
@@ -990,7 +999,7 @@ def extract_tool_result(hook_data):
     """
     try:
         # Get tool name from multiple possible locations
-        tool_name = hook_data.get("tool_name")
+        tool_name = hook_data.get("tool_name") or hook_data.get("toolName")
         logger.info(
             f"extract_tool_result: tool_name from hook_data.tool_name = {tool_name}"
         )
@@ -1019,6 +1028,8 @@ def extract_tool_result(hook_data):
         # Augment Code: normalize tool names
         if tool_name in _AUGMENT_TOOL_MAP:
             tool_name = _AUGMENT_TOOL_MAP[tool_name]
+        elif tool_name in _GROK_TOOL_MAP:
+            tool_name = _GROK_TOOL_MAP[tool_name]
 
         if tool_name in STATE_MODIFY_TOOLS:
             logger.debug(
@@ -1043,8 +1054,16 @@ def extract_tool_result(hook_data):
             return str(value) if value is not None else None
 
         # Claude Code format: tool_response field
-        if "tool_response" in hook_data:
-            tool_response = hook_data["tool_response"]
+        tool_response_key = next(
+            (
+                key
+                for key in ("tool_response", "toolResponse", "toolOutput", "toolResult")
+                if key in hook_data
+            ),
+            None,
+        )
+        if tool_response_key:
+            tool_response = hook_data[tool_response_key]
             # MCP tools return the structured result from `tools/call`, commonly
             # {content: [...], isError: false}. Serialize the complete result so
             # nested text is scanned and redacted.
@@ -1089,7 +1108,7 @@ def extract_tool_result(hook_data):
         # it has no conventional output field so MCP data cannot hide from the
         # post-tool scanner.
         if output is None:
-            for key in ("tool_output", "result_json"):
+            for key in ("tool_output", "toolOutput", "result_json", "resultJson"):
                 if key in hook_data:
                     output = _cursor_result_value(hook_data.get(key))
                     if output is not None:
@@ -1277,6 +1296,17 @@ def extract_file_content_from_tool(hook_data, hook_context=None):
         # Cursor format: tool_input.file_path
         if not file_path and "tool_input" in hook_data:
             tool_input = hook_data["tool_input"]
+            if isinstance(tool_input, dict):
+                file_path = tool_input.get("file_path") or tool_input.get("path")
+
+        # Grok Build format: toolInput is a camelCase dict or JSON string.
+        if not file_path and "toolInput" in hook_data:
+            tool_input = hook_data["toolInput"]
+            if isinstance(tool_input, str):
+                try:
+                    tool_input = json.loads(tool_input)
+                except json.JSONDecodeError:
+                    tool_input = {}
             if isinstance(tool_input, dict):
                 file_path = tool_input.get("file_path") or tool_input.get("path")
 

@@ -15,6 +15,7 @@ from ai_guardian.hook_adapters.cline import ClineAdapter
 from ai_guardian.hook_adapters.gemini import GeminiCLIAdapter
 from ai_guardian.hook_adapters.windsurf import WindsurfAdapter
 from ai_guardian.hook_adapters.copilot import CopilotAdapter
+from ai_guardian.hook_adapters.grok import GrokAdapter
 from ai_guardian.hook_adapters.cursor import CursorAdapter
 from ai_guardian.hook_adapters.kiro import KiroAdapter
 from ai_guardian.hook_adapters.augment import AugmentAdapter
@@ -36,6 +37,7 @@ ADAPTER_CLASSES = [
     ClineAdapter,  # clineVersion field
     GeminiCLIAdapter,  # transcript_path field
     WindsurfAdapter,  # agent_action_name field
+    GrokAdapter,  # hookEventName + Grok camelCase payload fields
     CopilotAdapter,  # toolName field or timestamp+cwd
     CursorAdapter,  # cursor_version or hook_name
     KiroAdapter,  # kiro_hook_type or kiro_version
@@ -64,6 +66,7 @@ _ADAPTER_CLASSES_BY_NAME = {
         BaseAgentAdapter,
         CursorAdapter,
         CopilotAdapter,
+        GrokAdapter,
         CodexAdapter,
         WindsurfAdapter,
         GeminiCLIAdapter,
@@ -171,6 +174,7 @@ def get_adapter_by_ide_type(ide_type) -> HookAdapter:
         IDEType.CLAUDE_CODE: "claude",
         IDEType.CURSOR: "cursor",
         IDEType.GITHUB_COPILOT: "copilot",
+        IDEType.GROK: "grok",
         IDEType.GEMINI_CLI: "gemini",
         IDEType.CLINE: "cline",
         IDEType.KIRO: "kiro",
@@ -193,6 +197,7 @@ __all__ = [
     "BaseAgentAdapter",
     "CursorAdapter",
     "CopilotAdapter",
+    "GrokAdapter",
     "CodexAdapter",
     "WindsurfAdapter",
     "GeminiCLIAdapter",

@@ -17,6 +17,7 @@ IDE_HOME_ENV_VARS: Dict[str, Tuple[str, ...]] = {
     "codex": ("CODEX_HOME",),
     "cursor": ("CURSOR_CONFIG_DIR",),
     "copilot": ("COPILOT_HOME",),
+    "grok": ("GROK_HOME",),
     "gemini": ("GEMINI_CLI_HOME",),
     "cline": ("CLINE_DATA_DIR",),
     "zoocode": ("CLINE_DATA_DIR",),
@@ -165,6 +166,8 @@ def resolve_ide_mcp_path(ide_type: str, default_path: Optional[str]) -> Optional
     if ide_type == "cursor":
         return home / "mcp.json"
     if ide_type in ("codex",):
+        return home / "config.toml"
+    if ide_type == "grok":
         return home / "config.toml"
     if ide_type == "gemini":
         return home / "settings.json"

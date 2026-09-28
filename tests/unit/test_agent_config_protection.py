@@ -63,6 +63,42 @@ def test_global_agent_configuration_roots_are_recursive(monkeypatch):
     )
 
 
+def test_grok_global_and_project_configuration_roots_are_protected(
+    monkeypatch, tmp_path
+):
+    grok_home = tmp_path / "grok-home"
+    project = tmp_path / "workspace"
+    project.mkdir()
+    monkeypatch.setenv("GROK_HOME", str(grok_home))
+
+    inventory = build_agent_config_inventory(str(project))
+
+    for path in (
+        grok_home / "config.toml",
+        grok_home / "hooks" / "ai-guardian.json",
+        project / ".grok" / "config.toml",
+        project / ".grok" / "hooks" / "ai-guardian.json",
+    ):
+        assert inventory.match_path(str(path)), path
+
+
+def test_grok_global_and_project_shell_mutations_match_protected_inventory(
+    monkeypatch, tmp_path
+):
+    grok_home = tmp_path / "grok-home"
+    project = tmp_path / "workspace"
+    project.mkdir()
+    monkeypatch.setenv("GROK_HOME", str(grok_home))
+    inventory = build_agent_config_inventory(str(project))
+
+    assert inventory.match_mutation(
+        "Bash", {"command": "printf '%s' value > \"$GROK_HOME/config.toml\""}
+    )
+    assert inventory.match_mutation(
+        "Bash", {"command": "rm -f .grok/hooks/ai-guardian.json"}
+    )
+
+
 def test_inventory_covers_explicit_config_files_and_managed_bridges(
     monkeypatch, tmp_path
 ):
@@ -115,6 +151,10 @@ def test_shell_reads_do_not_match_agent_configuration(tmp_path):
         ("Move", {"source": ".codex/config.toml", "destination": "config.bak"}),
         ("Rename", {"old_path": ".opencode/opencode.jsonc", "new_path": "old"}),
         ("Copy", {"source_path": ".pi/extensions/example.ts", "target_path": "old"}),
+        (
+            "search_replace",
+            {"filePath": ".grok/config.toml", "oldText": "a", "newText": "b"},
+        ),
     ],
 )
 def test_direct_mutation_tools_match_project_agent_configuration(
