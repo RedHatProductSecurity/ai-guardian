@@ -15,6 +15,7 @@ from ai_guardian.web.components.local_time import (
 from ai_guardian.web.pages.violations import (
     DETAIL_FIELDS,
     _ALLOWLIST_TYPES,
+    _NO_SUPPRESSION_TYPES,
     _format_violation_markdown,
     _load_local_violations,
     _show_allow_always_flow,
@@ -266,7 +267,8 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             from ai_guardian.tui.source_annotator import get_comment_prefix
 
             if (
-                annotation_target
+                vtype not in _NO_SUPPRESSION_TYPES
+                and annotation_target
                 and get_comment_prefix(annotation_target[0]) is not None
             ):
 
@@ -279,7 +281,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
                     on_click=on_suppress_source,
                 ).props("color=warning dense size=sm")
 
-            if v_file_path:
+            if v_file_path and vtype not in _NO_SUPPRESSION_TYPES:
 
                 def on_ignore_file(viol=v):
                     _show_ignore_file_flow(viol)

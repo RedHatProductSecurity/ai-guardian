@@ -1059,21 +1059,11 @@ class TestViolationResolutionInstructions:
         assert snippet == ""
 
     def test_all_known_types_have_instructions(self):
-        """Test that all 9 known violation types return non-empty instructions."""
+        """Test that every enum-backed violation type has resolution guidance."""
+        from ai_guardian.constants import ALL_VIOLATION_TYPES
         from ai_guardian.tui.violations import ViolationDetailsModal
 
-        known_types = [
-            "tool_permission",
-            "prompt_injection",
-            "jailbreak_detected",
-            "secret_detected",
-            "directory_blocking",
-            "pii_detected",
-            "secret_redaction",
-            "ssrf_blocked",
-            "config_file_exfil",
-        ]
-        for vtype in known_types:
+        for vtype in ALL_VIOLATION_TYPES:
             violation = {
                 "violation_type": vtype,
                 "blocked": {
@@ -1089,7 +1079,14 @@ class TestViolationResolutionInstructions:
             modal = ViolationDetailsModal(violation)
             instructions, snippet = modal._get_resolution_instructions()
             assert instructions, f"{vtype} should have non-empty instructions"
-            assert snippet, f"{vtype} should have non-empty snippet"
+            if vtype != "canary_detected":
+                assert snippet, f"{vtype} should have non-empty snippet"
+
+    def test_canary_has_no_allow_actions(self):
+        """Canary findings require investigation instead of suppression."""
+        from ai_guardian.tui.violations import _ALLOWLIST_TYPES
+
+        assert "canary_detected" not in _ALLOWLIST_TYPES
 
     def test_copy_snippet_button_in_modal(self):
         """Test that ViolationDetailsModal has copy-snippet button handling."""

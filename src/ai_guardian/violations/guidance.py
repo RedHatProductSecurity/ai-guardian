@@ -39,9 +39,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
     instructions_text is plain text (no Rich markup) so it works in TUI,
     Web, and CLI.  Callers can wrap with Rich/HTML formatting as needed.
 
-    Returns ("", "") for unknown violation types.
+    Returns generic review guidance for unknown violation types.
     """
-    vtype = violation.get("violation_type", "")
+    vtype = violation.get("violation_type", violation.get("type", ""))
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):
         blocked = {}
@@ -176,6 +176,84 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
         )
         return "Add file to config_file_scanning.ignore_files:", snippet
 
+    if vtype == "context_poisoning":
+        pattern = blocked.get("pattern") or blocked.get("matched_text") or "<regex>"
+        snippet = json.dumps(
+            {"context_poisoning": {"allowlist_patterns": [str(pattern)]}},
+            indent=2,
+        )
+        return (
+            "Review the persistent instruction and remove it if it is unexpected. "
+            "For a legitimate pattern, add it to "
+            "context_poisoning.allowlist_patterns; for a trusted source, prefer "
+            "context_poisoning.ignore_files or context_poisoning.ignore_tools:",
+            snippet,
+        )
+
+    if vtype == "supply_chain":
+        file_path = blocked.get("file_path") or "<file>"
+        snippet = json.dumps(
+            {"supply_chain": {"allowlist_paths": [str(file_path)]}}, indent=2
+        )
+        return (
+            "Review hooks, MCP, and plugin content in this file before trusting it. "
+            "If the file is verified safe, add its path to "
+            "supply_chain.allowlist_paths:",
+            snippet,
+        )
+
+    if vtype == "code_security":
+        rule_id = blocked.get("rule_id") or blocked.get("pattern") or "<rule-id>"
+        entry = {"rule_id": str(rule_id)}
+        file_path = blocked.get("file_path")
+        if file_path:
+            entry["file"] = str(file_path)
+        entry["reason"] = "Document why this finding is safe"
+        snippet = json.dumps({"code_scanning": {"allowlist": [entry]}}, indent=2)
+        return (
+            "Fix insecure code first. For an intentional safe finding, use a "
+            "narrowly scoped code_scanning.allowlist entry (or a source "
+            "annotation); use code_scanning.ignore_files only for files that "
+            "should not be inspected:",
+            snippet,
+        )
+
+    if vtype == "offensive_language":
+        pattern = blocked.get("matched_text") or blocked.get("pattern") or "<regex>"
+        snippet = json.dumps(
+            {"scan_offensive": {"allowlist_patterns": [str(pattern)]}},
+            indent=2,
+        )
+        return (
+            "Replace the flagged term with a neutral alternative when possible. "
+            "For a documented, intentional use, add a narrowly scoped pattern to "
+            "scan_offensive.allowlist_patterns; use scan_offensive.ignore_files "
+            "or scan_offensive.ignore_tools only for broader exclusions:",
+            snippet,
+        )
+
+    if vtype == "canary_detected":
+        return (
+            "Do not suppress this canary finding. Review "
+            "canary_detection.tokens and the output source, trace any downstream "
+            "exposure, and rotate or revoke any exposed secret before resolving "
+            "the finding.",
+            "",
+        )
+
+    if vtype == "exfil_detection":
+        pattern = blocked.get("matched_text") or blocked.get("pattern") or "<regex>"
+        snippet = json.dumps(
+            {"exfil_detection": {"allowlist_patterns": [str(pattern)]}},
+            indent=2,
+        )
+        return (
+            "Review the command and remove credential access or network exfiltration "
+            "behavior first. If the command is verified safe, add a narrowly "
+            "scoped regex to exfil_detection.allowlist_patterns:",
+            snippet,
+        )
+
     if vtype == "secret_in_transcript":
         secret_type = blocked.get("secret_type", "")
         if secret_type:
@@ -203,6 +281,22 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
             "Add pattern to scan_pii.allowlist_patterns:"
         )
         return instructions, snippet
+
+    if vtype == "prompt_injection_in_transcript":
+        return (
+            "Review the transcript entry and its originating shell command. "
+            "Remove untrusted instructions from the source or transcript before "
+            "continuing; transcript findings have no per-finding allowlist.",
+            "",
+        )
+
+    if vtype == "annotation_suppressed":
+        return (
+            "This audit entry records an inline annotation suppression. No "
+            "additional remediation is required; review the source annotation "
+            "and remove it if the suppression was not intentional.",
+            "",
+        )
 
     if vtype in ("image_secret_detected", "image_pii_detected"):
         file_path = blocked.get("file_path")

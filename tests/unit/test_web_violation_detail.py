@@ -88,6 +88,19 @@ class TestViolationModalOpenAsPage:
         assert "Open as page" in source
         assert "violation-detail" in source
 
+    def test_violation_card_announces_resolution_guidance(self):
+        import inspect
+
+        from ai_guardian.web.pages.violations import _render_violation_card
+
+        source = inspect.getsource(_render_violation_card)
+        assert "Resolution guidance: open Details" in source
+
+    def test_canary_has_no_suppression_action(self):
+        from ai_guardian.web.pages.violations import _ALLOWLIST_TYPES
+
+        assert "canary_detected" not in _ALLOWLIST_TYPES
+
 
 class TestViolationBadgeDeepLink:
     """Verify render_violation_badge links to detail page when ID present."""

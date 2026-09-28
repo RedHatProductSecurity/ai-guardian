@@ -85,6 +85,14 @@ budget_tokens: 1000
   and annotation checks passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## Issue #2447 Complete
+
+- Added actionable resolution guidance for every enum-backed violation type and explicit behavior for transcript and annotation audit filters.
+- Canary findings are investigation-only and no longer expose suppression or file-ignore actions in the TUI or Web Console.
+- Both console list cards now point users to Details for resolution guidance; tool-permission guidance remains shared across both Details views.
+- Focused validation: 234 affected tests and 152 violation/MCP regression tests passed; Ruff, Black, Pylint, and Mypy passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
 **Goal:** Run `daf complete` for issue `#2448` after review.
