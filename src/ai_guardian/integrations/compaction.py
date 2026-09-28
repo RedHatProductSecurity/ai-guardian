@@ -34,6 +34,7 @@ class CompactionResult:
     tokens_before: int
     tokens_after: int
     method: str
+    summary_text: str = ""
 
 
 def estimate_tokens(text: str) -> int:

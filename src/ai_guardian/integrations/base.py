@@ -429,6 +429,29 @@ class AgentLoopStrategy(ABC):
         """
         return None
 
+    def native_compaction_supported(self, client: Any, model: str) -> bool:
+        """Return whether this client can use provider-native compaction."""
+        return False
+
+    def native_compact_messages(
+        self,
+        client: Any,
+        *,
+        model: str,
+        max_tokens: int,
+        messages: List[Dict[str, Any]],
+        system: str,
+        tools: List[Any],
+        keep_first: int,
+        keep_last: int,
+        tokens_before: int,
+    ) -> Optional[Any]:
+        """Compact messages with a provider-native API when available."""
+        return None
+
+    def disable_native_compaction(self) -> None:
+        """Disable native compaction after an unsupported or unsafe response."""
+
     def context_window_tokens(self, model: str) -> int:
         """Return the context window size in tokens for *model*."""
         from ai_guardian.integrations.compaction import get_context_limit

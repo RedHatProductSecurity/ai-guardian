@@ -13,6 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Provider-aware SDK compaction (#2432):** Use Anthropic's native signed
+  compaction blocks when the Messages API and model support them, preserve
+  configured initial/recent turns, scan provider summaries, and fall back to
+  deterministic local compaction for OpenAI Chat Completions, Gemini,
+  OpenAI-compatible providers, unsupported models, or failed native requests.
+
 - **Structured MCP hook coverage (#2429):** Extend dummy-agent scenarios to
   model MCP `tools/call` results and scan structured MCP output during
   PostToolUse so secrets are redacted before reaching the agent.

@@ -5598,6 +5598,160 @@ class TestGuardedAgentCompaction:
         assert result["compaction_count"] >= 1
 
     @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_anthropic_native_compaction_is_used_and_scanned(self, mock_monitor):
+        mock_session = MagicMock()
+        mock_session.check_content.return_value = SimpleNamespace(
+            blocked=False, detected=False
+        )
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        def _tool_response(tool_id):
+            return _make_agent_response(
+                [
+                    SimpleNamespace(
+                        type="tool_use",
+                        name="bash",
+                        id=tool_id,
+                        input={"command": "echo hi"},
+                    )
+                ],
+                stop_reason="tool_use",
+                usage=SimpleNamespace(input_tokens=180_000, output_tokens=100),
+            )
+
+        native_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="compaction", content="Safe native summary", signature="sig"
+                )
+            ],
+            stop_reason="compaction",
+            usage=SimpleNamespace(input_tokens=180_000, output_tokens=100),
+        )
+        final_response = _make_agent_response(
+            [SimpleNamespace(type="text", text="Done")],
+            usage=SimpleNamespace(input_tokens=20_000, output_tokens=50),
+        )
+
+        normal_responses = iter(
+            [_tool_response("t1"), _tool_response("t2"), _tool_response("t3")]
+        )
+
+        def _beta_create(**kwargs):
+            if "compaction" in kwargs:
+                return native_response
+            return final_response
+
+        beta_create = MagicMock(side_effect=_beta_create)
+        normal_create = MagicMock(side_effect=normal_responses)
+        client = SimpleNamespace(
+            messages=SimpleNamespace(create=normal_create),
+            beta=SimpleNamespace(messages=SimpleNamespace(create=beta_create)),
+        )
+        agent, _ = self._make_agent(
+            mock_client=client, compact_threshold=0.8, compact_keep_turns=1
+        )
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="\n".join(["x" * 200] * 5000),
+        ):
+            result = agent.run("Analyze the project")
+
+        assert result["output"] == "Done"
+        assert result["compaction_count"] >= 1
+        compaction_entries = [
+            step
+            for step in _all_steps(result["trace"])
+            if step.get("type") == "compaction"
+        ]
+        assert any(
+            entry["method"] == "provider_native:anthropic"
+            for entry in compaction_entries
+        )
+        assert any(
+            call.kwargs.get("filename") == "provider_compaction"
+            for call in mock_session.check_content.call_args_list
+        )
+        assert beta_create.call_count == 2
+        assert normal_create.call_count == 3
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
+    def test_unsafe_native_summary_falls_back_to_local_compaction(self, mock_monitor):
+        mock_session = MagicMock()
+
+        def _check_content(_content, filename=None, **_kwargs):
+            return SimpleNamespace(
+                blocked=False, detected=filename == "provider_compaction"
+            )
+
+        mock_session.check_content.side_effect = _check_content
+        mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)
+        mock_monitor.return_value.__exit__ = MagicMock(return_value=False)
+
+        def _tool_response(tool_id):
+            return _make_agent_response(
+                [
+                    SimpleNamespace(
+                        type="tool_use",
+                        name="bash",
+                        id=tool_id,
+                        input={"command": "echo hi"},
+                    )
+                ],
+                stop_reason="tool_use",
+                usage=SimpleNamespace(input_tokens=180_000, output_tokens=100),
+            )
+
+        native_response = _make_agent_response(
+            [
+                SimpleNamespace(
+                    type="compaction", content="Unsafe native summary", signature="sig"
+                )
+            ],
+            stop_reason="compaction",
+        )
+
+        def _beta_create(**kwargs):
+            if "compaction" in kwargs:
+                return native_response
+            raise AssertionError("unsafe native summary should disable beta calls")
+
+        beta_create = MagicMock(side_effect=_beta_create)
+        normal_responses = iter(
+            [
+                _tool_response("t1"),
+                _tool_response("t2"),
+                _tool_response("t3"),
+                _make_agent_response(
+                    [SimpleNamespace(type="text", text="Done")],
+                    usage=SimpleNamespace(input_tokens=20_000, output_tokens=50),
+                ),
+            ]
+        )
+        normal_create = MagicMock(side_effect=normal_responses)
+        client = SimpleNamespace(
+            messages=SimpleNamespace(create=normal_create),
+            beta=SimpleNamespace(messages=SimpleNamespace(create=beta_create)),
+        )
+        agent, _ = self._make_agent(
+            mock_client=client, compact_threshold=0.8, compact_keep_turns=1
+        )
+
+        with patch(
+            "ai_guardian.integrations.anthropic.agent.execute_tool",
+            return_value="\n".join(["x" * 200] * 5000),
+        ):
+            result = agent.run("Analyze the project")
+
+        assert result["output"] == "Done"
+        assert result["compaction_count"] >= 1
+        assert beta_create.call_count == 1
+        assert normal_create.call_count == 4
+        assert not agent._native_compaction_enabled
+
+    @patch("ai_guardian.integrations.anthropic.agent.monitor")
     def test_compaction_count_in_result(self, mock_monitor):
         mock_session = MagicMock()
         mock_monitor.return_value.__enter__ = MagicMock(return_value=mock_session)

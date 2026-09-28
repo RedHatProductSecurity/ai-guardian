@@ -1,6 +1,7 @@
 """Tests for conversation compaction module."""
 
 import copy
+from types import SimpleNamespace
 
 from ai_guardian.integrations.anthropic.agent import AnthropicLoopStrategy
 from ai_guardian.integrations.compaction import (
@@ -16,6 +17,26 @@ from ai_guardian.integrations.compaction import (
 from ai_guardian.integrations.openai import OpenAILoopStrategy
 
 _ANTHROPIC = AnthropicLoopStrategy()
+
+
+class _NativeMessages:
+    def __init__(self, response=None, error=None):
+        self.response = response
+        self.error = error
+        self.requests = []
+
+    def create(self, **kwargs):
+        self.requests.append(kwargs)
+        if self.error is not None:
+            raise self.error
+        return self.response
+
+
+class _NativeClient:
+    def __init__(self, response=None, error=None):
+        self.beta_messages = _NativeMessages(response=response, error=error)
+        self.beta = SimpleNamespace(messages=self.beta_messages)
+        self.messages = SimpleNamespace(create=SimpleNamespace())
 
 
 def _make_tool_use_block(tool_id, name="bash", inp=None):
@@ -476,6 +497,87 @@ class TestAnthropicStrategyCreateBoundary:
         assert isinstance(content, list)
         assert content[0]["type"] == "text"
         assert "3 turn(s) removed" in content[0]["text"]
+
+
+class TestAnthropicNativeCompaction:
+    def _response(self):
+        return SimpleNamespace(
+            stop_reason="compaction",
+            content=[
+                SimpleNamespace(
+                    type="compaction", content="Native summary", signature="sig"
+                )
+            ],
+        )
+
+    def test_uses_native_api_and_preserves_configured_turns(self):
+        strategy = AnthropicLoopStrategy()
+        client = _NativeClient(response=self._response())
+        messages = _make_conversation(8)
+
+        result = strategy.native_compact_messages(
+            client,
+            model="claude-sonnet-5",
+            max_tokens=1024,
+            messages=messages,
+            system="Be concise.",
+            tools=[{"name": "bash"}],
+            keep_first=1,
+            keep_last=2,
+            tokens_before=100_000,
+        )
+
+        assert result.compacted
+        assert result.method == "provider_native:anthropic"
+        assert result.summary_text == "Native summary"
+        assert result.tokens_before == 100_000
+        assert len(result.messages) == 8
+        assert result.messages[0]["content"][0].type == "compaction"
+        assert result.messages[1] == messages[0]
+        assert result.messages[-4:] == messages[-4:]
+
+        request = client.beta_messages.requests[0]
+        assert request["betas"] == ["compact-2026-09-04"]
+        assert request["compaction"] == {"type": "summarize"}
+        assert request["messages"] == messages[:1] + messages[3:-4]
+        assert request["system"] == "Be concise."
+        assert request["tools"] == [{"name": "bash"}]
+        assert request["max_tokens"] == 4096
+
+        strategy.call_api(client, {"model": "claude-sonnet-5", "messages": []})
+        assert len(client.beta_messages.requests) == 2
+
+    def test_native_failure_disables_it_for_local_fallback(self):
+        strategy = AnthropicLoopStrategy()
+        client = _NativeClient(error=RuntimeError("unsupported beta"))
+
+        result = strategy.native_compact_messages(
+            client,
+            model="claude-sonnet-5",
+            max_tokens=4096,
+            messages=_make_conversation(8),
+            system="",
+            tools=[],
+            keep_first=1,
+            keep_last=2,
+            tokens_before=100_000,
+        )
+
+        assert result is None
+        assert not strategy.native_compaction_supported(client, "claude-sonnet-5")
+
+    def test_unsupported_models_use_local_compaction(self):
+        strategy = AnthropicLoopStrategy()
+        client = _NativeClient(response=self._response())
+
+        assert not strategy.native_compaction_supported(client, "claude-sonnet-4-5")
+
+    def test_bedrock_uses_local_compaction(self):
+        strategy = AnthropicLoopStrategy()
+        client = _NativeClient(response=self._response())
+        client._ai_guardian_provider = "bedrock"
+
+        assert not strategy.native_compaction_supported(client, "claude-sonnet-5")
 
 
 # ---------------------------------------------------------------------------

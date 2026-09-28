@@ -64,12 +64,20 @@ budget_tokens: 1000
 - UI/config validation: 111 UI/config tests and 595 self-protection tests pass; Black, Ruff, Pylint, and Mypy pass.
 - UI changes are uncommitted; no commit or pull request was created.
 
+## 🚧 Issue #2432 In Progress
+
+- Evaluated provider-native compaction: Anthropic on-demand compaction is usable through the Messages beta API; OpenAI compaction is Responses-API-only while this SDK uses Chat Completions; Gemini and OpenAI-compatible routes retain local compaction.
+- Implemented Anthropic native compaction with beta header `compact-2026-09-04`, signed block preservation, configured turn retention, summary scanning, Bedrock exclusion, and deterministic fallback.
+- Added strategy hooks, `CompactionResult.summary_text`, lifecycle/security regression tests, SDK documentation, and the Unreleased changelog entry.
+- Directly affected tests pass: `tests/unit/test_compaction.py` (55) and `tests/unit/test_integrations.py` (501). Ruff, Black, Pylint, and Mypy pass.
+- Changes are uncommitted; no commit or pull request was created.
+
 ## 🚀 Next phase
 
-**Goal:** Review and complete issue `#2441` through DevAIFlow.
+**Goal:** Final review and complete issue `#2432` through DevAIFlow.
 
 ### Open decisions
-- The required JIRA ticket lookup remains unavailable because `JIRA_API_TOKEN` is not set in the session environment.
+- Provider packages are not installed locally, so live Anthropic/OpenAI/Gemini calls remain unvalidated; mock coverage is complete for the implemented paths.
 - No commit or pull request was created; `daf complete` owns those actions.
 
 ---
@@ -77,7 +85,7 @@ budget_tokens: 1000
 ## 📁 Active architecture
 
 - **Stack:** Python 3.9-3.14, pytest, Textual/NiceGUI/Tkinter tray UI.
-- **Key modules:** `mcp/identity.py`, `mcp/server.py`, `setup/mcp.py`, `tray/health.py`, `tray/plugins.py`.
+- **Key modules:** `integrations/anthropic/agent.py`, `integrations/base.py`, `integrations/compaction.py`, `tests/unit/test_compaction.py`, `tests/unit/test_integrations.py`.
 - **Patterns:** Shared MCP startup migration; fail-closed identity checks; test UI isolation through environment overrides.
 
 ---

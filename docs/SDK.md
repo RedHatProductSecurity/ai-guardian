@@ -1002,7 +1002,7 @@ print(result["output"])  # validated structured object
 | `on_turn` | callable | `None` | `(turn: int, event: TurnEvent) -> None` — live callback fired per event. See [Observability](#observability) |
 | `strategy` | AgentLoopStrategy | `None` | Explicit loop strategy. Auto-detected from `client` if omitted. Use `OpenAILoopStrategy()` for OpenAI clients |
 | `cache_ttl` | str or int | `None` | Prompt caching TTL. Anthropic: `"5m"` or `"1h"` (auto-enabled for multi-turn). `0` = disabled |
-| `compact_threshold` | float | `0.8` | Ratio of input tokens to context window that triggers compaction. `0.8` = compact at 80% usage. `1.0` = disabled (raises `RuntimeError` when context exhausted) |
+| `compact_threshold` | float | `0.8` | Ratio of input tokens to context window that triggers compaction. `0.8` = compact at 80% usage. `1.0` = disabled (raises `RuntimeError` when context exhausted). Anthropic uses provider-native compaction when supported; other providers use the local fallback |
 | `compact_keep_turns` | int | `5` | Number of recent turn pairs to preserve during compaction |
 | `compact_keep_first` | int | `1` | Number of initial turn pairs to preserve during compaction |
 | `name` | str | `None` | Profile name linking to `sdk.agents.<name>` in `ai-guardian.json`. Config values override code-provided parameters |
@@ -1278,9 +1278,11 @@ Exit code `0` = continue. Non-zero = abort (`stop_reason: "hook_abort"`).
 
 ### Auto-Compaction
 
-Long conversations can exceed the model's context window. Auto-compaction shrinks the conversation by truncating old tool results, stripping code blocks, and dropping middle turns.
+Long conversations can exceed the model's context window. Auto-compaction uses a
+provider-native summary where the active provider supports one, then falls back
+to deterministic local compaction when it does not.
 
-By default, compaction is **enabled** at 80% of the context window (`compact_threshold=0.8`). When context usage exceeds the threshold, older turns are summarized automatically.
+By default, compaction is **enabled** at 80% of the context window (`compact_threshold=0.8`). When context usage exceeds the threshold, older turns are compacted using the provider-native path or the deterministic local fallback.
 
 ```python
 # Disable compaction (raises RuntimeError when context exhausted)
@@ -1293,11 +1295,35 @@ agent = GuardedAgent(
 
 Compaction preserves the first turn pair (`compact_keep_first`) and the most recent turn pairs (`compact_keep_turns`), dropping everything in between. A boundary message marks where turns were removed.
 
-When compaction fires, a `type: "compaction"` trace entry is emitted with `tokens_before`, `tokens_after`, and `method` fields. This appears in both the `on_turn` callback and the `trace` list in the result dict.
+When compaction fires, a `type: "compaction"` trace entry is emitted with
+`tokens_before`, `tokens_after`, and `method` fields. This appears in both the
+`on_turn` callback and the `trace` list in the result dict. Native Anthropic
+compaction reports `method: "provider_native:anthropic"`; local methods retain
+their existing names such as `truncate_and_strip+drop_middle_turns`.
 
 To fully disable compaction (raises `RuntimeError` when context exhausted), set `compact_threshold=1.0`.
 
-**Provider support:** Compaction handles both Anthropic and OpenAI message formats automatically via the `AgentLoopStrategy`. Anthropic uses content-block lists; OpenAI uses top-level `role: tool` messages and plain string content. The correct format is selected based on the active strategy.
+**Provider support and fallback policy:**
+
+| Provider route | Verified native capability | GuardedAgent behavior |
+|---|---|---|
+| Anthropic Messages API | Anthropic beta on-demand compaction (`compact-2026-09-04`) returns a signed `compaction` block and supports keeping recent turns | Uses native compaction when the client exposes `beta.messages`, the model is supported, and the platform is not Amazon Bedrock. The signed block is preserved unchanged and later requests continue through the beta endpoint |
+| OpenAI Chat Completions | OpenAI compaction is available through the separate Responses API, not this Chat Completions route | Uses local compaction; adding Responses API support is a separate provider strategy |
+| OpenAI-compatible providers | No standardized compaction contract across compatible servers | Uses local compaction |
+| Gemini `generate_content` | Context caching and larger context windows do not summarize or compact conversation history | Uses local compaction |
+
+Native summaries are scanned as `provider_compaction` content before they are
+added to the active history. A failed native request, unsupported model, or
+summary that triggers a security finding disables native compaction for the run
+and retries the deterministic local strategy. Model-assisted summarization is
+not used as a fallback because it adds an unbounded extra model call and would
+need its own tool, output, and security protocol.
+
+All local compaction paths still use the provider strategy to preserve content
+formats, tool-call/result pairing, and system/context boundaries. See the
+[Anthropic compaction documentation](https://platform.claude.com/docs/en/build-with-claude/compaction-on-demand)
+and [OpenAI compaction documentation](https://platform.openai.com/docs/guides/compaction)
+for the provider contracts evaluated for this behavior.
 
 ### Observability
 

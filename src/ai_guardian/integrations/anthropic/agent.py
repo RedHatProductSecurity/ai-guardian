@@ -58,6 +58,82 @@ class _GoalEvaluatorTimeout(Exception):
     """Internal signal used when a goal evaluator exceeds its time limit."""
 
 
+_NATIVE_COMPACTION_BETA = "compact-2026-09-04"
+_NATIVE_COMPACTION_MODEL_PREFIXES = (
+    "claude-fable-5-1",
+    "claude-mythos-5-1",
+    "claude-fable-5",
+    "claude-mythos-5",
+    "claude-mythos-preview",
+    "claude-opus-5-5",
+    "claude-opus-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-sonnet-5",
+    "claude-sonnet-4-6",
+)
+
+
+def _object_field(value: Any, name: str, default: Any = None) -> Any:
+    if isinstance(value, dict):
+        return value.get(name, default)
+    return getattr(value, name, default)
+
+
+def _content_block_type(block: Any) -> Optional[str]:
+    value = _object_field(block, "type")
+    return value if isinstance(value, str) else None
+
+
+def _compaction_summary_text(content: Any) -> str:
+    if not isinstance(content, list):
+        return ""
+    return "\n".join(
+        text
+        for block in content
+        if _content_block_type(block) == "compaction"
+        for text in [_object_field(block, "content", "")]
+        if isinstance(text, str) and text
+    )
+
+
+def _is_compaction_message(message: Dict[str, Any]) -> bool:
+    if message.get("role") != "assistant":
+        return False
+    content = message.get("content")
+    return isinstance(content, list) and any(
+        _content_block_type(block) == "compaction" for block in content
+    )
+
+
+def _split_native_compaction_messages(
+    messages: List[Dict[str, Any]], keep_first: int, keep_last: int
+) -> Optional[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]]:
+    """Split a history into the part to summarize and the verbatim tail."""
+    tail_count = max(0, keep_last) * 2
+    tail_start = len(messages) - tail_count if tail_count else len(messages)
+    if tail_start <= 1:
+        return None
+
+    prefix = messages[:tail_start]
+    tail = messages[tail_start:]
+    if _is_compaction_message(prefix[0]):
+        body = prefix[1:]
+        preserve_count = min(len(body), 1 + max(0, keep_first) * 2)
+        preserved = body[:preserve_count]
+        older = [prefix[0]] + body[preserve_count:]
+    else:
+        preserve_count = min(max(0, keep_first) * 2, len(prefix) - 1)
+        preserved = prefix[: 1 + preserve_count]
+        older = prefix[:1] + prefix[1 + preserve_count :]
+
+    recent = preserved + tail
+    if len(older) < 2 or not recent:
+        return None
+    return older, recent
+
+
 # ---------------------------------------------------------------------------
 # Anthropic loop strategy
 # ---------------------------------------------------------------------------
@@ -189,6 +265,14 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
     ) -> Any:
         if timeout is not None:
             kwargs = dict(kwargs, timeout=float(timeout))
+        if getattr(self, "_native_compaction_enabled", False):
+            beta_messages = getattr(getattr(client, "beta", None), "messages", None)
+            create = getattr(beta_messages, "create", None)
+            if not callable(create):
+                raise RuntimeError(
+                    "Anthropic beta.messages is required after native compaction"
+                )
+            return create(betas=[_NATIVE_COMPACTION_BETA], **kwargs)
         return client.messages.create(**kwargs)
 
     def parse_response(self, response: Any) -> ParsedResponse:
@@ -280,6 +364,108 @@ class AnthropicLoopStrategy(AgentLoopStrategy):
                 "count_tokens failed, falling back to estimation", exc_info=True
             )
             return None
+
+    def native_compaction_supported(self, client: Any, model: str) -> bool:
+        if getattr(self, "_native_compaction_disabled", False):
+            return False
+        provider = getattr(client, "_ai_guardian_provider", None)
+        client_type = type(client).__name__.lower()
+        if provider == "bedrock" or "bedrock" in client_type:
+            return False
+        if not isinstance(model, str) or not model.startswith(
+            _NATIVE_COMPACTION_MODEL_PREFIXES
+        ):
+            return False
+        beta_messages = getattr(getattr(client, "beta", None), "messages", None)
+        return callable(getattr(beta_messages, "create", None))
+
+    def native_compact_messages(
+        self,
+        client: Any,
+        *,
+        model: str,
+        max_tokens: int,
+        messages: List[Dict[str, Any]],
+        system: str,
+        tools: List[Any],
+        keep_first: int,
+        keep_last: int,
+        tokens_before: int,
+    ) -> Optional[Any]:
+        from ai_guardian.integrations.compaction import (
+            CompactionResult,
+            estimate_messages_tokens,
+        )
+
+        if not self.native_compaction_supported(client, model):
+            return None
+
+        split = _split_native_compaction_messages(messages, keep_first, keep_last)
+        if split is None:
+            return None
+        older, recent = split
+        beta_messages = getattr(client.beta, "messages", None)
+        create = getattr(beta_messages, "create", None)
+        if not callable(create):
+            self.disable_native_compaction()
+            return None
+        request: Dict[str, Any] = {
+            "model": model,
+            "max_tokens": max(4096, max_tokens),
+            "messages": older,
+            "betas": [_NATIVE_COMPACTION_BETA],
+            "compaction": {"type": "summarize"},
+        }
+        if system:
+            request["system"] = system
+        if tools:
+            request["tools"] = tools
+
+        try:
+            response = create(**request)
+        except Exception as exc:
+            self.disable_native_compaction()
+            logger.warning(
+                "Anthropic native compaction failed; using local fallback: %s", exc
+            )
+            return None
+
+        stop_reason = _object_field(response, "stop_reason")
+        stop_value = _object_field(stop_reason, "value", stop_reason)
+        if str(stop_value).lower() != "compaction":
+            self.disable_native_compaction()
+            logger.warning(
+                "Anthropic native compaction returned stop_reason=%r; "
+                "using local fallback",
+                stop_reason,
+            )
+            return None
+
+        content = _object_field(response, "content", [])
+        if not isinstance(content, list) or not any(
+            _content_block_type(block) == "compaction" for block in content
+        ):
+            self.disable_native_compaction()
+            logger.warning(
+                "Anthropic native compaction returned no compaction block; "
+                "using local fallback"
+            )
+            return None
+
+        self._native_compaction_enabled = True
+        compacted_messages = [{"role": "assistant", "content": content}] + recent
+        return CompactionResult(
+            compacted=True,
+            messages=compacted_messages,
+            tokens_before=tokens_before,
+            tokens_after=estimate_messages_tokens(compacted_messages, system),
+            method="provider_native:anthropic",
+            summary_text=_compaction_summary_text(content),
+        )
+
+    def disable_native_compaction(self) -> None:
+        self._native_compaction_disabled = True
+        self._native_compaction_enabled = False
 
     def is_server_tool(self, tool_name: str) -> bool:
         return is_server_tool(tool_name)
@@ -462,6 +648,9 @@ class GuardedAgent:
             self._strategy, self._client = self._create_client_from_profile()
 
         tools = self._apply_config_profile(tools)
+        self._native_compaction_enabled = self._strategy.native_compaction_supported(
+            self._client, self._model
+        )
 
         from ai_guardian.config.loaders import _load_sdk_hooks
 
@@ -1123,6 +1312,10 @@ class GuardedAgent:
         strategy: AgentLoopStrategy,
         messages: List[Dict[str, Any]],
         last_input_tokens: int,
+        *,
+        system: str = "",
+        tools: Optional[List[Any]] = None,
+        prefer_native: bool = True,
     ) -> tuple:
         from ai_guardian.integrations.compaction import compact_messages
 
@@ -1141,6 +1334,30 @@ class GuardedAgent:
                 f"Set compact_threshold < 1.0 (e.g. 0.8) to enable "
                 f"compaction for long conversations."
             )
+
+        if prefer_native and self._native_compaction_enabled:
+            native_result = strategy.native_compact_messages(
+                self._client,
+                model=self._model,
+                max_tokens=self._max_tokens,
+                messages=messages,
+                system=system,
+                tools=tools or [],
+                keep_first=self._compact_keep_first,
+                keep_last=self._compact_keep_turns,
+                tokens_before=last_input_tokens,
+            )
+            self._native_compaction_enabled = strategy.native_compaction_supported(
+                self._client, self._model
+            )
+            if native_result is not None:
+                logger.info(
+                    "Compacted conversation: %d -> ~%d tokens (%s)",
+                    native_result.tokens_before,
+                    native_result.tokens_after,
+                    native_result.method,
+                )
+                return native_result.messages, True, native_result
 
         result = compact_messages(
             messages,
@@ -1639,9 +1856,66 @@ class GuardedAgent:
                     break
 
                 if _turn > 0:
+                    messages_before_compaction = messages
                     messages, did_compact, compact_result = self._maybe_compact(
-                        strategy, messages, last_input_tokens
+                        strategy,
+                        messages,
+                        last_input_tokens,
+                        system=system,
+                        tools=self._resolved_tools,
                     )
+                    if (
+                        self._scanning
+                        and compact_result
+                        and compact_result.summary_text
+                    ):
+                        native_summary_unsafe = False
+                        try:
+                            scan_result = session.check_content(
+                                compact_result.summary_text,
+                                filename="provider_compaction",
+                            )
+                            _emit(
+                                turn_num,
+                                TurnEvent(type="scan", scanned="provider_compaction"),
+                            )
+                            native_summary_unsafe = bool(
+                                getattr(scan_result, "detected", False)
+                                or getattr(scan_result, "blocked", False)
+                            )
+                        except SecurityViolation as exc:
+                            _emit(
+                                turn_num,
+                                TurnEvent(
+                                    type="scan",
+                                    scanned="provider_compaction",
+                                    violations=[
+                                        {
+                                            "id": exc.result.violation_id,
+                                            "type": exc.result.violation_type,
+                                            "message": exc.result.message,
+                                        }
+                                    ],
+                                ),
+                            )
+                            native_summary_unsafe = True
+                            logger.warning(
+                                "Provider compaction summary blocked by security "
+                                "scan: %s",
+                                exc.result.message,
+                            )
+
+                        if native_summary_unsafe:
+                            strategy.disable_native_compaction()
+                            self._native_compaction_enabled = False
+                            messages, did_compact, compact_result = self._maybe_compact(
+                                strategy,
+                                messages_before_compaction,
+                                last_input_tokens,
+                                system=system,
+                                tools=self._resolved_tools,
+                                prefer_native=False,
+                            )
                     if did_compact:
                         compaction_count += 1
 
