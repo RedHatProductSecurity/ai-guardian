@@ -1412,6 +1412,19 @@ The Config tab displays the final, effective configuration after merging:
 - Remote configs (from Remote Configs tab)
 - Discovered permissions (from Permissions Discovery tab)
 
+#### Scope Selector
+
+The **Project** selector in the console header controls the scope shown by the
+Effective Configuration page:
+
+- **Global only** shows global configuration and excludes project-local
+  overrides. The page displays a red warning when this scope is selected.
+- Selecting a project shows its merged global and project-local configuration,
+  with provenance badges identifying the source of each value.
+
+Select a project before using the Effective Configuration page when you need to
+review the configuration that applies to a specific repository.
+
 #### Features
 
 **Configuration Display**

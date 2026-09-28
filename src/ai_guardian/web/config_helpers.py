@@ -169,6 +169,22 @@ def get_web_config_notice(config_state: Optional[dict]) -> Optional[dict]:
     return None
 
 
+def get_effective_config_scope_notice(project_dir: Optional[str]) -> Optional[dict]:
+    """Return the warning shown when effective config is global-only."""
+    if project_dir:
+        return None
+
+    return {
+        "message": (
+            "Global configuration selected. This view excludes project-local "
+            "overrides. Select a project to view its merged effective configuration."
+        ),
+        "icon": "warning",
+        "background_class": "bg-red-1",
+        "text_class": "text-red-10",
+    }
+
+
 def is_web_config_read_only() -> bool:
     """Return whether the current web-console config target is read-only."""
     return bool(get_web_config_state().get("read_only", False))

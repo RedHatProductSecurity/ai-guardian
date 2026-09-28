@@ -72,12 +72,24 @@ budget_tokens: 1000
 - Directly affected tests pass: `tests/unit/test_compaction.py` (55) and `tests/unit/test_integrations.py` (501). Ruff, Black, Pylint, and Mypy pass.
 - Changes are uncommitted; no commit or pull request was created.
 
+## ✅ Issue #2448 Complete
+
+- Added a prominent red warning to the Web Console Effective Configuration page
+  when the Project selector is `Global only`.
+- The warning explains that project-local overrides are excluded and directs
+  users to select a project for merged effective configuration.
+- The warning is hidden for project scope; page help text and `docs/CONSOLE.md`
+  document the selector behavior.
+- Added global-only and project-selected scope notice tests.
+- Directly affected tests: 125 passed. Black, Ruff, Pylint, Mypy, compileall,
+  and annotation checks passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Final review and complete issue `#2432` through DevAIFlow.
+**Goal:** Run `daf complete` for issue `#2448` after review.
 
 ### Open decisions
-- Provider packages are not installed locally, so live Anthropic/OpenAI/Gemini calls remain unvalidated; mock coverage is complete for the implemented paths.
 - No commit or pull request was created; `daf complete` owns those actions.
 
 ---

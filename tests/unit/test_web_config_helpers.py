@@ -12,6 +12,7 @@ from ai_guardian.web.config_helpers import (
     get_web_config_provenance,
     get_web_config_scope_label,
     get_web_config_notice,
+    get_effective_config_scope_notice,
     get_web_config_state,
     set_daemon_service,
     set_current_daemon_name,
@@ -147,6 +148,22 @@ class TestWebConfigNotice:
         assert get_web_config_notice({"source": "sandbox-local"}) is None
         assert get_web_config_notice({"source": "snapshot"}) is None
         assert get_web_config_notice(None) is None
+
+
+class TestEffectiveConfigScopeNotice:
+    def test_global_only_notice(self):
+        notice = get_effective_config_scope_notice(None)
+
+        assert notice["message"] == (
+            "Global configuration selected. This view excludes project-local "
+            "overrides. Select a project to view its merged effective configuration."
+        )
+        assert notice["icon"] == "warning"
+        assert notice["background_class"] == "bg-red-1"
+        assert notice["text_class"] == "text-red-10"
+
+    def test_project_scope_hides_notice(self):
+        assert get_effective_config_scope_notice("/projects/example") is None
 
 
 class TestCacheInvalidation:
