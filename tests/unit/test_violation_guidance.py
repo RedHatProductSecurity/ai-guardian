@@ -4,6 +4,7 @@ import json
 
 import pytest
 
+from ai_guardian.constants import ALL_VIOLATION_TYPES
 from ai_guardian.violations.guidance import (
     get_resolution_instructions,
     _type_placeholders,
@@ -300,22 +301,7 @@ class TestUnknownType:
 class TestAllKnownTypesHaveInstructions:
 
     def test_all_types_produce_nonempty_output(self):
-        known_types = [
-            "tool_permission",
-            "prompt_injection",
-            "jailbreak_detected",
-            "secret_detected",
-            "directory_blocking",
-            "pii_detected",
-            "secret_redaction",
-            "ssrf_blocked",
-            "config_file_exfil",
-            "secret_in_transcript",
-            "pii_in_transcript",
-            "image_secret_detected",
-            "image_pii_detected",
-        ]
-        for vtype in known_types:
+        for vtype in ALL_VIOLATION_TYPES:
             v = {
                 "violation_type": vtype,
                 "blocked": {
@@ -333,6 +319,83 @@ class TestAllKnownTypesHaveInstructions:
             }
             instr, snippet = get_resolution_instructions(v)
             assert instr, f"{vtype} should produce non-empty instructions"
+            if vtype != "canary_detected":
+                assert snippet, f"{vtype} should produce a config snippet"
+
+
+class TestAdditionalViolationTypes:
+    @pytest.mark.parametrize(
+        "vtype,blocked,section,key",
+        [
+            (
+                "context_poisoning",
+                {"pattern": "trusted preference"},
+                "context_poisoning",
+                "allowlist_patterns",
+            ),
+            (
+                "supply_chain",
+                {"file_path": "config/hooks.json"},
+                "supply_chain",
+                "allowlist_paths",
+            ),
+            (
+                "code_security",
+                {"rule_id": "B101", "file_path": "tests/example.py"},
+                "code_scanning",
+                "allowlist",
+            ),
+            (
+                "offensive_language",
+                {"matched_text": "legacy-term"},
+                "scan_offensive",
+                "allowlist_patterns",
+            ),
+            (
+                "exfil_detection",
+                {"matched_text": "safe-command"},
+                "exfil_detection",
+                "allowlist_patterns",
+            ),
+        ],
+    )
+    def test_type_specific_config_guidance(self, vtype, blocked, section, key):
+        instructions, snippet = get_resolution_instructions(
+            {"violation_type": vtype, "blocked": blocked}
+        )
+
+        assert section in instructions
+        parsed = json.loads(snippet)
+        assert key in parsed[section]
+
+    def test_canary_guidance_is_investigation_only(self):
+        instructions, snippet = get_resolution_instructions(
+            {
+                "violation_type": "canary_detected",
+                "blocked": {"matched_text": "CANARY_VALUE"},
+            }
+        )
+
+        assert "canary_detection.tokens" in instructions
+        assert "Do not suppress" in instructions
+        assert snippet == ""
+
+
+@pytest.mark.parametrize(
+    "vtype,phrase",
+    [
+        ("prompt_injection_in_transcript", "transcript"),
+        ("annotation_suppressed", "annotation"),
+    ],
+)
+def test_filter_types_have_explicit_no_remediation_guidance(vtype, phrase):
+    instructions, snippet = get_resolution_instructions(
+        {"violation_type": vtype, "blocked": {}}
+    )
+
+    assert phrase in instructions.lower()
+    assert instructions
+    assert snippet == ""
 
 
 class TestNoGenericPlaceholdersWhenDataAvailable:

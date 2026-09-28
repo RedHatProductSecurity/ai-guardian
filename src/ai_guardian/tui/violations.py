@@ -78,10 +78,13 @@ _ALLOWLIST_TYPES = frozenset(
         "supply_chain",
         "code_security",
         "offensive_language",
-        "canary_detected",
         "exfil_detection",
         "tool_permission",
     }
+)
+
+_NO_SUPPRESSION_TYPES = frozenset(
+    {"canary_detected", "prompt_injection_in_transcript", "annotation_suppressed"}
 )
 
 
@@ -231,6 +234,17 @@ class ViolationDetailsModal(ModalScreen):
             "ssrf_protection.additional_allowed_domains",
             "config_file_scanning.ignore_files",
             "image_scanning.ignore_files",
+            "context_poisoning.allowlist_patterns",
+            "context_poisoning.ignore_files",
+            "context_poisoning.ignore_tools",
+            "supply_chain.allowlist_paths",
+            "code_scanning.allowlist",
+            "code_scanning.ignore_files",
+            "scan_offensive.allowlist_patterns",
+            "scan_offensive.ignore_files",
+            "scan_offensive.ignore_tools",
+            "canary_detection.tokens",
+            "exfil_detection.allowlist_patterns",
         ]
         for key in BOLD_KEYS:
             instructions = instructions.replace(key, f"[bold]{key}[/bold]")
@@ -264,7 +278,9 @@ class ViolationDetailsModal(ModalScreen):
                 yield Button("Copy Details", id="copy-details", variant="default")
                 if snippet:
                     yield Button("Copy Snippet", id="copy-snippet", variant="success")
-                vtype = self.violation.get("violation_type", "")
+                vtype = self.violation.get(
+                    "violation_type", self.violation.get("type", "")
+                )
                 if vtype in _ALLOWLIST_TYPES:
                     yield Button(
                         "Always Allow...", id="always-allow", variant="warning"
@@ -272,7 +288,7 @@ class ViolationDetailsModal(ModalScreen):
                 blocked = self.violation.get("blocked", {})
                 annotation_target = get_annotation_target(self.violation)
                 annotation_available = False
-                if annotation_target:
+                if annotation_target and vtype not in _NO_SUPPRESSION_TYPES:
                     annotation_path, annotation_line = annotation_target
                     from ai_guardian.tui.source_annotator import get_comment_prefix
 
@@ -283,7 +299,11 @@ class ViolationDetailsModal(ModalScreen):
                             id="suppress-source",
                             variant="warning",
                         )
-                if isinstance(blocked, dict) and blocked.get("file_path"):
+                if (
+                    isinstance(blocked, dict)
+                    and blocked.get("file_path")
+                    and vtype not in _NO_SUPPRESSION_TYPES
+                ):
                     file_path = blocked["file_path"]
                     line_number = blocked.get("line_number")
                     if (
@@ -1096,6 +1116,11 @@ class ViolationCard(Vertical):
                 f"[dim]Correlation: {tool_use_id[:16]}... ({hook_label})[/dim]",
                 classes="violation-detail",
             )
+
+        yield Static(
+            "[dim]Resolution guidance: open Details[/dim]",
+            classes="violation-detail",
+        )
 
         # Action buttons
         with Horizontal(classes="violation-actions"):

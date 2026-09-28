@@ -391,10 +391,13 @@ _ALLOWLIST_TYPES = frozenset(
         "supply_chain",
         "code_security",
         "offensive_language",
-        "canary_detected",
         "exfil_detection",
         "tool_permission",
     }
+)
+
+_NO_SUPPRESSION_TYPES = frozenset(
+    {"canary_detected", "prompt_injection_in_transcript", "annotation_suppressed"}
 )
 
 
@@ -463,6 +466,10 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
             ui.code(json.dumps(suggestion["rule"], indent=2), language="json").classes(
                 "text-xs"
             )
+
+        ui.label("Resolution guidance: open Details").classes(
+            "text-xs text-grey-6 mt-1"
+        )
 
         tool_use_id = context.get("tool_use_id")
         hook_event = context.get("hook_event", "")
@@ -579,7 +586,8 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                 annotation_path, annotation_line = "", None
 
                             if (
-                                annotation_line
+                                vtype not in _NO_SUPPRESSION_TYPES
+                                and annotation_line
                                 and get_comment_prefix(annotation_path) is not None
                             ):
 
@@ -596,7 +604,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                                     "text-xs text-grey-6"
                                 )
 
-                            if v_file_path:
+                            if v_file_path and vtype not in _NO_SUPPRESSION_TYPES:
 
                                 def on_ignore_file(viol=violation):
                                     _show_ignore_file_flow(viol)
