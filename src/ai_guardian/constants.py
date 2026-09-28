@@ -273,6 +273,15 @@ CURSOR_MANAGED_HOOK_EVENTS = (
 
 COPILOT_MANAGED_HOOK_EVENTS = ("userPromptSubmitted", "preToolUse")
 
+GROK_MANAGED_HOOK_EVENTS = (
+    "SessionStart",
+    "UserPromptSubmit",
+    "PreToolUse",
+    "PostToolUse",
+    "SessionEnd",
+    "PostCompact",
+)
+
 CODEX_MANAGED_HOOK_EVENTS = (
     "UserPromptSubmit",
     "PreToolUse",
@@ -329,6 +338,7 @@ MANAGED_HOOK_EVENTS_BY_IDE = {
     "claude": CLAUDE_MANAGED_HOOK_EVENTS,
     "cursor": CURSOR_MANAGED_HOOK_EVENTS,
     "copilot": COPILOT_MANAGED_HOOK_EVENTS,
+    "grok": GROK_MANAGED_HOOK_EVENTS,
     "codex": CODEX_MANAGED_HOOK_EVENTS,
     "windsurf": WINDSURF_MANAGED_HOOK_EVENTS,
     "gemini": GEMINI_MANAGED_HOOK_EVENTS,

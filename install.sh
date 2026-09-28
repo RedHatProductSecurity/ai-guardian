@@ -32,7 +32,7 @@ Install modes (mutually exclusive, default: auto-detect):
 Options:
     --ide NAME          Setup hooks for a specific IDE; when omitted, detect
                         installed IDEs and set up their hooks automatically
-                        Choices: claude, cursor, copilot, codex, windsurf,
+                        Choices: claude, cursor, copilot, grok, codex, windsurf,
                                  gemini, antigravity, cline, zoocode, kiro, aiderdesk,
                                   openclaw, opencode, pi, augment, crush, junie
     --no-setup          Install only, don't auto-detect or update IDE hooks
@@ -101,6 +101,11 @@ detect_installed_agents() {
         [ -d "$COPILOT_HOME" ] && agents+=("copilot")
     elif [ -d "$HOME/.github/hooks" ]; then
         agents+=("copilot")
+    fi
+
+    local grok_dir="${GROK_HOME:-$HOME/.grok}"
+    if [ -d "$grok_dir" ] || command -v grok >/dev/null 2>&1; then
+        agents+=("grok")
     fi
 
     local codex_dir="${CODEX_HOME:-$HOME/.codex}"

@@ -270,6 +270,21 @@ class TestContainerLaunchers:
         )
         assert 'ai-guardian.openshell.pi-version="${PI_VERSION}"' in dockerfile
 
+    def test_normal_image_pins_and_checks_grok_build(self):
+        dockerfile = DOCKERFILE.read_text(encoding="utf-8")
+
+        assert "ARG GROK_VERSION=1.0.41" in dockerfile
+        assert '"@xai-official/grok@${GROK_VERSION}"' in dockerfile
+        assert "grok --version" in dockerfile
+        assert "XAI_API_KEY" in RUN_SCRIPT.read_text(encoding="utf-8")
+
+    def test_openshell_runtime_marks_grok_as_unsupported(self):
+        dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
+        entrypoint = ENTRYPOINT_SCRIPT.read_text(encoding="utf-8")
+
+        assert "AI_GUARDIAN_RUNTIME=openshell" in dockerfile
+        assert '"${AI_GUARDIAN_RUNTIME:-container}" = "openshell"' in entrypoint
+
     def test_fedora_openshell_selinux_guidance_preserves_host_hardening(self):
         troubleshooting = TROUBLESHOOTING_DOC.read_text(encoding="utf-8")
 

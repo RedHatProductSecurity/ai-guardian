@@ -53,6 +53,9 @@ _FILE_MUTATION_TOOLS = frozenset(
         "copy_file",
         "rename_file",
         "create_file",
+        # Grok's native file mutation name is normalized to Edit by the hook
+        # adapter, but direct policy callers can still receive it unchanged.
+        "search_replace",
     }
 )
 
@@ -68,6 +71,9 @@ SHELL_TOOL_NAMES = frozenset(
         "launch-process",
         "execute_command",
         "terminal",
+        # Grok's native shell tool name; the hook adapter normally maps it to
+        # the canonical Bash name before policy evaluation.
+        "run_terminal_command",
     }
 )
 
@@ -150,6 +156,7 @@ _PROJECT_ARTIFACTS: Dict[str, Tuple[Tuple[str, bool], ...]] = {
     "claude": ((".claude", True), (".mcp.json", False)),
     "cursor": ((".cursor", True),),
     "copilot": ((".github/hooks", True), (".github/skills", True)),
+    "grok": ((".grok", True),),
     "codex": ((".codex", True),),
     "windsurf": ((".windsurf", True), (".codeium/windsurf", True)),
     "gemini": ((".gemini", True),),
@@ -174,6 +181,7 @@ _GLOBAL_ARTIFACT_ROOTS: Dict[str, Tuple[str, ...]] = {
     "claude": ("~/.claude",),
     "cursor": ("~/.cursor",),
     "copilot": ("~/.github/hooks", "~/.copilot"),
+    "grok": ("~/.grok",),
     "codex": ("~/.codex",),
     "windsurf": ("~/.windsurf", "~/.codeium/windsurf"),
     "gemini": ("~/.gemini",),

@@ -36,6 +36,7 @@ to the clients bundled with the dedicated OpenShell image.
 | --- | --- | --- |
 | `claude` | Anthropic API key or Vertex ADC | Supported |
 | `copilot` | GitHub/Copilot token | Supported |
+| `grok` | `XAI_API_KEY` or Grok Build login | Supported in the normal image; OpenShell excluded |
 | `codex` | Codex OAuth or OpenAI API key | Supported |
 | `gemini` | Gemini CLI credentials | Supported |
 | `antigravity` | Antigravity CLI credentials | Supported |
@@ -48,6 +49,10 @@ to the clients bundled with the dedicated OpenShell image.
 Container-only options such as host ports and direct environment credentials are
 not available in OpenShell. OpenShell provider names and policy files are not
 accepted for Container sandboxes.
+
+Grok Build is intentionally omitted from the OpenShell selector and image until
+its OpenShell image, provider/network policy, and runtime authentication path are
+validated. This is a runtime-support boundary, not a package-license restriction.
 
 ### NVIDIA OpenShell
 

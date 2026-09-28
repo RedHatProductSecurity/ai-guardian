@@ -140,6 +140,31 @@ SUPPORTED_IDE_REGISTRY: Tuple[IDEIntegration, ...] = (
         agent_type_aliases=("github_copilot",),
     ),
     IDEIntegration(
+        "grok",
+        "Grok Build",
+        "GrokAdapter",
+        ("grok",),
+        "command-hooks",
+        "local",
+        (),
+        "none",
+        (
+            ("SessionStart", ("allow",)),
+            ("UserPromptSubmit", ("allow",)),
+            ("PreToolUse", ("allow", "block")),
+            # Grok ignores passive-event stdout, so PostToolUse is observation
+            # only and cannot provide AI Guardian's usual output replacement.
+            ("PostToolUse", ("allow",)),
+            ("SessionEnd", ("allow",)),
+            ("PostCompact", ("allow",)),
+        ),
+        project_scope=True,
+        post_output_transform=False,
+        platform_contract="Grok Build command hooks; only PreToolUse can block",
+        cli_capable=True,
+        cli_executables=("grok",),
+    ),
+    IDEIntegration(
         "codex",
         "OpenAI Codex (CLI + Desktop)",
         "CodexAdapter",

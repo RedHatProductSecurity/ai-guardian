@@ -33,6 +33,7 @@ class IDEType(Enum):
     CLAUDE_CODE = "claude_code"  # Exit codes: 0=allow, 2=block
     CURSOR = "cursor"  # JSON: {"continue": bool, "user_message": str}
     GITHUB_COPILOT = "github_copilot"  # JSON: {"permissionDecision": "allow"|"deny"}
+    GROK = "grok"  # JSON: {"decision": "deny", "reason": str}
     GEMINI_CLI = "gemini_cli"  # JSON: {"decision": "deny", "reason": str}
     CLINE = "cline"  # JSON: {"cancel": true, "reason": str}
     ANTIGRAVITY = "antigravity"  # JSON: {"decision": "deny", "reason": str}

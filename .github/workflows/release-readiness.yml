@@ -253,7 +253,7 @@ jobs:
 
       - name: Test IDE adapter setup
         run: |
-          IDES="claude cursor copilot codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie"
+          IDES="claude cursor copilot grok codex windsurf gemini antigravity cline zoocode kiro aiderdesk openclaw opencode pi augment crush junie"
           FAILED=""
           for ide in $IDES; do
             echo "--- Testing setup --ide $ide ---"
@@ -279,6 +279,18 @@ jobs:
               test ! -f "$CLOUD_PROJECT/.cursor/mcp.json"
               test -f "$HOME/.cursor/hooks.json"
               test -f "$HOME/.cursor/mcp.json"
+            fi
+            if [ "$ide" = "grok" ]; then
+              test -f "$HOME/.grok/hooks/ai-guardian.json"
+              test -f "$HOME/.grok/config.toml"
+              test ! -f "$WORK_DIR/.grok/hooks/ai-guardian.json"
+              test ! -f "$WORK_DIR/.grok/config.toml"
+
+              GROK_PROJECT="$WORK_DIR/grok-project"
+              mkdir -p "$GROK_PROJECT"
+              (cd "$WORK_DIR" && ai-guardian setup --ide grok --project "$GROK_PROJECT" --yes)
+              test -f "$GROK_PROJECT/.grok/hooks/ai-guardian.json"
+              test -f "$GROK_PROJECT/.grok/config.toml"
             fi
             rm -rf "$WORK_DIR"
           done
@@ -307,6 +319,7 @@ jobs:
           - claude
           - cursor
           - copilot
+          - grok
           - codex
           - windsurf
           - gemini

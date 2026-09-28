@@ -11,7 +11,7 @@ reason for items that do not apply in the issue or pull request.
 
 The canonical production registry is
 [`SUPPORTED_IDE_REGISTRY`](../src/ai_guardian/ide_registry.py). Its current
-keys are `claude`, `cursor`, `copilot`, `codex`, `windsurf`, `gemini`,
+keys are `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini`,
 `antigravity`, `cline`, `zoocode`, `kiro`, `aiderdesk`, `openclaw`, `opencode`,
 `pi`, `augment`, `crush`, and `junie`. Add a new IDE there first. The parity contract in
 [`tests/unit/test_ide_registry.py`](../tests/unit/test_ide_registry.py) then
@@ -257,6 +257,7 @@ fixtures synthetic and isolated from the user's configuration.
 | Hook lifecycle and UX | `tests/unit/test_hook_processing.py` and an applicable `tests/ux/` contract | Invoke every event AI Guardian installs. Test clean input, a blockable threat, warning, output transformation, malformed input, and the exact permission/message flow. If the upstream exposes an event that AI Guardian does not install, record the exclusion and test that it is not reported as missing |
 | Setup and configuration reconciliation | Setup unit tests, including shared `tests/unit/test_setup.py` coverage | Fresh setup, pre-existing config, unrelated user hooks/settings preserved, repeated setup idempotence, removed or drifted AI Guardian entry restored, `--force`, dry-run, custom paths/environment variables, permissions, and upgrade from the prior config shape |
 | Scope and health | Setup verification, doctor, tray, and REST/daemon health tests where exposed | User/desktop scope, explicit project scope, cloud/team/API scope, MCP-only behavior, missing or partial installation, verification, doctor output, tray **Check hooks/MCP installation...**, manual setup, and no silent project-file mutation |
+| Host CLI and configuration self-protection | Integration-specific self-protection and agent-configuration tests plus an applicable `tests/ux/` contract | Active CLI direct/path-qualified/package-wrapper invocations are denied before child start; global and project configuration mutations are denied before execution, including with ordinary permissions disabled; missing/invalid defaults, explicit global opt-outs, false positives, and documented runtime exclusions are covered |
 | MCP registration and advisor | MCP setup/server integration tests when MCP is supported | Fresh registration, existing server merge, duplicate/idempotent registration, malformed config, custom scope/path, unrelated entries preserved, registration health, and advisory-only behavior for MCP-only integrations. Document and test N/A when the host has no MCP path |
 | Transcript scanning | A focused transcript test module for every declared format/path branch | Format parsing, default and explicit path discovery, malformed/truncated records, incremental offsets, duplicate suppression, append, rotation/truncation, multiple sessions, and safe behavior when the transcript is unavailable. Document why no transcript exists when unsupported |
 | Plugin/extension bridge | Bridge/setup tests and generated-source contract | Install, update, removal/reconciliation, package/manifest registration, command/environment propagation, every bridge lifecycle callback, response conversion, and runtime smoke test when the host SDK is available. Structural CI coverage is required when the SDK is not a dependency |
@@ -273,6 +274,12 @@ health, and explicit “no hook enforcement” assertions. For a shared adapter
 (Cline/ZooCode or Kiro/AiderDesk/OpenClaw), retain one row and one evidence
 set per public IDE key so aliases cannot hide a missing setup or documentation
 path.
+
+For CLI-capable integrations, the evidence must identify the integration's
+actual executable and configuration roots. The Grok Build reference case uses
+`grok`, the relocated `GROK_HOME` root, and project `.grok/` artifacts; its
+OpenShell exclusion is recorded and tested separately from normal-container
+support.
 
 ### Minimum test-file inventory
 

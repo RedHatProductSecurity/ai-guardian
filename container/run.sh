@@ -27,7 +27,7 @@ EXTRA_ARGS=()
 SETUP_SCOPE="${AI_GUARDIAN_SETUP_SCOPE:-selected}"
 
 SUPPORTED_AGENTS=(
-    claude cursor copilot codex windsurf gemini cline zoocode kiro
+    claude cursor copilot grok codex windsurf gemini cline zoocode kiro
     aiderdesk openclaw opencode pi augment crush junie antigravity dummy-agent
 )
 
@@ -132,7 +132,7 @@ HOST_HOME="${HOME:-}"
 if [[ -z "$HOST_HOME" ]]; then
     for agent_home_var in \
          CODEX_HOME CLAUDE_CONFIG_DIR CURSOR_CONFIG_DIR COPILOT_HOME \
-         GEMINI_CLI_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME \
+         GEMINI_CLI_HOME GROK_HOME CLINE_DATA_DIR KIRO_HOME JUNIE_HOME \
          AIDER_DESK_DIR AIDER_DESK_HOME_DIR OPENCLAW_STATE_DIR OPENCLAW_HOME \
          OPENCODE_CONFIG_DIR PI_CODING_AGENT_DIR; do
         agent_home="${!agent_home_var:-}"
@@ -280,7 +280,7 @@ _forward_env() {
 }
 
 for common_env_name in \
-    OPENAI_API_KEY OPENROUTER_API_KEY GEMINI_API_KEY GOOGLE_API_KEY \
+    OPENAI_API_KEY OPENROUTER_API_KEY GEMINI_API_KEY GOOGLE_API_KEY XAI_API_KEY \
     COPILOT_GITHUB_TOKEN AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY \
     AWS_SESSION_TOKEN AWS_REGION AWS_DEFAULT_REGION \
     AZURE_OPENAI_API_KEY AZURE_OPENAI_ENDPOINT; do

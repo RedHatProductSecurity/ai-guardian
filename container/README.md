@@ -44,6 +44,7 @@ to the clients bundled with the dedicated OpenShell image.
 | --- | --- | --- |
 | `claude` | Anthropic API key or Vertex ADC | Supported |
 | `copilot` | GitHub/Copilot token | Supported |
+| `grok` | `XAI_API_KEY` or Grok Build login | Supported in the normal image; OpenShell excluded |
 | `codex` | Codex OAuth or OpenAI API key | Supported |
 | `gemini` | Gemini CLI credentials | Supported |
 | `antigravity` | Antigravity CLI credentials | Supported |
@@ -88,6 +89,7 @@ is reported separately from an unsupported scenario.
 | OpenCode | MIT | Build time |
 | Gemini CLI | Apache 2.0 | Build time |
 | Codex CLI | Apache 2.0 | Build time |
+| Grok Build | Apache 2.0 | Build time; version pinned at build time |
 | OpenClaw | MIT | Build time |
 | Pi coding agent | MIT | Build time |
 | rapidocr | Apache 2.0 | Build time |

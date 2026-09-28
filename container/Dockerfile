@@ -48,6 +48,7 @@ ARG AI_GUARDIAN_VERSION=1.18.0
 ARG UV_VERSION=0.11.16
 ARG OPENCODE_VERSION=1.17.3
 ARG PI_VERSION=0.86.0
+ARG GROK_VERSION=1.0.41
 ARG GH_VERSION=2.74.1
 ARG GLAB_VERSION=1.91.0
 
@@ -117,10 +118,11 @@ RUN DETECT_SECRETS_VERSION=$(/opt/uv-tools/ai-guardian/bin/python -c \
 
 # Node.js CLIs (installed to /opt/npm for predictable COPY paths)
 RUN npm install -g --prefix /opt/npm \
-        @google/gemini-cli @openai/codex openclaw \
+        @google/gemini-cli @openai/codex "@xai-official/grok@${GROK_VERSION}" openclaw \
         "@earendil-works/pi-coding-agent@${PI_VERSION}" 2>/dev/null \
     && (PATH="/opt/npm/bin:$PATH" gemini --version 2>/dev/null || echo "Gemini CLI installed") \
     && (PATH="/opt/npm/bin:$PATH" codex --version 2>/dev/null || echo "Codex CLI installed") \
+    && (PATH="/opt/npm/bin:$PATH" grok --version 2>/dev/null || echo "Grok Build CLI installed") \
     && (PATH="/opt/npm/bin:$PATH" openclaw --version 2>/dev/null || echo "OpenClaw installed") \
     && (PATH="/opt/npm/bin:$PATH" pi --version 2>/dev/null || echo "Pi ${PI_VERSION} installed")
 
@@ -209,6 +211,7 @@ RUN node -e " \
     var fs=require('fs'),p=require('path'); \
     ['/opt/npm/lib/node_modules/@google/gemini-cli', \
      '/opt/npm/lib/node_modules/@openai/codex', \
+      '/opt/npm/lib/node_modules/@xai-official/grok', \
      '/opt/npm/lib/node_modules/openclaw', \
      '/opt/npm/lib/node_modules/@earendil-works/pi-coding-agent'].forEach(function(d){ \
         try{ \
@@ -225,6 +228,7 @@ RUN node -e " \
     });" \
     && (gemini --version 2>/dev/null || echo "Gemini CLI available") \
     && (codex --version 2>/dev/null || echo "Codex CLI available") \
+    && (grok --version 2>/dev/null || echo "Grok Build CLI available") \
     && (openclaw --version 2>/dev/null || echo "OpenClaw available") \
     && (pi --version 2>/dev/null || echo "Pi CLI available")
 
@@ -248,7 +252,7 @@ COPY --from=builder --chown=sandbox:sandbox /opt/opencode/.opencode /sandbox/.op
 # consent via entrypoint.sh, not at build time.
 
 # Prepare config directories
-RUN mkdir -p /sandbox/.claude /sandbox/.config /sandbox/.gemini /sandbox/.codex \
+RUN mkdir -p /sandbox/.claude /sandbox/.config /sandbox/.gemini /sandbox/.codex /sandbox/.grok \
         /sandbox/.kiro /sandbox/.openclaw /sandbox/.pi/agent \
     && chown -R sandbox:sandbox /sandbox/.claude /sandbox/.config \
         /sandbox/.gemini /sandbox/.codex /sandbox/.kiro /sandbox/.openclaw \

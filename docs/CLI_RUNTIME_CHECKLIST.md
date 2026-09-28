@@ -42,6 +42,14 @@ published image. The current selector is `claude`, `copilot`, `codex`,
 must remain out of the default OpenShell list until their image, policy, auth,
 and runtime evidence is complete.
 
+### Current Grok Build boundary
+
+Grok Build is supported in the normal Docker/Podman image only. The image pins
+`@xai-official/grok` through `GROK_VERSION`, verifies the `grok` executable at
+build time, and forwards `XAI_API_KEY` when supplied. Grok is intentionally not
+part of the OpenShell selector or image until its image, provider/network
+policy, and runtime authentication path are validated.
+
 ## 1. Scope, support, and legal classification
 
 - [ ] Choose a stable CLI key and display name. Keep the key consistent across

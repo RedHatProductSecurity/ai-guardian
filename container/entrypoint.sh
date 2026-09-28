@@ -68,10 +68,21 @@ while [[ $# -gt 0 ]]; do
 done
 
 SUPPORTED_AGENT_IDES=(
-  claude cursor copilot codex windsurf gemini cline zoocode kiro
+  claude cursor copilot grok codex windsurf gemini cline zoocode kiro
   aiderdesk openclaw opencode pi augment crush junie antigravity
 )
-CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode pi crush antigravity)
+CLI_AGENT_IDES=(claude copilot grok codex gemini kiro openclaw opencode pi crush antigravity)
+
+# The normal support image bundles Grok, while the separate OpenShell image
+# deliberately does not. Keep direct entrypoint invocations aligned with the
+# runtime-specific sandbox selector.
+if [ "${AI_GUARDIAN_RUNTIME:-container}" = "openshell" ]; then
+  SUPPORTED_AGENT_IDES=(
+    claude cursor copilot codex windsurf gemini cline zoocode kiro
+    aiderdesk openclaw opencode pi augment crush junie antigravity
+  )
+  CLI_AGENT_IDES=(claude copilot codex gemini kiro openclaw opencode pi crush antigravity)
+fi
 SUPPORTED_IDES=("${SUPPORTED_AGENT_IDES[@]}" dummy-agent)
 
 # AI_GUARDIAN_AGENT is the name used by the sandbox command. Keep

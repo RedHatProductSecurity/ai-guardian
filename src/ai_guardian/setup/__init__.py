@@ -19,7 +19,7 @@ from ai_guardian.config.utils import get_cache_dir, get_config_dir
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_SCOPED_IDES = frozenset({"cursor", "pi"})
+_PROJECT_SCOPED_IDES = frozenset({"cursor", "grok", "pi"})
 
 
 def _supports_project_scope(ide_type: Optional[str]) -> bool:
@@ -42,7 +42,7 @@ def _normalize_project_setup_target(
             return (
                 scope,
                 project_dir,
-                "Project-scoped setup is supported only for Cursor and Pi.",
+                "Project-scoped setup is supported only for Cursor, Grok, and Pi.",
             )
         return "user", None, None
 
