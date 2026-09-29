@@ -194,7 +194,9 @@ def log_violation(
             "violation_type": result.violation_type,
             "blocked": blocked,
             "context": ctx,
-            "suggestion": suggestion or {},
+            "suggestion": (
+                {} if result.extra.get("is_immutable") is True else suggestion or {}
+            ),
             "severity": result.severity,
             "violation_id": result.id,
         }

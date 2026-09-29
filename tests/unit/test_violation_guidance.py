@@ -6,6 +6,7 @@ import pytest
 
 from ai_guardian.constants import ALL_VIOLATION_TYPES
 from ai_guardian.violations.guidance import (
+    IMMUTABLE_VIOLATION_NOTICE,
     get_resolution_instructions,
     _type_placeholders,
 )
@@ -38,6 +39,21 @@ class TestToolPermission:
         assert "permissions.rules" in instr
         assert "Bash" in snippet
         assert "ls" in snippet
+
+    def test_immutable_violation_has_no_remediation(self):
+        v = {
+            "violation_type": "tool_permission",
+            "blocked": {
+                "is_immutable": True,
+                "reason": "immutable deny: protected path",
+            },
+            "suggestion": {
+                "rule": {"matcher": "Bash", "mode": "allow", "patterns": ["ls"]}
+            },
+        }
+        instructions, snippet = get_resolution_instructions(v)
+        assert instructions == IMMUTABLE_VIOLATION_NOTICE
+        assert snippet == ""
 
     def test_without_rule(self):
         v = {"violation_type": "tool_permission", "blocked": {}, "suggestion": {}}

@@ -779,6 +779,36 @@ def _check_directory_rules(file_path, config):
         return None, None, None
 
 
+def _is_immutable_directory_rule(file_path, config, matched_pattern):
+    """Return whether the final matching directory rule is immutable."""
+    if not config or not matched_pattern:
+        return False
+
+    directory_rules_config = config.get("directory_rules", [])
+    if isinstance(directory_rules_config, dict):
+        directory_rules = directory_rules_config.get("rules", [])
+    else:
+        directory_rules = directory_rules_config
+    if not isinstance(directory_rules, list):
+        return False
+
+    abs_file_path = os.path.realpath(os.path.expanduser(file_path))
+    immutable = False
+    for rule in directory_rules:
+        if not isinstance(rule, dict) or rule.get("mode") not in ("allow", "deny"):
+            continue
+        paths = rule.get("paths", [])
+        if not isinstance(paths, list):
+            continue
+        if any(
+            pattern == matched_pattern
+            and _matches_directory_pattern(abs_file_path, pattern)
+            for pattern in paths
+        ):
+            immutable = rule.get("_immutable") is True
+    return immutable
+
+
 def check_directory_denied(file_path, config=None, hook_context=None):
     """
     Check if a file should be blocked based on directory rules and .ai-read-deny markers.
@@ -825,6 +855,7 @@ def check_directory_denied(file_path, config=None, hook_context=None):
         rule_decision, rule_action, matched_pattern = (
             _check_directory_rules(abs_path, config) if config else (None, None, None)
         )
+        immutable_rule = _is_immutable_directory_rule(abs_path, config, matched_pattern)
 
         # PRIORITY 2: Check for .ai-read-deny marker files
         current_dir = os.path.dirname(abs_path)
@@ -930,6 +961,7 @@ def check_directory_denied(file_path, config=None, hook_context=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    immutable=immutable_rule,
                     hook_context=hook_context,
                 )
                 warn_msg = "⚠️  Directory access policy violation (warn mode) - execution allowed"
@@ -949,6 +981,7 @@ def check_directory_denied(file_path, config=None, hook_context=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    immutable=immutable_rule,
                     hook_context=hook_context,
                 )
                 return (
@@ -966,6 +999,7 @@ def check_directory_denied(file_path, config=None, hook_context=None):
                     is_excluded=False,
                     reason=rule_reason,
                     suggestion=rule_suggestion,
+                    immutable=immutable_rule,
                     hook_context=hook_context,
                 )
                 return True, os.path.dirname(abs_path), None, matched_pattern  # BLOCK
@@ -1737,6 +1771,7 @@ def _log_directory_blocking_violation(
     is_excluded: bool = False,
     reason: str = None,
     suggestion: dict = None,
+    immutable: bool = False,
     hook_context: Optional[Dict] = None,
     violation_logger=None,
 ):
@@ -1764,6 +1799,7 @@ def _log_directory_blocking_violation(
         severity="warning",
         file_path=file_path,
         error_message=reason,
+        extra={"is_immutable": immutable is True},
     )
     ctx_overrides: Dict[str, Any] = {"path_in_exclusion": is_excluded}
     if is_excluded:

@@ -85,6 +85,28 @@ class TestLogDirectoryBlockingViolationReason:
 
     @mock.patch("ai_guardian.violations.logger.ViolationLogger")
     @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
+    def test_immutable_rule_hides_suggestion(self, mock_vl_class):
+        mock_logger = mock.MagicMock()
+        mock_vl_class.return_value = mock_logger
+
+        _log_directory_blocking_violation(
+            "/some/file.txt",
+            "/some",
+            reason="denied by directory rule: ~/.secret/**",
+            suggestion={"action": "update_directory_rules"},
+            immutable=True,
+        )
+
+        call_kwargs = mock_logger.log_violation.call_args
+        blocked = call_kwargs.kwargs.get("blocked", call_kwargs[1].get("blocked"))
+        suggestion = call_kwargs.kwargs.get(
+            "suggestion", call_kwargs[1].get("suggestion")
+        )
+        assert blocked["is_immutable"] is True
+        assert suggestion == {}
+
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
+    @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
     def test_explicit_marker_reason_overrides_default(self, mock_vl_class):
         mock_logger = mock.MagicMock()
         mock_vl_class.return_value = mock_logger
@@ -179,3 +201,41 @@ class TestCheckDirectoryDeniedViolationReason:
             "suggestion", call_kwargs[1].get("suggestion")
         )
         assert suggestion["action"] == "update_directory_rules"
+
+    @mock.patch("ai_guardian.violations.logger.ViolationLogger")
+    @mock.patch("ai_guardian.hook_processing.HAS_VIOLATION_LOGGER", True)
+    def test_immutable_directory_rule_logs_marker_without_suggestion(
+        self, mock_vl_class
+    ):
+        mock_logger = mock.MagicMock()
+        mock_vl_class.return_value = mock_logger
+
+        from ai_guardian import check_directory_denied
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = os.path.join(tmpdir, "secret.txt")
+            with open(test_file, "w") as f:
+                f.write("secret")
+
+            config = {
+                "directory_rules": {
+                    "action": "block",
+                    "rules": [
+                        {
+                            "mode": "deny",
+                            "paths": [f"{tmpdir}/**"],
+                            "_immutable": True,
+                        }
+                    ],
+                }
+            }
+            denied, _, _, _ = check_directory_denied(test_file, config)
+
+        assert denied is True
+        call_kwargs = mock_logger.log_violation.call_args
+        blocked = call_kwargs.kwargs.get("blocked", call_kwargs[1].get("blocked"))
+        suggestion = call_kwargs.kwargs.get(
+            "suggestion", call_kwargs[1].get("suggestion")
+        )
+        assert blocked["is_immutable"] is True
+        assert suggestion == {}

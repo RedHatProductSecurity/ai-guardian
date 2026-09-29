@@ -24,8 +24,9 @@ def _config():
 class TestMCPIdentityUX:
     """Document the fail-closed identity boundary for built-in MCP tools."""
 
+    @patch("ai_guardian.violations.log_violation.log_violation")
     @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=False)
-    def test_spoofed_registration_is_blocked(self, mock_verify):
+    def test_spoofed_registration_is_blocked(self, mock_verify, mock_log_violation):
         """
         USER EXPERIENCE: Same-name MCP registration without attestation -> blocked.
 
@@ -46,6 +47,8 @@ class TestMCPIdentityUX:
         assert message is not None
         assert "MCP Identity Verification Failed" in message
         assert "allowlist" not in message.lower()
+        result = mock_log_violation.call_args.args[0]
+        assert result.extra["is_immutable"] is True
 
     @patch("ai_guardian.tools.policy.verify_active_attestation", return_value=True)
     def test_verified_registration_passes(self, mock_verify):

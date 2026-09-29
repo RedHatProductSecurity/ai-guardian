@@ -172,6 +172,7 @@ class SSRFProtector:
         self.action = self.config.get("action", "block")
         self.allow_localhost = self.config.get("allow_localhost", False)
         self.findings: List[Dict[str, Any]] = []
+        self.last_is_immutable = False
         self.last_line_number: Optional[int] = None
         self.last_start_column: Optional[int] = None
         self.last_end_column: Optional[int] = None
@@ -927,6 +928,7 @@ class SSRFProtector:
         self.last_start_column = None
         self.last_end_column = None
         self.findings = []
+        self.last_is_immutable = False
 
         if not self.enabled:
             return False, None
@@ -937,6 +939,7 @@ class SSRFProtector:
                 return False, None
             try:
                 is_ssrf, reason, is_immutable = self._check_url(url)
+                self.last_is_immutable = is_immutable
                 if is_ssrf:
                     effective_action = "block" if is_immutable else self.action
                     immutable_note = (
@@ -961,6 +964,7 @@ class SSRFProtector:
                 return False, None
             except Exception as e:
                 logger.error(f"Error during SSRF check (WebFetch): {e}")
+                self.last_is_immutable = True
                 return True, "SSRF protection error — blocked"
 
         if tool_name != "Bash":
@@ -1011,6 +1015,10 @@ class SSRFProtector:
             if not self.findings:
                 return False, None
 
+            self.last_is_immutable = any(
+                finding.get("is_immutable") is True for finding in self.findings
+            )
+
             first = self.findings[0]
             self.last_line_number = first["line_number"]
             self.last_start_column = first["start_column"]
@@ -1047,6 +1055,7 @@ class SSRFProtector:
             # Fail-closed: block on errors to prevent bypasses
             logger.error(f"Error during SSRF check: {e}")
             logger.debug("Failing closed - blocking operation")
+            self.last_is_immutable = True
 
             error_msg = (
                 f"\n{'='*70}\n"

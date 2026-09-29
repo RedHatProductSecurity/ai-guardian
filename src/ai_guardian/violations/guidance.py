@@ -12,7 +12,9 @@ import json
 from typing import Tuple
 
 from ai_guardian.violations.allowlist_context import get_annotation_target
-from ai_guardian.violations.utils import is_temp_path
+from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
+
+IMMUTABLE_VIOLATION_NOTICE = "This protection is immutable and cannot be overridden."
 
 
 def _type_placeholders(types: list) -> list:
@@ -41,6 +43,9 @@ def get_resolution_instructions(violation: dict) -> Tuple[str, str]:
 
     Returns generic review guidance for unknown violation types.
     """
+    if is_immutable_violation(violation):
+        return IMMUTABLE_VIOLATION_NOTICE, ""
+
     vtype = violation.get("violation_type", violation.get("type", ""))
     blocked = violation.get("blocked", {})
     if not isinstance(blocked, dict):

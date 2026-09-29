@@ -11,7 +11,10 @@ import inspect
 import pytest
 
 from ai_guardian.constants import ALL_VIOLATION_TYPES
-from ai_guardian.violations.guidance import get_resolution_instructions
+from ai_guardian.violations.guidance import (
+    IMMUTABLE_VIOLATION_NOTICE,
+    get_resolution_instructions,
+)
 
 
 @pytest.mark.parametrize("violation_type", ALL_VIOLATION_TYPES)
@@ -71,6 +74,31 @@ def test_tool_permission_details_show_rule_instruction_and_snippet():
     assert "permissions.rules" in instructions
     assert '"matcher": "Bash"' in snippet
     assert '"safe-command"' in snippet
+
+
+def test_immutable_violation_shows_notice_without_override_guidance():
+    """
+    USER EXPERIENCE: immutable protection → investigation details only.
+
+    Immutable findings keep their reason and location in the Details view, but
+    must not expose remediation snippets or override actions.
+    """
+    instructions, snippet = get_resolution_instructions(
+        {
+            "violation_type": "tool_permission",
+            "blocked": {
+                "is_immutable": True,
+                "file_path": "/protected/config.json",
+                "reason": "immutable deny: protected path",
+            },
+            "suggestion": {
+                "rule": {"matcher": "Read", "mode": "allow", "patterns": ["*"]}
+            },
+        }
+    )
+
+    assert instructions == IMMUTABLE_VIOLATION_NOTICE
+    assert snippet == ""
 
 
 def test_canary_details_are_investigation_only():

@@ -458,6 +458,7 @@ class ToolPolicyChecker:
             matcher=tool_name,
             hook_data=hook_data,
             violation_type=ViolationType.TOOL_PERMISSION,
+            immutable=True,
         )
         logger.error(
             "Blocked agent-originated AI Guardian CLI execution via %s", tool_name
@@ -492,6 +493,7 @@ class ToolPolicyChecker:
             matcher=tool_name,
             hook_data=hook_data,
             violation_type=ViolationType.TOOL_PERMISSION,
+            immutable=True,
         )
         logger.error(
             "Blocked agent-originated host CLI execution for %s via %s",
@@ -532,6 +534,7 @@ class ToolPolicyChecker:
             reason=_AGENT_CONFIG_PROTECTION_REASON,
             matcher=tool_name,
             hook_data=hook_data,
+            immutable=True,
         )
         logger.error(
             "Blocked agent-originated mutation of %s configuration via %s",
@@ -620,6 +623,7 @@ class ToolPolicyChecker:
                             matcher=tool_name,
                             hook_data=hook_data,
                             violation_type=ViolationType.SSRF_BLOCKED,
+                            immutable=ssrf_protector.last_is_immutable,
                         )
                         return False, error_msg, tool_name
 
@@ -633,6 +637,7 @@ class ToolPolicyChecker:
                             matcher=tool_name,
                             hook_data=hook_data,
                             violation_type=ViolationType.SSRF_BLOCKED,
+                            immutable=ssrf_protector.last_is_immutable,
                         )
                         # Continue to other checks (warning is logged, execution allowed)
 
@@ -662,6 +667,10 @@ class ToolPolicyChecker:
                             matcher=tool_name,
                             hook_data=hook_data,
                             violation_type=ViolationType.CONFIG_FILE_EXFIL,
+                            immutable=bool(
+                                exfil_details
+                                and exfil_details.get("is_immutable") is True
+                            ),
                         )
                         return False, exfil_msg, tool_name
 
@@ -676,6 +685,10 @@ class ToolPolicyChecker:
                             matcher=tool_name,
                             hook_data=hook_data,
                             violation_type=ViolationType.CONFIG_FILE_EXFIL,
+                            immutable=bool(
+                                exfil_details
+                                and exfil_details.get("is_immutable") is True
+                            ),
                         )
 
             # PRIORITY 1: Check immutable deny patterns (cannot be overridden)
@@ -714,6 +727,7 @@ class ToolPolicyChecker:
                     reason="missing required parameter",
                     matcher=tool_name,
                     hook_data=hook_data,
+                    immutable=True,
                 )
                 return False, error_msg, tool_name
 
@@ -745,6 +759,7 @@ class ToolPolicyChecker:
                                 reason="hook modification in mixed settings file",
                                 matcher=tool_name,
                                 hook_data=hook_data,
+                                immutable=True,
                             )
                             return False, block_msg, tool_name
                         else:
@@ -783,6 +798,7 @@ class ToolPolicyChecker:
                             reason=f"immutable deny: {pattern}",
                             matcher=tool_name,
                             hook_data=hook_data,
+                            immutable=True,
                         )
                         return False, error_msg, tool_name
 
@@ -803,6 +819,7 @@ class ToolPolicyChecker:
                         matcher="mcp__ai-guardian__*",
                         hook_data=hook_data,
                         violation_type=ViolationType.TOOL_PERMISSION,
+                        immutable=True,
                     )
                     logger.error(
                         "Blocked unverified AI Guardian MCP tool: %s", tool_name
@@ -1918,6 +1935,7 @@ class ToolPolicyChecker:
         matcher: Optional[str],
         hook_data: Dict,
         violation_type: str = ViolationType.TOOL_PERMISSION,
+        immutable: bool = False,
     ):
         """Log a tool permission violation via unified ``log_violation``."""
         if not HAS_VIOLATION_LOGGER:
@@ -1928,12 +1946,18 @@ class ToolPolicyChecker:
 
         file_path_tools = {"Write", "Read", "Edit", "NotebookEdit"}
         file_path = check_value if tool_name in file_path_tools else None
+        is_immutable = bool(
+            immutable
+            or reason
+            in {
+                _IMMUTABLE_CLI_REASON,
+                _HOST_AGENT_CLI_REASON,
+                _AGENT_CONFIG_PROTECTION_REASON,
+            }
+            or reason.startswith("immutable deny:")
+        )
         suggestion = {}
-        if reason not in {
-            _IMMUTABLE_CLI_REASON,
-            _HOST_AGENT_CLI_REASON,
-            _AGENT_CONFIG_PROTECTION_REASON,
-        }:
+        if not is_immutable:
             suggested_matcher, suggested_patterns = self._suggest_permission_rule(
                 tool_name
             )
@@ -1956,6 +1980,7 @@ class ToolPolicyChecker:
             severity="warning",
             file_path=file_path,
             error_message=reason,
+            extra={"is_immutable": is_immutable},
         )
         log_violation(
             result,

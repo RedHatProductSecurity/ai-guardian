@@ -4,7 +4,7 @@ import os
 import tempfile
 
 from ai_guardian.violations.guidance import get_resolution_instructions
-from ai_guardian.violations.utils import is_temp_path
+from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
 
 
 class TestIsTempPath:
@@ -55,6 +55,24 @@ class TestIsTempPath:
     def test_path_traversal_out_of_temp_not_temp(self):
         """A traversal out of /tmp is not classified as a temp path."""
         assert is_temp_path("/tmp/../etc/passwd") is False
+
+
+class TestIsImmutableViolation:
+    def test_top_level_marker(self):
+        assert is_immutable_violation({"is_immutable": True}) is True
+
+    def test_blocked_marker(self):
+        assert is_immutable_violation({"blocked": {"is_immutable": True}}) is True
+
+    def test_does_not_infer_from_type_or_message(self):
+        violation = {
+            "violation_type": "tool_permission",
+            "blocked": {"reason": "immutable deny: protected path"},
+        }
+        assert is_immutable_violation(violation) is False
+
+    def test_false_marker_is_configurable(self):
+        assert is_immutable_violation({"is_immutable": False}) is False
 
 
 class TestGuidanceTempFile:
