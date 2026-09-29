@@ -160,6 +160,14 @@ def test_json_and_csv_exports(tmp_path):
     assert rows[0]["session_id"] == "session-4"
 
 
+def test_default_export_path_does_not_overwrite_source(tmp_path):
+    log_path = tmp_path / "audit.json"
+    audit = AuditLogger(log_path=log_path, config=_config())
+
+    assert audit.get_export_path("json") == tmp_path / "audit.json.export.json"
+    assert audit.get_export_path("csv") == tmp_path / "audit.csv"
+
+
 def test_include_context_can_omit_optional_fields(tmp_path):
     audit = AuditLogger(
         log_path=Path(tmp_path) / "audit.jsonl",

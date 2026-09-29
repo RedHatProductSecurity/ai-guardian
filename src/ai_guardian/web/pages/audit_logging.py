@@ -33,6 +33,32 @@ def _save_compliance_flag(key, value):
     save_web_config(config)
 
 
+def _save_context_flag(key, value):
+    config = load_web_config()
+    section = config.setdefault("audit_logging", {})
+    if not isinstance(section, dict):
+        section = {}
+        config["audit_logging"] = section
+    context = section.setdefault("include_context", {})
+    if not isinstance(context, dict):
+        context = {}
+        section["include_context"] = context
+    context[key] = value
+    save_web_config(config)
+
+
+def _export_audit_log(export_format, audit_config=None):
+    """Export the local daemon audit trail and return the generated path."""
+    from ai_guardian.violations.audit import AuditLogger
+
+    export_format = export_format if export_format in ("json", "csv") else "json"
+    audit_logger = AuditLogger(config=audit_config)
+    export_path = audit_logger.get_export_path(export_format)
+    if not audit_logger.export(export_path, export_format=export_format):
+        raise OSError("the audit trail could not be exported")
+    return str(export_path)
+
+
 def _enabled_value(raw):
     if isinstance(raw, dict):
         disabled_until = raw.get("disabled_until")
@@ -54,11 +80,17 @@ def create_audit_logging_page(service, daemon_name: str):
     sidebar = create_sidebar(daemon_name, current=f"/{daemon_name}/audit-logging")
     create_header(daemon_name, drawer=sidebar)
 
+    target = service.get_target_by_name(daemon_name) if service else None
+    remote_target = bool(target and getattr(target, "runtime", "local") != "local")
+
     with ui.column().classes("flex-grow p-6 gap-4"):
         ui.label("Compliance Audit Logging").classes("text-2xl font-bold")
         ui.label(
             "Record sanitized final hook decisions separately from violations.jsonl. "
             "Raw prompts and tool output are never persisted."
+        ).classes("text-sm text-grey-6")
+        ui.label(
+            "Find this page from the menu under Monitoring > Compliance Audit Logging."
         ).classes("text-sm text-grey-6")
 
         content = ui.column().classes("w-full gap-4")
@@ -72,6 +104,9 @@ def create_audit_logging_page(service, daemon_name: str):
             compliance = audit.get("compliance_mode", {})
             if not isinstance(compliance, dict):
                 compliance = {}
+            include_context = audit.get("include_context", {})
+            if not isinstance(include_context, dict):
+                include_context = {}
 
             enabled = _enabled_value(audit.get("enabled", False))
             log_all = bool(audit.get("log_all_tool_calls", True))
@@ -126,6 +161,32 @@ def create_audit_logging_page(service, daemon_name: str):
                         )
 
                     masking_checkbox.on_value_change(on_masking)
+
+                with ui.card().classes("w-full"):
+                    with ui.row().classes("items-center gap-1"):
+                        ui.label("Recorded Context").classes("text-lg font-bold")
+                        field_help_icon("audit_logging.include_context")
+                    ui.label(
+                        "Choose which normalized metadata fields are included in each audit record."
+                    ).classes("text-sm text-grey-6")
+                    for key, label in (
+                        ("user_id", "Include user ID"),
+                        ("session_id", "Include session ID"),
+                        ("timestamp", "Include timestamp"),
+                        ("tool_parameters", "Include tool parameters"),
+                        ("decision_reason", "Include decision reason"),
+                        ("hook_type", "Include hook type"),
+                    ):
+                        checkbox = ui.checkbox(
+                            label, value=bool(include_context.get(key, True))
+                        )
+
+                        async def save_context(event, context_key=key):
+                            await run.io_bound(
+                                _save_context_flag, context_key, event.value
+                            )
+
+                        checkbox.on_value_change(save_context)
 
                 with ui.card().classes("w-full"):
                     with ui.row().classes("items-center gap-1"):
@@ -234,5 +295,42 @@ def create_audit_logging_page(service, daemon_name: str):
                         ui.notify("Audit output path saved", type="positive")
 
                     output_input.on("blur", save_output)
+
+                    export_status = ui.label("").classes("text-sm")
+                    export_button = ui.button(
+                        "Export audit trail",
+                        icon="download",
+                    )
+                    if remote_target:
+                        export_button.disable()
+                        ui.label(
+                            "Export is available only for local daemons; remote audit-log export is not exposed by this console."
+                        ).classes("text-sm text-orange-8")
+
+                    async def export_audit():
+                        if remote_target:
+                            ui.notify(
+                                "Audit export is unavailable for remote daemons",
+                                type="warning",
+                            )
+                            return
+                        try:
+                            config = await run.io_bound(load_web_config)
+                            audit_config = config.get("audit_logging", {})
+                            if not isinstance(audit_config, dict):
+                                audit_config = {}
+                            export_path = await run.io_bound(
+                                _export_audit_log, format_select.value, audit_config
+                            )
+                            export_status.set_text(f"Saved: {export_path}")
+                            export_status.classes(replace="text-sm text-green")
+                            ui.download(export_path)
+                            ui.notify("Audit trail exported", type="positive")
+                        except (OSError, TypeError, ValueError, ImportError) as error:
+                            export_status.set_text(f"Export failed: {error}")
+                            export_status.classes(replace="text-sm text-red")
+                            ui.notify(f"Audit export failed: {error}", type="negative")
+
+                    export_button.on_click(export_audit)
 
         ui.timer(0.1, refresh, once=True)
