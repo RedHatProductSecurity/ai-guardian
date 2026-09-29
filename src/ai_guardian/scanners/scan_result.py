@@ -206,6 +206,9 @@ class ScanResult:
             findings=findings,
             config_section="config_exfil",
             file_path=file_path,
+            extra={
+                "is_immutable": bool(details and details.get("is_immutable") is True)
+            },
         )
 
     @classmethod
@@ -434,6 +437,8 @@ class ScanResult:
             blocked["source"] = source
         if extra_fields:
             blocked.update(extra_fields)
+        if "is_immutable" in self.extra:
+            blocked["is_immutable"] = self.extra["is_immutable"] is True
         return blocked
 
     @classmethod
@@ -443,9 +448,13 @@ class ScanResult:
         action: Optional[str],
         matched_pattern: Optional[str],
         file_path: Optional[str] = None,
+        is_immutable: bool = False,
     ) -> "ScanResult":
         """Wrap directory rules check result."""
         blocked = decision == "deny"
+        extra: Dict[str, Any] = {"decision": decision, "action": action}
+        if is_immutable is True:
+            extra["is_immutable"] = True
         return cls(
             detected=blocked,
             violation_type="directory_blocking",
@@ -456,5 +465,5 @@ class ScanResult:
             matched_pattern=matched_pattern or "",
             config_section="directory_rules",
             file_path=file_path,
-            extra={"decision": decision, "action": action},
+            extra=extra,
         )

@@ -932,6 +932,34 @@ class TestViolationResolutionInstructions:
         assert "Skill" in snippet
         assert "test" in snippet
 
+    def test_immutable_instructions_have_no_remediation(self):
+        """Immutable protection shows only the non-actionable notice."""
+        from ai_guardian.tui.violations import ViolationDetailsModal
+        from ai_guardian.violations.guidance import IMMUTABLE_VIOLATION_NOTICE
+
+        violation = {
+            "violation_type": "tool_permission",
+            "blocked": {"is_immutable": True},
+            "suggestion": {
+                "rule": {"matcher": "Skill", "mode": "allow", "patterns": ["test"]}
+            },
+        }
+        modal = ViolationDetailsModal(violation)
+        instructions, snippet = modal._get_resolution_instructions()
+
+        assert instructions == IMMUTABLE_VIOLATION_NOTICE
+        assert snippet == ""
+
+    def test_immutable_modal_gates_override_actions(self):
+        """Immutable modal paths must gate all configurable action buttons."""
+        import inspect
+
+        from ai_guardian.tui.violations import ViolationDetailsModal
+
+        source = inspect.getsource(ViolationDetailsModal.compose)
+        assert "if not immutable and vtype in _ALLOWLIST_TYPES" in source
+        assert "not immutable\n                    and" in source
+
     def test_prompt_injection_instructions(self):
         """Test resolution instructions for prompt_injection violations."""
         from ai_guardian.tui.violations import ViolationDetailsModal

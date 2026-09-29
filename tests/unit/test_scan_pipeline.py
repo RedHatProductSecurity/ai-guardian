@@ -414,6 +414,45 @@ class TestScanFile:
         assert results[0].violation_type == "directory_blocking"
         assert results[0].detected is True
 
+    @patch("ai_guardian.scanners.pipeline.run_directory_check")
+    def test_directory_immutable_marker_is_preserved(self, mock_dir):
+        mock_dir.return_value = ScanResult.from_directory_rules(
+            decision="deny",
+            action="block",
+            matched_pattern="/protected/**",
+            file_path="/protected/config.json",
+            is_immutable=True,
+        )
+
+        results = scan_file("/protected/config.json", config={})
+
+        assert results[0].extra["is_immutable"] is True
+        assert results[0].to_blocked_dict()["is_immutable"] is True
+
+    def test_run_directory_check_marks_immutable_rule(self, tmp_path):
+        from ai_guardian.hook_events.scanners import run_directory_check
+
+        protected_dir = tmp_path / "protected"
+        protected_dir.mkdir()
+        protected_file = protected_dir / "config.json"
+        protected_file.write_text("{}")
+        config = {
+            "directory_rules": {
+                "action": "block",
+                "rules": [
+                    {
+                        "mode": "deny",
+                        "paths": [f"{protected_dir}/**"],
+                        "_immutable": True,
+                    }
+                ],
+            }
+        }
+
+        result = run_directory_check(str(protected_file), config=config)
+
+        assert result.extra["is_immutable"] is True
+
     @patch("ai_guardian.scanners.pipeline.run_directory_check", return_value=None)
     def test_no_content_skips_content_scanners(self, mock_dir):
         results = scan_file("/safe/file.py", config={})

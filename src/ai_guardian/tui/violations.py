@@ -20,8 +20,11 @@ from textual import events
 
 from ai_guardian.violations.logger import ViolationLogger
 from ai_guardian.violations.allowlist_context import get_annotation_target
-from ai_guardian.violations.guidance import get_resolution_instructions
-from ai_guardian.violations.utils import is_temp_path
+from ai_guardian.violations.guidance import (
+    IMMUTABLE_VIOLATION_NOTICE,
+    get_resolution_instructions,
+)
+from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
 from ai_guardian.tui.widgets import format_local_time
 from ai_guardian.tui.pattern_editor import (
     config_section_for_violation,
@@ -216,6 +219,9 @@ class ViolationDetailsModal(ModalScreen):
         Delegates to the shared violation_guidance module and adds Rich
         markup for TUI display.
         """
+        if is_immutable_violation(self.violation):
+            return IMMUTABLE_VIOLATION_NOTICE, ""
+
         instructions, snippet = get_resolution_instructions(self.violation)
 
         if not instructions:
@@ -262,6 +268,7 @@ class ViolationDetailsModal(ModalScreen):
     def compose(self) -> ComposeResult:
         """Compose the modal."""
         instructions, snippet = self._get_resolution_instructions()
+        immutable = is_immutable_violation(self.violation)
 
         with Container(id="modal-container"):
             yield Static("[bold]Violation Details[/bold]", id="modal-header")
@@ -269,26 +276,33 @@ class ViolationDetailsModal(ModalScreen):
             details = json.dumps(self.violation, indent=2)
             with VerticalScroll(id="modal-content"):
                 yield Static(escape(details), id="modal-content-text")
-                yield Static("\n[bold]--- How to Resolve ---[/bold]\n")
+                if immutable:
+                    yield Static("\n[bold]--- Protection ---[/bold]\n")
+                else:
+                    yield Static("\n[bold]--- How to Resolve ---[/bold]\n")
                 yield Static(instructions)
-                if snippet:
+                if snippet and not immutable:
                     yield Static(f"\n[bold]Config snippet:[/bold]\n{escape(snippet)}")
 
             with Horizontal(id="modal-actions"):
                 yield Button("Copy Details", id="copy-details", variant="default")
-                if snippet:
+                if snippet and not immutable:
                     yield Button("Copy Snippet", id="copy-snippet", variant="success")
                 vtype = self.violation.get(
                     "violation_type", self.violation.get("type", "")
                 )
-                if vtype in _ALLOWLIST_TYPES:
+                if not immutable and vtype in _ALLOWLIST_TYPES:
                     yield Button(
                         "Always Allow...", id="always-allow", variant="warning"
                     )
                 blocked = self.violation.get("blocked", {})
                 annotation_target = get_annotation_target(self.violation)
                 annotation_available = False
-                if annotation_target and vtype not in _NO_SUPPRESSION_TYPES:
+                if (
+                    not immutable
+                    and annotation_target
+                    and vtype not in _NO_SUPPRESSION_TYPES
+                ):
                     annotation_path, annotation_line = annotation_target
                     from ai_guardian.tui.source_annotator import get_comment_prefix
 
@@ -300,7 +314,8 @@ class ViolationDetailsModal(ModalScreen):
                             variant="warning",
                         )
                 if (
-                    isinstance(blocked, dict)
+                    not immutable
+                    and isinstance(blocked, dict)
                     and blocked.get("file_path")
                     and vtype not in _NO_SUPPRESSION_TYPES
                 ):
@@ -726,6 +741,7 @@ class ViolationCard(Vertical):
         blocked = self.violation.get("blocked", {})
         suggestion = self.violation.get("suggestion", {})
         resolved = self.violation.get("resolved", False)
+        immutable = is_immutable_violation(self.violation)
 
         from ai_guardian.theme import textual_severity_class, violation_badge
 
@@ -773,7 +789,7 @@ class ViolationCard(Vertical):
             yield Static(f"Reason: {escape(reason)}", classes="violation-detail")
 
             # Show suggested rule
-            if suggestion and suggestion.get("rule"):
+            if not immutable and suggestion and suggestion.get("rule"):
                 rule = suggestion["rule"]
                 yield Static("\nSuggested rule:", classes="violation-detail")
                 yield Static(
@@ -1117,10 +1133,16 @@ class ViolationCard(Vertical):
                 classes="violation-detail",
             )
 
-        yield Static(
-            "[dim]Resolution guidance: open Details[/dim]",
-            classes="violation-detail",
-        )
+        if immutable:
+            yield Static(
+                f"[dim]{IMMUTABLE_VIOLATION_NOTICE}[/dim]",
+                classes="violation-detail",
+            )
+        else:
+            yield Static(
+                "[dim]Resolution guidance: open Details[/dim]",
+                classes="violation-detail",
+            )
 
         # Action buttons
         with Horizontal(classes="violation-actions"):

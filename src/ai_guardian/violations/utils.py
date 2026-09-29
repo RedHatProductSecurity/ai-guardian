@@ -37,3 +37,19 @@ def is_temp_path(path: str) -> bool:
         ):
             return True
     return False
+
+
+def is_immutable_violation(violation: object) -> bool:
+    """Return whether a violation explicitly identifies immutable protection.
+
+    Do not infer immutability from the violation type or message. Older records
+    do not carry this metadata and must keep their existing configurable UX.
+    """
+    if not isinstance(violation, dict):
+        return False
+
+    if violation.get("is_immutable") is True or violation.get("immutable") is True:
+        return True
+
+    blocked = violation.get("blocked")
+    return isinstance(blocked, dict) and blocked.get("is_immutable") is True

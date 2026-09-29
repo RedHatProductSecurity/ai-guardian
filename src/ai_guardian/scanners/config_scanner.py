@@ -135,6 +135,9 @@ class ConfigFileScanner:
             ],
         },
     ]
+    CORE_EXFIL_PATTERN_NAMES = frozenset(
+        pattern["name"] for pattern in CORE_EXFIL_PATTERNS
+    )
 
     # Standard AI config files (hardcoded)
     DEFAULT_CONFIG_FILES = [
@@ -236,6 +239,11 @@ class ConfigFileScanner:
                         "description": pattern_def.get(
                             "description", "exfiltration pattern"
                         ),
+                        "immutable": (
+                            pattern_def.get("immutable") is True
+                            or pattern_def.get("tier") == "immutable"
+                            or pattern_def.get("name") in self.CORE_EXFIL_PATTERN_NAMES
+                        ),
                     }
                 )
             except re.error as e:
@@ -259,6 +267,10 @@ class ConfigFileScanner:
                     "name": raw.get("id", "unknown"),
                     "pattern": raw.get("regex", ""),
                     "description": raw.get("description", ""),
+                    "immutable": (
+                        raw.get("tier") == "immutable"
+                        or raw.get("id") in self.CORE_EXFIL_PATTERN_NAMES
+                    ),
                 }
                 for raw in raw_rules
                 if raw.get("match_type", "regex") == "regex"
@@ -504,6 +516,7 @@ class ConfigFileScanner:
                         "context": context,
                         "file_path": file_path,
                         "error_message": reason,
+                        "is_immutable": pattern_def.get("immutable", False),
                     }
                 )
 
@@ -517,6 +530,9 @@ class ConfigFileScanner:
             if k not in ("error_message", "matched_pattern")
         }
         details["total_findings"] = len(self.findings)
+        details["is_immutable"] = any(
+            finding.get("is_immutable") is True for finding in self.findings
+        )
         return True, first["error_message"], details
 
     def scan(

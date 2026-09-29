@@ -12,9 +12,12 @@ from ai_guardian.web.components.local_time import (
 
 from ai_guardian.constants import HookEvent, VIOLATION_FILTER_TYPES
 from ai_guardian.violations.allowlist_context import get_annotation_target
-from ai_guardian.violations.guidance import get_resolution_instructions
+from ai_guardian.violations.guidance import (
+    IMMUTABLE_VIOLATION_NOTICE,
+    get_resolution_instructions,
+)
 from ai_guardian.web.components.header import create_header, create_sidebar
-from ai_guardian.violations.utils import is_temp_path
+from ai_guardian.violations.utils import is_immutable_violation, is_temp_path
 
 FILTER_TABS = [("All", None, "Show all violation types")] + list(VIOLATION_FILTER_TYPES)
 
@@ -184,7 +187,11 @@ def _format_violation_markdown(v: dict) -> str:
         lines.append(f"**Time:** {timestamp}")
 
     suggestion = v.get("suggestion", {})
-    if isinstance(suggestion, dict) and suggestion.get("rule"):
+    if (
+        not is_immutable_violation(v)
+        and isinstance(suggestion, dict)
+        and suggestion.get("rule")
+    ):
         lines.append(
             f"**Suggested Rule:**\n```json\n"
             f"{json.dumps(suggestion['rule'], indent=2)}\n```"
@@ -413,6 +420,7 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
     if not isinstance(suggestion, dict):
         suggestion = {}
     resolved = v.get("resolved", False)
+    immutable = is_immutable_violation(v)
     context = v.get("context", {})
     if not isinstance(context, dict):
         context = {}
@@ -461,15 +469,18 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             display = display[:97] + "..."
                         ui.label(display).classes("text-xs")
 
-        if vtype == "tool_permission" and suggestion.get("rule"):
+        if not immutable and vtype == "tool_permission" and suggestion.get("rule"):
             ui.label("Suggested rule:").classes("text-xs text-grey-6 mt-1")
             ui.code(json.dumps(suggestion["rule"], indent=2), language="json").classes(
                 "text-xs"
             )
 
-        ui.label("Resolution guidance: open Details").classes(
-            "text-xs text-grey-6 mt-1"
-        )
+        if immutable:
+            ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-xs text-grey-6 mt-1")
+        else:
+            ui.label("Resolution guidance: open Details").classes(
+                "text-xs text-grey-6 mt-1"
+            )
 
         tool_use_id = context.get("tool_use_id")
         hook_event = context.get("hook_event", "")
@@ -520,18 +531,22 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         ).props("flat dense size=sm")
 
                     ui.separator()
-                    ui.label("How to Resolve").classes("font-bold mt-2")
-                    instructions, snippet = _get_resolution_instructions(violation)
-                    ui.label(instructions).classes("text-sm")
-                    if snippet:
-                        ui.code(snippet, language="json").classes("text-xs mt-1")
-                        ui.button(
-                            "Copy Config",
-                            icon="content_copy",
-                            on_click=lambda s=snippet: ui.run_javascript(
-                                f"navigator.clipboard.writeText({json.dumps(s)})"
-                            ),
-                        ).props("flat dense size=sm")
+                    if is_immutable_violation(violation):
+                        ui.label("Protection is enforced").classes("font-bold mt-2")
+                        ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-sm")
+                    else:
+                        ui.label("How to Resolve").classes("font-bold mt-2")
+                        instructions, snippet = _get_resolution_instructions(violation)
+                        ui.label(instructions).classes("text-sm")
+                        if snippet:
+                            ui.code(snippet, language="json").classes("text-xs mt-1")
+                            ui.button(
+                                "Copy Config",
+                                icon="content_copy",
+                                on_click=lambda s=snippet: ui.run_javascript(
+                                    f"navigator.clipboard.writeText({json.dumps(s)})"
+                                ),
+                            ).props("flat dense size=sm")
 
                     v_id = violation.get("id")
                     if v_id:
@@ -542,7 +557,11 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                         ).classes("text-xs text-blue-4 mt-1")
 
                     with ui.row().classes("w-full justify-between mt-2"):
-                        if vtype in _ALLOWLIST_TYPES and service is not None:
+                        if (
+                            not is_immutable_violation(violation)
+                            and vtype in _ALLOWLIST_TYPES
+                            and service is not None
+                        ):
 
                             async def on_always_allow(
                                 dlg=dialog,
@@ -570,7 +589,9 @@ def _render_violation_card(v: dict, service=None, daemon_name: str = ""):
                             else ""
                         )
                         annotation_target = get_annotation_target(violation)
-                        if v_file_path or annotation_target:
+                        if not is_immutable_violation(violation) and (
+                            v_file_path or annotation_target
+                        ):
                             from ai_guardian.tui.source_annotator import (
                                 get_comment_prefix,
                             )

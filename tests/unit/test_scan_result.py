@@ -213,6 +213,15 @@ class TestFromConfigExfil:
         assert r.line_number == 1
         assert r.config_section == "config_exfil"
 
+    def test_immutable_marker_is_serialized(self):
+        r = UniversalScanResult.from_config_exfil(
+            should_block=True,
+            error_message="Core exfiltration protection",
+            details={"pattern": "core_rule", "is_immutable": True},
+        )
+        assert r.extra["is_immutable"] is True
+        assert r.to_blocked_dict()["is_immutable"] is True
+
     def test_no_exfil(self):
         r = UniversalScanResult.from_config_exfil(
             should_block=False,
@@ -304,6 +313,17 @@ class TestFromDirectoryRules:
         assert r.violation_type == "directory_blocking"
         assert r.matched_pattern == "~/.ssh/**"
         assert r.extra == {"decision": "deny", "action": "block"}
+
+    def test_immutable_marker_is_serialized(self):
+        r = UniversalScanResult.from_directory_rules(
+            decision="deny",
+            action="block",
+            matched_pattern="~/.ssh/**",
+            file_path="/home/user/.ssh/id_rsa",
+            is_immutable=True,
+        )
+        assert r.extra["is_immutable"] is True
+        assert r.to_blocked_dict()["is_immutable"] is True
 
     def test_denied_log_only(self):
         r = UniversalScanResult.from_directory_rules(

@@ -101,6 +101,19 @@ budget_tokens: 1000
 - Focused validation: 1,229 tests passed; Black, Ruff, Pylint, Mypy, JSON validation, and `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2457 Complete
+
+- Immutable violations now carry explicit `is_immutable` metadata through direct
+  policy, SSRF, config-exfiltration, directory-rule, and scan-pipeline paths.
+- TUI and Web Console details show the enforced-protection notice and hide
+  resolution snippets, suggested allow rules, Always Allow, source suppression,
+  and ignore-file actions only for explicitly immutable records.
+- Configurable and legacy records retain their existing remediation behavior.
+- Added unit and UX regression coverage for propagation, logging, scanners,
+  directory rules, TUI, Web Console, and MCP identity protection.
+- Focused tests pass; Ruff, Black, Pylint, Mypy, and `git diff --check` pass.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## ✅ Issue #2446 Complete
 
 - Added Grok Build host hooks, camelCase normalization, native PreToolUse deny

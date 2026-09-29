@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OpenCode configuration self-protection (#2425):** Canonicalize native lowercase tool names and camelCase file arguments before immutable policy checks.
 
 ### Changed
+- Immutable violations now carry explicit metadata through policy, scanner, and
+  directory-rule logging; TUI and Web Console details show only the enforced
+  protection notice and hide override guidance and actions (#2457).
+
 - CLI/agent onboarding checklists now require explicit evidence for supported
   CLI configuration protection and agent-originated host CLI execution
   restrictions, including scope, wrapper, permissions-disabled, and trusted

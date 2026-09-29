@@ -906,10 +906,22 @@ def run_directory_check(
         None if no file path provided.
         ScanResult with directory blocking details otherwise.
     """
-    from ai_guardian.hook_processing import _check_directory_rules
+    from ai_guardian.hook_processing import (
+        _check_directory_rules,
+        _is_immutable_directory_rule,
+    )
 
     if not file_path:
         return None
+
+    if config is None:
+        try:
+            from ai_guardian.tools.policy import ToolPolicyChecker
+
+            config = ToolPolicyChecker().config
+        except Exception as exc:
+            logger.debug("Could not load config for directory scan: %s", exc)
+            config = {}
 
     decision, action, matched_pattern = _check_directory_rules(file_path, config)
     return ScanResult.from_directory_rules(
@@ -917,4 +929,5 @@ def run_directory_check(
         action=action,
         matched_pattern=matched_pattern,
         file_path=file_path,
+        is_immutable=_is_immutable_directory_rule(file_path, config, matched_pattern),
     )

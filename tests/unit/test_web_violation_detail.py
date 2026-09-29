@@ -75,6 +75,15 @@ class TestViolationDetailRoute:
         assert "violation-detail" in source
         assert "create_violation_detail_page" in source
 
+    def test_immutable_detail_gates_override_actions(self):
+        import inspect
+
+        from ai_guardian.web.pages.violation_detail import _render_violation_detail
+
+        source = inspect.getsource(_render_violation_detail)
+        assert "if immutable:" in source
+        assert "if not immutable and vtype in _ALLOWLIST_TYPES" in source
+
 
 class TestViolationModalOpenAsPage:
     """Verify the modal gains an 'Open as page' link."""
@@ -100,6 +109,35 @@ class TestViolationModalOpenAsPage:
         from ai_guardian.web.pages.violations import _ALLOWLIST_TYPES
 
         assert "canary_detected" not in _ALLOWLIST_TYPES
+
+    def test_immutable_markdown_omits_suggested_rule(self):
+        from ai_guardian.web.pages.violations import _format_violation_markdown
+
+        markdown = _format_violation_markdown(
+            {
+                "violation_type": "tool_permission",
+                "blocked": {"is_immutable": True},
+                "suggestion": {
+                    "rule": {
+                        "matcher": "Bash",
+                        "mode": "allow",
+                        "patterns": ["safe-command"],
+                    }
+                },
+            }
+        )
+
+        assert "Suggested Rule" not in markdown
+        assert "safe-command" not in markdown
+
+    def test_immutable_card_gates_override_actions(self):
+        import inspect
+
+        from ai_guardian.web.pages.violations import _render_violation_card
+
+        source = inspect.getsource(_render_violation_card)
+        assert "not is_immutable_violation(violation)" in source
+        assert "if immutable:" in source
 
 
 class TestViolationBadgeDeepLink:

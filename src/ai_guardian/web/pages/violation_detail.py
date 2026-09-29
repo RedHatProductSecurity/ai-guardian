@@ -6,7 +6,11 @@ from nicegui import run, ui
 
 from ai_guardian.constants import HookEvent
 from ai_guardian.violations.allowlist_context import get_annotation_target
-from ai_guardian.violations.guidance import get_resolution_instructions
+from ai_guardian.violations.guidance import (
+    IMMUTABLE_VIOLATION_NOTICE,
+    get_resolution_instructions,
+)
+from ai_guardian.violations.utils import is_immutable_violation
 from ai_guardian.web.components.header import create_header, create_sidebar
 from ai_guardian.web.components.local_time import (
     inject_local_time_js,
@@ -107,6 +111,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
     if not isinstance(suggestion, dict):
         suggestion = {}
     resolved = v.get("resolved", False)
+    immutable = is_immutable_violation(v)
     context = v.get("context", {})
     if not isinstance(context, dict):
         context = {}
@@ -161,7 +166,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
                         )
 
     # --- Suggested rule ---
-    if vtype == "tool_permission" and suggestion.get("rule"):
+    if not immutable and vtype == "tool_permission" and suggestion.get("rule"):
         with ui.card().classes("w-full"):
             ui.label("Suggested Rule").classes("text-sm font-bold")
             ui.code(json.dumps(suggestion["rule"], indent=2), language="json").classes(
@@ -203,11 +208,15 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
 
     # --- Resolution instructions ---
     with ui.card().classes("w-full"):
-        ui.label("How to Resolve").classes("text-sm font-bold")
-        instructions, snippet = get_resolution_instructions(v)
-        ui.label(instructions).classes("text-sm mt-1")
-        if snippet:
-            ui.code(snippet, language="json").classes("text-xs mt-1")
+        if immutable:
+            ui.label("Protection is enforced").classes("text-sm font-bold")
+            ui.label(IMMUTABLE_VIOLATION_NOTICE).classes("text-sm mt-1")
+        else:
+            ui.label("How to Resolve").classes("text-sm font-bold")
+            instructions, snippet = get_resolution_instructions(v)
+            ui.label(instructions).classes("text-sm mt-1")
+            if snippet:
+                ui.code(snippet, language="json").classes("text-xs mt-1")
 
     # --- Resolution status ---
     if resolved:
@@ -247,7 +256,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             ),
         ).props("flat dense size=sm")
 
-        if vtype in _ALLOWLIST_TYPES and service is not None:
+        if not immutable and vtype in _ALLOWLIST_TYPES and service is not None:
 
             async def on_always_allow(viol=v, svc=service, dname=daemon_name):
                 await _show_allow_always_flow(None, viol, svc, dname)
@@ -263,7 +272,7 @@ def _render_violation_detail(v: dict, service, daemon_name: str):
             blocked_data.get("file_path", "") if isinstance(blocked_data, dict) else ""
         )
         annotation_target = get_annotation_target(v)
-        if v_file_path or annotation_target:
+        if not immutable and (v_file_path or annotation_target):
             from ai_guardian.tui.source_annotator import get_comment_prefix
 
             if (
