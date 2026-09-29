@@ -170,6 +170,9 @@ budget_tokens: 1000
 - Focused validation: 295 tests passed; Ruff, Black, Pylint, Mypy, and
   `git diff --check` passed. Three existing hook-test deprecation warnings
   remain.
+- Fixed the CI regression where `test_tui_global_settings.py` still expected
+  15 global settings features after adding `audit_logging`; the affected UI
+  and dashboard tests now pass (198 passed).
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
 ## 🚀 Next phase
