@@ -234,6 +234,23 @@ ISSUE_1678_FALSE_POSITIVE_CASES = [
     ("credentials-in-git-url", "https://user:%GIT_TOKEN%@github.com/org/repo"),
 ]
 
+ISSUE_2464_FALSE_POSITIVE_CASES = [
+    (
+        "credentials-in-git-url",
+        "Web UI patterns adopted from [ai-guardian](https://github.com/RedHatProductSecurity/ai-guardian) "
+        "trace viewer.\n\n"
+        "git clone git@github.com:tyraziel/agent-session-viewer.git",
+    ),
+    (
+        "credentials-in-git-url",
+        "git clone git@github.com:example/project.git",
+    ),
+    (
+        "credentials-in-git-url",
+        "See https://github.com/RedHatProductSecurity/ai-guardian for details.",
+    ),
+]
+
 GITLEAKS_FALSE_POSITIVE_CASES = [
     ("cohere-api-token", 'cohere_key = "abc123"'),
     ("doppler-api-token", "dp.pt.tooshort"),
@@ -449,6 +466,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_2185_FALSE_POSITIVE_CASES
     + ISSUE_2323_FALSE_POSITIVE_CASES
     + ISSUE_2322_FALSE_POSITIVE_CASES
+    + ISSUE_2464_FALSE_POSITIVE_CASES
 )
 
 

@@ -185,10 +185,19 @@ budget_tokens: 1000
   Pylint, Mypy, and `git diff --check` pass.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2464 Complete
+
+- Identified `credentials-in-git-url` as producer of false positives caused by
+  CR/LF-crossing negated character classes.
+- Restricted credential URL components to one physical line and added exact
+  cross-line, ordinary HTTPS, and SSH-style regression cases.
+- Directly related validation passed: 238 bundled TOML tests and 154 adjacent
+  secret validator/parser/redaction tests.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Review the complete uncommitted #266 diff and hand the issue back to
-the workflow.
+**Goal:** Hand issue #2464 back to the workflow for completion.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.
