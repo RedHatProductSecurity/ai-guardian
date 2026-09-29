@@ -46,6 +46,7 @@ FEATURES = [
     ("canary_detection", "gs_canary_detection", "🪤 Canary Detection"),
     ("exfil_detection", "gs_exfil_detection", "🔓 Exfil Detection"),
     ("violation_logging", "gs_violation_logging", "📝 Violation Logging"),
+    ("audit_logging", "gs_audit_logging", "📋 Compliance Audit Logging"),
     ("latency_tracking", "gs_latency_tracking", "⏱️ Latency Tracking"),
 ]
 
@@ -492,9 +493,16 @@ class GlobalSettingsContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             for section, config_key, _ in FEATURES:
                 section_data = config.get(section, {})
                 raw = (
-                    section_data.get("enabled", True)
+                    section_data.get(
+                        "enabled",
+                        (
+                            False
+                            if section in ("audit_logging", "latency_tracking")
+                            else True
+                        ),
+                    )
                     if isinstance(section_data, dict)
-                    else True
+                    else section not in ("audit_logging", "latency_tracking")
                 )
                 is_global_only = section in GLOBAL_ONLY_SECTIONS
                 section_immutable = immutables.get(section)

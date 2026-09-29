@@ -285,6 +285,29 @@
     "max_entries": 5000,
     "retention_days": 30
   },
+  "_comment_audit_logging": "Optional compliance audit trail for every final hook decision. Raw hook payloads and tool output are never persisted.",
+  "audit_logging": {
+    "enabled": false,
+    "log_all_tool_calls": true,
+    "include_context": {
+      "user_id": true,
+      "session_id": true,
+      "timestamp": true,
+      "tool_parameters": true,
+      "decision_reason": true,
+      "hook_type": true
+    },
+    "compliance_mode": {
+      "soc2": false,
+      "gdpr": false,
+      "hipaa": false
+    },
+    "retention_days": 90,
+    "max_entries": 10000,
+    "export_format": "json",
+    "sensitive_data_masking": true,
+    "output_file": null
+  },
   "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
   "violation_logging": {
     "enabled": true,

@@ -25,6 +25,11 @@ class TestDashboardImport:
         assert isinstance(FEATURE_PAGE_SLUGS, dict)
         assert len(FEATURE_PAGE_SLUGS) > 0
 
+    def test_audit_logging_page_imports(self):
+        from ai_guardian.web.pages.audit_logging import create_audit_logging_page
+
+        assert callable(create_audit_logging_page)
+
 
 class TestFeaturePageSlugs:
     """Verify FEATURE_PAGE_SLUGS mapping is consistent with routes."""
@@ -41,6 +46,7 @@ class TestFeaturePageSlugs:
         "permissions": "permission-rules",
         "directory_rules": "directory-rules",
         "violation_logging": "violation-logging",
+        "audit_logging": "audit-logging",
         "latency_tracking": "performance",
     }
 

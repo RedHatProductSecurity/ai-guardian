@@ -129,6 +129,7 @@ PANEL_TO_CONFIG_SECTION = {
     "panel-skills": "permissions",
     "panel-directory-rules": "directory_rules",
     "panel-violation-logging": "violation_logging",
+    "panel-audit-logging": "audit_logging",
     "panel-performance": "latency_tracking",
 }
 
@@ -159,6 +160,7 @@ NAV_GROUPS = [
         [
             ("Violations", "panel-violations"),
             ("Violation Logging", "panel-violation-logging"),
+            ("Compliance Audit Logging", "panel-audit-logging"),
             ("Metrics & Audit", "panel-metrics"),
             ("Performance", "panel-performance"),
             ("Logs", "panel-logs"),
@@ -781,6 +783,15 @@ HELP_DOCS = {
         "  secret_redaction, prompt_injection, jailbreak_detected,\n"
         "  ssrf_blocked, config_file_exfil, pii_detected\n\n"
         "[bold]Note:[/bold] Empty type selection logs all types."
+    ),
+    "panel-audit-logging": (
+        "[bold]Compliance Audit Logging[/bold]\n\n"
+        "Record sanitized final hook decisions in a separate audit trail.\n\n"
+        "[bold]Settings:[/bold]\n"
+        "  Enable logging, allowed tool-call recording, and sensitive-data masking.\n"
+        "  Mark records for SOC 2, GDPR, or HIPAA evidence collection.\n"
+        "  Configure retention, maximum entries, export format, and output path.\n\n"
+        "[bold]Privacy:[/bold] Raw prompts, tool output, and hook payloads are never persisted."
     ),
     "panel-metrics": (
         "[bold]Metrics & Audit[/bold]\n\n"
@@ -1745,6 +1756,11 @@ class AIGuardianTUI(App):
                     )
 
                     yield ViolationLoggingContent()
+
+                with Container(id="panel-audit-logging"):
+                    from ai_guardian.tui.audit_logging import AuditLoggingContent
+
+                    yield AuditLoggingContent()
 
                 with Container(id="panel-metrics"):
                     from ai_guardian.tui.metrics_panel import MetricsContent

@@ -174,6 +174,14 @@ class WebConsole:
 
             create_violation_logging_page(service, daemon_name)
 
+        @ui.page("/{daemon_name}/audit-logging")
+        def audit_logging_page(daemon_name: str):
+            from ai_guardian.web.pages.audit_logging import (
+                create_audit_logging_page,
+            )
+
+            create_audit_logging_page(service, daemon_name)
+
         @ui.page("/{daemon_name}/metrics")
         def metrics_page(daemon_name: str):
             from ai_guardian.web.pages.metrics import create_metrics_page

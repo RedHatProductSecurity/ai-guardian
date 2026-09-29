@@ -580,6 +580,11 @@ def _load_secret_redaction_config():
     return _load_config_section("secret_redaction")
 
 
+def _load_audit_logging_config():
+    """Load the general compliance audit logging configuration."""
+    return _load_config_section("audit_logging")
+
+
 _PII_DEFAULTS = {
     "enabled": True,
     "pii_types": [

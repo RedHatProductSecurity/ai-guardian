@@ -39,6 +39,7 @@ NAV_GROUPS = [
         [
             ("Violations", "/violations"),
             ("Violation Logging", "/violation-logging"),
+            ("Compliance Audit Logging", "/audit-logging"),
             ("Metrics & Audit", "/metrics"),
             ("Performance", "/performance"),
             ("Logs", "/logs"),

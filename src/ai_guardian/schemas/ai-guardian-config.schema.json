@@ -1884,6 +1884,105 @@
       },
       "additionalProperties": false
     },
+    "audit_logging": {
+      "type": "object",
+      "description": "Optional compliance audit trail for every final hook decision. Raw hook payloads and tool output are never persisted; tool parameters are masked by default.",
+      "properties": {
+        "enabled": {
+          "$ref": "#/definitions/time_based_enabled",
+          "default": false
+        },
+        "log_all_tool_calls": {
+          "type": "boolean",
+          "description": "Log allowed tool calls as well as warnings, blocks, redactions, and errors. When false, only non-allow decisions are retained.",
+          "default": true
+        },
+        "include_context": {
+          "type": "object",
+          "properties": {
+            "user_id": {
+              "type": "boolean",
+              "default": true
+            },
+            "session_id": {
+              "type": "boolean",
+              "default": true
+            },
+            "timestamp": {
+              "type": "boolean",
+              "default": true
+            },
+            "tool_parameters": {
+              "type": "boolean",
+              "default": true
+            },
+            "decision_reason": {
+              "type": "boolean",
+              "default": true
+            },
+            "hook_type": {
+              "type": "boolean",
+              "default": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "compliance_mode": {
+          "type": "object",
+          "description": "Mark records for the applicable compliance framework. HIPAA deployments should set retention_days to the organization's approved retention period.",
+          "properties": {
+            "soc2": {
+              "type": "boolean",
+              "default": false
+            },
+            "gdpr": {
+              "type": "boolean",
+              "default": false
+            },
+            "hipaa": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "retention_days": {
+          "type": "integer",
+          "description": "Delete audit records older than this many days.",
+          "default": 90,
+          "minimum": 1
+        },
+        "max_entries": {
+          "type": "integer",
+          "description": "Maximum number of audit records retained after retention cleanup.",
+          "default": 10000,
+          "minimum": 1
+        },
+        "export_format": {
+          "type": "string",
+          "enum": [
+            "json",
+            "csv"
+          ],
+          "description": "Default format used by AuditLogger.export().",
+          "default": "json"
+        },
+        "sensitive_data_masking": {
+          "type": "boolean",
+          "description": "Mask secrets and PII in user, reason, and tool-parameter fields before writing the log.",
+          "default": true
+        },
+        "output_file": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Audit JSONL path. Defaults to the AI Guardian state directory's audit.jsonl.",
+          "default": null
+        }
+      },
+      "additionalProperties": false
+    },
     "violation_logging": {
       "type": "object",
       "description": "Violation logging configuration (NEW in v1.1.0). Logs blocked operations to JSONL file for audit and review.",

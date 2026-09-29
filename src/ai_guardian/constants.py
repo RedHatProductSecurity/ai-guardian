@@ -575,6 +575,7 @@ SLUG_TO_CONFIG_SECTION = {
     "/permission-rules": "permissions",
     "/directory-rules": "directory_rules",
     "/violation-logging": "violation_logging",
+    "/audit-logging": "audit_logging",
     "/performance": "latency_tracking",
 }
 
