@@ -6,7 +6,7 @@ budget_tokens: 1000
 
 > Single source of truth for resuming work. Read this FIRST when starting a session.
 > Update this file at the end of every work phase so the next `/clear` resumes in 1 read.
-> Last updated: 2026-09-28
+> Last updated: 2026-09-29
 
 ---
 
@@ -145,9 +145,22 @@ budget_tokens: 1000
 - Focused validation: 638 tests passed; Black, Ruff, Pylint, Mypy, annotation checks, and `git diff --check` passed.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## 🚧 Issue #2461 In Progress
+
+- Shared format-aware host CLI config loading now reports malformed JSON, JSONC,
+  TOML, and YAML plus root/hook/MCP container schema errors.
+- Setup, doctor, and tray verification surface diagnostics; setup refuses to
+  rewrite existing invalid host files. Coverage includes OpenCode, Codex,
+  Claude, Cursor, Copilot, Gemini, Antigravity, and other shared hook/MCP paths.
+- Documentation and the Unreleased changelog were updated.
+- Focused setup/doctor/MCP/UX validation: 543 tests passed; Black, Ruff,
+  Pylint, Mypy, compileall, and `git diff --check` passed.
+- Changes are uncommitted; no commit or pull request was created.
+
 ## 🚀 Next phase
 
-**Goal:** Run `daf complete` for issue `#2425` after review.
+**Goal:** Review the uncommitted #2461 diff and run any additional integration
+validation before handing the issue back to the workflow.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

@@ -444,6 +444,7 @@ class TestCheckHooks:
             "mcp_status": "missing",
             "mcp_registration": "local",
             "mcp_config_path": str(tmp_path / "opencode.json"),
+            "mcp_diagnostic": "Invalid JSON schema in opencode.json: 'mcp' must be an object/mapping",
         }
 
         with (
@@ -468,6 +469,7 @@ class TestCheckHooks:
 
         assert result.status == CheckStatus.WARN
         assert "OpenCode: configured; MCP: missing" in result.message
+        assert "Invalid JSON schema in opencode.json" in result.message
         opencode = next(
             item for item in result.integrations if item["ide"] == "opencode"
         )
@@ -510,6 +512,36 @@ class TestCheckHooks:
                 )
                 assert claude["status"] == CheckStatus.WARN.value
                 assert "needs attention" in claude["message"]
+
+    def test_malformed_cli_config_is_reported_with_parse_error(
+        self, _isolate_config_dir, tmp_path
+    ):
+        """Doctor identifies an unreadable CLI hook file instead of only missing hooks."""
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        settings_path = claude_dir / "settings.json"
+        settings_path.write_text("{", encoding="utf-8")
+
+        with (
+            mock.patch(
+                "ai_guardian.setup.IDESetup.list_detected_ides",
+                return_value=["claude"],
+            ),
+            mock.patch(
+                "ai_guardian.setup.IDESetup.get_config_path",
+                return_value=str(settings_path),
+            ),
+            mock.patch(
+                "ai_guardian.setup.mcp.verify_mcp_config",
+                return_value={"mcp_status": "missing"},
+            ),
+        ):
+            result = Doctor().check_hooks()
+
+        assert result.status == CheckStatus.WARN
+        claude = next(item for item in result.integrations if item["ide"] == "claude")
+        assert "Invalid JSON" in claude["message"]
+        assert str(settings_path) in claude["message"]
 
     def test_installed_ide_without_hook_file_is_failure(
         self, _isolate_config_dir, tmp_path

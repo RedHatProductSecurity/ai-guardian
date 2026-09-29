@@ -1089,6 +1089,8 @@ class Doctor:
                 mcp_verification = verify_mcp_config(ide_type)
                 mcp_status = mcp_verification.get("mcp_status")
             mcp_detail = f"; MCP: {mcp_status}" if mcp_status else ""
+            if mcp_verification and mcp_verification.get("mcp_diagnostic"):
+                mcp_detail += f" ({mcp_verification['mcp_diagnostic']})"
             mcp_healthy = mcp_status in (None, "healthy", "external")
 
             if configured:
@@ -1268,6 +1270,8 @@ class Doctor:
             f"obsolete:{name}" for name in verification.get("obsolete", [])
         )
         attention.extend(str(item) for item in verification.get("diagnostics", []))
+        if verification.get("mcp_diagnostic"):
+            attention.append(str(verification["mcp_diagnostic"]))
         return ", ".join(attention) or None
 
     def _count_claude_hooks(self, config_path: Path) -> int:

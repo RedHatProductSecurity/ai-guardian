@@ -156,6 +156,48 @@ def test_local_daemon_prompts_for_installed_unconfigured_ide():
     )
 
 
+def test_setup_modal_shows_cli_config_parse_error():
+    """
+    USER EXPERIENCE: Invalid CLI config -> setup modal shows the real error.
+
+    Scenario:
+    1. The tray finds an installed CLI whose host configuration is malformed.
+    2. Verification records the parser diagnostic instead of treating the file
+       as an empty configuration.
+    3. The tray asks whether to install AI Guardian hooks.
+
+    Expected User Experience:
+    - The setup modal includes the affected file and the parse error.
+    - The user can fix the CLI configuration before rerunning setup.
+    """
+    config_path = "/tmp/cli/settings.json"
+    tray = SimpleNamespace(_standalone=True, _targets=[])
+    monitor = TrayHealthMonitor(tray)
+    verification = {
+        "healthy": False,
+        "events": {"userPromptSubmitted": "missing"},
+        "obsolete": [],
+        "diagnostics": [f"Invalid JSON in {config_path}: unterminated object"],
+    }
+
+    with (
+        patch.object(monitor, "_has_user_config", return_value=True),
+        patch.object(monitor, "_get_unconfigured_ides", return_value=["copilot"]),
+        patch.object(monitor, "_verify_ide_setup", return_value=verification),
+        patch("ai_guardian.tray.proactive_prompt.ProactivePromptDialog") as dialog,
+        patch("ai_guardian.tray.health.threading.Thread") as thread,
+    ):
+        thread.return_value.start.side_effect = lambda: thread.call_args.kwargs[
+            "target"
+        ]()
+        monitor._check_ide_setup_notification()
+
+    message = dialog.call_args.kwargs["message"]
+    assert "Current hook status:" in message
+    assert "Invalid JSON" in message
+    assert config_path in message
+
+
 def test_cursor_cloud_setup_requires_explicit_project_selection():
     """
     USER EXPERIENCE: Cursor Cloud setup -> choose a project before writing files.

@@ -23,6 +23,7 @@ from ai_guardian.ide_paths import resolve_ide_config_path
 from ai_guardian.setup.utils import (
     _create_vbs_wrapper,
     _is_ai_guardian_command,
+    _load_cli_config,
     _resolve_binary_path,
     _resolve_opencode_config,
     _strip_jsonc_comments,
@@ -67,6 +68,129 @@ _TYPESCRIPT_VERSION_MARKER = "// ai-guardian-generated-version:"
 _PI_MCP_ENABLED_TOKEN = "__AI_GUARDIAN_PI_MCP_ENABLED__"
 
 logger = logging.getLogger(__name__)
+
+
+def _hook_config_schema_error(
+    config: Dict[str, Any], config_path: Path, ide_type: str
+) -> Optional[str]:
+    """Return a useful diagnostic for an invalid host hook shape."""
+    format_name = {
+        ".jsonc": "JSONC",
+        ".json": "JSON",
+        ".yaml": "YAML",
+        ".yml": "YAML",
+        ".toml": "TOML",
+    }.get(config_path.suffix.lower(), "JSON")
+
+    if ide_type == "copilot":
+        for event_name in MANAGED_HOOK_EVENTS_BY_IDE.get(ide_type, ()):
+            if event_name in config and not isinstance(config[event_name], list):
+                return (
+                    f"Invalid {format_name} schema in {config_path}: "
+                    f"'{event_name}' must be a list"
+                )
+        return None
+
+    if ide_type == "antigravity":
+        owned_hooks = config.get(ANTIGRAVITY_HOOK_NAME)
+        if owned_hooks is not None and not isinstance(owned_hooks, dict):
+            return (
+                f"Invalid {format_name} schema in {config_path}: "
+                f"'{ANTIGRAVITY_HOOK_NAME}' must be an object/mapping"
+            )
+        if isinstance(owned_hooks, dict):
+            for event_name in MANAGED_HOOK_EVENTS_BY_IDE.get(ide_type, ()):
+                if event_name in owned_hooks and not isinstance(
+                    owned_hooks[event_name], list
+                ):
+                    return (
+                        f"Invalid {format_name} schema in {config_path}: "
+                        f"'{ANTIGRAVITY_HOOK_NAME}.{event_name}' must be a list"
+                    )
+        return None
+
+    if "hooks" not in config:
+        return None
+
+    hooks = config["hooks"]
+    if ide_type == "gemini":
+        expected = "a list"
+        valid = isinstance(hooks, list)
+    else:
+        expected = "an object/mapping"
+        valid = isinstance(hooks, dict)
+    if not valid:
+        return (
+            f"Invalid {format_name} schema in "
+            f"{config_path}: 'hooks' must be {expected}"
+        )
+
+    if ide_type == "gemini" and any(
+        not isinstance(entry, dict) or not entry.get("event") for entry in hooks
+    ):
+        return (
+            f"Invalid {format_name} schema in {config_path}: "
+            "'hooks' entries must be objects with an event"
+        )
+
+    hook_path = "hooks"
+    if ide_type in ("windsurf", "augment", "crush") and isinstance(hooks, dict):
+        nested_hooks = hooks.get("hooks")
+        if nested_hooks is not None and not isinstance(nested_hooks, dict):
+            return (
+                f"Invalid {format_name} schema in "
+                f"{config_path}: 'hooks.hooks' must be an object/mapping"
+            )
+        if isinstance(nested_hooks, dict):
+            hooks = nested_hooks
+            hook_path = "hooks.hooks"
+
+    if isinstance(hooks, dict):
+        for event_name in MANAGED_HOOK_EVENTS_BY_IDE.get(ide_type, ()):
+            if event_name in hooks and not isinstance(hooks[event_name], list):
+                return (
+                    f"Invalid {format_name} schema in {config_path}: "
+                    f"'{hook_path}.{event_name}' must be a list"
+                )
+    return None
+
+
+def _opencode_config_schema_error(
+    config: Dict[str, Any], config_path: Path
+) -> Optional[str]:
+    """Return a diagnostic for OpenCode's managed configuration fields."""
+    format_name = "JSONC" if config_path.suffix.lower() == ".jsonc" else "JSON"
+    for key in ("plugin", "plugins"):
+        if key in config and not isinstance(config[key], list):
+            return (
+                f"Invalid {format_name} schema in {config_path}: "
+                f"'{key}' must be a list"
+            )
+    if "mcp" in config and not isinstance(config["mcp"], dict):
+        return (
+            f"Invalid {format_name} schema in {config_path}: 'mcp' must be an "
+            "object/mapping"
+        )
+    return None
+
+
+def _opencode_setup_diagnostic(config_path: Path) -> Optional[str]:
+    """Return a setup-blocking diagnostic for an existing OpenCode config."""
+    config, parse_error = _load_cli_config(config_path)
+    if parse_error:
+        return (
+            f"OpenCode setup stopped: {parse_error}. Fix the file before "
+            "installing AI Guardian."
+        )
+    if config is None:
+        return None
+    schema_error = _opencode_config_schema_error(config, config_path)
+    if schema_error:
+        return (
+            f"OpenCode setup stopped: {schema_error}. Fix the file before "
+            "installing AI Guardian."
+        )
+    return None
 
 
 def _render_typescript_source(source: str) -> str:
@@ -785,18 +909,11 @@ class IDESetup:
         if not config_path.is_file():
             return False, None
 
-        try:
-            import tomllib
-        except ImportError:
-            try:
-                import tomli as tomllib  # type: ignore
-            except ImportError:
-                return False, f"TOML parser is unavailable for {config_path}"
-
-        try:
-            data = tomllib.loads(config_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            return False, f"Unable to parse {config_path}: {exc}"
+        data, config_error = _load_cli_config(config_path, format_name="toml")
+        if config_error:
+            return False, config_error
+        if data is None:
+            return False, None
 
         hooks = data.get("hooks")
         if isinstance(hooks, dict):
@@ -833,16 +950,19 @@ class IDESetup:
         for scope, directory in directories:
             config_toml = directory / "config.toml"
             inline_hooks, parse_error = self._codex_inline_hooks_status(config_toml)
+            hooks_json = directory / "hooks.json"
+            _, hooks_parse_error = _load_cli_config(hooks_json)
             layers.append(
                 {
                     "scope": scope,
                     "directory": str(directory),
-                    "hooks_json": str(directory / "hooks.json"),
+                    "hooks_json": str(hooks_json),
                     "config_toml": str(config_toml),
-                    "hooks_json_exists": (directory / "hooks.json").is_file(),
+                    "hooks_json_exists": hooks_json.is_file(),
                     "config_toml_exists": config_toml.is_file(),
                     "inline_hooks": inline_hooks,
                     "parse_error": parse_error,
+                    "hooks_parse_error": hooks_parse_error,
                 }
             )
         return layers
@@ -855,12 +975,13 @@ class IDESetup:
             return f"{CODEX_DISPLAY_NAME} setup stopped: no configuration path"
         target_dir = str(Path(config_path).expanduser().parent)
         for layer in layers:
-            if layer["parse_error"]:
+            parse_error = layer["parse_error"] or layer.get("hooks_parse_error")
+            if parse_error:
                 return (
                     f"{CODEX_DISPLAY_NAME} setup stopped: the active Codex "
                     "configuration "
                     f"layer at {layer['directory']} cannot be parsed "
-                    f"({layer['parse_error']}). Fix that file "
+                    f"({parse_error}). Fix that file "
                     "before installing AI Guardian hooks."
                 )
             if layer["directory"] == target_dir and layer["inline_hooks"]:
@@ -1092,13 +1213,18 @@ class IDESetup:
             "healthy": True,
             "events": {},
             "obsolete": [],
+            "diagnostics": [],
         }
         if ide_type == "codex":
             result["config_layers"] = self.get_codex_config_layers()
             result["diagnostics"] = [
-                layer["parse_error"]
+                parse_error
                 for layer in result["config_layers"]
-                if layer["parse_error"]
+                for parse_error in (
+                    layer.get("parse_error"),
+                    layer.get("hooks_parse_error"),
+                )
+                if parse_error
             ]
             config_path_value = self.get_config_path(
                 ide_type, scope=scope, project_dir=project_dir
@@ -1115,6 +1241,8 @@ class IDESetup:
                 result["diagnostics"].append(
                     "inline hooks are active in the target Codex user layer"
                 )
+            if result["diagnostics"]:
+                result["healthy"] = False
         if config.get("mcp_only"):
             return result
 
@@ -1150,6 +1278,17 @@ class IDESetup:
             return result
         path = Path(path_value).expanduser()
         if config.get("plugin_file"):
+            host_config_path = _resolve_opencode_config()
+            host_config, host_config_error = _load_cli_config(host_config_path)
+            result["host_config_path"] = str(host_config_path)
+            if host_config_error:
+                result["diagnostics"].append(host_config_error)
+            elif host_config is not None:
+                schema_error = _opencode_config_schema_error(
+                    host_config, host_config_path
+                )
+                if schema_error:
+                    result["diagnostics"].append(schema_error)
             plugin_file = path / "ai-guardian.ts"
             bridge_file = path / config.get("bridge_file", "ai-guardian-bridge.ts")
             try:
@@ -1171,7 +1310,7 @@ class IDESetup:
             else:
                 status = "healthy"
             result["events"]["plugin"] = status
-            result["healthy"] = status == "healthy"
+            result["healthy"] = status == "healthy" and not result["diagnostics"]
             return result
         if config.get("extension_file"):
             extension_file = path / config["extension_file"]
@@ -1248,13 +1387,17 @@ class IDESetup:
             )
             return result
 
-        try:
-            raw = path.read_text(encoding="utf-8")
-            if path.suffix == ".jsonc":
-                raw = _strip_jsonc_comments(raw)
-            installed = json.loads(raw)
-        except (OSError, json.JSONDecodeError):
+        installed, config_error = _load_cli_config(path)
+        if config_error:
+            result["diagnostics"].append(config_error)
             installed = {}
+        elif installed is None:
+            installed = {}
+
+        if isinstance(installed, dict):
+            schema_error = _hook_config_schema_error(installed, path, ide_type)
+            if schema_error:
+                result["diagnostics"].append(schema_error)
 
         installed_hooks = self._installed_hook_map(installed, ide_type)
 
@@ -1326,6 +1469,11 @@ class IDESetup:
         obsolete = sorted(
             {event for result in layer_results for event in result.get("obsolete", [])}
         )
+        diagnostics = [
+            str(diagnostic)
+            for result in layer_results
+            for diagnostic in result.get("diagnostics", [])
+        ]
         effective_hooks_healthy = (
             all(status == "healthy" for status in effective_events.values())
             and not obsolete
@@ -1375,6 +1523,7 @@ class IDESetup:
             "events": user_events,
             "effective_events": effective_events,
             "obsolete": obsolete,
+            "diagnostics": diagnostics,
             "effective_hooks_healthy": effective_hooks_healthy,
             "mcp_config_path": user_mcp.get("config_path", mcp.get("mcp_config_path")),
             "mcp_config_scopes": mcp_layers,
@@ -1423,6 +1572,8 @@ class IDESetup:
                     "mcp_registration": mcp.get("mcp_registration", "local"),
                 }
             )
+            if mcp.get("mcp_diagnostic"):
+                combined.setdefault("diagnostics", []).append(mcp["mcp_diagnostic"])
             if combined["mcp_status"] == "external":
                 # Project-scoped Cursor setup protects Cloud Agent hooks. MCP
                 # registration is managed outside the local project files and
@@ -1437,17 +1588,23 @@ class IDESetup:
         if ide_type == "codex":
             from ai_guardian.setup.mcp import (
                 get_codex_mcp_config_path,
-                is_codex_mcp_configured,
+                verify_mcp_config,
             )
 
             hooks_healthy = verification.get("healthy") is True
             mcp_config_path = get_codex_mcp_config_path()
-            mcp_installed = is_codex_mcp_configured(mcp_config_path)
+            mcp = verify_mcp_config("codex", scope=scope, project_dir=project_dir)
+            mcp_installed = mcp.get("mcp_installed") is True
             combined = dict(verification)
             combined["hooks_healthy"] = hooks_healthy
             combined["mcp_config_path"] = str(mcp_config_path)
             combined["mcp_installed"] = mcp_installed
-            combined["mcp_status"] = "healthy" if mcp_installed else "missing"
+            combined["mcp_status"] = mcp.get(
+                "mcp_status", "healthy" if mcp_installed else "missing"
+            )
+            combined["mcp_registration"] = mcp.get("mcp_registration", "local")
+            if mcp.get("mcp_diagnostic"):
+                combined.setdefault("diagnostics", []).append(mcp["mcp_diagnostic"])
             combined["healthy"] = hooks_healthy and mcp_installed
             return combined
 
@@ -1470,6 +1627,8 @@ class IDESetup:
                 "mcp_registration": mcp.get("mcp_registration", "local"),
             }
         )
+        if mcp.get("mcp_diagnostic"):
+            combined.setdefault("diagnostics", []).append(mcp["mcp_diagnostic"])
         mcp_optional = ide_type == "pi" and combined.get("mcp_status") == "disabled"
         combined["healthy"] = combined["hooks_healthy"] and (
             mcp_optional or combined["mcp_installed"] is True
@@ -2303,15 +2462,11 @@ class IDESetup:
                 config_file = _resolve_opencode_config()
                 if not config_file.exists():
                     return False
-                try:
-                    raw = config_file.read_text(encoding="utf-8")
-                    if config_file.suffix == ".jsonc":
-                        raw = _strip_jsonc_comments(raw)
-                    cfg = json.loads(raw) if raw.strip() else {}
-                    registered_plugins = cfg.get("plugin", cfg.get("plugins", []))
-                    return str(plugin_file) in registered_plugins
-                except (json.JSONDecodeError, OSError):
+                cfg, config_error = _load_cli_config(config_file)
+                if config_error or cfg is None:
                     return False
+                registered_plugins = cfg.get("plugin", cfg.get("plugins", []))
+                return str(plugin_file) in registered_plugins
 
             if ide_config.get("extension_file"):
                 extension_file = config_path / ide_config["extension_file"]
@@ -2358,8 +2513,9 @@ class IDESetup:
                                 pass  # intentionally silent — best-effort operation
                 return len(configured) == len(managed_scripts)
 
-            with open(config_path, "r", encoding="utf-8") as f:
-                config = json.load(f)
+            config, config_error = _load_cli_config(config_path)
+            if config_error or config is None:
+                return False
 
             manifest = self.expected_hook_manifest(ide_type)
             if manifest:
@@ -2476,22 +2632,23 @@ class IDESetup:
         if dry_run:
             return f"  Register plugin in: {config_file}\n"
 
-        config: Dict[str, Any] = {}
-        if config_file.exists():
-            try:
-                raw = config_file.read_text(encoding="utf-8")
-                if config_file.suffix == ".jsonc":
-                    raw = _strip_jsonc_comments(raw)
-                if raw.strip():
-                    config = json.loads(raw)
-            except (json.JSONDecodeError, OSError):
-                pass
+        config, config_error = _load_cli_config(config_file)
+        if config_error:
+            return (
+                f"OpenCode plugin registration stopped: {config_error}. "
+                "Fix the file before rerunning setup."
+            )
+        if config is None:
+            config = {}
+        schema_error = _opencode_config_schema_error(config, config_file)
+        if schema_error:
+            return (
+                f"OpenCode plugin registration stopped: {schema_error}. "
+                "Fix the file before rerunning setup."
+            )
 
         plugins = config.get("plugin", config.get("plugins", []))
         needs_write = "plugins" in config or "plugin" not in config
-        if not isinstance(plugins, list):
-            plugins = []
-            needs_write = True
         if plugin_path not in plugins:
             plugins.append(plugin_path)
             needs_write = True
@@ -2545,6 +2702,11 @@ class IDESetup:
         )
         legacy_bridge_file = plugins_dir / "ai-guardian-bridge.ts"
 
+        if ide_type == "opencode":
+            config_diagnostic = _opencode_setup_diagnostic(_resolve_opencode_config())
+            if config_diagnostic:
+                return False, config_diagnostic
+
         if dry_run:
             message = f"[DRY RUN] Would configure {ide_name} plugin:\n"
             message += f"  Create: {plugin_file}\n"
@@ -2567,7 +2729,9 @@ class IDESetup:
         bridge_file.parent.mkdir(parents=True, exist_ok=True)
         bridge_file.write_text(self._render_guardian_bridge(abs_path), encoding="utf-8")
 
-        self._register_opencode_plugin(plugin_file, plugins_dir)
+        registration_error = self._register_opencode_plugin(plugin_file, plugins_dir)
+        if registration_error:
+            return False, registration_error
 
         gitleaks_installed, gitleaks_message = self.verify_gitleaks_installed()
 
@@ -3000,13 +3164,16 @@ class IDESetup:
                 )
 
             # Load existing config or create new
-            existing_config = {}
-            if config_path.exists():
-                try:
-                    with open(config_path, "r", encoding="utf-8") as f:
-                        existing_config = json.load(f)
-                except json.JSONDecodeError as e:
-                    return False, f"Invalid JSON in {config_path}: {e}"
+            existing_config, config_error = _load_cli_config(config_path)
+            if config_error:
+                return False, config_error
+            if existing_config is None:
+                existing_config = {}
+            schema_error = _hook_config_schema_error(
+                existing_config, config_path, ide_type
+            )
+            if schema_error:
+                return False, schema_error
 
             obsolete_removed = []
             if force:
