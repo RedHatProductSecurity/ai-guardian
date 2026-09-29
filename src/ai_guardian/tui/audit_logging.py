@@ -4,7 +4,7 @@ from typing import Any, Dict
 
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, VerticalScroll
-from textual.widgets import Checkbox, Input, Label, Select, Static
+from textual.widgets import Button, Checkbox, Input, Label, Select, Static
 
 from ai_guardian.tui.schema_defaults import (
     ConfigSaveMixin,
@@ -26,6 +26,22 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         ("audit-export-format", "export_format", "select"),
         ("audit-output-file", "output_file", "input"),
     ]
+    CONTEXT_FIELDS = (
+        ("audit-context-user-id", "user_id", "Include user ID"),
+        ("audit-context-session-id", "session_id", "Include session ID"),
+        ("audit-context-timestamp", "timestamp", "Include timestamp"),
+        (
+            "audit-context-tool-parameters",
+            "tool_parameters",
+            "Include tool parameters",
+        ),
+        (
+            "audit-context-decision-reason",
+            "decision_reason",
+            "Include decision reason",
+        ),
+        ("audit-context-hook-type", "hook_type", "Include hook type"),
+    )
 
     CSS = """
     AuditLoggingContent {
@@ -119,6 +135,14 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                 )
 
             with Container(classes="section"):
+                yield Static("[bold]Recorded Context[/bold]", classes="section-title")
+                yield Static(
+                    "Choose which normalized metadata fields are included in each audit record."
+                )
+                for checkbox_id, _key, label in self.CONTEXT_FIELDS:
+                    yield Checkbox(label, id=checkbox_id, value=True)
+
+            with Container(classes="section"):
                 yield Static("[bold]Compliance Markers[/bold]", classes="section-title")
                 yield Checkbox("SOC 2", id="audit-soc2", value=False)
                 yield Checkbox("GDPR processing activity", id="audit-gdpr", value=False)
@@ -159,6 +183,9 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
                         id="audit-output-file",
                     )
                     yield Static("[dim](default: state directory audit.jsonl)[/dim]")
+                with Horizontal(classes="setting-row"):
+                    yield Button("Export Now", id="audit-export-btn", variant="primary")
+                    yield Static("", id="audit-export-status")
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
@@ -184,6 +211,9 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             compliance = audit_config.get("compliance_mode", {})
             if not isinstance(compliance, dict):
                 compliance = {}
+            include_context = audit_config.get("include_context", {})
+            if not isinstance(include_context, dict):
+                include_context = {}
 
             self.query_one("#audit_logging_enabled_toggle", TimeBasedToggle).load_value(
                 audit_config.get("enabled", False)
@@ -203,6 +233,10 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             self.query_one("#audit-hipaa", Checkbox).value = compliance.get(
                 "hipaa", False
             )
+            for checkbox_id, key, _label in self.CONTEXT_FIELDS:
+                self.query_one(f"#{checkbox_id}", Checkbox).value = include_context.get(
+                    key, True
+                )
             self.query_one("#audit-max-entries", Input).value = str(
                 audit_config.get("max_entries", 10000)
             )
@@ -238,6 +272,48 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         compliance[key] = value
         return self._write_full_config(config)
 
+    def _save_context_flag(self, key: str, value: bool) -> bool:
+        config = self._load_full_config()
+        section = config.setdefault("audit_logging", {})
+        if not isinstance(section, dict):
+            section = {}
+            config["audit_logging"] = section
+        include_context = section.setdefault("include_context", {})
+        if not isinstance(include_context, dict):
+            include_context = {}
+            section["include_context"] = include_context
+        include_context[key] = value
+        return self._write_full_config(config)
+
+    def _export_audit(self) -> None:
+        """Export the local audit trail without modifying the JSONL source."""
+        try:
+            from ai_guardian.violations.audit import AuditLogger
+
+            format_value = self.query_one("#audit-export-format", Select).value
+            export_format = (
+                str(format_value) if format_value in ("json", "csv") else "json"
+            )
+            config = self._load_full_config()
+            audit_config = config.get("audit_logging", {})
+            if not isinstance(audit_config, dict):
+                audit_config = {}
+            audit_logger = AuditLogger(config=audit_config)
+            export_path = audit_logger.get_export_path(export_format)
+            if not audit_logger.export(export_path, export_format=export_format):
+                raise OSError("the audit trail could not be exported")
+            self.query_one("#audit-export-status", Static).update(
+                f"[green]Exported to {export_path}[/green]"
+            )
+            self.app.notify(
+                f"Audit trail exported to {export_path}", severity="information"
+            )
+        except (OSError, TypeError, ValueError, ImportError) as error:
+            self.query_one("#audit-export-status", Static).update(
+                f"[red]Export failed: {error}[/red]"
+            )
+            self.app.notify(f"Audit export failed: {error}", severity="error")
+
     def on_button_pressed(self, event) -> None:
         if self._loading:
             return
@@ -246,6 +322,8 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
             toggle = self.query_one("#audit_logging_enabled_toggle", TimeBasedToggle)
             if toggle.current_mode != "temp_disabled":
                 self._save_config({"enabled": toggle.get_value()})
+        elif bid == "audit-export-btn":
+            self._export_audit()
 
     def on_checkbox_changed(self, event: Checkbox.Changed) -> None:
         if self._loading:
@@ -256,6 +334,13 @@ class AuditLoggingContent(ConfigSaveMixin, SchemaDefaultsMixin, Container):
         elif checkbox_id == "audit-mask":
             self._save_config({"sensitive_data_masking": event.value})
         else:
+            context_key = {
+                checkbox_id_value: key
+                for checkbox_id_value, key, _label in self.CONTEXT_FIELDS
+            }.get(checkbox_id)
+            if context_key:
+                self._save_context_flag(context_key, event.value)
+                return
             compliance_key = {
                 "audit-soc2": "soc2",
                 "audit-gdpr": "gdpr",

@@ -173,12 +173,22 @@ budget_tokens: 1000
 - Fixed the CI regression where `test_tui_global_settings.py` still expected
   15 global settings features after adding `audit_logging`; the affected UI
   and dashboard tests now pass (198 passed).
+- Added all six `include_context` controls to the TUI and Web Console, with
+  nested-config persistence and safe default handling.
+- Added TUI **Export Now** and Web Console **Export audit trail** actions for
+  JSON/CSV output without modifying `audit.jsonl`; Web export is disabled for
+  remote daemons rather than exporting the Web Console host's local trail.
+- Expanded `docs/AUDIT_LOGGING.md` with console navigation, controls, export
+  behavior, data-field semantics, and the distinction from legacy
+  `secret_scanning.audit_logging`.
+- Added console regression coverage; 235 focused tests pass, and Ruff, Black,
+  Pylint, Mypy, and `git diff --check` pass.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
 ## 🚀 Next phase
 
-**Goal:** Review the uncommitted #266 diff and hand the issue back to the
-workflow.
+**Goal:** Review the complete uncommitted #266 diff and hand the issue back to
+the workflow.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

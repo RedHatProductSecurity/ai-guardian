@@ -534,7 +534,7 @@ class AuditLogger:
             logger.warning("Unknown audit export format '%s'; using JSON", format_name)
             format_name = "json"
         if export_path is None:
-            export_path = self.log_path.with_suffix("." + format_name)
+            export_path = self.get_export_path(format_name)
         export_path = Path(export_path).expanduser()
 
         entries = self.get_recent_entries(limit=0)
@@ -550,6 +550,20 @@ class AuditLogger:
         except (OSError, TypeError, ValueError) as error:
             logger.error("Unable to export audit log to %s: %s", export_path, error)
             return False
+
+    def get_export_path(self, export_format: Optional[str] = None) -> Path:
+        """Return a default export path that cannot overwrite the JSONL source."""
+        format_name = (
+            export_format or self.config.get("export_format") or "json"
+        ).lower()
+        if format_name not in ("json", "csv"):
+            format_name = "json"
+        export_path = self.log_path.with_suffix("." + format_name)
+        if export_path == self.log_path:
+            export_path = self.log_path.with_name(
+                f"{self.log_path.name}.export.{format_name}"
+            )
+        return export_path
 
     def export_audit(
         self,

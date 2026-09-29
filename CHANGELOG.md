@@ -32,8 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Compliance audit logging (#266):** Add an opt-in, sanitized `audit.jsonl`
   trail for final hook decisions with SOC 2, GDPR, and HIPAA markers,
-  configurable retention, and JSON/CSV export while preserving the existing
-  violation log.
+  configurable retention, all context-field controls, and TUI/Web Console
+  JSON/CSV export actions while preserving the existing violation log.
 
 - **Grok Build integration (#2446):** Add the dedicated camelCase hook adapter,
   six managed lifecycle events, PreToolUse deny responses, user/project hook

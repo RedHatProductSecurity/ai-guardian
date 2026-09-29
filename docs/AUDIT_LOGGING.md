@@ -14,6 +14,14 @@ Add this section to the global `ai-guardian.json`:
   "audit_logging": {
     "enabled": true,
     "log_all_tool_calls": true,
+    "include_context": {
+      "user_id": true,
+      "session_id": true,
+      "timestamp": true,
+      "tool_parameters": true,
+      "decision_reason": true,
+      "hook_type": true
+    },
     "compliance_mode": {
       "soc2": true,
       "gdpr": true,
@@ -30,7 +38,25 @@ The feature is disabled by default. When `log_all_tool_calls` is false, only
 non-allow decisions are recorded.
 
 The settings are also available in the TUI under **Monitoring -> Compliance
-Audit Logging** and in the web console at `/audit-logging`.
+Audit Logging**. In the Web Console, open the hamburger menu, choose
+**Monitoring**, and select **Compliance Audit Logging**. The route is
+`/<daemon-name>/audit-logging` when a daemon name is present.
+
+Both consoles expose the same settings:
+
+- Enable or temporarily disable audit logging.
+- Log allowed tool calls as well as non-allow decisions.
+- Mask secrets and PII before writing records.
+- Select SOC 2, GDPR, and HIPAA compliance markers.
+- Select the maximum entry count, retention period, export format, and output file.
+- Select whether user ID, session ID, timestamp, tool parameters, decision reason,
+  and hook type are included in each record.
+
+The TUI's **Export Now** button writes an export beside the configured JSONL
+file. The Web Console's **Export audit trail** button downloads the selected
+JSON or CSV export. Web export is intentionally enabled only when the selected
+daemon is local; it does not read the Web Console host's audit file while a
+remote daemon is selected.
 
 ## Data Protection
 
@@ -45,6 +71,11 @@ Audit entries use normalized hook metadata rather than the raw hook payload:
 Set `include_context` fields to false when a deployment does not need the
 corresponding identifier or metadata. Keep `sensitive_data_masking` enabled
 for compliance deployments.
+
+`include_context` controls optional fields only. The normalized `decision`,
+`tool_name`, `policy_matched`, compliance flags, masking metadata, and
+`policy_decision` object remain part of the audit record. Disabling
+`tool_parameters` does not disable masking or security scanning.
 
 ## Log Location And Retention
 
@@ -113,6 +144,17 @@ logger.export(Path("audit-export.csv"), export_format="csv")
 ```
 
 The configured `export_format` is used when the format is omitted.
+
+The export contains the sanitized audit entries and leaves the source
+`audit.jsonl` file unchanged. An empty or disabled trail can still be exported
+as an empty JSON array or CSV with headers.
+
+## Audit Logging Versus Scan Audit
+
+The root `audit_logging` section documents the compliance trail described here.
+It is separate from the legacy `secret_scanning.audit_logging` boolean, which
+controls scan-audit behavior for secret scanning. Do not replace one section
+with the other; existing configurations may use both.
 
 ## Compliance Mapping
 
