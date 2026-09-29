@@ -21,8 +21,8 @@ from ai_guardian.tui.global_settings import (
 class TestFeatureMap:
     """Test FEATURES defines correct mappings."""
 
-    def test_has_twelve_features(self):
-        assert len(FEATURES) == 15
+    def test_has_sixteen_features(self):
+        assert len(FEATURES) == 16
 
     def test_expected_sections(self):
         sections = [s for s, _, _ in FEATURES]
@@ -36,6 +36,7 @@ class TestFeatureMap:
         assert "context_poisoning" in sections
         assert "supply_chain" in sections
         assert "violation_logging" in sections
+        assert "audit_logging" in sections
 
     def test_all_have_labels(self):
         for section, config_key, label in FEATURES:

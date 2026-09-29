@@ -59,6 +59,7 @@ To generate the static site locally on demand, run `mkdocs build`. The generated
 | [Tool Policy](TOOL_POLICY.md) | Allow/deny lists for Skills, MCP, Bash, Write |
 | [Permissions Comparison](PERMISSIONS_COMPARISON.md) | ai-guardian vs settings.json permissions |
 | [Violation Logging](VIOLATION_LOGGING.md) | JSON audit trail with unified policy decisions |
+| [Compliance Audit Logging](AUDIT_LOGGING.md) | Sanitized all-decision audit trail for SOC 2, GDPR, and HIPAA |
 
 ## AI Security Awareness
 

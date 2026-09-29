@@ -112,6 +112,11 @@ FEATURE_GROUPS = [
                 "Log blocked operations for audit",
             ),
             (
+                "audit_logging",
+                "Compliance Audit Logging",
+                "Record sanitized final hook decisions",
+            ),
+            (
                 "latency_tracking",
                 "Latency Tracking",
                 "Record per-hook timing to latency.jsonl",
@@ -131,6 +136,7 @@ CARD_PANEL_MAP = {
     "permissions-card": "panel-skills",
     "directory-rules-card": "panel-directory-rules",
     "violation-logging-card": "panel-violation-logging",
+    "audit-logging-card": "panel-audit-logging",
 }
 
 _DEFAULT_ACTIONS = {
@@ -140,6 +146,7 @@ _DEFAULT_ACTIONS = {
     "permissions": "enforce",
     "security_instructions": "inject",
     "violation_logging": "log",
+    "audit_logging": "log",
     "latency_tracking": "log",
 }
 
@@ -166,7 +173,7 @@ def _get_feature_status(config, key):
         return config.get("image_scanning", {}).get("enabled", True)
     section = config.get(key, {})
     if isinstance(section, dict):
-        enabled = section.get("enabled", True)
+        enabled = section.get("enabled", key != "audit_logging")
         if isinstance(enabled, dict):
             return enabled
         return enabled

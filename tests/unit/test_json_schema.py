@@ -128,6 +128,27 @@ def test_top_level_tracing_config(schema):
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_audit_logging_config_validates_without_breaking_scan_audit(schema):
+    """The hook audit section coexists with legacy scan audit configuration."""
+    validate(
+        instance={
+            "secret_scanning": {"audit_logging": False},
+            "audit_logging": {
+                "enabled": True,
+                "compliance_mode": {"soc2": True, "gdpr": True, "hipaa": False},
+                "include_context": {"session_id": True},
+                "retention_days": 90,
+                "max_entries": 1000,
+                "export_format": "json",
+                "sensitive_data_masking": True,
+                "output_file": None,
+            },
+        },
+        schema=schema,
+    )
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_legacy_sdk_trace_viewer_config_remains_valid(schema):
     """The deprecated location remains schema-compatible through 1.x."""
     validate(

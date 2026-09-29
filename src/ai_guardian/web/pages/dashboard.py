@@ -116,6 +116,11 @@ FEATURE_GROUPS = [
                 "Log blocked operations for audit",
             ),
             (
+                "audit_logging",
+                "Compliance Audit Logging",
+                "Record sanitized final hook decisions",
+            ),
+            (
                 "latency_tracking",
                 "Latency Tracking",
                 "Record per-hook timing to latency.jsonl",
@@ -136,6 +141,7 @@ FEATURE_PAGE_SLUGS = {
     "permissions": "permission-rules",
     "directory_rules": "directory-rules",
     "violation_logging": "violation-logging",
+    "audit_logging": "audit-logging",
     "latency_tracking": "performance",
     "code_scanning": "code-security",
     "scan_offensive": "offensive-language",
@@ -158,11 +164,11 @@ def _get_feature_status(config, key):
         return config.get("image_scanning", {}).get("enabled", True)
     section = config.get(key, {})
     if isinstance(section, dict):
-        enabled = section.get("enabled", True)
+        enabled = section.get("enabled", key != "audit_logging")
         if isinstance(enabled, dict):
             return enabled
         return enabled
-    return True
+    return key != "audit_logging"
 
 
 def _parse_enabled(status):
@@ -200,6 +206,7 @@ _DEFAULT_ACTIONS = {
     "security_instructions": "inject",
     "directory_rules": "block",
     "violation_logging": "log",
+    "audit_logging": "log",
     "latency_tracking": "log",
 }
 

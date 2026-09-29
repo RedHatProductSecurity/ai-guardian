@@ -40,6 +40,13 @@ class TestTUIApp:
         assert app is not None
 
 
+def test_audit_logging_panel_declares_root_config_section():
+    from ai_guardian.tui.audit_logging import AuditLoggingContent
+
+    assert AuditLoggingContent.CONFIG_SECTION == "audit_logging"
+    assert AuditLoggingContent.SCHEMA_SECTION == "audit_logging"
+
+
 class TestNavGroups:
     """Tests for navigation structure."""
 
@@ -47,10 +54,10 @@ class TestNavGroups:
         """Test that NAV_GROUPS defines exactly 10 category groups."""
         assert len(NAV_GROUPS) == 10
 
-    def test_nav_groups_has_fifty_five_panels(self):
-        """Test that NAV_GROUPS defines exactly 55 leaf panels."""
+    def test_nav_groups_has_fifty_six_panels(self):
+        """Test that NAV_GROUPS defines exactly 56 leaf panels."""
         total_leaves = sum(len(items) for _, items in NAV_GROUPS)
-        assert total_leaves == 55
+        assert total_leaves == 56
 
     def test_panel_ids_are_unique(self):
         """Test that all panel IDs are unique."""
@@ -123,6 +130,7 @@ class TestNavGroups:
         assert "panel-secrets" in nav_dict["Secrets"]
         assert "panel-violations" in nav_dict["Monitoring"]
         assert "panel-violation-logging" in nav_dict["Monitoring"]
+        assert "panel-audit-logging" in nav_dict["Monitoring"]
         assert "panel-ide-sessions" in nav_dict["AI Sessions"]
         assert "panel-traces" in nav_dict["AI Sessions"]
         assert "panel-otel-settings" in nav_dict["AI Sessions"]
@@ -143,6 +151,7 @@ class TestPanelToConfigSection:
         assert "panel-pi-detection" in PANEL_TO_CONFIG_SECTION
         assert "panel-ssrf" in PANEL_TO_CONFIG_SECTION
         assert "panel-supply-chain" in PANEL_TO_CONFIG_SECTION
+        assert PANEL_TO_CONFIG_SECTION["panel-audit-logging"] == "audit_logging"
 
     def test_sub_pages_map_to_parent_scanner(self):
         assert PANEL_TO_CONFIG_SECTION["panel-secret-engines"] == "secret_scanning"

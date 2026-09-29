@@ -120,6 +120,11 @@ FEATURE_GROUPS = [
                 "Log blocked operations for audit",
             ),
             (
+                "audit_logging",
+                "Compliance Audit Logging",
+                "Record sanitized final hook decisions",
+            ),
+            (
                 "latency_tracking",
                 "Latency Tracking",
                 "Record per-hook timing to latency.jsonl",
@@ -250,7 +255,9 @@ def _get_enabled(config, section):
         return True
     if section == "annotations":
         return config.get("annotations", {}).get("enabled", True)
-    default_enabled = False if section == "latency_tracking" else True
+    default_enabled = (
+        False if section in ("latency_tracking", "audit_logging") else True
+    )
     val = config.get(section, {})
     if isinstance(val, dict):
         enabled = val.get("enabled", default_enabled)

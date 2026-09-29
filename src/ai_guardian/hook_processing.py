@@ -3178,6 +3178,18 @@ def _ensure_codex_post_tool_use_json(hook_data, result):
     return repaired
 
 
+def _log_hook_audit_decision(hook_data, result):
+    """Persist the final hook decision when compliance audit logging is enabled."""
+    try:
+        from ai_guardian.violations.audit import AuditLogger
+
+        AuditLogger().log_hook_decision(hook_data, result)
+    except Exception as error:
+        # Audit logging is best-effort so a compliance configuration issue does
+        # not change the IDE hook protocol or block the protected operation.
+        logger.error("Audit decision logging failed: %s", error)
+
+
 def process_hook_data(hook_data, daemon_state=None):
     """Process one hook event and append it to the unified session trace."""
     try:
@@ -3191,6 +3203,7 @@ def process_hook_data(hook_data, daemon_state=None):
         result,
         action=_hook_failure_action(),
     )
+    _log_hook_audit_decision(hook_data, result)
     if daemon_state is None:
         return result
     try:

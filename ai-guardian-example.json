@@ -1147,6 +1147,31 @@
   "_comment_on_scan_error3": "'block': block operation when scanning or hook startup/processing fails (fail-closed, for strict compliance)",
   "on_scan_error": "allow",
 
+  "_comment_audit_logging": "Optional compliance audit trail for every final hook decision. Enable for SOC 2, GDPR, or HIPAA evidence collection.",
+  "_comment_audit_logging2": "Tool parameters are masked for secrets and PII before they are written. Raw tool output is never persisted.",
+  "audit_logging": {
+    "enabled": true,
+    "log_all_tool_calls": true,
+    "include_context": {
+      "user_id": true,
+      "session_id": true,
+      "timestamp": true,
+      "tool_parameters": true,
+      "decision_reason": true,
+      "hook_type": true
+    },
+    "compliance_mode": {
+      "soc2": true,
+      "gdpr": true,
+      "hipaa": false
+    },
+    "retention_days": 90,
+    "max_entries": 10000,
+    "export_format": "json",
+    "sensitive_data_masking": true,
+    "output_file": null
+  },
+
   "_comment_violation_logging": "Log blocked operations for audit and review (NEW in v1.1.0)",
   "_comment_violation_logging2": "All scanner findings are written to violations.jsonl for review in TUI/web console",
   "violation_logging": {

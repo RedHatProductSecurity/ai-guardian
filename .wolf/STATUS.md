@@ -157,10 +157,28 @@ budget_tokens: 1000
   Pylint, Mypy, compileall, and `git diff --check` passed.
 - Changes are uncommitted; no commit or pull request was created.
 
+## 🚧 Issue #266 In Progress
+
+- Added opt-in root `audit_logging` configuration and a separate sanitized
+  `audit.jsonl` trail for final hook decisions, preserving legacy violation and
+  scan-audit logging.
+- Added masking, canonical `PolicyDecision` records, SOC 2/GDPR/HIPAA markers,
+  retention/max-entry cleanup, JSON/CSV export, schema/profile/example/setup
+  coverage, and documentation.
+- Integrated audit logging after final hook response normalization and added
+  dedicated TUI/Web Console settings, navigation, and route coverage.
+- Focused validation: 295 tests passed; Ruff, Black, Pylint, Mypy, and
+  `git diff --check` passed. Three existing hook-test deprecation warnings
+  remain.
+- Fixed the CI regression where `test_tui_global_settings.py` still expected
+  15 global settings features after adding `audit_logging`; the affected UI
+  and dashboard tests now pass (198 passed).
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Review the uncommitted #2461 diff and run any additional integration
-validation before handing the issue back to the workflow.
+**Goal:** Review the uncommitted #266 diff and hand the issue back to the
+workflow.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

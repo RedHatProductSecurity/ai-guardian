@@ -119,6 +119,7 @@ nav:
       - Multi-Engine Support: MULTI_ENGINE_SUPPORT.md
       - ML Engine Support: ML_ENGINE_SUPPORT.md
       - Violation Logging: VIOLATION_LOGGING.md
+      - Compliance Audit Logging: AUDIT_LOGGING.md
   - Reference:
       - Tool Policy: TOOL_POLICY.md
       - Permissions Comparison: PERMISSIONS_COMPARISON.md
