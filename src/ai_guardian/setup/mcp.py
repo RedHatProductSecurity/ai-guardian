@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -11,12 +12,46 @@ from ai_guardian import __version__
 
 from ai_guardian.ide_paths import resolve_ide_config_path, resolve_ide_mcp_path
 from ai_guardian.setup.utils import (
+    _load_cli_config,
     _resolve_binary_path,
     _resolve_opencode_config,
     _strip_jsonc_comments,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _mcp_schema_error(
+    config: Dict[str, Any], config_path: Path, config_key: str
+) -> Optional[str]:
+    """Return a diagnostic when an MCP container has the wrong shape."""
+    if config_key not in config:
+        return None
+    if isinstance(config[config_key], dict):
+        return None
+    format_name = {
+        ".jsonc": "JSONC",
+        ".toml": "TOML",
+        ".yaml": "YAML",
+        ".yml": "YAML",
+    }.get(config_path.suffix.lower(), "JSON")
+    return (
+        f"Invalid {format_name} schema in {config_path}: "
+        f"'{config_key}' must be an object/mapping"
+    )
+
+
+def _load_mcp_config(
+    config_path: Path, mcp_config: Dict[str, Any]
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Load an MCP file and validate its configured server container."""
+    config, error = _load_cli_config(
+        config_path, format_name=mcp_config.get("config_format")
+    )
+    if error or config is None:
+        return config, error
+    return config, _mcp_schema_error(config, config_path, mcp_config["config_key"])
+
 
 PI_EXTENSION_NAME = "ai-guardian"
 PI_MCP_SDK_VERSION = "1.30.1"
@@ -456,11 +491,11 @@ def _cursor_mcp_entry_exists(path: Path) -> bool:
     """Check one Cursor MCP file without exposing its contents."""
     if not path.is_file():
         return False
-    try:
-        raw = path.read_text(encoding="utf-8")
-        config = json.loads(_strip_jsonc_comments(raw)) if raw.strip() else {}
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Unable to verify Cursor MCP config %s: %s", path, exc)
+    config, error = _load_mcp_config(path, {"config_key": "mcpServers"})
+    if error:
+        logger.warning("Unable to verify Cursor MCP config %s: %s", path, error)
+        return False
+    if config is None:
         return False
     servers = config.get("mcpServers", {}) if isinstance(config, dict) else {}
     return isinstance(servers, dict) and isinstance(servers.get("ai-guardian"), dict)
@@ -518,18 +553,36 @@ def verify_cursor_mcp_config(
                 }
             )
             continue
-        configured = _cursor_mcp_entry_exists(path)
+        config, config_error = (
+            _load_mcp_config(path, {"config_key": "mcpServers"})
+            if path.is_file()
+            else (None, None)
+        )
+        configured = (
+            isinstance(config, dict)
+            and isinstance(config.get("mcpServers"), dict)
+            and isinstance(config["mcpServers"].get("ai-guardian"), dict)
+            and config_error is None
+        )
         config_scopes.append(
             {
                 "scope": layer_scope,
                 "config_path": str(path),
                 "exists": path.is_file(),
                 "configured": configured,
-                "status": "healthy" if configured else "missing",
+                "status": (
+                    "invalid"
+                    if config_error
+                    else "healthy" if configured else "missing"
+                ),
+                "diagnostic": config_error,
             }
         )
 
     configured_layers = [layer for layer in config_scopes if layer["configured"]]
+    invalid_layers = [
+        layer for layer in config_scopes if layer.get("status") == "invalid"
+    ]
     effective_path = (
         configured_layers[0]["config_path"]
         if configured_layers
@@ -543,14 +596,24 @@ def verify_cursor_mcp_config(
         ),
         effective_path,
     )
-    return {
-        "mcp_installed": bool(configured_layers),
-        "mcp_status": "healthy" if configured_layers else "missing",
+    result = {
+        "mcp_installed": bool(configured_layers) and not invalid_layers,
+        "mcp_status": (
+            "invalid"
+            if invalid_layers
+            else ("healthy" if configured_layers else "missing")
+        ),
         "mcp_registration": "local",
         "mcp_config_path": user_path if scope == "auto" else effective_path,
         "effective_mcp_config_path": effective_path,
         "config_scopes": config_scopes,
     }
+    diagnostics = [
+        str(layer["diagnostic"]) for layer in invalid_layers if layer.get("diagnostic")
+    ]
+    if diagnostics:
+        result["mcp_diagnostic"] = "; ".join(diagnostics)
+    return result
 
 
 def verify_mcp_config(
@@ -590,25 +653,21 @@ def verify_mcp_config(
     if not config_path.is_file():
         return base
 
-    try:
-        raw = config_path.read_text(encoding="utf-8")
-        if ide_type != "codex" and config_path.suffix == ".jsonc":
-            raw = _strip_jsonc_comments(raw)
-        if ide_type == "codex" or mcp_ide.get("config_format") == "toml":
-            config = _load_toml_text(raw)
-            servers = config.get(mcp_ide["config_key"], {})
-        else:
-            config = json.loads(raw) if raw.strip() else {}
-            if not isinstance(config, dict):
-                base["mcp_status"] = "invalid"
-                return base
-            servers = config.get(mcp_ide["config_key"], {})
-    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+    config, config_error = _load_mcp_config(config_path, mcp_ide)
+    if config_error:
         base["mcp_status"] = "invalid"
+        base["mcp_diagnostic"] = config_error
         return base
+    if config is None:
+        return base
+
+    servers = config.get(mcp_ide["config_key"], {})
 
     if not isinstance(servers, dict):
         base["mcp_status"] = "invalid"
+        base["mcp_diagnostic"] = _mcp_schema_error(
+            config, config_path, mcp_ide["config_key"]
+        )
         return base
 
     entry = servers.get("ai-guardian")
@@ -648,10 +707,9 @@ def is_codex_mcp_configured(config_path: Optional[Path] = None) -> bool:
     if not path.is_file():
         return False
 
-    try:
-        data = _load_toml_text(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError) as exc:
-        logger.warning("Unable to read Codex MCP config %s: %s", path, exc)
+    data, config_error = _load_mcp_config(path, _MCP_IDE_CONFIGS["codex"])
+    if config_error or data is None:
+        logger.warning("Unable to read Codex MCP config %s: %s", path, config_error)
         return False
 
     mcp_servers = data.get("mcp_servers", {})
@@ -742,10 +800,13 @@ def _clean_legacy_codex_mcp_entry(
     if not legacy_path.is_file():
         return False
 
-    try:
-        config = json.loads(legacy_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        logger.warning("Unable to read stale Codex MCP config %s: %s", legacy_path, exc)
+    config, config_error = _load_cli_config(legacy_path)
+    if config_error or config is None:
+        logger.warning(
+            "Unable to read stale Codex MCP config %s: %s",
+            legacy_path,
+            config_error,
+        )
         return False
 
     mcp_servers = config.get("mcpServers") if isinstance(config, dict) else None
@@ -872,22 +933,18 @@ def _install_mcp_config(
         return
 
     # Read or create config file
-    config = {}
-    if config_path.exists():
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                raw = f.read()
-            if config_path.suffix == ".jsonc":
-                raw = _strip_jsonc_comments(raw)
-            if raw.strip():
-                config = json.loads(raw)
-        except (json.JSONDecodeError, OSError) as e:
-            # Never replace a non-empty user config that cannot be parsed.
-            logger.warning("Failed to read MCP config %s: %s", config_path, e)
-            return
+    config, config_error = _load_mcp_config(config_path, mcp_ide)
+    if config_error:
+        # Never replace a non-empty user config that cannot be parsed or does
+        # not have the host's expected MCP container shape.
+        logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
+        print(f"  MCP setup stopped: {config_error}", file=sys.stderr)
+        return
+    if config is None:
+        config = {}
 
     if not isinstance(config, dict):
-        logger.warning("MCP config %s must contain a JSON object", config_path)
+        logger.warning("MCP config %s must contain a mapping", config_path)
         return
 
     # Add MCP server entry with absolute path
@@ -926,19 +983,20 @@ def _install_mcp_config(
         if raw_settings_path is None:
             return
         settings_path = Path(raw_settings_path).expanduser()
-        try:
-            if settings_path.exists():
-                with open(settings_path, "r") as f:
-                    settings = json.load(f)
-                if "ai-guardian" in settings.get("mcpServers", {}):
-                    print(
-                        "  MCP: Warning: ai-guardian MCP entry found in "
-                        f"{settings_path} (hooks file).\n"
-                        f"  MCP servers should be in {config_path}. "
-                        "Remove the entry from settings.json to avoid conflicts."
-                    )
-        except (json.JSONDecodeError, OSError) as e:
-            logger.warning("Failed to read config: %s", e)
+        if settings_path.exists():
+            settings, settings_error = _load_cli_config(settings_path)
+            if settings_error:
+                logger.warning(
+                    "Failed to read config %s: %s", settings_path, settings_error
+                )
+                return
+            if settings and "ai-guardian" in settings.get("mcpServers", {}):
+                print(
+                    "  MCP: Warning: ai-guardian MCP entry found in "
+                    f"{settings_path} (hooks file).\n"
+                    f"  MCP servers should be in {config_path}. "
+                    "Remove the entry from settings.json to avoid conflicts."
+                )
 
 
 def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
@@ -950,12 +1008,16 @@ def _install_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
 
     raw = ""
     if config_path.exists():
-        try:
-            raw = config_path.read_text(encoding="utf-8")
-            data = _load_toml_text(raw) if raw.strip() else {}
-        except (OSError, ValueError) as exc:
-            logger.warning("Failed to read Codex config %s: %s", config_path, exc)
+        data, config_error = _load_mcp_config(config_path, _MCP_IDE_CONFIGS["codex"])
+        if config_error:
+            logger.warning(
+                "Failed to read Codex config %s: %s", config_path, config_error
+            )
+            print(f"  MCP setup stopped: {config_error}", file=sys.stderr)
             return
+        raw = config_path.read_text(encoding="utf-8")
+        if data is None:
+            data = {}
     else:
         data = {}
 
@@ -1007,12 +1069,18 @@ def _install_toml_mcp_config(
 
     raw = ""
     if config_path.exists():
-        try:
-            raw = config_path.read_text(encoding="utf-8")
-            data = _load_toml_text(raw) if raw.strip() else {}
-        except (OSError, ValueError) as exc:
-            logger.warning("Failed to read MCP config %s: %s", config_path, exc)
+        data, config_error = _load_mcp_config(
+            config_path, {"config_key": config_key, "config_format": "toml"}
+        )
+        if config_error:
+            logger.warning(
+                "Failed to read MCP config %s: %s", config_path, config_error
+            )
+            print(f"  MCP setup stopped: {config_error}", file=sys.stderr)
             return
+        raw = config_path.read_text(encoding="utf-8")
+        if data is None:
+            data = {}
     else:
         data = {}
 
@@ -1096,10 +1164,9 @@ def _remove_mcp_config(
         print("  MCP: No config file found, nothing to remove")
         return
 
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-    except (json.JSONDecodeError, OSError):
+    config, config_error = _load_mcp_config(config_path, mcp_ide)
+    if config_error or config is None:
+        logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
         return
 
     key = mcp_ide["config_key"]
@@ -1127,11 +1194,16 @@ def _remove_codex_mcp_config(config_path: Path, dry_run: bool = False) -> None:
         _clean_legacy_codex_mcp_entry()
         return
 
+    data, config_error = _load_mcp_config(config_path, _MCP_IDE_CONFIGS["codex"])
+    if config_error or data is None:
+        logger.warning("Failed to read Codex config %s: %s", config_path, config_error)
+        print(f"  MCP removal stopped: {config_error}", file=sys.stderr)
+        return
     try:
         raw = config_path.read_text(encoding="utf-8")
-        data = _load_toml_text(raw) if raw.strip() else {}
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         logger.warning("Failed to read Codex config %s: %s", config_path, exc)
+        print(f"  MCP removal stopped: {exc}", file=sys.stderr)
         return
 
     mcp_servers = data.get("mcp_servers")
@@ -1187,11 +1259,18 @@ def _remove_toml_mcp_config(
         print("  MCP: No config file found, nothing to remove")
         return
 
+    data, config_error = _load_mcp_config(
+        config_path, {"config_key": config_key, "config_format": "toml"}
+    )
+    if config_error or data is None:
+        logger.warning("Failed to read MCP config %s: %s", config_path, config_error)
+        print(f"  MCP removal stopped: {config_error}", file=sys.stderr)
+        return
     try:
         raw = config_path.read_text(encoding="utf-8")
-        data = _load_toml_text(raw) if raw.strip() else {}
-    except (OSError, ValueError) as exc:
+    except OSError as exc:
         logger.warning("Failed to read MCP config %s: %s", config_path, exc)
+        print(f"  MCP removal stopped: {exc}", file=sys.stderr)
         return
 
     servers = data.get(config_key)

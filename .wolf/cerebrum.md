@@ -56,6 +56,12 @@
 
 - **Grok Build setup paths (#2446):** Grok's relocated user hook target is `<GROK_HOME>/hooks/ai-guardian.json`, not directly under `GROK_HOME`; shared path resolution must pass the `hooks` subdirectory alongside the filename. Project hooks and MCP remain under `.grok/`.
 
+- **Host CLI config diagnostics (#2461):** Malformed or structurally invalid
+  JSON/JSONC/TOML/YAML files belong to the host CLI integration, not
+  `ai-guardian.json`. Setup, doctor, and tray health must use one format-aware
+  loader across every supported integration, preserve the existing file, and
+  surface the path/format-specific diagnostic before any write.
+
 - **Runtime-specific container entrypoints (#2446):** The normal and OpenShell images share `container/entrypoint.sh`; when a CLI is intentionally normal-container-only, the OpenShell image must set an explicit runtime marker and the entrypoint must filter that CLI from its supported arrays.
 
 - **Policy must use normalized tool fields:** Hook processing adds canonical

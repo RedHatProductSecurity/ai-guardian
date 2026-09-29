@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **OpenCode configuration self-protection (#2425):** Canonicalize native lowercase tool names and camelCase file arguments before immutable policy checks.
+- **Malformed host CLI configuration handling (#2461):** Report parse and
+  supported hook/MCP schema errors across CLI integrations in doctor and tray
+  setup health, and stop setup before replacing an existing invalid file.
 
 ### Changed
 - Immutable violations now carry explicit metadata through policy, scanner, and

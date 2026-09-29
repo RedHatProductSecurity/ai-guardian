@@ -1,10 +1,11 @@
 """Shared utility functions for ai-guardian setup modules."""
 
+import json
 import platform
 import re
 import shutil
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from ai_guardian.ide_paths import resolve_opencode_config
 
@@ -193,6 +194,82 @@ def _strip_jsonc_comments(text: str) -> str:
     stripped = "".join(result)
     stripped = re.sub(r",\s*([}\]])", r"\1", stripped)
     return stripped
+
+
+def _load_cli_config(
+    config_path: Path, format_name: Optional[str] = None
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """Load a CLI configuration without hiding parse or root-schema errors.
+
+    Setup and health checks inspect several host-owned configuration formats.
+    A malformed file must never be treated as an empty configuration because
+    doing so can make setup replace unrelated user settings.
+
+    Missing files are not errors: callers use ``(None, None)`` to distinguish a
+    new integration from an unreadable existing configuration.
+    """
+    suffix = config_path.suffix.lower()
+    normalized_format = (format_name or "").lower()
+    if normalized_format in ("jsonc", "json-with-comments") or suffix == ".jsonc":
+        config_format = "JSONC"
+    elif normalized_format == "toml" or suffix == ".toml":
+        config_format = "TOML"
+    elif normalized_format in ("yaml", "yml") or suffix in (".yaml", ".yml"):
+        config_format = "YAML"
+    else:
+        config_format = "JSON"
+
+    if not config_path.exists():
+        return None, None
+
+    try:
+        raw = config_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return (
+            None,
+            f"Unable to read {config_format} configuration {config_path}: {exc}",
+        )
+
+    if not raw.strip():
+        return {}, None
+
+    try:
+        if config_format == "JSONC":
+            value = json.loads(_strip_jsonc_comments(raw))
+        elif config_format == "JSON":
+            value = json.loads(raw)
+        elif config_format == "TOML":
+            try:
+                import tomllib
+            except ImportError:
+                try:
+                    import tomli as tomllib  # type: ignore
+                except ImportError as exc:
+                    return None, f"TOML parser is unavailable for {config_path}: {exc}"
+
+            value = tomllib.loads(raw)
+        else:
+            try:
+                import yaml
+            except ImportError as exc:
+                return None, f"YAML parser is unavailable for {config_path}: {exc}"
+
+            try:
+                value = yaml.safe_load(raw)
+            except yaml.YAMLError as exc:
+                return None, f"Invalid {config_format} in {config_path}: {exc}"
+            if value is None:
+                value = {}
+    except (OSError, TypeError, ValueError) as exc:
+        return None, f"Invalid {config_format} in {config_path}: {exc}"
+
+    if not isinstance(value, dict):
+        return (
+            None,
+            f"Invalid {config_format} schema in {config_path}: "
+            "expected a top-level object/mapping",
+        )
+    return value, None
 
 
 def _resolve_opencode_config() -> Path:

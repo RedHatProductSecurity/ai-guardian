@@ -744,6 +744,15 @@ Agent names: `claude`, `cursor`, `copilot`, `grok`, `codex`, `windsurf`, `gemini
 | Antigravity CLI | `~/.gemini/config/hooks.json` (global) or `<workspace>/.agents/hooks.json` (project) |
 | Junie | `.junie/guidelines` (MCP only) |
 
+### Malformed host configuration handling
+
+Setup and health verification share format-aware loading for supported host CLI
+configuration files. Existing JSON, JSONC, TOML, or YAML files that cannot be
+parsed, or that use an invalid hook/MCP container shape, are reported with the
+file path and format. `ai-guardian doctor` and tray setup health surface the
+diagnostic, while setup stops before rewriting the existing host file. Missing
+files remain valid setup targets.
+
 ### Cursor desktop, CLI, and agent scope
 
 Cursor uses the same command-hook JSON protocol and `hooks.json` event names

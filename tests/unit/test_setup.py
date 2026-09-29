@@ -1078,6 +1078,64 @@ class TestIDESetupParametrized:
         assert result["healthy"] is False
 
     @pytest.mark.parametrize(
+        "contents, expected",
+        [
+            ("{", "Invalid JSON"),
+            ('{"hooks": []}', "Invalid JSON schema"),
+        ],
+        ids=["malformed", "schema-invalid"],
+    )
+    def test_verify_hooks_surfaces_config_errors(self, tmp_path, contents, expected):
+        """Hook health must distinguish an invalid file from missing hooks."""
+        setup = IDESetup()
+        config_file = tmp_path / "hooks.json"
+        config_file.write_text(contents, encoding="utf-8")
+
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide("claude")
+            configured, detail = setup.check_hooks_for_ide("claude")
+
+        assert result["healthy"] is False
+        assert any(expected in diagnostic for diagnostic in result["diagnostics"])
+        assert configured is False
+        assert expected in detail
+
+    @pytest.mark.parametrize(
+        "ide_type, contents, expected",
+        [
+            (
+                "copilot",
+                '{"preToolUse": {}}',
+                "'preToolUse' must be a list",
+            ),
+            (
+                "gemini",
+                '{"hooks": [{"command": "ai-guardian"}]}',
+                "'hooks' entries must be objects with an event",
+            ),
+            (
+                "antigravity",
+                '{"ai-guardian": {"PreToolUse": {}}}',
+                "'ai-guardian.PreToolUse' must be a list",
+            ),
+        ],
+        ids=["copilot", "gemini", "antigravity"],
+    )
+    def test_verify_hooks_surfaces_adapter_schema_errors(
+        self, tmp_path, ide_type, contents, expected
+    ):
+        """Adapter-specific hook containers report structural errors."""
+        setup = IDESetup()
+        config_file = tmp_path / f"{ide_type}.json"
+        config_file.write_text(contents, encoding="utf-8")
+
+        with mock.patch.object(setup, "get_config_path", return_value=str(config_file)):
+            result = setup.verify_hooks_for_ide(ide_type)
+
+        assert result["healthy"] is False
+        assert any(expected in diagnostic for diagnostic in result["diagnostics"])
+
+    @pytest.mark.parametrize(
         "ide_name, expected_events",
         [
             ("augment", {"PreToolUse", "PostToolUse"}),
@@ -2116,6 +2174,41 @@ class TestCodexSetup:
 
         assert result["mcp_installed"] is False
         assert result["mcp_status"] == "invalid"
+
+    def test_generic_mcp_verification_reports_json_schema_error(
+        self, monkeypatch, tmp_path
+    ):
+        """MCP health exposes a wrong server-container shape, not just invalid."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        config_path = tmp_path / "opencode.json"
+        config_path.write_text('{"mcp": []}', encoding="utf-8")
+        monkeypatch.setenv("OPENCODE_CONFIG", str(config_path))
+
+        result = verify_mcp_config("opencode")
+
+        assert result["mcp_installed"] is False
+        assert result["mcp_status"] == "invalid"
+        assert "Invalid JSON schema" in result["mcp_diagnostic"]
+        assert str(config_path) in result["mcp_diagnostic"]
+
+    def test_codex_mcp_verification_reports_toml_parse_error(
+        self, monkeypatch, tmp_path
+    ):
+        """Codex health preserves the TOML parse diagnostic for doctor/tray."""
+        from ai_guardian.setup.mcp import verify_mcp_config
+
+        codex_home = tmp_path / "codex"
+        codex_home.mkdir()
+        config_path = codex_home / "config.toml"
+        config_path.write_text("[mcp_servers", encoding="utf-8")
+        monkeypatch.setenv("CODEX_HOME", str(codex_home))
+
+        result = verify_mcp_config("codex")
+
+        assert result["mcp_status"] == "invalid"
+        assert "Invalid TOML" in result["mcp_diagnostic"]
+        assert str(config_path) in result["mcp_diagnostic"]
 
     def test_generic_ide_setup_includes_mcp_health(self, monkeypatch, tmp_path):
         """Combined setup health includes MCP for MCP-only integrations."""
@@ -4304,6 +4397,79 @@ class TestMcpDefaultOn:
 
 class TestOpenCodeMcpConfig:
     """Tests for OpenCode MCP config handling (#1377)."""
+
+    @pytest.mark.parametrize(
+        "contents, expected",
+        [
+            ("{", "Invalid JSON"),
+            ('{"plugin": "not-a-list"}', "Invalid JSON schema"),
+        ],
+        ids=["malformed", "schema-invalid"],
+    )
+    def test_opencode_setup_reports_config_error_without_writing(
+        self, tmp_path, contents, expected
+    ):
+        """OpenCode setup must not replace an unreadable host config."""
+        from ai_guardian.setup.hooks import IDESetup
+
+        plugins_dir = tmp_path / "plugins"
+        config_file = tmp_path / "opencode.json"
+        config_file.write_text(contents, encoding="utf-8")
+        before = config_file.read_bytes()
+        setup = IDESetup()
+
+        with (
+            mock.patch.object(setup, "get_config_path", return_value=str(plugins_dir)),
+            mock.patch(
+                "ai_guardian.setup.hooks._resolve_opencode_config",
+                return_value=config_file,
+            ),
+        ):
+            success, message = setup.setup_ide_hooks("opencode")
+
+        assert success is False
+        assert expected in message
+        assert str(config_file) in message
+        assert config_file.read_bytes() == before
+        assert not plugins_dir.exists()
+
+    @pytest.mark.parametrize(
+        "suffix, contents, expected",
+        [
+            (".json", "{", "Invalid JSON"),
+            (".jsonc", "{", "Invalid JSONC"),
+            (".yaml", "[unclosed", "Invalid YAML"),
+            (".toml", "[section", "Invalid TOML"),
+        ],
+        ids=["json", "jsonc", "yaml", "toml"],
+    )
+    def test_cli_config_loader_reports_format_errors(
+        self, tmp_path, suffix, contents, expected
+    ):
+        """Host config parsing errors retain their format and file location."""
+        from ai_guardian.setup.utils import _load_cli_config
+
+        config_file = tmp_path / f"cli-config{suffix}"
+        config_file.write_text(contents, encoding="utf-8")
+
+        config, error = _load_cli_config(config_file)
+
+        assert config is None
+        assert expected in error
+        assert str(config_file) in error
+
+    def test_cli_config_loader_reports_root_schema_error(self, tmp_path):
+        """Host configs must be mappings before setup can merge them."""
+        from ai_guardian.setup.utils import _load_cli_config
+
+        config_file = tmp_path / "cli-config.json"
+        config_file.write_text("[]", encoding="utf-8")
+
+        config, error = _load_cli_config(config_file)
+
+        assert config is None
+        assert "Invalid JSON schema" in error
+        assert "top-level object/mapping" in error
 
     def test_writes_to_existing_json_not_jsonc(self, tmp_path):
         """When opencode.json exists but .jsonc does not, write to .json."""
