@@ -8,6 +8,7 @@
 
 - Dev install must use `uv tool install --editable .` — `uv tool install --force .` copies a snapshot; subsequent source changes are NOT reflected in the binary.
 - When DAF metadata labels a repository issue as JIRA but the user identifies it as GitHub, use the repository-qualified `gh issue view` flow.
+- Pi OpenShell remains unqualified; local v0.1.2 validation must use supported Codex or OpenCode paths instead.
 
 <!-- How the user likes things done. Code style, tools, patterns, communication. -->
 

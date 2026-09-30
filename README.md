@@ -352,6 +352,16 @@ The `opencode` + `claude` + Claude/Vertex combination has been tested. The
 `--cli` value selects OpenCode, `--agent claude` selects the tested profile,
 and `--model` plus `--provider` select the inference backend.
 
+For gateway-managed OpenAI credentials, attach provider explicitly and keep
+credentials out of sandbox:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --base localhost/ai-guardian-openshell:review-2474 \
+    --cli opencode --opencode-agent-profile build \
+    --model openai/gpt-5.6-luna --provider ai-guardian-codex --repo .
+```
+
 The Claude/Vertex policy does not grant GitHub access by default. The command
 above is sufficient for Claude requests, Vertex inference, and an ordinary
 Claude session. Marketplace or plugin installation and refresh are different:

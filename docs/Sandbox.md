@@ -484,13 +484,13 @@ named sandbox remains available for a later `connect` or `exec`. If an explicit
 command follows `--`, it runs in a separate exec after bootstrap and the create
 command returns when that command exits.
 
-When `--provider` is omitted, staged OpenShell setup reuses or creates an
-`ai-guardian-<cli>` provider from the active gateway and local credentials
-when that CLI/backend has a matching provider profile. For the auto-managed
-Codex provider, local credentials refresh the existing provider before a new
-sandbox is created. Existing providers can always be selected explicitly with
-repeatable `--provider` options. Running sandboxes may require a restart or
-recreation after provider credentials change. Claude
+When `--provider` is omitted, staged OpenShell setup can reuse or create an
+`ai-guardian-<cli>` provider only when matching local credentials are available.
+Gateway-only credentials require an explicit existing provider, for example
+`--provider ai-guardian-codex`; omitting it does not attach credentials to an
+already-created sandbox. Existing providers can always be selected explicitly
+with repeatable `--provider` options. Running sandboxes may require a restart
+or recreation after provider credentials change. Claude
 Vertex AI setup is selected by `ANTHROPIC_VERTEX_PROJECT_ID` or
 `VERTEX_AI_PROJECT_ID`; it creates or updates and attaches a gateway-managed
 `google-cloud` provider from ADC, then binds native Vertex endpoints to that
@@ -579,11 +579,26 @@ endpoint, so OpenCode must be configured for the attached provider's native
 endpoint and the selected model. OpenCode has no Claude-style `--bare` flag;
 launch it normally, or use `opencode --agent NAME`.
 
-For an OpenAI-shaped model such as `openai/gpt-5`, the sandbox command
-automatically attaches or creates `ai-guardian-codex` when the host Codex
-`auth.json` contains a top-level `OPENAI_API_KEY`. This uses the provider's
-native OpenAI API-key environment. OAuth-only Codex credentials remain
-supported for native `--cli codex`, not as a generic OpenCode API key.
+### OpenCode with OpenAI
+
+For gateway-managed OpenAI credentials, attach an existing OpenShell provider
+explicitly. Do not put `OPENAI_API_KEY` in the sandbox environment:
+
+```bash
+ai-guardian sandbox create --runtime openshell \
+    --name guardian-opencode \
+    --base localhost/ai-guardian-openshell:review-2474 \
+    --cli opencode \
+    --opencode-agent-profile build \
+    --model openai/gpt-5.6-luna \
+    --provider ai-guardian-codex \
+    --repo .
+ai-guardian sandbox exec guardian-opencode -- \
+    opencode --agent build run "hello" --model openai/gpt-5.6-luna
+```
+
+`ai-guardian-codex` must already exist on active OpenShell gateway. Its
+credential remains gateway-managed; only provider name is passed to sandbox.
 
 ## Manual Live Provider Smoke Tests
 

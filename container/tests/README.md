@@ -204,7 +204,7 @@ does not run a live provider or claim generic OpenShell compatibility.
 | `codex` | `codex exec --skip-git-repo-check "hello"` | Codex provider or local Codex login |
 | `copilot` | `copilot --help` | OpenShell Copilot provider; pass `--provider copilot=NAME` |
 | `opencode-claude` | `opencode --agent claude run "hello" --model claude-sonnet-4-6` | Claude/Vertex provider; pass `--provider opencode-claude=NAME` |
-| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Existing OpenAI-compatible provider, or Codex API-key login through sandbox auto-setup |
+| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Existing gateway provider; pass `--provider opencode-openai=ai-guardian-codex` |
 | `opencode-openai-api-key` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Host Codex `auth.json` with `OPENAI_API_KEY`; skipped otherwise |
 | `pi-anthropic` | `pi -p "hello" --model claude-sonnet-4-6 --provider anthropic` | Anthropic-compatible provider |
 | `pi-openai` | `pi -p "hello" --model gpt-5.6-luna --provider openai` | Local Pi OpenAI API-key login |
@@ -221,7 +221,7 @@ python container/tests/test_openshell_agents.py \
 
 Provider values are names only. The script delegates credential resolution to
 AI Guardian and OpenShell; it does not expose credential contents in command
-arguments.
+arguments or the sandbox environment.
 
 The `opencode-openai-api-key` case is skipped unless the host Codex auth file
 contains an API key. To exercise automatic `ai-guardian-codex` creation from a
