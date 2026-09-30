@@ -362,18 +362,15 @@ _configure_pi_openshell_models() {
 
   local provider_name
   local base_url
-  local api_key
   local pi_agent_dir
   local models_path
   provider_name="${AI_GUARDIAN_AGENT_PROVIDER}"
   case "$provider_name" in
     openai)
       base_url="https://api.openai.com/v1"
-      api_key="${OPENAI_API_KEY:-unused}"
       ;;
     anthropic)
       base_url="https://api.anthropic.com"
-      api_key="${ANTHROPIC_API_KEY:-unused}"
       ;;
     *)
       return 0
@@ -382,14 +379,14 @@ _configure_pi_openshell_models() {
 
   pi_agent_dir="${PI_CODING_AGENT_DIR:-${HOME}/.pi/agent}"
   models_path="${pi_agent_dir}/models.json"
-  if ! python3 - "$models_path" "$provider_name" "$base_url" "$api_key" <<'PY'
+  if ! python3 - "$models_path" "$provider_name" "$base_url" <<'PY'
 import json
 import os
 import sys
 import tempfile
 
 
-models_path, provider_name, base_url, api_key = sys.argv[1:]
+models_path, provider_name, base_url = sys.argv[1:]
 try:
     with open(models_path, encoding="utf-8") as stream:
         models = json.load(stream)
@@ -413,7 +410,9 @@ if not isinstance(provider, dict):
     print(f"Pi {provider_name} provider configuration must be an object", file=sys.stderr)
     raise SystemExit(1)
 provider["baseUrl"] = base_url
-provider["apiKey"] = api_key
+# OpenShell attaches credentials at gateway level; no credential is stored in
+# the sandbox provider configuration.
+provider["apiKey"] = ""
 
 models_dir = os.path.dirname(os.path.abspath(models_path))
 os.makedirs(models_dir, exist_ok=True)

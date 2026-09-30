@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   image from the retired Community base to a pinned NVIDIA Ubuntu 24.04 base,
   install workload dependencies explicitly, and remove managed
   `inference.local` route assumptions in favor of native provider attachments.
+  Pi provider configuration keeps credentials exclusively in the OpenShell
+  gateway and stores no API key in the sandbox.
 - Codex OpenShell v0.1.2 API-key qualification passed with gateway-owned
   OpenAI provider credentials; Codex and OpenAI provider-profile setup is now
   documented.

@@ -705,7 +705,7 @@ class TestContainerLaunchers:
 
     def test_agent_policy_fragments_are_scoped_to_one_selected_agent(self):
         expected_network_policies = {
-            "claude": {"claude_code"},
+            "claude": {"claude_code", "claude_install"},
             "codex": {"codex_openai"},
             "copilot": {"github_copilot"},
             "gemini": {"gemini_api"},
@@ -771,6 +771,7 @@ class TestContainerLaunchers:
             "github_api",
             "github_git",
             "claude_code",
+            "claude_install",
         }
         assert "codex_openai" not in policy["network_policies"]
 
@@ -1180,10 +1181,10 @@ fi
         "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_RUNTIME": "openshell",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "AI_GUARDIAN_AGENT_PROVIDER": "anthropic",
         "AI_GUARDIAN_AGENT_MODEL": "claude-sonnet-4-6",
-        "ANTHROPIC_API_KEY": "unused",
         "PI_CODING_AGENT_DIR": str(pi_agent_dir),
     }
 
@@ -1198,7 +1199,10 @@ fi
     assert result.returncode == 0, result.stderr
     models = json.loads(models_path.read_text(encoding="utf-8"))
     assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
-    assert "anthropic" not in models["providers"]
+    assert models["providers"]["anthropic"] == {
+        "baseUrl": "https://api.anthropic.com",
+        "apiKey": "",
+    }
     settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["defaultProvider"] == "anthropic"
     assert settings["defaultModel"] == "claude-sonnet-4-6"
@@ -1237,10 +1241,10 @@ fi
         "AI_GUARDIAN_CONFIG_DIR": str(tmp_path / "config"),
         "AI_GUARDIAN_HOST_CONFIG_MOUNTED": "false",
         "AI_GUARDIAN_SETUP_SCOPE": "selected",
+        "AI_GUARDIAN_RUNTIME": "openshell",
         "AI_GUARDIAN_OPEN_SHELL_INFERENCE": "true",
         "AI_GUARDIAN_AGENT_PROVIDER": "openai",
         "AI_GUARDIAN_AGENT_MODEL": "gpt-5",
-        "OPENAI_API_KEY": "unused",
         "PI_CODING_AGENT_DIR": str(pi_agent_dir),
     }
 
@@ -1255,7 +1259,10 @@ fi
     assert result.returncode == 0, result.stderr
     models = json.loads(models_path.read_text(encoding="utf-8"))
     assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
-    assert "openai" not in models["providers"]
+    assert models["providers"]["openai"] == {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "",
+    }
     settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["defaultProvider"] == "openai"
     assert settings["defaultModel"] == "gpt-5"

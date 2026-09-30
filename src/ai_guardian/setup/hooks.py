@@ -4350,65 +4350,6 @@ function replaceMessageText(message: any, replacement: string): any {
   return replaced ? { ...message, content } : message;
 }
 
-function isProviderCredentialField(name: string): boolean {
-  const normalized = name.toLowerCase().replace(/[^a-z]/g, "");
-  return normalized.endsWith("apikey") || normalized.endsWith("token") || [
-    "authorization",
-    "proxyauthorization",
-    "xapikey",
-    "apikey",
-    "accesstoken",
-    "bearertoken",
-  ].includes(normalized);
-}
-
-function providerPayloadForScan(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(providerPayloadForScan);
-  if (!value || typeof value !== "object") return value;
-  if (
-    "role" in value
-    && (value as { role?: unknown }).role
-      && ["system", "developer"].includes(String((value as { role: string }).role))
-  ) {
-    return {
-      role: (value as { role: string }).role,
-      content: "[trusted provider instructions omitted from user-content scan]",
-    };
-  }
-  return Object.fromEntries(
-    Object.entries(value).map(([key, item]) => [
-      key,
-      isProviderCredentialField(key)
-        ? "[provider credential omitted]"
-        : providerPayloadForScan(item),
-    ]),
-  );
-}
-
-function restoreProviderCredentials(original: unknown, candidate: unknown): unknown {
-  if (Array.isArray(original) && Array.isArray(candidate)) {
-    return candidate.map((item, index) =>
-      restoreProviderCredentials(original[index], item),
-    );
-  }
-  if (
-    original && typeof original === "object"
-    && candidate && typeof candidate === "object"
-    && !Array.isArray(original) && !Array.isArray(candidate)
-  ) {
-    const restored = { ...(candidate as Record<string, unknown>) };
-    for (const [key, value] of Object.entries(original)) {
-      if (isProviderCredentialField(key)) {
-        restored[key] = value;
-      } else if (key in restored) {
-        restored[key] = restoreProviderCredentials(value, restored[key]);
-      }
-    }
-    return restored;
-  }
-  return candidate;
-}
-
 type McpClient = {
   connect(transport: unknown): Promise<void>;
   listTools(): Promise<{ tools?: Array<Record<string, any>> }>;
@@ -4540,9 +4481,8 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
-    // Provider payload contains trusted system instructions and credential
-    // placeholders. User prompts and tool results are scanned by dedicated
-    // hooks; scanning this aggregate payload causes PII/secret false positives.
+    // User prompts and tool results are scanned by dedicated hooks. Scanning
+    // this aggregate payload causes PII/secret false positives.
     return event.payload;
   });
 

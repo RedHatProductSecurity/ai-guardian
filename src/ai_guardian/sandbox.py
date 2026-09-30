@@ -1632,10 +1632,15 @@ def _add_openshell_vertex_policy_binding(
                 {"path": f"/usr/bin/{cli}"},
                 {"path": f"/usr/local/bin/{cli}"},
                 {"path": f"/sandbox/.local/bin/{cli}"},
-                {"path": "/sandbox/.claude/downloads/**"},
-                {"path": "/sandbox/.local/share/claude/**"},
             ],
         }
+        if cli == "claude":
+            network_policies["ai_guardian_vertex"]["binaries"].extend(
+                [
+                    {"path": "/sandbox/.claude/downloads/**"},
+                    {"path": "/sandbox/.local/share/claude/**"},
+                ]
+            )
         policy_path.write_text(
             yaml.safe_dump(policy, sort_keys=False), encoding="utf-8"
         )
@@ -2448,24 +2453,10 @@ def _openshell_create(
     if cli == "opencode" and inference_cli == "claude" and provider_attached:
         # OpenCode must use a provider-native endpoint in v0.1.2. Do not point
         # it at the removed managed inference.local route.
-        if vertex_provider_required:
-            environment.extend(
-                [
-                    f"ANTHROPIC_VERTEX_PROJECT_ID={project}",
-                    f"CLOUD_ML_REGION={region}",
-                ]
-            )
         suppress_credential_warnings = True
 
     if cli == "pi" and inference_cli == "claude" and provider_attached:
         # Pi uses the provider-native Anthropic endpoint in v0.1.2.
-        if vertex_provider_required:
-            environment.extend(
-                [
-                    f"ANTHROPIC_VERTEX_PROJECT_ID={project}",
-                    f"CLOUD_ML_REGION={region}",
-                ]
-            )
         suppress_credential_warnings = True
 
     if cli == "pi" and inference_cli == "openai" and provider_attached:
@@ -2551,10 +2542,11 @@ def _create(
             return result
 
         vertex_project, _vertex_region, _vertex_model = _vertex_settings(args)
+        inference_cli = _openshell_inference_cli(args, getattr(args, "cli", ""))
         if (
             runtime == OPENSHELL_RUNTIME
             and vertex_project
-            and getattr(args, "cli", None) == "claude"
+            and inference_cli == "claude"
         ):
             provider_name = (
                 getattr(args, "provider", None) or ["ai-guardian-google-cloud"]

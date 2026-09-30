@@ -298,12 +298,11 @@ overlay described below.
 
 For Claude Code through Google Vertex AI, set the GCP project and launch with
 the OpenShell image. The subcommand creates or updates and attaches the gateway
-provider, configures the workspace's `inference.local` route, and supplies
-Claude only the non-secret client settings it requires; the host ADC file is
+provider, then supplies native Vertex settings to the CLI; the host ADC file is
 consumed by the gateway and is not mounted into the sandbox. The
-`ANTHROPIC_API_KEY=unused` value is only a Claude Code protocol placeholder,
-not an API credential; the actual authentication comes from the attached
-Vertex provider:
+`ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`, and
+`CLAUDE_CODE_USE_VERTEX=1` values select Vertex; credentials remain gateway-
+managed:
 
 ```bash
 export ANTHROPIC_VERTEX_PROJECT_ID=my-gcp-project
@@ -316,17 +315,10 @@ ai-guardian sandbox create --runtime openshell \
     --repo .
 ```
 
-From the resulting shell, start Claude explicitly with `claude --bare`, as
-documented by OpenShell. `--bare` skips Claude's OAuth login flow and uses
-`ANTHROPIC_API_KEY` directly. The value is only a non-secret placeholder:
-`inference.local` strips it and injects the real GCP access token before
-forwarding the request. AI Guardian does not install a persistent shell
-wrapper. For an explicit automated `claude --print ...` command passed during
-creation, the entrypoint adds `--bare` when it is missing. Administrative
-commands such as `claude plugin` and `claude doctor` remain unchanged. Do not
-set `CLAUDE_CODE_USE_VERTEX=1` inside an OpenShell sandbox; that direct-Vertex
-mode expects GCP credential discovery inside the sandbox. Use the subcommand's
-`--model` option (default `claude-sonnet-4-6`) to select the gateway model.
+From the resulting shell, start Claude normally. OpenShell's provider supplies
+the credential path, while AI Guardian sets the native Vertex environment. AI
+Guardian does not install a persistent shell wrapper. Use the subcommand's
+`--model` option (default `claude-sonnet-4-6`) to select the model.
 
 If using a locally built image, rebuild it after pulling this change so the
 OpenShell inference environment fallback is included.
@@ -350,14 +342,11 @@ ai-guardian sandbox create --runtime openshell \
 ```
 
 Here `--agent claude` is an OpenCode agent profile and `--model` selects the
-OpenShell inference model. OpenCode's `build` and `plan` names are profiles,
-not providers: with the default `claude-sonnet-4-6` model they use the same
-Claude-compatible route, while an explicitly non-Claude model leaves generic
-OpenCode provider handling unchanged. The tested Claude route enables
-`ANTHROPIC_BASE_URL=https://inference.local/v1` and the non-secret
-`ANTHROPIC_API_KEY=unused` placeholder. OpenCode has no Claude-style `--bare`
-flag; run `opencode --agent NAME` normally. The gateway inference route must
-be configured with `openshell inference set`.
+provider model. OpenCode's `build` and `plan` names are profiles, not
+providers. For the Claude/Vertex path, the subcommand attaches the Google
+Cloud provider and passes native Vertex settings; no `inference.local` route
+or `openshell inference set` command is required. OpenCode has no Claude-style
+`--bare` flag; run `opencode --agent NAME` normally.
 
 The `opencode` + `claude` + Claude/Vertex combination has been tested. The
 `--cli` value selects OpenCode, `--agent claude` selects the tested profile,
