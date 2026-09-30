@@ -97,6 +97,27 @@ def parse_transcript_token_usage(transcript_path: str) -> Optional[Dict[str, int
     return totals if found_any else None
 
 
+def parse_hook_token_usage(
+    hook_data: dict, adapter_name: Optional[str] = None
+) -> Optional[Dict[str, int]]:
+    """Read token usage from the transcript source for a hook session."""
+    is_opencode = adapter_name == "OpenCode" or (
+        hook_data.get("hook_source") == "opencode"
+        or bool(hook_data.get("opencode_version"))
+    )
+    if is_opencode:
+        from ai_guardian.scanners.transcript.opencode import (
+            get_opencode_db_path,
+            parse_opencode_token_usage,
+        )
+
+        return parse_opencode_token_usage(
+            get_opencode_db_path(), hook_data.get("session_id")
+        )
+
+    return parse_transcript_token_usage(_get_transcript_path(hook_data))
+
+
 # ---------------------------------------------------------------------------
 # Position tracking
 # ---------------------------------------------------------------------------

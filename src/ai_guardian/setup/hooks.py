@@ -4728,8 +4728,8 @@ export const AiGuardian: Plugin = async (ctx) => {
       }
     },
 
-    async 'session.end'() {
-      guardian.run({ hook_event_name: 'session.end', opencode_version: '1.0.0', hook_source: 'opencode', cwd });
+    async 'session.end'(input) {
+      guardian.run({ hook_event_name: 'SessionEnd', opencode_version: '1.0.0', hook_source: 'opencode', session_id: input?.sessionID, cwd });
     },
   };
 };

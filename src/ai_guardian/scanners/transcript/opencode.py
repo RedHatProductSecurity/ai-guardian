@@ -2,7 +2,8 @@
 
 OpenCode stores conversation sessions in a SQLite database at
 ~/.local/share/opencode/opencode.db (or OPENCODE_HOME). This module
-reads message parts to extract text for transcript scanning.
+reads message parts to extract text for transcript scanning and assistant
+message ``tokens`` objects to extract session usage.
 """
 
 import json
@@ -32,6 +33,103 @@ def get_opencode_db_path() -> Optional[str]:
         check=os.path.exists,
         env_suffix="opencode.db",
     )
+
+
+def _extract_token_usage(data: dict) -> Optional[Dict[str, int]]:
+    """Map an OpenCode message ``tokens`` object to AI Guardian counters."""
+    tokens = data.get("tokens")
+    if not isinstance(tokens, dict):
+        return None
+
+    usage: Dict[str, int] = {}
+    found_any = False
+
+    for source_key, target_key in (
+        ("input", "input_tokens"),
+        ("output", "output_tokens"),
+    ):
+        value = tokens.get(source_key)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        try:
+            if value < 0:
+                continue
+            usage[target_key] = int(value)
+        except (TypeError, ValueError, OverflowError):
+            continue
+        found_any = True
+
+    cache = tokens.get("cache")
+    if isinstance(cache, dict):
+        for source_key, target_key in (
+            ("read", "cache_read_input_tokens"),
+            ("write", "cache_creation_input_tokens"),
+        ):
+            value = cache.get(source_key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                continue
+            try:
+                if value < 0:
+                    continue
+                usage[target_key] = int(value)
+            except (TypeError, ValueError, OverflowError):
+                continue
+            found_any = True
+
+    return usage if found_any else None
+
+
+def parse_opencode_token_usage(
+    db_path: Optional[str], session_id: Optional[str]
+) -> Optional[Dict[str, int]]:
+    """Sum usage from OpenCode ``message.data.tokens`` records.
+
+    OpenCode stores aggregate usage on assistant messages, not on the
+    transcript ``part`` records.  The current schema is:
+    ``tokens.input``, ``tokens.output``, ``tokens.cache.read``, and
+    ``tokens.cache.write``.  A result containing only zero counters is still
+    considered available because the database explicitly supplied usage data.
+    """
+    if not db_path or not session_id or not os.path.isfile(db_path):
+        return None
+
+    totals: Dict[str, int] = {
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "cache_read_input_tokens": 0,
+        "cache_creation_input_tokens": 0,
+    }
+    found_any = False
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+        try:
+            rows = conn.execute(
+                "SELECT data FROM message "
+                "WHERE session_id = ? ORDER BY time_created ASC, id ASC",
+                (session_id,),
+            )
+            for (data_str,) in rows:
+                try:
+                    data = json.loads(data_str)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if not isinstance(data, dict):
+                    continue
+
+                usage = _extract_token_usage(data)
+                if usage is None:
+                    continue
+                found_any = True
+                for key in totals:
+                    totals[key] += usage.get(key, 0)
+        finally:
+            conn.close()
+    except (OSError, sqlite3.Error) as e:
+        logger.debug(f"OpenCode token usage read error: {e}")
+        return None
+
+    return totals if found_any else None
 
 
 def _extract_text_from_part(data: dict) -> str:

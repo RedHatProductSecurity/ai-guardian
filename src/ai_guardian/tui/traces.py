@@ -350,12 +350,15 @@ def _format_trace_label(t):
         active_marker = "[dim]○[/dim] "
         status = f"[dim]{display_stop}[/dim]"
 
-    tokens = t.get("total_tokens", {})
-    total_input = tokens.get("input_tokens", 0)
-    total_output = tokens.get("output_tokens", 0)
-    cache_read = tokens.get("cache_read_input_tokens", 0)
-    cache_create = tokens.get("cache_creation_input_tokens", 0)
-    context = total_input + cache_read + cache_create
+    if t.get("usage_available", True):
+        tokens = t.get("total_tokens", {})
+        total_input = tokens.get("input_tokens", 0)
+        total_output = tokens.get("output_tokens", 0)
+        cache_read = tokens.get("cache_read_input_tokens", 0)
+        cache_create = tokens.get("cache_creation_input_tokens", 0)
+        context_label = _fmt_tok(total_input + cache_read + cache_create)
+    else:
+        context_label = "unavailable"
 
     duration = t.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
@@ -365,7 +368,7 @@ def _format_trace_label(t):
 
     return (
         f"{active_marker}[bold]{name}[/bold] ({model}) {status}{v_str}  "
-        f"{started} | {turns} turns | ctx:{_fmt_tok(context)} | {duration_str}"
+        f"{started} | {turns} turns | ctx:{context_label} | {duration_str}"
     )
 
 

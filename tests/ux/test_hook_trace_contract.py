@@ -123,3 +123,31 @@ def test_unfinalized_trace_is_presented_as_interrupted():
     )
     assert "INTERRUPTED" in label
     assert "CRASHED" not in label
+
+
+def test_missing_token_usage_is_presented_as_unavailable(tmp_path):
+    """
+    USER EXPERIENCE: A hook trace has no usage source -> zero is not shown as usage.
+
+    The trace list and detail view must preserve the distinction between a
+    measured zero and unavailable token data.
+    """
+    from ai_guardian.daemon.traces import list_traces, read_trace_detail
+
+    writer = HookTraceWriter(
+        "ide-session",
+        adapter_name="OpenCode",
+        project_name="project",
+        trace_dir=str(tmp_path),
+    )
+    writer.finalize()
+    trace_file = next(
+        path for path in tmp_path.glob("*.json") if not path.name.endswith(".meta.json")
+    )
+
+    summary = list_traces(str(tmp_path))[0]
+    detail = read_trace_detail(str(tmp_path), trace_file.name)
+
+    assert summary["usage_available"] is False
+    assert detail["usage_available"] is False
+    assert detail["computed"]["usage_available"] is False

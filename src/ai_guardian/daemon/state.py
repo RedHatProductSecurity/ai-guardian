@@ -371,7 +371,7 @@ class DaemonState:
             self._schedule_persist()
         return run_id
 
-    def finalize_hook_trace(self, session_id, token_usage=None):
+    def finalize_hook_trace(self, session_id, token_usage=None, usage_available=None):
         """Finalize and remove a hook trace writer for a completed session."""
         if not session_id:
             return
@@ -379,7 +379,9 @@ class DaemonState:
             writer = self._hook_trace_writers.pop(session_id, None)
         if writer is not None:
             try:
-                writer.finalize(token_usage=token_usage)
+                writer.finalize(
+                    token_usage=token_usage, usage_available=usage_available
+                )
             except Exception:
                 logger.warning("Failed to finalize hook trace", exc_info=True)
 

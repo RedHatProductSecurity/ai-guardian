@@ -203,9 +203,20 @@ class HookTraceWriter:
                 turn_steps.append(step)
         self._write(stop_reason="in_progress")
 
-    def finalize(self, token_usage: Optional[Dict[str, Any]] = None) -> None:
+    def finalize(
+        self,
+        token_usage: Optional[Dict[str, Any]] = None,
+        usage_available: Optional[bool] = None,
+    ) -> None:
         """Finish the trace document when the IDE session ends."""
-        self._write(stop_reason="session_end", token_usage=token_usage, final=True)
+        if usage_available is None:
+            usage_available = token_usage is not None
+        self._write(
+            stop_reason="session_end",
+            token_usage=token_usage,
+            usage_available=usage_available,
+            final=True,
+        )
 
     def is_stale(self, now: Optional[float] = None) -> bool:
         """Return whether no hook event has arrived within the stale threshold."""
@@ -214,10 +225,11 @@ class HookTraceWriter:
 
     def finalize_stale(self) -> None:
         """Finish an abandoned hook trace using its last recorded activity."""
-        usage = compute_token_summary(self._trace, {}, self._model)["total_tokens"]
+        computed = compute_token_summary(self._trace, {}, self._model)
         self._write(
             stop_reason="timeout",
-            token_usage=usage,
+            token_usage=computed["total_tokens"],
+            usage_available=computed["usage_available"],
             final=True,
             ended_at=self.last_recorded_at,
         )
@@ -239,6 +251,7 @@ class HookTraceWriter:
         self,
         stop_reason: str,
         token_usage: Optional[Dict[str, Any]] = None,
+        usage_available: Optional[bool] = None,
         final: bool = False,
         ended_at: Optional[datetime] = None,
     ) -> Dict[str, Any]:
@@ -254,6 +267,8 @@ class HookTraceWriter:
             extras["run_id"] = self.run_id
         if final:
             extras["ended_at"] = (ended_at or datetime.now(timezone.utc)).isoformat()
+        if usage_available is not None:
+            extras["usage_available"] = usage_available
         return build_trace_doc(
             agent_name=agent_name,
             model=self._model,
@@ -270,10 +285,11 @@ class HookTraceWriter:
         *,
         stop_reason: str,
         token_usage: Optional[Dict[str, Any]] = None,
+        usage_available: Optional[bool] = None,
         final: bool = False,
         ended_at: Optional[datetime] = None,
     ) -> None:
-        doc = self._document(stop_reason, token_usage, final, ended_at)
+        doc = self._document(stop_reason, token_usage, usage_available, final, ended_at)
         write_trace_file(self.filepath, doc)
 
 
@@ -305,6 +321,7 @@ def write_trace_meta(filepath: str, doc: Dict[str, Any]) -> None:
         },
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
+        "usage_available": doc.get("usage_available", bool(usage)),
     }
     for field in ("session_id", "source", "adapter", "ended_at"):
         value = doc.get(field)
@@ -348,6 +365,7 @@ def _finalize_stale_trace(filepath: str) -> Optional[Dict[str, Any]]:
             trace, doc.get("usage") or {}, doc.get("model", "")
         )
         doc["usage"] = usage["total_tokens"]
+        doc["usage_available"] = usage["usage_available"]
         doc["stop_reason"] = "timeout"
         doc["ended_at"] = (
             _last_step_timestamp(trace)
@@ -489,6 +507,7 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
             if finalized:
                 stop_reason = "timeout"
                 usage = finalized.get("usage") or {}
+                meta["usage_available"] = finalized.get("usage_available", bool(usage))
                 if finalized.get("ended_at"):
                     meta["ended_at"] = finalized["ended_at"]
 
@@ -506,6 +525,7 @@ def _read_trace_summary(filepath: str, filename: str) -> Optional[Dict[str, Any]
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         },
+        "usage_available": meta.get("usage_available", bool(usage)),
         "duration_seconds": _compute_duration(
             started_at,
             stop_reason if isinstance(stop_reason, str) else "",
@@ -559,6 +579,7 @@ def _parse_full_trace_for_summary(
         "started_at": doc.get("started_at", ""),
         "stop_reason": doc.get("stop_reason"),
         "usage": doc.get("usage") or {},
+        "usage_available": doc.get("usage_available", bool(doc.get("usage") or {})),
         "total_turns": len(trace),
         "violation_count": _count_violations(trace),
     }
@@ -634,6 +655,9 @@ def read_trace_detail(
             pass
 
     computed = compute_token_summary(trace, usage, model)
+    computed["usage_available"] = doc.get(
+        "usage_available", computed["usage_available"]
+    )
     if doc.get("fragment_count", 1) > 1:
         computed["duration_seconds"] = _merged_duration_seconds(
             started_at,
@@ -703,6 +727,9 @@ def _group_hook_trace_summaries(
         )
         merged["total_tokens"] = _sum_usage(
             member.get("total_tokens") or {} for member in members
+        )
+        merged["usage_available"] = all(
+            member.get("usage_available", False) is True for member in members
         )
         merged["is_active"] = any(member.get("is_active", False) for member in members)
         if merged["is_active"]:
@@ -798,6 +825,10 @@ def _merge_hook_trace_documents(
             next_turn += 1
     merged["trace"] = trace
     merged["usage"] = _sum_usage(fragment.get("usage") or {} for fragment in fragments)
+    merged["usage_available"] = all(
+        fragment.get("usage_available", bool(fragment.get("usage"))) is True
+        for fragment in fragments
+    )
     merged["started_at"] = fragments[0].get("started_at", "")
     merged["ended_at"] = max(
         (fragment.get("ended_at", "") for fragment in fragments), default=""
@@ -824,6 +855,7 @@ def _merge_hook_trace_documents(
 def compute_token_summary(trace: list, usage: dict, model: str) -> Dict[str, Any]:
     """Compute per-turn token breakdown, running totals, and cost estimate."""
     per_turn: List[Dict[str, Any]] = []
+    has_step_usage = False
     for turn_obj in trace:
         turn_num = turn_obj.get("turn", 0)
         turn_input = 0
@@ -833,6 +865,8 @@ def compute_token_summary(trace: list, usage: dict, model: str) -> Dict[str, Any
 
         for step in turn_obj.get("steps", []):
             if step.get("type") == "response":
+                if "usage" in step and isinstance(step.get("usage"), dict):
+                    has_step_usage = True
                 step_usage = step.get("usage") or {}
                 turn_input += step_usage.get("input_tokens", 0)
                 turn_output += step_usage.get("output_tokens", 0)
@@ -877,6 +911,7 @@ def compute_token_summary(trace: list, usage: dict, model: str) -> Dict[str, Any
         "per_turn_tokens": per_turn,
         "cost_estimate_usd": estimate_cost(model, effective_usage),
         "cache_hit_ratio": round(cache_hit_ratio, 4),
+        "usage_available": bool(usage) or has_step_usage,
     }
 
 
@@ -1010,6 +1045,7 @@ def pushed_trace_to_summary(filename: str, doc: Dict[str, Any]) -> Dict[str, Any
             "cache_creation_input_tokens": usage.get("cache_creation_input_tokens", 0),
             "cache_read_input_tokens": usage.get("cache_read_input_tokens", 0),
         },
+        "usage_available": doc.get("usage_available", bool(usage)),
         "duration_seconds": _compute_duration(
             doc.get("started_at", ""),
             stop_reason if isinstance(stop_reason, str) else "",

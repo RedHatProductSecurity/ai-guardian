@@ -139,6 +139,18 @@ class TestSummaryToMeta:
         meta = _summary_to_meta(_make_summary())
         assert "run_id" not in meta
 
+    def test_preserves_unavailable_usage(self):
+        summary = _make_summary()
+        summary["total_tokens"] = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
+        summary["usage_available"] = False
+
+        assert _summary_to_meta(summary)["usage_available"] is False
+
 
 class TestCatchupPull:
     def test_fetches_completed_traces(self, cache_root):

@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **OpenCode trace token usage (#2467):** Read usage from OpenCode's SQLite
+  `message.data.tokens` records, finalize OpenCode session-end hooks with their
+  session ID, and show token usage as unavailable when no usage data exists.
 - **OpenCode configuration self-protection (#2425):** Canonicalize native lowercase tool names and camelCase file arguments before immutable policy checks.
 - **Malformed host CLI configuration handling (#2461):** Report parse and
   supported hook/MCP schema errors across CLI integrations in doctor and tray
