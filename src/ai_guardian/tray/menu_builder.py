@@ -1017,6 +1017,14 @@ class TrayMenuBuilder:
             agent_provider = ""
         if runtime == "openshell" and cli == "pi" and not agent_provider:
             agent_provider = "anthropic"
+        model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
+        providers_default = (
+            "ai-guardian-codex"
+            if runtime == "openshell"
+            and cli == "opencode"
+            and model_default.lower().startswith(("openai/", "gpt-"))
+            else ""
+        )
         from ai_guardian.sandbox import _generated_openshell_name
 
         name_default = _generated_openshell_name(cli)
@@ -1134,7 +1142,7 @@ class TrayMenuBuilder:
             {
                 "name": "model",
                 "label": "Inference model",
-                "default": os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", ""),
+                "default": model_default,
                 "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1172,8 +1180,12 @@ class TrayMenuBuilder:
             {
                 "name": "providers",
                 "label": "OpenShell providers",
-                "default": "",
-                "help": "OpenShell provider names; separate names with commas or newlines.",
+                "default": providers_default,
+                "help": (
+                    "OpenShell provider names; separate names with commas or "
+                    "newlines. OpenCode OpenAI models default to "
+                    "ai-guardian-codex."
+                ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
             },
@@ -1330,6 +1342,14 @@ class TrayMenuBuilder:
             provider = provider.strip()
             if provider:
                 provider_names.append(provider)
+        if (
+            runtime == "openshell"
+            and cli == "opencode"
+            and not provider_names
+            and model
+            and model.lower().startswith(("openai/", "gpt-"))
+        ):
+            provider_names.append("ai-guardian-codex")
         environment_values = []
         environment = str(values.get("environment") or "").strip()
         for entry in environment.replace("\n", ",").split(","):

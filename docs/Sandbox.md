@@ -599,6 +599,9 @@ ai-guardian sandbox exec guardian-opencode -- \
 
 `ai-guardian-codex` must already exist on active OpenShell gateway. Its
 credential remains gateway-managed; only provider name is passed to sandbox.
+Tray **Create sandbox** selects this provider automatically for OpenCode
+OpenAI-shaped models when no provider is entered. CLI commands do not infer
+this provider unless matching local credentials are available.
 
 ## Manual Live Provider Smoke Tests
 

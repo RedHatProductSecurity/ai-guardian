@@ -1009,6 +1009,33 @@ class TestSandboxTrayMenu:
         assert args.opencode_agent == "build"
         assert args.fresh_config is True
 
+    def test_create_form_auto_attaches_codex_provider_for_opencode_openai(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-opencode",
+            "cli": "opencode",
+            "agent": "build",
+            "repo": "",
+            "config_dir": "",
+            "image": "",
+            "model": "openai/gpt-5.6-luna",
+            "profile": "",
+            "policies": "",
+            "providers": "",
+            "environment": "",
+            "labels": "",
+            "config_source": "Host/default",
+            "port": "",
+        }
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            with mock.patch.object(
+                tray._menu, "_show_sandbox_progress", return_value=None
+            ):
+                tray._menu._complete_sandbox_create_form(values)
+
+        assert create.call_args.args[0].provider == ["ai-guardian-codex"]
+
     def test_create_form_rejects_unsupported_openshell_pi_provider(self):
         tray = _make_tray([])
         values = {
@@ -1105,6 +1132,7 @@ class TestSandboxTrayMenu:
             {
                 "AI_GUARDIAN_CLI": "opencode",
                 "AI_GUARDIAN_OPENCODE_AGENT": "build",
+                "AI_GUARDIAN_OPEN_SHELL_MODEL": "openai/gpt-5.6-luna",
             }
         )
         with mock.patch.dict(os.environ, opencode_env, clear=True):
@@ -1114,6 +1142,10 @@ class TestSandboxTrayMenu:
         assert agent_field["default"] == "build"
         name_field = next(field for field in fields if field["name"] == "name")
         assert name_field["default"] == "ag-opencode"
+        providers_field = next(
+            field for field in fields if field["name"] == "providers"
+        )
+        assert providers_field["default"] == "ai-guardian-codex"
 
         pi_env = base_env.copy()
         pi_env.update(
