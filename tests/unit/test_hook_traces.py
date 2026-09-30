@@ -49,6 +49,7 @@ def test_hook_trace_writer_uses_sdk_format_and_run_id(tmp_path):
     assert doc["source"] == "hook"
     assert doc["stop_reason"] == "session_end"
     assert doc["usage"] == {"input_tokens": 10, "output_tokens": 5}
+    assert doc["usage_available"] is True
     assert doc["trace"][0]["steps"][0]["type"] == "prompt"
     assert doc["trace"][0]["steps"][2]["type"] == "tool_call"
     assert doc["trace"][0]["steps"][3]["type"] == "scan"
@@ -268,3 +269,22 @@ def test_normal_session_end_flow_remains_unchanged(tmp_path):
     doc = json.loads(trace_file.read_text())
     assert doc["stop_reason"] == "session_end"
     assert doc["usage"] == {"input_tokens": 7, "output_tokens": 3}
+
+
+def test_session_end_without_usage_marks_usage_unavailable(tmp_path):
+    writer = HookTraceWriter(
+        "session-123", project_name="my-project", trace_dir=str(tmp_path)
+    )
+    writer.record(
+        {},
+        _normalized(HookEvent.PROMPT, prompt_text="hello"),
+        {"exit_code": 0},
+    )
+    writer.finalize()
+
+    trace_file = next(
+        path for path in tmp_path.glob("*.json") if not path.name.endswith(".meta.json")
+    )
+    doc = json.loads(trace_file.read_text())
+    assert doc["usage"] == {}
+    assert doc["usage_available"] is False

@@ -38,6 +38,11 @@ def test_generated_hosts_delegate_to_shared_bridge():
         assert "execFileSync" not in source
 
 
+def test_opencode_session_end_forwards_session_id():
+    assert "hook_event_name: 'SessionEnd'" in _OPENCODE_PLUGIN_TS
+    assert "session_id: input?.sessionID" in _OPENCODE_PLUGIN_TS
+
+
 def test_shared_bridge_contains_process_and_response_contracts():
     """The shared source owns process failures, timeout, parsing, and redaction."""
     assert "execFileSync" in _AI_GUARDIAN_BRIDGE_TS

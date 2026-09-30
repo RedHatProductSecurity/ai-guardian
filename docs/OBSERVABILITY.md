@@ -337,6 +337,7 @@ AI Guardian includes a built-in trace viewer accessible from both the TUI and we
 Navigate to `http://{daemon-host}:{port}/traces` to browse SDK agent traces. The page shows a list of trace files with:
 - Agent name, model, duration
 - Turn count and token usage
+- Explicit **unavailable** token usage when the agent does not expose usage data
 - A **Send to Collector** button to push traces to the configured OTEL endpoint
 
 ### TUI Console

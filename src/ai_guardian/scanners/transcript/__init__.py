@@ -24,6 +24,7 @@ from ai_guardian.scanners.transcript.common import (
     _save_transcript_positions,
     _scan_transcript_text,
     _scan_with_position_tracking,
+    parse_hook_token_usage,
     parse_transcript_token_usage,
 )
 from ai_guardian.scanners.transcript.cline import (
@@ -50,6 +51,7 @@ from ai_guardian.scanners.transcript.kiro import (
 )
 from ai_guardian.scanners.transcript.opencode import (
     OpenCodeTranscriptAdapter,
+    parse_opencode_token_usage,
     scan_opencode_transcript_incremental,
 )
 from ai_guardian.scanners.transcript.openclaw import (
@@ -101,6 +103,8 @@ __all__ = [
     "_save_transcript_positions",
     "_scan_transcript_text",
     "_scan_with_position_tracking",
+    "parse_hook_token_usage",
+    "parse_opencode_token_usage",
     "parse_transcript_token_usage",
     "scan_cline_transcript_incremental",
     "scan_copilot_chat_transcript_incremental",

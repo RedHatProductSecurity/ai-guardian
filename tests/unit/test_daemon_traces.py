@@ -722,6 +722,20 @@ class TestPushedTraceToSummary:
         assert result["total_turns"] == 2
         assert result["is_active"] is False
 
+    def test_preserves_unavailable_usage(self):
+        doc = _sample_trace_doc()
+        doc["usage"] = {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
+        doc["usage_available"] = False
+
+        result = pushed_trace_to_summary("test.json", doc)
+
+        assert result["usage_available"] is False
+
     def test_includes_run_id(self):
         doc = _sample_trace_doc()
         doc["run_id"] = "abc123"

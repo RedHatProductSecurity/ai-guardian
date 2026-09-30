@@ -195,9 +195,20 @@ budget_tokens: 1000
   secret validator/parser/redaction tests.
 - Changes are uncommitted; `daf complete` owns commit and pull request actions.
 
+## ✅ Issue #2467 Complete
+
+- OpenCode usage is extracted from SQLite `message.data.tokens` records and
+  mapped to input, output, cache-read, and cache-creation totals.
+- OpenCode session-end hooks now carry the session ID through normalization and
+  trace finalization; unavailable usage is persisted explicitly.
+- Web and TUI trace viewers no longer present unavailable usage as zero totals.
+- Focused validation: 469 tests passed; Ruff, Black, Pylint, Mypy, and
+  `git diff --check` passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Hand issue #2464 back to the workflow for completion.
+**Goal:** Hand issue #2467 back to the workflow for completion.
 
 ### Open decisions
 - No commit or pull request was created; `daf complete` owns those actions.

@@ -550,6 +550,38 @@ class TestHandleSessionEnd(TestCase):
 
         mock_advance.assert_called_once_with(hook_data)
 
+    @patch(
+        "ai_guardian.scanners.transcript.common.parse_hook_token_usage",
+        return_value={
+            "input_tokens": 300,
+            "output_tokens": 150,
+            "cache_read_input_tokens": 80,
+            "cache_creation_input_tokens": 70,
+        },
+    )
+    def test_opencode_usage_is_passed_to_trace_finalization(self, mock_usage):
+        from ai_guardian.hook_processing import _handle_session_end
+
+        daemon_state = MagicMock()
+        adapter = MagicMock()
+        adapter.name = "OpenCode"
+        hook_data = {"session_id": "s1", "hook_source": "opencode"}
+
+        result = _handle_session_end(hook_data, daemon_state, "s1", adapter)
+
+        assert result == {"output": None, "exit_code": 0}
+        mock_usage.assert_called_once_with(hook_data, adapter_name="OpenCode")
+        daemon_state.finalize_hook_trace.assert_called_once_with(
+            "s1",
+            token_usage={
+                "input_tokens": 300,
+                "output_tokens": 150,
+                "cache_read_input_tokens": 80,
+                "cache_creation_input_tokens": 70,
+            },
+            usage_available=True,
+        )
+
 
 class TestHookContextManagerCleanupSession(TestCase):
     """HookContextManager.cleanup_session tests."""
@@ -786,6 +818,7 @@ class TestDaemonStateCleanupSession(TestCase):
                 state._lock = __import__("threading").Lock()
                 state._security_injected_sessions = {"sess-1", "sess-2"}
                 state._security_reinject_sessions = {"sess-1"}
+                state._session_run_ids = {}
                 state._session_last_activity = {
                     "sess-1": time.time(),
                     "sess-2": time.time(),

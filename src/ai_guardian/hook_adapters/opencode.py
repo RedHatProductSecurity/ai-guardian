@@ -7,7 +7,7 @@ as Claude Code. Detection relies on opencode_version field or env var.
 
 from typing import ClassVar, Dict, List
 
-from ai_guardian.constants import OPENCODE_TOOL_INPUT_MAP, OPENCODE_TOOL_MAP
+from ai_guardian.constants import HookEvent, OPENCODE_TOOL_INPUT_MAP, OPENCODE_TOOL_MAP
 from ai_guardian.hook_adapters.base import NormalizedHookInput
 from ai_guardian.hook_adapters.base_agent import BaseAgentAdapter
 
@@ -49,6 +49,11 @@ class OpenCodeAdapter(BaseAgentAdapter):
 
     def normalize_input(self, hook_data: Dict) -> NormalizedHookInput:
         result = super().normalize_input(hook_data)
+        event_name = (
+            hook_data.get("hook_event_name") or hook_data.get("hookEventName") or ""
+        ).lower()
+        if event_name == "session.end":
+            result.event = HookEvent.SESSION_END
         result.tool_input = self._normalize_tool_input(result.tool_input)
         if not result.file_path:
             result.file_path = result.tool_input.get(

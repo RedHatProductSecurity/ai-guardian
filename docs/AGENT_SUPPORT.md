@@ -292,6 +292,16 @@ Claude Code exposes the conversation transcript to hooks via `UserPromptSubmit` 
 
 Transcript scanning uses a polymorphic `TranscriptAdapter` interface (`scanners/transcript/base.py`). Each IDE format has its own adapter that implements `can_scan()` and `scan_incremental()`.
 
+OpenCode token usage uses a separate source from transcript text. The
+authoritative records are rows in the SQLite `message` table, where the JSON
+in `message.data` stores assistant usage as
+`tokens.input`, `tokens.output`, `tokens.cache.read`, and `tokens.cache.write`.
+AI Guardian maps those fields to `input_tokens`, `output_tokens`,
+`cache_read_input_tokens`, and `cache_creation_input_tokens`. The `part` table
+is used for text and tool output scanning only. If no `message.data.tokens`
+records are available at session end, the Sessions viewers show token usage as
+unavailable rather than displaying zero totals.
+
 ### Correlating Hook Sessions with SDK Runs
 
 The **Sessions** console page can group hook-based IDE activity with SDK traces.
@@ -318,7 +328,7 @@ environment should provide `run_id` in their hook events when supported.
 |-------|--------|-------------|
 | Claude Code | JSONL | Provided by IDE in hook data |
 | Cursor | SQLite | `~/Library/Application Support/Cursor/User/globalStorage/state.vscdb` |
-| OpenCode | SQLite | `~/.opencode/sessions/*.db` |
+| OpenCode | SQLite | `~/.local/share/opencode/opencode.db` (or `$OPENCODE_HOME/opencode.db`) |
 | Copilot CLI | JSONL | `~/.copilot/session-state/events.jsonl` |
 | Codex | JSONL | `~/.codex/sessions/YYYY/MM/DD/*.jsonl` |
 | Cline / ZooCode | JSON array | `~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/tasks/<task_id>/api_conversation_history.json` |

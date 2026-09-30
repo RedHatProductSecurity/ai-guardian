@@ -111,6 +111,13 @@ class TestWebTracesContextDisplay:
         input_pos = source.find("Input:")
         assert context_pos < input_pos, "Context should appear before Input"
 
+    def test_trace_summary_shows_unavailable_usage_explicitly(self):
+        from ai_guardian.web.pages.traces import _render_token_summary
+
+        source = inspect.getsource(_render_token_summary)
+        assert "usage_available" in source
+        assert "Token usage unavailable for this trace." in source
+
     def test_per_turn_computes_context(self):
         from ai_guardian.web.pages.traces import _render_turn_row
 
@@ -189,3 +196,20 @@ class TestTuiContextDisplay:
         }
         label = _format_trace_label(trace)
         assert "ctx:82.3k" in label
+
+    def test_tui_trace_label_marks_unavailable_usage(self):
+        from ai_guardian.tui.traces import _format_trace_label
+
+        label = _format_trace_label(
+            {
+                "agent_name": "test-agent",
+                "model": "opencode-model",
+                "total_turns": 1,
+                "started_at": "2026-01-01T00:00:00",
+                "stop_reason": "session_end",
+                "usage_available": False,
+                "total_tokens": {"input_tokens": 0, "output_tokens": 0},
+                "duration_seconds": 1,
+            }
+        )
+        assert "ctx:unavailable" in label

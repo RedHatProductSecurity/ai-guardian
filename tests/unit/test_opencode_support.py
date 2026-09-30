@@ -89,6 +89,19 @@ class TestOpenCodeNormalization:
         assert n.event == HookEvent.PROMPT
         assert n.prompt_text == "help me fix the bug"
 
+    def test_session_end_is_a_terminal_event(self):
+        data = {
+            "hook_event_name": "session.end",
+            "opencode_version": "1.0.0",
+            "hook_source": "opencode",
+            "session_id": "session-123",
+        }
+
+        normalized = OpenCodeAdapter().normalize_input(data)
+
+        assert normalized.event == HookEvent.SESSION_END
+        assert normalized.session_id == "session-123"
+
     def test_file_path_extraction(self):
         data = {
             "hook_event_name": "tool.execute.before",

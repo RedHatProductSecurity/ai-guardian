@@ -113,6 +113,7 @@ def _summary_to_meta(summary: Dict[str, Any]) -> Dict[str, Any]:
         },
         "total_turns": summary.get("total_turns", 0),
         "violation_count": summary.get("violation_count", 0),
+        "usage_available": summary.get("usage_available", bool(tokens)),
     }
     run_id = summary.get("run_id")
     if run_id:

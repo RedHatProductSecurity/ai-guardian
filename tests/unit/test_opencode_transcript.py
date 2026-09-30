@@ -17,6 +17,7 @@ from ai_guardian.scanners.transcript.opencode import (
     _extract_text_from_part,
     get_opencode_db_path,
     get_opencode_latest_timestamp,
+    parse_opencode_token_usage,
     read_opencode_transcript,
 )
 
@@ -68,8 +69,8 @@ def _insert_session(conn, session_id="ses_test1", directory="/tmp/project"):
     conn.commit()
 
 
-def _insert_message(conn, msg_id, session_id, role="assistant", ts=1000):
-    data = json.dumps({"role": role, "mode": "build"})
+def _insert_message(conn, msg_id, session_id, role="assistant", ts=1000, data=None):
+    data = json.dumps(data or {"role": role, "mode": "build"})
     conn.execute(
         "INSERT INTO message (id, session_id, time_created, time_updated, data) "
         "VALUES (?, ?, ?, ?, ?)",
@@ -318,6 +319,94 @@ class TestGetOpenCodeLatestTimestamp(unittest.TestCase):
     def test_db_not_found(self):
         result = get_opencode_latest_timestamp("/nonexistent/db.db", "ses_1")
         self.assertEqual(result, 0)
+
+
+class TestParseOpenCodeTokenUsage(unittest.TestCase):
+    """Test usage extraction from OpenCode message records."""
+
+    def setUp(self):
+        self.tmpdir = tempfile.mkdtemp()
+        self.db_path = os.path.join(self.tmpdir, "opencode.db")
+        self.conn = _create_test_db(self.db_path)
+        _insert_session(self.conn, "ses_usage")
+
+    def tearDown(self):
+        self.conn.close()
+        import shutil
+
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_sums_message_token_usage(self):
+        _insert_message(
+            self.conn,
+            "msg_usage_1",
+            "ses_usage",
+            ts=1000,
+            data={
+                "role": "assistant",
+                "tokens": {
+                    "input": 100,
+                    "output": 50,
+                    "reasoning": 5,
+                    "cache": {"read": 80, "write": 20},
+                },
+            },
+        )
+        _insert_message(
+            self.conn,
+            "msg_usage_2",
+            "ses_usage",
+            ts=2000,
+            data={
+                "role": "assistant",
+                "tokens": {
+                    "input": 200,
+                    "output": 100,
+                    "cache": {"read": 0, "write": 50},
+                },
+            },
+        )
+        _insert_message(
+            self.conn,
+            "msg_other_session",
+            "other-session",
+            ts=3000,
+            data={"tokens": {"input": 999, "output": 999}},
+        )
+
+        assert parse_opencode_token_usage(self.db_path, "ses_usage") == {
+            "input_tokens": 300,
+            "output_tokens": 150,
+            "cache_read_input_tokens": 80,
+            "cache_creation_input_tokens": 70,
+        }
+
+    def test_zero_usage_is_still_available(self):
+        _insert_message(
+            self.conn,
+            "msg_zero",
+            "ses_usage",
+            data={
+                "role": "assistant",
+                "tokens": {
+                    "input": 0,
+                    "output": 0,
+                    "cache": {"read": 0, "write": 0},
+                },
+            },
+        )
+
+        assert parse_opencode_token_usage(self.db_path, "ses_usage") == {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0,
+        }
+
+    def test_returns_none_without_token_records(self):
+        _insert_message(self.conn, "msg_no_usage", "ses_usage")
+
+        assert parse_opencode_token_usage(self.db_path, "ses_usage") is None
 
 
 class TestScanOpenCodeTranscriptIncremental(unittest.TestCase):

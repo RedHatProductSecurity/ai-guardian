@@ -48,20 +48,14 @@ def handle_paused_otel(state, hook_data, cwd=None):
     if not session_id:
         return
     event_name = hook_data.get("hook_event_name") or hook_data.get("hookEventName", "")
+    is_opencode_session_end = (
+        isinstance(event_name, str)
+        and event_name.lower() == "session.end"
+        and hook_data.get("hook_source") == "opencode"
+    )
     try:
-        if event_name == "SessionEnd":
+        if event_name == "SessionEnd" or is_opencode_session_end:
             token_usage = None
-            try:
-                from ai_guardian.scanners.transcript.common import (
-                    _get_transcript_path,
-                    parse_transcript_token_usage,
-                )
-
-                tp = _get_transcript_path(hook_data)
-                if tp:
-                    token_usage = parse_transcript_token_usage(tp)
-            except Exception:
-                pass
             adapter_name = None
             try:
                 from ai_guardian.hook_processing import detect_adapter
@@ -69,12 +63,26 @@ def handle_paused_otel(state, hook_data, cwd=None):
                 adapter_name = detect_adapter(hook_data).name
             except Exception:
                 pass
+            try:
+                from ai_guardian.scanners.transcript.common import (
+                    parse_hook_token_usage,
+                )
+
+                token_usage = parse_hook_token_usage(
+                    hook_data, adapter_name=adapter_name
+                )
+            except Exception:
+                pass
             state.flush_otel_emitter(
                 session_id,
                 adapter_name=adapter_name,
                 token_usage=token_usage,
             )
-            state.finalize_hook_trace(session_id, token_usage=token_usage)
+            state.finalize_hook_trace(
+                session_id,
+                token_usage=token_usage,
+                usage_available=token_usage is not None,
+            )
             return
 
         adapter_name = None

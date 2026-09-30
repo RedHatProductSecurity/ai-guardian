@@ -661,11 +661,16 @@ def _render_trace_card(trace, daemon_name):
     daemon_source = trace.get("daemon_source", "")
     fragment_count = trace.get("fragment_count", 1)
 
+    usage_available = trace.get("usage_available", True)
     tokens = trace.get("total_tokens", {})
-    total_input = tokens.get("input_tokens", 0)
-    total_output = tokens.get("output_tokens", 0)
-    total_tok = total_input + total_output
-    context_tok = compute_context_tokens(tokens)
+    if usage_available:
+        total_input = tokens.get("input_tokens", 0)
+        total_output = tokens.get("output_tokens", 0)
+        total_tok = total_input + total_output
+        context_tok = compute_context_tokens(tokens)
+    else:
+        total_tok = None
+        context_tok = None
 
     duration = trace.get("duration_seconds", 0)
     duration_str = _format_duration(duration)
@@ -728,7 +733,9 @@ def _render_trace_card(trace, daemon_name):
                 ui.label("Context:").classes("text-xs text-grey-6")
                 ui.label(format_token_count(context_tok)).classes("text-xs")
             ui.label("Tokens:").classes("text-xs text-grey-6")
-            ui.label(f"{total_tok:,}").classes("text-xs")
+            ui.label(f"{total_tok:,}" if usage_available else "Unavailable").classes(
+                "text-xs"
+            )
             ui.label("Duration:").classes("text-xs text-grey-6")
             ui.label(duration_str).classes("text-xs")
             ui.label("File:").classes("text-xs text-grey-6")
@@ -738,6 +745,14 @@ def _render_trace_card(trace, daemon_name):
 
 
 def _render_token_summary(computed, total_turns=0):
+    if computed.get("usage_available", True) is False:
+        with ui.card().classes("w-full bg-grey-9 mt-2"):
+            ui.label("Summary").classes("text-sm font-bold")
+            ui.label("Token usage unavailable for this trace.").classes(
+                "text-xs text-grey-6"
+            )
+        return
+
     total = computed.get("total_tokens", {})
     cache_ratio = computed.get("cache_hit_ratio", 0)
     duration = computed.get("duration_seconds", 0)
