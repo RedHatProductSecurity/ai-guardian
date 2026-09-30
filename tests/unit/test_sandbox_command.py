@@ -151,7 +151,9 @@ def test_resolve_sandbox_name_preserves_long_openshell_name():
     args = _args(runtime="openshell", name="sandbox-name-that-is-too-long")
 
     with patch("ai_guardian.sandbox._sandbox_name_exists") as exists:
-        assert _resolve_sandbox_name(args, "openshell") == "sandbox-name-that-is-too-long"
+        assert (
+            _resolve_sandbox_name(args, "openshell") == "sandbox-name-that-is-too-long"
+        )
 
     exists.assert_not_called()
 

@@ -1636,9 +1636,13 @@ def _add_openshell_vertex_policy_binding(
                 {"path": "/sandbox/.local/share/claude/**"},
             ],
         }
-        policy_path.write_text(yaml.safe_dump(policy, sort_keys=False), encoding="utf-8")
+        policy_path.write_text(
+            yaml.safe_dump(policy, sort_keys=False), encoding="utf-8"
+        )
     except (OSError, UnicodeError, yaml.YAMLError, TypeError) as exc:
-        raise ValueError(f"unable to bind Vertex policy to provider '{provider_name}'") from exc
+        raise ValueError(
+            f"unable to bind Vertex policy to provider '{provider_name}'"
+        ) from exc
 
 
 def _wait_for_openshell_provider(
@@ -2547,12 +2551,14 @@ def _create(
             return result
 
         vertex_project, _vertex_region, _vertex_model = _vertex_settings(args)
-        if runtime == OPENSHELL_RUNTIME and vertex_project and getattr(
-            args, "cli", None
-        ) == "claude":
+        if (
+            runtime == OPENSHELL_RUNTIME
+            and vertex_project
+            and getattr(args, "cli", None) == "claude"
+        ):
             provider_name = (
-                (getattr(args, "provider", None) or ["ai-guardian-google-cloud"])[0]
-            )
+                getattr(args, "provider", None) or ["ai-guardian-google-cloud"]
+            )[0]
             _wait_for_openshell_provider(
                 args,
                 name,

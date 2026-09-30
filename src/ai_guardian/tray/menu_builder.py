@@ -1037,7 +1037,7 @@ class TrayMenuBuilder:
                 "choices": cli_choices,
                 "choices_by": {
                     "field": "runtime",
-                     "values": TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME,
+                    "values": TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME,
                 },
                 "clear_when_choice_invalid": True,
                 "default": cli,

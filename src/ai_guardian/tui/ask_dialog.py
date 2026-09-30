@@ -579,16 +579,15 @@ def show_ask_dialog(
     Returns:
         AskResult with the user's decision and optional allowlist pattern.
     """
-    # Tray forwarding: try early so containers/headless daemons get a visible
-    # dialog on the host without needing explicit preferred_ui=headless.
-    result = _show_via_tray_forwarding(violation, fallback_action, timeout_seconds)
-    if result is not None:
-        return result
-
     if _is_headless_env():
         decision = _map_fallback_to_decision(fallback_action)
         logger.info("headless env, using fallback: %s -> %s", fallback_action, decision)
         return AskResult(decision=decision)
+
+    # Tray forwarding is only used when an interactive UI is permitted.
+    result = _show_via_tray_forwarding(violation, fallback_action, timeout_seconds)
+    if result is not None:
+        return result
 
     result = _show_via_daemon(violation, fallback_action, timeout_seconds)
     if result is not None:

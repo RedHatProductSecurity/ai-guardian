@@ -1738,7 +1738,9 @@ class TestSandboxDialogFallback:
         progress = object()
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
-            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_progress_subprocess",
                 return_value=progress,
@@ -1770,7 +1772,9 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
-            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
                 return_value={"runtime": "container"},
@@ -1802,7 +1806,9 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
-            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
                 return_value=True,
@@ -1841,7 +1847,9 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
-            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
+            mock.patch(
+                "ai_guardian.tui.display.select_ui_provider", return_value="tkinter"
+            ),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
                 return_value=True,

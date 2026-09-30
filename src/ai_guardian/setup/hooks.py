@@ -230,7 +230,13 @@ def _render_pi_extension_source(enable_mcp: bool, binary_path: str) -> str:
 
 def _install_pi_mcp_sdk(extension_dir: Path) -> Tuple[bool, str]:
     """Install Pi's pinned MCP SDK without executing package scripts."""
-    package_path = extension_dir / "node_modules" / "@modelcontextprotocol" / "sdk" / "package.json"
+    package_path = (
+        extension_dir
+        / "node_modules"
+        / "@modelcontextprotocol"
+        / "sdk"
+        / "package.json"
+    )
     try:
         package = json.loads(package_path.read_text(encoding="utf-8"))
         if package.get("version") == "1.30.1":

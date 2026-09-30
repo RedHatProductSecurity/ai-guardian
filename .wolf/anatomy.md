@@ -5,6 +5,8 @@
 
 ## ./
 
+- `.wolf/memory.md` — Session action log (~120 tok)
+
 - `.aiguardignore.toml` (~138 tok)
 - `.coverage` (~14198 tok)
 - `.gitignore` — Git ignore rules (~243 tok)

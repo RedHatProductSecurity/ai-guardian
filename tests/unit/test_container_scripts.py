@@ -223,13 +223,10 @@ class TestContainerLaunchers:
         assert "ai-guardian-openshell-readiness" in workflow
         assert "test -f /sandbox/.pi/agent/extensions/ai-guardian/index.ts" in workflow
 
-    def test_openshell_image_uses_community_base_layout(self):
+    def test_openshell_image_uses_pinned_ubuntu_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
 
-        assert (
-            "ARG BASE_IMAGE=ghcr.io/nvidia/openshell-community/sandboxes/base@sha256:"
-            in dockerfile
-        )
+        assert "ARG BASE_IMAGE=nvcr.io/nvidia/base/ubuntu@sha256:" in dockerfile
         assert "sandboxes/base:latest" not in dockerfile
         assert "FROM ${BASE_IMAGE}" in dockerfile
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
@@ -237,20 +234,16 @@ class TestContainerLaunchers:
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile
         assert "ARG OPENCODE_VERSION=1.18.31" in dockerfile
         assert "ARG PI_VERSION=0.86.0" in dockerfile
-        assert "ARG COPILOT_VERSION" not in dockerfile
+        assert "ARG COPILOT_VERSION=1.0.10" in dockerfile
         assert "npm install --global --prefix /usr" in dockerfile
         assert '"@openai/codex@${CODEX_VERSION}"' in dockerfile
         assert '"opencode-ai@${OPENCODE_VERSION}"' in dockerfile
         assert '"@earendil-works/pi-coding-agent@${PI_VERSION}"' in dockerfile
-        assert (
-            "apt-get install --no-install-recommends --yes fd-find ripgrep"
-            in dockerfile
-        )
+        assert "apt-get install --no-install-recommends --yes" in dockerfile
+        assert "fd-find git gh iproute2" in dockerfile
         assert "ln -sf /usr/bin/fdfind /usr/local/bin/fd" in dockerfile
-        assert "command -v claude" in dockerfile
-        assert "command -v copilot" in dockerfile
         assert "https://claude.ai/install.sh" not in dockerfile
-        assert '"@github/copilot@${COPILOT_VERSION}"' not in dockerfile
+        assert '"@github/copilot@${COPILOT_VERSION}"' in dockerfile
         assert "&& opencode --version" in dockerfile
         assert "copilot --version" in dockerfile
         assert "/usr/sbin:/usr/bin:/sbin:/bin" in dockerfile
@@ -259,10 +252,10 @@ class TestContainerLaunchers:
         assert 'ai-guardian.version="${AI_GUARDIAN_VERSION}"' in dockerfile
         assert 'ai-guardian.openshell.base-image="${BASE_IMAGE}"' in dockerfile
         assert (
-            'ai-guardian.openshell.claude-version="inherited-from-base"' in dockerfile
+            'ai-guardian.openshell.claude-version="runtime-tos-install"' in dockerfile
         )
         assert (
-            'ai-guardian.openshell.copilot-version="inherited-from-base"' in dockerfile
+            'ai-guardian.openshell.copilot-version="${COPILOT_VERSION}"' in dockerfile
         )
         assert 'ai-guardian.openshell.codex-version="${CODEX_VERSION}"' in dockerfile
         assert (
@@ -823,7 +816,7 @@ class TestContainerLaunchers:
         env = _launcher_env(tmp_path, engine, capture)
 
         result = subprocess.run(
-            ["bash", str(RUN_SCRIPT), "--agent", agent, "--", "/bin/true"],
+            ["bash", str(RUN_SCRIPT), "--agent", agent, "--", "/usr/bin/true"],
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
@@ -868,7 +861,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -888,7 +881,7 @@ fi
     log_path.unlink()
     env["AI_GUARDIAN_SETUP_SCOPE"] = "cli"
     cli_result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -908,7 +901,7 @@ fi
     log_path.unlink()
     env["AI_GUARDIAN_SETUP_SCOPE"] = "selected"
     selected_result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -929,7 +922,7 @@ fi
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_reports_openshell_inference_auth(tmp_path):
+def test_entrypoint_reports_provider_auth_without_retired_inference_route(tmp_path):
     _executable_script(
         tmp_path / "ai-guardian",
         """#!/usr/bin/env bash
@@ -952,7 +945,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -960,14 +953,14 @@ fi
     )
 
     assert result.returncode == 0, result.stderr
-    assert "Auth:         OpenShell inference route" in result.stdout
-    assert "Auth:         Anthropic API key" not in result.stdout
+    assert "Auth:         Anthropic API key" in result.stdout
+    assert "Auth:         OpenShell inference route" not in result.stdout
 
 
 @pytest.mark.skipif(
     os.name == "nt", reason="The container entrypoint is a POSIX shell script"
 )
-def test_entrypoint_adds_bare_to_automated_openshell_claude_print(tmp_path):
+def test_entrypoint_does_not_add_bare_to_automated_openshell_claude_print(tmp_path):
     args_path = tmp_path / "claude.args"
     base_url_path = tmp_path / "claude.base-url"
     api_key_path = tmp_path / "claude.api-key"
@@ -1016,14 +1009,11 @@ fi
 
     assert result.returncode == 0, result.stderr
     assert args_path.read_text(encoding="utf-8").splitlines() == [
-        "--bare",
         "--print",
         "hello",
     ]
-    assert (
-        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
-    )
-    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
+    assert base_url_path.read_text(encoding="utf-8").strip() == "missing"
+    assert api_key_path.read_text(encoding="utf-8").strip() == "missing"
 
 
 @pytest.mark.skipif(
@@ -1086,13 +1076,10 @@ fi
 
     assert result.returncode == 0, result.stderr
     assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
-    assert (
-        base_url_path.read_text(encoding="utf-8").strip() == "https://inference.local"
-    )
-    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
-    assert (Path(env["HOME"]) / ".bashrc").exists()
-    assert (Path(env["HOME"]) / ".bash_profile").exists()
-    assert "claude()" not in (Path(env["HOME"]) / ".bashrc").read_text(encoding="utf-8")
+    assert base_url_path.read_text(encoding="utf-8").strip() == "missing"
+    assert api_key_path.read_text(encoding="utf-8").strip() == "missing"
+    assert not (Path(env["HOME"]) / ".bashrc").exists()
+    assert not (Path(env["HOME"]) / ".bash_profile").exists()
 
 
 @pytest.mark.skipif(
@@ -1149,11 +1136,8 @@ fi
 
     assert result.returncode == 0, result.stderr
     assert args_path.read_text(encoding="utf-8").splitlines() == ["hello"]
-    assert (
-        base_url_path.read_text(encoding="utf-8").strip()
-        == "https://inference.local/v1"
-    )
-    assert api_key_path.read_text(encoding="utf-8").strip() == "unused"
+    assert base_url_path.read_text(encoding="utf-8").strip() == "missing"
+    assert api_key_path.read_text(encoding="utf-8").strip() == "missing"
 
 
 @pytest.mark.skipif(
@@ -1214,14 +1198,11 @@ fi
     assert result.returncode == 0, result.stderr
     models = json.loads(models_path.read_text(encoding="utf-8"))
     assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
-    assert models["providers"]["anthropic"] == {
-        "baseUrl": "https://inference.local",
-        "apiKey": "unused",
-    }
+    assert "anthropic" not in models["providers"]
     settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["defaultProvider"] == "anthropic"
     assert settings["defaultModel"] == "claude-sonnet-4-6"
-    assert "Auth:         OpenShell inference route" in result.stdout
+    assert "Auth:         OpenShell inference route" not in result.stdout
 
 
 @pytest.mark.skipif(
@@ -1274,10 +1255,7 @@ fi
     assert result.returncode == 0, result.stderr
     models = json.loads(models_path.read_text(encoding="utf-8"))
     assert models["providers"]["custom"]["baseUrl"] == "https://example.invalid"
-    assert models["providers"]["openai"] == {
-        "baseUrl": "https://inference.local/v1",
-        "apiKey": "unused",
-    }
+    assert "openai" not in models["providers"]
     settings = json.loads((pi_agent_dir / "settings.json").read_text(encoding="utf-8"))
     assert settings["defaultProvider"] == "openai"
     assert settings["defaultModel"] == "gpt-5"
@@ -1422,7 +1400,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1598,7 +1576,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1641,7 +1619,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1692,7 +1670,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1739,7 +1717,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1778,7 +1756,7 @@ fi
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,
@@ -1816,7 +1794,7 @@ fi
     }
 
     process = subprocess.Popen(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         stdout=subprocess.PIPE,
@@ -2014,7 +1992,7 @@ def test_entrypoint_rejects_conflicting_profile_and_host_config(tmp_path):
     }
 
     result = subprocess.run(
-        ["bash", str(ENTRYPOINT_SCRIPT), "/bin/true"],
+        ["bash", str(ENTRYPOINT_SCRIPT), "/usr/bin/true"],
         cwd=REPO_ROOT,
         env=env,
         capture_output=True,

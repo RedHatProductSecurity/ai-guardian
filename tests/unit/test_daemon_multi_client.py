@@ -147,7 +147,9 @@ class TestRestTransportSecurity:
         response.__enter__.return_value.read.return_value = b"{}"
         client = MultiDaemonClient()
         target = DaemonTarget(
-            name="openshell", runtime="container", url="http://ag--ai-guardian.openshell.localhost:17670"
+            name="openshell",
+            runtime="container",
+            url="http://ag--ai-guardian.openshell.localhost:17670",
         )
 
         assert client._rest_request(target, "GET", "/api/health") == {}
