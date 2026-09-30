@@ -123,6 +123,7 @@
       "claude",
       "codex",
       "opencode",
+      "gemini",
       "cursor"
     ]
   }

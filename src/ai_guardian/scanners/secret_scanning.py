@@ -818,8 +818,12 @@ def check_secrets(
                 if not content.strip():
                     return False, None
 
-        # Use in-memory filesystem on Linux for better performance
-        tmp_base_dir = "/dev/shm" if os.path.exists("/dev/shm") else None
+        # OpenShell restricts /dev/shm; prefer writable /tmp there. Keep the
+        # shared-memory optimization for ordinary Linux runtimes.
+        if os.environ.get("AI_GUARDIAN_RUNTIME") == "openshell":
+            tmp_base_dir = "/tmp" if os.access("/tmp", os.W_OK) else None
+        else:
+            tmp_base_dir = "/dev/shm" if os.path.exists("/dev/shm") else None
 
         # Create temporary file with content
         with tempfile.NamedTemporaryFile(

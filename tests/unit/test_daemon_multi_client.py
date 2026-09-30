@@ -140,6 +140,19 @@ class TestRestTransportSecurity:
         assert client._rest_request(target, "GET", "/api/status") == {}
         assert mock_urlopen.call_args[0][0].full_url.startswith("http://127.0.0.1")
 
+    @mock.patch("ai_guardian.daemon.multi_client.build_opener")
+    @mock.patch.object(MultiDaemonClient, "_tcp_reachable", return_value=True)
+    def test_openshell_service_bypasses_host_proxy(self, mock_reachable, build_opener):
+        response = build_opener.return_value.open.return_value
+        response.__enter__.return_value.read.return_value = b"{}"
+        client = MultiDaemonClient()
+        target = DaemonTarget(
+            name="openshell", runtime="container", url="http://ag--ai-guardian.openshell.localhost:17670"
+        )
+
+        assert client._rest_request(target, "GET", "/api/health") == {}
+        build_opener.assert_called_once()
+
 
 class TestLocalPauseResumeRouting:
     """Test local daemon pause/resume via socket (issue #683)."""

@@ -18,7 +18,10 @@ from ai_guardian.tray.menu import (
     launch_sandbox_command,
     launch_sandbox_create_command,
 )
-from ai_guardian.tray.menu_builder import TrayMenuBuilder
+from ai_guardian.tray.menu_builder import (
+    TRAY_OPENSHELL_CLI_CHOICES,
+    TrayMenuBuilder,
+)
 
 
 class FakeMenu:
@@ -1059,12 +1062,12 @@ class TestSandboxTrayMenu:
 
         cli_field = next(field for field in fields if field["name"] == "cli")
         assert cli_field["type"] == "choice"
-        assert cli_field["choices"] == SUPPORTED_OPENSHELL_CLI_IDE_TYPES
-        assert cli_field["default"] == "claude"
+        assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
+        assert cli_field["default"] == "codex"
         assert cli_field["required"] is True
 
         name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"] == "ag-claude"
+        assert name_field["default"] == "ag-codex"
         dynamic_default = name_field["dynamic_default"]
         assert dynamic_default["field"] == "cli"
         assert dynamic_default["separator"] == ""
@@ -1073,7 +1076,7 @@ class TestSandboxTrayMenu:
 
         agent_field = next(field for field in fields if field["name"] == "agent")
         assert agent_field["type"] == "choice"
-        assert agent_field["choices"] == ("", "build", "plan", "claude")
+        assert agent_field["choices"] == ("", "build")
         assert agent_field["editable"] is True
         assert agent_field["default"] == ""
         assert agent_field["required"] is True
@@ -1128,7 +1131,7 @@ class TestSandboxTrayMenu:
         assert provider_field["default"] == "openai"
         assert next(field for field in fields if field["name"] == "name")[
             "default"
-        ] == ("ag-pi")
+        ] == ("ag-codex")
 
         container_env = base_env.copy()
         container_env.update({"AI_GUARDIAN_SANDBOX_RUNTIME": "container"})
@@ -1735,6 +1738,7 @@ class TestSandboxDialogFallback:
         progress = object()
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_progress_subprocess",
                 return_value=progress,
@@ -1766,6 +1770,7 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_form_subprocess",
                 return_value={"runtime": "container"},
@@ -1797,6 +1802,7 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_confirmation_subprocess",
                 return_value=True,
@@ -1835,6 +1841,7 @@ class TestSandboxDialogFallback:
 
         with (
             mock.patch("ai_guardian.tui.display._tkinter_available", return_value=True),
+            mock.patch("ai_guardian.tui.display.select_ui_provider", return_value="tkinter"),
             mock.patch(
                 "ai_guardian.tray.sandbox_dialog._show_tkinter_upload_confirmation_subprocess",
                 return_value=True,

@@ -28,6 +28,14 @@ from ai_guardian.tray import plugins as tray_plugins
 
 logger = logging.getLogger(__name__)
 
+# Tray advertises only OpenShell scenarios qualified against v0.1.2. Other
+# bundled clients remain available through the CLI for manual qualification.
+TRAY_OPENSHELL_CLI_CHOICES = ("codex", "opencode")
+TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
+    "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
+    "openshell": TRAY_OPENSHELL_CLI_CHOICES,
+}
+
 try:
     import pystray
 except Exception:
@@ -985,8 +993,8 @@ class TrayMenuBuilder:
         runtime = os.environ.get("AI_GUARDIAN_SANDBOX_RUNTIME", "openshell")
         if runtime not in {"container", "openshell"}:
             runtime = "openshell"
-        cli_choices = SANDBOX_CLI_IDE_TYPES_BY_RUNTIME[runtime]
-        default_cli = "claude" if runtime == "openshell" else "codex"
+        cli_choices = TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME[runtime]
+        default_cli = "codex"
         cli = os.environ.get("AI_GUARDIAN_CLI", default_cli)
         if cli not in cli_choices:
             cli = default_cli
@@ -1001,7 +1009,9 @@ class TrayMenuBuilder:
         if not repo_default:
             repo_default = os.path.expanduser("~")
         profile_choices = ("", "@minimal", "@standard", "@strict", "@moderator")
-        opencode_agent_choices = ("", "build", "plan", "claude")
+        opencode_agent_choices = (
+            ("", "build") if runtime == "openshell" else ("", "build", "plan", "claude")
+        )
         agent_provider_choices = SANDBOX_PI_PROVIDER_CHOICES_BY_RUNTIME[runtime]
         if agent_provider not in agent_provider_choices:
             agent_provider = ""
@@ -1027,7 +1037,7 @@ class TrayMenuBuilder:
                 "choices": cli_choices,
                 "choices_by": {
                     "field": "runtime",
-                    "values": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME,
+                     "values": TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME,
                 },
                 "clear_when_choice_invalid": True,
                 "default": cli,

@@ -23,7 +23,20 @@ network_policies:
         protocol: rest
         access: read-write
         enforcement: enforce
+      - host: claude.ai
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
+      - host: downloads.claude.ai
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
     binaries:
+      - { path: /usr/bin/curl }
+      - { path: /usr/bin/bash }
+      - { path: /bin/bash }
       - { path: /usr/bin/node }
       - { path: /usr/bin/claude }
       - { path: /usr/local/bin/claude }

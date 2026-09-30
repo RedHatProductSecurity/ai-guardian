@@ -17,6 +17,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup health, and stop setup before replacing an existing invalid file.
 
 ### Changed
+- **OpenShell v0.1.2 workload compatibility (#2460):** Move the dedicated
+  image from the retired Community base to a pinned NVIDIA Ubuntu 24.04 base,
+  install workload dependencies explicitly, and remove managed
+  `inference.local` route assumptions in favor of native provider attachments.
+- Codex OpenShell v0.1.2 API-key qualification passed with gateway-owned
+  OpenAI provider credentials; Codex and OpenAI provider-profile setup is now
+  documented.
+- OpenCode/OpenAI OpenShell v0.1.2 qualification passed. Claude/Vertex and
+  OpenCode/Claude/Vertex remain blocked by the OpenShell metadata-emulator issue
+  tracked in NVIDIA/OpenShell#3973; Pi/OpenAI remains unqualified.
 - Immutable violations now carry explicit metadata through policy, scanner, and
   directory-rule logging; TUI and Web Console details show only the enforced
   protection notice and hide override guidance and actions (#2457).

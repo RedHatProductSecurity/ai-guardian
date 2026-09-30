@@ -15,7 +15,7 @@ import shutil
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener, urlopen
 from urllib.error import URLError
 
 from ai_guardian.daemon.discovery import DaemonTarget
@@ -1465,7 +1465,12 @@ class MultiDaemonClient:
             req.add_header(REST_AUTH_HEADER, target.auth_token)
 
         try:
-            with urlopen(req, timeout=timeout) as resp:
+            if check_host.lower().endswith(".openshell.localhost"):
+                opener = build_opener(ProxyHandler({}))
+                response = opener.open(req, timeout=timeout)
+            else:
+                response = urlopen(req, timeout=timeout)
+            with response as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except URLError as e:
             if hasattr(e, "code") and e.code == 401 and not target.auth_token:

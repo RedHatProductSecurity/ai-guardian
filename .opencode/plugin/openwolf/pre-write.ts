@@ -1,6 +1,3 @@
-import {recordReceipt} from './visibility.js';
-import { sharedWolfDir } from "./knowledge-root.js";
-import { approvedMemory } from "./trusted-memory.js"
 import * as fs from "node:fs"
 import * as path from "node:path"
 import { getWolfDir, readMarkdown, normalizePath, readJSON } from "./fs.js"
@@ -32,12 +29,12 @@ export function handlePreWrite(directory: string, sessionId: string, filePath: s
   checkCerebrum(wolfDir, allContent)
 
   if (filePath && (oldStr || content)) {
-    checkBugLog(wolfDir, filePath, oldStr, newStr, content, sessionId)
+    checkBugLog(wolfDir, filePath, oldStr, newStr, content)
   }
 }
 
 function checkCerebrum(wolfDir: string, content: string): void {
-  const cerebrumContent = approvedMemory(wolfDir, "cerebrum.md")
+  const cerebrumContent = readMarkdown(path.join(wolfDir, "cerebrum.md"))
   const doNotRepeatSection = cerebrumContent.split("## Do-Not-Repeat")[1]
   if (!doNotRepeatSection) return
 
@@ -75,8 +72,8 @@ interface BugEntry {
   tags: string[]
 }
 
-function checkBugLog(wolfDir: string, filePath: string, oldStr: string, newStr: string, content: string, sessionId: string): void {
-  const bugLogPath = path.join(sharedWolfDir(wolfDir), "buglog.json")
+function checkBugLog(wolfDir: string, filePath: string, oldStr: string, newStr: string, content: string): void {
+  const bugLogPath = path.join(wolfDir, "buglog.json")
   if (!fs.existsSync(bugLogPath)) return
 
   const bugLog = readJSON<{ version: number; bugs: BugEntry[] }>(bugLogPath, { version: 1, bugs: [] })
@@ -98,8 +95,6 @@ function checkBugLog(wolfDir: string, filePath: string, oldStr: string, newStr: 
   })
 
   if (relevant.length === 0) return
-  const fixes=relevant.slice(0,2).filter(b=>typeof b.fix==="string"&&b.fix.trim())
-  if(fixes.length)recordReceipt(path.dirname(wolfDir),{agent:"opencode",session:sessionId,operation:"fix-retrieved",evidence:JSON.stringify(fixes.map(b=>[b.id,b.fix])),count:fixes.length})
 
   console.warn(`📋 OpenWolf buglog: ${relevant.length} past bug(s) found for ${basename} — review for context, do NOT apply blindly:`)
   for (const bug of relevant.slice(0, 2)) {

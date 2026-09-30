@@ -9,25 +9,21 @@ network_policies:
       - host: api.openai.com
         port: 443
         protocol: rest
-        tls: terminate
         enforcement: enforce
         access: read-write
       - host: auth.openai.com
         port: 443
         protocol: rest
-        tls: terminate
         enforcement: enforce
         access: read-write
       - host: chatgpt.com
         port: 443
         protocol: rest
-        tls: terminate
         enforcement: enforce
         access: read-write
       - host: ab.chatgpt.com
         port: 443
         protocol: rest
-        tls: terminate
         enforcement: enforce
         access: read-write
     binaries:

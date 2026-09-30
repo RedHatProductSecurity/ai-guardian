@@ -1,25 +1,9 @@
-import { persistObservation, reconcileReads } from "./event-journal.js"
-import * as crypto from "node:crypto"
-import { recordBug } from "./bug-journal.js"
-import { sharedWolfDir } from "./knowledge-root.js";
-import { withFileLock, HOOK_LOCK_BUDGET_MS } from "./anatomy-lock.js"
-import { nextBugId } from "./bug-id.js"
 import * as fs from "node:fs"
 import * as path from "node:path"
-import { getWolfDir, writeJSON, readJSON, appendMarkdown, timeShort, normalizePath, estimateTokens, isSensitiveFile, sessionFilePath } from "./fs.js"
+import * as crypto from "node:crypto"
+import { getWolfDir, writeJSON, readJSON, appendMarkdown, timeShort, normalizePath, estimateTokens } from "./fs.js"
 import { extractDescription, withAnatomyLock, loadStoreReconciled, saveStore, renderToFile, sha256, LOCK_BUDGET_MS } from "./anatomy.js"
 import type { PartialSessionState, FixDetection } from "./types.js"
-
-// File types where a value/string change is normal content editing, not a bug
-// fix — auto bug detection never runs on these (see autoDetectBugFix). Without
-// this, a version bump in a README or a key change in a JSON/YAML config is
-// logged as a "wrong-value" bug, since the detector matches quoted spans
-// (including markdown backticks) regardless of file type.
-const NON_CODE_EXTS = new Set([
-  ".md", ".mdx", ".markdown", ".txt", ".rst", ".adoc",
-  ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".env",
-  ".lock", ".csv", ".tsv",
-])
 
 export function handlePostWrite(
   directory: string,
@@ -34,28 +18,20 @@ export function handlePostWrite(
   if (!fs.existsSync(wolfDir)) return
 
   const hooksDir = path.join(wolfDir, "hooks")
-  const sessionFile = sessionFilePath(hooksDir, sessionId)
+  const sessionFile = path.join(hooksDir, "_session.json")
   const projectRoot = directory
 
   const absolutePath = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath)
   const relPath = normalizePath(path.relative(projectRoot, absolutePath))
   if (relPath.startsWith(".wolf/")) return
 
-  // Never track files outside the project root (e.g. a scratchpad under
-  // /private/tmp). path.relative() yields ../.. section keys that pollute
-  // anatomy.md and are wiped again by every full scan, so the index churns
-  // instead of converging.
-  if (relPath.startsWith("..") || path.isAbsolute(relPath)) return
-
-  // Never track secret-bearing files in anatomy/memory (issue #54): .env is
-  // not the only file whose description would leak sensitive content.
   const baseName = path.basename(absolutePath)
-  if (isSensitiveFile(baseName)) return
+  if (baseName === ".env" || baseName.startsWith(".env.")) return
 
   updateAnatomy(wolfDir, absolutePath, projectRoot, content)
   appendToMemory(wolfDir, toolName, absolutePath, projectRoot, content, newStr)
-  trackSession(sessionFile, filePath, toolName, content, newStr, baseName, projectRoot, absolutePath)
-
+  trackSession(wolfDir, sessionFile, filePath, toolName, content, newStr, baseName)
+  
   if (oldStr && newStr) {
     autoDetectBugFix(wolfDir, absolutePath, projectRoot, oldStr, newStr)
   }
@@ -137,22 +113,38 @@ function appendToMemory(
 }
 
 function trackSession(
+  wolfDir: string,
   sessionFile: string,
   filePath: string,
   toolName: string,
   content: string,
   newStr: string,
-  baseName: string,
-  projectRoot: string,
-  absolutePath: string
+  baseName: string
 ): void {
   try {
-    const normalizedFile=normalizePath(absolutePath)
-    const action=toolName.toLowerCase()==="write"?"create":"edit"
-    const tokens=estimateTokens(content || newStr,"code")
-    const editKey=normalizePath(path.relative(projectRoot,absolutePath))
-    persistObservation(sessionFile,{id:crypto.randomUUID(),kind:"write",file:normalizedFile,action,tokens,editKey,at:new Date().toISOString()})
-    reconcileReads(sessionFile)
+    const session = readJSON<PartialSessionState>(sessionFile, { files_written: [], edit_counts: {} })
+    if (!session.edit_counts) session.edit_counts = {}
+
+    const normalizedFile = normalizePath(filePath)
+    const action = toolName === "Write" ? "create" : "edit"
+    const fileContent = content ?? ""
+    const tokens = estimateTokens(fileContent || newStr, "code")
+
+    session.files_written!.push({
+      file: normalizedFile,
+      action,
+      tokens,
+      at: new Date().toISOString(),
+    })
+
+    const editKey = normalizePath(path.relative(wolfDir.replace("/.wolf", ""), path.join(wolfDir.replace("/.wolf", ""), filePath)))
+    session.edit_counts![editKey] = (session.edit_counts![editKey] || 0) + 1
+
+    writeJSON(sessionFile, session)
+
+    if (session.edit_counts![editKey] >= 3) {
+      console.warn(`⚠️ OpenWolf: ${baseName} has been edited ${session.edit_counts![editKey]} times this session. If you're fixing a bug, remember to log it to .wolf/buglog.json.`)
+    }
   } catch {}
 }
 
@@ -190,39 +182,56 @@ export function summarizeEdit(oldStr: string, newStr: string, filename: string):
   return `${oldCount}→${newCount} lines`
 }
 
-function bugAutoDetectEnabled(wolfDir: string): boolean {
-  try {
-    const cfg = readJSON<{ openwolf?: { buglog?: { auto_detect?: boolean } } }>(
-      path.join(wolfDir, "config.json"),
-      {}
-    )
-    // Default on; only an explicit `false` disables auto bug detection.
-    return cfg.openwolf?.buglog?.auto_detect !== false
-  } catch {
-    return true
-  }
-}
-
 export function autoDetectBugFix(wolfDir: string, absolutePath: string, projectRoot: string, oldStr: string, newStr: string): void {
+  const bugLogPath = path.join(wolfDir, "buglog.json")
+  const bugLog = readJSON<{ version: number; bugs: Array<{ id: string; timestamp: string; error_message: string; file: string; root_cause: string; fix: string; tags: string[]; related_bugs: string[]; occurrences: number; last_seen: string }> }>(bugLogPath, { version: 1, bugs: [] })
+  const relFile = normalizePath(path.relative(projectRoot, absolutePath))
   const basename = path.basename(absolutePath)
   const ext = path.extname(basename).toLowerCase()
 
-  // Bug-fix detection is a code concept — never fire on prose/docs/data files.
-  if (NON_CODE_EXTS.has(ext)) return
-  // Respect an explicit opt-out in .wolf/config.json (default: enabled).
-  if (!bugAutoDetectEnabled(wolfDir)) return
-
-  const detection=detectFixPattern(oldStr,newStr,ext,basename)
+  const detection = detectFixPattern(oldStr, newStr, ext, basename)
   if (!detection) return
-  recordBug(wolfDir,{error_message:detection.summary,file:normalizePath(path.relative(projectRoot,absolutePath)),root_cause:detection.rootCause,fix:detection.fix,tags:["auto-detected",detection.category,ext.slice(1)||"unknown"],status:"candidate",observed_worktree:projectRoot})
+
+  const recentDupe = bugLog.bugs.find(b => {
+    if (path.basename(b.file) !== basename) return false
+    if (!b.tags.includes("auto-detected")) return false
+    if (!b.tags.includes(detection.category)) return false
+    const bugTime = new Date(b.last_seen).getTime()
+    return (Date.now() - bugTime) < 5 * 60 * 1000
+  })
+
+  if (recentDupe) {
+    recentDupe.occurrences++
+    recentDupe.last_seen = new Date().toISOString()
+    if (detection.context && !recentDupe.fix.includes(detection.context)) {
+      recentDupe.fix += ` | Also: ${detection.context}`
+    }
+    writeJSON(bugLogPath, bugLog)
+    return
+  }
+
+  const nextId = `bug-${String(bugLog.bugs.length + 1).padStart(3, "0")}`
+  bugLog.bugs.push({
+    id: nextId,
+    timestamp: new Date().toISOString(),
+    error_message: detection.summary,
+    file: relFile,
+    root_cause: detection.rootCause,
+    fix: detection.fix,
+    tags: ["auto-detected", detection.category, ext.replace(".", "") || "unknown"],
+    related_bugs: [],
+    occurrences: 1,
+    last_seen: new Date().toISOString(),
+  })
+  writeJSON(bugLogPath, bugLog)
 }
 
 export function detectFixPattern(oldStr: string, newStr: string, ext: string, basename: string): FixDetection | null {
   const oldLines = oldStr.split("\n")
   const newLines = newStr.split("\n")
 
-  if (!/(?:Test|IT|Spec)\.\w+$|(?:[._](?:test|spec))\.\w+$|^test_/.test(basename) && /\bcatch\s*\(/.test(newStr) && !/\bcatch\s*\(/.test(oldStr)) {
-    const fn = newStr.match(/(?:function|def|async)\s+(\w+)/)?.[1] || basename
+  if (newStr.includes("catch") && !oldStr.includes("catch")) {
+    const fn = newStr.match(/(?:function|def|async)\s+(\w+)/)?.[1] || "unknown"
     return { category: "error-handling", summary: `Missing error handling in ${fn}`, rootCause: "Code path had no error handling", fix: "Added try/catch block", context: extractChangedLines(oldStr, newStr) }
   }
 

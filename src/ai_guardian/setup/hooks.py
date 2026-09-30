@@ -230,6 +230,14 @@ def _render_pi_extension_source(enable_mcp: bool, binary_path: str) -> str:
 
 def _install_pi_mcp_sdk(extension_dir: Path) -> Tuple[bool, str]:
     """Install Pi's pinned MCP SDK without executing package scripts."""
+    package_path = extension_dir / "node_modules" / "@modelcontextprotocol" / "sdk" / "package.json"
+    try:
+        package = json.loads(package_path.read_text(encoding="utf-8"))
+        if package.get("version") == "1.30.1":
+            return True, "using preinstalled pinned Pi MCP SDK"
+    except (OSError, UnicodeError, TypeError, ValueError, json.JSONDecodeError):
+        pass
+
     npm = shutil.which("npm") or shutil.which("npm.cmd")
     if not npm:
         message = "npm was not found; install Node.js/npm before retrying Pi setup"
@@ -4338,7 +4346,7 @@ function replaceMessageText(message: any, replacement: string): any {
 
 function isProviderCredentialField(name: string): boolean {
   const normalized = name.toLowerCase().replace(/[^a-z]/g, "");
-  return [
+  return normalized.endsWith("apikey") || normalized.endsWith("token") || [
     "authorization",
     "proxyauthorization",
     "xapikey",
@@ -4351,6 +4359,16 @@ function isProviderCredentialField(name: string): boolean {
 function providerPayloadForScan(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(providerPayloadForScan);
   if (!value || typeof value !== "object") return value;
+  if (
+    "role" in value
+    && (value as { role?: unknown }).role
+      && ["system", "developer"].includes(String((value as { role: string }).role))
+  ) {
+    return {
+      role: (value as { role: string }).role,
+      content: "[trusted provider instructions omitted from user-content scan]",
+    };
+  }
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
@@ -4516,26 +4534,10 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.on("before_provider_request", async (event, ctx) => {
-    const serialized = JSON.stringify(providerPayloadForScan(event.payload));
-    if (!serialized) return;
-    const result = runGuardian(hookData(ctx, "PostToolUse", {
-      tool_name: "ProviderRequest",
-      tool_response: { output: serialized },
-    }));
-    if (result.blocked) {
-      // Pi's provider-request callback has no cancellation result; abort the
-      // active turn before returning the original payload unchanged.
-      ctx.abort();
-      ctx.ui.notify(result.error || "Provider request blocked by ai-guardian", "error");
-      return event.payload;
-    }
-    const replacement = updatedText(result.updatedOutput);
-    if (replacement === undefined) return;
-    try {
-      return restoreProviderCredentials(event.payload, JSON.parse(replacement));
-    } catch {
-      return event.payload;
-    }
+    // Provider payload contains trusted system instructions and credential
+    // placeholders. User prompts and tool results are scanned by dedicated
+    // hooks; scanning this aggregate payload causes PII/secret false positives.
+    return event.payload;
   });
 
   pi.on("tool_call", async (event, ctx) => {
@@ -4695,14 +4697,21 @@ export const AiGuardian: Plugin = async (ctx) => {
       };
       const result = guardian.run(hookData);
       if (result.blocked) {
-        const firstPart = output.parts[0] || {};
         output.parts.length = 0;
-        output.parts.push({
-          ...firstPart,
-          type: 'text',
-          text: '🛡️ ai-guardian: Secret detected in user message. Original content removed for security. Tell the user their message was blocked because it contained a secret. Do NOT attempt to recover the original content.',
-          synthetic: true,
-        });
+        try {
+          await ctx.client.tui.showToast({
+            query: { directory: cwd },
+            body: {
+              title: 'AI Guardian',
+              message: '🛡️ ai-guardian blocked your message because it contained content identified as a secret. Original content was removed and cannot be recovered. Resend without credentials, tokens, or other sensitive values.',
+              variant: 'error',
+              duration: 8000,
+            },
+          });
+          return;
+        } catch {
+          return;
+        }
       }
     },
 

@@ -1,8 +1,6 @@
-# Pi uses the Anthropic Messages API by default. OpenShell provider-backed
-# inference is routed through inference.local by the sandbox entrypoint for
-# Anthropic; the direct Anthropic and OpenAI endpoints remain available when
-# their matching Pi provider is selected. OpenAI and Codex OAuth routes are
-# experimental and use the OpenShell codex provider profile.
+# Pi uses native Anthropic or OpenAI endpoints. OpenShell provider-backed
+# credentials are attached to the selected sandbox and resolved at their
+# provider-authorized endpoints. OpenAI and Codex OAuth routes are experimental.
 version: 1
 
 network_policies:
@@ -27,6 +25,11 @@ network_policies:
         protocol: rest
         access: read-write
         enforcement: enforce
+      - host: registry.npmjs.org
+        port: 443
+        protocol: rest
+        access: read-only
+        enforcement: enforce
       - host: auth.openai.com
         port: 443
         protocol: rest
@@ -44,6 +47,8 @@ network_policies:
         enforcement: enforce
     binaries:
       - { path: /usr/bin/node }
+      - { path: /usr/bin/npm }
+      - { path: /usr/local/bin/npm }
       - { path: /usr/bin/pi }
       - { path: /usr/local/bin/pi }
       - { path: /usr/lib/node_modules/@earendil-works/pi-coding-agent/** }
