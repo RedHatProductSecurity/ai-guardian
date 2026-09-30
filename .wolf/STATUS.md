@@ -208,11 +208,11 @@ budget_tokens: 1000
 
 ## 🚀 Next phase
 
-**Goal:** Verify PR #2474 after Black, headless-modal, and OpenShell test-contract fixes, then hand issue #2460 back to workflow completion.
+**Goal:** Monitor PR #2474 checks after review-fix push, then hand issue #2460 back to workflow completion.
 
 ### Open decisions
-- Formatting and headless-modal fixes remain uncommitted; `daf complete` owns commit, push, and PR updates.
-- Local validation: 306 UI/ask tests, 253 sandbox/daemon tests, 73 container-script tests, Black, and `git diff --check` pass.
+- Review fixes committed as `bf41f8b1` and pushed to branch `2460`; PR checks are rerunning.
+- Local validation: 190 focused review tests, 306 UI/ask tests, 253 sandbox/daemon tests, 73 container-script tests, Black, Ruff, Mypy, Pylint, shell syntax, and `git diff --check` pass.
 
 ---
 
