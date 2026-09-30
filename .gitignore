@@ -21,6 +21,8 @@ uv.lock
 *.swp
 .DS_Store
 codex.json
+# Codex project hooks are machine-specific.
+.codex/hooks.json
 
 # Testing
 .pytest_cache/
