@@ -215,6 +215,7 @@ class TestContainerLaunchers:
 
     def test_release_readiness_smoke_tests_both_pi_images(self):
         workflow = RELEASE_READINESS_WORKFLOW.read_text(encoding="utf-8")
+        dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")
 
         assert "container-images:" in workflow
         assert "Build normal support image" in workflow
@@ -226,6 +227,10 @@ class TestContainerLaunchers:
             "Verify OpenShell image Pi CLI and extension setup", 1
         )[1].split("Verify OpenShell compatibility metadata", 1)[0]
         assert "--entrypoint claude" not in openshell_check
+
+        base_image = re.search(r"^ARG BASE_IMAGE=(\S+)$", dockerfile, re.MULTILINE)
+        assert base_image
+        assert f'"{base_image.group(1)}"' in workflow
 
     def test_openshell_image_uses_pinned_ubuntu_base_layout(self):
         dockerfile = OPENSHELL_DOCKERFILE.read_text(encoding="utf-8")

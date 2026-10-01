@@ -234,11 +234,18 @@ budget_tokens: 1000
   misindented IDE entries and removing the impossible direct `claude --version`
   assertion from the OpenShell image check; Claude is intentionally runtime
   ToS-gated in `container/Dockerfile.openshell`.
+- The follow-up run passed the image checks but exposed a stale compatibility
+  assertion; updated the expected OpenShell base-image digest to match the
+  Dockerfile's pinned `nvcr.io/nvidia/base/ubuntu` image.
 - Added regression assertions in `tests/unit/test_ide_registry.py` and
   `tests/unit/test_container_scripts.py`.
 - Validation: all five affected IDE E2E cases passed individually, 121 workflow
   and container contract tests passed, YAML parsing passed, Ruff/Black and
   `git diff --check` passed. Docker image execution was not available locally.
+- The separate Python 3.9 compatibility failure did not reproduce: the exact
+  full-suite command passed locally under CPython 3.9 with 12,158 passed and
+  198 skipped. Python 3.9 remains required for the 1.19 line; remove it from
+  compatibility matrices only as part of the planned 1.20 support drop.
 
 ## 🚀 Next phase
 

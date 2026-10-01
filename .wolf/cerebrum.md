@@ -113,6 +113,16 @@
   CLIs packaged in the image; Claude is intentionally installed at runtime
   after ToS consent.
 
+- **OpenShell base-image labels have one source of truth:** The compatibility
+  assertion in release readiness must match `Dockerfile.openshell`'s `BASE_IMAGE`
+  digest. Keep a contract test comparing the workflow value to the Dockerfile
+  instead of manually maintaining two independent digests.
+
+- **Python support transition:** The 1.19 line still supports Python 3.9, so
+  retain its compatibility job even if a transient CI run fails there. Version
+  1.20.0 will drop Python 3.9; remove the 3.9 CI matrix entries and update the
+  package support metadata together when that release work begins.
+
 - **Multi-architecture OCI validation needs artifact cleanup:** The Ubuntu
   compatibility workflow exports normal and OpenShell images as large OCI
   tarballs on the same runner. Remove the first artifact before exporting the
