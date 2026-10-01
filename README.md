@@ -328,39 +328,10 @@ installation is read-only. To update Claude Code, rebuild the OpenShell image
 and create a new sandbox; the subcommand sets `DISABLE_AUTOUPDATER=1`
 automatically.
 
-OpenCode is a CLI with its own agent profiles and model/provider selection. The
-`--agent` profile is required when `--cli opencode` is selected. Use the explicit
-two-level form when an OpenCode profile should use Claude:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --cli opencode \
-    --agent claude \
-    --model claude-sonnet-4-6 \
-    --provider vertex-provider \
-    --repo .
-```
-
-Here `--agent claude` is an OpenCode agent profile and `--model` selects the
-provider model. OpenCode's `build` and `plan` names are profiles, not
-providers. For the Claude/Vertex path, the subcommand attaches the Google
-Cloud provider and passes native Vertex settings; no `inference.local` route
-or `openshell inference set` command is required. OpenCode has no Claude-style
-`--bare` flag; run `opencode --agent NAME` normally.
-
-The `opencode` + `claude` + Claude/Vertex combination has been tested. The
-`--cli` value selects OpenCode, `--agent claude` selects the tested profile,
-and `--model` plus `--provider` select the inference backend.
-
-For gateway-managed OpenAI credentials, attach provider explicitly and keep
-credentials out of sandbox:
-
-```bash
-ai-guardian sandbox create --runtime openshell \
-    --base localhost/ai-guardian-openshell:review-2474 \
-    --cli opencode --opencode-agent-profile build \
-    --model openai/gpt-5.6-luna --provider ai-guardian-codex --repo .
-```
+OpenCode is not currently supported for OpenShell v0.1.2. Its bundled provider
+profiles do not expose a compatible OpenCode credential boundary. Use Codex for
+the currently qualified OpenShell path; OpenCode requires a separately
+provisioned custom OpenShell provider profile.
 
 The Claude/Vertex policy does not grant GitHub access by default. The command
 above is sufficient for Claude requests, Vertex inference, and an ordinary

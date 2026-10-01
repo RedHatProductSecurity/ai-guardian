@@ -454,6 +454,9 @@ def _dynamic_default_value(specification: Dict[str, Any], value: str) -> Optiona
     value = str(value or "").strip()
     if not value:
         return None
+    value_by = specification.get("value_by")
+    if isinstance(value_by, dict):
+        return value_by.get(value)
     max_length = specification.get("value_max_length")
     if isinstance(max_length, int) and max_length > 0:
         value = value[:max_length]

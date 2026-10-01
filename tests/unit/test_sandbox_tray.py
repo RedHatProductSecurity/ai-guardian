@@ -998,18 +998,23 @@ class TestSandboxTrayMenu:
             "config_source": "Host/default",
             "port": "",
         }
-        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
-            with mock.patch.object(
-                tray._menu, "_show_sandbox_progress", return_value=None
-            ):
-                tray._menu._complete_sandbox_create_form(values)
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+            mock.patch(
+                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
+                return_value=("ai-guardian-openai",),
+            ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
+        ):
+            tray._menu._complete_sandbox_create_form(values)
 
         args = create.call_args.args[0]
         assert args.cli == "opencode"
         assert args.opencode_agent == "build"
+        assert args.provider == ["ai-guardian-openai"]
         assert args.fresh_config is True
 
-    def test_create_form_auto_attaches_codex_provider_for_opencode_openai(self):
+    def test_create_form_auto_attaches_existing_openai_provider(self):
         tray = _make_tray([])
         values = {
             "runtime": "openshell",
@@ -1028,13 +1033,17 @@ class TestSandboxTrayMenu:
             "config_source": "Host/default",
             "port": "",
         }
-        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
-            with mock.patch.object(
-                tray._menu, "_show_sandbox_progress", return_value=None
-            ):
-                tray._menu._complete_sandbox_create_form(values)
+        with (
+            mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create,
+            mock.patch(
+                "ai_guardian.tray.menu_builder._get_openshell_openai_providers",
+                return_value=("ai-guardian-openai",),
+            ),
+            mock.patch.object(tray._menu, "_show_sandbox_progress", return_value=None),
+        ):
+            tray._menu._complete_sandbox_create_form(values)
 
-        assert create.call_args.args[0].provider == ["ai-guardian-codex"]
+        assert create.call_args.args[0].provider == ["ai-guardian-openai"]
 
     def test_create_form_rejects_unsupported_openshell_pi_provider(self):
         tray = _make_tray([])
@@ -1127,25 +1136,14 @@ class TestSandboxTrayMenu:
             "values": ("pi",),
         }
 
-        opencode_env = base_env.copy()
-        opencode_env.update(
-            {
-                "AI_GUARDIAN_CLI": "opencode",
-                "AI_GUARDIAN_OPENCODE_AGENT": "build",
-                "AI_GUARDIAN_OPEN_SHELL_MODEL": "openai/gpt-5.6-luna",
-            }
-        )
-        with mock.patch.dict(os.environ, opencode_env, clear=True):
+        invalid_opencode_env = base_env.copy()
+        invalid_opencode_env["AI_GUARDIAN_CLI"] = "opencode"
+        with mock.patch.dict(os.environ, invalid_opencode_env, clear=True):
             fields = tray._menu._sandbox_create_fields()
 
-        agent_field = next(field for field in fields if field["name"] == "agent")
-        assert agent_field["default"] == "build"
-        name_field = next(field for field in fields if field["name"] == "name")
-        assert name_field["default"] == "ag-opencode"
-        providers_field = next(
-            field for field in fields if field["name"] == "providers"
-        )
-        assert providers_field["default"] == "ai-guardian-codex"
+        cli_field = next(field for field in fields if field["name"] == "cli")
+        assert cli_field["default"] == "codex"
+        assert cli_field["choices"] == TRAY_OPENSHELL_CLI_CHOICES
 
         pi_env = base_env.copy()
         pi_env.update(
@@ -1325,6 +1323,14 @@ class TestSandboxTrayMenu:
                 "claude",
             )
             == "ag-claude-abc123"
+        )
+
+        assert (
+            _dynamic_default_value(
+                {"value_by": {"opencode": "openai/gpt-5.6-luna"}},
+                "opencode",
+            )
+            == "openai/gpt-5.6-luna"
         )
 
     def test_path_browser_starts_at_current_directory_value(self, tmp_path):

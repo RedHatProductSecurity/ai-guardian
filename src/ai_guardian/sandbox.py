@@ -1048,7 +1048,9 @@ def _merge_openshell_policy_values(base: Any, overlay: Any) -> Any:
     return overlay
 
 
-def _compose_openshell_policy(args, cli: str) -> Tuple[Path, Path]:
+def _compose_openshell_policy(
+    args, cli: str, *, provider_attached: bool = False
+) -> Tuple[Path, Path]:
     """Compose the baseline, user overlays, and selected-CLI policy."""
     import yaml
 
@@ -1069,6 +1071,11 @@ def _compose_openshell_policy(args, cli: str) -> Tuple[Path, Path]:
     network_policies = policy.get("network_policies")
     if network_policies is not None and not isinstance(network_policies, dict):
         raise ValueError("network_policies must be a YAML mapping")
+    if cli == "opencode" and provider_attached and isinstance(network_policies, dict):
+        # OpenAI provider profiles own endpoint and credential boundaries in
+        # OpenShell v0.1.2. Do not duplicate the provider policy in workload
+        # policy; the provider attachment supplies the boundary.
+        openai_policy = network_policies.pop("openai", None)
 
     try:
         temporary_dir = Path(
@@ -2496,7 +2503,9 @@ def _openshell_create(
     else:
         command.append("--auto-providers")
 
-    policy_path, policy_dir = _compose_openshell_policy(args, cli)
+    policy_path, policy_dir = _compose_openshell_policy(
+        args, cli, provider_attached=provider_attached
+    )
     if vertex_provider_required:
         _add_openshell_vertex_policy_binding(policy_path, provider_names[0], cli)
     command.extend(["--policy", str(policy_path)])

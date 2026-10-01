@@ -204,8 +204,8 @@ does not run a live provider or claim generic OpenShell compatibility.
 | `codex` | `codex exec --skip-git-repo-check "hello"` | Codex provider or local Codex login |
 | `copilot` | `copilot --help` | OpenShell Copilot provider; pass `--provider copilot=NAME` |
 | `opencode-claude` | `opencode --agent claude run "hello" --model claude-sonnet-4-6` | Claude/Vertex provider; pass `--provider opencode-claude=NAME` |
-| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Existing gateway provider; pass `--provider opencode-openai=ai-guardian-codex` |
-| `opencode-openai-api-key` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Host Codex `auth.json` with `OPENAI_API_KEY`; skipped otherwise |
+| `opencode-openai` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Unsupported until custom OpenCode provider profile is provisioned |
+| `opencode-openai-api-key` | `opencode --agent build run "hello" --model openai/gpt-5.6-luna` | Unsupported until custom OpenCode provider profile is provisioned |
 | `pi-anthropic` | `pi -p "hello" --model claude-sonnet-4-6 --provider anthropic` | Anthropic-compatible provider |
 | `pi-openai` | `pi -p "hello" --model gpt-5.6-luna --provider openai` | Local Pi OpenAI API-key login |
 | `pi-openai-codex` | `pi -p "hello" --model gpt-5.6-luna --provider openai-codex` | Local Pi Codex OAuth login; experimental and may fail with resolver-backed credentials |

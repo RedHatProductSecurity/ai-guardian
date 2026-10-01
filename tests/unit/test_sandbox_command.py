@@ -1369,6 +1369,38 @@ def test_openshell_create_composes_baseline_overlay_and_agent_policy(tmp_path):
     assert set(policy["network_policies"]) == {"base", "overlay", "claude"}
 
 
+def test_opencode_provider_owns_openai_endpoints(tmp_path):
+    base = tmp_path / "base.yaml"
+    base.write_text("version: 1\nnetwork_policies: {}\n", encoding="utf-8")
+    agent_dir = tmp_path / "agents"
+    agent_dir.mkdir()
+    (agent_dir / "opencode.yaml").write_text(
+        "version: 1\nnetwork_policies:\n  openai:\n"
+        "    endpoints:\n      - host: api.openai.com\n"
+        "        port: 443\n    binaries:\n      - path: /usr/bin/opencode\n",
+        encoding="utf-8",
+    )
+    args = _args()
+
+    with patch.dict(
+        os.environ,
+        {
+            "AI_GUARDIAN_OPEN_SHELL_BASE_POLICY": str(base),
+            "AI_GUARDIAN_OPEN_SHELL_AGENT_POLICY_DIR": str(agent_dir),
+        },
+        clear=False,
+    ):
+        policy_path, policy_dir = _compose_openshell_policy(
+            args, "opencode", provider_attached=True
+        )
+        try:
+            policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+        finally:
+            shutil.rmtree(policy_dir)
+
+    assert "openai" not in policy["network_policies"]
+
+
 def test_openshell_create_adds_managed_policy_and_provider_modes(tmp_path):
     args = _args(
         sandbox_command="create",

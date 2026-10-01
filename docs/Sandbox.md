@@ -245,6 +245,9 @@ codex exec --skip-git-repo-check "hello"
 
 ### OpenCode with OpenAI
 
+> OpenCode is not currently supported for OpenShell v0.1.2. This section is
+> retained as provider-profile reference only; it is not a qualified workflow.
+
 ```bash
 ai-guardian sandbox create \
     --runtime openshell \
@@ -487,7 +490,7 @@ command returns when that command exits.
 When `--provider` is omitted, staged OpenShell setup can reuse or create an
 `ai-guardian-<cli>` provider only when matching local credentials are available.
 Gateway-only credentials require an explicit existing provider, for example
-`--provider ai-guardian-codex`; omitting it does not attach credentials to an
+`--provider ai-guardian-openai`; omitting it does not attach credentials to an
 already-created sandbox. Existing providers can always be selected explicitly
 with repeatable `--provider` options. Running sandboxes may require a restart
 or recreation after provider credentials change. Claude
@@ -591,16 +594,17 @@ ai-guardian sandbox create --runtime openshell \
     --cli opencode \
     --opencode-agent-profile build \
     --model openai/gpt-5.6-luna \
-    --provider ai-guardian-codex \
+    --provider ai-guardian-openai \
     --repo .
 ai-guardian sandbox exec guardian-opencode -- \
     opencode --agent build run "hello" --model openai/gpt-5.6-luna
 ```
 
-`ai-guardian-codex` must already exist on active OpenShell gateway. Its
+An existing OpenAI provider such as `ai-guardian-openai` must already exist on
+active OpenShell gateway. Its
 credential remains gateway-managed; only provider name is passed to sandbox.
-Tray **Create sandbox** selects this provider automatically for OpenCode
-OpenAI-shaped models when no provider is entered. CLI commands do not infer
+Tray **Create sandbox** discovers compatible OpenAI provider instances and
+selects one automatically when exactly one exists. CLI commands do not infer
 this provider unless matching local credentials are available.
 
 ## Manual Live Provider Smoke Tests

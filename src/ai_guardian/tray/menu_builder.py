@@ -7,6 +7,7 @@ MenuItem trees by reading state from DaemonTray and its sub-managers.
 """
 
 import logging
+import json
 import os
 import shlex
 import subprocess
@@ -28,9 +29,36 @@ from ai_guardian.tray import plugins as tray_plugins
 
 logger = logging.getLogger(__name__)
 
+
+def _get_openshell_openai_providers() -> tuple:
+    """Return existing OpenAI provider instances usable by OpenCode."""
+    try:
+        result = subprocess.run(
+            ["openshell", "provider", "list", "--output", "json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        payload = json.loads(result.stdout) if result.returncode == 0 else {}
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError):
+        return ()
+
+    providers = payload.get("providers", []) if isinstance(payload, dict) else []
+    names = {
+        str(provider["name"])
+        for provider in providers
+        if isinstance(provider, dict)
+        and provider.get("type") == "openai"
+        and "codex" not in str(provider.get("name", "")).lower()
+        and provider.get("name")
+    }
+    return tuple(sorted(names, key=str.casefold))
+
+
 # Tray advertises only OpenShell scenarios qualified against v0.1.2. Other
 # bundled clients remain available through the CLI for manual qualification.
-TRAY_OPENSHELL_CLI_CHOICES = ("codex", "opencode")
+TRAY_OPENSHELL_CLI_CHOICES = ("codex",)
 TRAY_SANDBOX_CLI_CHOICES_BY_RUNTIME = {
     "container": SANDBOX_CLI_IDE_TYPES_BY_RUNTIME["container"],
     "openshell": TRAY_OPENSHELL_CLI_CHOICES,
@@ -825,6 +853,12 @@ class TrayMenuBuilder:
         profile = str(values.get("profile") or "").strip()
         if profile:
             command.extend(["--profile", profile])
+        agent = str(values.get("agent") or "").strip()
+        if cli == "opencode" and agent:
+            command.extend(["--opencode-agent-profile", agent])
+        model = str(values.get("model") or "").strip()
+        if model:
+            command.extend(["--model", model])
         providers = [
             item.strip()
             for item in str(values.get("providers") or "").replace("\n", ",").split(",")
@@ -1017,12 +1051,26 @@ class TrayMenuBuilder:
             agent_provider = ""
         if runtime == "openshell" and cli == "pi" and not agent_provider:
             agent_provider = "anthropic"
+        if runtime == "openshell" and cli == "opencode" and not opencode_agent:
+            opencode_agent = "build"
         model_default = os.environ.get("AI_GUARDIAN_OPEN_SHELL_MODEL", "")
+        if runtime == "openshell" and cli == "opencode" and not model_default:
+            model_default = "openai/gpt-5.6-luna"
+        openai_providers = _get_openshell_openai_providers()
+        openshell_provider_choices_by_cli = {
+            "codex": ("",),
+            "opencode": openai_providers or ("",),
+        }
+        openshell_provider_choices = (
+            openshell_provider_choices_by_cli.get(cli, ("",))
+            if runtime == "openshell"
+            else ()
+        )
         providers_default = (
-            "ai-guardian-codex"
+            openai_providers[0]
             if runtime == "openshell"
             and cli == "opencode"
-            and model_default.lower().startswith(("openai/", "gpt-"))
+            and len(openai_providers) == 1
             else ""
         )
         from ai_guardian.sandbox import _generated_openshell_name
@@ -1143,6 +1191,12 @@ class TrayMenuBuilder:
                 "name": "model",
                 "label": "Inference model",
                 "default": model_default,
+                "dynamic_default": {
+                    "field": "cli",
+                    "value_by": {
+                        "opencode": "openai/gpt-5.6-luna",
+                    },
+                },
                 "help": "CLI model or OpenShell inference model; empty uses the default.",
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1180,11 +1234,25 @@ class TrayMenuBuilder:
             {
                 "name": "providers",
                 "label": "OpenShell providers",
+                "type": "choice" if runtime == "openshell" else "text",
+                "choices": openshell_provider_choices,
+                "editable": False if runtime == "openshell" else True,
+                "clear_when_choice_invalid": True,
+                "choices_by": (
+                    {
+                        "field": "cli",
+                        "values": openshell_provider_choices_by_cli,
+                    }
+                    if runtime == "openshell"
+                    else {}
+                ),
                 "default": providers_default,
                 "help": (
-                    "OpenShell provider names; separate names with commas or "
-                    "newlines. OpenCode OpenAI models default to "
-                    "ai-guardian-codex."
+                    "Select existing OpenAI provider instance; one provider "
+                    "is selected automatically when unambiguous."
+                    if openshell_provider_choices
+                    else "OpenShell provider names; separate names with commas "
+                    "or newlines."
                 ),
                 "enabled_when": {"field": "runtime", "values": ("openshell",)},
                 "clear_when_disabled": True,
@@ -1342,14 +1410,10 @@ class TrayMenuBuilder:
             provider = provider.strip()
             if provider:
                 provider_names.append(provider)
-        if (
-            runtime == "openshell"
-            and cli == "opencode"
-            and not provider_names
-            and model
-            and model.lower().startswith(("openai/", "gpt-"))
-        ):
-            provider_names.append("ai-guardian-codex")
+        if runtime == "openshell" and cli == "opencode" and not provider_names:
+            openai_providers = _get_openshell_openai_providers()
+            if len(openai_providers) == 1:
+                provider_names.append(openai_providers[0])
         environment_values = []
         environment = str(values.get("environment") or "").strip()
         for entry in environment.replace("\n", ",").split(","):
