@@ -46,6 +46,11 @@ _MCP_REASON_COMMAND_POLICY = "command_policy_denied"
 _MCP_REASON_IDENTITY = "identity_failure"
 _MCP_REASON_PERMISSION = "permission_denied"
 _MCP_REASON_POLICY_ERROR = "policy_check_error"
+_MCP_REASON_PAUSED = "proactive_checks_paused"
+_MCP_PAUSED_MESSAGE = (
+    "MCP action-gating check skipped because AI Guardian is paused. "
+    "Hooks remain active and enforce security."
+)
 
 
 def _mcp_policy_metadata(
@@ -157,9 +162,53 @@ def _load_mcp_config() -> Dict:
     try:
         with open(config_path, "r") as f:
             config = json.load(f)
-        return config.get("mcp_server", {})
+        section = config.get("mcp_server", {})
+        return section if isinstance(section, dict) else {}
     except Exception:
         return {}
+
+
+def _mcp_pause_directory(project_dir: Optional[str] = None) -> str:
+    """Resolve the workspace used for directory-scoped pause checks."""
+    requested = project_dir or os.environ.get("AI_GUARDIAN_PROJECT_DIR")
+    return str(Path(requested or Path.cwd()).expanduser().resolve())
+
+
+def _mcp_pause_source(
+    project_dir: Optional[str] = None,
+    configured_level: Optional[str] = None,
+) -> Optional[str]:
+    """Return the active MCP pause source, if proactive checks are paused.
+
+    The daemon persists pause state so a separate stdio MCP process can observe
+    pause/resume and timed expiry without maintaining a second runtime state.
+    """
+    level = configured_level
+    if level is None:
+        level = _load_mcp_config().get("proactive_level", "low")
+    if level == "paused":
+        return "configured"
+
+    try:
+        from ai_guardian.daemon.state import DaemonState
+
+        if DaemonState.is_paused_on_disk(cwd=_mcp_pause_directory(project_dir)):
+            return "daemon"
+    except Exception as exc:
+        logger.warning("Unable to determine daemon pause state for MCP checks: %s", exc)
+    return None
+
+
+def _mcp_paused_response(event: str, pause_source: str) -> Dict[str, Any]:
+    """Build the stable response returned when an action check is skipped."""
+    return {
+        "status": "paused",
+        "skipped": True,
+        "reason": _MCP_REASON_PAUSED,
+        "pause_source": pause_source,
+        "message": _MCP_PAUSED_MESSAGE,
+        "policy_decision": _mcp_policy_metadata(event, "allow", _MCP_REASON_PAUSED),
+    }
 
 
 def _load_skill_instructions() -> str:
@@ -315,14 +364,23 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
     _OPERATION_TO_TOOL = {"read": "Read", "write": "Write", "edit": "Edit"}
 
     @server.tool()
-    def check_path(path: str, operation: str = "read") -> Dict[str, Any]:
+    def check_path(
+        path: str,
+        operation: str = "read",
+        project_dir: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Check if a file path is protected by directory rules. Call before Read/Write/Edit on unfamiliar paths. Returns allowed/denied/not_found so you can distinguish between protected paths and missing files.
 
         Args:
             path: File path to check
             operation: "read", "write", or "edit" (default: "read")
+            project_dir: Optional active workspace used for directory pause state
         """
         try:
+            pause_source = _mcp_pause_source(project_dir)
+            if pause_source:
+                return _mcp_paused_response("mcp_check_path", pause_source)
+
             resolved = Path(path).expanduser()
             if not resolved.exists():
                 return {
@@ -372,9 +430,14 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
 
         ``project_dir`` is optional for MCP clients that can provide the active
         workspace.  When omitted, the MCP server launch directory is used.
-        Results are advisory; hooks provide enforcement.
+        Results are advisory; hooks provide enforcement. An active daemon or
+        directory pause skips this proactive check without changing hooks.
         """
         try:
+            pause_source = _mcp_pause_source(project_dir)
+            if pause_source:
+                return _mcp_paused_response("mcp_check_command", pause_source)
+
             if identity_verified:
                 from ai_guardian.mcp.identity import verify_active_attestation
 
@@ -427,9 +490,19 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             }
 
     @server.tool()
-    def check_mcp_trust(server_name: str) -> Dict[str, Any]:
-        """Check if an MCP server is trusted based on permission rules. Call before suggesting MCP server usage."""
+    def check_mcp_trust(
+        server_name: str, project_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Check if an MCP server is trusted based on permission rules. Call before suggesting MCP server usage.
+
+        ``project_dir`` optionally identifies the workspace whose directory
+        pause state should apply.
+        """
         try:
+            pause_source = _mcp_pause_source(project_dir)
+            if pause_source:
+                return _mcp_paused_response("mcp_check_trust", pause_source)
+
             from ai_guardian.tools.policy import ToolPolicyChecker
 
             checker = ToolPolicyChecker()
@@ -695,8 +768,15 @@ def create_server(*, identity_verified: bool = False) -> "MCPServer":
             features["scanner_actions"] = scanner_actions
 
             mcp_section = config.get("mcp_server", {})
+            if not isinstance(mcp_section, dict):
+                mcp_section = {}
             features["mcp_server"] = True
-            features["proactive_level"] = mcp_section.get("proactive_level", "low")
+            configured_level = mcp_section.get("proactive_level", "low")
+            pause_source = _mcp_pause_source(configured_level=configured_level)
+            features["configured_proactive_level"] = configured_level
+            features["proactive_level"] = "paused" if pause_source else configured_level
+            if pause_source:
+                features["proactive_pause_source"] = pause_source
 
             from ai_guardian.config.utils import get_project_config_path
 

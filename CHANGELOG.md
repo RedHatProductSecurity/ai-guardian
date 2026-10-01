@@ -50,6 +50,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Pause-aware MCP action gating (#2472):** Add the `paused` proactive level
+  and make MCP path, command, and trust checks observe global, directory, and
+  timed daemon pauses without restarting. Paused responses clearly report that
+  the check was skipped while query tools and mandatory hooks remain available.
+
 - **Compliance audit logging (#266):** Add an opt-in, sanitized `audit.jsonl`
   trail for final hook decisions with SOC 2, GDPR, and HIPAA markers,
   configurable retention, all context-field controls, and TUI/Web Console

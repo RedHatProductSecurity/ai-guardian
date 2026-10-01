@@ -113,6 +113,12 @@ def test_empty_config_is_valid(schema):
 
 
 @pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
+def test_paused_mcp_proactive_level_validates(schema):
+    """The explicit paused MCP proactive level is schema-compatible."""
+    validate(instance={"mcp_server": {"proactive_level": "paused"}}, schema=schema)
+
+
+@pytest.mark.skipif(not HAS_JSONSCHEMA, reason="jsonschema not installed")
 def test_top_level_tracing_config(schema):
     """Unified tracing settings are accepted at the top level."""
     validate(

@@ -45,7 +45,18 @@ Everything in **medium**, plus:
 
 This adds noticeable latency, grows the conversation context, and increases token usage. Use for high-security environments.
 
+### paused — Skip proactive action-gating
+An explicit `paused` level, or an active daemon/global or applicable directory
+pause, skips `check_path`, `check_command`, and `check_mcp_trust`. The saved
+`low`, `medium`, or `high` level is preserved during a runtime daemon pause and
+returns automatically when the pause expires or the daemon resumes. Hooks remain
+the mandatory enforcement layer and are not paused by this setting.
+
 ### Tool responses
+- `check_path`, `check_command`, and `check_mcp_trust` return `"paused"` with
+  `skipped: true` when proactive action-gating is paused.
+- A paused response uses reason `proactive_checks_paused` and explains that
+  hooks remain active. Query, diagnostic, and reporting tools remain usable.
 - `check_path`: `"allowed"` / `"denied"` (protected by rules) / `"not_found"` (file doesn't exist)
 - `check_command`: `"allowed"` / `"blocked"` + reason (`secret_detected`, `ssrf_detected`, `prompt_injection`, `directory_blocked`, `command_policy_denied`, `permission_denied`, `identity_failure`, `policy_check_error`)
 

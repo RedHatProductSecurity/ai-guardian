@@ -1213,6 +1213,7 @@
   "_comment_mcp_server3": "The AI checks security BEFORE acting — instead of being blocked and retrying",
   "_comment_mcp_server4": "Installed by default during setup. Use --no-mcp to skip",
   "_comment_mcp_server5": "Installed by default during setup. Use --no-mcp to skip",
+  "_comment_mcp_server6": "proactive_level can be low, medium, high, or paused. A daemon/global or directory pause temporarily reports paused while hooks continue enforcing security.",
   "mcp_server": {
     "proactive_level": "low"
   },

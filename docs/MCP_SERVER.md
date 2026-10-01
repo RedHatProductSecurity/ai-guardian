@@ -129,11 +129,18 @@ Controls how aggressively the AI uses proactive security checks. Higher levels a
 | **low** (default) | Check only when user asks or after a block | Most users — hooks enforce everything |
 | **medium** | Also check unfamiliar paths and suspicious commands | Teams wanting fewer blocked-and-retry cycles |
 | **high** | Check every file access and command | High-security environments |
+| **paused** | Skip proactive MCP action-gating checks; hooks continue enforcing security | Temporarily paused daemon or explicit proactive pause |
 
 Configure via:
 - `ai-guardian.json`: `"mcp_server": {"proactive_level": "low"}`
 - Tray menu: MCP submenu → Proactive radio buttons
-- Console: MCP Servers panel → Proactive Level dropdown
+- TUI/Web Console: MCP Servers panel → Proactive Level selector
+
+An active global daemon pause or applicable directory pause temporarily overrides
+the configured `low`, `medium`, or `high` level and reports the effective level
+as `paused`. The configured level is not changed and resumes automatically when
+the pause expires or the daemon resumes. Hooks remain the mandatory enforcement
+layer during every MCP pause.
 
 ## Tools
 
@@ -141,9 +148,9 @@ Configure via:
 
 | Tool | Parameters | Returns | Purpose |
 |------|-----------|---------|---------|
-| `check_path` | `path`, `operation?` | `allowed` / `denied` / `not_found` + policy decision | Is this path protected? |
-| `check_command` | `command`, `project_dir?` | `allowed` / `blocked` + reason + policy decision | Would this command be blocked? |
-| `check_mcp_trust` | `server_name` | `trusted` / `untrusted` + policy decision | Is this MCP server allowed? |
+| `check_path` | `path`, `operation?`, `project_dir?` | `allowed` / `denied` / `not_found` / `paused` + policy decision | Is this path protected? |
+| `check_command` | `command`, `project_dir?` | `allowed` / `blocked` / `paused` + reason + policy decision | Would this command be blocked? |
+| `check_mcp_trust` | `server_name`, `project_dir?` | `trusted` / `untrusted` / `paused` + policy decision | Is this MCP server allowed? |
 | `sanitize_text` | `text` | sanitized text + redaction count | Redact secrets/PII from text |
 | `check_annotations` | `file_path` | valid/invalid + warnings | Are annotation pairs matched? |
 
@@ -152,6 +159,11 @@ Configure via:
 Security check and violation responses include the normalized `policy_decision`
 object when available. Its versioned, redacted shape is documented in
 [`VIOLATION_LOGGING.md`](VIOLATION_LOGGING.md#unified-policy-decision).
+
+When an action-gating check returns `status: "paused"`, it also returns
+`skipped: true`, `reason: "proactive_checks_paused"`, and a message explaining
+that hooks remain active. No new allow/block/trust decision is evaluated. Query,
+diagnostic, and reporting tools remain available while action-gating is paused.
 
 `check_command` evaluates the project configuration used by the caller when
 `project_dir` is supplied. Integrations may provide the same context through

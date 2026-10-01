@@ -352,7 +352,11 @@ def create_daemon_detail_page(service, daemon_name: str):
                                         ui.label(label).classes("text-sm")
 
                             scanner_actions = features.get("scanner_actions", {})
-                            proactive = features.get("proactive_level", "low")
+                            proactive = (
+                                "paused"
+                                if stats and stats.get("paused")
+                                else features.get("proactive_level", "low")
+                            )
                             unique_actions = (
                                 sorted(set(scanner_actions.values()))
                                 if scanner_actions

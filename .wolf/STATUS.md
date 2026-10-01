@@ -273,12 +273,20 @@ budget_tokens: 1000
   20:51 while all other matrix jobs passed; the exact CI command passed locally
   with coverage in 7:31, so no test-suite change was made.
 
+## ✅ Issue #2472 Complete
+
+- MCP `check_path`, `check_command`, and `check_mcp_trust` now observe persisted global, directory-scoped, and timed daemon pauses without an MCP restart.
+- Paused responses explicitly identify skipped action-gating checks while query/diagnostic tools remain available and hooks continue enforcing security.
+- Added the `paused` proactive level across schema, generated profiles, example/setup config, TUI, Web Console, tray, MCP skill, documentation, and changelog.
+- Focused validation: 1,046 tests passed; Ruff, Black, Pylint, Mypy, annotation checks, and diff checks passed.
+- Changes are uncommitted; `daf complete` owns commit and pull request actions.
+
 ## 🚀 Next phase
 
-**Goal:** Review the final uncommitted #2471 diff and decide whether to commit or open a PR.
+**Goal:** Run `daf complete` for issue #2472 when ready to commit and open the pull request.
 
 ### Open decisions
-- No commit or PR action has been requested.
+- No commit or PR action has been requested in this session.
 
 ---
 
@@ -292,7 +300,7 @@ budget_tokens: 1000
 
 ## ⚠️ External blockers (don't block coding)
 
-- No active blockers. The remaining workflow step is review/commit of the uncommitted #2446 implementation.
+- No active blockers. The remaining workflow step is `daf complete` for the uncommitted #2472 implementation.
 
 ---
 

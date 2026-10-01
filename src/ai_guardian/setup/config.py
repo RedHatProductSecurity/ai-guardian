@@ -462,7 +462,7 @@ def _get_default_config_template(permissive: bool = False) -> Dict:
             "custom_rules": [],
             "replace_defaults": False,
         },
-        "_comment_mcp_server": "MCP security advisor server. Exposes read-only security tools for AI agents. Installed by default during setup. Use --no-mcp to skip. (NEW in v1.7.0, Issue #477)",
+        "_comment_mcp_server": "MCP security advisor server. Exposes read-only security tools for AI agents. Installed by default during setup. Use --no-mcp to skip. Set proactive_level to low, medium, high, or paused; a daemon pause temporarily reports paused without changing the saved level. (NEW in v1.7.0, Issue #477)",
         "mcp_server": {
             "proactive_level": "low",
         },

@@ -43,7 +43,7 @@ def create_mcp_servers_page(service, daemon_name: str):
                     ui.label("Proactive Check Level").classes("text-lg font-bold")
                     ui.label(
                         "Controls how aggressively MCP tools "
-                        "perform security checks."
+                        "perform security checks. Paused skips action-gating; hooks still enforce."
                     ).classes("text-xs text-grey-6")
                     mcp_cfg = config.get("mcp_server", {})
                     level = (
@@ -56,6 +56,7 @@ def create_mcp_servers_page(service, daemon_name: str):
                             "low": "Low \u2014 check only when asked",
                             "medium": "Medium \u2014 check unfamiliar paths/commands",
                             "high": "High \u2014 check everything",
+                            "paused": "Paused \u2014 skip checks; hooks still enforce",
                         },
                         value=level,
                     ).classes("w-96")

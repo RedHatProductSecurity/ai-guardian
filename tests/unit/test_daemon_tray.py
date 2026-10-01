@@ -2563,6 +2563,17 @@ class TestTrayStartAlreadyRunningMessage:
 class TestMcpProactiveMenuVisibility:
     """Tests for MCP Proactive menu visibility based on MCP installation (issue #726)."""
 
+    def test_mcp_proactive_label_reflects_global_pause(self):
+        """The tray shows the paused effective MCP level during a daemon pause."""
+        tray = DaemonTray(
+            get_stats_callback=lambda: {"paused": True},
+            stop_callback=lambda: None,
+            pause_callback=lambda mins: None,
+        )
+        tray._proactive_level = "medium"
+
+        assert tray._menu._mcp_proactive_label() == "MCP Proactive: paused"
+
     def test_is_mcp_installed_returns_true_when_ide_config_has_entry(self, tmp_path):
         """Detects ai-guardian MCP server entry in an IDE config file."""
         import json
