@@ -1407,6 +1407,14 @@ class TestPanelContainerConsistency:
 class TestMCPServersNoDuplicateIds:
     """Tests for MCP servers panel avoiding DuplicateIds (issue #446)."""
 
+    def test_mcp_panel_describes_paused_level(self):
+        import inspect
+        from ai_guardian.tui.mcp_servers import MCPServersContent
+
+        source = inspect.getsource(MCPServersContent.compose)
+        assert '"paused"' in source
+        assert "hooks still enforce" in source
+
     def test_empty_state_widget_has_no_fixed_id(self):
         """Test that the empty-state Static in load_permissions has no id.
 

@@ -241,6 +241,20 @@ class TrayMenuBuilder:
             return f"Resume ({mins}m {secs}s left)"
         return "Resume (paused)"
 
+    def _mcp_proactive_label(self, slot=None):
+        """Show the effective MCP level for the selected daemon."""
+        paused = False
+        if slot is None:
+            try:
+                paused = bool(self._tray._get_stats().get("paused", False))
+            except Exception as exc:
+                logger.debug("Unable to read daemon pause state for MCP menu: %s", exc)
+                paused = getattr(self._tray, "_status", "") == "paused"
+        elif slot < len(self._tray._targets):
+            paused = self._tray._targets[slot].status == "paused"
+        level = "paused" if paused else self._tray._proactive_level
+        return f"MCP Proactive: {level}"
+
     def _get_merged_dir_list(self, stats):
         """Merge recently tracked project dirs and paused dirs into a list.
 
@@ -2469,7 +2483,7 @@ class TrayMenuBuilder:
             ),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem(
-                lambda _: f"MCP Proactive: {self._tray._proactive_level}",
+                lambda _: self._mcp_proactive_label(),
                 pystray.Menu(
                     pystray.MenuItem(
                         "low",
@@ -2487,6 +2501,12 @@ class TrayMenuBuilder:
                         "high",
                         lambda _, __: self._tray._on_change_proactive("high"),
                         checked=lambda _: self._tray._proactive_level == "high",
+                        radio=True,
+                    ),
+                    pystray.MenuItem(
+                        "paused",
+                        lambda _, __: self._tray._on_change_proactive("paused"),
+                        checked=lambda _: self._tray._proactive_level == "paused",
                         radio=True,
                     ),
                 ),
@@ -3055,7 +3075,7 @@ class TrayMenuBuilder:
                         ),
                         pystray.Menu.SEPARATOR,
                         pystray.MenuItem(
-                            lambda _: f"MCP Proactive: {self._tray._proactive_level}",
+                            lambda _i, s=idx: self._mcp_proactive_label(s),
                             pystray.Menu(
                                 pystray.MenuItem(
                                     "low",
@@ -3082,6 +3102,15 @@ class TrayMenuBuilder:
                                     ),
                                     checked=lambda _: self._tray._proactive_level
                                     == "high",
+                                    radio=True,
+                                ),
+                                pystray.MenuItem(
+                                    "paused",
+                                    lambda _, __: self._tray._on_change_proactive(
+                                        "paused"
+                                    ),
+                                    checked=lambda _: self._tray._proactive_level
+                                    == "paused",
                                     radio=True,
                                 ),
                             ),

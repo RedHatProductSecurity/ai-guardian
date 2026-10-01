@@ -65,6 +65,10 @@ Quit
 - **○** Stopped daemon — limited submenu with Console, Mode, Start daemon
 - **⚠●** Running daemon with stale code detected — shows orange dot; local daemons show a **Restart daemon (stale code)** item; remote/container/Kubernetes daemons show a **Rebuild image** hint instead
 
+The MCP Proactive submenu includes `low`, `medium`, `high`, and `paused`.
+Daemon pauses temporarily use the `paused` effective state without changing the
+saved proactive level; hooks continue enforcing security.
+
 Every discovered daemon is exposed in the tray. The menu is rebuilt when the
 discovery result changes, so the number of running containers or other remote
 daemons is not limited by a fixed tray slot count.

@@ -8,6 +8,7 @@ Requires Python >= 3.10 (MCP SDK dependency).
 import asyncio
 import json
 import sys
+import time
 from pathlib import Path
 from unittest import mock
 from unittest.mock import MagicMock, patch
@@ -71,6 +72,156 @@ class TestCheckPath:
         result = tool.fn(path="/nonexistent/path/file.py")
         assert result["status"] == "not_found"
         assert result["policy_decision"]["decision"] == "allow"
+
+
+class TestMCPActionGatingPause:
+    """Test runtime pauses skip only proactive MCP action checks."""
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch(
+        "ai_guardian.daemon.state.DaemonState.is_paused_on_disk",
+        return_value=True,
+    )
+    def test_check_path_returns_paused_without_policy_evaluation(
+        self, mock_paused, mock_checker_cls, tmp_path
+    ):
+        checked_file = tmp_path / "file.py"
+        checked_file.write_text("value = 1")
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_path"]
+        result = tool.fn(path=str(checked_file), project_dir=str(tmp_path))
+
+        assert result["status"] == "paused"
+        assert result["skipped"] is True
+        assert result["reason"] == "proactive_checks_paused"
+        assert "Hooks remain active" in result["message"]
+        assert "policy_decision" not in result
+        mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))
+        mock_checker_cls.assert_not_called()
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch(
+        "ai_guardian.daemon.state.DaemonState.is_paused_on_disk",
+        return_value=True,
+    )
+    def test_check_command_returns_paused_before_identity_or_policy_checks(
+        self, mock_paused, mock_checker_cls, tmp_path
+    ):
+        server = create_server(identity_verified=True)
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="git status", project_dir=str(tmp_path))
+
+        assert result["status"] == "paused"
+        assert result["pause_source"] == "daemon"
+        assert "policy_decision" not in result
+        mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))
+        mock_checker_cls.assert_not_called()
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    @patch(
+        "ai_guardian.daemon.state.DaemonState.is_paused_on_disk",
+        return_value=True,
+    )
+    def test_check_mcp_trust_returns_paused_without_trust_evaluation(
+        self, mock_paused, mock_checker_cls, tmp_path
+    ):
+        server = create_server()
+        tool = server._tool_manager._tools["check_mcp_trust"]
+        result = tool.fn(server_name="filesystem", project_dir=str(tmp_path))
+
+        assert result["status"] == "paused"
+        assert result["skipped"] is True
+        assert "policy_decision" not in result
+        mock_paused.assert_called_once_with(cwd=str(tmp_path.resolve()))
+        mock_checker_cls.assert_not_called()
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_directory_pause_applies_only_to_matching_workspace(
+        self, mock_checker_cls, tmp_path, monkeypatch
+    ):
+        paused_dir = tmp_path / "paused-project"
+        active_dir = tmp_path / "active-project"
+        paused_dir.mkdir()
+        active_dir.mkdir()
+        (tmp_path / "daemon.paused").write_text(
+            json.dumps(
+                {
+                    "global": {"paused": False, "until": 0.0},
+                    "dirs": {str(paused_dir.resolve()): {"until": 0.0}},
+                }
+            )
+        )
+        monkeypatch.setattr("ai_guardian.daemon.state.get_state_dir", lambda: tmp_path)
+        mock_checker = MagicMock()
+        mock_checker.check_tool_allowed.return_value = (True, None, "Bash")
+        mock_checker_cls.return_value = mock_checker
+
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        paused_result = tool.fn(command="git status", project_dir=str(paused_dir))
+        active_result = tool.fn(command="git status", project_dir=str(active_dir))
+
+        assert paused_result["status"] == "paused"
+        assert active_result["status"] == "allowed"
+        assert mock_checker.check_tool_allowed.call_count == 1
+
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_expired_global_pause_restores_configured_checks(
+        self, mock_checker_cls, tmp_path, monkeypatch
+    ):
+        pause_file = tmp_path / "daemon.paused"
+        monkeypatch.setattr("ai_guardian.daemon.state.get_state_dir", lambda: tmp_path)
+        mock_checker = MagicMock()
+        mock_checker.check_tool_allowed.return_value = (True, None, "Bash")
+        mock_checker_cls.return_value = mock_checker
+
+        pause_file.write_text(
+            json.dumps(
+                {
+                    "global": {"paused": True, "until": time.time() + 60},
+                    "dirs": {},
+                }
+            )
+        )
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        paused_result = tool.fn(command="git status", project_dir=str(tmp_path))
+
+        pause_file.write_text(
+            json.dumps(
+                {
+                    "global": {"paused": True, "until": time.time() - 1},
+                    "dirs": {},
+                }
+            )
+        )
+        resumed_result = tool.fn(command="git status", project_dir=str(tmp_path))
+
+        assert paused_result["status"] == "paused"
+        assert resumed_result["status"] == "allowed"
+        assert mock_checker.check_tool_allowed.call_count == 1
+
+    @patch(
+        "ai_guardian.mcp.server._load_mcp_config",
+        return_value={"proactive_level": "paused"},
+    )
+    @patch("ai_guardian.tools.policy.ToolPolicyChecker")
+    def test_explicit_paused_level_skips_checks(
+        self, mock_checker_cls, mock_load_config
+    ):
+        server = create_server()
+        tool = server._tool_manager._tools["check_command"]
+        result = tool.fn(command="git status")
+
+        assert result["status"] == "paused"
+        assert result["pause_source"] == "configured"
+        mock_load_config.assert_called_once()
+        mock_checker_cls.assert_not_called()
+
+
+class TestCheckPathOperations:
+    """Test operation-specific path checks."""
 
     @patch("ai_guardian.tools.policy.ToolPolicyChecker")
     def test_default_operation_is_read(self, mock_checker_cls, tmp_path):

@@ -299,9 +299,13 @@ class MCPServersContent(ConfigSaveMixin, Container):
                 ("low — check only when asked", "low"),
                 ("medium — check unfamiliar paths/commands", "medium"),
                 ("high — check everything", "high"),
+                ("paused — skip checks; hooks still enforce", "paused"),
             ],
             value="low",
             id="proactive-level",
+        )
+        yield Static(
+            "[dim]A daemon or directory pause temporarily uses 'paused' without changing the saved level.[/dim]"
         )
 
         # Support Bundle config (Issue #477)

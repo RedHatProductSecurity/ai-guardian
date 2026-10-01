@@ -594,7 +594,7 @@ Manage MCP server permissions and the AI Guardian MCP security advisor.
 This panel includes controls for ai-guardian's own MCP server:
 
 - **Enable/Disable toggle**: Turn the MCP security advisor on/off without restarting the IDE
-- **Proactive Level**: `low` (default) / `medium` / `high` — controls how often the AI uses proactive security checks. See [MCP Server docs](MCP_SERVER.md).
+- **Proactive Level**: `low` (default) / `medium` / `high` / `paused` — controls how often the AI uses proactive security checks. `paused` skips proactive MCP action-gating while hooks continue enforcing security. A daemon pause temporarily reports `paused` without changing the saved level. See [MCP Server docs](MCP_SERVER.md).
 - **Support Bundle**: Configure the export destination and TTL for sanitized diagnostic bundles
 
 #### MCP Server Permissions

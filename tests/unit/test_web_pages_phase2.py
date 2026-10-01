@@ -33,6 +33,15 @@ class TestPageImports:
 
         assert callable(create_mcp_servers_page)
 
+    def test_mcp_servers_page_describes_paused_level(self):
+        import inspect
+
+        from ai_guardian.web.pages.mcp_servers import create_mcp_servers_page
+
+        source = inspect.getsource(create_mcp_servers_page)
+        assert '"paused"' in source
+        assert "hooks still enforce" in source
+
     def test_mcp_security_page_exists(self):
         from ai_guardian.web.pages.mcp_security import create_mcp_security_page
 
