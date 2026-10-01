@@ -238,6 +238,7 @@ class TestContainerLaunchers:
         assert "ARG BASE_IMAGE=nvcr.io/nvidia/base/ubuntu@sha256:" in dockerfile
         assert "sandboxes/base:latest" not in dockerfile
         assert "FROM ${BASE_IMAGE}" in dockerfile
+        assert "FROM ${BASE_IMAGE}\n\nARG BASE_IMAGE\n" in dockerfile
         assert "uv pip install --python /sandbox/.venv/bin/python" in dockerfile
         assert "ARG CLAUDE_VERSION" not in dockerfile
         assert "ARG CODEX_VERSION=0.154.0" in dockerfile

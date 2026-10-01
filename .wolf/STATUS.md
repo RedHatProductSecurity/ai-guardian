@@ -237,8 +237,11 @@ budget_tokens: 1000
 - The follow-up run passed the image checks but exposed a stale compatibility
   assertion; updated the expected OpenShell base-image digest to match the
   Dockerfile's pinned `nvcr.io/nvidia/base/ubuntu` image.
+- The next run still failed that assertion because `BASE_IMAGE` was not
+  redeclared after the final `FROM`; redeclared it so the `LABEL` expansion
+  carries the pinned value into the image.
 - Added regression assertions in `tests/unit/test_ide_registry.py` and
-  `tests/unit/test_container_scripts.py`.
+  `tests/unit/test_container_scripts.py`, including Dockerfile ARG scope.
 - Validation: all five affected IDE E2E cases passed individually, 121 workflow
   and container contract tests passed, YAML parsing passed, Ruff/Black and
   `git diff --check` passed. Docker image execution was not available locally.
