@@ -1306,7 +1306,8 @@ class TrayMenuBuilder:
         runtime = values.get("runtime")
         name = str(values.get("name") or "").strip()
         profile = str(values.get("profile") or "").strip()
-        restore = values.get("config_source") == "Latest saved snapshot"
+        config_source = str(values.get("config_source") or "Host/default")
+        restore = config_source == "Latest saved snapshot"
         if restore and profile:
             self._sandbox_error(
                 "Create AI Guardian sandbox",
@@ -1496,7 +1497,7 @@ class TrayMenuBuilder:
                 agent_provider=agent_provider,
                 profile=profile_value,
                 restore_config="latest" if restore else None,
-                fresh_config=values.get("config_source") == "Host/default",
+                fresh_config=config_source == "Host/default",
                 config_dir=config_dir,
                 repo=repo,
                 port=port_value,

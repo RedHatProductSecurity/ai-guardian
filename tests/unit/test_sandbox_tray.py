@@ -1014,6 +1014,23 @@ class TestSandboxTrayMenu:
         assert args.provider == ["ai-guardian-openai"]
         assert args.fresh_config is True
 
+    def test_create_form_defaults_missing_config_source_to_host(self):
+        tray = _make_tray([])
+        values = {
+            "runtime": "openshell",
+            "name": "ag-codex",
+            "cli": "codex",
+            "repo": "",
+            "providers": "",
+            "model": "",
+        }
+        with mock.patch("ai_guardian.sandbox.create_sandbox", return_value=0) as create:
+            tray._menu._complete_sandbox_create_form(values)
+
+        args = create.call_args.args[0]
+        assert args.restore_config is None
+        assert args.fresh_config is True
+
     def test_create_form_auto_attaches_existing_openai_provider(self):
         tray = _make_tray([])
         values = {
