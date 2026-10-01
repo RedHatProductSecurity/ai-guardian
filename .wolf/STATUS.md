@@ -249,6 +249,9 @@ budget_tokens: 1000
   full-suite command passed locally under CPython 3.9 with 12,158 passed and
   198 skipped. Python 3.9 remains required for the 1.19 line; remove it from
   compatibility matrices only as part of the planned 1.20 support drop.
+- A later Tests workflow run cancelled the Python 3.9 coverage step after
+  20:51 while all other matrix jobs passed; the exact CI command passed locally
+  with coverage in 7:31, so no test-suite change was made.
 
 ## 🚀 Next phase
 
