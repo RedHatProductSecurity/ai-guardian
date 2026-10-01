@@ -60,6 +60,8 @@
 - **Pi SDK setup policy:** The managed extension should automatically run `npm install --ignore-scripts --no-audit --no-fund` when npm is available. If npm is unavailable or the install fails, preserve hook protection and expose the retry command; a later setup without `--force` must retry pending SDK states. Setup and check commands may resolve different `ai-guardian` executables, so executable-pin diagnostics must remain distinct from missing SDK dependencies.
 - **Pi MCP bridge policy boundary (#2440):** Pi registers the managed server's tools as `mcp__ai-guardian__*` and sends them through its normal `tool_call` hook. A live identity attestation is the authorization boundary: scanners and immutable protections still run, but ordinary host MCP permission rules must not block the verified security advisor.
 
+- **MCP command-check context (#2471):** `check_command` runs outside the daemon, so project policy must be selected through an explicit `project_dir` or `AI_GUARDIAN_PROJECT_DIR`; otherwise the server launch directory is the documented fallback. Capture the developer-session trust state at MCP startup, keep identity failures fail-closed, and have managed Pi pass `ctx.cwd` automatically.
+
 - **Grok Build setup paths (#2446):** Grok's relocated user hook target is `<GROK_HOME>/hooks/ai-guardian.json`, not directly under `GROK_HOME`; shared path resolution must pass the `hooks` subdirectory alongside the filename. Project hooks and MCP remain under `.grok/`.
 
 - **Host CLI config diagnostics (#2461):** Malformed or structurally invalid

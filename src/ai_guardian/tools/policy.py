@@ -93,6 +93,10 @@ _SHELL_TOOL_NAMES = frozenset(
 _IMMUTABLE_CLI_REASON = "agent-originated AI Guardian CLI execution"
 _HOST_AGENT_CLI_REASON = "agent-originated host CLI execution"
 _AGENT_CONFIG_PROTECTION_REASON = "supported agent configuration protection"
+_DENY_CATEGORY_COMMAND = "command_policy"
+_DENY_CATEGORY_IDENTITY = "identity_failure"
+_DENY_CATEGORY_PERMISSION = "permission_denied"
+_DENY_CATEGORY_ERROR = "policy_check_error"
 
 
 def is_shell_tool_name(tool_name: Optional[str]) -> bool:
@@ -174,6 +178,7 @@ class ToolPolicyChecker:
         self.last_deny_action: Optional[str] = None
         self.last_deny_matched_pattern: Optional[str] = None
         self.last_deny_check_value: Optional[str] = None
+        self.last_deny_category: Optional[str] = None
 
     def _should_skip_immutable_protection(self, file_path: str, tool_name: str) -> bool:
         """
@@ -439,6 +444,7 @@ class ToolPolicyChecker:
             return None
 
         reason = _IMMUTABLE_CLI_REASON
+        self.last_deny_category = _DENY_CATEGORY_COMMAND
         error_message = (
             "AI Guardian Self-Protection\n\n"
             "Protection: Agent-originated AI Guardian CLI execution\n"
@@ -484,6 +490,7 @@ class ToolPolicyChecker:
             return None
 
         self.last_deny_action = "block"
+        self.last_deny_category = _DENY_CATEGORY_COMMAND
         self.last_deny_matched_pattern = _HOST_AGENT_CLI_REASON
         self.last_deny_check_value = "<agent-originated host CLI invocation>"
         self._log_violation(
@@ -526,6 +533,7 @@ class ToolPolicyChecker:
             return None
 
         self.last_deny_action = "block"
+        self.last_deny_category = _DENY_CATEGORY_COMMAND
         self.last_deny_matched_pattern = _AGENT_CONFIG_PROTECTION_REASON
         self.last_deny_check_value = "<supported agent configuration>"
         self._log_violation(
@@ -568,11 +576,17 @@ class ToolPolicyChecker:
             tuple: (is_allowed: bool, error_message: str or None, tool_name: str or None)
         """
         try:
+            self.last_deny_action = None
+            self.last_deny_matched_pattern = None
+            self.last_deny_check_value = None
+            self.last_deny_category = None
+
             # Extract tool name and parameters
             tool_name, tool_input = self._extract_tool_info(hook_data)
             if not tool_name:
                 logger.warning("Could not extract tool name from hook data")
                 # Fail-closed: block if we can't determine the tool (security-critical path)
+                self.last_deny_category = _DENY_CATEGORY_ERROR
                 return False, "Policy check error: unable to determine tool name", None
 
             logger.info(f"Checking if tool '{tool_name}' is allowed...")
@@ -616,6 +630,7 @@ class ToolPolicyChecker:
                     if should_block:
                         # SSRF detected and blocked
                         logger.error(f"🚨 BLOCKED: {tool_name} - SSRF attack detected")
+                        self.last_deny_category = _DENY_CATEGORY_COMMAND
                         self._log_violation(
                             tool_name=tool_name,
                             check_value=tool_input.get("command", str(tool_input)),
@@ -660,6 +675,7 @@ class ToolPolicyChecker:
                         logger.error(
                             f"🚨 BLOCKED: {tool_name} - credential exfiltration detected"
                         )
+                        self.last_deny_category = _DENY_CATEGORY_COMMAND
                         self._log_violation(
                             tool_name=tool_name,
                             check_value=bash_command,
@@ -800,6 +816,7 @@ class ToolPolicyChecker:
                             hook_data=hook_data,
                             immutable=True,
                         )
+                        self.last_deny_category = _DENY_CATEGORY_COMMAND
                         return False, error_msg, tool_name
 
             # The built-in namespace is not an identity proof. Require a
@@ -810,6 +827,7 @@ class ToolPolicyChecker:
                 if not verify_active_attestation("ai-guardian"):
                     error_msg = self._format_mcp_identity_deny_message(tool_name)
                     self.last_deny_action = "block"
+                    self.last_deny_category = _DENY_CATEGORY_IDENTITY
                     self.last_deny_matched_pattern = "unverified MCP identity"
                     self.last_deny_check_value = tool_name
                     self._log_violation(
@@ -866,6 +884,7 @@ class ToolPolicyChecker:
                         matcher=tool_name,
                         hook_data=hook_data,
                     )
+                    self.last_deny_category = _DENY_CATEGORY_PERMISSION
                     return False, error_msg, tool_name
 
                 # Built-in tools allowed by default when no rules target them
@@ -983,6 +1002,7 @@ class ToolPolicyChecker:
                     )
                     return True, None, tool_name
                 else:
+                    self.last_deny_category = _DENY_CATEGORY_PERMISSION
                     self.last_deny_action = final_action
                     self.last_deny_matched_pattern = matched_pattern
                     self.last_deny_check_value = (
@@ -1011,6 +1031,7 @@ class ToolPolicyChecker:
                         deny_default_action = rule_action
 
                 self.last_deny_action = deny_default_action
+                self.last_deny_category = _DENY_CATEGORY_PERMISSION
                 self.last_deny_matched_pattern = "not in allow list"
                 self.last_deny_check_value = check_value if check_value else tool_name
                 logger.warning(
@@ -1041,6 +1062,7 @@ class ToolPolicyChecker:
 
             logger.error(traceback.format_exc())
             # Fail-closed: block on errors (security-critical path)
+            self.last_deny_category = _DENY_CATEGORY_ERROR
             return False, f"Policy check error: {e}", None
 
     _AUGMENT_TOOL_MAP = AUGMENT_TOOL_MAP

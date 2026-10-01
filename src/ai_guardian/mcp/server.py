@@ -16,11 +16,13 @@ Issue #477
 
 import json
 import logging
+import os
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Iterator, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +41,11 @@ _SAFE_SUGGESTIONS: Dict[str, str] = {
     "canary_detected": "A registered canary token was detected — investigate potential data exfiltration",
     "exfil_detection": "This command contains credential exfiltration patterns — if legitimate, add a regex to exfil_detection.allowlist_patterns",
 }
+
+_MCP_REASON_COMMAND_POLICY = "command_policy_denied"
+_MCP_REASON_IDENTITY = "identity_failure"
+_MCP_REASON_PERMISSION = "permission_denied"
+_MCP_REASON_POLICY_ERROR = "policy_check_error"
 
 
 def _mcp_policy_metadata(
@@ -180,6 +187,83 @@ def _load_skill_instructions() -> str:
     )
 
 
+@contextmanager
+def _mcp_project_context(project_dir: Optional[str]) -> Iterator[str]:
+    """Apply an MCP caller project directory while evaluating policy.
+
+    MCP servers run outside the daemon hook process.  A caller can provide its
+    workspace explicitly; integrations may also provide it through the
+    environment.  Without either signal, the server's launch directory is the
+    documented policy context.
+    """
+    requested = project_dir or os.environ.get("AI_GUARDIAN_PROJECT_DIR")
+    effective = Path(requested or Path.cwd()).expanduser().resolve()
+    if not effective.is_dir():
+        raise ValueError("MCP project context is not a directory")
+
+    if requested:
+        from ai_guardian.config.utils import (
+            clear_project_dir_override,
+            set_project_dir_override,
+        )
+
+        set_project_dir_override(str(effective))
+        try:
+            yield str(effective)
+        finally:
+            clear_project_dir_override()
+        return
+
+    yield str(effective)
+
+
+def _legacy_command_reason(error_msg: Optional[str]) -> Optional[str]:
+    """Map legacy policy text to a safe, stable scanner category."""
+    if not isinstance(error_msg, str):
+        return None
+
+    lowered = error_msg.lower()
+    if "secret" in lowered:
+        return "secret_detected"
+    if "ssrf" in lowered:
+        return "ssrf_detected"
+    if "injection" in lowered:
+        return "prompt_injection"
+    if "jailbreak" in lowered:
+        return "jailbreak_detected"
+    if "config" in lowered and "exfil" in lowered:
+        return "config_file_exfil"
+    if "directory" in lowered:
+        return "directory_blocked"
+    if "pii" in lowered:
+        return "pii_detected"
+    return None
+
+
+def _command_denial_reason(checker: Any, error_msg: Optional[str]) -> str:
+    """Return a non-sensitive category for a command policy result."""
+    category = getattr(checker, "last_deny_category", None)
+    legacy_reason = _legacy_command_reason(error_msg)
+
+    if category == "identity_failure":
+        return _MCP_REASON_IDENTITY
+    if category == "policy_check_error":
+        return _MCP_REASON_POLICY_ERROR
+    if category == "permission_denied":
+        return legacy_reason or _MCP_REASON_PERMISSION
+    if category == "command_policy":
+        return legacy_reason or _MCP_REASON_COMMAND_POLICY
+
+    if legacy_reason:
+        return legacy_reason
+    if isinstance(error_msg, str) and any(
+        marker in error_msg.lower()
+        for marker in ("permission", "allow list", "denied", "blocked")
+    ):
+        return _MCP_REASON_PERMISSION
+    return _MCP_REASON_COMMAND_POLICY
+
+
 _BLOCKED_SYSTEM_DIRS = (
     "/etc",
     "/sys",
@@ -216,9 +300,15 @@ def _validate_scan_path(path: str) -> Tuple[bool, str, Optional[Path]]:
     return True, "", resolved
 
 
-def create_server() -> "MCPServer":
+def create_server(*, identity_verified: bool = False) -> "MCPServer":
     """Create and configure the MCP server with all tools and resources."""
     server = MCPServer("ai-guardian", instructions=_load_skill_instructions())
+
+    # Match the daemon's startup snapshot instead of rereading this setting on
+    # every advisory call.  This keeps MCP policy checks consistent with hooks.
+    from ai_guardian.developer_session import is_trusted_developer_session
+
+    developer_session = is_trusted_developer_session()
 
     # ─── Security Check Tools (proactive) ─────────────────────────
 
@@ -275,17 +365,41 @@ def create_server() -> "MCPServer":
             }
 
     @server.tool()
-    def check_command(command: str) -> Dict[str, Any]:
-        """Check if a Bash command would be blocked. Call before running commands with URLs or file paths. Results are advisory — hooks provide enforcement."""
+    def check_command(
+        command: str, project_dir: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Check a Bash command in the caller's effective project context.
+
+        ``project_dir`` is optional for MCP clients that can provide the active
+        workspace.  When omitted, the MCP server launch directory is used.
+        Results are advisory; hooks provide enforcement.
+        """
         try:
+            if identity_verified:
+                from ai_guardian.mcp.identity import verify_active_attestation
+
+                if not verify_active_attestation("ai-guardian"):
+                    return {
+                        "status": "error",
+                        "reason": _MCP_REASON_IDENTITY,
+                        "message": "AI Guardian MCP identity could not be verified",
+                        "policy_decision": _mcp_policy_metadata(
+                            "mcp_check_command", "error", _MCP_REASON_IDENTITY
+                        ),
+                    }
+
             from ai_guardian.tools.policy import ToolPolicyChecker
 
-            checker = ToolPolicyChecker()
-            hook_data = {
-                "tool_name": "Bash",
-                "tool_input": {"command": command},
-            }
-            allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
+            with _mcp_project_context(project_dir) as effective_project_dir:
+                checker = ToolPolicyChecker(developer_session=developer_session)
+                hook_data = {
+                    "hook_event_name": "PreToolUse",
+                    "hook_source": "mcp",
+                    "_daemon_cwd": effective_project_dir,
+                    "tool_name": "Bash",
+                    "tool_input": {"command": command},
+                }
+                allowed, error_msg, _ = checker.check_tool_allowed(hook_data)
             if allowed:
                 return {
                     "status": "allowed",
@@ -293,17 +407,7 @@ def create_server() -> "MCPServer":
                         "mcp_check_command", "allow", "policy_allow"
                     ),
                 }
-            reason = "policy_denied"
-            if error_msg:
-                msg_lower = error_msg.lower()
-                if "secret" in msg_lower:
-                    reason = "secret_detected"
-                elif "ssrf" in msg_lower:
-                    reason = "ssrf_detected"
-                elif "injection" in msg_lower:
-                    reason = "prompt_injection"
-                elif "directory" in msg_lower or "denied" in msg_lower:
-                    reason = "directory_blocked"
+            reason = _command_denial_reason(checker, error_msg)
             return {
                 "status": "blocked",
                 "reason": reason,
@@ -315,9 +419,10 @@ def create_server() -> "MCPServer":
             logger.error("check_command error: %s", e)
             return {
                 "status": "error",
+                "reason": _MCP_REASON_POLICY_ERROR,
                 "message": "Unable to check command",
                 "policy_decision": _mcp_policy_metadata(
-                    "mcp_check_command", "error", "policy_check_error"
+                    "mcp_check_command", "error", _MCP_REASON_POLICY_ERROR
                 ),
             }
 
@@ -890,6 +995,7 @@ def run_mcp_server() -> int:
             "Error: MCP SDK not available (requires Python >= 3.10).",
             file=sys.stderr,
         )
+        print("Reason: startup_failure.", file=sys.stderr)
         return 1
 
     from ai_guardian.mcp.identity import (
@@ -903,10 +1009,11 @@ def run_mcp_server() -> int:
             "Error: AI Guardian MCP server identity verification failed.",
             file=sys.stderr,
         )
+        print("Reason: identity_failure.", file=sys.stderr)
         return 1
 
     try:
-        server = create_server()
+        server = create_server(identity_verified=True)
         server.run(transport="stdio")
     finally:
         revoke_active_attestation()

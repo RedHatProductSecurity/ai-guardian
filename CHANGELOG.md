@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **MCP command-check context and diagnostics (#2471):** Evaluate commands
+  against the caller's supplied project context and startup developer-session
+  snapshot, and return stable permission, command-policy, identity, and
+  policy-error categories instead of a generic `policy_denied` result.
 - **OpenCode trace token usage (#2467):** Read usage from OpenCode's SQLite
   `message.data.tokens` records, finalize OpenCode session-end hooks with their
   session ID, and show token usage as unavailable when no usage data exists.
