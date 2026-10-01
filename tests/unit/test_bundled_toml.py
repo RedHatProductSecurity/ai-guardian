@@ -12,7 +12,7 @@ from ai_guardian.patterns.toml_parser import load_and_compile, load_toml_file
 PATTERNS_DIR = DATA_DIR
 
 EXPECTED_COUNTS = {
-    "secrets.toml": 123,
+    "secrets.toml": 125,
     "pii.toml": 13,
     "prompt-injection.toml": 73,
     "unicode.toml": 107,
@@ -422,6 +422,26 @@ ISSUE_2323_FALSE_POSITIVE_CASES = [
     ("resend-api-key", "# re_ is the Resend API key prefix"),
 ]
 
+ISSUE_2477_DETECTION_CASES = [
+    (
+        "gitlab-personal-token-v3",
+        "glpat-" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4" + ".a1.b2c3d4e5f",
+    ),
+    (
+        "okta-oauth-client-secret",
+        "OKTA_CLIENT_SECRET=" + "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8s9T0",
+    ),
+]
+
+ISSUE_2477_FALSE_POSITIVE_CASES = [
+    (
+        "gitlab-personal-token-v3",
+        "glpat-" + "a" * 27 + ".a1.b2c3d4e5",
+    ),
+    ("okta-oauth-client-secret", "OKTA_CLIENT_SECRET=" + "X" * 39),
+    ("okta-oauth-client-secret", "CLIENT_SECRET=" + "a1B2c3D4" * 5),
+]
+
 ISSUE_2322_DETECTION_CASES = [
     # postgresql:// scheme with credentials
     (
@@ -455,6 +475,7 @@ ALL_DETECTION_CASES = (
     + ISSUE_1777_DETECTION_CASES
     + ISSUE_2185_DETECTION_CASES
     + ISSUE_2323_DETECTION_CASES
+    + ISSUE_2477_DETECTION_CASES
     + ISSUE_2322_DETECTION_CASES
 )
 ALL_FALSE_POSITIVE_CASES = (
@@ -465,6 +486,7 @@ ALL_FALSE_POSITIVE_CASES = (
     + ISSUE_1777_FALSE_POSITIVE_CASES
     + ISSUE_2185_FALSE_POSITIVE_CASES
     + ISSUE_2323_FALSE_POSITIVE_CASES
+    + ISSUE_2477_FALSE_POSITIVE_CASES
     + ISSUE_2322_FALSE_POSITIVE_CASES
     + ISSUE_2464_FALSE_POSITIVE_CASES
 )
